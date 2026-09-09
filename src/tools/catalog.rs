@@ -166,50 +166,13 @@ fn summarize_tool_description(description: &str) -> String {
 }
 
 #[cfg(test)]
+#[path = "catalog_tests/mcp_isolation.rs"]
+mod mcp_isolation_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::BTreeSet;
-    use std::time::{Duration, Instant};
-
-    #[test]
-    fn catalog_does_not_discover_mcp_servers() {
-        let mut config = AppConfig::default();
-        config.mcp.enabled = true;
-        let (command, args) = if cfg!(windows) {
-            (
-                "cmd".to_string(),
-                vec!["/C".to_string(), "ping -n 3 127.0.0.1 >NUL".to_string()],
-            )
-        } else {
-            (
-                "sh".to_string(),
-                vec!["-c".to_string(), "sleep 2".to_string()],
-            )
-        };
-        config.mcp.servers.push(crate::config::McpServerConfig {
-            id: "slow-server".to_string(),
-            enabled: true,
-            transport: "stdio".to_string(),
-            command,
-            args,
-            env: Default::default(),
-            cwd: None,
-            url: None,
-            message_url: None,
-            headers: Default::default(),
-            timeout_ms: Some(500),
-        });
-        let paths = SaiPaths::new().unwrap();
-        let started = Instant::now();
-
-        let entries = tool_catalog(&config, &paths);
-
-        assert!(started.elapsed() < Duration::from_millis(250));
-        assert!(entries.iter().any(|entry| entry.name == "mcp_manager"));
-        assert!(!entries
-            .iter()
-            .any(|entry| entry.name.starts_with("mcp_slow_server_")));
-    }
 
     /// 构造一份关闭全部插件的配置。
     ///
