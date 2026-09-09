@@ -63,7 +63,7 @@ async fn private_workspace_processes_and_directory_locks_end_with_the_callback()
             send.send(path).unwrap();
         });
         let worker = plugin.clone();
-        let task = tokio::spawn(async move {
+        let mut task = tokio::spawn(async move {
             worker
                 .call_tool(
                     "run",
@@ -79,8 +79,17 @@ async fn private_workspace_processes_and_directory_locks_end_with_the_callback()
             .await
             .unwrap()
             .unwrap();
-        super::system_process::wait_file(&path.join("leader.pid")).await;
-        super::system_process::wait_file(&path.join("descendant.pid")).await;
+        // 【私有进程测试】【启动结果】2. 启动提前失败时报告工具结果，不把底层错误掩盖成标记等待超时
+        tokio::select! {
+            biased;
+            result = &mut task => panic!(
+                "private process ended before pid markers in {}: {result:?}", path.display()
+            ),
+            _ = async {
+                super::system_process::wait_file(&path.join("leader.pid")).await;
+                super::system_process::wait_file(&path.join("descendant.pid")).await;
+            } => {}
+        }
         let leader = super::system_process::read_pid(&path.join("leader.pid"));
         let descendant = super::system_process::read_pid(&path.join("descendant.pid"));
         if cancelled {
