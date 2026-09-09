@@ -1,0 +1,10 @@
+{
+  "api_version": 1,
+  "id": "weather",
+  "version": "1.0.0",
+  "name": "Current weather",
+  "description": "Query current weather through wttr.in.",
+  "entry": "init.lua",
+  "capabilities": {"http": ["https://wttr.in"]},
+  "limits": {"timeout_ms": 35000, "http_timeout_ms": 30000}
+}

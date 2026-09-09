@@ -246,6 +246,8 @@ local response = sai.http.request({
 | `sai.json.array(table?)` | 保留空数组的类型 |
 | `sai.json.null` | 表示 JSON null |
 | `sai.text.trim(text)` | 去除两端 Unicode 空白，保留正文内容 |
+| `sai.text.upper(text)` | 只接受字符串，按 Unicode 规则转为大写；输入及展开后的 UTF-8 字节数均受 `output_bytes` 限制 |
+| `sai.text.number_to_string(number)` | 只接受有限数值，以 f64 十进制格式保留有效数字及负零，不使用指数形式；整数先按 f64 语义转换 |
 | `sai.text.collapse_whitespace(text)` | 去除首尾空白，并把连续 Unicode 空白替换为一个空格；输入受 `output_bytes` 限制 |
 | `sai.text.estimate_tokens(text)` | 使用 Sai 分词器估算文本 token 数量；输入受 `output_bytes` 限制 |
 | `sai.text.url_encode(text)` | URL 百分号编码 |
@@ -255,7 +257,9 @@ local response = sai.http.request({
 | `sai.time.now()` | 当前 Unix 秒时间戳 |
 | `sai.time.iso(seconds, offset_seconds?)` | 指定时区的 ISO 时间，默认 UTC |
 
-HTML 转换前后的 UTF-8 文本均受包内 `output_bytes` 限制。Markdown 转换复用 `html2md`，相对链接保持原地址；正文范围提取与业务截断由插件负责。
+HTML 和 Unicode 大写转换前后的 UTF-8 文本均受包内 `output_bytes` 限制。Markdown 转换复用 `html2md`，相对链接保持原地址；正文范围提取与业务截断由插件负责。最终回调结果另受包含 JSON 封装在内的输出预算约束。
+
+`number_to_string` 不会把数字字符串、布尔值或 null 转成数值，也拒绝 Lua 计算产生的 NaN 和无穷大。它用于与宿主 f64 展示保持一致，例如 `1e-20` 返回 `0.00000000000000000001`；超过 f64 精确整数范围的值可能舍入。
 
 运行时提供 Lua 5.4 的表、字符串、数学和 UTF-8 标准库。没有 `io`、`os`、`package`、`debug`、`load`、`loadfile`、`dofile`、直接 `coroutine` 或原生动态库入口。HTTP 仅在回调执行期间可用。
 
@@ -279,5 +283,13 @@ Lua 计算位于阻塞工作线程，受指令 Hook、堆内存和总时长约�
 `linux-game-investigation` 和 `input-method-investigation` 均声明 32 MiB Lua 堆、2000 万指令、900 秒、2 MiB 输出、256 次模型请求和 1024 次工具调用。调查工具的业务步数及单工具超时可以进一步收窄，但不能突破这些宿主限制。
 
 `diagnostic-evidence` 声明 32 MiB Lua 堆、2000 万指令、300 秒、2 MiB 输出、2048 次系统调用及 4 次工具调用。包设置继续收窄单次命令时长和输出字符数。
+
+三个查询包采用各自的 HTTP 与回调上限，其他资源沿用运行时默认值：
+
+| 包 | 单次 HTTP | 回调总时长 | 单次正文上限 |
+| --- | --- | --- | --- |
+| `weather` | 30 秒 | 35 秒 | 64 KiB |
+| `exchange-rate` | 30 秒 | 65 秒 | 1 MiB |
+| `moegirl` | 10 秒 | 45 秒 | REST 页面 512 KiB，搜索与解析 API 1 MiB |
 
 版本 1 提供 HTTP、单次模型请求、显式工具调用、受限文件与环境访问、模板进程、JSON、文本和时间能力。持久插件存储、主 Agent 模型上下文变换和界面组件扩展尚未开放。

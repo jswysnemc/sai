@@ -34,7 +34,7 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 
 ## 已落地的版本 1
 
-独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、模型、工具调用、文件、环境、模板进程、JSON、文本、时间能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation` 与 `diagnostic-evidence` 已迁为随程序嵌入的十个 Lua 包，共提供 16 个工具；相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
+独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、模型、工具调用、文件、环境、模板进程、JSON、文本、时间能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation` 与 `diagnostic-evidence` 已迁为随程序嵌入的十三个 Lua 包，共提供 19 个工具；相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
 
 CLI 提供创建、验证、安装、替换、配置、授权、启停、移除和命令执行。TUI 提供 `/plugins`、`/plugins reload` 与 `/plugin <id>/<command>`。模型工具通过原有共用注册入口进入 CLI、TUI、Web 和子任务，直接用户命令目前只有 CLI 与 TUI 入口。
 
@@ -102,6 +102,10 @@ Unix 回收保留组长 PID 直至所属进程组终止，避免 PID 重用误�
 旧功能必须通过 Lua 实现执行，不能仅用 Lua 包装原有 Rust 业务函数。HTTP、文本解码、时间和 HTML 转文本或 Markdown 等通用能力保留为宿主能力。HTML 转换统一放在运行时的 `text.rs`，业务包负责页面范围、截断规则和返回格式。
 
 Arch 包内部按软件包、状态和 Wiki 查询拆分；Fcitx 的主题、双语规则、正文提取和响应格式各自独立；ProtonDB 的搜索、评论地址计算和评论格式分别维护。新增内置包由资源目录自动发现，Rust 层只保留必要的旧配置兼容。
+
+天气、汇率与萌娘百科的请求构造、响应选择、回退和展示分别位于 `weather`、`exchange-rate` 与 `moegirl`。汇率包按别名、设置及查询拆分；百科包按站点、HTTP、页面与查询编排拆分。原 Rust 三个查询模块及注册分支已删除。通用 Unicode 大写与有限 f64 文本转换由运行时提供，币种规则和两万个字符的百科截断规则保留在 Lua。
+
+三个查询包分别沿用旧开关作为缺省值，显式插件设置优先。汇率兼容层只传递旧密钥与免费回退开关，按字段合并显式设置；空密钥及 false 均为有效覆盖。管理操作仅保存原始设置，不复制旧密钥、不固化旧默认值，外部包不能取得兼容凭据。汇率 HTTP、传输和 JSON 错误直接失败，只有有效响应缺少成功汇率时才按设置回退；百科只在 REST 传输或正文大小失败时尝试解析 API，明确 HTTP 状态错误直接失败。
 
 网页搜索的选择顺序、请求构造、失败回退和结果格式化全部位于 `plugins/web-search`。六个供应商各有独立 Lua 文件，共用包内配置及结果格式。`src/tools/web_fetch.rs` 负责通用网页读取；原有 Rust 搜索注册及供应商模块已删除。
 

@@ -185,6 +185,9 @@ fn migrated_tools_are_present_in_common_and_readonly_registries() {
         "linux_game_compatibility",
         "linux_input_method_diagnose",
         "check_issue",
+        "get_weather",
+        "get_exchange_rate",
+        "query_moegirl",
     ] {
         assert!(common.contains(name));
         assert!(readonly.contains(name));

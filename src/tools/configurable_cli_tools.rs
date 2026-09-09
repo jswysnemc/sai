@@ -1,4 +1,4 @@
-use super::{calculator, exchange_rate, hash_codec, moegirl, weather, xuanxue, ToolRegistry};
+use super::{calculator, hash_codec, xuanxue, ToolRegistry};
 use crate::config::AppConfig;
 
 /// 【CLI 助手工具】【运行时注册】按配置注册轻量内置可选工具。
@@ -11,17 +11,8 @@ use crate::config::AppConfig;
 /// - 无
 pub(super) fn register(registry: &mut ToolRegistry, config: &AppConfig) {
     // 【CLI 助手工具】【可用性过滤】1. 每个工具只在对应开关启用时注册
-    if config.plugins.weather.enabled {
-        weather::register(registry);
-    }
-    if config.plugins.exchange_rate.enabled {
-        exchange_rate::register(registry, config.plugins.exchange_rate.clone());
-    }
     if config.plugins.xuanxue.enabled {
         xuanxue::register(registry);
-    }
-    if config.plugins.moegirl.enabled {
-        moegirl::register(registry);
     }
     if config.plugins.hash_codec.enabled {
         hash_codec::register(registry);
@@ -35,11 +26,8 @@ pub(super) fn register(registry: &mut ToolRegistry, config: &AppConfig) {
 mod tests {
     use super::*;
 
-    const CONFIGURABLE_TOOL_NAMES: [&str; 7] = [
-        "get_weather",
-        "get_exchange_rate",
+    const CONFIGURABLE_TOOL_NAMES: [&str; 4] = [
         "draw_zhouyi_hexagram",
-        "query_moegirl",
         "calculate_hash",
         "decode_encoded_text",
         "scientific_calculator",
@@ -116,10 +104,7 @@ mod tests {
     /// 返回:
     /// - 无
     fn set_enabled(config: &mut AppConfig, enabled: bool) {
-        config.plugins.weather.enabled = enabled;
-        config.plugins.exchange_rate.enabled = enabled;
         config.plugins.xuanxue.enabled = enabled;
-        config.plugins.moegirl.enabled = enabled;
         config.plugins.hash_codec.enabled = enabled;
         config.plugins.calculator.enabled = enabled;
     }

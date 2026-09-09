@@ -1,0 +1,10 @@
+{
+  "api_version": 1,
+  "id": "moegirl",
+  "version": "1.0.0",
+  "name": "Moegirlpedia",
+  "description": "Search and read Moegirlpedia pages using bounded HTTP requests.",
+  "entry": "init.lua",
+  "capabilities": {"http": ["https://zh.moegirl.org.cn", "https://moegirl.uk", "https://ja.moegirl.org", "https://ja.moegirl.org.cn"]},
+  "limits": {"timeout_ms": 45000, "http_timeout_ms": 10000}
+}

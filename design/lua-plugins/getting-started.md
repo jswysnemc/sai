@@ -108,10 +108,33 @@ sai plugins remove hello
 | `linux-game-investigation` | `linux_game_compatibility` | 沿用主配置 `plugins.linux_game_compatibility.enabled` |
 | `input-method-investigation` | `linux_input_method_diagnose` | 沿用主配置 `plugins.deep_diagnose.enabled` |
 | `diagnostic-evidence` | `check_issue`、`diagnostic_app_probe` | 沿用主配置 `plugins.diagnostics.enabled` |
+| `weather` | `get_weather` | 沿用主配置 `plugins.weather.enabled` |
+| `exchange-rate` | `get_exchange_rate` | 沿用主配置 `plugins.exchange_rate.enabled` |
+| `moegirl` | `query_moegirl` | 沿用主配置 `plugins.moegirl.enabled` |
 
 `plugins.jsonc` 的显式设置优先于上述默认值。内置包保留原工具名称；外部包不能使用内置插件 ID，也不能覆盖现有工具。已禁用的内置工具仍可在 Agent 设置中预先选择，但无法实际执行。
 
 查询工具和 `check_issue` 保持只读；`diagnostic_app_probe` 是明确执行应用的写入工具，不出现在只读工具目录中。ProtonDB 的 Algolia 搜索使用 GET，数字 App ID 的名称查询失败时保留原 ID，评论读取失败时仍返回评级。Fcitx 的 `include_page_excerpt=false` 完全使用包内规则；启用摘录时最多读取 512 KiB 页面，保留 Markdown 并截取 12,000 个 Unicode 字符。ArchWiki 页面同样保留 Markdown 链接。
+
+### 天气、汇率与萌娘百科
+
+三个包可以独立启停，普通与计划模式共用同一 Lua 实现。`weather` 通过 wttr.in 查询；`location` 留空时自动定位，城市名和机场代码保持原有用法。返回文本保留 `current weather(condition,temperature,wind,location): ` 前缀，单次正文最多 64 KiB。
+
+`exchange-rate` 保留中文币种别名及原有汇率文本格式。旧 `plugins.exchange_rate.api_key` 和 `free_fallback_enabled` 继续提供默认值，插件 `settings` 按字段覆盖。例如，将以下对象保存到文件并通过 `sai plugins configure exchange-rate ./settings.json` 应用：
+
+```json
+{"free_fallback_enabled": false}
+```
+
+该配置沿用旧密钥并关闭免费回退；也可显式设置 `api_key`，空字符串会覆盖旧密钥。密钥沿用旧字段的字面字符串语义，查询时去除首尾空白。启停不会把旧密钥或默认值复制到 `plugins.jsonc`，后续旧设置修改在新实例或重载后生效。错误类型、null 或字符串形式的布尔值会在配置保存前失败。
+
+有密钥时先访问配置接口；只有成功解析 JSON 但没有取得成功数值时，才在允许的情况下使用免费接口。HTTP、传输和 JSON 解析错误直接结束调用。来源限定为清单中的两个汇率服务，密钥和币种分别作为路径段编码，错误不回显带密钥的 URL 或远端正文。
+
+`moegirl` 保留 `auto`、`search`、`page` 模式及 `zh`/`cn`、`uk`、`ja` 站点。自动模式优先显式标题，否则使用首个字符串搜索标题；无命中时读取原查询。搜索结果保留同一 JSON 数据，输出采用紧凑排版。REST 页面只有传输或正文大小失败时才回退解析 API，HTTP 状态错误直接失败；Markdown 正文按 20,000 个 Unicode 字符截断。
+
+日文旧域名的 301 目标 `https://ja.moegirl.org.cn` 包含在缺省 HTTP 授权中。已有显式授权不会自动扩大，可核对 `sai plugins info moegirl --json` 后使用 `--grant-declared` 更新。
+
+三者均受独立网络授权约束。例如 `sai plugins enable weather --no-http` 保留启用状态并撤销网络访问；再次普通启用不会恢复已撤销的授权。
 
 ### 网页搜索设置
 
