@@ -88,9 +88,11 @@ urlencoding = "2.1"
 uuid = { version = "1.11", features = ["v4"] }
 supports-color = "3.0.2"
 terminal-colorsaurus = "1.0.3"
+cap-std = "3"
+cap-fs-ext = "3"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_ProcessStatus", "Win32_System_Threading"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_ProcessStatus", "Win32_System_Threading"] }
 
 
 [build-dependencies]

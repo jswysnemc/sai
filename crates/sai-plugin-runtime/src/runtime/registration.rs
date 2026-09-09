@@ -47,16 +47,8 @@ pub(super) fn install(
             }
             let description = description(&definition)?;
             let parameters: serde_json::Value = lua.from_value(definition.get("parameters")?)?;
-            if parameters.get("type").and_then(serde_json::Value::as_str) != Some("object") {
-                return Err(mlua::Error::runtime(
-                    "tool parameters must use an object JSON Schema",
-                ));
-            }
-            if serde_json::to_vec(&parameters).map_err(lua_error)?.len() > 64 * 1024 {
-                return Err(mlua::Error::runtime("tool schema exceeds 64 KiB"));
-            }
-            validate_local_refs(&parameters)?;
-            let validator = jsonschema::validator_for(&parameters).map_err(lua_error)?;
+            let validator = crate::schema::compile_object(&parameters)
+                .map_err(|error| mlua::Error::runtime(format!("{error:#}")))?;
             let tool = RegisteredTool {
                 definition: PluginTool {
                     name: name.clone(),
@@ -148,33 +140,6 @@ fn access(definition: &Table) -> mlua::Result<ToolAccess> {
         Some("writes") => Ok(ToolAccess::Writes),
         Some(_) => Err(mlua::Error::runtime("access must be read_only or writes")),
     }
-}
-
-/// 【插件】【Schema 校验】禁止参数 Schema 引用外部文件和网络资源。
-/// @param value Schema 节点
-/// @returns 所有引用均位于当前 Schema 内时成功
-fn validate_local_refs(value: &serde_json::Value) -> mlua::Result<()> {
-    match value {
-        serde_json::Value::Object(fields) => {
-            for (key, value) in fields {
-                if matches!(key.as_str(), "$ref" | "$dynamicRef" | "$recursiveRef")
-                    && value.as_str().is_some_and(|value| !value.starts_with('#'))
-                {
-                    return Err(mlua::Error::runtime(
-                        "plugin schemas may only reference local definitions",
-                    ));
-                }
-                validate_local_refs(value)?;
-            }
-        }
-        serde_json::Value::Array(items) => {
-            for item in items {
-                validate_local_refs(item)?;
-            }
-        }
-        _ => {}
-    }
-    Ok(())
 }
 
 /// 【插件】【错误转换】将宿主错误转换为 Lua 可读错误。

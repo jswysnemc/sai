@@ -15,6 +15,8 @@ pub(super) struct CallControl {
     pub progress_messages: AtomicUsize,
     pub model_requests: AtomicUsize,
     pub tool_calls: AtomicUsize,
+    pub system_calls: AtomicUsize,
+    workdir: Mutex<String>,
     services: Mutex<Option<Arc<dyn InvocationServices>>>,
 }
 
@@ -28,15 +30,22 @@ impl CallControl {
     pub fn begin(
         self: &Arc<Self>,
         services: Option<Arc<dyn InvocationServices>>,
+        workdir: &str,
     ) -> mlua::Result<InvocationLease> {
         *self
             .services
             .lock()
             .map_err(|_| mlua::Error::runtime("plugin service lock poisoned"))? = services;
+        *self
+            .workdir
+            .lock()
+            .map_err(|_| mlua::Error::runtime("plugin workdir lock poisoned"))? =
+            workdir.to_string();
         self.generation.fetch_add(1, Ordering::AcqRel);
         self.progress_messages.store(0, Ordering::Release);
         self.model_requests.store(0, Ordering::Release);
         self.tool_calls.store(0, Ordering::Release);
+        self.system_calls.store(0, Ordering::Release);
         self.writable.store(false, Ordering::Release);
         self.active.store(true, Ordering::Release);
         Ok(InvocationLease(self.clone()))
@@ -56,6 +65,24 @@ impl CallControl {
             .clone()
             .ok_or_else(|| mlua::Error::runtime("host services are unavailable for this callback"))
     }
+
+    /// 【插件】【系统作用域】只从 Rust 调用状态读取工作目录和权限，忽略 Lua 表中的同名字段。
+    /// @returns 本次调用的可信系统上下文；加载或结束后拒绝访问
+    pub fn system_context(&self) -> mlua::Result<crate::host::SystemContext> {
+        if !self.active.load(Ordering::Acquire) {
+            return Err(mlua::Error::runtime(
+                "system services are only available during plugin callbacks",
+            ));
+        }
+        Ok(crate::host::SystemContext {
+            workdir: self
+                .workdir
+                .lock()
+                .map_err(|_| mlua::Error::runtime("plugin workdir lock poisoned"))?
+                .clone(),
+            allow_writes: self.writable.load(Ordering::Acquire),
+        })
+    }
 }
 
 impl Drop for InvocationLease {
@@ -66,6 +93,9 @@ impl Drop for InvocationLease {
         self.0.writable.store(false, Ordering::Release);
         if let Ok(mut services) = self.0.services.lock() {
             services.take();
+        }
+        if let Ok(mut workdir) = self.0.workdir.lock() {
+            workdir.clear();
         }
     }
 }

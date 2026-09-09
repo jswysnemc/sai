@@ -31,6 +31,7 @@ pub struct ExecutionLimits {
     pub output_bytes: usize,
     pub model_requests: usize,
     pub tool_calls: usize,
+    pub system_calls: usize,
 }
 
 impl Default for ExecutionLimits {
@@ -44,6 +45,7 @@ impl Default for ExecutionLimits {
             output_bytes: 1024 * 1024,
             model_requests: 32,
             tool_calls: 128,
+            system_calls: 1024,
         }
     }
 }
@@ -102,6 +104,7 @@ impl ExecutionLimits {
             || !(1024..=4 * 1024 * 1024).contains(&self.output_bytes)
             || !(1..=256).contains(&self.model_requests)
             || !(1..=1024).contains(&self.tool_calls)
+            || !(1..=4096).contains(&self.system_calls)
         {
             bail!("plugin execution limits exceed supported bounds");
         }

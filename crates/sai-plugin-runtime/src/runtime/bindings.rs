@@ -28,6 +28,14 @@ pub(super) fn install(
         limits.clone(),
         control.clone(),
     )?;
+    super::system::install(
+        lua,
+        api,
+        host.clone(),
+        capabilities.clone(),
+        limits.clone(),
+        control.clone(),
+    )?;
     super::http::install(lua, api, host, capabilities, limits, control)
 }
 

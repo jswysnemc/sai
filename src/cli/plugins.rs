@@ -32,10 +32,10 @@ pub(crate) enum PluginsCommand {
         #[arg(long)]
         replace: bool,
     },
-    /// Enable a plugin, optionally changing network, model and tool grants
+    /// 【插件命令】【启用授权】启用插件，可分别调整网络、模型、工具、文件、环境和进程授权
     Enable {
         id: String,
-        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_tool", "no_tools"])]
+        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_tool", "no_tools", "allow_read_path", "no_file_read", "allow_env", "no_env", "allow_process", "no_processes"])]
         grant_declared: bool,
         #[arg(long, value_name = "ORIGIN", conflicts_with = "no_http")]
         allow_http: Vec<String>,
@@ -56,6 +56,18 @@ pub(crate) enum PluginsCommand {
         allow_tool: Vec<String>,
         #[arg(long)]
         no_tools: bool,
+        #[arg(long, value_name = "PATH", conflicts_with = "no_file_read")]
+        allow_read_path: Vec<String>,
+        #[arg(long)]
+        no_file_read: bool,
+        #[arg(long, value_name = "NAME", conflicts_with = "no_env")]
+        allow_env: Vec<String>,
+        #[arg(long)]
+        no_env: bool,
+        #[arg(long, value_name = "TEMPLATE", conflicts_with = "no_processes")]
+        allow_process: Vec<String>,
+        #[arg(long)]
+        no_processes: bool,
     },
     /// Disable a plugin for subsequent loads
     Disable { id: String },
@@ -193,6 +205,12 @@ pub(crate) async fn run(
             no_model,
             allow_tool,
             no_tools,
+            allow_read_path,
+            no_file_read,
+            allow_env,
+            no_env,
+            allow_process,
+            no_processes,
         } => {
             let update = if grant_declared {
                 GrantUpdate::Declared
@@ -202,6 +220,12 @@ pub(crate) async fn run(
                 || no_model
                 || !allow_tool.is_empty()
                 || no_tools
+                || !allow_read_path.is_empty()
+                || no_file_read
+                || !allow_env.is_empty()
+                || no_env
+                || !allow_process.is_empty()
+                || no_processes
             {
                 let change_http = no_http || !allow_http.is_empty();
                 GrantUpdate::Changes(GrantChanges {
@@ -211,6 +235,12 @@ pub(crate) async fn run(
                     model: (allow_model || no_model).then_some(allow_model),
                     tools: (no_tools || !allow_tool.is_empty())
                         .then(|| allow_tool.into_iter().collect()),
+                    read_paths: (no_file_read || !allow_read_path.is_empty())
+                        .then(|| allow_read_path.into_iter().collect()),
+                    environment: (no_env || !allow_env.is_empty())
+                        .then(|| allow_env.into_iter().collect()),
+                    processes: (no_processes || !allow_process.is_empty())
+                        .then(|| allow_process.into_iter().collect()),
                 })
             } else {
                 GrantUpdate::Keep

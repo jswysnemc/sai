@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use sai_plugin_runtime::Capabilities;
+use sai_plugin_runtime::{Capabilities, SystemCapabilities};
 use std::collections::BTreeSet;
 
 /// 【插件】【授权更新】全量替换与按能力修改分开，撤销网络不会隐式改变模型或工具授权。
@@ -16,6 +16,9 @@ pub(crate) struct GrantChanges {
     pub http_read_only_post: Option<BTreeSet<String>>,
     pub model: Option<bool>,
     pub tools: Option<BTreeSet<String>>,
+    pub read_paths: Option<BTreeSet<String>>,
+    pub environment: Option<BTreeSet<String>>,
+    pub processes: Option<BTreeSet<String>>,
 }
 
 impl GrantUpdate {
@@ -27,6 +30,8 @@ impl GrantUpdate {
         current: Capabilities,
         declared: &Capabilities,
     ) -> Result<Option<Capabilities>> {
+        // 【插件】【过期授权】1. 模板或来源变化后，分项修改只保留仍然有效的授权
+        let current = current.intersection(declared);
         let grants = match self {
             Self::Keep => return Ok(None),
             Self::Declared => declared.clone(),
@@ -37,6 +42,23 @@ impl GrantUpdate {
                     .unwrap_or(current.http_read_only_post),
                 model: changes.model.unwrap_or(current.model),
                 tools: changes.tools.unwrap_or(current.tools),
+                system: SystemCapabilities {
+                    read_paths: changes.read_paths.unwrap_or(current.system.read_paths),
+                    environment: changes.environment.unwrap_or(current.system.environment),
+                    processes: match changes.processes {
+                        None => current.system.processes,
+                        Some(names) => names
+                            .into_iter()
+                            .map(|name| {
+                                let template =
+                                    declared.system.processes.get(&name).ok_or_else(|| {
+                                        anyhow::anyhow!("process template is not declared: {name}")
+                                    })?;
+                                Ok((name, template.clone()))
+                            })
+                            .collect::<Result<_>>()?,
+                    },
+                },
             },
         };
         grants.validate()?;

@@ -5,9 +5,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 mod services;
+mod system;
 pub use services::{
     HostTool, InvocationServices, ModelMessage, ModelRequest, ModelResponse, ModelRole,
     ModelToolCall, ModelUsage,
+};
+pub use system::{
+    DirectoryEntry, DirectoryListing, FileInfo, FileReadRequest, FileText, ProcessOutput,
+    ProcessRequest, SystemContext,
 };
 
 /// 【插件】【HTTP 请求】宿主执行的请求，不允许插件直接创建网络连接。
@@ -38,6 +43,62 @@ pub struct HttpResponse {
 /// 【插件】【宿主接口】插件运行时所需的异步能力，实现不依赖 Sai 应用配置。
 #[async_trait]
 pub trait PluginHost: Send + Sync {
+    /// 【插件】【环境读取】读取精确授权的环境变量，缺失值返回 None。
+    /// @param name 变量名；capabilities 为有效授权
+    /// @returns 环境变量文本，未实现该能力的宿主返回错误
+    fn environment(&self, _name: &str, _capabilities: &Capabilities) -> Result<Option<String>> {
+        anyhow::bail!("environment access is unavailable in this host")
+    }
+
+    /// 【插件】【文件读取】读取已授权范围内的有界文本。
+    /// @param request 路径与字节限制；context 为可信工作目录；capabilities 为授权
+    /// @returns 文本与截断信息
+    async fn read_text(
+        &self,
+        _request: FileReadRequest,
+        _context: SystemContext,
+        _capabilities: Capabilities,
+    ) -> Result<FileText> {
+        anyhow::bail!("file reading is unavailable in this host")
+    }
+
+    /// 【插件】【目录读取】列出已授权目录中的有界条目。
+    /// @param path 路径；max_entries 为条数上限；context 为可信目录；capabilities 为授权
+    /// @returns 条目与截断信息
+    async fn read_directory(
+        &self,
+        _path: String,
+        _max_entries: usize,
+        _context: SystemContext,
+        _capabilities: Capabilities,
+    ) -> Result<DirectoryListing> {
+        anyhow::bail!("directory reading is unavailable in this host")
+    }
+
+    /// 【插件】【属性读取】检查已授权路径，不将未授权路径伪装为不存在。
+    /// @param path 路径；context 为可信目录；capabilities 为授权
+    /// @returns 文件属性，已授权但不存在时返回 None
+    async fn file_info(
+        &self,
+        _path: String,
+        _context: SystemContext,
+        _capabilities: Capabilities,
+    ) -> Result<Option<FileInfo>> {
+        anyhow::bail!("file information is unavailable in this host")
+    }
+
+    /// 【插件】【进程执行】按完整模板执行程序并管理超时、取消和有界输出。
+    /// @param request 模板与参数；context 为真实目录和权限；capabilities 为有效授权
+    /// @returns 退出状态与输出，无法启动或未授权时返回错误
+    async fn process(
+        &self,
+        _request: ProcessRequest,
+        _context: SystemContext,
+        _capabilities: Capabilities,
+    ) -> Result<ProcessOutput> {
+        anyhow::bail!("process execution is unavailable in this host")
+    }
+
     /// 【插件】【文本分词】由宿主提供统一的文本 token 估算。
     /// @param text 已通过字节限制的文本
     /// @returns 估算数量；未提供分词能力的宿主返回明确错误

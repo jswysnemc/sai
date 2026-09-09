@@ -5,6 +5,7 @@ mod http;
 mod modules;
 mod registration;
 mod services;
+mod system;
 mod text;
 
 use crate::host::{InvocationServices, PluginHost};

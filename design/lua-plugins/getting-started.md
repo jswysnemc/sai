@@ -107,10 +107,11 @@ sai plugins remove hello
 | `linux-game-signals` | `gather_linux_game_compatibility_signals` | 沿用主配置 `plugins.linux_game_compatibility.enabled` |
 | `linux-game-investigation` | `linux_game_compatibility` | 沿用主配置 `plugins.linux_game_compatibility.enabled` |
 | `input-method-investigation` | `linux_input_method_diagnose` | 沿用主配置 `plugins.deep_diagnose.enabled` |
+| `diagnostic-evidence` | `check_issue`、`diagnostic_app_probe` | 沿用主配置 `plugins.diagnostics.enabled` |
 
 `plugins.jsonc` 的显式设置优先于上述默认值。内置包保留原工具名称；外部包不能使用内置插件 ID，也不能覆盖现有工具。已禁用的内置工具仍可在 Agent 设置中预先选择，但无法实际执行。
 
-这些查询工具均为只读。ProtonDB 的 Algolia 搜索使用 GET，数字 App ID 的名称查询失败时保留原 ID，评论读取失败时仍返回评级。Fcitx 的 `include_page_excerpt=false` 完全使用包内规则；启用摘录时最多读取 512 KiB 页面，保留 Markdown 并截取 12,000 个 Unicode 字符。ArchWiki 页面同样保留 Markdown 链接。
+查询工具和 `check_issue` 保持只读；`diagnostic_app_probe` 是明确执行应用的写入工具，不出现在只读工具目录中。ProtonDB 的 Algolia 搜索使用 GET，数字 App ID 的名称查询失败时保留原 ID，评论读取失败时仍返回评级。Fcitx 的 `include_page_excerpt=false` 完全使用包内规则；启用摘录时最多读取 512 KiB 页面，保留 Markdown 并截取 12,000 个 Unicode 字符。ArchWiki 页面同样保留 Markdown 链接。
 
 ### 网页搜索设置
 
@@ -189,6 +190,24 @@ sai plugins disable input-method-investigation
 ```
 
 调查包可以独立启停，禁用后 `check_issue` 和 Fcitx Wiki 仍可单独使用。显式插件开关优先于旧输入法开关。调查只使用授权范围内的只读工具；模型消息不包含主会话历史或供应商凭据。模型、工具和消息预算的收尾规则与游戏调查一致，接口限制见 [Lua API](api.md)。
+
+### 本地诊断证据
+
+`diagnostic-evidence` 把 `check_issue` 的参数推断、Linux 九类采集、macOS 基础采集、输入法路径规则和报告格式迁入 Lua。Windows 自动模式仍返回 `unsupported`，不会执行 Linux 命令。
+
+```sh
+sai --plan __tool check_issue '{"area":"input_method","target":"your-app","depth":"quick"}'
+sai plugins info diagnostic-evidence --json
+sai plugins enable diagnostic-evidence --no-processes
+```
+
+普通取证不再自动执行目标的 `--version`。需要运行目标时，调用写入工具 `diagnostic_app_probe`，传入 `probe="version"` 或 `probe="launch"`、`target`，以及可选的 `area="app"` 或 `area="input_method"`。旧 `check_issue` 参数 `allow_launch_probe=true` 会在取证前返回明确错误，指向 `diagnostic_app_probe`，不会静默忽略启动意图。
+
+启动探测沿用 `launch_timeout_seconds` 的 1–15 秒采样范围；目标已运行时跳过重复启动。长时间运行的目标使用既有 `run_command` 管理，报告返回 `facts.launch_probe.managed_task_id`，可以用 `background_command action=stop` 停止。禁用后台命令时，启动执行沿用宿主同步命令的超时策略，不承诺继续保留应用。
+
+包设置为 `command_timeout_ms`、`max_stdout_chars` 和 `max_stderr_chars`。旧 `plugins.diagnostics` 设置仅提供缺省值：旧命令时长收窄到 1–120 秒，输出最多各 200,000 字符；显式毫秒设置支持 1–120,000，显式输出限制支持 0–200,000。非法类型或超限值在保存前失败。
+
+文件、环境、进程分别授权。内置清单明确列出 `/proc`、系统模块目录、桌面入口目录、系统信息文件、输入法环境变量和固定只读模板；显式版本模板声明写入，启动依赖单独的 `run_command` 工具授权。撤销一类能力后，报告保留其他证据并记录缺失来源。完整接口见[系统能力说明](system-api.md)。
 
 ## 验证
 

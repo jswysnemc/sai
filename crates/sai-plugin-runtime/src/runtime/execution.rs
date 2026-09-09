@@ -15,7 +15,9 @@ impl Vm {
         invocation: Invocation,
         context: InvocationContext,
     ) -> Result<Value> {
-        let _lease = self.control.begin(context.services.clone())?;
+        let _lease = self
+            .control
+            .begin(context.services.clone(), &context.workdir)?;
         let ctx = context_table(&self.lua, &context, self.control.clone())?;
         match invocation {
             Invocation::Tool(name, arguments) => {

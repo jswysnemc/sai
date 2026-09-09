@@ -35,6 +35,7 @@ pub(super) fn packages() -> Result<Vec<PluginPackage>> {
 pub(super) fn default_enabled(config: &AppConfig, id: &str) -> bool {
     match id {
         "archlinux" => config.plugins.archlinux.enabled,
+        "diagnostic-evidence" => config.plugins.diagnostics.enabled,
         "input-method-investigation" => config.plugins.deep_diagnose.enabled,
         "linux-game-signals" | "linux-game-investigation" => {
             config.plugins.linux_game_compatibility.enabled

@@ -11,6 +11,7 @@ mod management_lock;
 mod registry;
 mod services;
 mod session;
+mod system;
 
 pub(crate) use discovery::{discover, PluginDiagnostic, PluginSource};
 pub(crate) use events::PluginEvents;

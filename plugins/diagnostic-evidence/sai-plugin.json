@@ -1,0 +1,379 @@
+{
+  "api_version": 1,
+  "id": "diagnostic-evidence",
+  "version": "1.0.0",
+  "name": "Local diagnostic evidence",
+  "description": "Collect Linux and macOS evidence through explicitly granted file, environment, and process capabilities.",
+  "entry": "init.lua",
+  "capabilities": {
+    "tools": [
+      "run_command"
+    ],
+    "system": {
+      "read_paths": [
+        "/etc/os-release",
+        "/proc",
+        "/usr/lib",
+        "/usr/lib64",
+        "/app/lib",
+        "/usr/share/applications",
+        "~/.local/share/applications",
+        "/var/lib/pacman/db.lck"
+      ],
+      "environment": [
+        "HOME",
+        "PATH",
+        "SHELL",
+        "TERM",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "XDG_SESSION_TYPE",
+        "XDG_CURRENT_DESKTOP",
+        "DESKTOP_SESSION",
+        "WAYLAND_DISPLAY",
+        "DISPLAY",
+        "GTK_IM_MODULE",
+        "QT_IM_MODULE",
+        "QT_IM_MODULES",
+        "XMODIFIERS",
+        "SDL_IM_MODULE",
+        "GLFW_IM_MODULE",
+        "XDG_RUNTIME_DIR",
+        "DBUS_SESSION_BUS_ADDRESS"
+      ],
+      "processes": {
+        "system-info": {
+          "program": "uname",
+          "args": [
+            "-a"
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          },
+          "read_only": true
+        },
+        "command-path": {
+          "program": "which",
+          "args": [
+            "--",
+            {
+              "parameter": "target"
+            }
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160,
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.+-]*$"
+              }
+            },
+            "required": [
+              "target"
+            ],
+            "additionalProperties": false
+          },
+          "read_only": true
+        },
+        "processes": {
+          "program": "pgrep",
+          "args": [
+            "-af",
+            "--",
+            {
+              "parameter": "target"
+            }
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              }
+            },
+            "required": [
+              "target"
+            ],
+            "additionalProperties": false
+          },
+          "read_only": true
+        },
+        "systemd-user": {
+          "program": "systemctl",
+          "args": [
+            "--user",
+            "is-active",
+            "--",
+            {
+              "parameter": "service"
+            }
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "enum": [
+                  "xdg-desktop-portal.service",
+                  "pipewire.service",
+                  "wireplumber.service",
+                  "pipewire-pulse.service"
+                ]
+              }
+            },
+            "required": [
+              "service"
+            ],
+            "additionalProperties": false
+          },
+          "read_only": true
+        },
+        "fcitx-status": {
+          "program": "fcitx5-remote",
+          "args": [],
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          },
+          "read_only": true
+        },
+        "wayland-info": {
+          "program": "wayland-info",
+          "args": [],
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          },
+          "read_only": true
+        },
+        "locales": {
+          "program": "locale",
+          "args": [
+            "-a"
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          },
+          "read_only": true
+        },
+        "sockets": {
+          "program": "ss",
+          "args": [
+            "-xp"
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          },
+          "read_only": true
+        },
+        "audio-status": {
+          "program": "wpctl",
+          "args": [
+            "status"
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          },
+          "read_only": true
+        },
+        "pci": {
+          "program": "lspci",
+          "args": [
+            "-nnk"
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          },
+          "read_only": true
+        },
+        "network-addresses": {
+          "program": "ip",
+          "args": [
+            "-brief",
+            "addr"
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          },
+          "read_only": true
+        },
+        "resolver-status": {
+          "program": "resolvectl",
+          "args": [
+            "status"
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          },
+          "read_only": true
+        },
+        "disk-usage": {
+          "program": "df",
+          "args": [
+            "-hT"
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          },
+          "read_only": true
+        },
+        "macos-info": {
+          "program": "sw_vers",
+          "args": [],
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          },
+          "read_only": true
+        },
+        "package-owner": {
+          "program": "pacman",
+          "args": [
+            "-Qo",
+            "--",
+            {
+              "parameter": "path"
+            }
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false
+          },
+          "read_only": true
+        },
+        "package-files": {
+          "program": "pacman",
+          "args": [
+            "-Ql",
+            "--",
+            {
+              "parameter": "package"
+            }
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "package": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160,
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.+-]*$"
+              }
+            },
+            "required": [
+              "package"
+            ],
+            "additionalProperties": false
+          },
+          "read_only": true
+        },
+        "recent-logs": {
+          "program": "journalctl",
+          "args": [
+            "--user",
+            "--since",
+            {
+              "parameter": "since"
+            },
+            "--no-pager",
+            "-n",
+            "200"
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "since": {
+                "type": "string",
+                "pattern": "^-[0-9]{1,4}min$"
+              }
+            },
+            "required": [
+              "since"
+            ],
+            "additionalProperties": false
+          },
+          "read_only": true
+        },
+        "app-version": {
+          "program": "/usr/bin/env",
+          "args": [
+            "--",
+            {
+              "parameter": "target"
+            },
+            "--version"
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160,
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.+-]*$"
+              }
+            },
+            "required": [
+              "target"
+            ],
+            "additionalProperties": false
+          },
+          "read_only": false
+        }
+      }
+    }
+  },
+  "limits": {
+    "memory_bytes": 33554432,
+    "instructions": 20000000,
+    "timeout_ms": 300000,
+    "output_bytes": 2097152,
+    "system_calls": 2048,
+    "tool_calls": 4
+  }
+}

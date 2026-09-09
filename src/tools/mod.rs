@@ -7,7 +7,6 @@ mod configurable_cli_tools;
 mod context;
 mod default_tools;
 mod descriptions;
-mod diagnostics;
 mod exchange_rate;
 pub(crate) mod file_change_model;
 pub(crate) mod file_diff;
@@ -244,9 +243,6 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     if config.plugins.package_advisor.enabled {
         package_advisor::register(&mut registry, paths.clone());
     }
-    if config.plugins.diagnostics.enabled {
-        diagnostics::register(&mut registry, config.clone());
-    }
     if config.memory_config().enabled {
         memory::register(&mut registry, config.clone(), paths.clone());
     }
@@ -367,9 +363,6 @@ pub fn readonly_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     }
     if config.plugins.package_advisor.enabled {
         package_advisor::register(&mut registry, paths.clone());
-    }
-    if config.plugins.diagnostics.enabled {
-        diagnostics::register(&mut registry, config.clone());
     }
     if config.memory_config().enabled {
         memory::register_readonly(&mut registry, config.clone(), paths.clone());

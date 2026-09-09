@@ -3,6 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use url::Url;
 
+mod system;
+pub use system::{ProcessArgument, ProcessParameter, ProcessTemplate, SystemCapabilities};
+
 /// 【插件】【能力声明】来源授权与只读 POST 查询端点分别声明和授予。
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -15,12 +18,15 @@ pub struct Capabilities {
     pub model: bool,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub tools: BTreeSet<String>,
+    #[serde(default, skip_serializing_if = "SystemCapabilities::is_empty")]
+    pub system: SystemCapabilities,
 }
 
 impl Capabilities {
     /// 【插件】【能力校验】验证精确来源和不含查询参数的规范端点地址。
     /// @returns 声明合法且没有超过数量限制时成功
     pub fn validate(&self) -> Result<()> {
+        self.system.validate()?;
         if self.http.len() > 32 || self.http_read_only_post.len() > 32 {
             bail!("a plugin may declare at most 32 HTTP origins and 32 read-only POST endpoints");
         }
@@ -72,6 +78,7 @@ impl Capabilities {
                 .collect(),
             model: self.model && granted.model,
             tools: self.tools.intersection(&granted.tools).cloned().collect(),
+            system: self.system.intersection(&granted.system),
         }
     }
 
@@ -85,6 +92,7 @@ impl Capabilities {
                 .is_subset(&declared.http_read_only_post)
             && (!self.model || declared.model)
             && self.tools.is_subset(&declared.tools)
+            && self.system.is_subset(&declared.system)
     }
 
     /// 【插件】【来源授权】检查完整 URL 是否属于有效来源，拒绝 URL 内嵌凭据。
