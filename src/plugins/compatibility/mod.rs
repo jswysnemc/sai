@@ -2,6 +2,7 @@ mod diagnostics;
 mod exchange_rate;
 mod input_method;
 mod linux_game;
+mod notification;
 mod web_search;
 
 use crate::config::AppConfig;
@@ -26,6 +27,9 @@ pub(super) fn resolve(
     declared: &Capabilities,
 ) -> Result<Option<RuntimeOverrides>> {
     match id {
+        "reply-notification" => {
+            notification::resolve(&config.notification, settings, declared).map(Some)
+        }
         "diagnostic-evidence" => diagnostics::resolve(config, settings, declared).map(Some),
         "exchange-rate" => {
             exchange_rate::resolve(&config.plugins.exchange_rate, settings, declared).map(Some)

@@ -16,6 +16,8 @@ pub struct Capabilities {
     pub http_read_only_post: BTreeSet<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub model: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub notifications: bool,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub tools: BTreeSet<String>,
     #[serde(default, skip_serializing_if = "SystemCapabilities::is_empty")]
@@ -77,6 +79,7 @@ impl Capabilities {
                 .cloned()
                 .collect(),
             model: self.model && granted.model,
+            notifications: self.notifications && granted.notifications,
             tools: self.tools.intersection(&granted.tools).cloned().collect(),
             system: self.system.intersection(&granted.system),
         }
@@ -91,6 +94,7 @@ impl Capabilities {
                 .http_read_only_post
                 .is_subset(&declared.http_read_only_post)
             && (!self.model || declared.model)
+            && (!self.notifications || declared.notifications)
             && self.tools.is_subset(&declared.tools)
             && self.system.is_subset(&declared.system)
     }

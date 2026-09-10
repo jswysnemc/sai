@@ -232,15 +232,15 @@ pub(super) async fn execute_repl_turn(
         (!draft.is_empty()).then_some(draft)
     };
     guard_result?;
-    // 1. 答复结束（完成 / 中断 / 失败）发送桌面通知
-    let body = if interrupted {
-        crate::i18n::text("Reply interrupted", "答复已中断")
+    // 3. 【答复通知】【终态交付】宿主只交付确定的结束状态，文案与开关由 Lua 策略处理
+    let status = if interrupted {
+        sai_plugin_runtime::ReplyStatus::Interrupted
     } else if result.is_err() {
-        crate::i18n::text("Reply failed", "答复失败")
+        sai_plugin_runtime::ReplyStatus::Failed
     } else {
-        crate::i18n::text("Reply complete", "答复已完成")
+        sai_plugin_runtime::ReplyStatus::Completed
     };
-    crate::reply_notify::notify_reply_complete(config, "Sai", body);
+    crate::notifications::reply_ended(paths, config, status).await;
     Ok(ReplTurnOutcome {
         interrupted,
         result,

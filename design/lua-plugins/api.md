@@ -117,14 +117,40 @@ sai.on("tool_call", check_tool)
 | `turn_end` | `message_end` 之后 | 同上及 `ok` |
 | `tool_call` | 实际工具通过宿主授权，尚未执行 | `name`、原始 `arguments` |
 | `tool_result` | 工具执行或插件检查结束 | `name`、`ok`、最多 16384 字符的 `output` |
+| `reply_end` | 交互面为一次结束状态计算通知 | `surface`、`status`、`locale`；使用下述独立纯运行时 |
 
 传输重试属于同一逻辑模型请求，不会重复产生开始事件。工具执行独立于模型请求范围。主 Agent、子任务以及各工具入口共用相同分发语义；外部对话内核提供 Agent 级事件，不伪造无法观察的内部模型请求事件。
 
 `tool_call` 只接受 `nil` 或 `{deny="原因"}`；拒绝原因必须非空且不超过 4096 字节。异常或非法返回值阻止本次工具执行。监听器不能批准宿主已拒绝的操作，也不能修改真实参数。
 
-其他事件仅用于观察；返回值不会注入模型消息。监听器失败独立诊断，不替换业务结果，也不阻止其他插件。事件回调没有写入授权，也没有模型和工具调用服务，不能沿用上一工具回调的权限。
+除 `tool_call` 和 `reply_end` 外，事件仅用于观察；返回值不会注入模型消息。监听器失败独立诊断，不替换业务结果，也不阻止其他插件。事件回调没有写入授权，也没有模型和工具调用服务，不能沿用上一工具回调的权限。
 
 外部取消会回收正在运行的 Future，不另外启动后台任务补发结束事件。插件不能依赖结束监听器释放宿主资源；取消、I/O 回收和实例释放由 Rust 负责。
+
+### 通知纯回调
+
+通知包声明 `"capabilities": {"notifications": true}`。外部包还需要用户通过 `sai plugins enable <id> --allow-notifications` 授权；`--no-notifications` 只撤销这一项，其他分项更新也不会改变通知授权。
+
+```lua
+--- 【通知示例】【完成提醒】为 Web 完成状态提供纯展示数据
+--- @param event table 包含交互面、结束状态与区域代码
+--- @return table|nil 通知数据，不适用时返回 nil
+local function notice(event)
+    if event.surface ~= "web" or event.status ~= "completed" then return nil end
+    return {title="Sai", body="Reply complete", desktop=true, sound=false}
+end
+sai.on("reply_end", notice)
+```
+
+`surface` 只接受 `tui`、`web`；`status` 只接受 `completed`、`interrupted`、`failed`。`locale` 是最多 32 字节的区域代码，当前交互面使用 `en-US` 或 `zh-CN`。不会传入回复正文、工作目录或会话私有状态，CLI 单次执行与子任务没有这个展示入口。
+
+每次计算重新读取已保存的插件设置、授权和源码，建立独立纯 VM。不要依赖 Agent 的 Lua 全局变量、事件配对或连接内状态。此 VM 只获得通知授权，不提供网络、文件、进程、模型、工具调用或存储服务；同一包在普通工具回调中的其他授权不参与通知计算。返回值只交给交互面的投递器，不进入模型上下文，也不产生后台命令或自动续聊。
+
+一个监听器返回 `nil` 或 `{title, body, desktop, sound}`，四个字段必须类型正确，不接受额外字段。标题须非空且最多 256 字节，正文最多 4096 字节；拒绝换行、回车和制表符之外的控制字符。正文的整理与截断属于 Lua 策略。一个包出现任何非法返回值时整批丢弃，后续包继续执行。
+
+展示实例的 Lua 堆最多 4 MiB、指令最多 100,000、加载及回调各使用 100 毫秒时限、序列化结果最多 16 KiB；更小的清单预算继续有效。一次计划最多处理 16 个策略、交付 8 条通知，总等待预算两秒。发现与加载在阻塞工作线程中执行；文件读取的取消边界沿用系统接口约束。
+
+TUI 使用同一纯策略入口并在后台线程完成系统投递。Web 通过已认证的 `POST /api/notifications/plan` 提交 `{"status":"completed","locale":"zh-CN"}`，取得禁止缓存的 `{notifications, diagnostics}`；该接口本身不在服务器桌面显示通知。浏览器使用 SSE 封套中的 `replayed` 字段区分历史恢复，按工作区、会话和运行标识消费通知。已知活动运行在断线期间完成时，补发仍可以通知一次；会话切换会取消尚未完成的请求及权限回调。
 
 ## 上下文与状态
 

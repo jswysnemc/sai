@@ -32,10 +32,10 @@ pub(crate) enum PluginsCommand {
         #[arg(long)]
         replace: bool,
     },
-    /// 【插件命令】【启用授权】启用插件，可分别调整网络、模型、工具、文件、环境和进程授权
+    /// 【插件命令】【启用授权】启用插件，并按声明分别调整各项宿主能力授权
     Enable {
         id: String,
-        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_tool", "no_tools", "allow_read_path", "no_file_read", "allow_env", "no_env", "allow_process", "no_processes", "allow_session_storage", "no_session_storage", "allow_workspace", "no_workspace"])]
+        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_tool", "no_tools", "allow_read_path", "no_file_read", "allow_env", "no_env", "allow_process", "no_processes", "allow_session_storage", "no_session_storage", "allow_workspace", "no_workspace", "allow_notifications", "no_notifications"])]
         grant_declared: bool,
         #[arg(long, value_name = "ORIGIN", conflicts_with = "no_http")]
         allow_http: Vec<String>,
@@ -52,6 +52,10 @@ pub(crate) enum PluginsCommand {
         allow_model: bool,
         #[arg(long)]
         no_model: bool,
+        #[arg(long, conflicts_with = "no_notifications")]
+        allow_notifications: bool,
+        #[arg(long)]
+        no_notifications: bool,
         #[arg(long, value_name = "NAME", conflicts_with = "no_tools")]
         allow_tool: Vec<String>,
         #[arg(long)]
@@ -211,6 +215,8 @@ pub(crate) async fn run(
             no_http,
             allow_model,
             no_model,
+            allow_notifications,
+            no_notifications,
             allow_tool,
             no_tools,
             allow_read_path,
@@ -230,6 +236,8 @@ pub(crate) async fn run(
                 || !allow_http.is_empty()
                 || allow_model
                 || no_model
+                || allow_notifications
+                || no_notifications
                 || !allow_tool.is_empty()
                 || no_tools
                 || !allow_read_path.is_empty()
@@ -252,6 +260,8 @@ pub(crate) async fn run(
                     http_read_only_post: change_http
                         .then(|| allow_http_read_only_post.into_iter().collect()),
                     model: (allow_model || no_model).then_some(allow_model),
+                    notifications: (allow_notifications || no_notifications)
+                        .then_some(allow_notifications),
                     tools: (no_tools || !allow_tool.is_empty())
                         .then(|| allow_tool.into_iter().collect()),
                     read_paths: (no_file_read || !allow_read_path.is_empty())

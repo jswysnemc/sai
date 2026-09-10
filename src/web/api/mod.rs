@@ -11,6 +11,7 @@ mod health;
 mod input_history;
 mod mcp_config;
 mod memory;
+mod notifications;
 mod permissions;
 mod prompts;
 mod providers;
@@ -51,6 +52,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
     let protected = Router::new()
         .merge(workspaces::routes())
         .merge(config::routes())
+        .merge(notifications::routes())
         .merge(engine_connection::routes())
         .merge(input_history::routes())
         .merge(mcp_config::routes())

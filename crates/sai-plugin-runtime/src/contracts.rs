@@ -43,6 +43,7 @@ pub enum EventKind {
     MessageEnd,
     ToolCall,
     ToolResult,
+    ReplyEnd,
 }
 
 /// 【插件】【事件上下文】只传入本次事件允许插件读取的资料。

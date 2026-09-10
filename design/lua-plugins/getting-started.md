@@ -111,10 +111,27 @@ sai plugins remove hello
 | `weather` | `get_weather` | 沿用主配置 `plugins.weather.enabled` |
 | `exchange-rate` | `get_exchange_rate` | 沿用主配置 `plugins.exchange_rate.enabled` |
 | `moegirl` | `query_moegirl` | 沿用主配置 `plugins.moegirl.enabled` |
+| `package-advisor` | `review_aur_package`、`install_aur_package` | 沿用主配置 `plugins.package_advisor.enabled` |
+| `reply-notification` | 无模型工具；提供 `preview` 命令和 `reply_end` 回调 | 默认启用，沿用主配置的通知和声音设置 |
 
 `plugins.jsonc` 的显式设置优先于上述默认值。内置包保留原工具名称；外部包不能使用内置插件 ID，也不能覆盖现有工具。已禁用的内置工具仍可在 Agent 设置中预先选择，但无法实际执行。
 
 查询工具和 `check_issue` 保持只读；`diagnostic_app_probe` 是明确执行应用的写入工具，不出现在只读工具目录中。ProtonDB 的 Algolia 搜索使用 GET，数字 App ID 的名称查询失败时保留原 ID，评论读取失败时仍返回评级。Fcitx 的 `include_page_excerpt=false` 完全使用包内规则；启用摘录时最多读取 512 KiB 页面，保留 Markdown 并截取 12,000 个 Unicode 字符。ArchWiki 页面同样保留 Markdown 链接。
+
+### 答复通知
+
+TUI 与 Web 的完成、中断和失败通知由 `reply-notification` 计算，系统通知与提示音分别控制。`notification.enabled`、`notification.sound` 继续提供默认值；显式插件设置优先。例如，将 `{"sound":false}` 保存为 JSON，再执行 `sai plugins configure reply-notification ./settings.json`，即可沿用旧通知开关并关闭提示音。
+
+```sh
+sai plugins run reply-notification preview '{"surface":"tui","status":"completed","locale":"zh-CN"}'
+sai plugins enable reply-notification --no-notifications
+sai plugins enable reply-notification --allow-notifications
+sai plugins disable reply-notification
+```
+
+`preview` 只返回数据，不显示通知或播放声音；它可以在没有模型配置时运行。正式通知需要插件启用且取得 `notifications` 授权。撤销授权后，普通 `enable` 不会恢复它；通知开关与声音开关均为 false 时没有任何投递。
+
+纯策略每次计算读取新设置，Web 设置页中的旧通知开关也会在下一次计算生效。外部策略包通过 `--allow-notifications` 单独授权，其回调只返回展示数据；接口与预算见 [Lua API](api.md#通知纯回调)。客户端不会因回放已经结束的历史轮次再次播放提示音。
 
 ### 天气、汇率与萌娘百科
 

@@ -1,0 +1,10 @@
+{
+  "api_version": 1,
+  "id": "reply-notification",
+  "version": "1.0.0",
+  "name": "Reply notifications",
+  "description": "Plan desktop notifications and sounds after TUI or Web replies complete, fail or stop.",
+  "entry": "init.lua",
+  "capabilities": {"notifications": true},
+  "limits": {"memory_bytes": 1048576, "instructions": 100000, "timeout_ms": 100, "output_bytes": 4096}
+}

@@ -15,6 +15,7 @@ pub(crate) struct GrantChanges {
     pub http: Option<BTreeSet<String>>,
     pub http_read_only_post: Option<BTreeSet<String>>,
     pub model: Option<bool>,
+    pub notifications: Option<bool>,
     pub tools: Option<BTreeSet<String>>,
     pub read_paths: Option<BTreeSet<String>>,
     pub environment: Option<BTreeSet<String>>,
@@ -43,6 +44,7 @@ impl GrantUpdate {
                     .http_read_only_post
                     .unwrap_or(current.http_read_only_post),
                 model: changes.model.unwrap_or(current.model),
+                notifications: changes.notifications.unwrap_or(current.notifications),
                 tools: changes.tools.unwrap_or(current.tools),
                 system: SystemCapabilities {
                     session_storage: changes

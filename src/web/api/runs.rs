@@ -15,6 +15,9 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio_stream::wrappers::ReceiverStream;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Deserialize)]
 struct EventQuery {
     after: Option<u64>,
@@ -169,11 +172,11 @@ pub(super) fn session_events_stream(
     let backlog_stream = stream::iter(
         backlog
             .into_iter()
-            .map(|event| Ok::<_, Infallible>(sse_event(&event))),
+            .map(|event| Ok::<_, Infallible>(sse_event(&event, true))),
     );
     let live_stream = ReceiverStream::new(subscription.events).filter_map(move |event| {
         let event = (event.sequence > latest_backlog).then_some(event);
-        async move { event.map(|event| Ok::<_, Infallible>(sse_event(&event))) }
+        async move { event.map(|event| Ok::<_, Infallible>(sse_event(&event, false))) }
     });
     // 观察者被摘除后接收端关闭，此处补一条提示让前端知道存在空洞需要重连
     let dropped = subscription.dropped;
@@ -209,12 +212,23 @@ async fn events(
     Ok(Sse::new(stream).keep_alive(sse_keep_alive()))
 }
 
-/// 将 WebEvent 编码为 SSE 事件。
-pub(super) fn sse_event(event: &WebEvent) -> Event {
+/// 【事件交付】【补发标记】编码 SSE 并标记历史补发，避免客户端重复触发通知副作用。
+/// @param event 已分配序号的事件；replayed 表示本次交付来自历史日志
+/// @returns 保留原序号和内容的 SSE；标记不写回会话日志
+fn sse_event(event: &WebEvent, replayed: bool) -> Event {
+    #[derive(serde::Serialize)]
+    struct Delivery<'a> {
+        #[serde(flatten)]
+        event: &'a WebEvent,
+        replayed: bool,
+    }
     Event::default()
         .id(event.sequence.to_string())
         .event(event.kind.clone())
-        .data(serde_json::to_string(event).unwrap_or_else(|_| "{}".to_string()))
+        .data(
+            serde_json::to_string(&Delivery { event, replayed })
+                .unwrap_or_else(|_| "{}".to_string()),
+        )
 }
 
 /// 会话事件 SSE 保活设置。

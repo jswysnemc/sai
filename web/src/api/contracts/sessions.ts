@@ -162,6 +162,8 @@ export type ActiveRunsResponse = {
 };
 
 export type WebEvent = {
+  /** 【事件交付】【补发标记】历史补发用于恢复展示，不重复触发已经消费的通知 */
+  replayed?: boolean;
   sequence: number;
   run_id: string;
   workspace_id: string;

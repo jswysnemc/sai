@@ -34,7 +34,7 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 
 ## 已落地的版本 1
 
-独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、模型、工具调用、文件、环境、模板进程、JSON、文本、时间能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence` 与 `package-advisor` 已迁为随程序嵌入的十四个 Lua 包，共提供 21 个工具；相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
+独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、模型、工具调用、文件、环境、模板进程、JSON、文本、时间及通知纯回调能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence`、`package-advisor` 与 `reply-notification` 已迁为随程序嵌入的十五个 Lua 包，共提供 21 个工具；通知包不增加模型工具，相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
 
 CLI 提供创建、验证、安装、替换、配置、授权、启停、移除和命令执行。TUI 提供 `/plugins`、`/plugins reload` 与 `/plugin <id>/<command>`。模型工具通过原有共用注册入口进入 CLI、TUI、Web 和子任务，直接用户命令目前只有 CLI 与 TUI 入口。
 
@@ -136,3 +136,13 @@ Arch 包内部按软件包、状态和 Wiki 查询拆分；Fcitx 的主题、双
 `plugins/package-advisor` 包含元数据、审查文件选择、风险规则、审查记录和完整安装编排。Rust 的 `host/private.rs` 与 `runtime/private` 定义契约、授权、预算和有期限的目录句柄；`src/plugins/private` 负责插件及会话隔离、原子记录、二进制下载、安全解压和缓存目录。宿主不包含 AUR 风险模式或助手选择分支。
 
 用户操作标识由 `src/plugins/operation.rs` 维护，在普通 Agent 请求和跨 Lua VM 的组合调用中传递。审查记录使用完整会话目录区分工作区内同名会话；`StateStore` 的共同重置入口只清理当前作用域。通知模块仍保留宿主平台投递职责。
+
+## 通知策略与交付
+
+`plugins/reply-notification` 负责 TUI 与 Web 的状态文案、语言选择、通知开关、声音开关和 Unicode 正文整理。原 `src/reply_notify.rs` 及 Web 通知业务实现已删除；`src/notifications` 与浏览器投递模块只调用固定平台接口。宿主只交付已经确定的完成、中断或失败状态，插件不能改写它。
+
+`PresentationRuntime` 以每次展示为范围创建纯 VM，使用独立的通知授权和更小的资源预算。`src/plugins/presentation.rs` 负责发现与授权筛选、加载隔离、结果校验及诊断汇总。这个纯回调入口与 Agent 生命周期实例分开，没有 I/O 服务和会话私有状态，也不要求模型配置或工具白名单。插件错误不会改变原答复。
+
+旧 `notification.enabled` 与 `notification.sound` 只向内置包提供运行时默认值。显式插件设置按字段覆盖，包括 false；插件启停和通知授权又是独立开关。新计划读取新快照，管理操作不把旧默认值复制进 `plugins.jsonc`。外部包不会继承这两个配置字段。
+
+Web 使用独立认证接口计算通知，SSE 只增加交付层的历史补发标记，原始会话日志不改变。浏览器在异步计算前登记运行标识，拦截重复终态；重连后补发的已知活动运行仍可通知一次。切换会话时取消请求和迟到的权限回调。状态归并从原 856 行的 `use-run-stream.ts` 拆出，流连接、通知消费与平台投递各自独立。
