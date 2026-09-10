@@ -29,6 +29,7 @@ impl ImageHost {
                 responses
                     .into_iter()
                     .map(|(status, body)| BinaryResponse {
+                        url: String::new(),
                         status,
                         headers: Default::default(),
                         body,
@@ -149,9 +150,12 @@ pub(super) fn runtime(id: &str, settings: Value, host: Arc<dyn PluginHost>) -> P
         .into_iter()
         .find(|p| p.manifest.id == id)
         .unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let paths = crate::paths::SaiPaths::for_tests(root.path());
     let overrides = crate::plugins::compatibility::resolve(
         id,
         &crate::config::AppConfig::default(),
+        &paths,
         &settings,
         &package.manifest.capabilities,
     )

@@ -8,6 +8,8 @@ pub enum ToolAccess {
     #[default]
     ReadOnly,
     Writes,
+    /// 【插件】【可选写入】普通调用需要写入权限，只读调用仍可执行受宿主限制的查询分支
+    OptionalWrites,
 }
 
 /// 【插件】【工具契约】可序列化的模型工具定义，不包含 Lua 函数句柄。

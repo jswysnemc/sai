@@ -51,7 +51,7 @@ impl Vm {
                     .validate(&arguments)
                     .map_err(|error| anyhow::anyhow!("plugin tool {name} arguments: {error}"))?;
                 self.control.writable.store(
-                    context.allow_writes && tool.definition.access == ToolAccess::Writes,
+                    context.allow_writes && tool.definition.access != ToolAccess::ReadOnly,
                     Ordering::Release,
                 );
                 ctx.set(
@@ -70,7 +70,7 @@ impl Vm {
                     .get(&name)
                     .with_context(|| format!("unknown plugin command: {name}"))?;
                 self.control.writable.store(
-                    context.allow_writes && command.definition.access == ToolAccess::Writes,
+                    context.allow_writes && command.definition.access != ToolAccess::ReadOnly,
                     Ordering::Release,
                 );
                 ctx.set(

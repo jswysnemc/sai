@@ -8,6 +8,7 @@ pub(crate) mod binary;
 mod private;
 mod services;
 mod system;
+mod vision;
 pub use binary::{BinaryData, BinaryFile, BinaryResponse, DisplayedImage};
 pub use private::{
     validate_storage_key, validate_workspace_path, ArchiveRequest, PluginWorkspace, StorageRequest,
@@ -20,6 +21,7 @@ pub use system::{
     DirectoryEntry, DirectoryListing, FileInfo, FileReadRequest, FileText, ProcessOutput,
     ProcessRequest, SystemContext,
 };
+pub use vision::{VisionModelInfo, VisionRequest, VisionResponse, MAX_VISION_IMAGE_BYTES};
 
 /// 【插件】【HTTP 请求】宿主执行的请求，不允许插件直接创建网络连接。
 #[derive(Clone, Debug, Deserialize, Serialize)]

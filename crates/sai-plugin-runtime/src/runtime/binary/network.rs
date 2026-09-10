@@ -87,6 +87,12 @@ pub(super) fn install(lua: &Lua, api: &Table, services: Arc<BinaryServices>) -> 
                     }
                     let result = lua.create_table()?;
                     result.set("status", response.status)?;
+                    if response.url.len() > 8192 {
+                        return Err(mlua::Error::runtime(
+                            "plugin binary response URL exceeds size limit",
+                        ));
+                    }
+                    result.set("url", response.url)?;
                     result.set(
                         "headers",
                         super::super::system::result_value(

@@ -84,13 +84,15 @@ fn invalid_notification_settings_do_not_mutate_configuration() {
 /// 【通知设置测试】【配置隔离】外部包不能继承主配置中的通知偏好。
 #[test]
 fn external_packages_do_not_inherit_legacy_notification_settings() {
+    let root = tempfile::tempdir().unwrap();
+    let paths = crate::paths::SaiPaths::for_tests(root.path());
     let mut config = AppConfig::default();
     config.notification.enabled = false;
     config.notification.sound = false;
     for id in [ID, "own-notification"] {
         let mut plugin = super::support::descriptor(id, "");
         plugin.setting.settings = json!({"own":true});
-        plugin.refresh_compatibility(&config).unwrap();
+        plugin.refresh_compatibility(&config, &paths).unwrap();
         assert_eq!(plugin.settings(), &json!({"own":true}));
     }
 }

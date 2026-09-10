@@ -1,7 +1,10 @@
 mod model;
+mod stream_budget;
 mod tools;
+mod vision;
 
 pub(crate) use model::PluginModelSource;
+pub(crate) use vision::PluginVisionSource;
 
 use crate::llm::OpenAiCompatibleClient;
 use crate::tools::ToolRegistry;
@@ -31,6 +34,7 @@ struct CallFrame {
 pub(crate) struct PluginServices {
     tools: ToolRegistry,
     model: Option<PluginModelSource>,
+    vision: Option<PluginVisionSource>,
     client: OnceLock<OpenAiCompatibleClient>,
     progress: Option<ProgressCallback>,
     allowed: BTreeSet<String>,
@@ -63,6 +67,7 @@ impl PluginServices {
         Ok(Self {
             tools,
             model,
+            vision: None,
             client: OnceLock::new(),
             progress: context.progress.clone(),
             allowed,
@@ -104,6 +109,28 @@ impl PluginServices {
 
 #[async_trait]
 impl InvocationServices for PluginServices {
+    /// 【插件视觉】【配置查询】返回宿主视觉配置的公开标识，不初始化模型客户端。
+    /// @returns 已启用且配置有效时的模型标识
+    fn vision_info(&self) -> Result<Option<sai_plugin_runtime::host::VisionModelInfo>> {
+        self.vision
+            .as_ref()
+            .map(PluginVisionSource::info)
+            .transpose()
+            .map(Option::flatten)
+    }
+
+    /// 【插件视觉】【图片请求】使用独立授权的视觉模型分析当前缓冲。
+    /// @param request 提示词；image 为本次图片字节；max_bytes 为文字大小上限
+    /// @returns 模型正文和可信模型标识
+    async fn analyze_image(
+        &self,
+        request: sai_plugin_runtime::host::VisionRequest,
+        image: sai_plugin_runtime::host::BinaryData,
+        max_bytes: usize,
+    ) -> Result<sai_plugin_runtime::host::VisionResponse> {
+        self.complete_vision(request, image, max_bytes).await
+    }
+
     /// 【插件】【工具目录】只公开当前调用授权并且不会递归进入祖先插件的工具。
     /// @returns 与模型请求和实际执行共用的目录
     fn tools(&self) -> Result<Vec<HostTool>> {

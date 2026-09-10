@@ -27,7 +27,7 @@ fn registry(
     tools.set_plugin_model_client(&fixture.client("selected-input-model", paths));
     let mut plugin = find(&config, paths, PLUGIN).unwrap();
     plugin.setting.settings = settings;
-    plugin.refresh_compatibility(&config).unwrap();
+    plugin.refresh_compatibility(&config, &paths).unwrap();
     change(&mut plugin);
     register_descriptor(&mut tools, plugin, Arc::new(FixtureHost::default()), false).unwrap();
     register_evidence(&mut tools);

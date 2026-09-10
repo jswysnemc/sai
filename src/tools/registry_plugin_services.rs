@@ -2,7 +2,7 @@ use super::{ToolPermission, ToolRegistry};
 use crate::config::AppConfig;
 use crate::llm::OpenAiCompatibleClient;
 use crate::paths::SaiPaths;
-use crate::plugins::{PluginModelSource, PluginServices};
+use crate::plugins::{PluginModelSource, PluginServices, PluginVisionSource};
 use anyhow::Result;
 use sai_plugin_runtime::InvocationContext;
 use std::sync::Arc;
@@ -19,10 +19,9 @@ impl ToolRegistry {
     /// @param config 当前应用配置；paths 为凭据与应用目录
     /// @returns 无
     pub(crate) fn configure_plugin_model(&mut self, config: &AppConfig, paths: &SaiPaths) {
-        self.plugin_model = Some(PluginModelSource::Config(Arc::new((
-            config.clone(),
-            paths.clone(),
-        ))));
+        let snapshot = Arc::new((config.clone(), paths.clone()));
+        self.plugin_model = Some(PluginModelSource::Config(snapshot.clone()));
+        self.plugin_vision = Some(PluginVisionSource::new(snapshot));
     }
 
     /// 【插件】【当前模型】Agent 或子任务选定客户端后覆盖配置来源，热切换立即生效。
@@ -48,7 +47,7 @@ impl ToolRegistry {
         context: &InvocationContext,
     ) -> Result<Option<Arc<PluginServices>>> {
         let grants = self.plugins.capabilities(id)?;
-        if !grants.model && grants.tools.is_empty() {
+        if !grants.model && !grants.vision && grants.tools.is_empty() {
             return Ok(None);
         }
         let names = grants
@@ -64,8 +63,9 @@ impl ToolRegistry {
         // 【插件】【能力组合】保留 Agent 目录供被调用插件检查自己的授权，调用方仍只能使用 names
         let tools = self.clone();
         let model = grants.model.then(|| self.plugin_model.clone()).flatten();
-        Ok(Some(Arc::new(PluginServices::new(
-            id, tools, model, names, context,
-        )?)))
+        Ok(Some(Arc::new(
+            PluginServices::new(id, tools, model, names, context)?
+                .with_vision(grants.vision.then(|| self.plugin_vision.clone()).flatten()),
+        )))
     }
 }

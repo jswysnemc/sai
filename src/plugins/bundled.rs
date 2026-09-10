@@ -48,6 +48,7 @@ pub(super) fn default_enabled(config: &AppConfig, id: &str) -> bool {
         "moegirl" => config.plugins.moegirl.enabled,
         "weather" => config.plugins.weather.enabled,
         "web-search" => config.plugins.web.enabled,
+        "web-images" => config.plugins.web_images.enabled,
         _ => true,
     }
 }

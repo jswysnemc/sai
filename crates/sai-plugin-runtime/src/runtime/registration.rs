@@ -77,11 +77,17 @@ pub(super) fn install(
                     "duplicate plugin command: {name}"
                 )));
             }
+            let permission = access(&definition)?;
+            if permission == ToolAccess::OptionalWrites {
+                return Err(mlua::Error::runtime(
+                    "optional_writes is only supported for tools",
+                ));
+            }
             let command = RegisteredCommand {
                 definition: PluginCommand {
                     name: name.clone(),
                     description: description(&definition)?,
-                    access: access(&definition)?,
+                    access: permission,
                 },
                 handler: definition.get("execute")?,
             };
@@ -133,12 +139,15 @@ fn description(definition: &Table) -> mlua::Result<String> {
 
 /// 【插件】【权限声明】读取工具或命令的访问类型。
 /// @param definition 注册定义
-/// @returns 只读或写入权限，未知声明返回错误
+/// @returns 只读、写入或可选写入权限，未知声明返回错误
 fn access(definition: &Table) -> mlua::Result<ToolAccess> {
     match definition.get::<Option<String>>("access")?.as_deref() {
         None | Some("read_only") => Ok(ToolAccess::ReadOnly),
         Some("writes") => Ok(ToolAccess::Writes),
-        Some(_) => Err(mlua::Error::runtime("access must be read_only or writes")),
+        Some("optional_writes") => Ok(ToolAccess::OptionalWrites),
+        Some(_) => Err(mlua::Error::runtime(
+            "access must be read_only, writes or optional_writes",
+        )),
     }
 }
 

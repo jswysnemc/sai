@@ -14,7 +14,6 @@ mod file_read;
 pub(crate) mod fs_path;
 pub(crate) mod groups;
 mod hash_codec;
-mod http_body;
 pub mod knowledge_base;
 pub(crate) mod memes;
 mod memory;
@@ -46,7 +45,6 @@ mod tool_spec;
 mod trash_path;
 mod vision;
 mod web_fetch;
-mod web_images;
 mod write_file;
 mod xuanxue;
 
@@ -221,9 +219,6 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     if config.plugins.memes.enabled {
         memes::register(&mut registry, config.clone(), paths.clone());
     }
-    if config.plugins.web_images.enabled {
-        web_images::register(&mut registry, config.clone(), paths.clone(), true);
-    }
     if config.plugins.knowledge_base.enabled {
         knowledge_base::register(&mut registry, config.clone(), paths.clone());
     }
@@ -339,9 +334,6 @@ pub fn readonly_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     default_tools::register_readonly(&mut registry, config, paths);
     web_fetch::register(&mut registry);
     crate::plugins::register_plugins(&mut registry, config, paths, true);
-    if config.plugins.web_images.enabled {
-        web_images::register(&mut registry, config.clone(), paths.clone(), false);
-    }
     if config.plugins.knowledge_base.enabled {
         knowledge_base::register_readonly(&mut registry, config.clone(), paths.clone());
     }

@@ -24,7 +24,7 @@ pub(crate) use management::{configure, install, remove, scaffold, set_enabled, v
 pub(crate) use presentation::notification_plan;
 pub(crate) use private::clear_session_storage;
 pub(crate) use registry::{register_bundled_catalog_tools, register_plugins};
-pub(crate) use services::{PluginModelSource, PluginServices};
+pub(crate) use services::{PluginModelSource, PluginServices, PluginVisionSource};
 pub(crate) use session::PluginSession;
 
 #[cfg(test)]

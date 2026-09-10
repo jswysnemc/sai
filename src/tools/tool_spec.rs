@@ -324,6 +324,8 @@ impl ToolSpec {
 fn plugin_permission(access: sai_plugin_runtime::ToolAccess) -> ToolPermission {
     match access {
         sai_plugin_runtime::ToolAccess::ReadOnly => ToolPermission::ReadOnly,
-        sai_plugin_runtime::ToolAccess::Writes => ToolPermission::Writes,
+        sai_plugin_runtime::ToolAccess::Writes | sai_plugin_runtime::ToolAccess::OptionalWrites => {
+            ToolPermission::Writes
+        }
     }
 }

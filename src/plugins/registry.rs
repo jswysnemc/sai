@@ -85,7 +85,11 @@ pub(super) fn register_descriptor(
         if registry.contains(&name) {
             bail!("plugin {id} tool conflicts with an existing tool: {name}");
         }
-        let spec = ToolSpec::plugin(&id, name, definition);
+        let mut spec = ToolSpec::plugin(&id, name, definition);
+        // 1. 【插件注册】【只读分支】只有显式支持只读调用的工具进入目录，运行时继续封锁写入能力
+        if readonly && definition.access == sai_plugin_runtime::ToolAccess::OptionalWrites {
+            spec.permission = ToolPermission::ReadOnly;
+        }
         if !readonly || spec.permission == ToolPermission::ReadOnly {
             specs.push(spec);
         }

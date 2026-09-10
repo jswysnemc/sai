@@ -135,12 +135,14 @@ fn invalid_image_settings_leave_configuration_unchanged() {
 /// 【图片设置测试】【定向兼容】外部源码即使声明相同 ID，也不能继承旧图片凭据或显示偏好。
 #[test]
 fn external_packages_never_inherit_image_compatibility_settings() {
+    let root = tempfile::tempdir().unwrap();
+    let paths = crate::paths::SaiPaths::for_tests(root.path());
     let mut config = AppConfig::default();
     config.plugins.image_generation.api_keys = vec!["fixture-secret".into()];
     for id in ["image-generation", "image-display", "own-image"] {
         let mut plugin = super::support::descriptor(id, "");
         plugin.setting.settings = json!({"own":true});
-        plugin.refresh_compatibility(&config).unwrap();
+        plugin.refresh_compatibility(&config, &paths).unwrap();
         assert_eq!(plugin.settings(), &json!({"own":true}));
         assert!(plugin.capabilities().binary.is_empty());
     }

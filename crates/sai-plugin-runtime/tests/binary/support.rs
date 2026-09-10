@@ -64,6 +64,7 @@ impl PluginHost for Host {
             std::future::pending::<()>().await;
         }
         Ok(BinaryResponse {
+            url: String::new(),
             status: 200,
             headers: BTreeMap::new(),
             body: self.body.lock().unwrap().clone(),
@@ -80,6 +81,7 @@ impl PluginHost for Host {
     ) -> Result<BinaryResponse> {
         self.requests.lock().unwrap().push(request);
         Ok(BinaryResponse {
+            url: String::new(),
             status: 200,
             headers: BTreeMap::new(),
             body: self.body.lock().unwrap().clone(),

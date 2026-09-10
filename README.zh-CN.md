@@ -86,7 +86,7 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 - **子代理** - `subagent` 工具启动独立 LLM 循环,带 `max_steps` 预算与超时;可写任务在 git 仓库内自动创建 `.sai-subagents` worktree 隔离,完成后自动 apply 回父工作区并清理。支持 persistent 待命复用与留言通道(REPL `/subagents`、`/msg`)
 - **Skills 技能包** - `SKILL.md` 格式的可复用技能,三级暴露(不暴露 / 仅名称 / 完整);TUI 与 CLI 均可启用 / 禁用 / 列出 / 统计 / 清理。会话内 load 缓存见上。
 - **MCP 协议桥接** - 原生支持 stdio / http 两种 MCP Server,工具名以 `mcp_` 前缀注入注册表,独立 `mcp.jsonc` 配置文件
-- **Lua 插件** - 十七个 Lua 5.4 内置包提供 23 个工具，支持用户命令、生命周期回调、独立配置及逐项能力授权。在线查询、游戏与输入法调查、系统证据采集、AUR 审查安装、答复通知策略和图片生成展示已迁入 Lua。插件使用当前 Agent 的模型与已授权工具，通过通用宿主接口访问有界文件、进程、私有会话状态、工作目录和二进制缓冲；图片保存后按设置调用独立显示包预览。参见[开发指南](design/lua-plugins/getting-started.md)、[接口说明](design/lua-plugins/api.md)和[迁移进度](design/lua-plugins/migration.md)。
+- **Lua 插件** - 十八个 Lua 5.4 内置包提供 24 个工具，支持用户命令、生命周期回调、独立配置及逐项能力授权。在线查询、游戏与输入法调查、系统证据采集、AUR 审查安装、答复通知策略、图片生成展示和网页搜图已迁入 Lua。搜图在只读模式下返回远程元数据，下载、排序、视觉筛选与预览编排均由插件完成；视觉请求沿用独立视觉配置，图片预览调用独立显示包。宿主提供有界模型、工具、文件、进程、私有状态和二进制能力。参见[开发指南](design/lua-plugins/getting-started.md)、[接口说明](design/lua-plugins/api.md)和[迁移进度](design/lua-plugins/migration.md)。
 - **会话级 Todo** - 任务计划清单,跨工具轮次跟踪进度
 - **Cron 定时任务** - bash / http / prompt 三种类型,持久化到 `jobs.db`,后台调度器到期触发
 

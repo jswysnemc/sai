@@ -1,7 +1,9 @@
 mod buffer;
+mod inspection;
 mod json;
 mod network;
 mod terminal;
+mod vision;
 
 use super::control::CallControl;
 use crate::host::{binary::BinaryBudget, PluginHost};
@@ -87,5 +89,6 @@ pub(super) fn install(
         })?,
     )?;
     api.set("binary", binary)?;
+    vision::install(lua, api, services.clone())?;
     terminal::install(lua, api, services)
 }

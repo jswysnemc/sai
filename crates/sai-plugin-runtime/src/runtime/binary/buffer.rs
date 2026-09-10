@@ -8,8 +8,8 @@ use std::time::Duration;
 /// 【插件二进制】【Lua 缓冲】数据不实现序列化，只允许有界查看、解码及授权写入。
 pub(super) struct Buffer {
     data: Arc<BinarySlot>,
-    services: Arc<BinaryServices>,
-    generation: u64,
+    pub(super) services: Arc<BinaryServices>,
+    pub(super) generation: u64,
 }
 
 impl Buffer {
@@ -39,7 +39,7 @@ impl Buffer {
 
     /// 【插件二进制】【句柄读取】先验证调用代次，再借用未释放的数据。
     /// @returns 本次有效数据；已关闭或过期句柄返回错误
-    fn data(&self) -> mlua::Result<BinaryData> {
+    pub(super) fn data(&self) -> mlua::Result<BinaryData> {
         self.services.check(self.generation)?;
         self.data
             .lock()
@@ -52,8 +52,10 @@ impl Buffer {
 impl UserData for Buffer {
     /// 【插件二进制】【缓冲方法】安装纯读取与带授权的异步写入，关闭操作只释放引用。
     /// @param methods 句柄方法注册器
-    /// @returns 无；原始字节不会直接暴露给 Lua
+    /// @returns 无；原始字节仅能通过有界读取接口进入 Lua
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        super::inspection::install(methods);
+        super::vision::install_methods(methods);
         methods.add_method("len", |_, this, ()| Ok(this.data()?.bytes().len()));
         methods.add_method("close", |_, this, ()| {
             this.data

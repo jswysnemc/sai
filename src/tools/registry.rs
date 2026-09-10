@@ -41,6 +41,8 @@ pub struct ToolRegistry {
     plugin_diagnostics: Vec<crate::plugins::PluginDiagnostic>,
     /// 【插件】【模型绑定】模型来源独立于 Lua 状态，重载实例时不保留过期客户端
     plugin_model: Option<crate::plugins::PluginModelSource>,
+    /// 【插件】【视觉绑定】独立视觉配置不会随 Agent 当前文本模型切换而丢失
+    plugin_vision: Option<crate::plugins::PluginVisionSource>,
 }
 
 impl ToolRegistry {
@@ -276,6 +278,7 @@ impl ToolRegistry {
         registry.plugin_storage_session_id = self.plugin_storage_session_id.clone();
         registry.plugin_diagnostics = self.plugin_diagnostics.clone();
         registry.plugin_model = self.plugin_model.clone();
+        registry.plugin_vision = self.plugin_vision.clone();
         registry
     }
 
@@ -298,6 +301,7 @@ impl ToolRegistry {
         registry.plugin_storage_session_id = self.plugin_storage_session_id.clone();
         registry.plugin_diagnostics = self.plugin_diagnostics.clone();
         registry.plugin_model = self.plugin_model.clone();
+        registry.plugin_vision = self.plugin_vision.clone();
         // 1. 按来源注册顺序复制，确保供应商工具定义顺序稳定
         for tool in self.ordered_tools() {
             if !excluded.contains(tool.name.as_str()) {

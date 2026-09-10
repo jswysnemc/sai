@@ -9,6 +9,7 @@ pub(crate) type BinarySlot = std::sync::Mutex<Option<BinaryData>>;
 /// 【插件二进制】【网络结果】响应正文保留原始字节，不经过文本解码或模型输出。
 pub struct BinaryResponse {
     pub status: u16,
+    pub url: String,
     pub headers: BTreeMap<String, String>,
     pub body: Vec<u8>,
 }

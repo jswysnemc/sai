@@ -1,0 +1,25 @@
+{
+  "api_version": 1,
+  "id": "web-images",
+  "version": "1.0.0",
+  "name": "Web image search",
+  "description": "Search, rank, download and review web images with optional terminal previews.",
+  "entry": "init.lua",
+  "capabilities": {
+    "http": ["https://duckduckgo.com", "https://www.bing.com"],
+    "vision": true,
+    "tools": ["print_image"],
+    "binary": {"public_downloads": true, "write_paths": ["~/Pictures/sai/web-images"]}
+  },
+  "limits": {
+    "memory_bytes": 33554432,
+    "instructions": 20000000,
+    "timeout_ms": 3600000,
+    "http_timeout_ms": 120000,
+    "binary_timeout_ms": 600000,
+    "binary_bytes": 67108864,
+    "output_bytes": 4194304,
+    "model_requests": 16,
+    "tool_calls": 5
+  }
+}

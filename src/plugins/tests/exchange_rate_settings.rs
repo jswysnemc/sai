@@ -132,12 +132,14 @@ async fn invalid_exchange_settings_preserve_the_file_and_false_disables_fallback
 /// 【汇率设置测试】【凭据隔离】外部包即使使用相同标识也不能取得兼容密钥，其他内置包同样隔离。
 #[test]
 fn legacy_exchange_credentials_are_scoped_to_the_bundled_exchange_package() {
+    let root = tempfile::tempdir().unwrap();
+    let paths = crate::paths::SaiPaths::for_tests(root.path());
     let mut config = AppConfig::default();
     config.plugins.exchange_rate.api_key = "private-exchange-key".into();
     for id in [ID, "external-exchange"] {
         let mut descriptor = super::support::descriptor(id, "");
         descriptor.setting.settings = json!({"own_setting":"value"});
-        descriptor.refresh_compatibility(&config).unwrap();
+        descriptor.refresh_compatibility(&config, &paths).unwrap();
         assert_eq!(descriptor.settings(), &json!({"own_setting":"value"}));
     }
     let root = tempfile::tempdir().unwrap();

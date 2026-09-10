@@ -1,6 +1,6 @@
 # 二进制与终端图片接口
 
-图片正文使用独立缓冲，不经过 Lua JSON 工具结果通道。生成服务选择、请求参数、响应字段、输出名称和自动预览策略属于插件；Rust 提供受控网络、字节缓冲、文件输出及终端绘制。
+图片正文使用独立缓冲，不经过 Lua JSON 工具结果通道。生成请求、搜索与排序、下载编排、图片元数据、视觉筛选规则和预览策略属于插件；Rust 提供受控网络、字节缓冲、文件输出、单次视觉请求及终端绘制。
 
 ## 能力与授权
 
@@ -56,7 +56,7 @@ image:close()
 return saved
 ```
 
-`sai.binary.request` 的请求字段与文本 HTTP 相同，使用相同精确来源、只读 POST、重定向和凭据检查。返回 `{status, headers, body}`，其中 `body` 是不可序列化的 Lua userdata。状态错误仍作为响应交给插件。
+`sai.binary.request` 的请求字段与文本 HTTP 相同，使用相同精确来源、只读 POST、重定向和凭据检查。两个二进制网络入口返回 `{status, url, headers, body}`，`url` 是最终重定向地址，`body` 是不可序列化的 Lua userdata。状态错误仍作为响应交给插件。
 
 `sai.binary.download({url, max_bytes?, timeout_ms?})` 只接受无正文、无自定义请求头的 GET。每次跳转都重新检查地址；精确授权的来源可以是本地服务，其他来源必须具有 `public_downloads` 授权，且全部 DNS 结果均为公开单播地址。宿主固定实际连接地址并禁用公开下载的代理，防止解析检查与连接目标不一致。每条链最多跟随五次跳转，共用截止时间；不会保存或转发 Cookie。
 
@@ -65,6 +65,8 @@ return saved
 | 接口 | 返回值与边界 |
 | --- | --- |
 | `buffer:len()` | 原始字节数 |
+| `buffer:bytes(offset, length)` | 从零基偏移读取原始 Lua 字符串，保留零字节和无效 UTF-8；只接受非负整数，长度不能超过 `output_bytes`，超出缓冲尾部返回已有部分 |
+| `buffer:sha256()` | 小写十六进制 SHA-256；消耗一次系统调用额度，在阻塞线程计算，完成前继续持有字节预算 |
 | `buffer:text(max_bytes?)` | 有界 UTF-8 文本前缀；无效编码替换，不超过 `output_bytes` |
 | `buffer:json_type(pointer)` | `object`、`array`、`string`、`number`、`boolean`、`null`；字段缺失返回 nil |
 | `buffer:json_string(pointer)` | 字符串或 nil；文本超过输出限制时失败 |
@@ -84,6 +86,27 @@ JSON 路径遵循 RFC 6901，最多 1024 字节、64 层。解析只选取目标
 宿主先解析现有祖先并验证完整目标归属，再创建必要目录。后续逐层使用不跟随链接的目录句柄，禁止通过越界链接写入文件。数据写入同目录随机暂存文件，完整写入并成功等待后才原子替换目标。
 
 取消会撤销异步调用并通知文件线程。已开始的系统调用不能保证立即中断，线程在数据块边界检查取消，保留缓冲预算直至退出；取消或错误不发布暂存文件。授权内新建的空目录可能保留。
+
+## 视觉模型
+
+视觉能力独立于文本模型、网络和终端授权。包须声明 `"vision": true`，外部包再通过 `--allow-vision` 授权；`--no-vision` 仅撤销视觉能力。普通 `--allow-model` 不会间接开放视觉请求。
+
+```lua
+local info = sai.vision.info()
+local response = image:analyze_image({
+    system = "只描述图片中可见的内容",
+    prompt = "这张图片展示了什么？",
+    mime_type = "image/png",
+    timeout_ms = 10000,
+})
+return {content=response.content, provider_id=response.provider_id, model=response.model}
+```
+
+`info()` 返回 `{provider_id, model}`，宿主关闭视觉时返回 JSON null；配置无效时返回错误。它不初始化模型客户端，也不读取密钥文件。视觉供应商由旧 `plugins.vision.vision_provider_id` 选择，空值使用主配置中的活动供应商；`vision_model` 非空时覆盖该供应商默认模型。文本模型切换和工具表过滤保留这项独立配置。Lua 不获得地址、凭据或主配置，也不能通过请求覆盖它们。
+
+`analyze_image` 只接受 `system`（默认空字符串）、非空 `prompt`、`mime_type` 和可选 `timeout_ms`。支持 PNG、JPEG/JPG、GIF、WebP、BMP；真实缓冲必须为 1 字节至 10 MiB。未知字段、路径、供应商或模型覆盖均被拒绝。图片由当前有效缓冲提供，无任意文件读取入口；是否匹配用户查询、如何处理模型输出以及是否保留失败图片由 Lua 决定。
+
+视觉与文本共用每次回调的 `model_requests` 次数；输入、响应、流式正文、思考和工具参数受 `output_bytes` 限制。宿主发送单次无工具图片请求，不自动执行模型建议。`timeout_ms` 默认使用回调总时长，限制在 1 毫秒至该上限。超时可由 `pcall` 捕获，超时和外部取消均释放模型 Future；图片租约覆盖整个请求。初始化、事件和通知纯回调不能使用视觉服务，完成或取消后的旧句柄也不能复用。
 
 ## 终端图片
 
@@ -106,3 +129,9 @@ return shown.path
 `image-display` 保留只读 `print_image`。宽高参数优先于 `size`，再回退到终端百分比；默认 45% 宽、35% 高，沿用旧 `plugins.print_image` 设置。显式插件设置可覆盖 `width_percent`、`height_percent` 和 `language`（`en` 或 `zh`）。
 
 自动预览通过 `sai.tools.list/call` 调用 `print_image`，因此显示包的开关、授权、尺寸和 Agent 工具白名单都参与生效。显示工具不可用时跳过预览，绘制失败时返回 `printed=false` 和 `print_error`，已经保存的图片仍然成功。`generate_image` 保持写入属性，不进入只读工具目录；`print_image` 可以在只读目录中使用。
+
+`web-images` 保留 `search_web_images`，声明 `optional_writes`。只读模式只返回远程候选元数据；普通模式按用户数量搜索、稳定排序、去重、下载，再根据独立视觉结果筛选。DuckDuckGo 失败或数量不足时回退 Bing；原图失败时尝试缩略图，内容摘要决定 `webimg-<sha256>.<ext>` 名称。审核拒绝后继续候选，审核失败保留图片和失败记录。
+
+旧 `plugins.web_images` 提供逐字段默认值。内置缓存默认位于应用图片目录的 `web-images` 子目录，允许显式 `cache_dir`；`duckduckgo_base_url` 与 `bing_base_url` 可配置为独立实例。兼容层只派生精确搜索来源和输出目录声明，已有显式授权不会跟随设置改变；外部包不继承旧设置或目录。
+
+包最多返回 10 张图片、尝试 16 个下载候选、预览 5 张。单次下载由 `max_download_mb` 限制到 0.1–64 MiB；搜索正文最多 4 MiB，VM 二进制预算为 64 MiB，回调上限 3600 秒，视觉最多 16 次。预览继续通过独立显示包，使用 `printed` 和 `print_errors` 报告结果；显示失败不丢失已保存文件。

@@ -82,6 +82,8 @@ async fn presentation_callbacks_cannot_use_other_host_capabilities_or_session_da
                 function() return sai.storage.get('secret') end,
                 function() return sai.workspace.open('directory') end,
                 function() return sai.model.complete({messages={{role='user',content='secret'}}}) end,
+                function() return sai.vision.info() end,
+                function() return sai.binary.decode_base64('YWJj'):analyze_image({prompt='secret',mime_type='image/png'}) end,
                 function() return sai.tools.call('read_file', {path='secret'}) end,
                 function() return sai.binary.request({url='https://example.test'}) end,
                 function() return sai.binary.download({url='https://example.test'}) end,
@@ -101,7 +103,7 @@ async fn presentation_callbacks_cannot_use_other_host_capabilities_or_session_da
         "#,
     );
     package.manifest.capabilities = serde_json::from_value(json!({
-        "notifications":true,"model":true,"tools":["read_file"],
+        "notifications":true,"model":true,"vision":true,"tools":["read_file"],
         "http":["https://example.test"],
         "binary":{"public_downloads":true,"write_paths":["."],"display_images":true},
         "system": {

@@ -242,7 +242,7 @@ fn allowed_tools(
 /// 【插件】【调用预算】在宿主操作开始前消耗一次预算，失败操作也计入次数。
 /// @param counter 已调用次数；limit 为上限；kind 为错误中的操作名称
 /// @returns 有剩余额度时成功
-fn charge(counter: &AtomicUsize, limit: usize, kind: &str) -> mlua::Result<()> {
+pub(super) fn charge(counter: &AtomicUsize, limit: usize, kind: &str) -> mlua::Result<()> {
     counter
         .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
             (count < limit).then_some(count + 1)
@@ -254,14 +254,18 @@ fn charge(counter: &AtomicUsize, limit: usize, kind: &str) -> mlua::Result<()> {
 /// 【插件】【服务错误】保留嵌套插件的完整错误原因，避免只显示外层回调失败。
 /// @param error 模型或工具服务的原始错误
 /// @returns Lua 可捕获的错误及完整原因链
-fn service_error(error: anyhow::Error) -> mlua::Error {
+pub(super) fn service_error(error: anyhow::Error) -> mlua::Error {
     mlua::Error::runtime(format!("{error:#}"))
 }
 
 /// 【插件】【数据大小】按实际 JSON 字节数检查宿主请求和结果。
 /// @param value 待传递数据；limit 为字节上限；kind 为操作名称
 /// @returns 数据未超过限制时成功
-fn check_size(value: &impl serde::Serialize, limit: usize, kind: &str) -> mlua::Result<()> {
+pub(super) fn check_size(
+    value: &impl serde::Serialize,
+    limit: usize,
+    kind: &str,
+) -> mlua::Result<()> {
     if serde_json::to_vec(value).map_err(lua_error)?.len() > limit {
         return Err(mlua::Error::runtime(format!(
             "plugin {kind} exceeds size limit"

@@ -31,19 +31,9 @@ pub(crate) fn print_rendered(rendered: &str) -> Result<()> {
     Ok(())
 }
 
-/// 【终端图片】【共享绘制】为尚未迁移的搜图和表情库提供公共终端绘制能力。
+/// 【终端图片】【共享绘制】为表情库提供公共终端绘制能力。
 /// @param path 图片路径；size 为可选单元格尺寸
 /// @returns 完成渲染和输出时成功
 pub(crate) async fn print_image_file(path: &Path, size: Option<String>) -> Result<()> {
     print_rendered(&render(path, size.as_deref())?)
-}
-
-/// 【终端图片】【比例尺寸】把终端百分比换算成有界单元格尺寸，不读取任何业务配置。
-/// @param width_percent 宽度百分比；height_percent 为高度百分比
-/// @returns 有交互终端时返回尺寸，否则为 None
-pub(crate) fn proportional_size(width_percent: u8, height_percent: u8) -> Option<String> {
-    let (cols, rows) = crossterm::terminal::size().ok()?;
-    let width = ((u32::from(cols) * u32::from(width_percent)) / 100).clamp(1, 300);
-    let height = ((u32::from(rows) * u32::from(height_percent)) / 100).clamp(1, 200);
-    Some(format!("{width}x{height}"))
 }

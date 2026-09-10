@@ -19,6 +19,8 @@ pub struct Capabilities {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub model: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub vision: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub notifications: bool,
     #[serde(default, skip_serializing_if = "BinaryCapabilities::is_empty")]
     pub binary: BinaryCapabilities,
@@ -84,6 +86,7 @@ impl Capabilities {
                 .cloned()
                 .collect(),
             model: self.model && granted.model,
+            vision: self.vision && granted.vision,
             notifications: self.notifications && granted.notifications,
             binary: self.binary.intersection(&granted.binary),
             tools: self.tools.intersection(&granted.tools).cloned().collect(),
@@ -100,6 +103,7 @@ impl Capabilities {
                 .http_read_only_post
                 .is_subset(&declared.http_read_only_post)
             && (!self.model || declared.model)
+            && (!self.vision || declared.vision)
             && (!self.notifications || declared.notifications)
             && self.binary.is_subset(&declared.binary)
             && self.tools.is_subset(&declared.tools)

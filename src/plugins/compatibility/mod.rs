@@ -4,6 +4,7 @@ mod image;
 mod input_method;
 mod linux_game;
 mod notification;
+mod web_images;
 mod web_search;
 
 use crate::config::AppConfig;
@@ -24,10 +25,12 @@ pub(super) struct RuntimeOverrides {
 pub(super) fn resolve(
     id: &str,
     config: &AppConfig,
+    paths: &crate::paths::SaiPaths,
     settings: &Value,
     declared: &Capabilities,
 ) -> Result<Option<RuntimeOverrides>> {
     match id {
+        "web-images" => web_images::resolve(config, paths, settings, declared).map(Some),
         "image-generation" => {
             image::generation(&config.plugins.image_generation, settings, declared).map(Some)
         }

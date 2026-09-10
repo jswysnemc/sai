@@ -20,7 +20,7 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 | `src/plugins` | 配置与发现、宿主能力实现、注册适配、安装管理 |
 | `src/plugins/session.rs` | Agent 内插件实例共享、跨 Agent 隔离、重载复用判定 |
 | `src/plugins/events.rs` | Agent 与逻辑模型请求的生命周期范围 |
-| `src/plugins/services` | 绑定当前模型、工具目录和调用链，执行单次模型与工具请求 |
+| `src/plugins/services` | 绑定当前文本模型、独立视觉配置、工具目录和调用链，执行单次模型与工具请求 |
 | `src/tools/registry_plugin_services.rs` | 将实时工具权限、插件授权与当前模型交给调用服务 |
 | `src/plugins/compatibility` | 旧业务设置的定向兼容；派生凭据仅保留在运行时快照 |
 | `src/plugins/http.rs` | 通用 HTTP 执行、逐次重定向授权、凭据处理和响应限制 |
@@ -37,7 +37,7 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 
 ## 已落地的版本 1
 
-独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、模型、工具调用、文件、环境、模板进程、二进制缓冲、终端图片、JSON、文本、时间及通知纯回调能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence`、`package-advisor`、`reply-notification`、`image-generation` 与 `image-display` 已迁为随程序嵌入的十七个 Lua 包，共提供 23 个工具；通知包不增加模型工具，相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
+独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、文本与视觉模型、工具调用、文件、环境、模板进程、二进制缓冲、终端图片、JSON、文本、时间及通知纯回调能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence`、`package-advisor`、`reply-notification`、`image-generation`、`image-display` 与 `web-images` 已迁为随程序嵌入的十八个 Lua 包，共提供 24 个工具；通知包不增加模型工具，相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
 
 CLI 提供创建、验证、安装、替换、配置、授权、启停、移除和命令执行。TUI 提供 `/plugins`、`/plugins reload` 与 `/plugin <id>/<command>`。模型工具通过原有共用注册入口进入 CLI、TUI、Web 和子任务，直接用户命令目前只有 CLI 与 TUI 入口。
 
@@ -70,7 +70,7 @@ Lua 状态属于 Agent 实例内存，不是持久化会话存储。不同入口
 
 ### 模型与工具的调用服务
 
-`InvocationServices` 只提供模型单次完成、已授权工具目录和显式工具执行，运行时不包含 Sai 配置或业务循环。每次需要这些能力的调用绑定一个新服务；`InvocationLease` 在成功、错误和取消时撤销权限并释放服务引用，事件回调不绑定服务。模型与工具次数预算也以本次回调为范围。
+`InvocationServices` 提供文本或视觉模型单次完成、公开视觉标识、已授权工具目录和显式工具执行，运行时不包含 Sai 配置或业务循环。每次需要这些能力的调用绑定一个新服务；`InvocationLease` 在成功、错误和取消时撤销权限并释放服务引用，事件回调不绑定服务。文本与视觉共用本次回调的模型次数预算，工具另有独立额度。
 
 服务复制父 Agent 的完整工具表并 fork 插件 VM，再用单独的名称集合限制调用方。这样 A 可以调用 B，B 继续使用自己的 C 依赖，而 A 不会获得 C 权限；B 的依赖仍必须存在于原 Agent 白名单。嵌套调用沿用实时权限配置、工作目录和网格归属，独立的插件会话标识不扩大跨会话权限。
 
@@ -152,10 +152,14 @@ Web 使用独立认证接口计算通知，SSE 只增加交付层的历史补发
 
 ## 二进制与图片业务
 
-`plugins/image-generation` 负责供应商设置、请求构造、尺寸映射、响应选择、文件命名和自动预览，保留 `generate_image`。`plugins/image-display` 负责尺寸优先级、终端百分比和双语反馈，保留只读 `print_image`。原 Rust 图片生成模块和显示工具业务已删除；图像分析仍在 `vision.rs`，网页搜图与表情库仍使用共享绘制能力，尚未迁为插件。
+`plugins/image-generation` 负责供应商设置、请求构造、尺寸映射、响应选择、文件命名和自动预览，保留 `generate_image`。`plugins/image-display` 负责尺寸优先级、终端百分比和双语反馈，保留只读 `print_image`。`plugins/web-images` 负责 DuckDuckGo/Bing 请求与解析、排序去重、下载、图片元数据、视觉筛选及结果与预览规则，保留 `search_web_images`。相应 Rust 业务模块已删除；独立图像分析和表情库未计为本轮迁移。
 
 运行时的 `host/binary.rs` 定义原始响应、共享缓冲和文件结果，`runtime/binary` 分别实现网络、JSON 字段选取、解码、缓冲与终端绑定。大正文不进入 JSON 工具结果，所有缓冲共用 VM 字节预算；回调完成、失败或取消时撤销句柄，文件线程仍持有的数据直到实际 I/O 结束才归还预算。普通文本 HTTP 和二进制请求的时限独立。
 
 匿名公开下载、输出目录和图片展示分别声明与授权。公开下载只接受无正文、无自定义头的 GET，每次跳转重新验证全部 DNS 结果并固定连接地址；私有地址必须由精确来源授权。文件输出先验证完整归属，再通过不跟随链接的目录句柄写入暂存文件，成功等待后原子发布。图片使用普通文件快照和像素限制，协议内容完整生成后才输出；Kitty 图片数据不在工作线程内提前发送，也不消耗普通渲染器的传输缓存。
 
 自动预览通过正式工具服务调用 `print_image`，由显示包使用自身设置和授权。禁用显示包或从 Agent 白名单移除显示工具会跳过预览，绘制失败不会撤销已经成功保存的图片。旧图片设置仅向对应内置包提供逐字段默认值，显式 false 有效；管理操作不复制旧凭据，输出目录变更也不会扩大已经保存的显式授权。完整契约见[二进制与终端图片接口](binary-api.md)。
+
+搜图声明 `optional_writes`，普通工具表按写入工具授权，只读工具表映射为只读查询。运行时根据 Rust 调用状态决定写入能力，Lua 修改 `ctx.allow_writes` 无效；命令不能声明可选写入。该机制适用于通用工具契约，没有在注册表保留搜图专用分支。
+
+`runtime/binary/inspection.rs` 提供有界原始字节与 SHA-256，图片格式识别仍属于 Lua。摘要在线程中计算，取消不能提前归还正在使用的缓冲预算。`host/vision.rs` 定义单图请求，`runtime/binary/vision.rs` 校验独立授权、参数、图片大小和次数预算；`src/plugins/services/vision.rs` 使用可信视觉配置完成一次无工具请求。视觉配置独立于文本客户端，工具表过滤和文本热切换继续保留它，模型流共用有界输出计量。

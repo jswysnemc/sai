@@ -25,7 +25,7 @@ fn false_settings_do_not_silently_select_defaults() {
     ] {
         let mut plugin = find(&config, &paths, PLUGIN).unwrap();
         plugin.setting.settings = settings;
-        plugin.refresh_compatibility(&config).unwrap();
+        plugin.refresh_compatibility(&config, &paths).unwrap();
         let mut tools = ToolRegistry::new();
         assert!(
             register_descriptor(&mut tools, plugin, Arc::new(FixtureHost::default()), false)
@@ -67,7 +67,9 @@ fn registry(
     let host = signal_host();
     let mut investigation = find(&config, paths, PLUGIN).unwrap();
     investigation.setting.settings = settings;
-    investigation.refresh_compatibility(&config).unwrap();
+    investigation
+        .refresh_compatibility(&config, &paths)
+        .unwrap();
     change(&mut investigation);
     register_descriptor(&mut tools, investigation, host.clone(), false).unwrap();
     register_descriptor(

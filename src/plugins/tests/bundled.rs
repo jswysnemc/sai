@@ -181,6 +181,7 @@ fn migrated_tools_are_present_in_common_and_readonly_registries() {
         "fcitx5_input_method_wiki_qurey",
         "protondb_query",
         "web_search",
+        "search_web_images",
         "gather_linux_game_compatibility_signals",
         "linux_game_compatibility",
         "linux_input_method_diagnose",

@@ -153,7 +153,7 @@ pub(crate) fn configure(
     }
     let mut descriptor = find(config, paths, id)?;
     descriptor.setting.settings = settings;
-    descriptor.refresh_compatibility(config)?;
+    descriptor.refresh_compatibility(config, paths)?;
     // 【插件】【配置验证】校验派生设置但只保存原始设置，环境凭据不会写回配置
     PluginRuntime::load(
         descriptor.runtime_package(),

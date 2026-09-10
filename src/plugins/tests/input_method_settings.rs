@@ -70,7 +70,7 @@ fn invalid_input_method_settings_fail_before_registration() {
     ] {
         let mut plugin = find(&config, &paths, PLUGIN).unwrap();
         plugin.setting.settings = settings;
-        plugin.refresh_compatibility(&config).unwrap();
+        plugin.refresh_compatibility(&config, &paths).unwrap();
         let mut tools = ToolRegistry::new();
         assert!(
             register_descriptor(&mut tools, plugin, Arc::new(FixtureHost::default()), false)

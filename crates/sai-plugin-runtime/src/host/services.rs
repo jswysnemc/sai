@@ -83,6 +83,24 @@ pub struct HostTool {
 /// 【插件】【调用服务】宿主为一次回调绑定的模型与工具能力，生命周期短于插件实例。
 #[async_trait]
 pub trait InvocationServices: Send + Sync {
+    /// 【插件视觉】【模型信息】查询宿主明确配置的视觉模型，禁用时返回 None。
+    /// @returns 无凭据的模型标识；未实现该能力的宿主返回 None
+    fn vision_info(&self) -> Result<Option<super::VisionModelInfo>> {
+        Ok(None)
+    }
+
+    /// 【插件视觉】【单次分析】分析本次回调持有的图片字节，不读取插件指定的任意路径。
+    /// @param request 提示词和媒体类型；image 为预算内字节；max_bytes 为文字输入输出上限
+    /// @returns 模型正文与可信模型标识
+    async fn analyze_image(
+        &self,
+        _request: super::VisionRequest,
+        _image: super::BinaryData,
+        _max_bytes: usize,
+    ) -> Result<super::VisionResponse> {
+        anyhow::bail!("plugin vision service is unavailable")
+    }
+
     /// 【插件】【工具目录】枚举已按父任务权限和插件声明收窄的工具。
     /// @returns 工具定义，不执行工具或模型请求
     fn tools(&self) -> Result<Vec<HostTool>>;

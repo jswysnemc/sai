@@ -98,13 +98,18 @@ impl PluginDescriptor {
     }
 
     /// 【插件】【兼容快照】只为可信内置包解析旧配置，外部包无法继承应用凭据。
-    /// @param config 旧应用配置
+    /// @param config 旧应用配置；paths 为应用目录快照
     /// @returns 设置和派生能力均合法时成功
-    pub(super) fn refresh_compatibility(&mut self, config: &AppConfig) -> Result<()> {
+    pub(super) fn refresh_compatibility(
+        &mut self,
+        config: &AppConfig,
+        paths: &SaiPaths,
+    ) -> Result<()> {
         self.overrides = if matches!(self.source, PluginSource::Bundled) {
             super::compatibility::resolve(
                 &self.package.manifest.id,
                 config,
+                paths,
                 &self.setting.settings,
                 &self.package.manifest.capabilities,
             )?
@@ -173,7 +178,7 @@ pub(crate) fn discover(config: &AppConfig, paths: &SaiPaths) -> Discovery {
                     setting,
                     overrides: None,
                 };
-                match descriptor.refresh_compatibility(config) {
+                match descriptor.refresh_compatibility(config, paths) {
                     Ok(()) => found.plugins.push(descriptor),
                     Err(error) => found
                         .diagnostics

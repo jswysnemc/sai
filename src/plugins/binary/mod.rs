@@ -32,6 +32,7 @@ pub(super) async fn request(
 /// @returns 不进行文本解码的结果
 async fn read(response: reqwest::Response, max_bytes: usize) -> Result<BinaryResponse> {
     let status = response.status().as_u16();
+    let url = response.url().to_string();
     let headers = response
         .headers()
         .iter()
@@ -45,6 +46,7 @@ async fn read(response: reqwest::Response, max_bytes: usize) -> Result<BinaryRes
     let body = super::http::read_bytes(response, max_bytes).await?;
     Ok(BinaryResponse {
         status,
+        url,
         headers,
         body,
     })

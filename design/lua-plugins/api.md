@@ -64,7 +64,9 @@ sai.register_tool({
 })
 ```
 
-`access` 允许 `read_only`（默认）和 `writes`。参数必须是对象 JSON Schema；本地校验发生在业务函数和 HTTP 调用之前。Schema 最多 64 KiB，仅允许本地 `$ref`。工具和命令包内名称最多 48 字节；外部工具最终名称 `lua__<id>__<name>` 不得超过 64 字节，超长时拒绝整个包，不截断名称。
+工具 `access` 允许 `read_only`（默认）、`writes` 和 `optional_writes`。可选写入工具在普通目录中按写入工具授权，在只读目录中仍可执行查询分支；通过可信 `ctx.allow_writes` 决定业务分支。修改 Lua 上下文不能开放宿主写入能力。用户命令只接受前两种声明，不支持 `optional_writes`。
+
+参数必须是对象 JSON Schema；本地校验发生在业务函数和 HTTP 调用之前。Schema 最多 64 KiB，仅允许本地 `$ref`。工具和命令包内名称最多 48 字节；外部工具最终名称 `lua__<id>__<name>` 不得超过 64 字节，超长时拒绝整个包，不截断名称。
 
 返回字符串时直接作为工具文本；其他可序列化值输出为 JSON。`nil` 返回空文本。定义、说明和参数直接来自插件，不被旧工具说明表覆盖。
 
@@ -181,7 +183,7 @@ Lua 全局变量属于当前实例，不是持久会话存储。进程重启、�
 
 ### 二进制与图片
 
-`sai.binary.request/download/decode_base64` 使用独立预算保存大正文，通过句柄读取 JSON 字段、解码和授权写入。`sai.terminal.size/display_image` 提供受授权的终端图片能力。参数、生命周期、目录边界和三个分项授权见[二进制接口](binary-api.md)。
+`sai.binary.request/download/decode_base64` 使用独立预算保存大正文，通过句柄读取原始字节与 JSON 字段、计算 SHA-256、解码和授权写入。`sai.terminal.size/display_image` 提供受授权的终端图片能力。`sai.vision.info()` 和 `buffer:analyze_image(...)` 使用独立 `vision` 授权与宿主视觉配置，不随 Agent 文本模型切换。参数、生命周期、目录与视觉边界见[二进制接口](binary-api.md)。
 
 ### 模型与工具
 
@@ -250,7 +252,7 @@ local response = sai.http.request({
 })
 ```
 
-响应包含 `status`、`headers`、`text`。支持 GET、HEAD、POST、PUT、PATCH、DELETE。GET/HEAD 允许在只读回调中使用；其他方法默认要求当前工具或命令声明 `writes`，并通过 Sai 授权。HTTP 错误状态作为响应返回，由业务代码选择处理方式。
+响应包含 `status`、`headers`、`text`。支持 GET、HEAD、POST、PUT、PATCH、DELETE。GET/HEAD 允许在只读回调中使用；其他方法默认要求当前工具或命令取得真实写入许可，并通过 Sai 授权。HTTP 错误状态作为响应返回，由业务代码选择处理方式。
 
 搜索等使用 POST 的只读接口可另外声明精确端点：
 
@@ -307,7 +309,7 @@ HTML 和 Unicode 大写转换前后的 UTF-8 文本均受包内 `output_bytes` �
 | VM 保留的二进制字节 | 32 MiB | 1 KiB–64 MiB |
 | 单次二进制操作最大时长 | 120 秒 | 0.001–600 秒 |
 | 输出与宿主结果大小 | 1 MiB | 1 KiB–4 MiB |
-| 单次回调模型请求数 | 32 | 1–256 |
+| 单次回调模型请求数（文本与视觉共用） | 32 | 1–256 |
 | 单次回调工具调用数 | 128 | 1–1024 |
 | 单次回调系统调用数 | 1024 | 1–4096 |
 

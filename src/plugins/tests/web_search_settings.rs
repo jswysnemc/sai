@@ -120,11 +120,13 @@ fn enabling_a_plugin_does_not_pin_legacy_settings() {
 /// 【搜索测试】【外部隔离】外部包只取得自己的设置，不能通过兼容层继承搜索凭据。
 #[test]
 fn external_plugins_cannot_inherit_legacy_search_settings() {
+    let root = tempfile::tempdir().unwrap();
+    let paths = crate::paths::SaiPaths::for_tests(root.path());
     let mut config = AppConfig::default();
     config.plugins.web.tavily_api_keys = vec!["private-search-key".into()];
     let mut descriptor = super::support::descriptor("external-search", "");
     descriptor.setting.settings = json!({"own_setting":"value"});
-    descriptor.refresh_compatibility(&config).unwrap();
+    descriptor.refresh_compatibility(&config, &paths).unwrap();
     assert_eq!(descriptor.settings(), &json!({"own_setting":"value"}));
     assert!(!serde_json::to_string(descriptor.settings())
         .unwrap()

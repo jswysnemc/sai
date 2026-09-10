@@ -5,7 +5,7 @@ use crate::paths::SaiPaths;
 use anyhow::{bail, Context, Result};
 use sai_plugin_runtime::host::{ModelRequest, ModelResponse, ModelRole, ModelToolCall, ModelUsage};
 use serde_json::json;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -74,23 +74,9 @@ impl PluginServices {
             .get()
             .context("plugin model service is unavailable")?;
         let round = self.rounds.fetch_add(1, Ordering::AcqRel);
-        let mut received_bytes = 0usize;
-        let mut tool_bytes = BTreeMap::new();
+        let mut budget = super::stream_budget::StreamBudget::new(max_bytes);
         let operation = client.chat_stream_events(messages, definitions, |event| {
-            // 【插件】【流式限额】正文、思考和工具参数共用字节预算，连接未结束也能停止超限响应
-            let added = match &event {
-                ChatStreamEvent::Chunk(chunk) => chunk.text.len(),
-                ChatStreamEvent::ToolCallProgress(progress) => {
-                    let bytes = progress
-                        .arguments_bytes
-                        .saturating_add(progress.name.as_ref().map_or(0, String::len));
-                    bytes.saturating_sub(tool_bytes.insert(progress.index, bytes).unwrap_or(0))
-                }
-            };
-            received_bytes = received_bytes.saturating_add(added);
-            if received_bytes > max_bytes {
-                bail!("plugin model response exceeds size limit");
-            }
+            budget.observe(&event)?;
             if let ChatStreamEvent::Chunk(chunk) = event {
                 if request.stream_reasoning && chunk.kind == ChatStreamKind::Reasoning {
                     if let Some(progress) = &self.progress {
