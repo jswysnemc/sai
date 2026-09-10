@@ -1,6 +1,6 @@
 # 私有状态与工作目录
 
-`sai.storage` 保存插件自己的会话记录；`sai.workspace` 管理插件私有缓存目录。两项能力独立声明和授权，不提供任意路径写入接口。普通文件、环境和进程接口见[系统接口](system-api.md)。
+`sai.storage.get/set/compare_exchange` 保存插件自己的会话记录；`sai.storage.plugin` 保存同一插件的跨会话记录；`sai.workspace` 管理插件私有缓存目录。三项能力独立声明和授权，不提供任意路径写入接口。普通文件、环境和进程接口见[系统接口](system-api.md)。
 
 ## 授权
 
@@ -10,6 +10,7 @@
     "http": ["https://aur.archlinux.org"],
     "system": {
       "session_storage": true,
+      "plugin_storage": true,
       "workspace": true,
       "processes": {
         "build": {
@@ -25,11 +26,15 @@
 
 ```sh
 sai plugins enable my-plugin --allow-session-storage --allow-workspace
+sai plugins enable my-plugin --allow-plugin-storage
 sai plugins enable my-plugin --no-session-storage
+sai plugins enable my-plugin --no-plugin-storage
 sai plugins enable my-plugin --no-workspace
 ```
 
 未指定的类别保持原授权。外部包缺省没有上述能力；`--grant-declared` 可以一次授予清单的完整声明。`workspace` 是进程模板的一部分，更改它会使旧的显式模板授权失效。普通 `sai.process.output` 不能调用私有目录模板，私有目录也不能使用普通目录模板。
+
+`system.plugin_storage` 不继承 `session_storage` 授权，旧清单和旧授权默认没有跨会话存储。`--allow-plugin-storage` 与 `--no-plugin-storage` 互斥，两者也不能与 `--grant-declared` 同时使用。未声明该能力的插件无法获得授权；单独修改存储授权会保留其他有效授权。
 
 ## 会话记录
 
@@ -48,9 +53,38 @@ sai.storage.set("review/example", nil)
 
 Lua 可用 `value == nil or value == sai.json.null` 判断缺失值。比较按 JSON 值进行，不比较对象字段顺序。键是 1–256 字节且不含控制字符的文本；宿主将键转换成摘要文件名。每个插件、每个会话最多 128 个键，单个值的 JSON 编码不超过 256 KiB。写入使用同目录临时文件、同步和原子替换。跨进程的短文件锁覆盖比较与写入；发生并发冲突时返回错误，由调用方决定是否重试。
 
-目录归属由 Rust 绑定的插件标识和完整会话作用域决定。正式 Agent 使用会话目录区分工作区内同名会话；子 Agent 独立隔离。插件 A 调用 B 时，B 使用自身插件命名空间及原用户会话的状态；新建 Lua VM 不会改变这一归属。直接 CLI 工具调用使用单独的 `direct-command` 作用域，允许两个独立命令进程先审查、后确认。
+目录归属由 Rust 绑定的插件标识和完整会话作用域决定。正式 Agent 使用会话目录区分工作区内同名会话；子 Agent 独立隔离。插件 A 调用 B 时，B 使用自身插件命名空间及原用户会话的状态；新建 Lua VM 不会改变这一归属。直接 CLI 工具使用 `cli-tool`，`plugins run` 使用 `plugin-command`，未绑定会话的工具注册表使用 `direct-command`。同一直接入口的不同进程共享其会话记录，允许先审查、后确认；工具和命令入口的会话记录分别隔离。
 
-只读工具可以更新已授权的私有记录，也可以创建私有缓存。事件只能读取记录，不能调用 set、compare_exchange 或创建工作目录。修改 Lua 上下文字段不会改变宿主归属。任何入口重置 `StateStore` 都会清除当前会话的插件记录，其他会话不受影响；清空会话命令也清理直接 CLI 工具记录。
+只读工具可以更新已授权的会话记录，也可以创建私有缓存。事件只能读取记录，不能调用 set、compare_exchange 或创建工作目录。修改 Lua 上下文字段不会改变宿主归属。任何入口重置 `StateStore` 都会清除当前会话的插件记录，其他会话不受影响；清空会话命令也清理直接 CLI 工具记录。
+
+## 插件持久记录
+
+以下片段在已授权的写入回调中执行：
+
+```lua
+local store = sai.storage.plugin
+local record = store.get("preferences")
+store.set("preferences", {enabled=true})
+local changed = store.compare_exchange("preferences", {enabled=true}, {enabled=false})
+store.set("preferences", nil)
+```
+
+三个操作的 JSON 返回值、null 删除和比较语义与会话记录相同。键必须是 1–256 字节且不含控制字符的 UTF-8 字符串；新接口拒绝数字等类型的隐式转换。每个插件最多 128 个键，单条记录以及比较值的 JSON 编码分别不超过 256 KiB。存储结果还受 `limits.output_bytes` 限制。输入与权限校验通过后，每次操作消耗一次 `limits.system_calls`，与会话存储及其他系统接口共用预算；宿主失败也会计费，每次回调重新获得额度。
+
+| 调用场景 | 读取 | 写入与比较交换 |
+| --- | --- | --- |
+| 初始化或回调失效后 | 拒绝 | 拒绝 |
+| 已授权的只读工具、只读命令和事件 | 允许 | 拒绝 |
+| 已授权的写入工具或命令 | 允许 | 还需可信 `allow_writes=true` |
+| 已授权的 `optional_writes` 工具 | 允许 | 还需可信 `allow_writes=true` |
+
+删除与比较不匹配的 `compare_exchange` 也按写入操作检查权限。Rust 运行时和文件宿主分别验证能力与写入权限；修改 `ctx.allow_writes`、`ctx.session_id` 或 `sai.plugin_id` 不会改变授权和归属。宿主实现通过 `PluginHost::plugin_storage(request, capabilities, allow_writes)` 接入，旧宿主的默认实现返回不可用错误。
+
+记录位于应用状态根目录的 `plugin-storage/<插件摘要>/<空作用域摘要>/`，由绑定的插件 ID 独占。会话记录继续位于 `plugin-state`；即使会话标识为空，两种类别也不会重叠。新建 Agent、切换工作区或会话、创建新 VM 和进程重启后，同一应用状态根目录下的同一插件仍可读取这些记录，其他插件不能读取。会话重置和 `sai clear --yes` 保留插件持久记录；禁用、撤权和移除源码也不会删除数据，重新授予同一插件 ID 后可以继续访问。需要清除记录时，已授权写入回调可以使用 `set(key, nil)`。
+
+插件存储使用独立的 `.plugin-storage.lock`，会话清理继续使用 `.plugin-state.lock`。比较、读取和原子替换处于同一临界区，锁正被占用时立即返回可重试错误；比较不匹配返回 false。命名空间目录、记录和锁拒绝符号链接，记录和锁还要求普通文件。损坏 JSON 或过大记录会明确报错，不能被静默覆盖。
+
+运行时在宿主调用前后检查超时和取消，失效回调不能继续发起存储操作。已开始的同步文件事务不能强制中断或回滚；调用超时、取消或结果超限不保证此前写入没有提交，调用方可在后续有效回调中读取记录确认。
 
 ## 工作目录
 

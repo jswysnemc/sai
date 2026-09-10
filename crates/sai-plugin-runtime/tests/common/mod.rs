@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 pub mod services;
+pub mod storage;
 pub mod system;
 
 use anyhow::Result;

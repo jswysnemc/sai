@@ -98,6 +98,18 @@ impl PluginHost for PrivatePluginHost {
         storage::execute(&self.paths, &self.id, session, request, capabilities)
     }
 
+    /// 【插件宿主】【持久存储】访问绑定插件的独立记录，跨会话写入仍需宿主确认权限。
+    /// @param request 键值操作；capabilities 为有效授权；allow_writes 为可信写入权限
+    /// @returns 原子读取、写入或比较交换结果
+    fn plugin_storage(
+        &self,
+        request: StorageRequest,
+        capabilities: &Capabilities,
+        allow_writes: bool,
+    ) -> Result<serde_json::Value> {
+        storage::execute_plugin(&self.paths, &self.id, request, capabilities, allow_writes)
+    }
+
     /// 【插件宿主】【目录能力】创建绑定插件的私有缓存目录。
     /// @param key 目录键；session 为可信会话；capabilities 为有效授权
     /// @returns 受管目录句柄

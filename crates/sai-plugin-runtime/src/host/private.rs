@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// 【插件】【私有状态】按插件与宿主会话隔离的原子键值操作，null 表示删除。
+/// 【插件】【私有状态】由宿主接口决定插件或会话作用域的原子键值操作，null 表示删除。
 #[derive(Clone, Debug)]
 pub enum StorageRequest {
     Get {

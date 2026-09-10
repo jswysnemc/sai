@@ -26,8 +26,8 @@ pub(super) fn root(base: &Path) -> Result<(Dir, PathBuf)> {
     Ok((Dir::open_ambient_dir(&path, ambient_authority())?, path))
 }
 
-/// 【插件私有数据】【命名空间】用摘要隔离插件与会话，空会话只属于直接命令入口。
-/// @param base 应用根目录；category 为数据类别；plugin 为绑定插件；session 为可信会话
+/// 【插件私有数据】【命名空间】类别、插件和作用域共同隔离数据，相同摘要不能跨类别访问。
+/// @param base 应用根目录；category 为数据类别；plugin 为绑定插件；session 为可信会话或类别内固定作用域
 /// @returns 隔离目录及显示路径
 pub(super) fn namespace(
     base: &Path,
@@ -61,7 +61,15 @@ pub(super) fn lock(directory: &Dir, name: &str) -> Result<Lock> {
         .create(true)
         .truncate(false)
         .follow(FollowSymlinks::No);
+    #[cfg(unix)]
+    {
+        use cap_std::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NONBLOCK);
+    }
     let file = directory.open_with(name, &options)?.into_std();
+    if !file.metadata()?.is_file() {
+        anyhow::bail!("plugin private data lock requires a regular file");
+    }
     file.try_lock()
         .context("plugin private data is busy; retry the operation")?;
     Ok(Lock(file))

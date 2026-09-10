@@ -25,6 +25,50 @@ pub(super) fn execute(
     if !capabilities.system.session_storage {
         bail!("plugin session storage is not allowed");
     }
+    transaction(paths, "plugin-state", id, session, request)
+}
+
+/// 【插件状态】【持久操作】独立授权插件记录，非法权限和请求在创建目录之前拒绝。
+/// @param paths 应用路径；id 为绑定插件；request 为操作；capabilities 为授权；allow_writes 为可信权限
+/// @returns 跨会话记录值或比较交换结果
+pub(super) fn execute_plugin(
+    paths: &SaiPaths,
+    id: &str,
+    request: StorageRequest,
+    capabilities: &Capabilities,
+    allow_writes: bool,
+) -> Result<Value> {
+    // 1. 【插件状态】【权限复核】会话授权不能替代插件授权，删除和失败比较同样属于写入操作
+    if !capabilities.system.plugin_storage {
+        bail!("plugin storage is not allowed");
+    }
+    if !matches!(request, StorageRequest::Get { .. }) && !allow_writes {
+        bail!("read-only plugin callback cannot mutate plugin storage");
+    }
+    // 2. 【插件状态】【记录预算】比较值与目标值均需有界，比较失败不能绕过输入限制
+    match &request {
+        StorageRequest::Set { value, .. } => validate_value(value)?,
+        StorageRequest::CompareExchange {
+            expected, value, ..
+        } => {
+            validate_value(expected)?;
+            validate_value(value)?;
+        }
+        StorageRequest::Get { .. } => {}
+    }
+    transaction(paths, "plugin-storage", id, "", request)
+}
+
+/// 【插件状态】【共用事务】在独立类别锁下执行读取、比较和原子替换，作用域只能由宿主指定。
+/// @param paths 应用路径；category 为内部类别；id 为插件；session 为作用域；request 为操作
+/// @returns 记录值或比较交换结果
+fn transaction(
+    paths: &SaiPaths,
+    category: &str,
+    id: &str,
+    session: &str,
+    request: StorageRequest,
+) -> Result<Value> {
     let key = match &request {
         StorageRequest::Get { key }
         | StorageRequest::Set { key, .. }
@@ -33,8 +77,8 @@ pub(super) fn execute(
     validate_storage_key(key)?;
     let name = format!("{}.json", paths::hash(key));
     let (root, _) = paths::root(&paths.state_dir)?;
-    let _lock = paths::lock(&root, ".plugin-state.lock")?;
-    let (directory, _) = paths::namespace(&paths.state_dir, "plugin-state", id, session)?;
+    let _lock = paths::lock(&root, &format!(".{category}.lock"))?;
+    let (directory, _) = paths::namespace(&paths.state_dir, category, id, session)?;
     let previous = read(&directory, &name)?;
     match request {
         StorageRequest::Get { .. } => Ok(previous),
@@ -55,7 +99,7 @@ pub(super) fn execute(
 }
 
 /// 【插件状态】【有界读取】禁止特殊文件和符号链接进入 JSON 读取。
-/// @param directory 会话目录；name 为摘要文件名
+/// @param directory 私有记录目录；name 为摘要文件名
 /// @returns 已解析记录，缺失返回 null
 fn read(directory: &Dir, name: &str) -> Result<Value> {
     let mut options = OpenOptions::new();
@@ -78,11 +122,21 @@ fn read(directory: &Dir, name: &str) -> Result<Value> {
     if bytes.len() > MAX_VALUE {
         bail!("plugin storage value exceeds 256 KiB");
     }
-    serde_json::from_slice(&bytes).context("decode plugin session storage")
+    serde_json::from_slice(&bytes).context("decode plugin storage record")
+}
+
+/// 【插件状态】【值校验】使用 JSON 序列化字节数计算配额，包含引号和转义开销。
+/// @param value 要保存或比较的记录值
+/// @returns 大小未超过单条上限时成功
+fn validate_value(value: &Value) -> Result<()> {
+    if serde_json::to_vec(value)?.len() > MAX_VALUE {
+        bail!("plugin storage value exceeds 256 KiB");
+    }
+    Ok(())
 }
 
 /// 【插件状态】【原子保存】写入新文件并同步后重命名，失败时删除未发布文件。
-/// @param directory 会话目录；name 为摘要文件名；value 为新值，null 表示删除
+/// @param directory 私有记录目录；name 为摘要文件名；value 为新值，null 表示删除
 /// @returns 保存结果
 fn write(directory: &Dir, name: &str, value: &Value) -> Result<()> {
     if value.is_null() {
@@ -97,7 +151,7 @@ fn write(directory: &Dir, name: &str, value: &Value) -> Result<()> {
         bail!("plugin storage value exceeds 256 KiB");
     }
     if !directory.try_exists(name)? && directory.entries()?.take(128).count() >= 128 {
-        bail!("plugin session storage exceeds 128 keys");
+        bail!("plugin storage exceeds 128 keys");
     }
     let temporary = format!(".{}.tmp", uuid::Uuid::new_v4());
     let result = (|| {

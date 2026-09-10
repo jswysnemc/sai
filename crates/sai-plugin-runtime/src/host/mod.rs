@@ -118,6 +118,18 @@ pub trait PluginHost: Send + Sync {
         anyhow::bail!("private storage is unavailable in this host")
     }
 
+    /// 【插件】【持久存储】访问宿主绑定插件的跨会话记录，不接受可伪造的插件或会话标识。
+    /// @param request 键值操作；capabilities 为有效授权；allow_writes 为可信调用权限
+    /// @returns 读取值、写入后的值或比较交换是否成功，默认宿主不提供该能力
+    fn plugin_storage(
+        &self,
+        _request: StorageRequest,
+        _capabilities: &Capabilities,
+        _allow_writes: bool,
+    ) -> Result<serde_json::Value> {
+        anyhow::bail!("plugin storage is unavailable in this host")
+    }
+
     /// 【插件】【工作目录创建】重建指定键的私有缓存目录，锁住目录直到调用结束。
     /// @param key 插件私有键；session 为可信会话；capabilities 为有效授权
     /// @returns 不能访问其他工作目录的宿主句柄

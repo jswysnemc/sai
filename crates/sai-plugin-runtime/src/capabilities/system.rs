@@ -11,6 +11,8 @@ pub struct SystemCapabilities {
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub session_storage: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub plugin_storage: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub workspace: bool,
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub read_paths: BTreeSet<String>,
@@ -52,9 +54,10 @@ pub struct ProcessParameter {
 
 impl SystemCapabilities {
     /// 【插件】【空授权】判断是否未声明任何系统能力。
-    /// @returns 三类授权均为空时为 true
+    /// @returns 所有系统授权均为空时为 true
     pub fn is_empty(&self) -> bool {
         !self.session_storage
+            && !self.plugin_storage
             && !self.workspace
             && self.read_paths.is_empty()
             && self.environment.is_empty()
@@ -86,6 +89,7 @@ impl SystemCapabilities {
     pub fn intersection(&self, granted: &Self) -> Self {
         Self {
             session_storage: self.session_storage && granted.session_storage,
+            plugin_storage: self.plugin_storage && granted.plugin_storage,
             workspace: self.workspace && granted.workspace,
             read_paths: self
                 .read_paths
@@ -111,6 +115,7 @@ impl SystemCapabilities {
     /// @returns 当前授权是声明的子集时为 true
     pub fn is_subset(&self, declared: &Self) -> bool {
         (!self.session_storage || declared.session_storage)
+            && (!self.plugin_storage || declared.plugin_storage)
             && (!self.workspace || declared.workspace)
             && self.read_paths.is_subset(&declared.read_paths)
             && self.environment.is_subset(&declared.environment)

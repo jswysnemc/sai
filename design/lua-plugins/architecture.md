@@ -41,7 +41,7 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 
 CLI 提供创建、验证、安装、替换、配置、授权、启停、移除和命令执行。TUI 提供 `/plugins`、`/plugins reload` 与 `/plugin <id>/<command>`。模型工具通过原有共用注册入口进入 CLI、TUI、Web 和子任务，直接用户命令目前只有 CLI 与 TUI 入口。
 
-私有会话状态、有界归档与工作目录能力已开放，契约见[私有接口](private-api.md)。主 Agent 模型上下文变换、插件界面组件和远端包分发尚未开放。后续业务迁移见[迁移清单](migration.md)。
+私有会话状态、插件跨会话存储、有界归档与工作目录能力已开放，契约见[私有接口](private-api.md)。跨插件共享存储、主 Agent 模型上下文变换、插件界面组件和远端包分发尚未开放。后续业务迁移见[迁移清单](migration.md)。
 
 ## 契约原则
 
@@ -139,6 +139,8 @@ Arch 包内部按软件包、状态和 Wiki 查询拆分；Fcitx 的主题、双
 `plugins/package-advisor` 包含元数据、审查文件选择、风险规则、审查记录和完整安装编排。Rust 的 `host/private.rs` 与 `runtime/private` 定义契约、授权、预算和有期限的目录句柄；`src/plugins/private` 负责插件及会话隔离、原子记录、二进制下载、安全解压和缓存目录。宿主不包含 AUR 风险模式或助手选择分支。
 
 用户操作标识由 `src/plugins/operation.rs` 维护，在普通 Agent 请求和跨 Lua VM 的组合调用中传递。审查记录使用完整会话目录区分工作区内同名会话；`StateStore` 的共同重置入口只清理当前作用域。通知模块仍保留宿主平台投递职责。
+
+`sai.storage.plugin` 使用独立的 `system.plugin_storage` 授权，由 `PrivatePluginHost` 绑定插件 ID，在 `plugin-storage` 类别中保存跨会话记录。它与原 `plugin-state` 会话目录及锁分别隔离，复用有界 JSON、短文件锁和原子替换事务。写入同时要求写入工具或命令声明与宿主调用权限；事件只有读取能力，初始化没有 I/O。会话重置保留这些记录，重新加载实例不会改变归属。这个接口不开放跨插件共享，也不提供后台定时调度；闹钟迁移仍需单独完成调度和通知契约。
 
 ## 通知策略与交付
 
