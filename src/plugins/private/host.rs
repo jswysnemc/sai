@@ -26,6 +26,66 @@ impl PrivatePluginHost {
 
 #[async_trait]
 impl PluginHost for PrivatePluginHost {
+    /// 【插件宿主】【二进制请求】复用精确来源授权和独立大文件时限。
+    /// @param request 请求；capabilities 为授权；allow_writes 为可信写入权限
+    /// @returns 原始有界响应
+    async fn http_binary(
+        &self,
+        request: HttpRequest,
+        capabilities: Capabilities,
+        allow_writes: bool,
+    ) -> Result<BinaryResponse> {
+        SaiPluginHost
+            .http_binary(request, capabilities, allow_writes)
+            .await
+    }
+
+    /// 【插件宿主】【匿名下载】下载不带凭据的公开或精确授权来源。
+    /// @param request 下载请求；capabilities 为授权
+    /// @returns 原始有界响应
+    async fn download_binary(
+        &self,
+        request: HttpRequest,
+        capabilities: Capabilities,
+    ) -> Result<BinaryResponse> {
+        SaiPluginHost.download_binary(request, capabilities).await
+    }
+
+    /// 【插件宿主】【文件输出】通过目录句柄写入并原子发布。
+    /// @param path 目标；data 为缓冲租约；context 为可信目录；capabilities 为写入授权
+    /// @returns 实际路径和字节数
+    async fn write_binary(
+        &self,
+        path: String,
+        data: BinaryData,
+        context: SystemContext,
+        capabilities: Capabilities,
+    ) -> Result<BinaryFile> {
+        SaiPluginHost
+            .write_binary(path, data, context, capabilities)
+            .await
+    }
+
+    /// 【插件宿主】【终端尺寸】获取当前终端单元格数量。
+    /// @returns 有可用终端时返回宽高
+    fn terminal_size(&self) -> Option<(u16, u16)> {
+        SaiPluginHost.terminal_size()
+    }
+
+    /// 【插件宿主】【图片显示】将有界图片交给公共终端渲染器。
+    /// @param path 路径；size 为单元格尺寸；context 为可信目录；capabilities 为展示授权
+    /// @returns 已显示的原图片路径
+    async fn display_image(
+        &self,
+        path: String,
+        size: Option<String>,
+        context: SystemContext,
+        capabilities: Capabilities,
+    ) -> Result<DisplayedImage> {
+        SaiPluginHost
+            .display_image(path, size, context, capabilities)
+            .await
+    }
     /// 【插件宿主】【状态能力】执行绑定插件的会话状态操作。
     /// @param request 键值操作；session 为可信会话；capabilities 为有效授权
     /// @returns 原子操作结果

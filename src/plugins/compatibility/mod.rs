@@ -1,5 +1,6 @@
 mod diagnostics;
 mod exchange_rate;
+mod image;
 mod input_method;
 mod linux_game;
 mod notification;
@@ -27,6 +28,12 @@ pub(super) fn resolve(
     declared: &Capabilities,
 ) -> Result<Option<RuntimeOverrides>> {
     match id {
+        "image-generation" => {
+            image::generation(&config.plugins.image_generation, settings, declared).map(Some)
+        }
+        "image-display" => {
+            image::display(&config.plugins.print_image, settings, declared).map(Some)
+        }
         "reply-notification" => {
             notification::resolve(&config.notification, settings, declared).map(Some)
         }

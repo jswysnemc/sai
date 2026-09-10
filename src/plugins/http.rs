@@ -20,11 +20,23 @@ pub(super) async fn execute(
 /// @param request 请求；capabilities 为授权；allow_writes 为调用权限
 /// @returns 尚未读取正文的最终响应
 pub(super) async fn send(
-    mut request: HttpRequest,
+    request: HttpRequest,
     capabilities: Capabilities,
     allow_writes: bool,
 ) -> Result<reqwest::Response> {
-    let timeout = Duration::from_millis(request.timeout_ms.clamp(1, 120_000));
+    send_with_timeout_limit(request, capabilities, allow_writes, 120_000).await
+}
+
+/// 【插件】【分级时限】文本与大文件请求复用相同授权逻辑，各自采用独立硬上限。
+/// @param request 请求；capabilities 为授权；allow_writes 为调用权限；timeout_limit 为宿主时限
+/// @returns 尚未读取正文的最终响应
+pub(super) async fn send_with_timeout_limit(
+    mut request: HttpRequest,
+    capabilities: Capabilities,
+    allow_writes: bool,
+    timeout_limit: u64,
+) -> Result<reqwest::Response> {
+    let timeout = Duration::from_millis(request.timeout_ms.clamp(1, timeout_limit));
     let deadline = Instant::now() + timeout;
     let client = reqwest::Client::builder()
         .timeout(timeout)

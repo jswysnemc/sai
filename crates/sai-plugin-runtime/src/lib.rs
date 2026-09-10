@@ -10,7 +10,8 @@ mod runtime;
 mod schema;
 
 pub use capabilities::{
-    Capabilities, ProcessArgument, ProcessParameter, ProcessTemplate, SystemCapabilities,
+    BinaryCapabilities, Capabilities, ProcessArgument, ProcessParameter, ProcessTemplate,
+    SystemCapabilities,
 };
 pub use contracts::{EventContext, EventKind, PluginCommand, PluginTool, ToolAccess};
 pub use manifest::{ExecutionLimits, PluginManifest, API_VERSION};

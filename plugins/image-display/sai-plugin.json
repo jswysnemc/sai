@@ -1,0 +1,10 @@
+{
+  "api_version": 1,
+  "id": "image-display",
+  "version": "1.0.0",
+  "name": "Terminal image display",
+  "description": "Display local images with compact terminal sizing and bilingual tool feedback.",
+  "entry": "init.lua",
+  "capabilities": {"binary": {"display_images": true}},
+  "limits": {"timeout_ms": 20000, "binary_timeout_ms": 20000, "output_bytes": 65536}
+}

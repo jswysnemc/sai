@@ -72,6 +72,8 @@ async fn presentation_callbacks_cannot_use_other_host_capabilities_or_session_da
             ctx.allow_writes = true
             ctx.workdir = '/'
             assert(type(sai.process.output) == 'function' and type(sai.workspace.open) == 'function')
+            assert(type(sai.binary.request) == 'function' and type(sai.terminal.display_image) == 'function')
+            assert(sai.limits.binary_bytes <= 1024 * 1024 and sai.limits.binary_timeout_ms <= 100)
             local checks = {
                 function() return sai.http.request({url='https://example.test'}) end,
                 function() return sai.env.get('LANG') end,
@@ -81,10 +83,15 @@ async fn presentation_callbacks_cannot_use_other_host_capabilities_or_session_da
                 function() return sai.workspace.open('directory') end,
                 function() return sai.model.complete({messages={{role='user',content='secret'}}}) end,
                 function() return sai.tools.call('read_file', {path='secret'}) end,
+                function() return sai.binary.request({url='https://example.test'}) end,
+                function() return sai.binary.download({url='https://example.test'}) end,
+                function() return sai.binary.decode_base64('aGVsbG8='):write('secret.png') end,
+                function() return sai.terminal.size() end,
+                function() return sai.terminal.display_image('secret.png') end,
             }
-            for _, check in ipairs(checks) do
+            for index, check in ipairs(checks) do
                 local ok, reason = pcall(check)
-                assert(not ok)
+                assert(not ok, 'unexpected allowed host operation ' .. index)
                 reason = tostring(reason)
                 assert(reason:find('not allowed', 1, true) or reason:find('unavailable', 1, true), reason)
             end
@@ -96,6 +103,7 @@ async fn presentation_callbacks_cannot_use_other_host_capabilities_or_session_da
     package.manifest.capabilities = serde_json::from_value(json!({
         "notifications":true,"model":true,"tools":["read_file"],
         "http":["https://example.test"],
+        "binary":{"public_downloads":true,"write_paths":["."],"display_images":true},
         "system": {
             "read_paths":["."],"environment":["LANG"],"session_storage":true,"workspace":true,
             "processes":{"read":{"program":"read-fixture","read_only":true}}

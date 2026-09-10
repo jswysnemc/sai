@@ -63,7 +63,10 @@ pub(super) fn install(
 /// 【插件】【请求边界】在网络调用前验证 URL、头部及正文大小，保留传输头控制权。
 /// @param request 待发送请求；output_limit 为包声明的字节上限
 /// @returns 请求满足资源与传输约束时成功
-fn validate_sizes_and_headers(request: &HttpRequest, output_limit: usize) -> mlua::Result<()> {
+pub(super) fn validate_sizes_and_headers(
+    request: &HttpRequest,
+    output_limit: usize,
+) -> mlua::Result<()> {
     if request.url.len() > 8192
         || request
             .headers

@@ -356,9 +356,19 @@ fn encode_kitty_png(path: &Path, cols: Option<usize>, rows: Option<usize>) -> Re
     if register_kitty_transmission(image_id) {
         transmit_kitty_data_now(&kitty_transmission_payload(image_id, &bytes));
     }
-    // 2. 放置序列：q=2 静默；C=1 放置后光标保持原位（默认会跳到图像
-    //    右下角之后，表格等逐行拼接的布局会从图片列开始整体错位），
-    //    占位由文本层（换行 / 空格）自行控制（对齐 jcode/ratatui-image）
+    Ok(kitty_placement_payload(image_id, placement_id, cols, rows))
+}
+
+/// 【终端图片】【Kitty 放置】只编码已有图片的放置与尺寸，不登记缓存或写入终端。
+/// @param image_id 图片标识；placement_id 为放置标识；cols、rows 为可选单元格尺寸
+/// @returns 完整放置协议内容
+fn kitty_placement_payload(
+    image_id: u32,
+    placement_id: u32,
+    cols: Option<usize>,
+    rows: Option<usize>,
+) -> String {
+    // 1. 【终端图片】【放置光标】q=2 静默，C=1 保持原位，换行与空格由文本层控制
     let mut control = format!("a=p,q=2,C=1,i={image_id},p={placement_id}");
     if let Some(cols) = cols.filter(|value| *value > 0) {
         control.push_str(&format!(",c={cols}"));
@@ -366,7 +376,7 @@ fn encode_kitty_png(path: &Path, cols: Option<usize>, rows: Option<usize>) -> Re
     if let Some(rows) = rows.filter(|value| *value > 0) {
         control.push_str(&format!(",r={rows}"));
     }
-    Ok(format!("\x1b_G{control}\x1b\\"))
+    format!("\x1b_G{control}\x1b\\")
 }
 
 /// 组装 Kitty 图像数据传输载荷（a=t 只传输不放置）。
@@ -446,7 +456,11 @@ fn kitty_image_id(bytes: &[u8]) -> u32 {
     let mut hasher = std::hash::DefaultHasher::new();
     bytes.hash(&mut hasher);
     let id = hasher.finish() as u32;
-    if id == 0 { 1 } else { id }
+    if id == 0 {
+        1
+    } else {
+        id
+    }
 }
 
 /// 分配进程内唯一的 Kitty 放置 ID（非零）。
@@ -459,7 +473,11 @@ fn kitty_image_id(bytes: &[u8]) -> u32 {
 fn next_kitty_placement_id() -> u32 {
     static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
     let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    if id == 0 { 1 } else { id }
+    if id == 0 {
+        1
+    } else {
+        id
+    }
 }
 
 /// 使用 Kitty 图形协议渲染图片。
@@ -473,17 +491,24 @@ fn next_kitty_placement_id() -> u32 {
 /// 返回:
 /// - Kitty 图形协议转义序列，末尾带足够换行以占位
 fn render_kitty_image(path: &Path) -> Result<String> {
-    // 1. 加载并裁掉透明边距（去掉大画布四周空白，不是把图内容缩小）
+    render_kitty_image_with(path, kitty_block_limits(), encode_kitty_png)
+}
+
+/// 【终端图片】【Kitty 组合渲染】共享裁剪和单元格对齐，调用方决定编码时是否立即传输。
+/// @param path 图片路径；limits 为最大列行和单元格像素；encode 为 PNG 编码函数
+/// @returns 编码内容及准确占位换行
+fn render_kitty_image_with(
+    path: &Path,
+    limits: (usize, usize, usize, usize),
+    encode: impl FnOnce(&Path, Option<usize>, Option<usize>) -> Result<String>,
+) -> Result<String> {
+    // 1. 【终端图片】【透明裁剪】加载图片并移除四周透明留白
     let image = load_image_rgba(path)?;
     let image = crop_transparent_bounds(&image);
-    // 2. 仅当超出终端可用区域时才缩小，避免「为了压高度把图压扁」
-    let limits = kitty_block_limits();
+    // 2. 【终端图片】【等比缩放】仅缩小超出可用区域的图片，保留原始比例
     let (max_cols, max_rows, cell_pw, cell_ph) = limits;
     let image = fit_raster_to_max_cells(image, max_cols, max_rows, cell_pw, cell_ph);
-    // 3. 推算占位网格后，把像素补齐到恰好覆盖整格。
-    //    只传 c 时终端按自己的取整决定实际行数，与这里预留的换行数可能差一行，
-    //    表现为文本覆盖图片底部或图下多出空行；c/r 同传 + 像素对齐整格后，
-    //    渲染行数与占位行数强制一致（对齐 jcode/ratatui-image 的做法）
+    // 3. 【终端图片】【网格对齐】补齐整格像素并同时传入 c/r，确保渲染与占位行数一致
     let (cols, rows) = kitty_cell_dimensions_with(limits, image.width, image.height);
     let image = pad_raster_to_cell_grid(image, cols, rows, cell_pw, cell_ph);
     let temp = tempfile::Builder::new()
@@ -492,8 +517,8 @@ fn render_kitty_image(path: &Path) -> Result<String> {
         .tempfile()
         .context("failed to create temporary kitty image")?;
     write_raster_png(temp.path(), &image)?;
-    let mut output = encode_kitty_png(temp.path(), Some(cols), Some(rows))?;
-    // 4. 换行数与声明的 r 严格一致
+    let mut output = encode(temp.path(), Some(cols), Some(rows))?;
+    // 4. 【终端图片】【行数占位】换行数与声明的 r 严格一致
     for _ in 0..rows {
         output.push('\n');
     }

@@ -1,0 +1,14 @@
+{
+  "api_version": 1,
+  "id": "image-generation",
+  "version": "1.0.0",
+  "name": "Image generation",
+  "description": "Generate, download and save images through the configured image API, with optional preview through the image-display plugin.",
+  "entry": "init.lua",
+  "capabilities": {
+    "http": ["https://api.openai.com"],
+    "tools": ["print_image"],
+    "binary": {"public_downloads": true, "write_paths": ["~/Pictures/sai/generated-images"]}
+  },
+  "limits": {"timeout_ms": 1300000, "binary_timeout_ms": 600000, "binary_bytes": 67108864, "output_bytes": 65536}
+}

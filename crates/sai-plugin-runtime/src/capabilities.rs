@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use url::Url;
 
+mod binary;
 mod system;
+pub use binary::BinaryCapabilities;
 pub use system::{ProcessArgument, ProcessParameter, ProcessTemplate, SystemCapabilities};
 
 /// 【插件】【能力声明】来源授权与只读 POST 查询端点分别声明和授予。
@@ -18,6 +20,8 @@ pub struct Capabilities {
     pub model: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub notifications: bool,
+    #[serde(default, skip_serializing_if = "BinaryCapabilities::is_empty")]
+    pub binary: BinaryCapabilities,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub tools: BTreeSet<String>,
     #[serde(default, skip_serializing_if = "SystemCapabilities::is_empty")]
@@ -29,6 +33,7 @@ impl Capabilities {
     /// @returns 声明合法且没有超过数量限制时成功
     pub fn validate(&self) -> Result<()> {
         self.system.validate()?;
+        self.binary.validate()?;
         if self.http.len() > 32 || self.http_read_only_post.len() > 32 {
             bail!("a plugin may declare at most 32 HTTP origins and 32 read-only POST endpoints");
         }
@@ -80,6 +85,7 @@ impl Capabilities {
                 .collect(),
             model: self.model && granted.model,
             notifications: self.notifications && granted.notifications,
+            binary: self.binary.intersection(&granted.binary),
             tools: self.tools.intersection(&granted.tools).cloned().collect(),
             system: self.system.intersection(&granted.system),
         }
@@ -95,6 +101,7 @@ impl Capabilities {
                 .is_subset(&declared.http_read_only_post)
             && (!self.model || declared.model)
             && (!self.notifications || declared.notifications)
+            && self.binary.is_subset(&declared.binary)
             && self.tools.is_subset(&declared.tools)
             && self.system.is_subset(&declared.system)
     }

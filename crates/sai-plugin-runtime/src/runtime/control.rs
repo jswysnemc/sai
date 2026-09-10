@@ -20,6 +20,7 @@ pub(super) struct CallControl {
     session: Mutex<String>,
     pub private_mutations: AtomicBool,
     pub workspaces: Mutex<Vec<Arc<dyn crate::host::PluginWorkspace>>>,
+    pub binary_buffers: Mutex<Vec<std::sync::Weak<crate::host::binary::BinarySlot>>>,
     services: Mutex<Option<Arc<dyn InvocationServices>>>,
 }
 
@@ -122,6 +123,13 @@ impl Drop for InvocationLease {
         self.0.private_mutations.store(false, Ordering::Release);
         if let Ok(mut workspaces) = self.0.workspaces.lock() {
             workspaces.clear();
+        }
+        if let Ok(mut buffers) = self.0.binary_buffers.lock() {
+            for buffer in buffers.drain(..).filter_map(|buffer| buffer.upgrade()) {
+                if let Ok(mut data) = buffer.lock() {
+                    data.take();
+                }
+            }
         }
         if let Ok(mut services) = self.0.services.lock() {
             services.take();

@@ -15,7 +15,6 @@ pub(crate) mod fs_path;
 pub(crate) mod groups;
 mod hash_codec;
 mod http_body;
-mod image_generation;
 pub mod knowledge_base;
 pub(crate) mod memes;
 mod memory;
@@ -219,15 +218,11 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     web_fetch::register(&mut registry);
     configurable_cli_tools::register(&mut registry, config);
     crate::plugins::register_plugins(&mut registry, config, paths, false);
-    vision::register_print(&mut registry, config.clone());
     if config.plugins.memes.enabled {
         memes::register(&mut registry, config.clone(), paths.clone());
     }
     if config.plugins.web_images.enabled {
         web_images::register(&mut registry, config.clone(), paths.clone(), true);
-    }
-    if config.plugins.image_generation.enabled {
-        image_generation::register(&mut registry, config.clone());
     }
     if config.plugins.knowledge_base.enabled {
         knowledge_base::register(&mut registry, config.clone(), paths.clone());

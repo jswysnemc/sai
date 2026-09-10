@@ -35,7 +35,7 @@ pub(crate) enum PluginsCommand {
     /// 【插件命令】【启用授权】启用插件，并按声明分别调整各项宿主能力授权
     Enable {
         id: String,
-        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_tool", "no_tools", "allow_read_path", "no_file_read", "allow_env", "no_env", "allow_process", "no_processes", "allow_session_storage", "no_session_storage", "allow_workspace", "no_workspace", "allow_notifications", "no_notifications"])]
+        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_tool", "no_tools", "allow_read_path", "no_file_read", "allow_env", "no_env", "allow_process", "no_processes", "allow_session_storage", "no_session_storage", "allow_workspace", "no_workspace", "allow_notifications", "no_notifications", "allow_public_downloads", "no_public_downloads", "allow_write_path", "no_file_write", "allow_image_display", "no_image_display"])]
         grant_declared: bool,
         #[arg(long, value_name = "ORIGIN", conflicts_with = "no_http")]
         allow_http: Vec<String>,
@@ -80,6 +80,18 @@ pub(crate) enum PluginsCommand {
         allow_workspace: bool,
         #[arg(long)]
         no_workspace: bool,
+        #[arg(long, conflicts_with = "no_public_downloads")]
+        allow_public_downloads: bool,
+        #[arg(long)]
+        no_public_downloads: bool,
+        #[arg(long, value_name = "PATH", conflicts_with = "no_file_write")]
+        allow_write_path: Vec<String>,
+        #[arg(long)]
+        no_file_write: bool,
+        #[arg(long, conflicts_with = "no_image_display")]
+        allow_image_display: bool,
+        #[arg(long)]
+        no_image_display: bool,
     },
     /// Disable a plugin for subsequent loads
     Disable { id: String },
@@ -229,6 +241,12 @@ pub(crate) async fn run(
             no_session_storage,
             allow_workspace,
             no_workspace,
+            allow_public_downloads,
+            no_public_downloads,
+            allow_write_path,
+            no_file_write,
+            allow_image_display,
+            no_image_display,
         } => {
             let update = if grant_declared {
                 GrantUpdate::Declared
@@ -250,9 +268,21 @@ pub(crate) async fn run(
                 || no_session_storage
                 || allow_workspace
                 || no_workspace
+                || allow_public_downloads
+                || no_public_downloads
+                || !allow_write_path.is_empty()
+                || no_file_write
+                || allow_image_display
+                || no_image_display
             {
                 let change_http = no_http || !allow_http.is_empty();
                 GrantUpdate::Changes(GrantChanges {
+                    public_downloads: (allow_public_downloads || no_public_downloads)
+                        .then_some(allow_public_downloads),
+                    write_paths: (no_file_write || !allow_write_path.is_empty())
+                        .then(|| allow_write_path.into_iter().collect()),
+                    display_images: (allow_image_display || no_image_display)
+                        .then_some(allow_image_display),
                     session_storage: (allow_session_storage || no_session_storage)
                         .then_some(allow_session_storage),
                     workspace: (allow_workspace || no_workspace).then_some(allow_workspace),

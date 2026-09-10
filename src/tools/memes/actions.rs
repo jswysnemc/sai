@@ -43,7 +43,7 @@ async fn show_meme(args: Value, config: &AppConfig, paths: &SaiPaths) -> Result<
     let id = required_str(&args, "id")?;
     let meme = find_meme(paths, &library, id)?.with_context(|| format!("meme not found: {id}"))?;
     let size = meme_print_size(&args, &config.plugins.memes);
-    vision::print_image_file(&meme.path, size).await?;
+    crate::media::terminal::print_image_file(&meme.path, size).await?;
     Ok(json!({
         "success": true,
         "library": library,
@@ -130,7 +130,11 @@ pub(crate) async fn render_auto_meme(
 ) -> Result<()> {
     let meme = find_meme(paths, &event.library, &event.id)?
         .with_context(|| format!("meme not found: {}", event.id))?;
-    vision::print_image_file(&meme.path, configured_meme_size(&config.plugins.memes)).await
+    crate::media::terminal::print_image_file(
+        &meme.path,
+        configured_meme_size(&config.plugins.memes),
+    )
+    .await
 }
 
 pub(crate) fn record_auto_meme_event(
@@ -358,4 +362,3 @@ async fn delete_meme(args: Value, config: &AppConfig, paths: &SaiPaths) -> Resul
     }
     bail!("meme not found: {requested_id}")
 }
-

@@ -1,3 +1,4 @@
+mod binary;
 mod bundled;
 mod compatibility;
 mod config;

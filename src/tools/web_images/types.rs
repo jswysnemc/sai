@@ -1,4 +1,4 @@
-use super::{vision, ToolProgress, ToolRegistry, ToolSpec};
+use super::{ToolProgress, ToolRegistry, ToolSpec};
 use crate::config::{AppConfig, ProviderConfig, VisionPluginConfig};
 use crate::i18n::text as t;
 use crate::llm::{ChatMessage, OpenAiCompatibleClient};
@@ -178,9 +178,12 @@ async fn search_web_images(
     if should_print {
         progress.report("__external_output__");
         for item in stored.iter().take(preview_count) {
-            if let Err(err) = vision::print_image_file(
+            if let Err(err) = crate::media::terminal::print_image_file(
                 &item.local_path,
-                vision::configured_print_size(&config.plugins.print_image),
+                crate::media::terminal::proportional_size(
+                    config.plugins.print_image.width_percent,
+                    config.plugins.print_image.height_percent,
+                ),
             )
             .await
             {

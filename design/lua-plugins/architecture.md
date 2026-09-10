@@ -25,6 +25,9 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 | `src/plugins/compatibility` | 旧业务设置的定向兼容；派生凭据仅保留在运行时快照 |
 | `src/plugins/http.rs` | 通用 HTTP 执行、逐次重定向授权、凭据处理和响应限制 |
 | `src/plugins/system` | 通用环境访问、目录句柄授权、受管模板进程及平台回收 |
+| `src/plugins/binary` | 原始字节传输、匿名公开下载、原子文件输出及受控图片展示 |
+| `src/media/terminal.rs` | 共用图片渲染与输出；完整渲染成功后才写入终端 |
+| `src/render/terminal_image/buffered.rs` | 不直接输出的图片协议编码，保留调用方尺寸与取消边界 |
 | `plugins/<id>` | 随二进制发布的 Lua 业务包；业务源码不再置于 `src/tools` |
 | `src/cli/plugins.rs` | 面向插件开发者和使用者的管理入口 |
 | `src/cli/repl/plugin_commands.rs` | TUI 会话内命令、重载、进度和取消 |
@@ -34,7 +37,7 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 
 ## 已落地的版本 1
 
-独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、模型、工具调用、文件、环境、模板进程、JSON、文本、时间及通知纯回调能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence`、`package-advisor` 与 `reply-notification` 已迁为随程序嵌入的十五个 Lua 包，共提供 21 个工具；通知包不增加模型工具，相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
+独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、模型、工具调用、文件、环境、模板进程、二进制缓冲、终端图片、JSON、文本、时间及通知纯回调能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence`、`package-advisor`、`reply-notification`、`image-generation` 与 `image-display` 已迁为随程序嵌入的十七个 Lua 包，共提供 23 个工具；通知包不增加模型工具，相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
 
 CLI 提供创建、验证、安装、替换、配置、授权、启停、移除和命令执行。TUI 提供 `/plugins`、`/plugins reload` 与 `/plugin <id>/<command>`。模型工具通过原有共用注册入口进入 CLI、TUI、Web 和子任务，直接用户命令目前只有 CLI 与 TUI 入口。
 
@@ -146,3 +149,13 @@ Arch 包内部按软件包、状态和 Wiki 查询拆分；Fcitx 的主题、双
 旧 `notification.enabled` 与 `notification.sound` 只向内置包提供运行时默认值。显式插件设置按字段覆盖，包括 false；插件启停和通知授权又是独立开关。新计划读取新快照，管理操作不把旧默认值复制进 `plugins.jsonc`。外部包不会继承这两个配置字段。
 
 Web 使用独立认证接口计算通知，SSE 只增加交付层的历史补发标记，原始会话日志不改变。浏览器在异步计算前登记运行标识，拦截重复终态；重连后补发的已知活动运行仍可通知一次。切换会话时取消请求和迟到的权限回调。状态归并从原 856 行的 `use-run-stream.ts` 拆出，流连接、通知消费与平台投递各自独立。
+
+## 二进制与图片业务
+
+`plugins/image-generation` 负责供应商设置、请求构造、尺寸映射、响应选择、文件命名和自动预览，保留 `generate_image`。`plugins/image-display` 负责尺寸优先级、终端百分比和双语反馈，保留只读 `print_image`。原 Rust 图片生成模块和显示工具业务已删除；图像分析仍在 `vision.rs`，网页搜图与表情库仍使用共享绘制能力，尚未迁为插件。
+
+运行时的 `host/binary.rs` 定义原始响应、共享缓冲和文件结果，`runtime/binary` 分别实现网络、JSON 字段选取、解码、缓冲与终端绑定。大正文不进入 JSON 工具结果，所有缓冲共用 VM 字节预算；回调完成、失败或取消时撤销句柄，文件线程仍持有的数据直到实际 I/O 结束才归还预算。普通文本 HTTP 和二进制请求的时限独立。
+
+匿名公开下载、输出目录和图片展示分别声明与授权。公开下载只接受无正文、无自定义头的 GET，每次跳转重新验证全部 DNS 结果并固定连接地址；私有地址必须由精确来源授权。文件输出先验证完整归属，再通过不跟随链接的目录句柄写入暂存文件，成功等待后原子发布。图片使用普通文件快照和像素限制，协议内容完整生成后才输出；Kitty 图片数据不在工作线程内提前发送，也不消耗普通渲染器的传输缓存。
+
+自动预览通过正式工具服务调用 `print_image`，由显示包使用自身设置和授权。禁用显示包或从 Agent 白名单移除显示工具会跳过预览，绘制失败不会撤销已经成功保存的图片。旧图片设置仅向对应内置包提供逐字段默认值，显式 false 有效；管理操作不复制旧凭据，输出目录变更也不会扩大已经保存的显式授权。完整契约见[二进制与终端图片接口](binary-api.md)。

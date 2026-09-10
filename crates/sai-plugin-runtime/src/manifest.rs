@@ -28,6 +28,8 @@ pub struct ExecutionLimits {
     pub instructions: u64,
     pub timeout_ms: u64,
     pub http_timeout_ms: u64,
+    pub binary_bytes: usize,
+    pub binary_timeout_ms: u64,
     pub output_bytes: usize,
     pub model_requests: usize,
     pub tool_calls: usize,
@@ -42,6 +44,8 @@ impl Default for ExecutionLimits {
             instructions: 2_000_000,
             timeout_ms: 20_000,
             http_timeout_ms: 30_000,
+            binary_bytes: 32 * 1024 * 1024,
+            binary_timeout_ms: 120_000,
             output_bytes: 1024 * 1024,
             model_requests: 32,
             tool_calls: 128,
@@ -101,6 +105,8 @@ impl ExecutionLimits {
             || !(1_000..=20_000_000).contains(&self.instructions)
             || !(100..=3_600_000).contains(&self.timeout_ms)
             || !(1..=120_000).contains(&self.http_timeout_ms)
+            || !(1024..=64 * 1024 * 1024).contains(&self.binary_bytes)
+            || !(1..=600_000).contains(&self.binary_timeout_ms)
             || !(1024..=4 * 1024 * 1024).contains(&self.output_bytes)
             || !(1..=256).contains(&self.model_requests)
             || !(1..=1024).contains(&self.tool_calls)

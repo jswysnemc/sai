@@ -17,6 +17,7 @@ mod i18n;
 mod ipc;
 mod llm;
 mod mcp;
+mod media;
 mod memory;
 mod notifications;
 mod paths;

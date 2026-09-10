@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use sai_plugin_runtime::{Capabilities, SystemCapabilities};
+use sai_plugin_runtime::{BinaryCapabilities, Capabilities, SystemCapabilities};
 use std::collections::BTreeSet;
 
 /// 【插件】【授权更新】全量替换与按能力修改分开，撤销网络不会隐式改变模型或工具授权。
@@ -22,6 +22,9 @@ pub(crate) struct GrantChanges {
     pub processes: Option<BTreeSet<String>>,
     pub session_storage: Option<bool>,
     pub workspace: Option<bool>,
+    pub public_downloads: Option<bool>,
+    pub write_paths: Option<BTreeSet<String>>,
+    pub display_images: Option<bool>,
 }
 
 impl GrantUpdate {
@@ -46,6 +49,15 @@ impl GrantUpdate {
                 model: changes.model.unwrap_or(current.model),
                 notifications: changes.notifications.unwrap_or(current.notifications),
                 tools: changes.tools.unwrap_or(current.tools),
+                binary: BinaryCapabilities {
+                    public_downloads: changes
+                        .public_downloads
+                        .unwrap_or(current.binary.public_downloads),
+                    write_paths: changes.write_paths.unwrap_or(current.binary.write_paths),
+                    display_images: changes
+                        .display_images
+                        .unwrap_or(current.binary.display_images),
+                },
                 system: SystemCapabilities {
                     session_storage: changes
                         .session_storage

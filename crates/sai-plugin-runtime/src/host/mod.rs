@@ -4,9 +4,11 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+pub(crate) mod binary;
 mod private;
 mod services;
 mod system;
+pub use binary::{BinaryData, BinaryFile, BinaryResponse, DisplayedImage};
 pub use private::{
     validate_storage_key, validate_workspace_path, ArchiveRequest, PluginWorkspace, StorageRequest,
 };
@@ -47,6 +49,61 @@ pub struct HttpResponse {
 /// 【插件】【宿主接口】插件运行时所需的异步能力，实现不依赖 Sai 应用配置。
 #[async_trait]
 pub trait PluginHost: Send + Sync {
+    /// 【插件二进制】【原始请求】执行精确来源授权的请求，保留响应正文原始字节。
+    /// @param request 请求；capabilities 为有效授权；allow_writes 为宿主权限
+    /// @returns 有界响应，默认宿主不提供该能力
+    async fn http_binary(
+        &self,
+        _request: HttpRequest,
+        _capabilities: Capabilities,
+        _allow_writes: bool,
+    ) -> Result<BinaryResponse> {
+        anyhow::bail!("binary HTTP is unavailable in this host")
+    }
+
+    /// 【插件二进制】【匿名下载】从已授权来源或明确授权的公开网络执行无凭据 GET。
+    /// @param request 无正文和自定义头的 GET；capabilities 为有效网络授权
+    /// @returns 有界二进制响应，公开网络必须由宿主验证和固定解析地址
+    async fn download_binary(
+        &self,
+        _request: HttpRequest,
+        _capabilities: Capabilities,
+    ) -> Result<BinaryResponse> {
+        anyhow::bail!("binary download is unavailable in this host")
+    }
+
+    /// 【插件二进制】【文件输出】在授权目录内写入缓冲，参数不能覆盖宿主权限。
+    /// @param path 目标；data 为持有预算的缓冲；context 为可信目录；capabilities 为授权
+    /// @returns 实际输出路径与字节数
+    async fn write_binary(
+        &self,
+        _path: String,
+        _data: BinaryData,
+        _context: SystemContext,
+        _capabilities: Capabilities,
+    ) -> Result<BinaryFile> {
+        anyhow::bail!("binary file writing is unavailable in this host")
+    }
+
+    /// 【插件图片】【终端尺寸】返回当前交互终端的单元格尺寸。
+    /// @returns 没有交互终端时返回 None，不开放其他系统状态
+    fn terminal_size(&self) -> Option<(u16, u16)> {
+        None
+    }
+
+    /// 【插件图片】【显示接口】绘制指定图片，图像内容不通过这个接口返回 Lua。
+    /// @param path 图片路径；size 为有界显示尺寸；context 为可信目录；capabilities 为展示授权
+    /// @returns 实际使用的图片路径
+    async fn display_image(
+        &self,
+        _path: String,
+        _size: Option<String>,
+        _context: SystemContext,
+        _capabilities: Capabilities,
+    ) -> Result<DisplayedImage> {
+        anyhow::bail!("image display is unavailable in this host")
+    }
+
     /// 【插件】【私有状态】读取或原子更新宿主会话内的插件数据。
     /// @param request 键值操作；session 为可信会话；capabilities 为有效授权
     /// @returns 读取值、写入后的值或比较交换是否成功

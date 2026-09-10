@@ -44,6 +44,14 @@ pub(super) fn install(
         limits.clone(),
         control.clone(),
     )?;
+    super::binary::install(
+        lua,
+        api,
+        host.clone(),
+        capabilities.clone(),
+        limits.clone(),
+        control.clone(),
+    )?;
     super::http::install(lua, api, host, capabilities, limits, control)
 }
 
@@ -118,6 +126,28 @@ fn install_json(lua: &Lua, api: &Table, limit: usize) -> mlua::Result<()> {
 /// @returns 时间帮助函数安装结果
 fn install_time(lua: &Lua, api: &Table) -> mlua::Result<()> {
     let time = lua.create_table()?;
+    time.set(
+        "local_format",
+        lua.create_function(|_, (format, seconds): (String, Option<i64>)| {
+            if format.len() > 128
+                || chrono::format::StrftimeItems::new(&format)
+                    .any(|item| matches!(item, chrono::format::Item::Error))
+            {
+                return Err(mlua::Error::runtime("invalid local time format"));
+            }
+            let instant = seconds
+                .map(|value| DateTime::from_timestamp(value, 0))
+                .unwrap_or_else(|| Some(Utc::now()))
+                .ok_or_else(|| mlua::Error::runtime("invalid local time timestamp"))?;
+            let mut result = String::new();
+            std::fmt::write(
+                &mut result,
+                format_args!("{}", instant.with_timezone(&chrono::Local).format(&format)),
+            )
+            .map_err(|_| mlua::Error::runtime("unsupported local time format"))?;
+            Ok(result)
+        })?,
+    )?;
     time.set(
         "now",
         lua.create_function(|_, ()| Ok(Utc::now().timestamp()))?,

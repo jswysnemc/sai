@@ -113,8 +113,12 @@ sai plugins remove hello
 | `moegirl` | `query_moegirl` | 沿用主配置 `plugins.moegirl.enabled` |
 | `package-advisor` | `review_aur_package`、`install_aur_package` | 沿用主配置 `plugins.package_advisor.enabled` |
 | `reply-notification` | 无模型工具；提供 `preview` 命令和 `reply_end` 回调 | 默认启用，沿用主配置的通知和声音设置 |
+| `image-generation` | `generate_image` | 沿用主配置 `plugins.image_generation.enabled` |
+| `image-display` | `print_image` | 沿用主配置 `plugins.print_image.enabled` |
 
 `plugins.jsonc` 的显式设置优先于上述默认值。内置包保留原工具名称；外部包不能使用内置插件 ID，也不能覆盖现有工具。已禁用的内置工具仍可在 Agent 设置中预先选择，但无法实际执行。
+
+图片生成设置和显示设置分别归属两个包。生成包保存图片后，可按 `auto_print` 调用显示包；禁用显示包会跳过自动预览，预览失败不影响已保存的图片。二进制响应、匿名公开下载、输出目录和终端展示使用独立授权，详见[二进制接口](binary-api.md)。
 
 查询工具和 `check_issue` 保持只读；`diagnostic_app_probe` 是明确执行应用的写入工具，不出现在只读工具目录中。ProtonDB 的 Algolia 搜索使用 GET，数字 App ID 的名称查询失败时保留原 ID，评论读取失败时仍返回评级。Fcitx 的 `include_page_excerpt=false` 完全使用包内规则；启用摘录时最多读取 512 KiB 页面，保留 Markdown 并截取 12,000 个 Unicode 字符。ArchWiki 页面同样保留 Markdown 链接。
 

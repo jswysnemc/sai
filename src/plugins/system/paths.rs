@@ -26,7 +26,7 @@ impl AuthorizedPath {
 /// 【插件系统】【工作目录】使用宿主交付的绝对目录，库直接调用时使用宿主当前目录。
 /// @param context 可信调用上下文
 /// @returns 实际工作目录；显式相对目录属于无效宿主输入
-pub(super) fn workdir(context: &SystemContext) -> Result<PathBuf> {
+pub(in crate::plugins) fn workdir(context: &SystemContext) -> Result<PathBuf> {
     if context.workdir.is_empty() {
         return std::env::current_dir().context("read host working directory");
     }
@@ -92,7 +92,7 @@ pub(super) fn authorize(
 /// 【插件系统】【目录锚定】逐级打开规范路径，拒绝在路径校验后被替换成链接的目录。
 /// @param path 已规范化的绝对目录
 /// @returns 不再依赖可变路径名称的目录句柄
-fn open_anchor(path: &Path) -> Result<Dir> {
+pub(in crate::plugins) fn open_anchor(path: &Path) -> Result<Dir> {
     let mut root = PathBuf::new();
     let mut names = Vec::new();
     for component in path.components() {
@@ -118,7 +118,7 @@ fn open_anchor(path: &Path) -> Result<Dir> {
 /// 【插件系统】【路径展开】展开当前用户目录或可信工作目录，不解释其他环境变量。
 /// @param value 声明或请求路径；cwd 为绝对工作目录
 /// @returns 绝对路径
-fn expand(value: &str, cwd: &Path) -> Result<PathBuf> {
+pub(in crate::plugins) fn expand(value: &str, cwd: &Path) -> Result<PathBuf> {
     if value == "~" || value.starts_with("~/") {
         let user = directories::UserDirs::new().context("host user directory is unavailable")?;
         return Ok(user.home_dir().join(value.strip_prefix("~/").unwrap_or("")));
@@ -142,7 +142,7 @@ mod tests;
 /// 【插件系统】【缺失路径】解析最近存在的祖先，防止不存在的目标掩盖上层符号链接越界。
 /// @param path 绝对路径
 /// @returns 解析现有链接后重新附加缺失路径段的绝对路径
-fn resolve_existing_ancestor(path: &Path) -> Result<PathBuf> {
+pub(in crate::plugins) fn resolve_existing_ancestor(path: &Path) -> Result<PathBuf> {
     let mut current = path.to_path_buf();
     let mut suffix = Vec::new();
     loop {

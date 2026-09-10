@@ -1,5 +1,5 @@
 mod files;
-mod paths;
+pub(super) mod paths;
 mod process;
 mod process_group;
 #[cfg(windows)]

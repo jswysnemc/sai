@@ -1,3 +1,4 @@
+mod binary;
 mod bindings;
 mod control;
 mod execution;

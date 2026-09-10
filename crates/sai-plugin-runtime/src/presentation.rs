@@ -121,6 +121,8 @@ impl PresentationRuntime {
         limits.instructions = limits.instructions.min(100_000);
         limits.timeout_ms = 100;
         limits.output_bytes = limits.output_bytes.min(16 * 1024);
+        limits.binary_bytes = limits.binary_bytes.min(1024 * 1024);
+        limits.binary_timeout_ms = 100;
         let capabilities = Capabilities {
             notifications: true,
             ..Default::default()

@@ -179,6 +179,10 @@ Lua 全局变量属于当前实例，不是持久会话存储。进程重启、�
 
 `sai.system` 提供平台和宿主 PID；`sai.env.get`、`sai.fs.read_text/read_dir/stat` 和 `sai.process.output` 分别使用精确环境授权、路径授权和固定进程模板。详细参数、返回值、取消边界及授权示例见[系统接口](system-api.md)。这些 I/O 接口仅在回调中开放，工作目录和权限由 Rust 调用状态提供。
 
+### 二进制与图片
+
+`sai.binary.request/download/decode_base64` 使用独立预算保存大正文，通过句柄读取 JSON 字段、解码和授权写入。`sai.terminal.size/display_image` 提供受授权的终端图片能力。参数、生命周期、目录边界和三个分项授权见[二进制接口](binary-api.md)。
+
 ### 模型与工具
 
 模型与工具调用分别声明、分别授权：
@@ -284,6 +288,7 @@ local response = sai.http.request({
 | `sai.text.clip(text, count)` | 按 Unicode 字符截取并附截断说明 |
 | `sai.time.now()` | 当前 Unix 秒时间戳 |
 | `sai.time.iso(seconds, offset_seconds?)` | 指定时区的 ISO 时间，默认 UTC |
+| `sai.time.local_format(format, seconds?)` | 按宿主本地时区格式化时间，省略时间戳时使用当前时间；格式最多 128 字节，非法格式返回错误 |
 
 HTML 和 Unicode 大写转换前后的 UTF-8 文本均受包内 `output_bytes` 限制。Markdown 转换复用 `html2md`，相对链接保持原地址；正文范围提取与业务截断由插件负责。最终回调结果另受包含 JSON 封装在内的输出预算约束。
 
@@ -299,6 +304,8 @@ HTML 和 Unicode 大写转换前后的 UTF-8 文本均受包内 `output_bytes` �
 | 单次指令预算 | 2000000 | 1000–20000000 |
 | 回调总时长 | 20 秒 | 0.1–3600 秒 |
 | 单次 HTTP 最大时长 | 30 秒 | 0.001–120 秒 |
+| VM 保留的二进制字节 | 32 MiB | 1 KiB–64 MiB |
+| 单次二进制操作最大时长 | 120 秒 | 0.001–600 秒 |
 | 输出与宿主结果大小 | 1 MiB | 1 KiB–4 MiB |
 | 单次回调模型请求数 | 32 | 1–256 |
 | 单次回调工具调用数 | 128 | 1–1024 |
