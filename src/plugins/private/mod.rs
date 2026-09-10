@@ -1,6 +1,6 @@
 mod archive;
 mod host;
-mod paths;
+pub(in crate::plugins) mod paths;
 mod storage;
 mod workspace;
 

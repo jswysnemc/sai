@@ -26,12 +26,14 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 | `src/plugins/http.rs` | 通用 HTTP 执行、逐次重定向授权、凭据处理和响应限制 |
 | `src/plugins/system` | 通用环境访问、目录句柄授权、受管模板进程及平台回收 |
 | `src/plugins/notification.rs` | 主动通知权限复核、有界音频快照及取消传递 |
+| `src/plugins/scheduler` | 插件命令持久调度、记录事务、执行锁、独立工作进程与到期授权 |
 | `src/notifications` | 固定桌面程序、默认音频输出与投递资源回收 |
 | `src/plugins/binary` | 原始字节传输、匿名公开下载、原子文件输出及受控图片展示 |
 | `src/media/terminal.rs` | 共用图片渲染与输出；完整渲染成功后才写入终端 |
 | `src/render/terminal_image/buffered.rs` | 不直接输出的图片协议编码，保留调用方尺寸与取消边界 |
 | `plugins/<id>` | 随二进制发布的 Lua 业务包；业务源码不再置于 `src/tools` |
 | `src/cli/plugins.rs` | 面向插件开发者和使用者的管理入口 |
+| `src/cli/plugin_jobs.rs` | 持久任务列表、取消、恢复及内部工作入口参数 |
 | `src/cli/repl/plugin_commands.rs` | TUI 会话内命令、重载、进度和取消 |
 | `src/tools` | 统一的工具注册、权限和结果交付；不按外部插件逐项编写分支 |
 
@@ -43,7 +45,7 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 
 CLI 提供创建、验证、安装、替换、配置、授权、启停、移除和命令执行。TUI 提供 `/plugins`、`/plugins reload` 与 `/plugin <id>/<command>`。模型工具通过原有共用注册入口进入 CLI、TUI、Web 和子任务，直接用户命令目前只有 CLI 与 TUI 入口。
 
-私有会话状态、插件跨会话存储、有界归档与工作目录能力已开放，契约见[私有接口](private-api.md)。独立授权的即时桌面和声音投递见[主动通知接口](notification-api.md)。跨插件共享存储、后台定时调度、主 Agent 模型上下文变换、插件界面组件和远端包分发尚未开放。后续业务迁移见[迁移清单](migration.md)。
+私有会话状态、插件跨会话存储、有界归档与工作目录能力已开放，契约见[私有接口](private-api.md)。独立授权的即时桌面和声音投递见[主动通知接口](notification-api.md)，本插件命令的后台执行见[持久调度接口](scheduler-api.md)。跨插件共享存储、主 Agent 模型上下文变换、插件界面组件和远端包分发尚未开放。后续业务迁移见[迁移清单](migration.md)。
 
 ## 契约原则
 
@@ -142,7 +144,17 @@ Arch 包内部按软件包、状态和 Wiki 查询拆分；Fcitx 的主题、双
 
 用户操作标识由 `src/plugins/operation.rs` 维护，在普通 Agent 请求和跨 Lua VM 的组合调用中传递。审查记录使用完整会话目录区分工作区内同名会话；`StateStore` 的共同重置入口只清理当前作用域。通知模块仍保留宿主平台投递职责。
 
-`sai.storage.plugin` 使用独立的 `system.plugin_storage` 授权，由 `PrivatePluginHost` 绑定插件 ID，在 `plugin-storage` 类别中保存跨会话记录。它与原 `plugin-state` 会话目录及锁分别隔离，复用有界 JSON、短文件锁和原子替换事务。写入同时要求写入工具或命令声明与宿主调用权限；事件只有读取能力，初始化没有 I/O。会话重置保留这些记录，重新加载实例不会改变归属。这个接口不开放跨插件共享，也不提供后台定时调度；闹钟迁移仍需完成调度和旧记录兼容。
+`sai.storage.plugin` 使用独立的 `system.plugin_storage` 授权，由 `PrivatePluginHost` 绑定插件 ID，在 `plugin-storage` 类别中保存跨会话记录。它与原 `plugin-state` 会话目录及锁分别隔离，复用有界 JSON、短文件锁和原子替换事务。写入同时要求写入工具或命令声明与宿主调用权限；事件只有读取能力，初始化没有 I/O。会话重置保留这些记录，重新加载实例不会改变归属。这个接口不开放跨插件共享；后台执行使用独立调度能力，闹钟仍需完成旧记录兼容与业务迁移。
+
+## 持久命令调度
+
+运行时的 `host/scheduler.rs` 定义请求、状态、分页、授权与结果契约，`runtime/scheduler.rs` 提供 Lua 绑定并复用系统调用预算。`PrivatePluginHost` 绑定插件 ID 及完整版本摘要；`src/plugins/scheduler` 分别管理记录、短事务、进程发布与后台执行，不包含闹钟时间解析或提醒文案。
+
+任务保存于独立的 `plugin-jobs` 类别，每插件最多 32 个活动任务和 128 条记录。创建与状态转换使用短操作锁，原子替换文件；整个等待和执行期间另有独占执行锁。随机启动身份与 PID 发布握手阻止重复入口，取消只通过状态与执行锁协作，不按持久 PID 发送信号。发布失败通过自有子进程句柄回收。
+
+创建与到期执行都读取当前插件配置，验证启用、独立调度授权与清单、源码、设置、授权的完整摘要。记录保留宿主路径和摘要，不复制插件设置或凭据。后台使用独立命令实例及可信工作目录，命令自身的读写声明继续生效，不继承原 Agent 的模型或工具调用服务。开始后的执行保持自己的加载快照。
+
+工作进程脱离父终端，创建调用正常退出不取消任务；系统重启没有自动恢复。显式恢复只重新启动尚未执行的任务，已经开始的中断任务记录失败或确认取消，避免重复投递。命令仍受清单执行限制，取消释放受管 Future；已经发生的外部副作用不能回滚。列表与取消管理入口不依赖插件仍然启用或安装。原闹钟的记录与后台工作程序尚未迁移。
 
 ## 通知策略与交付
 
@@ -152,7 +164,7 @@ Arch 包内部按软件包、状态和 Wiki 查询拆分；Fcitx 的主题、双
 
 `plugins/reply-notification` 负责 TUI 与 Web 的状态文案、语言选择、通知开关、声音开关和 Unicode 正文整理。原 `src/reply_notify.rs` 及 Web 通知业务实现已删除；`src/notifications` 与浏览器投递模块只调用固定平台接口。宿主只交付已经确定的完成、中断或失败状态，插件不能改写它。
 
-`PresentationRuntime` 以每次展示为范围创建纯 VM，使用顶层 `notifications` 授权和更小的资源预算，不继承 `system.notify`。`src/plugins/presentation.rs` 负责发现与授权筛选、加载隔离、结果校验及诊断汇总。这个纯回调入口与 Agent 生命周期实例分开，没有 I/O 服务和会话私有状态，也不要求模型配置或工具白名单。插件错误不会改变原答复。
+`PresentationRuntime` 以每次展示为范围创建纯 VM，使用顶层 `notifications` 授权和更小的资源预算，不继承 `system.notify` 或 `system.schedule`。`src/plugins/presentation.rs` 负责发现与授权筛选、加载隔离、结果校验及诊断汇总。这个纯回调入口与 Agent 生命周期实例分开，没有 I/O 服务和会话私有状态，也不要求模型配置或工具白名单。插件错误不会改变原答复。
 
 旧 `notification.enabled` 与 `notification.sound` 只向内置包提供运行时默认值。显式插件设置按字段覆盖，包括 false；插件启停和通知授权又是独立开关。新计划读取新快照，管理操作不把旧默认值复制进 `plugins.jsonc`。外部包不会继承这两个配置字段。
 

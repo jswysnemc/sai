@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 pub mod notification;
+pub mod scheduler;
 pub mod services;
 pub mod storage;
 pub mod system;

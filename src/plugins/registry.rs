@@ -26,12 +26,15 @@ pub(crate) fn register_plugins(
         .filter(|plugin| plugin.setting.enabled)
     {
         let id = descriptor.package.manifest.id.clone();
-        if let Err(error) = register_descriptor(
-            registry,
-            descriptor,
-            Arc::new(PrivatePluginHost::new(paths, &id)),
-            readonly,
-        ) {
+        let result = descriptor.revision().and_then(|revision| {
+            register_descriptor(
+                registry,
+                descriptor,
+                Arc::new(PrivatePluginHost::with_revision(paths, &id, revision)),
+                readonly,
+            )
+        });
+        if let Err(error) = result {
             diagnostics.push(diagnostic(id, error));
         }
     }
@@ -55,12 +58,15 @@ pub(crate) fn register_bundled_catalog_tools(
     {
         descriptor.setting.enabled = true;
         let id = descriptor.package.manifest.id.clone();
-        if let Err(error) = register_descriptor(
-            registry,
-            descriptor,
-            Arc::new(PrivatePluginHost::new(paths, &id)),
-            false,
-        ) {
+        let result = descriptor.revision().and_then(|revision| {
+            register_descriptor(
+                registry,
+                descriptor,
+                Arc::new(PrivatePluginHost::with_revision(paths, &id, revision)),
+                false,
+            )
+        });
+        if let Err(error) = result {
             let mut diagnostics = registry.plugin_diagnostics().to_vec();
             diagnostics.push(diagnostic(id, error));
             registry.set_plugin_diagnostics(diagnostics);

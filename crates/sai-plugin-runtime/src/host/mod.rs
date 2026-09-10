@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 pub(crate) mod binary;
 mod notification;
 mod private;
+mod scheduler;
 mod services;
 mod system;
 mod vision;
@@ -17,6 +18,11 @@ pub use notification::{
 };
 pub use private::{
     validate_storage_key, validate_workspace_path, ArchiveRequest, PluginWorkspace, StorageRequest,
+};
+pub use scheduler::{
+    validate_scheduled_id, ScheduleListOptions, ScheduleRequest, ScheduledStatus, ScheduledTask,
+    SchedulerRequest, SchedulerResponse, MAX_ACTIVE_TASKS, MAX_SCHEDULED_TASKS,
+    MAX_SCHEDULE_ARGUMENTS,
 };
 pub use services::{
     HostTool, InvocationServices, ModelMessage, ModelRequest, ModelResponse, ModelRole,
@@ -56,6 +62,18 @@ pub struct HttpResponse {
 /// 【插件】【宿主接口】插件运行时所需的异步能力，实现不依赖 Sai 应用配置。
 #[async_trait]
 pub trait PluginHost: Send + Sync {
+    /// 【插件调度】【宿主边界】执行绑定插件的持久任务操作，未实现的宿主明确拒绝。
+    /// @param request 操作；context 为可信目录与权限；capabilities 为有效授权
+    /// @returns 请求对应的任务、列表或变更结果
+    async fn scheduler(
+        &self,
+        _request: SchedulerRequest,
+        _context: &SystemContext,
+        _capabilities: &Capabilities,
+    ) -> Result<SchedulerResponse> {
+        anyhow::bail!("scheduling is unavailable in this host")
+    }
+
     /// 【插件通知】【直接投递】发送已授权通知并等待完成，丢弃 Future 应停止未完成的投递。
     /// @param request 通知请求；context 为可信目录与写入权限；capabilities 为有效授权
     /// @returns 成功完成的通道，默认宿主明确报告不可用

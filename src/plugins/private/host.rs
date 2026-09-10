@@ -10,22 +10,55 @@ use std::sync::Arc;
 pub(in crate::plugins) struct PrivatePluginHost {
     paths: SaiPaths,
     id: String,
+    revision: Option<String>,
 }
 
 impl PrivatePluginHost {
     /// 【插件宿主】【绑定】构造宿主能力组合，初始化不创建目录或执行网络请求。
     /// @param paths 应用路径；id 为清单中验证后的插件标识
     /// @returns 可传给运行时的独立宿主
+    #[cfg(test)]
     pub(in crate::plugins) fn new(paths: &SaiPaths, id: &str) -> Self {
         Self {
             paths: paths.clone(),
             id: id.to_string(),
+            revision: None,
+        }
+    }
+
+    /// 【插件宿主】【调度绑定】把调用实例的源码与授权摘要绑定到持久调度入口。
+    /// @param paths 应用路径；id 为插件；revision 为已校验描述符摘要
+    /// @returns 具备可信调度归属的宿主
+    pub(in crate::plugins) fn with_revision(paths: &SaiPaths, id: &str, revision: String) -> Self {
+        Self {
+            paths: paths.clone(),
+            id: id.into(),
+            revision: Some(revision),
         }
     }
 }
 
 #[async_trait]
 impl PluginHost for PrivatePluginHost {
+    /// 【插件宿主】【持久调度】插件身份和源码摘要来自宿主实例，Lua 无法覆盖。
+    /// @param request 操作；context 为可信上下文；capabilities 为有效授权
+    /// @returns 任务操作结果
+    async fn scheduler(
+        &self,
+        request: SchedulerRequest,
+        context: &SystemContext,
+        capabilities: &Capabilities,
+    ) -> Result<SchedulerResponse> {
+        crate::plugins::scheduler::execute(
+            &self.paths,
+            &self.id,
+            self.revision.as_deref(),
+            request,
+            context,
+            capabilities,
+        )
+        .await
+    }
     /// 【插件宿主】【通知代理】直接通知使用可信调用上下文与当前插件有效授权。
     /// @param request 通知请求；context 为可信目录与权限；capabilities 为授权
     /// @returns 投递完成的通道

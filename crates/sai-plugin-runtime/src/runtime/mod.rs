@@ -10,6 +10,7 @@ mod modules;
 mod notification;
 mod private;
 mod registration;
+mod scheduler;
 mod services;
 mod system;
 mod text;

@@ -3,7 +3,7 @@ use anyhow::{Context, Result};
 use directories::{BaseDirs, UserDirs};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SaiPaths {
     pub config_dir: PathBuf,
     pub config_file: PathBuf,

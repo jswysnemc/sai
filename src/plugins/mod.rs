@@ -14,6 +14,7 @@ pub(crate) mod operation;
 mod presentation;
 mod private;
 mod registry;
+pub(crate) mod scheduler;
 mod services;
 mod session;
 mod system;

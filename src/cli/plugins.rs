@@ -35,7 +35,7 @@ pub(crate) enum PluginsCommand {
     /// 【插件命令】【启用授权】启用插件，并按声明分别调整各项宿主能力授权
     Enable {
         id: String,
-        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_vision", "no_vision", "allow_tool", "no_tools", "allow_read_path", "no_file_read", "allow_env", "no_env", "allow_process", "no_processes", "allow_session_storage", "no_session_storage", "allow_plugin_storage", "no_plugin_storage", "allow_workspace", "no_workspace", "allow_notifications", "no_notifications", "allow_notify", "no_notify", "allow_public_downloads", "no_public_downloads", "allow_write_path", "no_file_write", "allow_image_display", "no_image_display"])]
+        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_vision", "no_vision", "allow_tool", "no_tools", "allow_read_path", "no_file_read", "allow_env", "no_env", "allow_process", "no_processes", "allow_session_storage", "no_session_storage", "allow_plugin_storage", "no_plugin_storage", "allow_workspace", "no_workspace", "allow_notifications", "no_notifications", "allow_notify", "no_notify", "allow_schedule", "no_schedule", "allow_public_downloads", "no_public_downloads", "allow_write_path", "no_file_write", "allow_image_display", "no_image_display"])]
         grant_declared: bool,
         #[arg(long, value_name = "ORIGIN", conflicts_with = "no_http")]
         allow_http: Vec<String>,
@@ -68,6 +68,14 @@ pub(crate) enum PluginsCommand {
         allow_notify: bool,
         #[arg(long, help = "Revoke direct notification delivery")]
         no_notify: bool,
+        #[arg(
+            long,
+            conflicts_with = "no_schedule",
+            help = "Allow persistent background plugin commands"
+        )]
+        allow_schedule: bool,
+        #[arg(long, help = "Revoke persistent plugin scheduling")]
+        no_schedule: bool,
         #[arg(long, value_name = "NAME", conflicts_with = "no_tools")]
         allow_tool: Vec<String>,
         #[arg(long)]
@@ -117,6 +125,8 @@ pub(crate) enum PluginsCommand {
     Configure { id: String, file: PathBuf },
     /// List commands registered by enabled plugins
     Commands,
+    /// Manage persistent scheduled plugin tasks
+    Jobs(super::plugin_jobs::JobsArgs),
     /// Run a plugin command through the normal permission and audit flow
     Run {
         id: String,
@@ -137,6 +147,7 @@ pub(crate) async fn run(
     let command = args.command.unwrap_or(PluginsCommand::List);
     // 1. 【插件命令】【独立工具链】源码创建和校验不依赖模型供应商配置
     match &command {
+        PluginsCommand::Jobs(args) => return super::plugin_jobs::run(paths, args),
         PluginsCommand::Init { id, directory } => {
             let path = plugins::scaffold(directory, id)?;
             return print_result(
@@ -249,6 +260,8 @@ pub(crate) async fn run(
             no_notifications,
             allow_notify,
             no_notify,
+            allow_schedule,
+            no_schedule,
             allow_tool,
             no_tools,
             allow_read_path,
@@ -282,6 +295,8 @@ pub(crate) async fn run(
                 || no_notifications
                 || allow_notify
                 || no_notify
+                || allow_schedule
+                || no_schedule
                 || !allow_tool.is_empty()
                 || no_tools
                 || !allow_read_path.is_empty()
@@ -324,6 +339,7 @@ pub(crate) async fn run(
                     notifications: (allow_notifications || no_notifications)
                         .then_some(allow_notifications),
                     notify: (allow_notify || no_notify).then_some(allow_notify),
+                    schedule: (allow_schedule || no_schedule).then_some(allow_schedule),
                     tools: (no_tools || !allow_tool.is_empty())
                         .then(|| allow_tool.into_iter().collect()),
                     read_paths: (no_file_read || !allow_read_path.is_empty())
@@ -401,6 +417,7 @@ pub(crate) async fn run(
         }
         PluginsCommand::Init { .. }
         | PluginsCommand::Check { .. }
+        | PluginsCommand::Jobs(_)
         | PluginsCommand::Install { .. } => unreachable!(),
     }
 }

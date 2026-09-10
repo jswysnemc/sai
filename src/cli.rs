@@ -45,6 +45,7 @@ mod message;
 mod model_select;
 mod models_picker;
 mod permission_prompt;
+mod plugin_jobs;
 mod plugins;
 mod providers;
 mod render_options;
@@ -169,7 +170,10 @@ pub async fn run(cli: Cli) -> Result<()> {
     }
 
     if !paths.config_file.exists()
-        && !matches!(cli.command, Some(Command::Init | Command::Plugins(_)))
+        && !matches!(
+            cli.command,
+            Some(Command::Init | Command::Plugins(_) | Command::PluginJobWorker(_))
+        )
     {
         run_init(&paths, InitKind::FirstRun)?;
     }
@@ -193,6 +197,15 @@ pub async fn run(cli: Cli) -> Result<()> {
 
     match cli.command {
         Some(Command::AlarmWorker(args)) => run_alarm_worker(args),
+        Some(Command::PluginJobWorker(args)) => {
+            crate::plugins::scheduler::run_worker(
+                &args.state_dir,
+                &args.plugin,
+                &args.id,
+                &args.launch,
+            )
+            .await
+        }
         Some(Command::Tool(args)) => {
             run_tool(
                 &paths,

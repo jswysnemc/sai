@@ -7,7 +7,7 @@ use cap_std::{
 use std::path::{Path, PathBuf};
 
 /// 【插件私有数据】【目录锁】持有目录操作的文件锁，离开作用域时显式释放。
-pub(super) struct Lock(std::fs::File);
+pub(in crate::plugins) struct Lock(std::fs::File);
 
 impl Drop for Lock {
     /// 【插件私有数据】【释放锁】取消或普通返回都释放锁，不依赖子进程描述符关闭。
@@ -29,7 +29,7 @@ pub(super) fn root(base: &Path) -> Result<(Dir, PathBuf)> {
 /// 【插件私有数据】【命名空间】类别、插件和作用域共同隔离数据，相同摘要不能跨类别访问。
 /// @param base 应用根目录；category 为数据类别；plugin 为绑定插件；session 为可信会话或类别内固定作用域
 /// @returns 隔离目录及显示路径
-pub(super) fn namespace(
+pub(in crate::plugins) fn namespace(
     base: &Path,
     category: &str,
     plugin: &str,
@@ -53,7 +53,7 @@ pub(super) fn namespace(
 /// 【插件私有数据】【互斥】以不跟随链接的文件句柄取得立即失败的操作锁。
 /// @param directory 可信目录句柄；name 为锁文件名
 /// @returns 锁守卫；并发占用时提示重试
-pub(super) fn lock(directory: &Dir, name: &str) -> Result<Lock> {
+pub(in crate::plugins) fn lock(directory: &Dir, name: &str) -> Result<Lock> {
     let mut options = OpenOptions::new();
     options
         .read(true)

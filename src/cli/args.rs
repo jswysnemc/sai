@@ -73,6 +73,8 @@ fn parse_language_argument(value: &str) -> Result<String, String> {
 pub enum Command {
     #[command(name = "__alarm-worker", hide = true)]
     AlarmWorker(AlarmWorkerArgs),
+    #[command(name = "__plugin-job-worker", hide = true)]
+    PluginJobWorker(super::plugin_jobs::WorkerArgs),
     #[command(name = "__tool", hide = true)]
     Tool(ToolArgs),
     /// 启动 Sai Web 编程工作台
