@@ -40,6 +40,18 @@ impl PrivatePluginHost {
 
 #[async_trait]
 impl PluginHost for PrivatePluginHost {
+    /// 【插件路径】【组合代理】路径解析保持普通系统接口的授权范围。
+    /// @param path 请求路径；context 为可信目录；capabilities 为授权
+    /// @returns 规范绝对路径
+    async fn real_path(
+        &self,
+        path: String,
+        context: SystemContext,
+        capabilities: Capabilities,
+    ) -> Result<String> {
+        SaiPluginHost.real_path(path, context, capabilities).await
+    }
+
     /// 【插件宿主】【持久调度】插件身份和源码摘要来自宿主实例，Lua 无法覆盖。
     /// @param request 操作；context 为可信上下文；capabilities 为有效授权
     /// @returns 任务操作结果

@@ -84,7 +84,7 @@ Run `sai config` (also reachable from the REPL) for the terminal configurator. T
 - **Subagents** - The `subagent` tool starts an independent LLM loop with a `max_steps` budget and timeout; writable tasks auto-create a `.sai-subagents` git worktree for isolation, then apply back and clean up on success. Persistent agents can idle and take follow-ups (REPL `/subagents`, `/msg`)
 - **Skills** - Reusable `SKILL.md` skill packs with three visibility tiers (hidden / name-only / full); enable / disable / list / stats / prune from the TUI or CLI. Session loads are cached as described above.
 - **MCP bridging** - Native stdio / http MCP servers; tools registered with `mcp_` prefix; dedicated `mcp.jsonc` config
-- **Lua plugins** - Nineteen local Lua 5.4 packages provide 26 tools, with user commands, lifecycle callbacks, separate settings, and explicit HTTP, model, vision, tool, file, environment, process, private storage, workspace, binary download, file output, and image display grants. Online queries, complete Linux game and input method investigations, local diagnostic evidence, AUR review/install workflows, reply notification policy, image generation and display, web image search, and hash/text decoding use bundled Lua implementations. Plugins compose authorized tools and use bounded host services. Web image search keeps metadata queries available in read-only mode; downloads, ranking, visual screening and preview policy run in Lua. Visual screening uses the separately configured vision model, and previews invoke the independent display plugin. See the [plugin guide](design/lua-plugins/getting-started.md), [API](design/lua-plugins/api.md), and [migration status](design/lua-plugins/migration.md) (Chinese).
+- **Lua plugins** - Twenty local Lua 5.4 packages provide 29 tools, with user commands, lifecycle callbacks, separate settings, and explicit HTTP, model, vision, tool, file, environment, process, private storage, workspace, binary download, file output, image display, notification, and scheduling grants. Online queries, complete Linux game and input method investigations, local diagnostic evidence, AUR review/install workflows, reply notification policy, image generation and display, web image search, hash/text decoding, and alarms use bundled Lua implementations. Plugins compose authorized tools and use bounded host services. Alarms retain their public tool names and legacy records, with persistent background delivery and separate audio permissions. Web image search keeps metadata queries available in read-only mode; downloads, ranking, visual screening and preview policy run in Lua. Visual screening uses the separately configured vision model, and previews invoke the independent display plugin. See the [plugin guide](design/lua-plugins/getting-started.md), [API](design/lua-plugins/api.md), [alarm guide](design/lua-plugins/alarm.md), and [migration status](design/lua-plugins/migration.md) (Chinese).
 - **Session-level Todo** - A plan checklist tracked across tool rounds
 - **Cron jobs** - bash / http / prompt types, persisted to `jobs.db`, triggered by a background scheduler
 
@@ -428,6 +428,7 @@ Sai/
 │   ├── cli/              # CLI subcommand dispatch and REPL implementation
 │   ├── llm/              # LLM client: triple-protocol, streaming, thinking, tool-call stream
 │   ├── tools/            # 30+ built-in tools, registry, progressive loading, subagent, skills
+│   ├── plugins/          # Plugin management, host APIs, persistent scheduling and compatibility
 │   ├── memory/           # Long-term memory: facts/episodes/FTS5/decay/association
 │   ├── state/            # Session state: turns WAL, pending, compaction, snapshot, recovery
 │   ├── gateways/         # Multi-platform gateways: QQ/WeChat/OneBot/WeCom, supervisor
@@ -442,7 +443,9 @@ Sai/
 │   ├── prompts/          # System prompt templates (obfuscated by build.rs)
 │   ├── i18n/             # Chinese / English i18n
 │   ├── cron/             # Cron job scheduling
-│   └── ...               # alarm/memes/knowledge_base/hooks, etc.
+│   └── ...               # memes/knowledge_base/hooks, etc.
+├── plugins/              # Bundled Lua business packages, including alarms
+├── crates/sai-plugin-runtime/ # Reusable Lua runtime and capability contracts
 ├── web/                  # Web workbench frontend (React + Vite)
 ├── assets/               # o200k tokenizer vocabulary
 ├── pics/                 # Screenshots and architecture overview
@@ -485,7 +488,9 @@ Linux `~/.local/state/sai` / macOS `~/Library/Application Support/sai` / Windows
 | `prompt.sha256` | System prompt fingerprint; change resets the session |
 | `profile.md` | User profile |
 | `sai.log` | Runtime log |
-| `alarms/` | Alarm state and logs |
+| `plugin-jobs/` | Persistent plugin tasks, including new alarms |
+| `plugin-legacy/` | Isolated compatibility states for legacy alarm records |
+| `alarms.json`, `alarm.log` | Preserved legacy alarm snapshot and log |
 | `permission-audit.jsonl` | Permission audit log |
 
 ### Data directory

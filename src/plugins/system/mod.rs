@@ -5,7 +5,7 @@ mod process_group;
 #[cfg(windows)]
 mod process_windows_paths;
 
-pub(super) use files::{file_info, read_directory, read_text};
+pub(super) use files::{file_info, read_directory, read_text, real_path};
 pub(super) use process::{execute, execute_workspace};
 
 use anyhow::Result;

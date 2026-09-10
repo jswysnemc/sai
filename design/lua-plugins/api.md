@@ -181,7 +181,7 @@ Lua 全局变量属于当前实例，不是持久会话存储。进程重启、�
 
 ### 文件、环境与进程
 
-`sai.system` 提供平台和宿主 PID；`sai.env.get`、`sai.fs.read_text/read_dir/stat` 和 `sai.process.output` 分别使用精确环境授权、路径授权和固定进程模板。详细参数、返回值、取消边界及授权示例见[系统接口](system-api.md)。这些 I/O 接口仅在回调中开放，工作目录和权限由 Rust 调用状态提供。
+`sai.system` 提供平台和宿主 PID；`sai.env.get`、`sai.fs.read_text/read_dir/stat/realpath` 和 `sai.process.output` 分别使用精确环境授权、路径授权和固定进程模板。详细参数、返回值、取消边界及授权示例见[系统接口](system-api.md)。这些 I/O 接口仅在回调中开放，工作目录和权限由 Rust 调用状态提供。
 
 ### 主动通知
 
@@ -191,7 +191,7 @@ Lua 全局变量属于当前实例，不是持久会话存储。进程重启、�
 
 `sai.scheduler.schedule({due_at, command, arguments?})` 在指定 Unix 秒执行本插件已注册命令，创建调用退出后由独立工作进程继续执行。`list({offset=0, limit=16})`、`get(id)`、`cancel(id)` 和 `resume(id)` 提供有界查询、取消与显式恢复。所有操作要求独立的 `system.schedule`，变更还要求可信写入权限；到期执行重新验证源码、设置与授权，已经开始的中断任务不会自动重试。
 
-每插件最多 32 个活动任务、128 条记录，任务参数与持久输出分别限制为 16 KiB。后台命令保留自身读写声明，不附加 Agent 模型或工具调用服务；不提供开机自动恢复。任务状态、分页、发布取消及管理入口见[持久调度接口](scheduler-api.md)。
+每插件新建任务最多 32 个活动任务、128 条记录，任务参数与持久输出分别限制为 16 KiB。闹钟过渡期另外展示最多 128 条旧记录，分页 offset 上限为 256。后台命令保留自身读写声明，不附加 Agent 模型或工具调用服务；不提供开机自动恢复。任务状态、分页、发布取消及管理入口见[持久调度接口](scheduler-api.md)，业务规则与旧入口见[Lua 闹钟](alarm.md)。
 
 ### 二进制与图片
 

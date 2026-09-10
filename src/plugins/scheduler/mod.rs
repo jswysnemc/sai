@@ -11,6 +11,7 @@ pub(crate) use worker::run as run_worker;
 use self::process::{SystemLauncher, WorkerLauncher};
 use self::record::JobRecord;
 use self::store::Store;
+use super::compatibility::alarm_jobs;
 use super::discovery::{discover, PluginDescriptor};
 use super::private::PrivatePluginHost;
 use crate::{config::AppConfig, paths::SaiPaths};
@@ -192,24 +193,34 @@ fn start(store: &Store, record: &mut JobRecord, launcher: &dyn WorkerLauncher) -
 /// @returns 有界任务列表，不执行后台恢复
 pub(crate) fn list(paths: &SaiPaths, plugin: &str) -> Result<Vec<ScheduledTask>> {
     validate_plugin(plugin)?;
-    Ok(Store::open(&paths.state_dir, plugin)?
+    let mut tasks: Vec<_> = Store::open(&paths.state_dir, plugin)?
         .list()?
         .into_iter()
         .map(|record| record.task)
-        .collect())
+        .collect();
+    if plugin == "alarm" {
+        tasks.extend(alarm_jobs::list(paths)?);
+        tasks
+            .sort_by(|left, right| (left.created_at, &left.id).cmp(&(right.created_at, &right.id)));
+    }
+    Ok(tasks)
 }
 
-/// 【插件调度】【读取任务】根据随机标识读取当前插件的一条记录。
+/// 【插件调度】【读取任务】根据已校验标识读取当前插件的一条记录。
 /// @param paths 应用路径；plugin 为插件；id 为任务标识
 /// @returns 任务或 None
 pub(crate) fn get(paths: &SaiPaths, plugin: &str, id: &str) -> Result<Option<ScheduledTask>> {
     validate_plugin(plugin)?;
-    Ok(Store::open(&paths.state_dir, plugin)?
-        .get(id)?
-        .map(|record| record.task))
+    if let Some(record) = Store::open(&paths.state_dir, plugin)?.get(id)? {
+        return Ok(Some(record.task));
+    }
+    if plugin == "alarm" {
+        return alarm_jobs::get(paths, id);
+    }
+    Ok(None)
 }
 
-/// 【插件调度】【请求取消】只修改拥有的任务状态，不根据持久 PID 发送系统信号。
+/// 【插件调度】【请求取消】原生任务通过状态取消，旧闹钟由受限兼容层核验并取消。
 /// @param paths 应用路径；plugin 为插件；id 为任务标识
 /// @returns 是否接受新的取消请求
 pub(crate) fn cancel(paths: &SaiPaths, plugin: &str, id: &str) -> Result<bool> {
@@ -217,6 +228,10 @@ pub(crate) fn cancel(paths: &SaiPaths, plugin: &str, id: &str) -> Result<bool> {
     let store = Store::open(&paths.state_dir, plugin)?;
     let _lock = store.lock()?;
     let Some(mut record) = store.get(id)? else {
+        drop(_lock);
+        if plugin == "alarm" {
+            return alarm_jobs::cancel(paths, id);
+        }
         return Ok(false);
     };
     if !record.task.status.is_active() {
@@ -252,7 +267,16 @@ fn resume(
     validate_plugin(plugin)?;
     let store = Store::open(&paths.state_dir, plugin)?;
     let _lock = store.lock()?;
-    let mut record = store.get(id)?.context("scheduled task not found")?;
+    let mut record = match store.get(id)? {
+        Some(record) => record,
+        None => {
+            drop(_lock);
+            if plugin == "alarm" && alarm_jobs::get(paths, id)?.is_some() {
+                bail!("legacy alarms cannot be resumed or replayed");
+            }
+            bail!("scheduled task not found");
+        }
+    };
     ensure!(
         record.task.status.is_active(),
         "finished scheduled tasks cannot be resumed"

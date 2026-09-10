@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 
 pub const MAX_SCHEDULE_ARGUMENTS: usize = 16 * 1024;
 pub const MAX_SCHEDULED_TASKS: usize = 128;
+pub const MAX_SCHEDULE_LIST_OFFSET: usize = 256;
 pub const MAX_ACTIVE_TASKS: usize = 32;
 
 /// 【插件调度】【分页查询】每页限制数量，任务文本不会让列表无限增长。
@@ -164,8 +165,8 @@ impl SchedulerRequest {
             Self::Get(id) | Self::Cancel(id) | Self::Resume(id) => validate_scheduled_id(id),
             Self::List(options) => {
                 ensure!(
-                    options.offset <= MAX_SCHEDULED_TASKS && (1..=16).contains(&options.limit),
-                    "scheduled list requires offset 0-128 and limit 1-16"
+                    options.offset <= MAX_SCHEDULE_LIST_OFFSET && (1..=16).contains(&options.limit),
+                    "scheduled list requires offset 0-256 and limit 1-16"
                 );
                 Ok(())
             }
@@ -216,7 +217,7 @@ impl SchedulerRequest {
     }
 }
 
-/// 【插件调度】【标识校验】任务只使用宿主生成的固定长度随机标识。
+/// 【插件调度】【标识校验】任务使用宿主生成的固定长度十六进制标识。
 /// @param id 任务标识
 /// @returns 标识合法时成功
 pub fn validate_scheduled_id(id: &str) -> Result<()> {

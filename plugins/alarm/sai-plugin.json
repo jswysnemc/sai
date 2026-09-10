@@ -1,0 +1,17 @@
+{
+  "api_version": 1,
+  "id": "alarm",
+  "version": "1.0.0",
+  "name": "Local alarms",
+  "description": "Schedule local alarms and countdowns with persistent background delivery.",
+  "entry": "init.lua",
+  "capabilities": {
+    "system": {"schedule": true, "notify": true, "read_paths": ["."]}
+  },
+  "limits": {
+    "memory_bytes": 16777216,
+    "instructions": 2000000,
+    "timeout_ms": 120000,
+    "output_bytes": 1048576
+  }
+}

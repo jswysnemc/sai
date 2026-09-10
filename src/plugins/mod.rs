@@ -19,6 +19,7 @@ mod services;
 mod session;
 mod system;
 
+pub(crate) use compatibility::alarm_jobs::run_worker as run_legacy_alarm_worker;
 pub(crate) use discovery::{discover, PluginDiagnostic, PluginSource};
 pub(crate) use events::PluginEvents;
 pub(crate) use grants::{GrantChanges, GrantUpdate};

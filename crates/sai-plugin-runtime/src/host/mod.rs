@@ -62,6 +62,18 @@ pub struct HttpResponse {
 /// 【插件】【宿主接口】插件运行时所需的异步能力，实现不依赖 Sai 应用配置。
 #[async_trait]
 pub trait PluginHost: Send + Sync {
+    /// 【插件路径】【真实路径】解析已授权且存在的路径，不授予额外读取范围。
+    /// @param path 请求路径；context 为可信目录；capabilities 为有效授权
+    /// @returns 规范绝对路径，未实现宿主明确拒绝
+    async fn real_path(
+        &self,
+        _path: String,
+        _context: SystemContext,
+        _capabilities: Capabilities,
+    ) -> Result<String> {
+        anyhow::bail!("path resolution is unavailable in this host")
+    }
+
     /// 【插件调度】【宿主边界】执行绑定插件的持久任务操作，未实现的宿主明确拒绝。
     /// @param request 操作；context 为可信目录与权限；capabilities 为有效授权
     /// @returns 请求对应的任务、列表或变更结果

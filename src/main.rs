@@ -1,7 +1,6 @@
 mod acp;
 mod agent;
 mod agent_engine;
-mod alarm;
 mod assistants;
 mod cli;
 mod clipboard;

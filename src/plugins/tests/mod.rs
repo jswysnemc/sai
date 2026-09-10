@@ -1,3 +1,9 @@
+mod alarm_contract;
+mod alarm_delivery;
+mod alarm_legacy;
+mod alarm_reference;
+mod alarm_settings;
+mod alarm_support;
 mod archlinux;
 mod archlinux_status;
 mod aur_composition;
@@ -65,6 +71,7 @@ mod support;
 mod system_files;
 mod system_grants;
 mod system_process;
+mod system_realpath;
 mod web_images_download;
 mod web_images_paths;
 mod web_images_reference;

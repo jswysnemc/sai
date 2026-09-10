@@ -12,6 +12,18 @@ pub(super) struct SaiPluginHost;
 
 #[async_trait]
 impl PluginHost for SaiPluginHost {
+    /// 【插件路径】【宿主解析】复用读取授权与目录句柄边界。
+    /// @param path 请求路径；context 为可信目录；capabilities 为授权
+    /// @returns 规范绝对路径
+    async fn real_path(
+        &self,
+        path: String,
+        context: SystemContext,
+        capabilities: Capabilities,
+    ) -> Result<String> {
+        super::system::real_path(path, context, capabilities).await
+    }
+
     /// 【插件宿主】【通知投递】复用独立授权、文件边界和可取消的平台投递。
     /// @param request 通知请求；context 为可信目录与权限；capabilities 为授权
     /// @returns 已完成的投递通道

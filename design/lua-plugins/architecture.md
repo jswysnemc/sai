@@ -23,6 +23,7 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 | `src/plugins/services` | 绑定当前文本模型、独立视觉配置、工具目录和调用链，执行单次模型与工具请求 |
 | `src/tools/registry_plugin_services.rs` | 将实时工具权限、插件授权与当前模型交给调用服务 |
 | `src/plugins/compatibility` | 旧业务设置的定向兼容；派生凭据仅保留在运行时快照 |
+| `src/plugins/compatibility/alarm_jobs` | 旧闹钟记录投影、稳定进程身份、独立状态与旧入口交接 |
 | `src/plugins/http.rs` | 通用 HTTP 执行、逐次重定向授权、凭据处理和响应限制 |
 | `src/plugins/system` | 通用环境访问、目录句柄授权、受管模板进程及平台回收 |
 | `src/plugins/notification.rs` | 主动通知权限复核、有界音频快照及取消传递 |
@@ -41,7 +42,7 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 
 ## 已落地的版本 1
 
-独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、文本与视觉模型、工具调用、文件、环境、模板进程、二进制缓冲、终端图片、JSON、文本、时间、摘要、字节解码及通知纯回调能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence`、`package-advisor`、`reply-notification`、`image-generation`、`image-display`、`web-images` 与 `hash-codec` 已迁为随程序嵌入的十九个 Lua 包，共提供 26 个工具；通知包不增加模型工具，相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
+独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、文本与视觉模型、工具调用、文件、环境、模板进程、二进制缓冲、终端图片、JSON、文本、时间、摘要、字节解码及通知纯回调能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence`、`package-advisor`、`reply-notification`、`image-generation`、`image-display`、`web-images`、`hash-codec` 与 `alarm` 已迁为随程序嵌入的二十个 Lua 包，共提供 29 个工具；通知包不增加模型工具，相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
 
 CLI 提供创建、验证、安装、替换、配置、授权、启停、移除和命令执行。TUI 提供 `/plugins`、`/plugins reload` 与 `/plugin <id>/<command>`。模型工具通过原有共用注册入口进入 CLI、TUI、Web 和子任务，直接用户命令目前只有 CLI 与 TUI 入口。
 
@@ -144,23 +145,25 @@ Arch 包内部按软件包、状态和 Wiki 查询拆分；Fcitx 的主题、双
 
 用户操作标识由 `src/plugins/operation.rs` 维护，在普通 Agent 请求和跨 Lua VM 的组合调用中传递。审查记录使用完整会话目录区分工作区内同名会话；`StateStore` 的共同重置入口只清理当前作用域。通知模块仍保留宿主平台投递职责。
 
-`sai.storage.plugin` 使用独立的 `system.plugin_storage` 授权，由 `PrivatePluginHost` 绑定插件 ID，在 `plugin-storage` 类别中保存跨会话记录。它与原 `plugin-state` 会话目录及锁分别隔离，复用有界 JSON、短文件锁和原子替换事务。写入同时要求写入工具或命令声明与宿主调用权限；事件只有读取能力，初始化没有 I/O。会话重置保留这些记录，重新加载实例不会改变归属。这个接口不开放跨插件共享；后台执行使用独立调度能力，闹钟仍需完成旧记录兼容与业务迁移。
+`sai.storage.plugin` 使用独立的 `system.plugin_storage` 授权，由 `PrivatePluginHost` 绑定插件 ID，在 `plugin-storage` 类别中保存跨会话记录。它与原 `plugin-state` 会话目录及锁分别隔离，复用有界 JSON、短文件锁和原子替换事务。写入同时要求写入工具或命令声明与宿主调用权限；事件只有读取能力，初始化没有 I/O。会话重置保留这些记录，重新加载实例不会改变归属。这个接口不开放跨插件共享；闹钟后台执行使用独立调度能力。
 
 ## 持久命令调度
 
 运行时的 `host/scheduler.rs` 定义请求、状态、分页、授权与结果契约，`runtime/scheduler.rs` 提供 Lua 绑定并复用系统调用预算。`PrivatePluginHost` 绑定插件 ID 及完整版本摘要；`src/plugins/scheduler` 分别管理记录、短事务、进程发布与后台执行，不包含闹钟时间解析或提醒文案。
 
-任务保存于独立的 `plugin-jobs` 类别，每插件最多 32 个活动任务和 128 条记录。创建与状态转换使用短操作锁，原子替换文件；整个等待和执行期间另有独占执行锁。随机启动身份与 PID 发布握手阻止重复入口，取消只通过状态与执行锁协作，不按持久 PID 发送信号。发布失败通过自有子进程句柄回收。
+原生任务保存于独立的 `plugin-jobs` 类别，每插件最多 32 个活动任务和 128 条记录。创建与状态转换使用短操作锁，原子替换文件；整个等待和执行期间另有独占执行锁。随机启动身份与 PID 发布握手阻止重复入口，原生调度取消只通过状态与执行锁协作，不按持久 PID 发送信号。发布失败通过自有子进程句柄回收。
 
 创建与到期执行都读取当前插件配置，验证启用、独立调度授权与清单、源码、设置、授权的完整摘要。记录保留宿主路径和摘要，不复制插件设置或凭据。后台使用独立命令实例及可信工作目录，命令自身的读写声明继续生效，不继承原 Agent 的模型或工具调用服务。开始后的执行保持自己的加载快照。
 
-工作进程脱离父终端，创建调用正常退出不取消任务；系统重启没有自动恢复。显式恢复只重新启动尚未执行的任务，已经开始的中断任务记录失败或确认取消，避免重复投递。命令仍受清单执行限制，取消释放受管 Future；已经发生的外部副作用不能回滚。列表与取消管理入口不依赖插件仍然启用或安装。原闹钟的记录与后台工作程序尚未迁移。
+工作进程脱离父终端，创建调用正常退出不取消任务；系统重启没有自动恢复。显式恢复只重新启动尚未执行的任务，已经开始的中断任务记录失败或确认取消，避免重复投递。命令仍受清单执行限制，取消释放受管 Future；已经发生的外部副作用不能回滚。列表与取消管理入口不依赖插件仍然启用或安装。
+
+`plugins/alarm` 使用上述接口实现时间解析、音频选择、查询、取消和结果字段。`sai.fs.realpath` 通过授权目录句柄返回路径快照，后续读取继续重新校验。旧 `alarms.json` 只读投影到同一个调度接口，独立状态保存在 `plugin-legacy`；旧任务不占新建配额，过渡列表最多 256 条。旧入口核对发布 PID 与参数，按原到期时间执行当前可信 Lua 包，拒绝重放；取消核对完整身份并使用稳定进程句柄。启动时暂缺 argv 不等于退出，只有进程句柄确认结束后才能报告取消成功。音频旧许可与平台限制见[Lua 闹钟](alarm.md)。
 
 ## 通知策略与交付
 
 `sai.notify.send` 使用独立的 `system.notify` 授权，运行时复核可信写入权限、参数与共用系统调用预算。`host/notification.rs` 定义请求、结果和声音来源，`runtime/notification.rs` 负责 Lua 绑定与时限；应用宿主通过授权目录句柄读取最多 8 MiB 的普通音频文件，再交给平台后端。内置声音不需要文件读取授权，其他声音不能绕过读取范围。
 
-投递控制连接异步 Future 与原生工作线程，超时和取消会停止后续动作、终止桌面子进程及停止声音播放；已经开始的原生文件或设备调用需等待返回，已经交付的通知不能回滚。所有指定通道完成才返回成功，失败由插件决定如何处理。这个接口只投递到宿主机器，不创建定时任务，不向浏览器转发；原闹钟工具和后台工作进程尚未迁移。
+投递控制连接异步 Future 与原生工作线程，超时和取消会停止后续动作、终止桌面子进程及停止声音播放；已经开始的原生文件或设备调用需等待返回，已经交付的通知不能回滚。所有指定通道完成才返回成功，失败由插件决定如何处理。这个接口只投递到宿主机器，不创建定时任务，不向浏览器转发；Lua 闹钟通过通用调度在到期时调用它。
 
 `plugins/reply-notification` 负责 TUI 与 Web 的状态文案、语言选择、通知开关、声音开关和 Unicode 正文整理。原 `src/reply_notify.rs` 及 Web 通知业务实现已删除；`src/notifications` 与浏览器投递模块只调用固定平台接口。宿主只交付已经确定的完成、中断或失败状态，插件不能改写它。
 

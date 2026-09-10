@@ -20,7 +20,7 @@ impl Drop for Lock {
 /// 【插件私有数据】【目录根】打开宿主指定路径，后续子目录不跟随符号链接。
 /// @param base 宿主应用目录
 /// @returns 目录句柄与规范显示路径
-pub(super) fn root(base: &Path) -> Result<(Dir, PathBuf)> {
+pub(in crate::plugins) fn root(base: &Path) -> Result<(Dir, PathBuf)> {
     std::fs::create_dir_all(base)?;
     let path = dunce::canonicalize(base)?;
     Ok((Dir::open_ambient_dir(&path, ambient_authority())?, path))

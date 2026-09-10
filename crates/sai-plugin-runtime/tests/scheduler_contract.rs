@@ -188,7 +188,7 @@ async fn scheduler_list_options_are_strictly_bounded() {
     for input in [
         json!({"limit":0}),
         json!({"limit":17}),
-        json!({"offset":129}),
+        json!({"offset":257}),
         json!({"offset":-1}),
         json!({"offset":1.5}),
         json!({"plugin":"other"}),
@@ -204,15 +204,17 @@ async fn scheduler_list_options_are_strictly_bounded() {
             .is_err());
     }
     assert!(host.calls.lock().unwrap().is_empty());
-    assert!(plugin
-        .call_tool(
-            "read",
-            json!({"action":"list","input":{"offset":1,"limit":1}}),
-            Default::default()
-        )
-        .await
-        .is_ok());
-    assert_eq!(host.calls.lock().unwrap().len(), 1);
+    for offset in [1, 128, 129, 256] {
+        assert!(plugin
+            .call_tool(
+                "read",
+                json!({"action":"list","input":{"offset":offset,"limit":1}}),
+                Default::default()
+            )
+            .await
+            .is_ok());
+    }
+    assert_eq!(host.calls.lock().unwrap().len(), 4);
 }
 
 /// 【调度契约测试】【默认宿主与输出】未实现宿主明确拒绝，成功提交后的过大结果仍受输出限制。

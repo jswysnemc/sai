@@ -8,6 +8,29 @@ use sai_plugin_runtime::host::{
 use sai_plugin_runtime::Capabilities;
 use std::io::{ErrorKind, Read};
 
+/// 【插件路径】【真实路径】使用已授权目录句柄确认对象存在，返回授权时解析的规范路径。
+/// @param path 请求路径；context 为可信工作目录；capabilities 为读取授权
+/// @returns 普通文件或目录的 UTF-8 绝对路径
+pub(in crate::plugins) async fn real_path(
+    path: String,
+    context: SystemContext,
+    capabilities: Capabilities,
+) -> Result<String> {
+    tokio::task::spawn_blocking(move || {
+        let path = paths::authorize(&path, &context, &capabilities)?;
+        let metadata = path.directory.symlink_metadata(&path.relative)?;
+        if metadata.file_type().is_symlink() || !(metadata.is_file() || metadata.is_dir()) {
+            bail!("plugin path resolution requires an unchanged regular file or directory");
+        }
+        Ok(dunce::simplified(&path.canonical)
+            .to_str()
+            .context("resolved plugin path is not UTF-8")?
+            .to_string())
+    })
+    .await
+    .context("plugin path resolver stopped")?
+}
+
 /// 【插件系统】【文件读取】通过授权目录句柄读取普通文件，特殊设备和管道不能阻塞读取入口。
 /// @param request 有界读取选项；context 为可信目录；capabilities 为有效授权
 /// @returns 文本及是否截断

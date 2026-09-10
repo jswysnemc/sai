@@ -1,4 +1,3 @@
-mod alarm;
 mod ask_question;
 mod calculator;
 mod catalog;
@@ -211,7 +210,6 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     command::register(&mut registry, config, paths, true);
     default_tools::register(&mut registry, config, paths);
     trash_path::register(&mut registry);
-    alarm::register(&mut registry, paths.clone());
     web_fetch::register(&mut registry);
     configurable_cli_tools::register(&mut registry, config);
     crate::plugins::register_plugins(&mut registry, config, paths, false);

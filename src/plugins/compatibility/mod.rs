@@ -1,3 +1,5 @@
+mod alarm;
+pub(in crate::plugins) mod alarm_jobs;
 mod diagnostics;
 mod exchange_rate;
 mod image;
@@ -30,6 +32,7 @@ pub(super) fn resolve(
     declared: &Capabilities,
 ) -> Result<Option<RuntimeOverrides>> {
     match id {
+        "alarm" => alarm::resolve(settings, declared).map(Some),
         "web-images" => web_images::resolve(config, paths, settings, declared).map(Some),
         "image-generation" => {
             image::generation(&config.plugins.image_generation, settings, declared).map(Some)

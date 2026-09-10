@@ -18,7 +18,6 @@ use crossterm::terminal::{self, Clear, ClearType};
 use crossterm::{execute, queue};
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
-use std::io::Cursor;
 use std::io::{self, IsTerminal, Read, Write};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -172,7 +171,12 @@ pub async fn run(cli: Cli) -> Result<()> {
     if !paths.config_file.exists()
         && !matches!(
             cli.command,
-            Some(Command::Init | Command::Plugins(_) | Command::PluginJobWorker(_))
+            Some(
+                Command::Init
+                    | Command::Plugins(_)
+                    | Command::PluginJobWorker(_)
+                    | Command::AlarmWorker(_)
+            )
         )
     {
         run_init(&paths, InitKind::FirstRun)?;
@@ -196,7 +200,7 @@ pub async fn run(cli: Cli) -> Result<()> {
     }
 
     match cli.command {
-        Some(Command::AlarmWorker(args)) => run_alarm_worker(args),
+        Some(Command::AlarmWorker(args)) => run_alarm_worker(&paths, args).await,
         Some(Command::PluginJobWorker(args)) => {
             crate::plugins::scheduler::run_worker(
                 &args.state_dir,

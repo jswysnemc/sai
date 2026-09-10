@@ -120,6 +120,53 @@ pub(super) fn install(
             }
         })?,
     )?;
+    let (path_host, path_capabilities, path_limits, path_control) = (
+        host.clone(),
+        capabilities.clone(),
+        limits.clone(),
+        control.clone(),
+    );
+    fs.set(
+        "realpath",
+        lua.create_async_function(move |lua, input: Value| {
+            let (host, capabilities, limits, control) = (
+                path_host.clone(),
+                path_capabilities.clone(),
+                path_limits.clone(),
+                path_control.clone(),
+            );
+            async move {
+                // 1. 【插件路径】【调用边界】真实目录只来自宿主，非法参数在宿主调用之前拒绝
+                let context = control.system_context()?;
+                if !matches!(input, Value::String(_)) {
+                    return Err(mlua::Error::runtime("plugin path must be a string"));
+                }
+                let path: String = lua.from_value(input)?;
+                capabilities
+                    .system
+                    .check_read_request(&path)
+                    .map_err(error)?;
+                crate::runtime::budget::checkpoint(&lua)?;
+                charge(&control, limits.system_calls)?;
+                let resolved = host
+                    .real_path(path, context, capabilities.clone())
+                    .await
+                    .map_err(error)?;
+                // 2. 【插件路径】【结果边界】宿主必须提供合法绝对路径，结果仍受输出预算限制
+                crate::runtime::budget::checkpoint(&lua)?;
+                capabilities
+                    .system
+                    .check_read_request(&resolved)
+                    .map_err(error)?;
+                if !std::path::Path::new(&resolved).is_absolute() {
+                    return Err(mlua::Error::runtime(
+                        "resolved plugin path must be absolute",
+                    ));
+                }
+                result_value(&lua, &resolved, limits.output_bytes)
+            }
+        })?,
+    )?;
     fs.set(
         "stat",
         lua.create_async_function(move |lua, path: String| {

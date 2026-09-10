@@ -67,6 +67,7 @@ local language = sai.env.get("LANG")
 local file = sai.fs.read_text("notes.txt", {max_bytes=65536, lossy=false})
 local directory = sai.fs.read_dir(".", {max_entries=100})
 local information = sai.fs.stat("notes.txt")
+local absolute = sai.fs.realpath("notes.txt")
 ```
 
 | 接口 | 结果 | 默认限制 |
@@ -74,8 +75,11 @@ local information = sai.fs.stat("notes.txt")
 | `read_text(path, options)` | `{text, truncated}` | 1 MiB，进一步受回调输出上限限制 |
 | `read_dir(path, options)` | `{entries, truncated}` | 256 条，最多 1024 条 |
 | `stat(path)` | `{is_file, is_dir, len}` 或 `nil` | 不读取正文 |
+| `realpath(path)` | 已授权普通文件或目录的规范 UTF-8 绝对路径 | 严格字符串参数，共用系统调用与输出预算 |
 
 目录条目包含 `name`、`path`、`is_dir`、`is_file`。`len` 是文件系统报告的字节数；例如 `/proc` 伪文件可能报告零长度但仍有可读正文。`truncated=true` 表示还有内容未返回，不能据此认定扫描完整。
+
+`realpath` 要求对象存在，使用与读取相同的授权路径和可信工作目录。授权内符号链接返回真实目标，越界链接、特殊文件、相对宿主工作目录和非法宿主结果均报错。结果是路径快照；后续读取仍须重新授权与检查，不把返回路径当成永久文件句柄。
 
 请求的字节数和条数收窄到至少 1。`lossy` 默认为 `false`：严格读取遇到非法 UTF-8 会失败；字节上限切到一个有效字符中间时丢弃不完整尾部。`lossy=true` 使用替换字符，替换后的文本仍不能突破字节限制。运行时在接收宿主结果后再次检查单次请求和总结果大小。
 

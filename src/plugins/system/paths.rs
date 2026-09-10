@@ -11,6 +11,7 @@ pub(in crate::plugins) struct AuthorizedPath {
     pub directory: Dir,
     pub relative: PathBuf,
     pub display: PathBuf,
+    pub canonical: PathBuf,
 }
 
 impl AuthorizedPath {
@@ -84,6 +85,7 @@ pub(in crate::plugins) fn authorize(
             directory,
             relative,
             display,
+            canonical: requested,
         });
     }
     bail!("plugin file path is outside the granted read paths")
