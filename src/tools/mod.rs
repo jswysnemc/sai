@@ -13,7 +13,6 @@ mod file_edit;
 mod file_read;
 pub(crate) mod fs_path;
 pub(crate) mod groups;
-mod hash_codec;
 pub mod knowledge_base;
 pub(crate) mod memes;
 mod memory;

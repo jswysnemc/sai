@@ -92,6 +92,7 @@ async fn existing_text_helpers_keep_their_contract() {
                     exact=sai.text.clip("输入法", 3),
                     trimmed=sai.text.trim("　输入法  "),
                     collapsed=sai.text.collapse_whitespace("　输入法 \t 与\n Lua　"),
+                    lowered=sai.text.lower("ÄBC İNVÄLID ΟΣ"),
                 }
             end})
     "#,
@@ -107,6 +108,61 @@ async fn existing_text_helpers_keep_their_contract() {
     assert_eq!(result["exact"], "输入法");
     assert_eq!(result["trimmed"], "输入法");
     assert_eq!(result["collapsed"], "输入法 与 Lua");
+    assert_eq!(result["lowered"], "äbc i\u{307}nvälid ος");
+}
+
+/// 【插件测试】【Unicode 小写边界】拒绝非字符串，输入与 Unicode 展开结果都受字节限制
+/// @returns 无；错误后仍可转换恰好达到上限的文本
+#[tokio::test]
+async fn lowercase_enforces_type_and_byte_limits() {
+    let mut package = package(
+        r#"
+        sai.register_tool({name="lower",description="Bounded lowercase",parameters={type="object"},
+            execute=function(args) return #sai.text.lower(args.value) end})
+    "#,
+    );
+    package.manifest.limits.output_bytes = 1024;
+    let plugin = PluginRuntime::load(
+        package,
+        json!({}),
+        Capabilities::default(),
+        Arc::new(RecordingHost::default()),
+    )
+    .unwrap();
+    for value in [Value::Null, json!(42), json!(false), json!([]), json!({})] {
+        let error = plugin
+            .call_tool(
+                "lower",
+                json!({"value":value}),
+                InvocationContext::default(),
+            )
+            .await
+            .unwrap_err();
+        assert!(format!("{error:#}").contains("lower requires a string"));
+    }
+    for (value, stage) in [("A".repeat(1025), "input"), ("İ".repeat(512), "output")] {
+        let error = plugin
+            .call_tool(
+                "lower",
+                json!({"value":value}),
+                InvocationContext::default(),
+            )
+            .await
+            .unwrap_err();
+        assert!(format!("{error:#}").contains(&format!("text {stage} exceeds plugin size limit")));
+    }
+    let value = format!("{}A", "İ".repeat(341));
+    assert_eq!(
+        plugin
+            .call_tool(
+                "lower",
+                json!({"value":value}),
+                InvocationContext::default()
+            )
+            .await
+            .unwrap(),
+        "1024"
+    );
 }
 
 /// 【插件测试】【Unicode 大写】保留非 ASCII 转换，并在调用边界拒绝非文本参数。

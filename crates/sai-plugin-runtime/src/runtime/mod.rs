@@ -1,6 +1,9 @@
 mod binary;
 mod bindings;
+mod budget;
 mod control;
+mod crypto;
+mod encoding;
 mod execution;
 mod http;
 mod modules;
@@ -88,7 +91,7 @@ impl PluginRuntime {
         lua.set_memory_limit(manifest.limits.memory_bytes)?;
         // 1. 加载阶段仅允许纯计算和注册，宿主 I/O 在调用阶段才开放
         let control = Arc::new(control::CallControl::default());
-        control::install_budget(&lua, &manifest.limits, CancellationToken::new())?;
+        budget::install(&lua, &manifest.limits, CancellationToken::new())?;
         let api = lua.create_table()?;
         api.set("config", lua.to_value(&settings)?)?;
         api.set("plugin_id", manifest.id.as_str())?;
@@ -245,7 +248,7 @@ impl PluginRuntime {
             let handle = tokio::runtime::Handle::current();
             tokio::task::spawn_blocking(move || {
                 handle.block_on(async move {
-                control::install_budget(&vm.lua, &limits, cancel.clone())?;
+                budget::install(&vm.lua, &limits, cancel.clone())?;
                 let result = tokio::select! {
                     _ = cancel.cancelled() => Err(anyhow::anyhow!("plugin execution cancelled")),
                     result = vm.execute(invocation, context) => result,

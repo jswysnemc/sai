@@ -1,0 +1,15 @@
+{
+  "api_version": 1,
+  "id": "hash-codec",
+  "version": "1.0.0",
+  "name": "Hash and text codecs",
+  "description": "Calculate byte hashes and decode text without external capabilities.",
+  "entry": "init.lua",
+  "capabilities": {},
+  "limits": {
+    "memory_bytes": 16777216,
+    "instructions": 20000000,
+    "timeout_ms": 5000,
+    "output_bytes": 1048576
+  }
+}

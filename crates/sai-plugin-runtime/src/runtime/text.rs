@@ -12,8 +12,15 @@ pub(super) fn install(lua: &Lua, api: &Table, limit: usize) -> mlua::Result<()> 
     text.set(
         "upper",
         lua.create_function(move |_, value: Value| match value {
-            Value::String(value) => uppercase(&value.to_str()?, limit),
+            Value::String(value) => convert_case(&value.to_str()?, limit, true),
             _ => Err(mlua::Error::runtime("upper requires a string")),
+        })?,
+    )?;
+    text.set(
+        "lower",
+        lua.create_function(move |_, value: Value| match value {
+            Value::String(value) => convert_case(&value.to_str()?, limit, false),
+            _ => Err(mlua::Error::runtime("lower requires a string")),
         })?,
     )?;
     text.set(
@@ -67,14 +74,18 @@ pub(super) fn install(lua: &Lua, api: &Table, limit: usize) -> mlua::Result<()> 
     api.set("text", text)
 }
 
-/// 【插件】【Unicode 大写】按 Unicode 规则转换大小写，输入和展开结果都受字节预算约束。
-/// @param value 原始文本；limit 为当前插件的输出字节上限
+/// 【插件】【Unicode 大小写】按 Unicode 规则转换大小写，输入和展开结果都受字节预算约束。
+/// @param value 原始文本；limit 为输出字节上限；upper 决定转为大写还是小写
 /// @returns 转换后的文本；超过预算时返回错误
-fn uppercase(value: &str, limit: usize) -> mlua::Result<String> {
+fn convert_case(value: &str, limit: usize, upper: bool) -> mlua::Result<String> {
     if value.len() > limit {
         return Err(mlua::Error::runtime("text input exceeds plugin size limit"));
     }
-    let output = value.to_uppercase();
+    let output = if upper {
+        value.to_uppercase()
+    } else {
+        value.to_lowercase()
+    };
     if output.len() > limit {
         return Err(mlua::Error::runtime(
             "text output exceeds plugin size limit",

@@ -37,7 +37,7 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 
 ## 已落地的版本 1
 
-独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、文本与视觉模型、工具调用、文件、环境、模板进程、二进制缓冲、终端图片、JSON、文本、时间及通知纯回调能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence`、`package-advisor`、`reply-notification`、`image-generation`、`image-display` 与 `web-images` 已迁为随程序嵌入的十八个 Lua 包，共提供 24 个工具；通知包不增加模型工具，相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
+独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、文本与视觉模型、工具调用、文件、环境、模板进程、二进制缓冲、终端图片、JSON、文本、时间、摘要、字节解码及通知纯回调能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence`、`package-advisor`、`reply-notification`、`image-generation`、`image-display`、`web-images` 与 `hash-codec` 已迁为随程序嵌入的十九个 Lua 包，共提供 26 个工具；通知包不增加模型工具，相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
 
 CLI 提供创建、验证、安装、替换、配置、授权、启停、移除和命令执行。TUI 提供 `/plugins`、`/plugins reload` 与 `/plugin <id>/<command>`。模型工具通过原有共用注册入口进入 CLI、TUI、Web 和子任务，直接用户命令目前只有 CLI 与 TUI 入口。
 

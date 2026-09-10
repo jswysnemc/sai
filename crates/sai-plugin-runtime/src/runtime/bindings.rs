@@ -6,7 +6,7 @@ use chrono::{DateTime, FixedOffset, Utc};
 use mlua::{Lua, LuaSerdeExt, Table, Value};
 use std::sync::Arc;
 
-/// 【插件】【宿主绑定】安装 JSON、文本、时间和受授权的 HTTP 接口。
+/// 【插件】【宿主绑定】安装 JSON、文本、摘要、编码、时间与受授权的宿主接口。
 /// @param lua 为虚拟机；api 为 sai 表；host 为宿主实现；capabilities 为有效授权；limits 为上限；control 为执行状态
 /// @returns 全部宿主接口的安装结果
 pub(super) fn install(
@@ -19,6 +19,8 @@ pub(super) fn install(
 ) -> mlua::Result<()> {
     install_json(lua, api, limits.output_bytes)?;
     super::text::install(lua, api, limits.output_bytes)?;
+    super::crypto::install(lua, api, limits.output_bytes)?;
+    super::encoding::install(lua, api, limits.output_bytes)?;
     install_token_estimation(lua, api, host.clone(), limits.output_bytes)?;
     install_time(lua, api)?;
     super::private::install(

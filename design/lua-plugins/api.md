@@ -281,6 +281,7 @@ local response = sai.http.request({
 | `sai.json.null` | 表示 JSON null |
 | `sai.text.trim(text)` | 去除两端 Unicode 空白，保留正文内容 |
 | `sai.text.upper(text)` | 只接受字符串，按 Unicode 规则转为大写；输入及展开后的 UTF-8 字节数均受 `output_bytes` 限制 |
+| `sai.text.lower(text)` | 只接受字符串，按 Unicode 规则转为小写，保留上下文相关大小写规则；输入与展开结果受 `output_bytes` 限制 |
 | `sai.text.number_to_string(number)` | 只接受有限数值，以 f64 十进制格式保留有效数字及负零，不使用指数形式；整数先按 f64 语义转换 |
 | `sai.text.collapse_whitespace(text)` | 去除首尾空白，并把连续 Unicode 空白替换为一个空格；输入受 `output_bytes` 限制 |
 | `sai.text.estimate_tokens(text)` | 使用 Sai 分词器估算文本 token 数量；输入受 `output_bytes` 限制 |
@@ -292,11 +293,31 @@ local response = sai.http.request({
 | `sai.time.iso(seconds, offset_seconds?)` | 指定时区的 ISO 时间，默认 UTC |
 | `sai.time.local_format(format, seconds?)` | 按宿主本地时区格式化时间，省略时间戳时使用当前时间；格式最多 128 字节，非法格式返回错误 |
 
-HTML 和 Unicode 大写转换前后的 UTF-8 文本均受包内 `output_bytes` 限制。Markdown 转换复用 `html2md`，相对链接保持原地址；正文范围提取与业务截断由插件负责。最终回调结果另受包含 JSON 封装在内的输出预算约束。
+HTML 和 Unicode 大小写转换前后的 UTF-8 文本均受包内 `output_bytes` 限制。Markdown 转换复用 `html2md`，相对链接保持原地址；正文范围提取与业务截断由插件负责。最终回调结果另受包含 JSON 封装在内的输出预算约束。
 
 `number_to_string` 不会把数字字符串、布尔值或 null 转成数值，也拒绝 Lua 计算产生的 NaN 和无穷大。它用于与宿主 f64 展示保持一致，例如 `1e-20` 返回 `0.00000000000000000001`；超过 f64 精确整数范围的值可能舍入。
 
 运行时提供 Lua 5.4 的表、字符串、数学和 UTF-8 标准库。没有 `io`、`os`、`package`、`debug`、`load`、`loadfile`、`dofile`、直接 `coroutine` 或原生动态库入口。HTTP 仅在回调执行期间可用。
+
+### 摘要与字节解码
+
+这些接口只处理传入的字节，无需声明外部能力，可在加载阶段及只读回调中使用。字符串参数不接受数字、布尔值、表或 JSON null 的隐式转换。
+
+| 接口 | 行为 |
+| --- | --- |
+| `sai.crypto.digest(algorithm, bytes)` | 原始 Lua 字符串字节的摘要，返回小写十六进制文本 |
+| `sai.encoding.decode(format, input)` | `base64`、`hex` 或 `url` 解码，返回可包含 NUL 和非法 UTF-8 的 Lua 字符串 |
+| `sai.encoding.to_utf8(bytes, lossy?)` | 默认严格检查 UTF-8；`lossy=true` 将非法序列替换为 U+FFFD，选项只接受布尔值 |
+
+`digest` 接受规范名称：`md5`、`sha1`、`sha224`、`sha256`、`sha384`、`sha512`、`sha3_224`、`sha3_256`、`sha3_384`、`sha3_512`、`blake2b`、`blake2s`、`blake3`、`crc32`、`adler32`。BLAKE2b 使用 512 位结果，BLAKE2s 使用 256 位结果。大小写归一化、`b2sum` 或 `sha3-256` 等别名、多算法组合均由插件决定，未知宿主算法返回错误。
+
+`decode` 不自动去除空白。Base64 使用标准字母表及严格填充校验，Hex 拒绝奇数长度与非法字符。URL 按百分号解码，保留 `+` 和无法识别的转义；是否允许非法 UTF-8 由后续 `to_utf8` 调用决定。
+
+摘要输入、编码输入和转换输出均受 `limits.output_bytes` 限制；UTF-8 替换可能增加输出字节数，因此转换后会再次校验。每次摘要、解码或 UTF-8 转换按输入字节扣除共用指令预算，空输入至少扣除一单位。Rust 保存实际额度，修改 `sai.limits` 不能扩大限制。每次回调重新取得预算，加载阶段也执行计费。
+
+摘要每处理最多 64 KiB 检查一次取消和截止时间；解码及文本转换在有界计算前后检查调用状态。最终结果仍受回调输出上限约束。
+
+`plugins/hash-codec` 展示零外部权限组合：保留 `calculate_hash` 与 `decode_encoded_text`，算法列表、别名、HTML 实体替换、ROT13 和结果格式均在 Lua 中实现。默认算法为 SHA-256；`all`、`mainstream` 及空白选择沿用旧列表，其中 `b2sum` 与 BLAKE2b 重复，BLAKE3 需显式指定。`text_encoding` 保留原有兼容行为，Base64 与 Hex 解码仍按 UTF-8 替换非法序列。
 
 ## 资源范围
 

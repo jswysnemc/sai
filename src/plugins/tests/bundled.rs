@@ -189,6 +189,8 @@ fn migrated_tools_are_present_in_common_and_readonly_registries() {
         "get_weather",
         "get_exchange_rate",
         "query_moegirl",
+        "calculate_hash",
+        "decode_encoded_text",
     ] {
         assert!(common.contains(name));
         assert!(readonly.contains(name));

@@ -1,4 +1,4 @@
-use super::{calculator, hash_codec, xuanxue, ToolRegistry};
+use super::{calculator, xuanxue, ToolRegistry};
 use crate::config::AppConfig;
 
 /// 【CLI 助手工具】【运行时注册】按配置注册轻量内置可选工具。
@@ -14,9 +14,6 @@ pub(super) fn register(registry: &mut ToolRegistry, config: &AppConfig) {
     if config.plugins.xuanxue.enabled {
         xuanxue::register(registry);
     }
-    if config.plugins.hash_codec.enabled {
-        hash_codec::register(registry);
-    }
     if config.plugins.calculator.enabled {
         calculator::register(registry);
     }
@@ -26,12 +23,7 @@ pub(super) fn register(registry: &mut ToolRegistry, config: &AppConfig) {
 mod tests {
     use super::*;
 
-    const CONFIGURABLE_TOOL_NAMES: [&str; 4] = [
-        "draw_zhouyi_hexagram",
-        "calculate_hash",
-        "decode_encoded_text",
-        "scientific_calculator",
-    ];
+    const CONFIGURABLE_TOOL_NAMES: [&str; 2] = ["draw_zhouyi_hexagram", "scientific_calculator"];
 
     /// 【CLI 助手工具】【运行时注册】验证关闭开关后不会向模型暴露工具。
     ///
@@ -105,7 +97,6 @@ mod tests {
     /// - 无
     fn set_enabled(config: &mut AppConfig, enabled: bool) {
         config.plugins.xuanxue.enabled = enabled;
-        config.plugins.hash_codec.enabled = enabled;
         config.plugins.calculator.enabled = enabled;
     }
 }
