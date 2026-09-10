@@ -58,6 +58,7 @@ mod system_files;
 mod system_grants;
 mod system_process;
 mod web_images_download;
+mod web_images_paths;
 mod web_images_reference;
 mod web_images_screening;
 mod web_images_search;

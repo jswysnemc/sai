@@ -81,6 +81,42 @@ async fn writes_create_authorized_roots_and_publish_complete_files() {
     );
 }
 
+/// 【二进制文件测试】【短目录写入】真实读写保留目录和文件名中的波浪号，同时阻止相邻目录写入。
+/// @returns 无；授权目录保存完整文件，越界请求不会创建任何文件或目录
+#[tokio::test]
+async fn literal_tilde_paths_write_files_without_expanding_authority() {
+    let root = tempfile::Builder::new()
+        .prefix("RUNNER~1-")
+        .tempdir()
+        .unwrap();
+    let allowed = root.path().join("output~1");
+    let outside = root.path().join("output~2");
+    let path = allowed.join("image~.png");
+    let plugin = runtime(root.path(), &[allowed.to_str().unwrap()]);
+    let result = plugin
+        .call_tool("write", json!({"path":path}), context(root.path()))
+        .await
+        .unwrap();
+    let result: serde_json::Value = serde_json::from_str(&result).unwrap();
+    assert_eq!(result["path"], json!(path));
+    assert_eq!(std::fs::read(&path).unwrap(), b"hello");
+
+    let error = plugin
+        .call_tool(
+            "write",
+            json!({"path":outside.join("nested/image.png")}),
+            context(root.path()),
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        format!("{error:#}").contains("outside the granted write paths"),
+        "{error:#}"
+    );
+    assert!(!outside.exists());
+    assert_eq!(std::fs::read_dir(&allowed).unwrap().count(), 1);
+}
+
 /// 【二进制文件测试】【先授权后创建】越界、父目录跳转及设备名称不能产生任何目录。
 #[tokio::test]
 async fn rejected_paths_do_not_create_parents_or_touch_existing_files() {

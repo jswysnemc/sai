@@ -227,15 +227,16 @@ impl ProcessTemplate {
 }
 
 /// 【插件】【路径声明】允许绝对路径、工作区相对路径和当前用户目录，不接受通配符或父目录跳转。
-/// @param value 清单中的读取根目录或单个文件
+/// @param value 读取或写入声明及请求路径，名称中的波浪号保持字面含义
 /// @returns 路径格式合法时成功，实际路径归属由宿主校验
 pub fn validate_read_path(value: &str) -> Result<()> {
+    // 1. 【插件】【用户目录】仅起始波浪号表示用户目录，Windows 短文件名中的波浪号不是展开语法
     if value.is_empty()
         || value.len() > 4096
         || value.chars().any(char::is_control)
         || value.contains(['*', '?', '<', '>', '|', '"'])
         || value.split(['/', '\\']).any(|part| part == "..")
-        || (value.contains('~') && value != "~" && !value.starts_with("~/"))
+        || (value.starts_with('~') && value != "~" && !value.starts_with("~/"))
     {
         bail!("plugin read path must be a bounded path without wildcards or parent traversal");
     }
