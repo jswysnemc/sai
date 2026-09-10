@@ -23,6 +23,7 @@ pub(crate) struct GrantChanges {
     pub processes: Option<BTreeSet<String>>,
     pub session_storage: Option<bool>,
     pub plugin_storage: Option<bool>,
+    pub notify: Option<bool>,
     pub workspace: Option<bool>,
     pub public_downloads: Option<bool>,
     pub write_paths: Option<BTreeSet<String>>,
@@ -68,6 +69,7 @@ impl GrantUpdate {
                     plugin_storage: changes
                         .plugin_storage
                         .unwrap_or(current.system.plugin_storage),
+                    notify: changes.notify.unwrap_or(current.system.notify),
                     workspace: changes.workspace.unwrap_or(current.system.workspace),
                     read_paths: changes.read_paths.unwrap_or(current.system.read_paths),
                     environment: changes.environment.unwrap_or(current.system.environment),

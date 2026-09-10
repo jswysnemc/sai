@@ -7,7 +7,7 @@ use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
 
 /// 【插件系统】【路径句柄】以已经授权的目录句柄为根，后续操作不能通过符号链接离开该根。
-pub(super) struct AuthorizedPath {
+pub(in crate::plugins) struct AuthorizedPath {
     pub directory: Dir,
     pub relative: PathBuf,
     pub display: PathBuf,
@@ -40,7 +40,7 @@ pub(in crate::plugins) fn workdir(context: &SystemContext) -> Result<PathBuf> {
 /// 【插件系统】【路径授权】先比较解析后的真实路径，再从授权根目录句柄执行后续操作。
 /// @param path 请求路径；context 为宿主目录；capabilities 为有效读取授权
 /// @returns 不能越过授权根的句柄及相对路径
-pub(super) fn authorize(
+pub(in crate::plugins) fn authorize(
     path: &str,
     context: &SystemContext,
     capabilities: &Capabilities,

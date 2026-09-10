@@ -6,6 +6,7 @@ use url::Url;
 mod binary;
 mod system;
 pub use binary::BinaryCapabilities;
+pub(crate) use system::validate_read_path;
 pub use system::{ProcessArgument, ProcessParameter, ProcessTemplate, SystemCapabilities};
 
 /// 【插件】【能力声明】来源授权与只读 POST 查询端点分别声明和授予。

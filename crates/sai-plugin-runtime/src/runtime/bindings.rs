@@ -23,6 +23,14 @@ pub(super) fn install(
     super::encoding::install(lua, api, limits.output_bytes)?;
     install_token_estimation(lua, api, host.clone(), limits.output_bytes)?;
     install_time(lua, api)?;
+    super::notification::install(
+        lua,
+        api,
+        host.clone(),
+        capabilities.clone(),
+        limits.clone(),
+        control.clone(),
+    )?;
     super::private::install(
         lua,
         api,

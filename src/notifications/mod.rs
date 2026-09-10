@@ -1,4 +1,6 @@
+pub(crate) mod delivery;
 mod desktop;
+mod playback;
 mod sound;
 
 use crate::config::AppConfig;

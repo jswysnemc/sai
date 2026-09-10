@@ -36,6 +36,8 @@ mod linux_game_report;
 mod linux_game_signals;
 mod management;
 mod management_lock;
+mod notification_delivery;
+mod notification_grants;
 mod notification_policy;
 mod notification_reference;
 mod notification_settings;

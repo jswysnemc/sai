@@ -5,11 +5,16 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub(crate) mod binary;
+mod notification;
 mod private;
 mod services;
 mod system;
 mod vision;
 pub use binary::{BinaryData, BinaryFile, BinaryResponse, DisplayedImage};
+pub use notification::{
+    BuiltinSound, NotificationDelivery, NotificationRequest, NotificationSound,
+    MAX_NOTIFICATION_AUDIO_BYTES,
+};
 pub use private::{
     validate_storage_key, validate_workspace_path, ArchiveRequest, PluginWorkspace, StorageRequest,
 };
@@ -51,6 +56,18 @@ pub struct HttpResponse {
 /// 【插件】【宿主接口】插件运行时所需的异步能力，实现不依赖 Sai 应用配置。
 #[async_trait]
 pub trait PluginHost: Send + Sync {
+    /// 【插件通知】【直接投递】发送已授权通知并等待完成，丢弃 Future 应停止未完成的投递。
+    /// @param request 通知请求；context 为可信目录与写入权限；capabilities 为有效授权
+    /// @returns 成功完成的通道，默认宿主明确报告不可用
+    async fn notify(
+        &self,
+        _request: NotificationRequest,
+        _context: SystemContext,
+        _capabilities: Capabilities,
+    ) -> Result<NotificationDelivery> {
+        anyhow::bail!("notification delivery is unavailable in this host")
+    }
+
     /// 【插件二进制】【原始请求】执行精确来源授权的请求，保留响应正文原始字节。
     /// @param request 请求；capabilities 为有效授权；allow_writes 为宿主权限
     /// @returns 有界响应，默认宿主不提供该能力

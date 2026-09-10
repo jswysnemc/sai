@@ -13,6 +13,8 @@ pub struct SystemCapabilities {
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub plugin_storage: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub notify: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub workspace: bool,
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub read_paths: BTreeSet<String>,
@@ -58,6 +60,7 @@ impl SystemCapabilities {
     pub fn is_empty(&self) -> bool {
         !self.session_storage
             && !self.plugin_storage
+            && !self.notify
             && !self.workspace
             && self.read_paths.is_empty()
             && self.environment.is_empty()
@@ -90,6 +93,7 @@ impl SystemCapabilities {
         Self {
             session_storage: self.session_storage && granted.session_storage,
             plugin_storage: self.plugin_storage && granted.plugin_storage,
+            notify: self.notify && granted.notify,
             workspace: self.workspace && granted.workspace,
             read_paths: self
                 .read_paths
@@ -116,6 +120,7 @@ impl SystemCapabilities {
     pub fn is_subset(&self, declared: &Self) -> bool {
         (!self.session_storage || declared.session_storage)
             && (!self.plugin_storage || declared.plugin_storage)
+            && (!self.notify || declared.notify)
             && (!self.workspace || declared.workspace)
             && self.read_paths.is_subset(&declared.read_paths)
             && self.environment.is_subset(&declared.environment)

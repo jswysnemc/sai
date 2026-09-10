@@ -7,6 +7,7 @@ mod encoding;
 mod execution;
 mod http;
 mod modules;
+mod notification;
 mod private;
 mod registration;
 mod services;

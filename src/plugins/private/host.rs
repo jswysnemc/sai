@@ -26,6 +26,18 @@ impl PrivatePluginHost {
 
 #[async_trait]
 impl PluginHost for PrivatePluginHost {
+    /// 【插件宿主】【通知代理】直接通知使用可信调用上下文与当前插件有效授权。
+    /// @param request 通知请求；context 为可信目录与权限；capabilities 为授权
+    /// @returns 投递完成的通道
+    async fn notify(
+        &self,
+        request: NotificationRequest,
+        context: SystemContext,
+        capabilities: Capabilities,
+    ) -> Result<NotificationDelivery> {
+        SaiPluginHost.notify(request, context, capabilities).await
+    }
+
     /// 【插件宿主】【二进制请求】复用精确来源授权和独立大文件时限。
     /// @param request 请求；capabilities 为授权；allow_writes 为可信写入权限
     /// @returns 原始有界响应

@@ -12,6 +12,18 @@ pub(super) struct SaiPluginHost;
 
 #[async_trait]
 impl PluginHost for SaiPluginHost {
+    /// 【插件宿主】【通知投递】复用独立授权、文件边界和可取消的平台投递。
+    /// @param request 通知请求；context 为可信目录与权限；capabilities 为授权
+    /// @returns 已完成的投递通道
+    async fn notify(
+        &self,
+        request: sai_plugin_runtime::host::NotificationRequest,
+        context: SystemContext,
+        capabilities: Capabilities,
+    ) -> Result<sai_plugin_runtime::host::NotificationDelivery> {
+        super::notification::send(request, context, capabilities).await
+    }
+
     /// 【插件宿主】【二进制请求】复用精确来源授权和独立大文件时限。
     /// @param request 请求；capabilities 为授权；allow_writes 为可信写入权限
     /// @returns 原始有界响应

@@ -25,6 +25,8 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 | `src/plugins/compatibility` | 旧业务设置的定向兼容；派生凭据仅保留在运行时快照 |
 | `src/plugins/http.rs` | 通用 HTTP 执行、逐次重定向授权、凭据处理和响应限制 |
 | `src/plugins/system` | 通用环境访问、目录句柄授权、受管模板进程及平台回收 |
+| `src/plugins/notification.rs` | 主动通知权限复核、有界音频快照及取消传递 |
+| `src/notifications` | 固定桌面程序、默认音频输出与投递资源回收 |
 | `src/plugins/binary` | 原始字节传输、匿名公开下载、原子文件输出及受控图片展示 |
 | `src/media/terminal.rs` | 共用图片渲染与输出；完整渲染成功后才写入终端 |
 | `src/render/terminal_image/buffered.rs` | 不直接输出的图片协议编码，保留调用方尺寸与取消边界 |
@@ -41,7 +43,7 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 
 CLI 提供创建、验证、安装、替换、配置、授权、启停、移除和命令执行。TUI 提供 `/plugins`、`/plugins reload` 与 `/plugin <id>/<command>`。模型工具通过原有共用注册入口进入 CLI、TUI、Web 和子任务，直接用户命令目前只有 CLI 与 TUI 入口。
 
-私有会话状态、插件跨会话存储、有界归档与工作目录能力已开放，契约见[私有接口](private-api.md)。跨插件共享存储、主 Agent 模型上下文变换、插件界面组件和远端包分发尚未开放。后续业务迁移见[迁移清单](migration.md)。
+私有会话状态、插件跨会话存储、有界归档与工作目录能力已开放，契约见[私有接口](private-api.md)。独立授权的即时桌面和声音投递见[主动通知接口](notification-api.md)。跨插件共享存储、后台定时调度、主 Agent 模型上下文变换、插件界面组件和远端包分发尚未开放。后续业务迁移见[迁移清单](migration.md)。
 
 ## 契约原则
 
@@ -140,13 +142,17 @@ Arch 包内部按软件包、状态和 Wiki 查询拆分；Fcitx 的主题、双
 
 用户操作标识由 `src/plugins/operation.rs` 维护，在普通 Agent 请求和跨 Lua VM 的组合调用中传递。审查记录使用完整会话目录区分工作区内同名会话；`StateStore` 的共同重置入口只清理当前作用域。通知模块仍保留宿主平台投递职责。
 
-`sai.storage.plugin` 使用独立的 `system.plugin_storage` 授权，由 `PrivatePluginHost` 绑定插件 ID，在 `plugin-storage` 类别中保存跨会话记录。它与原 `plugin-state` 会话目录及锁分别隔离，复用有界 JSON、短文件锁和原子替换事务。写入同时要求写入工具或命令声明与宿主调用权限；事件只有读取能力，初始化没有 I/O。会话重置保留这些记录，重新加载实例不会改变归属。这个接口不开放跨插件共享，也不提供后台定时调度；闹钟迁移仍需单独完成调度和通知契约。
+`sai.storage.plugin` 使用独立的 `system.plugin_storage` 授权，由 `PrivatePluginHost` 绑定插件 ID，在 `plugin-storage` 类别中保存跨会话记录。它与原 `plugin-state` 会话目录及锁分别隔离，复用有界 JSON、短文件锁和原子替换事务。写入同时要求写入工具或命令声明与宿主调用权限；事件只有读取能力，初始化没有 I/O。会话重置保留这些记录，重新加载实例不会改变归属。这个接口不开放跨插件共享，也不提供后台定时调度；闹钟迁移仍需完成调度和旧记录兼容。
 
 ## 通知策略与交付
 
+`sai.notify.send` 使用独立的 `system.notify` 授权，运行时复核可信写入权限、参数与共用系统调用预算。`host/notification.rs` 定义请求、结果和声音来源，`runtime/notification.rs` 负责 Lua 绑定与时限；应用宿主通过授权目录句柄读取最多 8 MiB 的普通音频文件，再交给平台后端。内置声音不需要文件读取授权，其他声音不能绕过读取范围。
+
+投递控制连接异步 Future 与原生工作线程，超时和取消会停止后续动作、终止桌面子进程及停止声音播放；已经开始的原生文件或设备调用需等待返回，已经交付的通知不能回滚。所有指定通道完成才返回成功，失败由插件决定如何处理。这个接口只投递到宿主机器，不创建定时任务，不向浏览器转发；原闹钟工具和后台工作进程尚未迁移。
+
 `plugins/reply-notification` 负责 TUI 与 Web 的状态文案、语言选择、通知开关、声音开关和 Unicode 正文整理。原 `src/reply_notify.rs` 及 Web 通知业务实现已删除；`src/notifications` 与浏览器投递模块只调用固定平台接口。宿主只交付已经确定的完成、中断或失败状态，插件不能改写它。
 
-`PresentationRuntime` 以每次展示为范围创建纯 VM，使用独立的通知授权和更小的资源预算。`src/plugins/presentation.rs` 负责发现与授权筛选、加载隔离、结果校验及诊断汇总。这个纯回调入口与 Agent 生命周期实例分开，没有 I/O 服务和会话私有状态，也不要求模型配置或工具白名单。插件错误不会改变原答复。
+`PresentationRuntime` 以每次展示为范围创建纯 VM，使用顶层 `notifications` 授权和更小的资源预算，不继承 `system.notify`。`src/plugins/presentation.rs` 负责发现与授权筛选、加载隔离、结果校验及诊断汇总。这个纯回调入口与 Agent 生命周期实例分开，没有 I/O 服务和会话私有状态，也不要求模型配置或工具白名单。插件错误不会改变原答复。
 
 旧 `notification.enabled` 与 `notification.sound` 只向内置包提供运行时默认值。显式插件设置按字段覆盖，包括 false；插件启停和通知授权又是独立开关。新计划读取新快照，管理操作不把旧默认值复制进 `plugins.jsonc`。外部包不会继承这两个配置字段。
 

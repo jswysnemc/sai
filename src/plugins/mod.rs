@@ -9,6 +9,7 @@ mod host;
 mod http;
 mod management;
 mod management_lock;
+mod notification;
 pub(crate) mod operation;
 mod presentation;
 mod private;
