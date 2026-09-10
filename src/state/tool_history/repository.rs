@@ -271,6 +271,8 @@ pub(in crate::state) fn insert_tool_call_with_context(
 ) -> Result<()> {
     let conn = db.conn.lock().unwrap();
     let now = Utc::now().to_rfc3339();
+    // 1. 【工具历史】【调用标识】内部主键使用 UUID，重复交付继续按会话与供应商调用编号更新
+    let id = format!("tool_call_{}", uuid::Uuid::new_v4().simple());
     conn.execute(
         "INSERT INTO tool_calls (
             id, session_id, turn_id, seq, assistant_round, assistant_reasoning,
@@ -285,11 +287,7 @@ pub(in crate::state) fn insert_tool_call_with_context(
             arguments = excluded.arguments,
             updated_at = excluded.updated_at",
         params![
-            format!(
-                "tool_call_{}_{}",
-                Utc::now().timestamp_millis(),
-                rand::random::<u16>()
-            ),
+            id,
             record.session_id,
             record.turn_id,
             record.seq as i64,
@@ -353,6 +351,8 @@ pub(in crate::state) fn insert_tool_result(
 ) -> Result<()> {
     let mut conn = db.conn.lock().unwrap();
     let now = Utc::now().to_rfc3339();
+    // 1. 【工具历史】【结果标识】避免同毫秒内有限随机后缀碰撞，不改写已有记录的主键
+    let id = format!("tool_result_{}", uuid::Uuid::new_v4().simple());
     let tx = conn.transaction()?;
     tx.execute(
         "INSERT INTO tool_results (
@@ -368,11 +368,7 @@ pub(in crate::state) fn insert_tool_result(
             original_chars = excluded.original_chars,
             completed_at = excluded.completed_at",
         params![
-            format!(
-                "tool_result_{}_{}",
-                Utc::now().timestamp_millis(),
-                rand::random::<u16>()
-            ),
+            id,
             &record.session_id,
             &record.turn_id,
             &record.provider_call_id,
