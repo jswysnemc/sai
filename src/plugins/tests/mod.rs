@@ -84,3 +84,8 @@ mod web_search_reference;
 mod web_search_routing;
 mod web_search_settings;
 mod web_search_support;
+mod xuanxue_contract;
+mod xuanxue_limits;
+mod xuanxue_reference;
+mod xuanxue_settings;
+mod xuanxue_support;

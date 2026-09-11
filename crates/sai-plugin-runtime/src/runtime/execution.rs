@@ -50,6 +50,8 @@ impl Vm {
                 tool.validator
                     .validate(&arguments)
                     .map_err(|error| anyhow::anyhow!("plugin tool {name} arguments: {error}"))?;
+                let arguments = Arc::new(arguments);
+                super::json_input::install(&self.lua, &ctx, &arguments)?;
                 self.control.writable.store(
                     context.allow_writes && tool.definition.access != ToolAccess::ReadOnly,
                     Ordering::Release,
@@ -60,7 +62,7 @@ impl Vm {
                 )?;
                 let value = tool
                     .handler
-                    .call_async::<LuaValue>((self.lua.to_value(&arguments)?, ctx))
+                    .call_async::<LuaValue>((self.lua.to_value(arguments.as_ref())?, ctx))
                     .await?;
                 Ok(registration::json_value(&self.lua, value)?)
             }
@@ -84,12 +86,17 @@ impl Vm {
                 Ok(registration::json_value(&self.lua, value)?)
             }
             Invocation::Event(event, data) => {
+                let data = Arc::new(data);
+                super::json_input::install(&self.lua, &ctx, &data)?;
                 self.control.writable.store(false, Ordering::Release);
                 let mut results = Vec::new();
                 if let Some(handlers) = self.events.get(&event) {
                     for handler in handlers {
                         let value = handler
-                            .call_async::<LuaValue>((self.lua.to_value(&data)?, ctx.clone()))
+                            .call_async::<LuaValue>((
+                                self.lua.to_value(data.as_ref())?,
+                                ctx.clone(),
+                            ))
                             .await?;
                         results.push(registration::json_value(&self.lua, value)?);
                     }

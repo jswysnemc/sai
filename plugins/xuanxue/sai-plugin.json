@@ -1,0 +1,15 @@
+{
+  "api_version": 1,
+  "id": "xuanxue",
+  "version": "1.0.0",
+  "name": "Divination and dice",
+  "description": "Draw Zhouyi hexagrams, tarot cards and fortune lots, or roll dice.",
+  "entry": "init.lua",
+  "capabilities": {},
+  "limits": {
+    "memory_bytes": 1048576,
+    "instructions": 100000,
+    "timeout_ms": 1000,
+    "output_bytes": 4096
+  }
+}

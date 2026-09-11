@@ -42,7 +42,7 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 
 ## 已落地的版本 1
 
-独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、文本与视觉模型、工具调用、文件、环境、模板进程、二进制缓冲、终端图片、JSON、文本、时间、摘要、字节解码及通知纯回调能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence`、`package-advisor`、`reply-notification`、`image-generation`、`image-display`、`web-images`、`hash-codec` 与 `alarm` 已迁为随程序嵌入的二十个 Lua 包，共提供 29 个工具；通知包不增加模型工具，相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
+独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、文本与视觉模型、工具调用、文件、环境、模板进程、二进制缓冲、终端图片、JSON、文本、时间、摘要、字节解码及通知纯回调能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence`、`package-advisor`、`reply-notification`、`image-generation`、`image-display`、`web-images`、`hash-codec`、`alarm` 与 `xuanxue` 已迁为随程序嵌入的二十一个 Lua 包，共提供 33 个工具；通知包不增加模型工具，相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
 
 CLI 提供创建、验证、安装、替换、配置、授权、启停、移除和命令执行。TUI 提供 `/plugins`、`/plugins reload` 与 `/plugin <id>/<command>`。模型工具通过原有共用注册入口进入 CLI、TUI、Web 和子任务，直接用户命令目前只有 CLI 与 TUI 入口。
 
@@ -68,6 +68,8 @@ CLI 提供创建、验证、安装、替换、配置、授权、启停、移除�
 模式切换、工具表替换和显式重载通过包源码、设置、授权的摘要识别未变更实例。更新后的工具表复用未变更插件；已禁用或发生变化的插件不再继承旧实例。TUI 重载重新构建子任务工具闭包，并防止早先启动的 MCP 预热结果覆盖新快照。已经执行中的调用持有自己的旧快照，直至完成或取消。
 
 Lua 状态属于 Agent 实例内存，不是持久化会话存储。不同入口对 Agent 的复用时长不同，插件不能依赖全局变量在进程重启或会话切换后保留。
+
+工具和事件上下文提供通用 `ctx.json_integer(pointer)`，查询 Lua 转换前的原 JSON 整数。接口返回精确十进制文本，保留有符号、无符号 64 位整数与浮点表示的区别；路径扫描计入执行预算，弱引用在本次执行结束后失效。玄学包据此在 Lua 中处理数量默认值与收窄；宿主不包含骰子规则或牌库。
 
 `agent_start/end` 包围一次用户请求或子任务段，`turn_start/end` 与 `message_start/end` 包围一次逻辑模型请求，传输重试位于同一范围内。工具检查统一放在宿主授权之后、真实调用之前，只接受继续或拒绝；观察回调失败独立诊断。外部取消回收 Future，不另起后台任务补发结束回调，避免产生新的自动续聊工作。
 

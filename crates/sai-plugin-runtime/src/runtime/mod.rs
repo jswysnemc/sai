@@ -6,6 +6,7 @@ mod crypto;
 mod encoding;
 mod execution;
 mod http;
+mod json_input;
 mod modules;
 mod notification;
 mod private;

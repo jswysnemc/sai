@@ -1,4 +1,4 @@
-use super::{calculator, xuanxue, ToolRegistry};
+use super::{calculator, ToolRegistry};
 use crate::config::AppConfig;
 
 /// 【CLI 助手工具】【运行时注册】按配置注册轻量内置可选工具。
@@ -11,9 +11,6 @@ use crate::config::AppConfig;
 /// - 无
 pub(super) fn register(registry: &mut ToolRegistry, config: &AppConfig) {
     // 【CLI 助手工具】【可用性过滤】1. 每个工具只在对应开关启用时注册
-    if config.plugins.xuanxue.enabled {
-        xuanxue::register(registry);
-    }
     if config.plugins.calculator.enabled {
         calculator::register(registry);
     }
@@ -23,7 +20,7 @@ pub(super) fn register(registry: &mut ToolRegistry, config: &AppConfig) {
 mod tests {
     use super::*;
 
-    const CONFIGURABLE_TOOL_NAMES: [&str; 2] = ["draw_zhouyi_hexagram", "scientific_calculator"];
+    const CONFIGURABLE_TOOL_NAMES: [&str; 1] = ["scientific_calculator"];
 
     /// 【CLI 助手工具】【运行时注册】验证关闭开关后不会向模型暴露工具。
     ///
@@ -96,7 +93,6 @@ mod tests {
     /// 返回:
     /// - 无
     fn set_enabled(config: &mut AppConfig, enabled: bool) {
-        config.plugins.xuanxue.enabled = enabled;
         config.plugins.calculator.enabled = enabled;
     }
 }

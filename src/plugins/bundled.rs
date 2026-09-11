@@ -50,6 +50,7 @@ pub(super) fn default_enabled(config: &AppConfig, id: &str) -> bool {
         "weather" => config.plugins.weather.enabled,
         "web-search" => config.plugins.web.enabled,
         "web-images" => config.plugins.web_images.enabled,
+        "xuanxue" => config.plugins.xuanxue.enabled,
         _ => true,
     }
 }

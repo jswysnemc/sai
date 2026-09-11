@@ -44,7 +44,6 @@ mod trash_path;
 mod vision;
 mod web_fetch;
 mod write_file;
-mod xuanxue;
 
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
