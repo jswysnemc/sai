@@ -108,6 +108,21 @@ impl PluginHost for PrivatePluginHost {
         SaiPluginHost.download_binary(request, capabilities).await
     }
 
+    /// 【插件宿主】【读取代理】复用普通读取授权，不把私有存储身份转换为文件读取权限
+    /// @param path 路径；buffer 为预算；context 为可信目录；capabilities 为有效授权
+    /// @returns 完整原始文件缓冲
+    async fn read_binary(
+        &self,
+        path: String,
+        buffer: BinaryReadBuffer,
+        context: SystemContext,
+        capabilities: Capabilities,
+    ) -> Result<BinaryData> {
+        SaiPluginHost
+            .read_binary(path, buffer, context, capabilities)
+            .await
+    }
+
     /// 【插件宿主】【文件输出】通过目录句柄写入并原子发布。
     /// @param path 目标；data 为缓冲租约；context 为可信目录；capabilities 为写入授权
     /// @returns 实际路径和字节数

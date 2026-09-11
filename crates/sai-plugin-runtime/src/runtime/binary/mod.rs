@@ -1,4 +1,5 @@
 mod buffer;
+mod files;
 mod inspection;
 mod json;
 mod network;
@@ -50,7 +51,7 @@ impl BinaryServices {
 
 /// 【插件二进制】【入口安装】将大正文保存在不参与 JSON 工具输出的受控句柄内。
 /// @param lua 虚拟机；api 为 sai 表；host 为宿主；capabilities 为授权；limits 为限制；control 为状态
-/// @returns 网络、解码和终端入口的安装结果
+/// @returns 网络、文件读取、解码和终端入口的安装结果
 pub(super) fn install(
     lua: &Lua,
     api: &Table,
@@ -75,6 +76,7 @@ pub(super) fn install(
     lua.create_userdata(buffer::Buffer::new(empty, services.clone(), 0)?)?;
     let binary = lua.create_table()?;
     network::install(lua, &binary, services.clone())?;
+    files::install(lua, &binary, services.clone())?;
     let decoder = services.clone();
     binary.set(
         "decode_base64",

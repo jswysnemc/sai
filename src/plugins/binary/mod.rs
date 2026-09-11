@@ -2,10 +2,12 @@ mod download;
 mod files;
 mod paths;
 mod public_address;
+mod read;
 mod terminal;
 
 pub(super) use download::download;
 pub(super) use files::write;
+pub(super) use read::read_file;
 pub(super) use terminal::display;
 
 use anyhow::{bail, Result};

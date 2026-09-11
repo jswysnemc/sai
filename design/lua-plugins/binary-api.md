@@ -1,6 +1,6 @@
 # 二进制与终端图片接口
 
-图片正文使用独立缓冲，不经过 Lua JSON 工具结果通道。生成请求、搜索与排序、下载编排、图片元数据、视觉筛选规则和预览策略属于插件；Rust 提供受控网络、字节缓冲、文件输出、单次视觉请求及终端绘制。
+图片正文使用独立缓冲，不经过 Lua JSON 工具结果通道。生成请求、搜索与排序、下载编排、图片元数据、视觉筛选规则和预览策略属于插件；Rust 提供受控网络、字节缓冲、本地文件读取、文件输出、单次视觉请求及终端绘制。
 
 ## 能力与授权
 
@@ -8,6 +8,7 @@
 {
   "capabilities": {
     "http": ["https://api.example.com"],
+    "system": {"read_paths": ["input/images"]},
     "binary": {
       "public_downloads": true,
       "write_paths": ["output/images"],
@@ -74,10 +75,35 @@ return saved
 | `buffer:write(path)` | `{path, bytes}`；必须同时取得目录授权和本次回调写入权限 |
 | `buffer:close()` | 立即释放句柄引用；重复关闭没有副作用 |
 | `sai.binary.decode_base64(text)` | 从有界 Lua 文本创建缓冲；输入受 `output_bytes` 限制 |
+| `sai.binary.read_file(path, options?)` | 读取已授权的完整普通文件并返回缓冲；选项为 `max_bytes` 和 `timeout_ms` |
 
 JSON 路径遵循 RFC 6901，最多 1024 字节、64 层。解析只选取目标字段，不把完整响应复制成 JSON 对象树；重复键采用最后一个值。所有原始缓冲和解码副本共享同一预算，包含仍被宿主 I/O 持有的缓冲。转义字符串需要额外解码空间，空间不足时拒绝操作。
 
 句柄只在创建它的回调内有效。回调完成、失败或取消都会释放句柄中的数据；Lua 保存旧句柄也不能在下一次回调重新使用。宿主文件线程持有的独立租约在实际 I/O 结束后才归还预算。显式关闭仍有助于在同一回调内及时释放空间。
+
+## 本地文件读取
+
+```lua
+local image = sai.binary.read_file("input/images/example.png", {
+    max_bytes = 4 * 1024 * 1024,
+    timeout_ms = 5000,
+})
+local digest = image:sha256()
+image:close()
+return digest
+```
+
+读取复用 `system.read_paths` 的声明与授权交集，外部包使用 `sai plugins enable example --allow-read-path input/images` 授权，`--no-file-read` 同时撤销文本和二进制读取。无需新的二进制能力开关；下载、展示、写入和视觉授权均不会间接开放本地读取。读取允许只读回调，禁止初始化 I/O。工作目录来自可信调用上下文。
+
+`path` 必须是合法 UTF-8 字符串，遵守[系统路径限制](system-api.md)。`options` 只能是可选表，字段只接受正整数，不把字符串、零、负数、分数、非有限值或未知字段转换为有效选项。`max_bytes` 默认 1 MiB，进一步收窄到 VM 剩余二进制预算；`timeout_ms` 默认采用 `binary_timeout_ms`，显式值也不能超过它。外层回调期限始终有效。
+
+结果保留 NUL 和非法 UTF-8 字节，空普通文件可以成功。读取持续到 EOF；初始长度或读取过程中新增的数据超过有效上限均报错，不返回截断缓冲。成功只表示当次读取到 EOF 且未超限，不保证与其他进程的文件修改隔离。结果可以直接用于原始字节检查、摘要、JSON 字段读取、独立授权的视觉请求和文件输出。
+
+宿主解析真实路径并取得授权目录句柄，支持授权范围内的初始符号链接，拒绝越界链接和校验后替换的末级链接。打开前后分别确认普通文件，Unix 使用非阻塞打开以防对象在检查后变成管道。目录、FIFO、套接字和设备不能读取。
+
+每次实际读取消耗一次共用系统调用额度，宿主读取错误仍计数。读取开始前预留本次最大字节数，工作线程独占有界 `BinaryReadBuffer`；追加不能超出预留额度，完整成功后才转换为 `BinaryData` 并按实际长度计费。运行时再次检查结果大小和预算归属，其他 VM 的缓冲不能作为结果返回。
+
+单次超时可以由 Lua `pcall` 捕获。超时或取消会丢弃等待中的 Future 并通知线程；线程在授权、数据块和最终结果边界检查取消。已经开始的文件系统调用不能保证立即停止，预留额度保留到实际线程结束，因此连续取消不能重复使用仍被占用的额度。读取失败、关闭缓冲或回调结束后按实际持有情况归还预算。
 
 ## 文件输出和取消
 
@@ -104,7 +130,7 @@ return {content=response.content, provider_id=response.provider_id, model=respon
 
 `info()` 返回 `{provider_id, model}`，宿主关闭视觉时返回 JSON null；配置无效时返回错误。它不初始化模型客户端，也不读取密钥文件。视觉供应商由旧 `plugins.vision.vision_provider_id` 选择，空值使用主配置中的活动供应商；`vision_model` 非空时覆盖该供应商默认模型。文本模型切换和工具表过滤保留这项独立配置。Lua 不获得地址、凭据或主配置，也不能通过请求覆盖它们。
 
-`analyze_image` 只接受 `system`（默认空字符串）、非空 `prompt`、`mime_type` 和可选 `timeout_ms`。支持 PNG、JPEG/JPG、GIF、WebP、BMP；真实缓冲必须为 1 字节至 10 MiB。未知字段、路径、供应商或模型覆盖均被拒绝。图片由当前有效缓冲提供，无任意文件读取入口；是否匹配用户查询、如何处理模型输出以及是否保留失败图片由 Lua 决定。
+`analyze_image` 只接受 `system`（默认空字符串）、非空 `prompt`、`mime_type` 和可选 `timeout_ms`。支持 PNG、JPEG/JPG、GIF、WebP、BMP；真实缓冲必须为 1 字节至 10 MiB。未知字段、路径、供应商或模型覆盖均被拒绝。图片必须来自当前有效缓冲；本地文件先通过 `read_file` 完成独立目录授权，是否匹配用户查询、如何处理模型输出以及是否保留失败图片由 Lua 决定。
 
 视觉与文本共用每次回调的 `model_requests` 次数；输入、响应、流式正文、思考和工具参数受 `output_bytes` 限制。宿主发送单次无工具图片请求，不自动执行模型建议。`timeout_ms` 默认使用回调总时长，限制在 1 毫秒至该上限。超时可由 `pcall` 捕获，超时和外部取消均释放模型 Future；图片租约覆盖整个请求。初始化、事件和通知纯回调不能使用视觉服务，完成或取消后的旧句柄也不能复用。
 

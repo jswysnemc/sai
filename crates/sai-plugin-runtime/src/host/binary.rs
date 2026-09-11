@@ -4,6 +4,10 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+#[path = "binary_read.rs"]
+mod read;
+pub use read::BinaryReadBuffer;
+
 pub(crate) type BinarySlot = std::sync::Mutex<Option<BinaryData>>;
 
 /// 【插件二进制】【网络结果】响应正文保留原始字节，不经过文本解码或模型输出。
@@ -37,6 +41,7 @@ pub(crate) struct BinaryBudget {
 
 struct Allocation {
     bytes: Vec<u8>,
+    charged: usize,
     budget: Arc<BinaryBudget>,
 }
 
@@ -49,6 +54,13 @@ impl BinaryData {
     /// @returns 当前不可变字节切片
     pub fn bytes(&self) -> &[u8] {
         &self.0.bytes
+    }
+
+    /// 【插件二进制】【预算归属】检查宿主结果没有混入其他虚拟机的缓冲
+    /// @param budget 当前虚拟机的共享字节预算
+    /// @returns 数据归属同一预算时为 true
+    pub(crate) fn belongs_to(&self, budget: &Arc<BinaryBudget>) -> bool {
+        Arc::ptr_eq(&self.0.budget, budget)
     }
 }
 
@@ -75,6 +87,18 @@ impl BinaryBudget {
     /// @returns 带预算租约的不可变缓冲；不足时不保留数据
     pub(crate) fn retain(self: &Arc<Self>, bytes: Vec<u8>) -> Result<BinaryData> {
         let size = bytes.len();
+        self.charge(size)?;
+        Ok(BinaryData(Arc::new(Allocation {
+            bytes,
+            charged: size,
+            budget: self.clone(),
+        })))
+    }
+
+    /// 【插件二进制】【额度预留】以原子计数为保留数据或即将开始的读取预留空间
+    /// @param size 本次增加的预算字节数
+    /// @returns 总量未超限时成功，失败不改变计数
+    fn charge(&self, size: usize) -> Result<()> {
         if self
             .retained
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |used| {
@@ -84,19 +108,16 @@ impl BinaryBudget {
         {
             bail!("plugin retained binary buffers exceed size limit");
         }
-        Ok(BinaryData(Arc::new(Allocation {
-            bytes,
-            budget: self.clone(),
-        })))
+        Ok(())
     }
 }
 
 impl Drop for Allocation {
     /// 【插件二进制】【预算回收】最后一个缓冲持有者释放后归还所有字节。
-    /// @returns 无；阻塞文件写入未结束时仍持有该租约
+    /// @returns 无；阻塞文件读写未结束时仍持有该租约
     fn drop(&mut self) {
         self.budget
             .retained
-            .fetch_sub(self.bytes.len(), Ordering::AcqRel);
+            .fetch_sub(self.charged, Ordering::AcqRel);
     }
 }

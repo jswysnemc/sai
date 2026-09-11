@@ -1,8 +1,8 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use sai_plugin_runtime::host::{
-    BinaryData, BinaryFile, BinaryResponse, DirectoryListing, DisplayedImage, FileInfo,
-    FileReadRequest, FileText, HttpRequest, HttpResponse, PluginHost, ProcessOutput,
+    BinaryData, BinaryFile, BinaryReadBuffer, BinaryResponse, DirectoryListing, DisplayedImage,
+    FileInfo, FileReadRequest, FileText, HttpRequest, HttpResponse, PluginHost, ProcessOutput,
     ProcessRequest, SystemContext,
 };
 use sai_plugin_runtime::Capabilities;
@@ -57,6 +57,19 @@ impl PluginHost for SaiPluginHost {
         capabilities: Capabilities,
     ) -> Result<BinaryResponse> {
         super::binary::download(request, capabilities).await
+    }
+
+    /// 【插件宿主】【二进制读取】通过已有读取授权读取完整文件，实际线程持有预留预算
+    /// @param path 路径；buffer 为预留额度；context 为可信目录；capabilities 为读取授权
+    /// @returns 保留原始字节的受控数据
+    async fn read_binary(
+        &self,
+        path: String,
+        buffer: BinaryReadBuffer,
+        context: SystemContext,
+        capabilities: Capabilities,
+    ) -> Result<BinaryData> {
+        super::binary::read_file(path, buffer, context, capabilities).await
     }
 
     /// 【插件宿主】【文件输出】通过目录句柄写入并原子发布。

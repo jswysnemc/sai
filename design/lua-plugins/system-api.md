@@ -2,6 +2,8 @@
 
 Lua 业务通过 `sai.fs`、`sai.env` 和 `sai.process` 访问系统能力。运行时校验输入、有效授权、可信调用权限和预算；Sai 宿主负责真实路径、平台进程与资源回收。`io`、`os` 和原生动态库仍未开放。
 
+完整原始文件使用 `sai.binary.read_file(path, {max_bytes?, timeout_ms?})`，复用本页的 `system.read_paths` 授权，返回独立字节预算内的缓冲。它不进行文本转换，超限时不返回截断内容；参数及线程预算契约见[二进制接口](binary-api.md)。
+
 ## 能力声明与授权
 
 ```json

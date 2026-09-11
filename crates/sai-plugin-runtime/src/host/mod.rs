@@ -11,7 +11,7 @@ mod scheduler;
 mod services;
 mod system;
 mod vision;
-pub use binary::{BinaryData, BinaryFile, BinaryResponse, DisplayedImage};
+pub use binary::{BinaryData, BinaryFile, BinaryReadBuffer, BinaryResponse, DisplayedImage};
 pub use notification::{
     BuiltinSound, NotificationDelivery, NotificationRequest, NotificationSound,
     MAX_NOTIFICATION_AUDIO_BYTES,
@@ -119,6 +119,19 @@ pub trait PluginHost: Send + Sync {
         _capabilities: Capabilities,
     ) -> Result<BinaryResponse> {
         anyhow::bail!("binary download is unavailable in this host")
+    }
+
+    /// 【插件二进制】【文件读取】读取授权范围内的完整文件，读取线程必须持有预留缓冲直到结束
+    /// @param path 路径；buffer 为预留额度；context 为可信目录；capabilities 为读取授权
+    /// @returns 同一缓冲完成后的原始数据，取消后不得提前归还实际线程仍在使用的额度
+    async fn read_binary(
+        &self,
+        _path: String,
+        _buffer: BinaryReadBuffer,
+        _context: SystemContext,
+        _capabilities: Capabilities,
+    ) -> Result<BinaryData> {
+        anyhow::bail!("binary file reading is unavailable in this host")
     }
 
     /// 【插件二进制】【文件输出】在授权目录内写入缓冲，参数不能覆盖宿主权限。

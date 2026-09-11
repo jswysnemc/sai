@@ -200,7 +200,7 @@ Lua 全局变量属于当前实例，不是持久会话存储。进程重启、�
 
 ### 二进制与图片
 
-`sai.binary.request/download/decode_base64` 使用独立预算保存大正文，通过句柄读取原始字节与 JSON 字段、计算 SHA-256、解码和授权写入。`sai.terminal.size/display_image` 提供受授权的终端图片能力。`sai.vision.info()` 和 `buffer:analyze_image(...)` 使用独立 `vision` 授权与宿主视觉配置，不随 Agent 文本模型切换。参数、生命周期、目录与视觉边界见[二进制接口](binary-api.md)。
+`sai.binary.request/download/decode_base64/read_file` 使用独立预算保存大正文，通过句柄读取原始字节与 JSON 字段、计算 SHA-256、解码和授权写入。本地 `read_file` 复用 `system.read_paths`，读取完整普通文件；读取前预留预算，取消后实际工作线程仍持有额度。`sai.terminal.size/display_image` 提供受授权的终端图片能力。`sai.vision.info()` 和 `buffer:analyze_image(...)` 使用独立 `vision` 授权与宿主视觉配置，不随 Agent 文本模型切换。参数、生命周期、目录与视觉边界见[二进制接口](binary-api.md)。
 
 ### 模型与工具
 
