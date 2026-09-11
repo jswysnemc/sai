@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub(crate) mod binary;
+mod binary_revision;
 mod notification;
 mod private;
 mod scheduler;
@@ -12,6 +13,7 @@ mod services;
 mod system;
 mod vision;
 pub use binary::{BinaryData, BinaryFile, BinaryReadBuffer, BinaryResponse, DisplayedImage};
+pub use binary_revision::{BinaryConditionalWrite, BinaryRevision};
 pub use notification::{
     BuiltinSound, NotificationDelivery, NotificationRequest, NotificationSound,
     MAX_NOTIFICATION_AUDIO_BYTES,
@@ -145,6 +147,19 @@ pub trait PluginHost: Send + Sync {
         _capabilities: Capabilities,
     ) -> Result<BinaryFile> {
         anyhow::bail!("binary file writing is unavailable in this host")
+    }
+
+    /// 【插件二进制】【条件输出】在读取和写入共同授权的目录中比较修订并原子发布
+    /// @param request 路径、旧修订及比较上限；data 为预算租约；context 为可信目录；capabilities 为授权
+    /// @returns 成功发布为 true，修订不匹配为 false；取消后不得发布迟到结果
+    async fn write_binary_if(
+        &self,
+        _request: BinaryConditionalWrite,
+        _data: BinaryData,
+        _context: SystemContext,
+        _capabilities: Capabilities,
+    ) -> Result<bool> {
+        anyhow::bail!("conditional binary file writing is unavailable in this host")
     }
 
     /// 【插件图片】【终端尺寸】返回当前交互终端的单元格尺寸。

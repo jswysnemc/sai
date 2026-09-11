@@ -1,12 +1,16 @@
+mod conditional;
 mod download;
+mod file_lock;
 mod files;
 mod paths;
 mod public_address;
 mod read;
+mod revision;
 mod terminal;
 
+pub(super) use conditional::write as write_if;
 pub(super) use download::download;
-pub(super) use files::write;
+pub(super) use files::{write, write_locked};
 pub(super) use read::read_file;
 pub(super) use terminal::display;
 

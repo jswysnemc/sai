@@ -133,9 +133,34 @@ impl PluginHost for PrivatePluginHost {
         context: SystemContext,
         capabilities: Capabilities,
     ) -> Result<BinaryFile> {
-        SaiPluginHost
-            .write_binary(path, data, context, capabilities)
-            .await
+        crate::plugins::binary::write_locked(
+            self.paths.state_dir.clone(),
+            path,
+            data,
+            context,
+            capabilities,
+        )
+        .await
+    }
+
+    /// 【插件宿主】【条件输出】绑定应用状态目录，普通输出和修订比较共用文件锁
+    /// @param request 文件条件；data 为预算租约；context 为可信目录；capabilities 为读写授权
+    /// @returns 成功发布为 true，修订冲突为 false
+    async fn write_binary_if(
+        &self,
+        request: BinaryConditionalWrite,
+        data: BinaryData,
+        context: SystemContext,
+        capabilities: Capabilities,
+    ) -> Result<bool> {
+        crate::plugins::binary::write_if(
+            self.paths.state_dir.clone(),
+            request,
+            data,
+            context,
+            capabilities,
+        )
+        .await
     }
 
     /// 【插件宿主】【终端尺寸】获取当前终端单元格数量。

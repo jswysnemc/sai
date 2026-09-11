@@ -1,4 +1,6 @@
 mod buffer;
+mod conditional;
+mod constructors;
 mod files;
 mod inspection;
 mod json;
@@ -77,19 +79,7 @@ pub(super) fn install(
     let binary = lua.create_table()?;
     network::install(lua, &binary, services.clone())?;
     files::install(lua, &binary, services.clone())?;
-    let decoder = services.clone();
-    binary.set(
-        "decode_base64",
-        lua.create_function(move |_, text: mlua::LuaString| {
-            let generation = decoder.generation()?;
-            if text.as_bytes().len() > decoder.limits.output_bytes {
-                return Err(mlua::Error::runtime(
-                    "base64 text exceeds plugin input limit",
-                ));
-            }
-            buffer::decode(&text.as_bytes(), decoder.clone(), generation)
-        })?,
-    )?;
+    constructors::install(lua, &binary, services.clone())?;
     api.set("binary", binary)?;
     vision::install(lua, api, services.clone())?;
     terminal::install(lua, api, services)

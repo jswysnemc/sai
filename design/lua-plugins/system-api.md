@@ -4,6 +4,8 @@ Lua 业务通过 `sai.fs`、`sai.env` 和 `sai.process` 访问系统能力。运
 
 完整原始文件使用 `sai.binary.read_file(path, {max_bytes?, timeout_ms?})`，复用本页的 `system.read_paths` 授权，返回独立字节预算内的缓冲。它不进行文本转换，超限时不返回截断内容；参数及线程预算契约见[二进制接口](binary-api.md)。
 
+`buffer:write_if(path, expected_sha256)` 检查文件存在性或完整 SHA-256，因此同时需要本页的读取授权、`binary.write_paths` 和可信调用写入权限。声明根尚不存在时仍按规范路径验证范围；`nil` 仅在缺失目标时创建，条件不匹配不会创建输出父目录。完整锁与取消契约见[条件写入](binary-api.md#文件修订与条件写入)。
+
 ## 能力声明与授权
 
 ```json

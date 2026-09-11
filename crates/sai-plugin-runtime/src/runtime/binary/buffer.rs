@@ -56,6 +56,7 @@ impl UserData for Buffer {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
         super::inspection::install(methods);
         super::vision::install_methods(methods);
+        super::conditional::install(methods);
         methods.add_method("len", |_, this, ()| Ok(this.data()?.bytes().len()));
         methods.add_method("close", |_, this, ()| {
             this.data
