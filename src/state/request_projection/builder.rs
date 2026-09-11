@@ -115,7 +115,7 @@ pub(crate) fn project_provider_base_context_projection(
 /// - `input`: 当前用户输入
 /// - `image_urls`: 图片 data URL 列表
 /// - `memory_index_prompt`: 可选记忆索引注入文本
-/// - `auto_meme_reminder`: 可选自动表情包提醒
+/// - `plugin_reply_reminder`: 可选插件回复策略提醒
 /// - `tool_count`: 当前可见工具数量
 /// - `context_limit_chars`: 当前模型上下文窗口字符数
 ///
@@ -127,7 +127,7 @@ pub(crate) fn project_provider_turn_from_parts(
     input: &str,
     image_url: Option<&str>,
     memory_index_prompt: Option<&str>,
-    auto_meme_reminder: Option<&str>,
+    plugin_reply_reminder: Option<&str>,
     tool_count: usize,
     context_limit_chars: usize,
 ) -> ProjectedRequest {
@@ -143,7 +143,7 @@ pub(crate) fn project_provider_turn_from_parts(
         input,
         &image_urls,
         memory_index_prompt,
-        auto_meme_reminder,
+        plugin_reply_reminder,
         tool_count,
         context_limit_chars,
     )
@@ -156,7 +156,7 @@ pub(crate) fn project_provider_turn_from_parts(
 /// - `input`: 当前用户输入
 /// - `image_urls`: 图片 data URL 列表
 /// - `memory_index_prompt`: 可选记忆索引注入文本
-/// - `auto_meme_reminder`: 可选自动表情包提醒
+/// - `plugin_reply_reminder`: 可选插件回复策略提醒
 /// - `tool_count`: 当前可见工具数量
 /// - `context_limit_chars`: 当前模型上下文窗口字符数
 ///
@@ -167,7 +167,7 @@ pub(crate) fn project_provider_turn_from_base_projection(
     input: &str,
     image_urls: &[String],
     memory_index_prompt: Option<&str>,
-    auto_meme_reminder: Option<&str>,
+    plugin_reply_reminder: Option<&str>,
     tool_count: usize,
     context_limit_chars: usize,
 ) -> ProjectedRequest {
@@ -181,8 +181,8 @@ pub(crate) fn project_provider_turn_from_base_projection(
         dynamic_sources.push(dynamic_source("memory_association", &prompt));
         user_contexts.push(prompt);
     }
-    if let Some(reminder) = auto_meme_reminder {
-        dynamic_sources.push(dynamic_source("auto_meme", reminder));
+    if let Some(reminder) = plugin_reply_reminder {
+        dynamic_sources.push(dynamic_source("plugin_reply", reminder));
         user_contexts.push(reminder.to_string());
     }
     for (index, url) in image_urls.iter().enumerate() {
@@ -380,7 +380,7 @@ mod tests {
             .map(|source| (source.key.as_str(), source.chars))
             .collect::<Vec<_>>();
 
-        assert_eq!(sources, [("memory_association", 6), ("auto_meme", 4)]);
+        assert_eq!(sources, [("memory_association", 6), ("plugin_reply", 4)]);
     }
 
     #[test]

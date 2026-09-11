@@ -1,7 +1,7 @@
 use crate::agent::{
     combine_context_updates, context_resource_update, context_resource_update_against_baseline,
-    context_state_update, extract_instruction_files, load_instruction_prompt, AgentMode,
-    RuntimeContextSnapshot,
+    context_state_update, extract_instruction_files, load_instruction_prompt,
+    plugin_context_updates, AgentMode, RuntimeContextSnapshot,
 };
 use crate::config::AppConfig;
 use crate::llm::{ChatContent, ChatMessage};
@@ -10,13 +10,17 @@ use crate::paths::SaiPaths;
 use crate::state::StateStore;
 use anyhow::Result;
 
+#[cfg(test)]
+#[path = "context_runtime_tests.rs"]
+mod tests;
+
 /// Web 预览与用量统计共用的当前轮动态上下文。
 pub(super) struct ContextRuntimeProjection {
     pub(super) goal_context: String,
     pub(super) compaction_summary: String,
     pub(super) runtime_context: String,
     pub(super) memory_index: String,
-    pub(super) last_auto_meme: String,
+    pub(super) plugin_reply_context: String,
     pub(super) instruction_files: String,
     pub(super) memory_enabled: bool,
 }
@@ -32,11 +36,54 @@ impl ContextRuntimeProjection {
             self.compaction_summary.as_str(),
             self.runtime_context.as_str(),
             self.memory_index.as_str(),
-            self.last_auto_meme.as_str(),
+            self.plugin_reply_context.as_str(),
         ]
         .iter()
         .any(|part| !part.trim().is_empty())
     }
+}
+
+/// 【回复策略】【实时预览】独立只读实例读取当前上下文，不提供输入或模型服务
+/// @param config 当前配置；paths 为应用目录；store 为会话；workspace_path 为目录；mode 为模式
+/// @returns 可用于 Web 预览和用量估算的完整投影
+pub(super) async fn project_context_runtime(
+    config: &AppConfig,
+    paths: &SaiPaths,
+    store: &StateStore,
+    workspace_path: &str,
+    mode: AgentMode,
+) -> Result<ContextRuntimeProjection> {
+    let mut tools = crate::tools::readonly_registry(config, paths);
+    tools.start_plugin_session(store.session_id())?;
+    tools.inherit_plugin_storage_session(&store.state_dir().to_string_lossy());
+    let prepared = crate::runtime_cwd::scope(
+        std::path::PathBuf::from(workspace_path),
+        tools.prepare_plugin_replies("", false),
+    )
+    .await;
+    let contexts = tools.current_reply_contexts(&prepared.contexts);
+    project_context_runtime_with_replies(config, paths, store, workspace_path, mode, &contexts)
+}
+
+/// 【回复策略】【同步用量】流式事件循环读取已载入正文，不在同步按键处理中等待异步策略
+/// @param config 当前配置；paths 为应用目录；store 为会话；workspace_path 为目录；mode 为模式
+/// @returns 当前已载入插件上下文的用量投影
+pub(super) fn project_cached_context_runtime(
+    config: &AppConfig,
+    paths: &SaiPaths,
+    store: &StateStore,
+    workspace_path: &str,
+    mode: AgentMode,
+) -> Result<ContextRuntimeProjection> {
+    let history = store.project_history(None)?;
+    let checkpoint = history
+        .checkpoint_context
+        .or(store.compaction_summary_context()?);
+    let mut contexts =
+        crate::agent::plugin_context_snapshot(checkpoint.as_deref(), &history.messages);
+    let ids = crate::tools::readonly_registry(config, paths).active_reply_policy_ids();
+    contexts.retain(|id, _| ids.contains(id));
+    project_context_runtime_with_replies(config, paths, store, workspace_path, mode, &contexts)
 }
 
 /// 按真实 Agent 请求路径投影当前轮动态上下文。
@@ -50,12 +97,13 @@ impl ContextRuntimeProjection {
 ///
 /// 返回:
 /// - 不写入会话历史的动态上下文投影
-pub(super) fn project_context_runtime(
+fn project_context_runtime_with_replies(
     config: &AppConfig,
     paths: &SaiPaths,
     store: &StateStore,
     workspace_path: &str,
     mode: AgentMode,
+    contexts: &std::collections::BTreeMap<String, String>,
 ) -> Result<ContextRuntimeProjection> {
     // 1. 读取 Goal、压缩摘要和最近一条用户输入
     let goal_context = if config.prompt_sections.state_contract {
@@ -101,9 +149,8 @@ pub(super) fn project_context_runtime(
         String::new()
     };
 
-    // 4. 最近一次自动表情包提醒与真实请求保持一致
-    let last_auto_meme =
-        crate::tools::memes::last_auto_meme_reminder(config, paths)?.unwrap_or_default();
+    // 4. 【回复策略】【资源投影】调用方选择实时读取或使用已载入快照
+    let plugin_reply_context = contexts.values().cloned().collect::<Vec<_>>().join("\n\n");
     let goal_update = if config.prompt_sections.state_contract {
         context_resource_update(
             "goal",
@@ -114,9 +161,8 @@ pub(super) fn project_context_runtime(
     } else {
         None
     };
-    let meme_update = context_resource_update(
-        "last_auto_meme",
-        &last_auto_meme,
+    let plugin_update = plugin_context_updates(
+        contexts,
         (!compaction_summary.is_empty()).then_some(compaction_summary.as_str()),
         &projected_history.messages,
     )?;
@@ -141,16 +187,20 @@ pub(super) fn project_context_runtime(
     } else {
         None
     };
-    let runtime_context =
-        combine_context_updates([runtime_update, goal_update, instruction_update, meme_update])
-            .unwrap_or_default();
+    let runtime_context = combine_context_updates([
+        runtime_update,
+        goal_update,
+        instruction_update,
+        plugin_update,
+    ])
+    .unwrap_or_default();
 
     Ok(ContextRuntimeProjection {
         goal_context,
         compaction_summary,
         runtime_context,
         memory_index,
-        last_auto_meme,
+        plugin_reply_context,
         instruction_files,
         memory_enabled,
     })

@@ -5,7 +5,7 @@ impl Agent {
     ///
     /// 参数:
     /// - turn_id 为当前轮次，messages 为可追加上下文，used_tools 记录已执行工具
-    /// - input、image_urls 为本轮输入，memory_index_prompt、auto_meme_reminder 为附加上下文
+    /// - input、image_urls 为本轮输入，memory_index_prompt、plugin_reply_reminder 为附加上下文
     /// - inter_message_source 为排队消息来源，wait_for_external 控制后台等待
     /// - on_event 接收流式事件，perf 记录阶段耗时
     ///
@@ -18,7 +18,7 @@ impl Agent {
         input: &str,
         image_urls: &[String],
         memory_index_prompt: Option<&str>,
-        auto_meme_reminder: Option<&str>,
+        plugin_reply_reminder: Option<&str>,
         inter_message_source: Option<&dyn InterMessageSource>,
         wait_for_external: bool,
         on_event: &mut F,
@@ -88,7 +88,7 @@ impl Agent {
                 input,
                 image_urls,
                 memory_index_prompt,
-                auto_meme_reminder,
+                plugin_reply_reminder,
                 on_event,
                 perf,
             )

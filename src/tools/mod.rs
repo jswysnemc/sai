@@ -13,7 +13,6 @@ mod file_read;
 pub(crate) mod fs_path;
 pub(crate) mod groups;
 pub mod knowledge_base;
-pub(crate) mod memes;
 mod memory;
 pub(crate) mod mesh;
 mod native_search;
@@ -54,7 +53,10 @@ pub(crate) use progressive::{
     INVOKE_NAME, LOAD_NAME,
 };
 pub use registry::{empty_parameters, ToolPermission, ToolProgress, ToolRegistry, ToolSpec};
-pub(crate) use registry::{ToolModelAttachment, ToolOutput, DSH_BASH_EXECUTION_ALIAS};
+pub(crate) use registry::{
+    PluginReplyContexts, PreparedPluginReplies, ToolModelAttachment, ToolOutput,
+    DSH_BASH_EXECUTION_ALIAS,
+};
 pub(crate) use skill_management::{
     create_managed_skill, list_managed_skills, read_managed_skill, set_managed_skill_enabled,
     update_managed_skill, ManagedSkill,
@@ -212,9 +214,6 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     web_fetch::register(&mut registry);
     configurable_cli_tools::register(&mut registry, config);
     crate::plugins::register_plugins(&mut registry, config, paths, false);
-    if config.plugins.memes.enabled {
-        memes::register(&mut registry, config.clone(), paths.clone());
-    }
     if config.plugins.knowledge_base.enabled {
         knowledge_base::register(&mut registry, config.clone(), paths.clone());
     }

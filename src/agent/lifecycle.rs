@@ -133,6 +133,7 @@ impl Agent {
             config,
             paths: paths.clone(),
             last_dynamic_sources: Vec::new(),
+            plugin_reply_contexts: Default::default(),
             external_engine,
         })
     }
@@ -383,6 +384,7 @@ impl Agent {
     /// - 切换是否成功
     pub fn replace_state(&mut self, state: StateStore) -> Result<()> {
         self.tools.start_plugin_session(state.session_id())?;
+        self.plugin_reply_contexts.clear();
         self.tools
             .inherit_plugin_storage_session(&state.state_dir().to_string_lossy());
         self.state = state;

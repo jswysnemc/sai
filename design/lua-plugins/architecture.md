@@ -22,6 +22,9 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 | `src/plugins/events.rs` | Agent 与逻辑模型请求的生命周期范围 |
 | `src/plugins/services` | 绑定当前文本模型、独立视觉配置、工具目录和调用链，执行单次模型与工具请求 |
 | `src/tools/registry_plugin_services.rs` | 将实时工具权限、插件授权与当前模型交给调用服务 |
+| `crates/sai-plugin-runtime/src/reply_policy.rs`、`runtime/reply_*` | 回复策略协议、注册、独立授权与一次性结果归属 |
+| `src/tools/registry_reply.rs` | 有界策略分发、当前服务绑定与实例过滤 |
+| `src/agent/reply_policy.rs`、`context_resources.rs` | 主回复前后接入、快照与固定命名空间上下文 |
 | `src/plugins/compatibility` | 旧业务设置的定向兼容；派生凭据仅保留在运行时快照 |
 | `src/plugins/compatibility/alarm_jobs` | 旧闹钟记录投影、稳定进程身份、独立状态与旧入口交接 |
 | `src/plugins/http.rs` | 通用 HTTP 执行、逐次重定向授权、凭据处理和响应限制 |
@@ -43,11 +46,11 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 
 ## 已落地的版本 1
 
-独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、文本与视觉模型、工具调用、文件、环境、模板进程、二进制缓冲、终端图片、JSON、文本、时间、摘要、字节解码及通知纯回调能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence`、`package-advisor`、`reply-notification`、`image-generation`、`image-display`、`web-images`、`hash-codec`、`alarm` 与 `xuanxue` 已迁为随程序嵌入的二十一个 Lua 包，共提供 33 个工具；通知包不增加模型工具，相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
+独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、文本与视觉模型、工具调用、文件、环境、模板进程、二进制缓冲、终端图片、JSON、文本、时间、摘要、字节解码、通知纯回调及回复策略能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence`、`package-advisor`、`reply-notification`、`image-generation`、`image-display`、`web-images`、`hash-codec`、`alarm`、`xuanxue` 与 `memes` 已迁为随程序嵌入的二十二个 Lua 包，共提供 39 个工具；通知包不增加模型工具，相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
 
 CLI 提供创建、验证、安装、替换、配置、授权、启停、移除和命令执行。TUI 提供 `/plugins`、`/plugins reload` 与 `/plugin <id>/<command>`。模型工具通过原有共用注册入口进入 CLI、TUI、Web 和子任务，直接用户命令目前只有 CLI 与 TUI 入口。
 
-私有会话状态、插件跨会话存储、有界归档与工作目录能力已开放，契约见[私有接口](private-api.md)。独立授权的即时桌面和声音投递见[主动通知接口](notification-api.md)，本插件命令的后台执行见[持久调度接口](scheduler-api.md)。跨插件共享存储、主 Agent 模型上下文变换、插件界面组件和远端包分发尚未开放。后续业务迁移见[迁移清单](migration.md)。
+私有会话状态、插件跨会话存储、有界归档与工作目录能力已开放，契约见[私有接口](private-api.md)。独立授权的即时桌面和声音投递见[主动通知接口](notification-api.md)，本插件命令的后台执行见[持久调度接口](scheduler-api.md)，插件上下文及回复后动作见[回复策略接口](reply-policy-api.md)。跨插件共享存储、任意改写主 Agent 消息历史、插件界面组件和远端包分发尚未开放。后续业务迁移见[迁移清单](migration.md)。
 
 ## 契约原则
 
@@ -178,15 +181,15 @@ Web 使用独立认证接口计算通知，SSE 只增加交付层的历史补发
 
 ## 二进制与图片业务
 
-`plugins/image-generation` 负责供应商设置、请求构造、尺寸映射、响应选择、文件命名和自动预览，保留 `generate_image`。`plugins/image-display` 负责尺寸优先级、终端百分比和双语反馈，保留只读 `print_image`。`plugins/web-images` 负责 DuckDuckGo/Bing 请求与解析、排序去重、下载、图片元数据、视觉筛选及结果与预览规则，保留 `search_web_images`。相应 Rust 业务模块已删除；独立图像分析和表情库未计为本轮迁移。
+`plugins/image-generation` 负责供应商设置、请求构造、尺寸映射、响应选择、文件命名和自动预览，保留 `generate_image`。`plugins/image-display` 负责尺寸优先级、终端百分比和双语反馈，保留只读 `print_image`。`plugins/web-images` 负责 DuckDuckGo/Bing 请求与解析、排序去重、下载、图片元数据、视觉筛选及结果与预览规则，保留 `search_web_images`。相应 Rust 业务模块已删除；共用图像分析仍服务于原生文件读取。
 
 运行时的 `host/binary.rs` 定义原始响应、共享缓冲和文件结果，`runtime/binary` 分别实现网络、文件读取、JSON 字段选取、解码、缓冲与终端绑定。大正文不进入 JSON 工具结果，所有缓冲共用 VM 字节预算；回调完成、失败或取消时撤销句柄，文件线程仍持有的数据直到实际 I/O 结束才归还预算。普通文本 HTTP 和二进制请求的时限独立。
 
-`host/binary_read.rs` 提供不可克隆的预留缓冲，`runtime/binary/files.rs` 校验 `read_file` 参数、读取授权和超时；`src/plugins/binary/read.rs` 通过授权目录句柄读取完整普通文件。读取开始前预留最大额度，工作线程持续持有到完成或失败，成功时才缩为实际长度。该能力复用 `system.read_paths`，不授予索引写入、删除或视觉权限；表情库六个工具及自动发送策略仍待整体迁移。
+`host/binary_read.rs` 提供不可克隆的预留缓冲，`runtime/binary/files.rs` 校验 `read_file` 参数、读取授权和超时；`src/plugins/binary/read.rs` 通过授权目录句柄读取完整普通文件。读取开始前预留最大额度，工作线程持续持有到完成或失败，成功时才缩为实际长度。该能力复用 `system.read_paths`，不授予索引写入、删除或视觉权限；表情库使用它取得完整图片和索引修订。
 
-`host/binary_revision.rs` 区分缺失目标与 SHA-256 修订；`runtime/binary/constructors.rs` 提供有界原始字节构造，`runtime/binary/conditional.rs` 为 `write_if` 校验独立读写授权。应用侧 `binary/paths.rs` 分离无副作用授权与目录创建，`binary/revision.rs` 流式比较完整文件，`file_ops/lock.rs` 用固定状态文件协调正式宿主的普通输出、条件输出与单文件删除，暂存和发布复用 `binary/files.rs`。锁覆盖同一应用状态目录下的不同插件和进程，外部写入不参与；条件冲突不创建输出父目录，取消后的工作线程继续持有数据，迟到暂存结果只清理不发布。这项宿主能力为索引更新提供修订比较，表情库索引业务、删除规则和自动发送策略仍由原实现承担。
+`host/binary_revision.rs` 区分缺失目标与 SHA-256 修订；`runtime/binary/constructors.rs` 提供有界原始字节构造，`runtime/binary/conditional.rs` 为 `write_if` 校验独立读写授权。应用侧 `binary/paths.rs` 分离无副作用授权与目录创建，`binary/revision.rs` 流式比较完整文件，`file_ops/lock.rs` 用固定状态文件协调正式宿主的普通输出、条件输出与单文件删除，暂存和发布复用 `binary/files.rs`。锁覆盖同一应用状态目录下的不同插件和进程，外部写入不参与；条件冲突不创建输出父目录，取消后的工作线程继续持有数据，迟到暂存结果只清理不发布。表情索引在 Lua 中通过这项修订比较合并并发修改。
 
-`host/file_removal.rs` 定义单文件删除类型，`capabilities/file_removal.rs` 为永久删除与回收站选择独立目录授权，`runtime/system/removal.rs` 执行严格参数、可信写入权限与系统预算检查。应用侧 `file_ops/paths.rs` 保留末级名称，`target.rs` 检查普通文件和身份；`trash` 按目录安全、还原信息与 Linux 无覆盖移动拆分。阻塞线程只准备句柄和信息，成功等待后才修改源文件；取消后的迟到结果只清理。回收站当前限于 Linux 同文件系统用户回收站，标准目录或信息被替换时拒绝或无覆盖还原，冲突保留恢复材料。完整边界见[单文件删除接口](file-removal-api.md)，这不代表表情库业务已经迁移。
+`host/file_removal.rs` 定义单文件删除类型，`capabilities/file_removal.rs` 为永久删除与回收站选择独立目录授权，`runtime/system/removal.rs` 执行严格参数、可信写入权限与系统预算检查。应用侧 `file_ops/paths.rs` 保留末级名称，`target.rs` 检查普通文件和身份；`trash` 按目录安全、还原信息与 Linux 无覆盖移动拆分。阻塞线程只准备句柄和信息，成功等待后才修改源文件；取消后的迟到结果只清理。回收站当前限于 Linux 同文件系统用户回收站，标准目录或信息被替换时拒绝或无覆盖还原，冲突保留恢复材料。完整边界见[单文件删除接口](file-removal-api.md)，表情删除的业务恢复协议见[表情库插件](memes.md)。
 
 匿名公开下载、输出目录和图片展示分别声明与授权。公开下载只接受无正文、无自定义头的 GET，每次跳转重新验证全部 DNS 结果并固定连接地址；私有地址必须由精确来源授权。文件输出先验证完整归属，再通过不跟随链接的目录句柄写入暂存文件，成功等待后原子发布。图片使用普通文件快照和像素限制，协议内容完整生成后才输出；Kitty 图片数据不在工作线程内提前发送，也不消耗普通渲染器的传输缓存。
 
@@ -195,3 +198,11 @@ Web 使用独立认证接口计算通知，SSE 只增加交付层的历史补发
 搜图声明 `optional_writes`，普通工具表按写入工具授权，只读工具表映射为只读查询。运行时根据 Rust 调用状态决定写入能力，Lua 修改 `ctx.allow_writes` 无效；命令不能声明可选写入。该机制适用于通用工具契约，没有在注册表保留搜图专用分支。
 
 `runtime/binary/inspection.rs` 提供有界原始字节与 SHA-256，图片格式识别仍属于 Lua。摘要在线程中计算，取消不能提前归还正在使用的缓冲预算。`host/vision.rs` 定义单图请求，`runtime/binary/vision.rs` 校验独立授权、参数、图片大小和次数预算；`src/plugins/services/vision.rs` 使用可信视觉配置完成一次无工具请求。视觉配置独立于文本客户端，工具表过滤和文本热切换继续保留它，模型流共用有界输出计量。
+
+## 表情库与回复策略
+
+`plugins/memes` 将六个工具、原视觉提示词、索引覆盖、删除协议和自动发送规则全部迁入 Lua。只有 `compatibility/memes.rs` 定向桥接旧配置和应用目录；通用调度器不包含表情候选、概率或文案。索引使用完整字节摘要和最多 16 次条件更新，新图片独占创建，删除先记录待处理条目再操作原文件，取消后由显式重试恢复。
+
+`reply_policy` 独立授权准备与完成回调。准备在当前模型请求前运行，结果绑定实例、会话、操作、工作目录及原后续写入许可。Agent 主回复完成后才消费计划，完成前重新核对实时模式和实例；错误不会修改主回复终态。每阶段最多八个策略，总期限 60 秒，其他宿主能力仍分别授权。
+
+上下文通过固定 `plugin_reply_<id>` 资源名进入会话投影，当前轮提醒覆盖初次请求、工具循环、压缩及溢出恢复。Web 预览以空输入和无模型服务异步读取实际 Lua；终端流式用量保持同步，使用已经载入的正文。图片显示和状态记录、图片创建和索引发布均没有多文件事务，相关部分完成边界见[表情库插件](memes.md)。

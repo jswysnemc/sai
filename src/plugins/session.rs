@@ -55,11 +55,13 @@ impl PluginInstance {
             self.runtime.tools(),
             self.runtime.commands(),
             self.runtime.events(),
+            self.runtime.has_reply_policy(),
         ))?;
         let current = serde_json::to_value((
             fresh.runtime.tools(),
             fresh.runtime.commands(),
             fresh.runtime.events(),
+            fresh.runtime.has_reply_policy(),
         ))?;
         if original != current {
             bail!(
@@ -72,6 +74,44 @@ impl PluginInstance {
 }
 
 impl PluginSession {
+    /// 【回复策略】【有效目录】只枚举本会话已经加载且取得独立授权的策略
+    /// @returns 按插件标识排序的实例目录
+    pub(crate) fn reply_policies(&self) -> Vec<(String, u64)> {
+        self.instances
+            .iter()
+            .filter(|(_, instance)| {
+                instance.runtime.has_reply_policy()
+                    && instance.descriptor.capabilities().reply_policy
+                    && instance.descriptor.grants().reply_policy
+            })
+            .map(|(id, instance)| (id.clone(), instance.runtime.instance_id()))
+            .collect()
+    }
+
+    /// 【回复策略】【准备调用】通过固定实例执行只读准备，不保存宿主服务到结果中
+    /// @param id 插件标识；input 为用户消息；context 为可信上下文
+    /// @returns 绑定当前实例的准备结果
+    pub(crate) async fn prepare_reply(
+        &self,
+        id: &str,
+        input: &str,
+        context: InvocationContext,
+    ) -> Result<sai_plugin_runtime::PreparedReply> {
+        self.runtime(id)?.prepare_reply(input, context).await
+    }
+
+    /// 【回复策略】【完成调用】当前目录必须仍包含原实例，运行时再次核对结果归属
+    /// @param id 插件标识；prepared 为单次准备结果；context 为当前权限上下文
+    /// @returns 更新后的插件上下文
+    pub(crate) async fn complete_reply(
+        &self,
+        id: &str,
+        prepared: sai_plugin_runtime::PreparedReply,
+        context: InvocationContext,
+    ) -> Result<Option<String>> {
+        self.runtime(id)?.complete_reply(prepared, context).await
+    }
+
     /// 【插件】【实例定位】读取当前包对应的 VM 标识，不获取执行锁。
     /// @param id 插件标识
     /// @returns 进程内实例标识；未加载插件返回错误

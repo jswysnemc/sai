@@ -30,10 +30,3 @@ pub(crate) fn print_rendered(rendered: &str) -> Result<()> {
     output.flush()?;
     Ok(())
 }
-
-/// 【终端图片】【共享绘制】为表情库提供公共终端绘制能力。
-/// @param path 图片路径；size 为可选单元格尺寸
-/// @returns 完成渲染和输出时成功
-pub(crate) async fn print_image_file(path: &Path, size: Option<String>) -> Result<()> {
-    print_rendered(&render(path, size.as_deref())?)
-}

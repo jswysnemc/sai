@@ -30,6 +30,8 @@ pub struct Agent {
     pub(super) config: AppConfig,
     pub(super) paths: SaiPaths,
     pub(super) last_dynamic_sources: Vec<DynamicContextSource>,
+    /// 【回复策略】【上下文】只缓存当前仍启用实例提供的上下文快照
+    pub(super) plugin_reply_contexts: crate::tools::PluginReplyContexts,
     /// 外部对话内核；为空时使用内置循环
     pub(super) external_engine: Option<Box<dyn crate::agent_engine::ExternalTurnEngine>>,
 }

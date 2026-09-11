@@ -11,6 +11,8 @@ mod modules;
 mod notification;
 mod private;
 mod registration;
+mod reply_execution;
+mod reply_policy;
 mod scheduler;
 mod services;
 mod system;
@@ -56,6 +58,8 @@ pub struct PluginRuntime {
     tools: Arc<Vec<PluginTool>>,
     commands: Arc<Vec<PluginCommand>>,
     events: Arc<Vec<EventKind>>,
+    reply_registered: bool,
+    reply_allowed: bool,
     vm: Arc<Mutex<Vm>>,
 }
 
@@ -64,6 +68,7 @@ struct Vm {
     tools: BTreeMap<String, RegisteredTool>,
     commands: BTreeMap<String, RegisteredCommand>,
     events: BTreeMap<EventKind, Vec<mlua::Function>>,
+    reply_policy: Option<reply_policy::RegisteredReplyPolicy>,
     control: Arc<control::CallControl>,
 }
 
@@ -71,6 +76,8 @@ enum Invocation {
     Tool(String, Value),
     Command(String, String),
     Event(EventKind, Value),
+    ReplyPrepare(String),
+    ReplyComplete(Value),
 }
 
 impl PluginRuntime {
@@ -87,6 +94,7 @@ impl PluginRuntime {
         granted.validate()?;
         let manifest = Arc::new(package.manifest.clone());
         let capabilities = package.manifest.capabilities.intersection(&granted);
+        let reply_allowed = capabilities.reply_policy;
         let lua = Lua::new_with(
             StdLib::TABLE | StdLib::STRING | StdLib::MATH | StdLib::UTF8,
             LuaOptions::default(),
@@ -134,6 +142,7 @@ impl PluginRuntime {
         let tools = std::mem::take(&mut registrations.tools);
         let commands = std::mem::take(&mut registrations.commands);
         let events = std::mem::take(&mut registrations.events);
+        let reply_policy = registrations.reply_policy.take();
         registrations.closed = true;
         let metadata = tools.values().map(|tool| tool.definition.clone()).collect();
         let command_metadata = commands
@@ -148,11 +157,14 @@ impl PluginRuntime {
             tools: Arc::new(metadata),
             commands: Arc::new(command_metadata),
             events: Arc::new(event_metadata),
+            reply_registered: reply_policy.is_some(),
+            reply_allowed,
             vm: Arc::new(Mutex::new(Vm {
                 lua,
                 tools,
                 commands,
                 events,
+                reply_policy,
                 control,
             })),
         })

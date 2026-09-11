@@ -35,7 +35,7 @@ pub(crate) enum PluginsCommand {
     /// 【插件命令】【启用授权】启用插件，并按声明分别调整各项宿主能力授权
     Enable {
         id: String,
-        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_vision", "no_vision", "allow_tool", "no_tools", "allow_read_path", "no_file_read", "allow_remove_path", "no_file_remove", "allow_trash_path", "no_file_trash", "allow_env", "no_env", "allow_process", "no_processes", "allow_session_storage", "no_session_storage", "allow_plugin_storage", "no_plugin_storage", "allow_workspace", "no_workspace", "allow_notifications", "no_notifications", "allow_notify", "no_notify", "allow_schedule", "no_schedule", "allow_public_downloads", "no_public_downloads", "allow_write_path", "no_file_write", "allow_image_display", "no_image_display"])]
+        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_vision", "no_vision", "allow_tool", "no_tools", "allow_read_path", "no_file_read", "allow_remove_path", "no_file_remove", "allow_trash_path", "no_file_trash", "allow_env", "no_env", "allow_process", "no_processes", "allow_session_storage", "no_session_storage", "allow_plugin_storage", "no_plugin_storage", "allow_workspace", "no_workspace", "allow_notifications", "no_notifications", "allow_reply_policy", "no_reply_policy", "allow_notify", "no_notify", "allow_schedule", "no_schedule", "allow_public_downloads", "no_public_downloads", "allow_write_path", "no_file_write", "allow_image_display", "no_image_display"])]
         grant_declared: bool,
         #[arg(long, value_name = "ORIGIN", conflicts_with = "no_http")]
         allow_http: Vec<String>,
@@ -60,6 +60,10 @@ pub(crate) enum PluginsCommand {
         allow_notifications: bool,
         #[arg(long)]
         no_notifications: bool,
+        #[arg(long, conflicts_with = "no_reply_policy")]
+        allow_reply_policy: bool,
+        #[arg(long)]
+        no_reply_policy: bool,
         #[arg(
             long,
             conflicts_with = "no_notify",
@@ -276,6 +280,8 @@ pub(crate) async fn run(
             no_vision,
             allow_notifications,
             no_notifications,
+            allow_reply_policy,
+            no_reply_policy,
             allow_notify,
             no_notify,
             allow_schedule,
@@ -315,6 +321,8 @@ pub(crate) async fn run(
                 || no_vision
                 || allow_notifications
                 || no_notifications
+                || allow_reply_policy
+                || no_reply_policy
                 || allow_notify
                 || no_notify
                 || allow_schedule
@@ -364,6 +372,8 @@ pub(crate) async fn run(
                     vision: (allow_vision || no_vision).then_some(allow_vision),
                     notifications: (allow_notifications || no_notifications)
                         .then_some(allow_notifications),
+                    reply_policy: (allow_reply_policy || no_reply_policy)
+                        .then_some(allow_reply_policy),
                     notify: (allow_notify || no_notify).then_some(allow_notify),
                     schedule: (allow_schedule || no_schedule).then_some(allow_schedule),
                     tools: (no_tools || !allow_tool.is_empty())

@@ -156,6 +156,14 @@ sai.on("reply_end", notice)
 
 TUI 使用同一纯策略入口并在后台线程完成系统投递。Web 通过已认证的 `POST /api/notifications/plan` 提交 `{"status":"completed","locale":"zh-CN"}`，取得禁止缓存的 `{notifications, diagnostics}`；该接口本身不在服务器桌面显示通知。浏览器使用 SSE 封套中的 `replayed` 字段区分历史恢复，按工作区、会话和运行标识消费通知。已知活动运行在断线期间完成时，补发仍可以通知一次；会话切换会取消尚未完成的请求及权限回调。
 
+## 回复上下文与完成策略
+
+`sai.register_reply_policy({prepare, complete})` 在主请求前提供插件上下文和当前轮提醒，在主回复完成后消费一次投递计划。需要独立的 `reply_policy` 声明与授权；CLI 使用 `--allow-reply-policy` 和 `--no-reply-policy`，其他宿主能力仍分别授权。
+
+准备返回 `nil` 或 `{context?, reminder?, delivery?}`，完成返回 `nil` 或 `{context?}`。文字各限 16 KiB，投递 JSON 对象限 16 KiB，拒绝未知字段与宿主资源标记。准备时 `ctx.allow_writes=false`，`ctx.reply_can_deliver` 表示后续投递许可；不可克隆的准备结果绑定实例、会话、操作和目录，完成时重新检查实时计划模式与实例归属。
+
+主回复先保存完成状态，附属动作失败只产生诊断。上下文使用固定 `plugin_reply_<id>` 命名空间；本轮提醒贯穿工具循环、压缩和溢出恢复。Web 预览异步读取实际策略，终端同步用量读取已载入快照。完整阶段语义、只读边界和预算见[回复策略接口](reply-policy-api.md)，实际消费者见[表情库插件](memes.md)。
+
 ## 上下文与状态
 
 | 字段或函数 | 含义 |
@@ -165,7 +173,8 @@ TUI 使用同一纯策略入口并在后台线程完成系统投递。Web 通过
 | `sai.limits` | 清单资源限制的 Lua 副本；修改它不能提高 Rust 实际限制 |
 | `ctx.session_id` | 宿主提供的会话标识；子任务使用独立标识 |
 | `ctx.operation_id` | 同一次用户操作及其插件组合调用共享的标识 |
-| `ctx.allow_writes` | 本次工具或命令实际取得的写入权限；事件为 false |
+| `ctx.allow_writes` | 本次回调实际取得的写入权限；事件和回复准备为 false |
+| `ctx.reply_can_deliver` | 仅回复准备阶段提供，表示宿主是否允许后续投递 |
 | `ctx.workdir` | 本次调用所属任务的真实工作目录 |
 | `ctx.progress(text)` | 单条最多 4096 字节，每次调用最多 128 条 |
 | `ctx.json_integer(pointer)` | 工具参数或事件数据中，指定 JSON Pointer 对应的原整数十进制文本；其他类型或缺失节点返回 nil |
@@ -369,4 +378,4 @@ Lua 计算位于阻塞工作线程，受指令 Hook、堆内存和总时长约�
 | `exchange-rate` | 30 秒 | 65 秒 | 1 MiB |
 | `moegirl` | 10 秒 | 45 秒 | REST 页面 512 KiB，搜索与解析 API 1 MiB |
 
-版本 1 提供 HTTP、单次模型请求、显式工具调用、受限文件与环境访问、模板进程、主动通知、持久命令调度、JSON、文本和时间能力。私有会话存储、插件跨会话存储、有界归档和工作目录接口见[私有状态与工作目录](private-api.md)。跨插件共享存储、主 Agent 模型上下文变换和界面组件扩展尚未开放。
+版本 1 提供 HTTP、单次模型请求、显式工具调用、受限文件与环境访问、模板进程、主动通知、持久命令调度、回复上下文与完成策略、JSON、文本和时间能力。私有会话存储、插件跨会话存储、有界归档和工作目录接口见[私有状态与工作目录](private-api.md)。跨插件共享存储、任意改写主 Agent 消息历史和界面组件扩展尚未开放。

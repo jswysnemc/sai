@@ -6,6 +6,7 @@ pub mod host;
 mod manifest;
 mod package;
 mod presentation;
+mod reply_policy;
 mod runtime;
 mod schema;
 
@@ -19,5 +20,8 @@ pub use package::PluginPackage;
 pub use presentation::{
     Notification, PresentationRuntime, PresentationSurface, ReplyPresentation, ReplyStatus,
     MAX_NOTIFICATIONS,
+};
+pub use reply_policy::{
+    PreparedReply, MAX_REPLY_CONTEXT_BYTES, MAX_REPLY_DELIVERY_BYTES, MAX_REPLY_INPUT_BYTES,
 };
 pub use runtime::{InvocationContext, PluginRuntime, ProgressCallback};

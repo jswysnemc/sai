@@ -1,0 +1,37 @@
+{
+  "source_commit": "90a911c8859d1bef72e7d983e865a815a0abab47",
+  "source_sha256": {
+    "metadata.rs": "418293b1d3ee606b854190473f6833f88e24acab1e53ab451486e2b2b746286a",
+    "library.rs": "821952529c935d355841875b9a5519d2965b00c3efccd78ec9414868e188e659",
+    "tests.rs": "ec05f17512d47dc670e5b6ab44d70d0250db92689b1b3ebfc0cece94690da565",
+    "actions.rs": "637905fe4eecc7d5f273ec0868a922cd64b55fb49801cd24d8b7a7a231ae2a87",
+    "registry.rs": "ab05fc34c6d0df678fd402e4adfd96c26e78a21d65d8b2204f4d2ee44a37eb99"
+  },
+  "cases": [
+    {"operation":"size","args":{},"label":"arguments-000-size","expected":{"ok":true,"value":"28x6"}},
+    {"operation":"size","args":{"size":" 40x15 "},"label":"arguments-001-size","expected":{"ok":true,"value":"40x15"}},
+    {"operation":"size","args":{"size":" "},"label":"arguments-002-size","expected":{"ok":true,"value":"28x6"}},
+    {"operation":"size","args":{"width":40},"label":"arguments-003-size","expected":{"ok":true,"value":"40x"}},
+    {"operation":"size","args":{"height":15},"label":"arguments-004-size","expected":{"ok":true,"value":"x15"}},
+    {"operation":"size","args":{"width":40,"height":15},"label":"arguments-005-size","expected":{"ok":true,"value":"40x15"}},
+    {"operation":"size","args":{"width":1000,"height":1000},"label":"arguments-006-size","expected":{"ok":true,"value":"160x80"}},
+    {"operation":"size","args":{"width":0,"height":0},"label":"arguments-007-size","expected":{"ok":true,"value":"28x6"}},
+    {"operation":"size","args":{"width":-1},"label":"arguments-008-size","expected":{"ok":true,"value":"28x6"}},
+    {"operation":"size","args":{"width":3.0,"height":2.0},"label":"arguments-009-size","expected":{"ok":true,"value":"28x6"}},
+    {"operation":"size","args":{"width":18446744073709551615},"label":"arguments-010-size","expected":{"ok":true,"value":"160x"}},
+    {"operation":"size","args":{"height":9223372036854775808},"label":"arguments-011-size","expected":{"ok":true,"value":"x80"}},
+    {"operation":"size","args":{"width":"40"},"label":"arguments-012-size","expected":{"ok":true,"value":"28x6"}},
+    {"operation":"size","args":{"width":null},"label":"arguments-013-size","expected":{"ok":true,"value":"28x6"}},
+    {"operation":"size","args":{"size":"bad"},"label":"arguments-014-size","expected":{"ok":true,"value":"bad"}},
+    {"operation":"size","args":{"width":2,"size":"bad"},"label":"arguments-015-size","expected":{"ok":true,"value":"2x"}},
+    {"operation":"library","args":{},"label":"arguments-016-library","expected":{"ok":true,"value":"sai"}},
+    {"operation":"library","args":{"library":""},"label":"arguments-017-library","expected":{"ok":true,"value":"sai"}},
+    {"operation":"library","args":{"library":" "},"label":"arguments-018-library","expected":{"ok":true,"value":"sai"}},
+    {"operation":"library","args":{"library":"S A I"},"label":"arguments-019-library","expected":{"ok":true,"value":"s-a-i"}},
+    {"operation":"library","args":{"library":"默认"},"label":"arguments-020-library","expected":{"ok":true,"value":"default"}},
+    {"operation":"library","args":{"library":"a中文b"},"label":"arguments-021-library","expected":{"ok":true,"value":"a--b"}},
+    {"operation":"library","args":{"library":"../outside"},"label":"arguments-022-library","expected":{"ok":true,"value":"outside"}},
+    {"operation":"library","args":{"library":null},"label":"arguments-023-library","expected":{"ok":true,"value":"sai"}},
+    {"operation":"library","args":{"library":5},"label":"arguments-024-library","expected":{"ok":true,"value":"sai"}}
+  ]
+}

@@ -5,7 +5,6 @@ use super::{Agent, AgentEvent, InterMessageSource};
 use crate::llm::ChatResult;
 use crate::perf_trace::PerfTrace;
 use crate::state::PendingTurnGuard;
-use crate::tools::memes;
 use anyhow::Result;
 use std::sync::Arc;
 
@@ -167,12 +166,8 @@ impl Agent {
                 &turn_id,
             ),
         )?;
-        let auto_meme_plan = settle_step(
-            &mut guard,
-            memes::plan_auto_meme_before_reply(&self.config, &self.paths, &self.client, &input)
-                .await,
-        )?;
-        perf.mark("auto meme plan");
+        let plugin_reply_plan = self.prepare_reply_policies(&input).await;
+        perf.mark("reply policy preparation");
         // 结构化记忆按当前工作区召回，相关度不足时不注入
         let workspace = crate::runtime_cwd::current_dir()
             .ok()
@@ -186,7 +181,7 @@ impl Agent {
             None
         };
         perf.mark("memory association");
-        let auto_meme_reminder = auto_meme_plan.as_ref().map(|plan| plan.reminder.as_str());
+        let plugin_reply_reminder = plugin_reply_plan.reminder.as_deref();
         let mut messages = settle_step(
             &mut guard,
             self.chat_messages_for_turn(
@@ -194,7 +189,7 @@ impl Agent {
                 &input,
                 &image_urls,
                 memory_index_prompt.as_deref(),
-                auto_meme_reminder,
+                plugin_reply_reminder,
             ),
         )?;
         perf.mark("build initial messages");
@@ -220,7 +215,7 @@ impl Agent {
                     &input,
                     &image_urls,
                     memory_index_prompt.as_deref(),
-                    auto_meme_reminder,
+                    plugin_reply_reminder,
                 ),
             )?;
             perf.mark("rebuild messages after compaction");
@@ -234,7 +229,7 @@ impl Agent {
                 &input,
                 &image_urls,
                 memory_index_prompt.as_deref(),
-                auto_meme_reminder,
+                plugin_reply_reminder,
                 inter_message_source.as_deref(),
                 wait_for_external,
                 &mut emit_event,
@@ -253,7 +248,7 @@ impl Agent {
                         &input,
                         &image_urls,
                         memory_index_prompt.as_deref(),
-                        auto_meme_reminder,
+                        plugin_reply_reminder,
                         &mut emit_event,
                     )
                     .await,
@@ -270,7 +265,7 @@ impl Agent {
                         &input,
                         &image_urls,
                         memory_index_prompt.as_deref(),
-                        auto_meme_reminder,
+                        plugin_reply_reminder,
                     ),
                 )?;
                 if !used_tools.is_empty() {
@@ -288,7 +283,7 @@ impl Agent {
                         &input,
                         &image_urls,
                         memory_index_prompt.as_deref(),
-                        auto_meme_reminder,
+                        plugin_reply_reminder,
                         inter_message_source.as_deref(),
                         wait_for_external,
                         &mut emit_event,
@@ -319,21 +314,12 @@ impl Agent {
         let result = execution;
         settle_step(&mut guard, emit_event.as_mut()(AgentEvent::FlushContent))?;
         perf.mark("final content flushed");
-        if let Some(plan) = auto_meme_plan {
-            settle_step(&mut guard, emit_event.as_mut()(AgentEvent::ExternalOutput))?;
-            settle_step(
-                &mut guard,
-                memes::render_auto_meme(&self.config, &self.paths, &plan.event).await,
-            )?;
-            settle_step(
-                &mut guard,
-                memes::record_auto_meme_event(&self.config, &self.paths, &plan.event),
-            )?;
-        }
-        drop(emit_event);
         // 模型已产出完整回复，先落终态再做收尾：
         // 收尾环节失败不应让这一轮显示成中断
         guard.complete(&result.content, result.reasoning.as_deref())?;
+        self.complete_reply_policies(plugin_reply_plan, emit_event.as_mut())
+            .await;
+        drop(emit_event);
         perf.mark("complete turn");
         worktree_undo.finish();
         self.spawn_session_memory_extraction();

@@ -22,7 +22,7 @@ impl Agent {
     /// - `input`: 当前用户输入
     /// - `image_urls`: 当前用户图片
     /// - `memory_index_prompt`: 记忆索引注入文本
-    /// - `auto_meme_reminder`: 自动表情提醒
+    /// - `plugin_reply_reminder`: 插件回复策略提醒
     /// - `on_event`: 运行事件回调
     /// - `perf`: 性能追踪器
     ///
@@ -36,7 +36,7 @@ impl Agent {
         input: &str,
         image_urls: &[String],
         memory_index_prompt: Option<&str>,
-        auto_meme_reminder: Option<&str>,
+        plugin_reply_reminder: Option<&str>,
         on_event: &mut impl FnMut(super::AgentEvent) -> Result<()>,
         perf: &mut crate::perf_trace::PerfTrace,
     ) -> Result<bool> {
@@ -63,7 +63,7 @@ impl Agent {
             input,
             image_urls,
             memory_index_prompt,
-            auto_meme_reminder,
+            plugin_reply_reminder,
         )?;
         messages.extend(self.state.project_running_turn_tool_messages(turn_id)?);
         messages.extend(trailing_runtime_messages);

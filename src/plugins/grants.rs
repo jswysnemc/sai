@@ -17,6 +17,7 @@ pub(crate) struct GrantChanges {
     pub model: Option<bool>,
     pub vision: Option<bool>,
     pub notifications: Option<bool>,
+    pub reply_policy: Option<bool>,
     pub tools: Option<BTreeSet<String>>,
     pub read_paths: Option<BTreeSet<String>>,
     pub remove_paths: Option<BTreeSet<String>>,
@@ -55,6 +56,7 @@ impl GrantUpdate {
                 model: changes.model.unwrap_or(current.model),
                 vision: changes.vision.unwrap_or(current.vision),
                 notifications: changes.notifications.unwrap_or(current.notifications),
+                reply_policy: changes.reply_policy.unwrap_or(current.reply_policy),
                 tools: changes.tools.unwrap_or(current.tools),
                 binary: BinaryCapabilities {
                     public_downloads: changes

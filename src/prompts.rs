@@ -12,7 +12,6 @@ pub const AUDITED_REMINDER: &str = include_str!("prompts/audited.md");
 pub const AUTO_AUDIT_REMINDER: &str = include_str!("prompts/auto-audit-mode.md");
 pub const AUTO_AUDIT_SYSTEM_PROMPT: &str = include_str!("prompts/auto-audit.md");
 pub const PLAN_REMINDER: &str = include_str!("prompts/plan.md");
-pub const MEME_DESCRIPTION_PROMPT: &str = include_str!("prompts/meme-description.md");
 
 pub fn default_system_prompt() -> String {
     let bytes = base64::engine::general_purpose::STANDARD

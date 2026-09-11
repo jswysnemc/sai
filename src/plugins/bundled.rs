@@ -47,6 +47,7 @@ pub(super) fn default_enabled(config: &AppConfig, id: &str) -> bool {
         "online-man" => config.plugins.man.enabled,
         "package-advisor" => config.plugins.package_advisor.enabled,
         "moegirl" => config.plugins.moegirl.enabled,
+        "memes" => config.plugins.memes.enabled,
         "weather" => config.plugins.weather.enabled,
         "web-search" => config.plugins.web.enabled,
         "web-images" => config.plugins.web_images.enabled,

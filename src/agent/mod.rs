@@ -26,6 +26,9 @@ pub(crate) mod model_json;
 mod plugin_commands;
 mod recovery;
 pub(crate) mod repeat_guard;
+#[cfg(test)]
+mod reply_context_tests;
+mod reply_policy;
 mod runtime_context;
 mod skill_load;
 pub(crate) mod system_prompt;
@@ -51,7 +54,7 @@ use crate::state::request_projection::{
     project_provider_turn_from_messages, DynamicContextSource, ProjectedBaseContext,
 };
 use crate::state::StateStore;
-use crate::tools::{self, memes, ToolPermission, ToolRegistry};
+use crate::tools::{self, ToolPermission, ToolRegistry};
 use anyhow::Result;
 use message_context::system_messages_first;
 use model_context::selected_model_label;
@@ -65,6 +68,7 @@ pub use agent_state::Agent;
 pub(crate) use compaction::CompactionRunOutcome;
 pub(crate) use context_resources::{
     combine_context_updates, context_resource_update, context_resource_update_against_baseline,
+    plugin_context_snapshot, plugin_context_updates,
 };
 pub use event::{AgentEvent, CompactionError, MessageContextUpdate};
 pub(crate) use external_events::{ExternalEventBatch, ExternalEventMonitor, ExternalEventWake};

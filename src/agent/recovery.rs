@@ -95,7 +95,7 @@ impl Agent {
     /// - `input`: 当前用户输入
     /// - `image_urls`: 图片 data URL 列表
     /// - `memory_index_prompt`: 可选记忆索引注入文本
-    /// - `auto_meme_reminder`: 可选自动表情包提醒
+    /// - `plugin_reply_reminder`: 可选插件回复策略提醒
     /// - `on_event`: 压缩流式事件回调
     ///
     /// 返回:
@@ -108,7 +108,7 @@ impl Agent {
         input: &str,
         image_urls: &[String],
         memory_index_prompt: Option<&str>,
-        auto_meme_reminder: Option<&str>,
+        plugin_reply_reminder: Option<&str>,
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<bool> {
         let projection = project_provider_turn_from_messages(messages, 0, self.context_char_budget);
@@ -139,7 +139,7 @@ impl Agent {
             input,
             image_urls,
             memory_index_prompt,
-            auto_meme_reminder,
+            plugin_reply_reminder,
         )?;
         reprojected.extend(self.state.project_running_turn_tool_messages(turn_id)?);
         let reprojected_projection =

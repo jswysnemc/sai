@@ -39,6 +39,13 @@ impl Vm {
         )?;
         let ctx = context_table(&self.lua, &context, self.control.clone())?;
         match invocation {
+            Invocation::ReplyPrepare(input) => {
+                self.prepare_reply(input, ctx, context.allow_writes).await
+            }
+            Invocation::ReplyComplete(delivery) => {
+                self.complete_reply(delivery, ctx, context.allow_writes)
+                    .await
+            }
             Invocation::Tool(name, arguments) => {
                 let tool = self
                     .tools

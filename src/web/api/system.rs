@@ -157,6 +157,7 @@ async fn usage(
                 &workspace_path,
                 mode,
             )
+            .await
         })
         .await
         {

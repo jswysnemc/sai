@@ -8,6 +8,9 @@ mod execution;
 mod plugin_services;
 #[path = "registry_plugins.rs"]
 mod plugins;
+#[path = "registry_reply.rs"]
+mod reply;
+pub(crate) use reply::{PluginReplyContexts, PreparedPluginReplies};
 
 use crate::llm::ToolDefinition;
 use crate::permission::PermissionProfile;

@@ -100,7 +100,7 @@ pub(crate) async fn load_session_context_prompt(
             &store,
             &workspace_path_owned,
             mode,
-        )?;
+        ).await?;
 
         // 3. 工具定义（请求里作为 tools 参数，不是 system 文本；UI 一并展示）
         let tools_section =
@@ -203,12 +203,12 @@ pub(crate) async fn load_session_context_prompt(
                 locale.text("_Memory is disabled._", "_记忆功能已关闭。_"),
             ));
         }
-        if !dynamic.last_auto_meme.trim().is_empty() {
+        if !dynamic.plugin_reply_context.trim().is_empty() {
             sections.push(section(
-                "meme",
-                locale.text("Meme reminder", "表情包提醒"),
-                locale.text("9. Auto meme reminder", "9. 自动表情包提醒"),
-                &dynamic.last_auto_meme,
+                "plugin_reply",
+                locale.text("Plugin reply context", "插件回复上下文"),
+                locale.text("9. Plugin reply context", "9. 插件回复上下文"),
+                &dynamic.plugin_reply_context,
             ));
         }
         if !tools_section.markdown.trim().is_empty() {

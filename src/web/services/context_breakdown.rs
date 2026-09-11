@@ -50,14 +50,34 @@ impl ContextUsageBreakdown {
 ///
 /// 返回:
 /// - 上下文分项估算
-pub(crate) fn estimate_context_breakdown(
+pub(crate) async fn estimate_context_breakdown(
     config: &AppConfig,
     paths: &SaiPaths,
     store: &StateStore,
     workspace_path: &str,
     mode: AgentMode,
 ) -> Result<ContextUsageBreakdown> {
-    let dynamic = project_context_runtime(config, paths, store, workspace_path, mode)?;
+    let dynamic = project_context_runtime(config, paths, store, workspace_path, mode).await?;
+    estimate_context_breakdown_with_runtime(config, paths, store, mode, &dynamic)
+}
+
+/// 【回复策略】【同步统计】终端即时命令使用已载入的插件上下文快照
+/// @param config 配置；paths 为应用目录；store 为会话；workspace_path 为目录；mode 为模式
+/// @returns 无需等待策略的上下文用量估算
+pub(crate) fn estimate_cached_context_breakdown(
+    config: &AppConfig,
+    paths: &SaiPaths,
+    store: &StateStore,
+    workspace_path: &str,
+    mode: AgentMode,
+) -> Result<ContextUsageBreakdown> {
+    let dynamic = super::context_runtime::project_cached_context_runtime(
+        config,
+        paths,
+        store,
+        workspace_path,
+        mode,
+    )?;
     estimate_context_breakdown_with_runtime(config, paths, store, mode, &dynamic)
 }
 

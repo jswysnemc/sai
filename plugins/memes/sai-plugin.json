@@ -1,0 +1,29 @@
+{
+  "api_version": 1,
+  "id": "memes",
+  "version": "1.0.0",
+  "name": "Meme library",
+  "description": "Search, display and maintain meme libraries with an optional reply policy.",
+  "entry": "init.lua",
+  "capabilities": {
+    "reply_policy": true,
+    "model": true,
+    "vision": true,
+    "binary": {"write_paths": [".sai/memes", ".sai/state/memes"], "display_images": true},
+    "system": {
+      "read_paths": [".", "src/memes", "/usr/share/sai/memes", ".sai/memes", ".sai/state/memes"],
+      "remove_paths": [".sai/memes"],
+      "trash_paths": [".sai/memes"]
+    }
+  },
+  "limits": {
+    "memory_bytes": 33554432,
+    "instructions": 8000000,
+    "timeout_ms": 180000,
+    "binary_bytes": 67108864,
+    "binary_timeout_ms": 60000,
+    "output_bytes": 1048576,
+    "model_requests": 2,
+    "system_calls": 2048
+  }
+}

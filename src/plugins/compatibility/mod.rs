@@ -5,6 +5,7 @@ mod exchange_rate;
 mod image;
 mod input_method;
 mod linux_game;
+mod memes;
 mod notification;
 mod web_images;
 mod web_search;
@@ -33,6 +34,7 @@ pub(super) fn resolve(
 ) -> Result<Option<RuntimeOverrides>> {
     match id {
         "alarm" => alarm::resolve(settings, declared).map(Some),
+        "memes" => memes::resolve(config, paths, settings, declared).map(Some),
         "web-images" => web_images::resolve(config, paths, settings, declared).map(Some),
         "image-generation" => {
             image::generation(&config.plugins.image_generation, settings, declared).map(Some)

@@ -101,6 +101,66 @@ pub(crate) fn combine_context_updates(
     (!parts.is_empty()).then(|| parts.join("\n\n"))
 }
 
+/// 【回复策略】【资源更新】为插件使用固定命名空间，清除历史中已停用策略和旧表情资源
+/// @param contexts 当前获授权插件的文字；checkpoint_context 为摘要；history 为可见历史
+/// @returns 需要注入的资源更新；插件不能选择或覆盖核心资源名称
+pub(crate) fn plugin_context_updates(
+    contexts: &BTreeMap<String, String>,
+    checkpoint_context: Option<&str>,
+    history: &[ChatMessage],
+) -> Result<Option<String>> {
+    const PREFIX: &str = "plugin_reply_";
+    let known = known_resources(checkpoint_context, history);
+    let mut names: std::collections::BTreeSet<String> =
+        contexts.keys().map(|id| format!("{PREFIX}{id}")).collect();
+    names.extend(
+        known
+            .keys()
+            .filter(|name| name.starts_with(PREFIX))
+            .cloned(),
+    );
+    names.insert("last_auto_meme".into());
+    let updates = names
+        .into_iter()
+        .map(|name| {
+            let text = name
+                .strip_prefix(PREFIX)
+                .and_then(|id| contexts.get(id))
+                .map(String::as_str)
+                .unwrap_or_default();
+            context_resource_update(&name, text, checkpoint_context, history)
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(combine_context_updates(updates))
+}
+
+/// 【回复策略】【已载入快照】为同步用量视图恢复历史中最后一个完整插件资源正文
+/// @param checkpoint_context 当前摘要；history 为可见 provider 历史
+/// @returns 插件标识到已载入文字的映射，不执行插件或模型请求
+pub(crate) fn plugin_context_snapshot(
+    checkpoint_context: Option<&str>,
+    history: &[ChatMessage],
+) -> BTreeMap<String, String> {
+    let known = known_resources(checkpoint_context, history);
+    let texts: Vec<String> = checkpoint_context
+        .into_iter()
+        .map(str::to_string)
+        .chain(history.iter().filter_map(message_text))
+        .collect();
+    known
+        .into_iter()
+        .filter_map(|(name, hash)| {
+            let id = name.strip_prefix("plugin_reply_")?.to_string();
+            let open = format!("<context-resource name=\"{name}\" hash=\"{hash}\">");
+            texts.iter().rev().find_map(|text| {
+                let start = text.rfind(&open)? + open.len();
+                let end = text[start..].find("</context-resource>")? + start;
+                Some((id.clone(), text[start..end].trim().to_string()))
+            })
+        })
+        .collect()
+}
+
 /// 从当前可见投影恢复已完整载入的资源版本。
 ///
 /// 参数:

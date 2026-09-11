@@ -8,7 +8,7 @@ impl Agent {
     /// - `input`: 当前用户输入
     /// - `image_urls`: 图片 data URL 列表
     /// - `memory_index_prompt`: 可选记忆索引注入文本
-    /// - `auto_meme_reminder`: 可选自动表情包提醒
+    /// - `plugin_reply_reminder`: 可选插件回复策略提醒
     ///
     /// 返回:
     /// - 当前轮请求消息列表
@@ -18,7 +18,7 @@ impl Agent {
         input: &str,
         image_urls: &[String],
         memory_index_prompt: Option<&str>,
-        auto_meme_reminder: Option<&str>,
+        plugin_reply_reminder: Option<&str>,
     ) -> Result<Vec<ChatMessage>> {
         let base_projection = self.chat_base_context_projection(Some(turn_id))?;
         let projection = project_provider_turn_from_base_projection(
@@ -26,7 +26,7 @@ impl Agent {
             input,
             image_urls,
             memory_index_prompt,
-            auto_meme_reminder,
+            plugin_reply_reminder,
             0,
             self.context_char_budget,
         );
@@ -60,7 +60,6 @@ impl Agent {
         let compaction_summary_context = projected_history
             .checkpoint_context
             .or(self.state.compaction_summary_context()?);
-        let last_auto_meme_reminder = memes::last_auto_meme_reminder(&self.config, &self.paths)?;
         let selected_model = selected_model_label(&self.config)?;
         let snapshot = RuntimeContextSnapshot::capture(
             selected_model.as_deref(),
@@ -84,9 +83,10 @@ impl Agent {
         } else {
             None
         };
-        let meme_update = context_resources::context_resource_update(
-            "last_auto_meme",
-            last_auto_meme_reminder.as_deref().unwrap_or_default(),
+        let plugin_update = context_resources::plugin_context_updates(
+            &self
+                .tools
+                .current_reply_contexts(&self.plugin_reply_contexts),
             compaction_summary_context.as_deref(),
             &projected_history.messages,
         )?;
@@ -126,7 +126,7 @@ impl Agent {
             runtime_update,
             goal_update,
             instruction_update,
-            meme_update,
+            plugin_update,
             skills_update,
         ]);
         Ok(project_provider_base_context_projection(

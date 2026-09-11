@@ -24,6 +24,8 @@ pub struct Capabilities {
     pub vision: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub notifications: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub reply_policy: bool,
     #[serde(default, skip_serializing_if = "BinaryCapabilities::is_empty")]
     pub binary: BinaryCapabilities,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
@@ -90,6 +92,7 @@ impl Capabilities {
             model: self.model && granted.model,
             vision: self.vision && granted.vision,
             notifications: self.notifications && granted.notifications,
+            reply_policy: self.reply_policy && granted.reply_policy,
             binary: self.binary.intersection(&granted.binary),
             tools: self.tools.intersection(&granted.tools).cloned().collect(),
             system: self.system.intersection(&granted.system),
@@ -107,6 +110,7 @@ impl Capabilities {
             && (!self.model || declared.model)
             && (!self.vision || declared.vision)
             && (!self.notifications || declared.notifications)
+            && (!self.reply_policy || declared.reply_policy)
             && self.binary.is_subset(&declared.binary)
             && self.tools.is_subset(&declared.tools)
             && self.system.is_subset(&declared.system)
