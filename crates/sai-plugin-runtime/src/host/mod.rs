@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 
 pub(crate) mod binary;
 mod binary_revision;
+mod file_removal;
 mod notification;
 mod private;
 mod scheduler;
@@ -14,6 +15,7 @@ mod system;
 mod vision;
 pub use binary::{BinaryData, BinaryFile, BinaryReadBuffer, BinaryResponse, DisplayedImage};
 pub use binary_revision::{BinaryConditionalWrite, BinaryRevision};
+pub use file_removal::{FileRemovalKind, FileRemovalRequest};
 pub use notification::{
     BuiltinSound, NotificationDelivery, NotificationRequest, NotificationSound,
     MAX_NOTIFICATION_AUDIO_BYTES,
@@ -64,6 +66,18 @@ pub struct HttpResponse {
 /// 【插件】【宿主接口】插件运行时所需的异步能力，实现不依赖 Sai 应用配置。
 #[async_trait]
 pub trait PluginHost: Send + Sync {
+    /// 【插件文件】【删除宿主】只操作独立目录授权内的单个普通文件，回收站失败不得改为永久删除
+    /// @param request 路径与删除类型；context 为可信目录和权限；capabilities 为有效授权
+    /// @returns 成功删除为 true，授权目标缺失为 false；未实现宿主明确拒绝
+    async fn remove_file(
+        &self,
+        _request: FileRemovalRequest,
+        _context: SystemContext,
+        _capabilities: Capabilities,
+    ) -> Result<bool> {
+        anyhow::bail!("file removal is unavailable in this host")
+    }
+
     /// 【插件路径】【真实路径】解析已授权且存在的路径，不授予额外读取范围。
     /// @param path 请求路径；context 为可信目录；capabilities 为有效授权
     /// @returns 规范绝对路径，未实现宿主明确拒绝

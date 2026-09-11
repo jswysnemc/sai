@@ -1,4 +1,6 @@
-use super::{file_lock, paths};
+use super::paths;
+pub(super) use crate::plugins::file_ops::cancel::{check_cancelled, CancelOnDrop};
+use crate::plugins::file_ops::lock as file_lock;
 use anyhow::{bail, Context, Result};
 use cap_std::fs::{Dir, OpenOptions};
 use sai_plugin_runtime::{
@@ -7,10 +9,7 @@ use sai_plugin_runtime::{
 };
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use std::sync::{atomic::AtomicBool, Arc};
 
 /// 【插件写入】【暂存守卫】成功等待后才发布，取消或错误时删除未完成的临时文件。
 pub(super) struct Staging {
@@ -25,16 +24,6 @@ impl Drop for Staging {
     /// @returns 无；发布后临时名称已经不存在
     fn drop(&mut self) {
         let _ = self.destination.directory.remove_file(&self.name);
-    }
-}
-
-pub(super) struct CancelOnDrop(pub(super) Arc<AtomicBool>);
-
-impl Drop for CancelOnDrop {
-    /// 【插件写入】【取消信号】异步调用被释放时通知阻塞线程停止写入。
-    /// @returns 无
-    fn drop(&mut self) {
-        self.0.store(true, Ordering::Release);
     }
 }
 
@@ -157,16 +146,6 @@ pub(super) fn publish(staging: &Staging) -> Result<()> {
 pub(super) fn validate_data(data: &BinaryData) -> Result<()> {
     if data.bytes().len() > 64 * 1024 * 1024 {
         bail!("plugin binary output exceeds byte limit");
-    }
-    Ok(())
-}
-
-/// 【插件写入】【取消检查】在授权、锁等待、分块写入及最终结果边界检查撤销
-/// @param cancelled 异步调用设置的取消标记
-/// @returns 调用仍有效时成功
-pub(super) fn check_cancelled(cancelled: &AtomicBool) -> Result<()> {
-    if cancelled.load(Ordering::Acquire) {
-        bail!("plugin binary write cancelled");
     }
     Ok(())
 }

@@ -21,6 +21,10 @@ pub struct SystemCapabilities {
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub read_paths: BTreeSet<String>,
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub remove_paths: BTreeSet<String>,
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub trash_paths: BTreeSet<String>,
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub environment: BTreeSet<String>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub processes: BTreeMap<String, ProcessTemplate>,
@@ -66,6 +70,8 @@ impl SystemCapabilities {
             && !self.schedule
             && !self.workspace
             && self.read_paths.is_empty()
+            && self.remove_paths.is_empty()
+            && self.trash_paths.is_empty()
             && self.environment.is_empty()
             && self.processes.is_empty()
     }
@@ -73,10 +79,20 @@ impl SystemCapabilities {
     /// 【插件】【系统校验】验证数量、路径、环境变量及完整的进程参数契约。
     /// @returns 声明可交给宿主执行时成功
     pub fn validate(&self) -> Result<()> {
-        if self.read_paths.len() > 64 || self.environment.len() > 64 || self.processes.len() > 64 {
+        if self.read_paths.len() > 64
+            || self.remove_paths.len() > 64
+            || self.trash_paths.len() > 64
+            || self.environment.len() > 64
+            || self.processes.len() > 64
+        {
             bail!("plugin system capabilities exceed 64 entries per category");
         }
-        for path in &self.read_paths {
+        for path in self
+            .read_paths
+            .iter()
+            .chain(&self.remove_paths)
+            .chain(&self.trash_paths)
+        {
             validate_read_path(path)?;
         }
         for name in &self.environment {
@@ -104,6 +120,16 @@ impl SystemCapabilities {
                 .intersection(&granted.read_paths)
                 .cloned()
                 .collect(),
+            remove_paths: self
+                .remove_paths
+                .intersection(&granted.remove_paths)
+                .cloned()
+                .collect(),
+            trash_paths: self
+                .trash_paths
+                .intersection(&granted.trash_paths)
+                .cloned()
+                .collect(),
             environment: self
                 .environment
                 .intersection(&granted.environment)
@@ -128,6 +154,8 @@ impl SystemCapabilities {
             && (!self.schedule || declared.schedule)
             && (!self.workspace || declared.workspace)
             && self.read_paths.is_subset(&declared.read_paths)
+            && self.remove_paths.is_subset(&declared.remove_paths)
+            && self.trash_paths.is_subset(&declared.trash_paths)
             && self.environment.is_subset(&declared.environment)
             && self
                 .processes

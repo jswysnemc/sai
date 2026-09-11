@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use url::Url;
 
 mod binary;
+mod file_removal;
 mod system;
 pub use binary::BinaryCapabilities;
 pub(crate) use system::validate_read_path;

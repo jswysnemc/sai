@@ -6,6 +6,8 @@ Lua 业务通过 `sai.fs`、`sai.env` 和 `sai.process` 访问系统能力。运
 
 `buffer:write_if(path, expected_sha256)` 检查文件存在性或完整 SHA-256，因此同时需要本页的读取授权、`binary.write_paths` 和可信调用写入权限。声明根尚不存在时仍按规范路径验证范围；`nil` 仅在缺失目标时创建，条件不匹配不会创建输出父目录。完整锁与取消契约见[条件写入](binary-api.md#文件修订与条件写入)。
 
+`sai.fs.remove_file(path)` 与 `sai.fs.trash_file(path)` 分别使用独立的 `system.remove_paths`、`system.trash_paths` 目录授权，并要求可信写入权限。两者只操作单个普通文件，缺失返回 `false`；读取和二进制写入不会间接授予删除。参数、系统回收站平台范围及提交取消边界见[单文件删除](file-removal-api.md)。
+
 ## 能力声明与授权
 
 ```json
@@ -33,7 +35,7 @@ Lua 业务通过 `sai.fs`、`sai.env` 和 `sai.process` 访问系统能力。运
 }
 ```
 
-路径、环境名称和进程模板各自最多 64 项。路径是精确声明的文件或目录，支持绝对路径、相对于可信工作目录的路径以及 `~`、`~/…`。禁止父目录跳转、通配符和控制字符。环境名称只允许 ASCII 字母、数字和下划线，不能以数字开头。
+读取路径、永久删除目录、回收站目录、环境名称和进程模板各自最多 64 项。读取路径可以声明文件或目录，删除与回收站只声明目录；支持绝对路径、相对于可信工作目录的路径以及 `~`、`~/…`。禁止父目录跳转、通配符和控制字符。环境名称只允许 ASCII 字母、数字和下划线，不能以数字开头。
 
 外部包缺省没有系统授权。下列命令分别选择清单已声明的能力：
 
@@ -80,6 +82,8 @@ local absolute = sai.fs.realpath("notes.txt")
 | `read_dir(path, options)` | `{entries, truncated}` | 256 条，最多 1024 条 |
 | `stat(path)` | `{is_file, is_dir, len}` 或 `nil` | 不读取正文 |
 | `realpath(path)` | 已授权普通文件或目录的规范 UTF-8 绝对路径 | 严格字符串参数，共用系统调用与输出预算 |
+| `remove_file(path)` | 删除单个普通文件，存在返回 `true`，缺失返回 `false` | 独立 `remove_paths` 目录授权及可信写入权限 |
+| `trash_file(path)` | 移入系统回收站，存在返回 `true`，缺失返回 `false` | 独立 `trash_paths` 授权；当前支持 Linux 同文件系统用户回收站 |
 
 目录条目包含 `name`、`path`、`is_dir`、`is_file`。`len` 是文件系统报告的字节数；例如 `/proc` 伪文件可能报告零长度但仍有可读正文。`truncated=true` 表示还有内容未返回，不能据此认定扫描完整。
 

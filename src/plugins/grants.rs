@@ -19,6 +19,8 @@ pub(crate) struct GrantChanges {
     pub notifications: Option<bool>,
     pub tools: Option<BTreeSet<String>>,
     pub read_paths: Option<BTreeSet<String>>,
+    pub remove_paths: Option<BTreeSet<String>>,
+    pub trash_paths: Option<BTreeSet<String>>,
     pub environment: Option<BTreeSet<String>>,
     pub processes: Option<BTreeSet<String>>,
     pub session_storage: Option<bool>,
@@ -74,6 +76,8 @@ impl GrantUpdate {
                     schedule: changes.schedule.unwrap_or(current.system.schedule),
                     workspace: changes.workspace.unwrap_or(current.system.workspace),
                     read_paths: changes.read_paths.unwrap_or(current.system.read_paths),
+                    remove_paths: changes.remove_paths.unwrap_or(current.system.remove_paths),
+                    trash_paths: changes.trash_paths.unwrap_or(current.system.trash_paths),
                     environment: changes.environment.unwrap_or(current.system.environment),
                     processes: match changes.processes {
                         None => current.system.processes,

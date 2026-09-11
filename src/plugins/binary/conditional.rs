@@ -1,4 +1,5 @@
-use super::{file_lock, files, paths, revision};
+use super::{files, paths, revision};
+use crate::plugins::file_ops::lock as file_lock;
 use anyhow::{Context, Result};
 use sai_plugin_runtime::{
     host::{BinaryConditionalWrite, BinaryData, BinaryRevision, SystemContext},

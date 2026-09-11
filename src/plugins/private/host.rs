@@ -40,6 +40,24 @@ impl PrivatePluginHost {
 
 #[async_trait]
 impl PluginHost for PrivatePluginHost {
+    /// 【插件文件】【删除代理】使用正式宿主状态锁执行独立授权的文件删除或回收站移动
+    /// @param request 文件与删除类型；context 为可信目录和权限；capabilities 为有效授权
+    /// @returns 成功删除为 true，授权目标缺失为 false
+    async fn remove_file(
+        &self,
+        request: FileRemovalRequest,
+        context: SystemContext,
+        capabilities: Capabilities,
+    ) -> Result<bool> {
+        crate::plugins::file_ops::execute(
+            self.paths.state_dir.clone(),
+            request,
+            context,
+            capabilities,
+        )
+        .await
+    }
+
     /// 【插件路径】【组合代理】路径解析保持普通系统接口的授权范围。
     /// @param path 请求路径；context 为可信目录；capabilities 为授权
     /// @returns 规范绝对路径

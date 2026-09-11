@@ -35,7 +35,7 @@ pub(crate) enum PluginsCommand {
     /// 【插件命令】【启用授权】启用插件，并按声明分别调整各项宿主能力授权
     Enable {
         id: String,
-        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_vision", "no_vision", "allow_tool", "no_tools", "allow_read_path", "no_file_read", "allow_env", "no_env", "allow_process", "no_processes", "allow_session_storage", "no_session_storage", "allow_plugin_storage", "no_plugin_storage", "allow_workspace", "no_workspace", "allow_notifications", "no_notifications", "allow_notify", "no_notify", "allow_schedule", "no_schedule", "allow_public_downloads", "no_public_downloads", "allow_write_path", "no_file_write", "allow_image_display", "no_image_display"])]
+        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_vision", "no_vision", "allow_tool", "no_tools", "allow_read_path", "no_file_read", "allow_remove_path", "no_file_remove", "allow_trash_path", "no_file_trash", "allow_env", "no_env", "allow_process", "no_processes", "allow_session_storage", "no_session_storage", "allow_plugin_storage", "no_plugin_storage", "allow_workspace", "no_workspace", "allow_notifications", "no_notifications", "allow_notify", "no_notify", "allow_schedule", "no_schedule", "allow_public_downloads", "no_public_downloads", "allow_write_path", "no_file_write", "allow_image_display", "no_image_display"])]
         grant_declared: bool,
         #[arg(long, value_name = "ORIGIN", conflicts_with = "no_http")]
         allow_http: Vec<String>,
@@ -84,6 +84,24 @@ pub(crate) enum PluginsCommand {
         allow_read_path: Vec<String>,
         #[arg(long)]
         no_file_read: bool,
+        #[arg(
+            long,
+            value_name = "PATH",
+            conflicts_with = "no_file_remove",
+            help = "Allow permanent file removal inside a directory"
+        )]
+        allow_remove_path: Vec<String>,
+        #[arg(long, help = "Revoke permanent file removal")]
+        no_file_remove: bool,
+        #[arg(
+            long,
+            value_name = "PATH",
+            conflicts_with = "no_file_trash",
+            help = "Allow moving files from a directory into the system trash"
+        )]
+        allow_trash_path: Vec<String>,
+        #[arg(long, help = "Revoke moving files into the system trash")]
+        no_file_trash: bool,
         #[arg(long, value_name = "NAME", conflicts_with = "no_env")]
         allow_env: Vec<String>,
         #[arg(long)]
@@ -266,6 +284,10 @@ pub(crate) async fn run(
             no_tools,
             allow_read_path,
             no_file_read,
+            allow_remove_path,
+            no_file_remove,
+            allow_trash_path,
+            no_file_trash,
             allow_env,
             no_env,
             allow_process,
@@ -301,6 +323,10 @@ pub(crate) async fn run(
                 || no_tools
                 || !allow_read_path.is_empty()
                 || no_file_read
+                || !allow_remove_path.is_empty()
+                || no_file_remove
+                || !allow_trash_path.is_empty()
+                || no_file_trash
                 || !allow_env.is_empty()
                 || no_env
                 || !allow_process.is_empty()
@@ -344,6 +370,10 @@ pub(crate) async fn run(
                         .then(|| allow_tool.into_iter().collect()),
                     read_paths: (no_file_read || !allow_read_path.is_empty())
                         .then(|| allow_read_path.into_iter().collect()),
+                    remove_paths: (no_file_remove || !allow_remove_path.is_empty())
+                        .then(|| allow_remove_path.into_iter().collect()),
+                    trash_paths: (no_file_trash || !allow_trash_path.is_empty())
+                        .then(|| allow_trash_path.into_iter().collect()),
                     environment: (no_env || !allow_env.is_empty())
                         .then(|| allow_env.into_iter().collect()),
                     processes: (no_processes || !allow_process.is_empty())

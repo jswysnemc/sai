@@ -188,6 +188,8 @@ Lua 全局变量属于当前实例，不是持久会话存储。进程重启、�
 
 `sai.system` 提供平台和宿主 PID；`sai.env.get`、`sai.fs.read_text/read_dir/stat/realpath` 和 `sai.process.output` 分别使用精确环境授权、路径授权和固定进程模板。详细参数、返回值、取消边界及授权示例见[系统接口](system-api.md)。这些 I/O 接口仅在回调中开放，工作目录和权限由 Rust 调用状态提供。
 
+`sai.fs.remove_file(path)` 永久删除单个普通文件，`sai.fs.trash_file(path)` 移入系统回收站，分别要求 `system.remove_paths`、`system.trash_paths` 和可信写入权限。成功返回 `true`，授权目标缺失返回 `false`；目录和链接均拒绝。回收站当前支持 Linux 同文件系统用户回收站，失败不会改为永久删除。平台、共用锁、还原信息及取消边界见[单文件删除接口](file-removal-api.md)。
+
 ### 主动通知
 
 `sai.notify.send(request)` 等待宿主桌面通知及声音播放完成，返回 `{desktop, sound}`。它要求独立的 `system.notify` 授权和可信写入权限，不能在初始化、事件或只读回调中执行。本地声音还需文件读取授权，内置声音支持 `alarm` 和 `chime`。参数、平台支持、超时取消及部分完成边界见[主动通知接口](notification-api.md)。接口不会创建后台定时任务，也不会自动向浏览器或远端客户端投递。

@@ -1,6 +1,7 @@
 mod environment;
 mod files;
 mod process;
+mod removal;
 
 use super::control::CallControl;
 use crate::host::PluginHost;
@@ -29,6 +30,14 @@ pub(super) fn install(
         control.clone(),
     )?;
     files::install(
+        lua,
+        api,
+        host.clone(),
+        capabilities.clone(),
+        limits.clone(),
+        control.clone(),
+    )?;
+    removal::install(
         lua,
         api,
         host.clone(),

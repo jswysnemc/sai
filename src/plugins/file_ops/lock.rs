@@ -1,4 +1,4 @@
-use super::files::check_cancelled;
+use super::cancel::check_cancelled;
 use crate::plugins::private::paths;
 use anyhow::{bail, Context, Result};
 use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt};
@@ -11,19 +11,30 @@ use std::{
 
 const NAME: &str = "plugin-binary-write.lock";
 
-/// 【插件写入】【应用互斥】同一应用状态目录中的所有正式二进制输出共用一个稳定文件锁
-pub(super) struct Lock {
+/// 【插件文件】【应用互斥】同一应用状态目录中的正式二进制输出与文件删除共用稳定文件锁
+pub(in crate::plugins) struct Lock {
     file: std::fs::File,
     path: PathBuf,
 }
 
 impl Lock {
-    /// 【插件写入】【锁文件保护】禁止输出替换正在协调同一应用写入的锁文件
+    /// 【插件文件】【锁文件保护】禁止修改正在协调同一应用文件操作的锁文件
     /// @param target 已规范化的目标路径
     /// @returns 输出不是锁文件本身时成功
-    pub(super) fn check_target(&self, target: &Path) -> Result<()> {
+    pub(in crate::plugins) fn check_target(&self, target: &Path) -> Result<()> {
         if target == self.path {
-            bail!("plugin binary output cannot replace its coordination lock");
+            bail!("plugin file operation cannot modify its coordination lock");
+        }
+        Ok(())
+    }
+
+    /// 【插件文件】【锁对象保护】按实际文件标识阻止硬链接、大小写或短文件名别名绕过锁保护
+    /// @param metadata 已授权且不跟随链接获得的目标元数据
+    /// @returns 目标不是当前锁对象时成功
+    pub(super) fn check_object(&self, metadata: &cap_std::fs::Metadata) -> Result<()> {
+        let locked = cap_std::fs::Metadata::from_file(&self.file)?;
+        if super::target::same_file(metadata, &locked)? {
+            bail!("plugin file operation cannot modify its coordination lock");
         }
         Ok(())
     }
@@ -40,7 +51,7 @@ impl Drop for Lock {
 /// 【插件写入】【有界等待】安全打开固定锁文件，在阻塞线程中短暂等待并持续检查取消
 /// @param state_dir 宿主应用状态目录；cancelled 为调用取消标记
 /// @returns 持有跨进程互斥的守卫；等待最多十分钟，运行时可施加更短时限
-pub(super) fn acquire(state_dir: &Path, cancelled: &AtomicBool) -> Result<Lock> {
+pub(in crate::plugins) fn acquire(state_dir: &Path, cancelled: &AtomicBool) -> Result<Lock> {
     // 1. 【插件写入】【锁句柄】固定名称只接受普通文件，打开时不跟随链接或等待管道另一端
     check_cancelled(cancelled)?;
     let (directory, display) = paths::root(state_dir)?;

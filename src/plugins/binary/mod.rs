@@ -1,6 +1,5 @@
 mod conditional;
 mod download;
-mod file_lock;
 mod files;
 mod paths;
 mod public_address;

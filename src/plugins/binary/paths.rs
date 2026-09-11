@@ -1,3 +1,4 @@
+use crate::plugins::file_ops::paths::validate_components;
 use crate::plugins::system::paths::{expand, open_anchor, resolve_existing_ancestor, workdir};
 use anyhow::{bail, Context, Result};
 use cap_fs_ext::DirExt;
@@ -5,7 +6,7 @@ use cap_std::fs::Dir;
 use sai_plugin_runtime::{host::SystemContext, Capabilities};
 use std::ffi::OsString;
 use std::io::ErrorKind;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 /// 【插件写入】【目录句柄】目标父目录与文件名分开，发布不再依赖可变的绝对路径
 pub(super) struct Destination {
@@ -181,39 +182,4 @@ fn child(directory: &Dir, name: &std::ffi::OsStr) -> Result<Dir> {
     directory
         .open_dir_nofollow(name)
         .context("open plugin binary directory without following links")
-}
-
-/// 【插件写入】【跨平台路径】禁止数据流名称、设备别名及尾部规范化歧义
-/// @param path 绝对输出路径
-/// @returns 所有普通路径分量都能作为普通文件名时成功
-fn validate_components(path: &Path) -> Result<()> {
-    for component in path.components() {
-        if let Component::Normal(name) = component {
-            let name = name.to_string_lossy();
-            let base = name
-                .split('.')
-                .next()
-                .unwrap_or_default()
-                .to_ascii_lowercase();
-            if name.contains(':')
-                || name.ends_with(['.', ' '])
-                || matches!(
-                    base.as_str(),
-                    "con" | "prn" | "aux" | "nul" | "conin$" | "conout$"
-                )
-                || base
-                    .strip_prefix("com")
-                    .or_else(|| base.strip_prefix("lpt"))
-                    .is_some_and(|suffix| {
-                        matches!(
-                            suffix,
-                            "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
-                        )
-                    })
-            {
-                bail!("plugin binary output has a non-portable path component");
-            }
-        }
-    }
-    Ok(())
 }

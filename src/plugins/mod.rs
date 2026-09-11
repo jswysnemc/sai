@@ -4,6 +4,7 @@ mod compatibility;
 mod config;
 mod discovery;
 mod events;
+mod file_ops;
 mod grants;
 mod host;
 mod http;
