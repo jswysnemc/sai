@@ -25,7 +25,11 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 | `crates/sai-plugin-runtime/src/reply_policy.rs`、`runtime/reply_*` | 回复策略协议、注册、独立授权与一次性结果归属 |
 | `src/tools/registry_reply.rs` | 有界策略分发、当前服务绑定与实例过滤 |
 | `src/agent/reply_policy.rs`、`context_resources.rs` | 主回复前后接入、快照与固定命名空间上下文 |
+| `crates/sai-plugin-runtime/src/tool_policy.rs`、`runtime/tool_policy.rs` | 可选工具后策略的输入、状态、提醒和只读执行边界 |
+| `src/tools/registry_tool_policy.rs`、`src/agent/tool_policy.rs` | 有界工具后分发、循环状态归属及提醒追加 |
 | `src/plugins/compatibility` | 旧业务设置的定向兼容；派生凭据仅保留在运行时快照 |
+| `src/plugins/compatibility/todo.rs` | 可信内置待办的固定存储键、旧文件种子和会话生命周期兼容 |
+| `src/plugins/todo_view.rs`、`src/web/api/session_data_todos.rs` | 使用实际 Lua 快照提供 Web 清单与会话待办数量 |
 | `src/plugins/compatibility/alarm_jobs` | 旧闹钟记录投影、稳定进程身份、独立状态与旧入口交接 |
 | `src/plugins/http.rs` | 通用 HTTP 执行、逐次重定向授权、凭据处理和响应限制 |
 | `src/plugins/system` | 通用环境访问、目录句柄授权、受管模板进程及平台回收 |
@@ -46,9 +50,9 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 
 ## 已落地的版本 1
 
-独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、文本与视觉模型、工具调用、文件、环境、模板进程、二进制缓冲、终端图片、JSON、文本、时间、摘要、字节解码、通知纯回调及回复策略能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence`、`package-advisor`、`reply-notification`、`image-generation`、`image-display`、`web-images`、`hash-codec`、`alarm`、`xuanxue` 与 `memes` 已迁为随程序嵌入的二十二个 Lua 包，共提供 39 个工具；通知包不增加模型工具，相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
+独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、文本与视觉模型、工具调用、文件、环境、模板进程、二进制缓冲、终端图片、JSON、文本、时间、摘要、字节解码、通知纯回调及回复策略能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence`、`package-advisor`、`reply-notification`、`image-generation`、`image-display`、`web-images`、`hash-codec`、`alarm`、`xuanxue`、`memes` 与 `todo` 已迁为随程序嵌入的二十三个 Lua 包，共提供 40 个工具；通知包不增加模型工具，相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
 
-CLI 提供创建、验证、安装、替换、配置、授权、启停、移除和命令执行。TUI 提供 `/plugins`、`/plugins reload` 与 `/plugin <id>/<command>`。模型工具通过原有共用注册入口进入 CLI、TUI、Web 和子任务，直接用户命令目前只有 CLI 与 TUI 入口。
+CLI 提供创建、验证、安装、替换、配置、授权、启停、移除和命令执行。TUI 提供 `/plugins`、`/plugins reload` 与 `/plugin <id>/<command>`。模型工具通过原有共用注册入口进入 CLI、TUI、Web 和子任务，直接用户命令目前只有 CLI 与 TUI 入口。默认目录为 66 项工具，较原版增加直接入口的 `todo`；网关仍不公开待办工具，计划模式继续过滤整个写入工具。
 
 私有会话状态、插件跨会话存储、有界归档与工作目录能力已开放，契约见[私有接口](private-api.md)。独立授权的即时桌面和声音投递见[主动通知接口](notification-api.md)，本插件命令的后台执行见[持久调度接口](scheduler-api.md)，插件上下文及回复后动作见[回复策略接口](reply-policy-api.md)。跨插件共享存储、任意改写主 Agent 消息历史、插件界面组件和远端包分发尚未开放。后续业务迁移见[迁移清单](migration.md)。
 
@@ -206,3 +210,13 @@ Web 使用独立认证接口计算通知，SSE 只增加交付层的历史补发
 `reply_policy` 独立授权准备与完成回调。准备在当前模型请求前运行，结果绑定实例、会话、操作、工作目录及原后续写入许可。Agent 主回复完成后才消费计划，完成前重新核对实时模式和实例；错误不会修改主回复终态。每阶段最多八个策略，总期限 60 秒，其他宿主能力仍分别授权。
 
 上下文通过固定 `plugin_reply_<id>` 资源名进入会话投影，当前轮提醒覆盖初次请求、工具循环、压缩及溢出恢复。Web 预览以空输入和无模型服务异步读取实际 Lua；终端流式用量保持同步，使用已经载入的正文。图片显示和状态记录、图片创建和索引发布均没有多文件事务，相关部分完成边界见[表情库插件](memes.md)。
+
+## 会话待办与工具后策略
+
+`plugins/todo` 负责原四动作、双语定义、完整整数定位、顺序推进、完成归档和提醒。活动项与历史共用一条 256 KiB 记录，通过最多 16 次比较交换合并冲突；更新或删除首次定位后绑定 ID。输出上限为 512 KiB，允许结果同时包含变更项和活动清单。
+
+只有真实内置描述符将固定 `plan` 键绑定到会话目录的 `todos.plugin.json`，新记录缺失时只读提供原文件种子。新文件和 null 墓碑阻止重复导入；普通对话重置保留计划，整体清理或删除会话数据才移除新旧文件。非路径直接入口使用普通私有存储，外部同 ID 包没有兼容身份。存储共用 `.plugin-state.lock`，锁忙立即失败；取消不能撤销已完成发布。
+
+可选 `after_tool` 扩展独立回复策略，按事件只读权限执行，清除模型与工具服务，禁止修改私有存储。显式状态绑定实例、会话、存储会话、操作及目录，每个工具循环重新开始。回调在普通串行工具完成分支追加提醒，保持原待办接入位置；并发只读组、门禁提前拒绝和特殊分支不触发它。错误和超时只产生诊断，不修改主回复终态。
+
+Web 清单和会话数据统计执行真实内置 Lua `snapshot`，按当前启停及授权处理。只读快照保留原查询的导入和归档副作用，统计在导入后重新收集文件。禁用时返回空数据，损坏配置、撤权及记录错误明确呈现，前端字段保持兼容。完整契约见[会话待办插件](todo.md)和[回复策略接口](reply-policy-api.md)。

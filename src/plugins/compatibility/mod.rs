@@ -7,6 +7,7 @@ mod input_method;
 mod linux_game;
 mod memes;
 mod notification;
+pub(in crate::plugins) mod todo;
 mod web_images;
 mod web_search;
 
@@ -33,6 +34,7 @@ pub(super) fn resolve(
     declared: &Capabilities,
 ) -> Result<Option<RuntimeOverrides>> {
     match id {
+        "todo" => todo::resolve(settings, declared).map(Some),
         "alarm" => alarm::resolve(settings, declared).map(Some),
         "memes" => memes::resolve(config, paths, settings, declared).map(Some),
         "web-images" => web_images::resolve(config, paths, settings, declared).map(Some),

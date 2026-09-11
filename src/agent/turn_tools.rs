@@ -31,10 +31,7 @@ impl Agent {
         // 跨轮累计同一工具调用的重复次数，防止模型对同一参数无限重复
         let mut repeat_guard = repeat_guard::RepeatGuard::default();
         let mut tool_event_seq = self.state.tool_call_count_for_turn(turn_id)?;
-        let mut todo_reminder = self
-            .tools
-            .contains("todo")
-            .then(|| tools::todo::TodoReminder::new(self.state.todo_file()));
+        let mut plugin_tool_policies = tools::PluginToolPolicyStates::default();
         let mut question_rounds = 0usize;
         let mut pending_gap_delivery = None;
         let mut turn_usage = None;
@@ -697,14 +694,14 @@ impl Agent {
                         &hook_ctx,
                     )
                     .await;
-                    if let Some(reminder) = todo_reminder.as_mut() {
-                        let todo_updated = call.function.name == "todo"
-                            && !output.starts_with("tool error:")
-                            && tools::todo::is_mutating_call(&call.function.arguments);
-                        if let Some(content) = reminder.after_tool_round(todo_updated)? {
-                            messages.push(ChatMessage::system(content));
-                        }
-                    }
+                    self.after_tool_policies(
+                        &mut plugin_tool_policies,
+                        &call.function.name,
+                        &call.function.arguments,
+                        !execution.failed && !output.starts_with("tool error:"),
+                        messages,
+                    )
+                    .await;
                 }
             }
             tool_attachments::append_model_attachments(messages, round_model_attachments);

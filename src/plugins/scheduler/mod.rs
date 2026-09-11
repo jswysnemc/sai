@@ -327,11 +327,7 @@ fn load_current(
         descriptor.revision()? == revision,
         "scheduled plugin source, settings or grants changed"
     );
-    let host = Arc::new(PrivatePluginHost::with_revision(
-        paths,
-        plugin,
-        revision.into(),
-    ));
+    let host = Arc::new(PrivatePluginHost::for_descriptor(paths, &descriptor)?);
     let runtime = PluginRuntime::load(
         descriptor.runtime_package(),
         descriptor.settings().clone(),

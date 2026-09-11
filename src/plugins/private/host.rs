@@ -11,6 +11,7 @@ pub(in crate::plugins) struct PrivatePluginHost {
     paths: SaiPaths,
     id: String,
     revision: Option<String>,
+    bundled_compatibility: bool,
 }
 
 impl PrivatePluginHost {
@@ -23,6 +24,7 @@ impl PrivatePluginHost {
             paths: paths.clone(),
             id: id.to_string(),
             revision: None,
+            bundled_compatibility: false,
         }
     }
 
@@ -34,7 +36,25 @@ impl PrivatePluginHost {
             paths: paths.clone(),
             id: id.into(),
             revision: Some(revision),
+            bundled_compatibility: false,
         }
+    }
+
+    /// 【插件宿主】【可信来源】只有实际内置描述符可以启用旧会话数据接续
+    /// @param paths 应用路径；descriptor 为正式发现得到的固定包与来源
+    /// @returns 带源码修订和明确兼容身份的宿主
+    pub(in crate::plugins) fn for_descriptor(
+        paths: &SaiPaths,
+        descriptor: &crate::plugins::discovery::PluginDescriptor,
+    ) -> Result<Self> {
+        let mut host = Self::with_revision(
+            paths,
+            &descriptor.package.manifest.id,
+            descriptor.revision()?,
+        );
+        host.bundled_compatibility =
+            matches!(descriptor.source, crate::plugins::PluginSource::Bundled);
+        Ok(host)
     }
 }
 
@@ -210,6 +230,16 @@ impl PluginHost for PrivatePluginHost {
         session: &str,
         capabilities: &Capabilities,
     ) -> Result<serde_json::Value> {
+        if self.bundled_compatibility && self.id == "todo" {
+            if let Some(value) = crate::plugins::compatibility::todo::storage_override(
+                &self.paths,
+                session,
+                &request,
+                capabilities,
+            )? {
+                return Ok(value);
+            }
+        }
         storage::execute(&self.paths, &self.id, session, request, capabilities)
     }
 

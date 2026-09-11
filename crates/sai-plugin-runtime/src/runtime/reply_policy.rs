@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 pub(super) struct RegisteredReplyPolicy {
     prepare: Function,
     complete: Function,
+    pub(super) after_tool: Option<Function>,
 }
 
 /// 【回复策略】【注册入口】安装单一策略定义，拒绝重复、缺失回调及未知字段
@@ -29,13 +30,14 @@ pub(super) fn install(
             }
             for field in definition.clone().pairs::<String, Value>() {
                 let (name, _) = field?;
-                if !matches!(name.as_str(), "prepare" | "complete") {
+                if !matches!(name.as_str(), "prepare" | "complete" | "after_tool") {
                     return Err(mlua::Error::runtime("unknown reply policy field"));
                 }
             }
             registrations.reply_policy = Some(RegisteredReplyPolicy {
                 prepare: definition.get("prepare")?,
                 complete: definition.get("complete")?,
+                after_tool: definition.get("after_tool")?,
             });
             Ok(())
         })?,

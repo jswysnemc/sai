@@ -102,6 +102,13 @@ fn transaction(
 /// @param directory 私有记录目录；name 为摘要文件名
 /// @returns 已解析记录，缺失返回 null
 fn read(directory: &Dir, name: &str) -> Result<Value> {
+    Ok(read_optional(directory, name)?.unwrap_or(Value::Null))
+}
+
+/// 【插件状态】【记录存在性】区分缺失文件和已保存 null，供旧会话接续保留删除事实
+/// @param directory 私有记录目录；name 为固定文件名
+/// @returns 完整记录，文件缺失时为 None
+pub(in crate::plugins) fn read_optional(directory: &Dir, name: &str) -> Result<Option<Value>> {
     let mut options = OpenOptions::new();
     options.read(true).follow(FollowSymlinks::No);
     #[cfg(unix)]
@@ -111,7 +118,7 @@ fn read(directory: &Dir, name: &str) -> Result<Value> {
     }
     let file = match directory.open_with(name, &options) {
         Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Value::Null),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error.into()),
     };
     if !file.metadata()?.is_file() {
@@ -122,7 +129,9 @@ fn read(directory: &Dir, name: &str) -> Result<Value> {
     if bytes.len() > MAX_VALUE {
         bail!("plugin storage value exceeds 256 KiB");
     }
-    serde_json::from_slice(&bytes).context("decode plugin storage record")
+    serde_json::from_slice(&bytes)
+        .map(Some)
+        .context("decode plugin storage record")
 }
 
 /// 【插件状态】【值校验】使用 JSON 序列化字节数计算配额，包含引号和转义开销。
@@ -146,12 +155,20 @@ fn write(directory: &Dir, name: &str, value: &Value) -> Result<()> {
             Err(error) => Err(error.into()),
         };
     }
+    validate_value(value)?;
+    if !directory.try_exists(name)? && directory.entries()?.take(128).count() >= 128 {
+        bail!("plugin storage exceeds 128 keys");
+    }
+    write_document(directory, name, value)
+}
+
+/// 【插件状态】【文档发布】原子保存完整 JSON，null 同样保留为显式记录
+/// @param directory 已验证目录；name 为固定记录名；value 为有界 JSON
+/// @returns 同步和原子替换结果；失败清理临时文件
+pub(in crate::plugins) fn write_document(directory: &Dir, name: &str, value: &Value) -> Result<()> {
     let bytes = serde_json::to_vec(value)?;
     if bytes.len() > MAX_VALUE {
         bail!("plugin storage value exceeds 256 KiB");
-    }
-    if !directory.try_exists(name)? && directory.entries()?.take(128).count() >= 128 {
-        bail!("plugin storage exceeds 128 keys");
     }
     let temporary = format!(".{}.tmp", uuid::Uuid::new_v4());
     let result = (|| {

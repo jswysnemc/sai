@@ -1,7 +1,7 @@
 mod archive;
 mod host;
 pub(in crate::plugins) mod paths;
-mod storage;
+pub(in crate::plugins) mod storage;
 mod workspace;
 
 pub(super) use host::PrivatePluginHost;

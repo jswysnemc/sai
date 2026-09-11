@@ -302,7 +302,7 @@ impl ToolSpec {
         let output = match &self.handler {
             ToolBackend::Native(handler) => return handler(args, progress).await,
             ToolBackend::LuaTool { plugin_id, name } => {
-                plugins.call_tool(plugin_id, name, args, context).await?
+                plugins.call_tool(plugin_id, name, args, context).await
             }
             ToolBackend::LuaCommand { plugin_id, name } => {
                 let arguments = args
@@ -311,9 +311,11 @@ impl ToolSpec {
                     .ok_or_else(|| anyhow::anyhow!("plugin command arguments must be text"))?;
                 plugins
                     .call_command(plugin_id, name, arguments, context)
-                    .await?
+                    .await
             }
         };
+        // 1. 【插件】【错误投影】保留具体业务原因，避免模型只收到外层回调失败说明
+        let output = output.map_err(|error| anyhow::anyhow!("{error:#}"))?;
         Ok(ToolOutput::text(output))
     }
 }

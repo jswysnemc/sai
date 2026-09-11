@@ -35,10 +35,14 @@ impl Vm {
             context.services.clone(),
             &context.workdir,
             storage_session,
-            !matches!(invocation, Invocation::Event(..)),
+            !matches!(
+                invocation,
+                Invocation::Event(..) | Invocation::AfterTool(..)
+            ),
         )?;
         let ctx = context_table(&self.lua, &context, self.control.clone())?;
         match invocation {
+            Invocation::AfterTool(input, state) => self.after_tool(input, state, ctx).await,
             Invocation::ReplyPrepare(input) => {
                 self.prepare_reply(input, ctx, context.allow_writes).await
             }

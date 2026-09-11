@@ -138,14 +138,6 @@ impl StateStore {
         &self.session_id
     }
 
-    /// 返回当前会话 TODO 状态文件。
-    ///
-    /// 返回:
-    /// - TODO 状态文件路径
-    pub(crate) fn todo_file(&self) -> PathBuf {
-        self.state_dir.join("todos.json")
-    }
-
     /// 系统提示变化时重置会话。
     ///
     /// 参数:

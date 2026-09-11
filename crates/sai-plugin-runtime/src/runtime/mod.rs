@@ -17,6 +17,7 @@ mod scheduler;
 mod services;
 mod system;
 mod text;
+mod tool_policy;
 
 use crate::host::{InvocationServices, PluginHost};
 use crate::{
@@ -60,6 +61,7 @@ pub struct PluginRuntime {
     events: Arc<Vec<EventKind>>,
     reply_registered: bool,
     reply_allowed: bool,
+    tool_policy_registered: bool,
     vm: Arc<Mutex<Vm>>,
 }
 
@@ -78,6 +80,7 @@ enum Invocation {
     Event(EventKind, Value),
     ReplyPrepare(String),
     ReplyComplete(Value),
+    AfterTool(Value, Value),
 }
 
 impl PluginRuntime {
@@ -158,6 +161,9 @@ impl PluginRuntime {
             commands: Arc::new(command_metadata),
             events: Arc::new(event_metadata),
             reply_registered: reply_policy.is_some(),
+            tool_policy_registered: reply_policy
+                .as_ref()
+                .is_some_and(|policy| policy.after_tool.is_some()),
             reply_allowed,
             vm: Arc::new(Mutex::new(Vm {
                 lua,

@@ -158,11 +158,13 @@ TUI 使用同一纯策略入口并在后台线程完成系统投递。Web 通过
 
 ## 回复上下文与完成策略
 
-`sai.register_reply_policy({prepare, complete})` 在主请求前提供插件上下文和当前轮提醒，在主回复完成后消费一次投递计划。需要独立的 `reply_policy` 声明与授权；CLI 使用 `--allow-reply-policy` 和 `--no-reply-policy`，其他宿主能力仍分别授权。
+`sai.register_reply_policy({prepare, complete, after_tool?})` 在主请求前提供插件上下文和当前轮提醒，在主回复完成后消费一次投递计划，也可在工具循环中提供提醒。`prepare`、`complete` 必须存在，`after_tool` 可选。需要独立的 `reply_policy` 声明与授权；CLI 使用 `--allow-reply-policy` 和 `--no-reply-policy`，其他宿主能力仍分别授权。
 
 准备返回 `nil` 或 `{context?, reminder?, delivery?}`，完成返回 `nil` 或 `{context?}`。文字各限 16 KiB，投递 JSON 对象限 16 KiB，拒绝未知字段与宿主资源标记。准备时 `ctx.allow_writes=false`，`ctx.reply_can_deliver` 表示后续投递许可；不可克隆的准备结果绑定实例、会话、操作和目录，完成时重新检查实时计划模式与实例归属。
 
-主回复先保存完成状态，附属动作失败只产生诊断。上下文使用固定 `plugin_reply_<id>` 命名空间；本轮提醒贯穿工具循环、压缩和溢出恢复。Web 预览异步读取实际策略，终端同步用量读取已载入快照。完整阶段语义、只读边界和预算见[回复策略接口](reply-policy-api.md)，实际消费者见[表情库插件](memes.md)。
+`after_tool(input, state, ctx)` 接收实际工具名称、本插件本地名称、原参数、成功标志及当前可见的本插件工具，返回 `nil` 或 `{state?, reminder?}`。输入最多 64 KiB，状态对象或 null 最多 16 KiB，提醒最多 16 KiB。它按事件权限只读执行，不提供模型或工具调用服务，也不能修改会话或插件存储；状态绑定实例和会话归属，每个工具循环重新开始。当前只接入普通串行工具完成分支，并发只读组、门禁提前拒绝及特殊分支不触发它。
+
+主回复先保存完成状态，附属动作失败只产生诊断。上下文使用固定 `plugin_reply_<id>` 命名空间；准备阶段提供的本轮提醒贯穿工具循环、压缩和溢出恢复。Web 预览异步读取实际策略，终端同步用量读取已载入快照。完整阶段语义、只读边界和预算见[回复策略接口](reply-policy-api.md)，实际消费者见[表情库插件](memes.md)和[会话待办插件](todo.md)。
 
 ## 上下文与状态
 
@@ -173,7 +175,7 @@ TUI 使用同一纯策略入口并在后台线程完成系统投递。Web 通过
 | `sai.limits` | 清单资源限制的 Lua 副本；修改它不能提高 Rust 实际限制 |
 | `ctx.session_id` | 宿主提供的会话标识；子任务使用独立标识 |
 | `ctx.operation_id` | 同一次用户操作及其插件组合调用共享的标识 |
-| `ctx.allow_writes` | 本次回调实际取得的写入权限；事件和回复准备为 false |
+| `ctx.allow_writes` | 本次回调实际取得的写入权限；事件、回复准备和工具后策略为 false |
 | `ctx.reply_can_deliver` | 仅回复准备阶段提供，表示宿主是否允许后续投递 |
 | `ctx.workdir` | 本次调用所属任务的真实工作目录 |
 | `ctx.progress(text)` | 单条最多 4096 字节，每次调用最多 128 条 |
@@ -318,6 +320,7 @@ local response = sai.http.request({
 | `sai.text.html_to_markdown(html)` | HTML 转 Markdown，保留标题、链接、列表和代码格式 |
 | `sai.text.clip(text, count)` | 按 Unicode 字符截取并附截断说明 |
 | `sai.time.now()` | 当前 Unix 秒时间戳 |
+| `sai.time.utc_now()` | 同一次 UTC 时钟读取的 `{unix_ms, rfc3339}`，分别为整数毫秒和完整 RFC 3339 文本 |
 | `sai.time.iso(seconds, offset_seconds?)` | 指定时区的 ISO 时间，默认 UTC |
 | `sai.time.local_format(format, seconds?)` | 按宿主本地时区格式化时间，省略时间戳时使用当前时间；格式最多 128 字节，非法格式返回错误 |
 

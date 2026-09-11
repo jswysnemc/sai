@@ -37,7 +37,6 @@ mod subagent_runtime;
 pub(crate) mod subagent_state;
 pub(crate) mod subagent_timeline;
 mod subagent_worktree;
-pub(crate) mod todo;
 mod tool_spec;
 mod trash_path;
 mod vision;
@@ -54,8 +53,8 @@ pub(crate) use progressive::{
 };
 pub use registry::{empty_parameters, ToolPermission, ToolProgress, ToolRegistry, ToolSpec};
 pub(crate) use registry::{
-    PluginReplyContexts, PreparedPluginReplies, ToolModelAttachment, ToolOutput,
-    DSH_BASH_EXECUTION_ALIAS,
+    PluginReplyContexts, PluginToolPolicyStates, PreparedPluginReplies, ToolModelAttachment,
+    ToolOutput, DSH_BASH_EXECUTION_ALIAS,
 };
 pub(crate) use skill_management::{
     create_managed_skill, list_managed_skills, read_managed_skill, set_managed_skill_enabled,
@@ -285,29 +284,7 @@ pub(crate) fn register_interactive_tools(
         session_id,
         config.mesh.cross_session,
     );
-    todo::register(
-        registry,
-        std::path::PathBuf::from(owner_key).join("todos.json"),
-    );
     register_ask_question(registry);
-}
-
-/// 注册会话级 TODO 工具。
-///
-/// 交互式会话经 `register_interactive_tools` 一并注册；
-/// CLI 单次对话只需要 todo 而不需要 subagent 等长生命周期工具，因此单独开放这个入口。
-///
-/// 参数:
-/// - `registry`: 工具注册表
-/// - `state_dir`: 会话状态目录，TODO 状态文件落在其下
-///
-/// 返回:
-/// - 无
-pub(crate) fn register_todo(registry: &mut ToolRegistry, state_dir: &std::path::Path) {
-    if registry.contains("todo") {
-        return;
-    }
-    todo::register(registry, state_dir.join("todos.json"));
 }
 
 /// 注册结构化提问工具。

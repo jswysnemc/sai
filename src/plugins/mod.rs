@@ -19,6 +19,7 @@ pub(crate) mod scheduler;
 mod services;
 mod session;
 mod system;
+pub(crate) mod todo_view;
 
 pub(crate) use compatibility::alarm_jobs::run_worker as run_legacy_alarm_worker;
 pub(crate) use discovery::{discover, PluginDiagnostic, PluginSource};

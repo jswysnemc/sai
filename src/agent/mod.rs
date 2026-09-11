@@ -38,6 +38,7 @@ mod tool_execution;
 mod tool_gate;
 mod tool_history;
 mod tool_invocation;
+mod tool_policy;
 mod tool_visibility;
 mod turn_execution;
 mod turn_orchestration;

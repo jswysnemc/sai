@@ -170,6 +170,17 @@ fn install_time(lua: &Lua, api: &Table) -> mlua::Result<()> {
         "now",
         lua.create_function(|_, ()| Ok(Utc::now().timestamp()))?,
     )?;
+    // 1. 【插件时间】【同一时刻】毫秒标识与完整 UTC 文本来自同一次时钟读取
+    time.set(
+        "utc_now",
+        lua.create_function(|lua, ()| {
+            let now = Utc::now();
+            let value = lua.create_table()?;
+            value.set("unix_ms", now.timestamp_millis())?;
+            value.set("rfc3339", now.to_rfc3339())?;
+            Ok(value)
+        })?,
+    )?;
     time.set(
         "iso",
         lua.create_function(|_, (seconds, offset): (i64, Option<i32>)| {

@@ -56,12 +56,14 @@ impl PluginInstance {
             self.runtime.commands(),
             self.runtime.events(),
             self.runtime.has_reply_policy(),
+            self.runtime.has_tool_policy(),
         ))?;
         let current = serde_json::to_value((
             fresh.runtime.tools(),
             fresh.runtime.commands(),
             fresh.runtime.events(),
             fresh.runtime.has_reply_policy(),
+            fresh.runtime.has_tool_policy(),
         ))?;
         if original != current {
             bail!(
@@ -74,6 +76,47 @@ impl PluginInstance {
 }
 
 impl PluginSession {
+    /// 【工具策略】【有效目录】枚举已授权回调及其本地名称与公开名称映射
+    /// @returns 插件标识、实例及工具映射，不包含未授权策略
+    pub(crate) fn tool_policies(&self) -> Vec<(String, u64, Vec<(String, String)>)> {
+        self.instances
+            .iter()
+            .filter(|(_, instance)| {
+                instance.runtime.has_tool_policy()
+                    && instance.descriptor.capabilities().reply_policy
+                    && instance.descriptor.grants().reply_policy
+            })
+            .map(|(id, instance)| {
+                let names = instance
+                    .runtime
+                    .tools()
+                    .iter()
+                    .filter_map(|tool| {
+                        instance
+                            .descriptor
+                            .tool_name(&tool.name)
+                            .ok()
+                            .map(|public| (tool.name.clone(), public))
+                    })
+                    .collect();
+                (id.clone(), instance.runtime.instance_id(), names)
+            })
+            .collect()
+    }
+
+    /// 【工具策略】【实例执行】把当前循环的状态只交给原插件实例
+    /// @param id 插件标识；input 为宿主事实；state 为当前循环状态；context 为可信归属
+    /// @returns 已校验的状态与提醒
+    pub(crate) async fn after_tool(
+        &self,
+        id: &str,
+        input: sai_plugin_runtime::ToolPolicyInput,
+        state: Value,
+        context: InvocationContext,
+    ) -> Result<sai_plugin_runtime::ToolPolicyOutput> {
+        self.runtime(id)?.after_tool(input, state, context).await
+    }
+
     /// 【回复策略】【有效目录】只枚举本会话已经加载且取得独立授权的策略
     /// @returns 按插件标识排序的实例目录
     pub(crate) fn reply_policies(&self) -> Vec<(String, u64)> {
