@@ -5216,6 +5216,8 @@ dependencies = [
  "jsonschema",
  "md5 0.7.0",
  "mlua",
+ "rusqlite",
+ "sai-sqlite-buffer",
  "semver",
  "serde",
  "serde_json",
@@ -5227,6 +5229,14 @@ dependencies = [
  "tokio-util",
  "url",
  "urlencoding",
+]
+
+[[package]]
+name = "sai-sqlite-buffer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "rusqlite",
 ]
 
 [[package]]

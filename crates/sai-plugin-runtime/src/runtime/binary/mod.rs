@@ -5,6 +5,8 @@ mod files;
 mod inspection;
 mod json;
 mod network;
+mod sqlite;
+mod sqlite_request;
 mod terminal;
 mod vision;
 
@@ -81,6 +83,7 @@ pub(super) fn install(
     files::install(lua, &binary, services.clone())?;
     constructors::install(lua, &binary, services.clone())?;
     api.set("binary", binary)?;
+    sqlite::install(lua, api, services.clone())?;
     vision::install(lua, api, services.clone())?;
     terminal::install(lua, api, services)
 }

@@ -9,6 +9,7 @@ mod presentation;
 mod reply_policy;
 mod runtime;
 mod schema;
+mod sqlite;
 mod tool_policy;
 
 pub use capabilities::{

@@ -7,8 +7,8 @@ repository = "https://github.com/jswysnemc/sai"
 description = "Command-line AI assistant"
 
 [workspace]
-members = [".", "crates/sai-plugin-runtime"]
-default-members = [".", "crates/sai-plugin-runtime"]
+members = [".", "crates/sai-plugin-runtime", "crates/sai-sqlite-buffer"]
+default-members = [".", "crates/sai-plugin-runtime", "crates/sai-sqlite-buffer"]
 resolver = "2"
 
 [dependencies]

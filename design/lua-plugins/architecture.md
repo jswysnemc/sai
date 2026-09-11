@@ -17,6 +17,8 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 | 位置 | 职责 |
 | --- | --- |
 | `crates/sai-plugin-runtime` | 不依赖 Sai 应用配置的清单、源码快照、Lua 执行和宿主契约 |
+| `crates/sai-plugin-runtime/src/sqlite`、`runtime/binary/sqlite*` | 结构化 SQLite 快照、事务副本、句柄校验、资源预留及取消 |
+| `crates/sai-sqlite-buffer` | 固定容量 SQLite 镜像的分配、所有权移交和独占借用导出 |
 | `src/plugins` | 配置与发现、宿主能力实现、注册适配、安装管理 |
 | `src/plugins/session.rs` | Agent 内插件实例共享、跨 Agent 隔离、重载复用判定 |
 | `src/plugins/events.rs` | Agent 与逻辑模型请求的生命周期范围 |
@@ -57,6 +59,8 @@ CLI 提供创建、验证、安装、替换、配置、授权、启停、移除�
 私有会话状态、插件跨会话存储、有界归档与工作目录能力已开放，契约见[私有接口](private-api.md)。独立授权的即时桌面和声音投递见[主动通知接口](notification-api.md)，本插件命令的后台执行见[持久调度接口](scheduler-api.md)，插件上下文及回复后动作见[回复策略接口](reply-policy-api.md)。跨插件共享存储、任意改写主 Agent 消息历史、插件界面组件和远端包分发尚未开放。后续业务迁移见[迁移清单](migration.md)。
 
 ## 契约原则
+
+SQLite 能力仅操作二进制镜像，文件读取和条件发布复用已有目录授权及锁。运行时不接受数据库路径或 SQL 文本，也不包含知识库表名、搜索或嵌入规则。固定内存所需的 FFI 封装在独立小型库，插件运行时继续禁止 unsafe 代码；SQLite 指令与 Lua 共用执行预算，取消后实际线程持有预留直至退出。接口与现有限制见 [SQLite 快照](sqlite-api.md)。
 
 1. 每个插件有独立 `sai-plugin.json`，包含 API 版本、稳定 ID、版本、入口、能力声明和资源限制。
 2. 从受信任的用户插件目录或显式安装路径加载。工作区中的文件不能仅因存在便获得自动执行权限。

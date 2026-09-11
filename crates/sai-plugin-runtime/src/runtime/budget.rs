@@ -69,6 +69,28 @@ pub(super) fn checkpoint(lua: &Lua) -> mlua::Result<()> {
     current(lua)?.charge(0)
 }
 
+/// 【插件】【工作线程预算】把当前执行额度交给原生线程，首个失败保持到本次操作结束
+/// @param lua 当前虚拟机
+/// @returns 同时约束指令、时间和取消的线程安全检查函数
+pub(super) fn worker(lua: &Lua) -> mlua::Result<crate::sqlite::Budget> {
+    let budget = current(lua)?;
+    let failed = std::sync::Mutex::new(None::<String>);
+    Ok(Arc::new(move |units| {
+        let mut failed = failed
+            .lock()
+            .map_err(|_| anyhow::anyhow!("native budget lock poisoned"))?;
+        if let Some(error) = failed.as_ref() {
+            anyhow::bail!("{error}");
+        }
+        if let Err(error) = budget.charge(units) {
+            let message = error.to_string();
+            *failed = Some(message.clone());
+            anyhow::bail!("{message}");
+        }
+        Ok(())
+    }))
+}
+
 /// 【插件】【可信状态】从 Rust 虚拟机附加数据取得当前预算，不读取公开的 sai.limits
 /// @param lua 当前虚拟机
 /// @returns 当前预算；未安装预算时拒绝原生计算

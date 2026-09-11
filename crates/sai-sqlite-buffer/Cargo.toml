@@ -1,0 +1,10 @@
+[package]
+name = "sai-sqlite-buffer"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Fixed-capacity SQLite memory snapshots with safe ownership"
+
+[dependencies]
+anyhow = "1.0"
+rusqlite = { version = "0.32", features = ["bundled", "serialize"] }
