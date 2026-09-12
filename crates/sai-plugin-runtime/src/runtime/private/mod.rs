@@ -1,3 +1,4 @@
+mod lock;
 mod storage;
 mod workspace;
 
@@ -18,6 +19,14 @@ pub(super) fn install(
     control: Arc<CallControl>,
 ) -> mlua::Result<()> {
     storage::install(
+        lua,
+        api,
+        host.clone(),
+        capabilities.clone(),
+        limits.clone(),
+        control.clone(),
+    )?;
+    lock::install(
         lua,
         api,
         host.clone(),

@@ -12,7 +12,6 @@ mod file_edit;
 mod file_read;
 pub(crate) mod fs_path;
 pub(crate) mod groups;
-pub mod knowledge_base;
 mod memory;
 pub(crate) mod mesh;
 mod native_search;
@@ -213,9 +212,6 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     web_fetch::register(&mut registry);
     configurable_cli_tools::register(&mut registry, config);
     crate::plugins::register_plugins(&mut registry, config, paths, false);
-    if config.plugins.knowledge_base.enabled {
-        knowledge_base::register(&mut registry, config.clone(), paths.clone());
-    }
     if config.memory_config().enabled {
         memory::register(&mut registry, config.clone(), paths.clone());
     }
@@ -306,9 +302,6 @@ pub fn readonly_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     default_tools::register_readonly(&mut registry, config, paths);
     web_fetch::register(&mut registry);
     crate::plugins::register_plugins(&mut registry, config, paths, true);
-    if config.plugins.knowledge_base.enabled {
-        knowledge_base::register_readonly(&mut registry, config.clone(), paths.clone());
-    }
     if config.memory_config().enabled {
         memory::register_readonly(&mut registry, config.clone(), paths.clone());
     }

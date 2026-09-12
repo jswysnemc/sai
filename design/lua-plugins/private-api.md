@@ -1,6 +1,6 @@
 # 私有状态与工作目录
 
-`sai.storage.get/set/compare_exchange` 保存插件自己的会话记录；`sai.storage.plugin` 保存同一插件的跨会话记录；`sai.workspace` 管理插件私有缓存目录。三项能力独立声明和授权，不提供任意路径写入接口。普通文件、环境和进程接口见[系统接口](system-api.md)。
+`sai.storage.get/set/compare_exchange` 保存插件自己的会话记录；`sai.storage.plugin` 保存同一插件的跨会话记录，并提供私有作用域锁；`sai.workspace` 管理插件私有缓存目录。三项能力独立声明和授权，不提供任意路径写入接口。普通文件、环境和进程接口见[系统接口](system-api.md)。
 
 ## 授权
 
@@ -93,6 +93,12 @@ store.set("preferences", nil)
 插件存储使用独立的 `.plugin-storage.lock`，会话清理继续使用 `.plugin-state.lock`。比较、读取和原子替换处于同一临界区，锁正被占用时立即返回可重试错误；比较不匹配返回 false。命名空间目录、记录和锁拒绝符号链接，记录和锁还要求普通文件。损坏 JSON 或过大记录会明确报错，不能被静默覆盖。
 
 运行时在宿主调用前后检查超时和取消，失效回调不能继续发起存储操作。已开始的同步文件事务不能强制中断或回滚；调用超时、取消或结果超限不保证此前写入没有提交，调用方可在后续有效回调中读取记录确认。
+
+## 插件作用域锁
+
+`sai.storage.plugin.with_lock(key, callback, options?)` 复用 `system.plugin_storage`，协调同一插件的实例与进程。它不使用存储操作的短锁；回调中仍可调用 get、set 和 compare_exchange，写入许可继续独立检查。只读工具、命令和事件可以协调读取，初始化阶段拒绝取锁。
+
+默认等待 10 秒，最多 600 秒；键最多 256 字节，每插件最多 128 个稳定锁文件。最多嵌套四层且键严格递增，回调结束、失败和取消自动释放，不向 Lua 交付句柄。锁归属、文件边界和取消限制见[私有作用域锁](private-lock-api.md)。
 
 ## 工作目录
 

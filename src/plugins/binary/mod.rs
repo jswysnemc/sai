@@ -1,4 +1,5 @@
 mod conditional;
+mod directories;
 mod download;
 mod files;
 mod paths;
@@ -8,6 +9,7 @@ mod revision;
 mod terminal;
 
 pub(super) use conditional::write as write_if;
+pub(super) use directories::create as create_directory;
 pub(super) use download::download;
 pub(super) use files::{write, write_locked};
 pub(super) use read::read_file;

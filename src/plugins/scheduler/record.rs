@@ -16,6 +16,8 @@ pub(super) struct JobRecord {
     pub paths: SaiPaths,
     pub workdir: String,
     pub launch: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<crate::i18n::Locale>,
 }
 
 impl JobRecord {
@@ -36,6 +38,7 @@ impl JobRecord {
             paths: paths.clone(),
             workdir,
             launch: String::new(),
+            language: Some(crate::i18n::locale()),
             task: ScheduledTask {
                 id: format!("job-{}", uuid::Uuid::new_v4().simple()),
                 command: request.command,

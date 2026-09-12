@@ -1,0 +1,29 @@
+{
+  "api_version": 1,
+  "id": "knowledge-base",
+  "version": "1.0.0",
+  "name": "Knowledge base",
+  "description": "Local knowledge files, keyword and semantic search, and index maintenance",
+  "entry": "init.lua",
+  "capabilities": {
+    "http": [],
+    "system": {
+      "plugin_storage": true,
+      "schedule": true,
+      "read_paths": [],
+      "remove_paths": []
+    },
+    "binary": {
+      "write_paths": []
+    }
+  },
+  "limits": {
+    "memory_bytes": 67108864,
+    "instructions": 20000000,
+    "timeout_ms": 3600000,
+    "http_timeout_ms": 120000,
+    "binary_bytes": 67108864,
+    "output_bytes": 4194304,
+    "system_calls": 4096
+  }
+}

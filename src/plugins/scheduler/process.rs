@@ -100,6 +100,9 @@ impl WorkerLauncher for SystemLauncher {
     /// @returns 启动守卫；没有 shell 拼接或用户指定程序
     fn spawn(&self, record: &JobRecord) -> Result<Box<dyn WorkerHandle>> {
         let mut command = Command::new(std::env::current_exe()?);
+        if let Some(language) = record.language {
+            command.arg("--lang").arg(language.code());
+        }
         command
             .arg("__plugin-job-worker")
             .arg("--state-dir")

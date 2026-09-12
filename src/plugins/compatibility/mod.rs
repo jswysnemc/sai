@@ -4,6 +4,7 @@ mod diagnostics;
 mod exchange_rate;
 mod image;
 mod input_method;
+mod knowledge_base;
 mod linux_game;
 mod memes;
 mod notification;
@@ -34,6 +35,7 @@ pub(super) fn resolve(
     declared: &Capabilities,
 ) -> Result<Option<RuntimeOverrides>> {
     match id {
+        "knowledge-base" => knowledge_base::resolve(config, paths, settings, declared).map(Some),
         "todo" => todo::resolve(settings, declared).map(Some),
         "alarm" => alarm::resolve(settings, declared).map(Some),
         "memes" => memes::resolve(config, paths, settings, declared).map(Some),

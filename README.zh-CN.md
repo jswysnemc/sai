@@ -429,7 +429,8 @@ Sai/
 │   ├── agent/            # Agent 内核:循环、模式、压缩、子代理、上下文投影
 │   ├── cli/              # CLI 子命令分发与 REPL 实现
 │   ├── llm/              # LLM 客户端:三协议、流式、thinking、工具流解析
-│   ├── tools/            # 30+ 内置工具、注册表、渐进加载、子代理、Skills
+│   ├── tools/            # 核心工具、注册表、渐进加载、子代理和技能
+│   ├── plugins/          # 插件管理、宿主接口、持久调度和兼容适配
 │   ├── memory/           # 长期记忆:facts/episodes/FTS5/衰减/联想
 │   ├── state/            # 会话状态:turns WAL、pending、压缩、快照、恢复
 │   ├── gateways/         # 多平台网关:QQ/微信/OneBot/企业微信、supervisor
@@ -444,7 +445,10 @@ Sai/
 │   ├── prompts/          # 系统提示模板(build.rs 混淆嵌入)
 │   ├── i18n/             # 中英文国际化
 │   ├── cron/             # 定时任务调度
-│   └── ...               # alarm/memes/knowledge_base/hooks 等
+│   └── ...               # 其他宿主模块
+├── plugins/              # 随程序发布的 Lua 业务包：知识库、待办、表情库等
+├── crates/sai-plugin-runtime/ # 独立 Lua 运行时和能力契约
+├── crates/sai-sqlite-buffer/  # 固定容量的 SQLite 快照缓冲
 ├── web/                  # Web 工作台前端(React + Vite)
 ├── assets/               # o200k tokenizer 词表
 ├── pics/                 # 截图与架构总览图
@@ -456,6 +460,8 @@ Sai/
 ```
 
 ---
+
+[知识库插件文档](design/lua-plugins/knowledge-base.md)说明原命令兼容、后台索引、恢复流程和容量限制。
 
 ## 存储与目录布局
 

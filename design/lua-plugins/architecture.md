@@ -31,12 +31,16 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 | `src/tools/registry_tool_policy.rs`、`src/agent/tool_policy.rs` | 有界工具后分发、循环状态归属及提醒追加 |
 | `src/plugins/compatibility` | 旧业务设置的定向兼容；派生凭据仅保留在运行时快照 |
 | `src/plugins/compatibility/todo.rs` | 可信内置待办的固定存储键、旧文件种子和会话生命周期兼容 |
+| `src/plugins/compatibility/knowledge_base.rs` | 知识库旧配置、选中嵌入供应商与最小文件及 HTTP 能力投影 |
+| `src/plugins/commands.rs`、`knowledge_view.rs` | 可信内置命令的单次输入授权及知识库 TUI 数据适配 |
 | `src/plugins/todo_view.rs`、`src/web/api/session_data_todos.rs` | 使用实际 Lua 快照提供 Web 清单与会话待办数量 |
 | `src/plugins/compatibility/alarm_jobs` | 旧闹钟记录投影、稳定进程身份、独立状态与旧入口交接 |
 | `src/plugins/http.rs` | 通用 HTTP 执行、逐次重定向授权、凭据处理和响应限制 |
 | `src/plugins/system` | 通用环境访问、目录句柄授权、受管模板进程及平台回收 |
 | `src/plugins/notification.rs` | 主动通知权限复核、有界音频快照及取消传递 |
 | `src/plugins/scheduler` | 插件命令持久调度、记录事务、执行锁、独立工作进程与到期授权 |
+| `src/plugins/private/lock.rs`、`crates/sai-plugin-runtime/src/runtime/private/lock.rs` | 插件私有作用域锁、严格嵌套次序及取消释放 |
+| `src/i18n/scoped.rs` | 同步重建调度描述符时使用创建语言，不改变其他线程 |
 | `src/notifications` | 固定桌面程序、默认音频输出与投递资源回收 |
 | `src/plugins/binary` | 原始字节传输、匿名公开下载、有界文件读取、持锁条件输出、原子文件发布及受控图片展示 |
 | `src/plugins/file_ops` | 独立授权的单文件删除、Linux 用户回收站、共用文件锁及提交前取消 |
@@ -52,7 +56,7 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 
 ## 已落地的版本 1
 
-独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、文本与视觉模型、工具调用、文件、环境、模板进程、二进制缓冲、终端图片、JSON、文本、时间、摘要、字节解码、通知纯回调及回复策略能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence`、`package-advisor`、`reply-notification`、`image-generation`、`image-display`、`web-images`、`hash-codec`、`alarm`、`xuanxue`、`memes` 与 `todo` 已迁为随程序嵌入的二十三个 Lua 包，共提供 40 个工具；通知包不增加模型工具，相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
+独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、文本与视觉模型、工具调用、文件、环境、模板进程、二进制缓冲、终端图片、JSON、文本、时间、摘要、字节解码、通知纯回调及回复策略能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence`、`package-advisor`、`reply-notification`、`image-generation`、`image-display`、`web-images`、`hash-codec`、`alarm`、`xuanxue`、`memes`、`todo` 与 `knowledge-base` 已迁为随程序嵌入的二十四个 Lua 包，共提供 46 个工具；通知包不增加模型工具，相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
 
 CLI 提供创建、验证、安装、替换、配置、授权、启停、移除和命令执行。TUI 提供 `/plugins`、`/plugins reload` 与 `/plugin <id>/<command>`。模型工具通过原有共用注册入口进入 CLI、TUI、Web 和子任务，直接用户命令目前只有 CLI 与 TUI 入口。默认目录为 66 项工具，较原版增加直接入口的 `todo`；网关仍不公开待办工具，计划模式继续过滤整个写入工具。
 
@@ -224,3 +228,13 @@ Web 使用独立认证接口计算通知，SSE 只增加交付层的历史补发
 可选 `after_tool` 扩展独立回复策略，按事件只读权限执行，清除模型与工具服务，禁止修改私有存储。显式状态绑定实例、会话、存储会话、操作及目录，每个工具循环重新开始。回调在普通串行工具完成分支追加提醒，保持原待办接入位置；并发只读组、门禁提前拒绝和特殊分支不触发它。错误和超时只产生诊断，不修改主回复终态。
 
 Web 清单和会话数据统计执行真实内置 Lua `snapshot`，按当前启停及授权处理。只读快照保留原查询的导入和归档副作用，统计在导入后重新收集文件。禁用时返回空数据，损坏配置、撤权及记录错误明确呈现，前端字段保持兼容。完整契约见[会话待办插件](todo.md)和[回复策略接口](reply-policy-api.md)。
+
+## 本地知识库与后台重建
+
+`plugins/knowledge-base` 负责六个原工具、九个管理命令、两个原 SQLite 索引、关键词评分和语义嵌入。`sai kb` 与配置 TUI 只转换参数和呈现结果；显式来源读取权限仅存在于单次内置命令中，不进入持久配置或后台任务。旧开关、目录与当前供应商由可信兼容层投影，原 Rust 知识库业务已删除。
+
+普通文件、二进制快照、条件发布和私有作用域锁共同提供业务基础。Lua 用 `knowledge:store` 串行化参与者，并通过 `pending-write.json` 接续中断提交；恢复重新校验名称和原摘要，只读入口拒绝未完成记录。这是多文件恢复协议，不是跨文件 ACID，也不协调外部编辑器或旧原生进程。
+
+后台队列用私有序号和实际活动任务合并等待扫描，规范化真实目录后区分同名相对路径。网络阶段释放数据锁，发布前核对元数据及正文，单文件块只发布完整最终快照。通用调度保存创建语言并在恢复和到期时复用，完整源码、设置和授权检查继续生效。
+
+语义查询使用 32 行分页，并仅在结果总量超限时缩页；单个字段、镜像与共用指令预算仍有独立上限。文件默认 1 MiB，索引最多 8 MiB，不能保证任意规模的旧库均可处理。接口和资源边界见[知识库插件](knowledge-base.md)、[私有作用域锁](private-lock-api.md)与[SQLite 快照](sqlite-api.md)。

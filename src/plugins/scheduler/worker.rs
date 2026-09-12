@@ -58,7 +58,12 @@ pub(crate) async fn run(state_dir: &Path, plugin: &str, id: &str, launch: &str) 
 /// @param store 任务存储；record 为启动时的可信记录
 /// @returns 命令结果，None 表示执行取消
 async fn execute(store: &Store, record: &JobRecord) -> Option<Result<String>> {
-    let loaded = load_current(&record.paths, &record.plugin, &record.revision);
+    let loaded = load_current(
+        &record.paths,
+        &record.plugin,
+        &record.revision,
+        record.language,
+    );
     let (_, runtime) = match loaded {
         Ok(value) => value,
         Err(error) => return Some(Err(error)),

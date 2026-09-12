@@ -1,6 +1,6 @@
 use super::binary_conditional_support::digest;
 use super::sqlite_support::*;
-use crate::{config::AppConfig, paths::SaiPaths, tools::knowledge_base::KnowledgeBase};
+
 use serde_json::json;
 use std::sync::Arc;
 
@@ -9,12 +9,8 @@ use std::sync::Arc;
 #[tokio::test]
 async fn sqlite_queries_read_real_knowledge_indexes_without_touching_disk_bytes() {
     let root = tempfile::tempdir().unwrap();
-    let mut config = AppConfig::default();
-    config.plugins.knowledge_base.data_dir = root.path().join("allowed").display().to_string();
-    KnowledgeBase::new(config, SaiPaths::for_tests(root.path()))
-        .unwrap()
-        .init()
-        .unwrap();
+    super::knowledge_support::seed(root.path(), &serde_json::json!({}), true);
+    std::fs::rename(root.path().join("kb"), root.path().join("allowed")).unwrap();
     let meta = root.path().join("allowed/kb_meta.db");
     let semantic = root.path().join("allowed/semantic_index.db");
     {

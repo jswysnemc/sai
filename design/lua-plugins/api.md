@@ -193,11 +193,15 @@ TUI 使用同一纯策略入口并在后台线程完成系统投递。Web 通过
 
 Lua 全局变量属于当前实例，不是持久会话存储。进程重启、创建新 Agent 或切换会话都会重新初始化；不同交互入口对 Agent 的复用时长可能不同。跨会话记录使用独立授权的 `sai.storage.plugin`，会话记录继续使用 `sai.storage.get/set/compare_exchange`，详见[私有存储契约](private-api.md)。
 
+`sai.storage.plugin.with_lock(key, callback, {timeout_ms=10000})` 使用同一插件跨实例、跨进程的私有锁执行回调，并返回其全部结果。它复用 `system.plugin_storage`，允许只读协调，不授予文件或存储写入权限。最多四层递增键，等待上限 600 秒，完成、错误和取消自动释放；完整归属与配额见[私有作用域锁](private-lock-api.md)。
+
 ## 宿主能力
 
 ### 文件、环境与进程
 
 `sai.system` 提供平台和宿主 PID；`sai.env.get`、`sai.fs.read_text/read_dir/stat/realpath` 和 `sai.process.output` 分别使用精确环境授权、路径授权和固定进程模板。详细参数、返回值、取消边界及授权示例见[系统接口](system-api.md)。这些 I/O 接口仅在回调中开放，工作目录和权限由 Rust 调用状态提供。
+
+`sai.fs.create_dir(path)` 复用 `binary.write_paths` 和可信写入许可，创建授权根及缺失子目录，返回规范绝对路径。它不需要读取授权，也不扩大文件访问范围。`sai.fs.stat` 新增可选的 `modified` Unix 秒字段，获取失败时省略。
 
 `sai.fs.remove_file(path)` 永久删除单个普通文件，`sai.fs.trash_file(path)` 移入系统回收站，分别要求 `system.remove_paths`、`system.trash_paths` 和可信写入权限。成功返回 `true`，授权目标缺失返回 `false`；目录和链接均拒绝。回收站当前支持 Linux 同文件系统用户回收站，失败不会改为永久删除。平台、共用锁、还原信息及取消边界见[单文件删除接口](file-removal-api.md)。
 
@@ -208,6 +212,8 @@ Lua 全局变量属于当前实例，不是持久会话存储。进程重启、�
 ### 持久调度
 
 `sai.scheduler.schedule({due_at, command, arguments?})` 在指定 Unix 秒执行本插件已注册命令，创建调用退出后由独立工作进程继续执行。`list({offset=0, limit=16})`、`get(id)`、`cancel(id)` 和 `resume(id)` 提供有界查询、取消与显式恢复。所有操作要求独立的 `system.schedule`，变更还要求可信写入权限；到期执行重新验证源码、设置与授权，已经开始的中断任务不会自动重试。
+
+新任务在宿主内部保存创建语言，恢复及到期检查按该语言重建派生设置；语言不会进入公开命令参数，也不会免除实际配置和授权检查。
 
 每插件新建任务最多 32 个活动任务、128 条记录，任务参数与持久输出分别限制为 16 KiB。闹钟过渡期另外展示最多 128 条旧记录，分页 offset 上限为 256。后台命令保留自身读写声明，不附加 Agent 模型或工具调用服务；不提供开机自动恢复。任务状态、分页、发布取消及管理入口见[持久调度接口](scheduler-api.md)，业务规则与旧入口见[Lua 闹钟](alarm.md)。
 
@@ -378,6 +384,8 @@ Lua 计算位于阻塞工作线程，受指令 Hook、堆内存和总时长约�
 `linux-game-investigation` 和 `input-method-investigation` 均声明 32 MiB Lua 堆、2000 万指令、900 秒、2 MiB 输出、256 次模型请求和 1024 次工具调用。调查工具的业务步数及单工具超时可以进一步收窄，但不能突破这些宿主限制。
 
 `diagnostic-evidence` 声明 32 MiB Lua 堆、2000 万指令、300 秒、2 MiB 输出、2048 次系统调用及 4 次工具调用。包设置继续收窄单次命令时长和输出字符数。
+
+`knowledge-base` 声明 64 MiB Lua 堆、64 MiB 二进制额度、2000 万指令、3600 秒、4 MiB 输出及 4096 次系统调用。文件默认 1 MiB、配置最多 4 MiB，每个索引最多 8 MiB；JSON、SQLite 字段和累计计算可能先达到各自限制。业务恢复、语义分页及完整资源边界见[知识库插件](knowledge-base.md)。
 
 三个查询包采用各自的 HTTP 与回调上限，其他资源沿用运行时默认值：
 

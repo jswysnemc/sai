@@ -1,55 +1,60 @@
 use super::*;
+use crate::plugins::commands::{run_bundled, BundledCommand};
+use anyhow::Context;
+use serde_json::json;
 
-pub(super) async fn run_kb(paths: &SaiPaths, args: KbArgs) -> Result<()> {
+/// 【知识库命令】【兼容语法】原参数转换为插件命令，知识库业务只在 Lua 中执行
+/// @param paths 应用目录；args 为旧 CLI 参数；mode 为显式权限模式
+/// @returns 命令执行和标准输出结果
+pub(super) async fn run_kb(paths: &SaiPaths, args: KbArgs, mode: Option<AgentMode>) -> Result<()> {
     let config = AppConfig::load(paths)?;
-    let kb = tools::knowledge_base::KnowledgeBase::new(config, paths.clone())?;
-    match args.command {
+    let mut input = None;
+    let (command, arguments) = match args.command {
         KbCommand::Add(args) => {
-            let added = kb.add_path(&args.path).await?;
-            for path in added {
-                println!("{} {path}", t("added", "已添加"));
-            }
+            let name = args
+                .path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .context("source path has no valid file or directory name")?;
+            let source =
+                dunce::canonicalize(&args.path).context("resolve knowledge base import source")?;
+            input = Some(source.clone());
+            ("add", json!({"path":source, "name":name}))
         }
-        KbCommand::List => {
-            for file in kb.list()? {
-                println!("{}\t{} {}", file.name, file.size_bytes, t("bytes", "字节"));
-            }
-        }
-        KbCommand::Search(args) => {
-            let query = args.query.join(" ");
-            println!("{}", kb.search(&query, args.limit).await?);
-        }
-        KbCommand::Find(args) => {
-            let query = args.query.join(" ");
-            println!("{}", kb.find_by_name(&query, args.limit)?);
-        }
-        KbCommand::Read(args) => {
-            println!("{}", kb.read_file(&args.file, args.start, args.lines)?);
-        }
-        KbCommand::Remove(args) => {
-            kb.remove(&args.file)?;
-            println!("{} {}", t("removed", "已移除"), args.file);
-        }
-        KbCommand::Reindex => {
-            let files = kb.list()?;
-            println!(
-                "{}: {}",
-                t(
-                    "keyword index is rebuilt on demand; files tracked",
-                    "关键词索引会按需重建；已跟踪文件数",
-                ),
-                files.len()
-            );
-        }
-        KbCommand::Stats => {
-            let stats = kb.stats()?;
-            println!("{}", stats);
-        }
+        KbCommand::List => ("list", json!({})),
+        KbCommand::Search(args) => (
+            "search",
+            json!({"query":args.query.join(" "), "limit":args.limit.map(|value|value.to_string())}),
+        ),
+        KbCommand::Find(args) => (
+            "find",
+            json!({"query":args.query.join(" "), "limit":args.limit.map(|value|value.to_string())}),
+        ),
+        KbCommand::Read(args) => (
+            "read",
+            json!({"file":args.file,"start":args.start.to_string(),"lines":args.lines.map(|value|value.to_string())}),
+        ),
+        KbCommand::Remove(args) => ("remove", json!({"file":args.file})),
+        KbCommand::Reindex => ("reindex", json!({})),
+        KbCommand::Stats => ("stats", json!({})),
         KbCommand::Embed(args) => match args.command {
-            KbEmbedCommand::Reindex(args) => {
-                kb.reindex_embeddings(args.quiet).await?;
-            }
+            KbEmbedCommand::Reindex(args) => ("embed-reindex", json!({"quiet":args.quiet})),
         },
+    };
+    let result = run_bundled(
+        &config,
+        paths,
+        BundledCommand {
+            plugin: "knowledge-base",
+            command,
+            arguments,
+            input,
+            allow_writes: !matches!(mode, Some(AgentMode::Plan)),
+        },
+    )
+    .await?;
+    if !result.is_empty() {
+        println!("{result}");
     }
     Ok(())
 }

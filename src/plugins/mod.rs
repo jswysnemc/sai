@@ -1,5 +1,6 @@
 mod binary;
 mod bundled;
+pub(crate) mod commands;
 mod compatibility;
 mod config;
 mod discovery;
@@ -8,6 +9,7 @@ mod file_ops;
 mod grants;
 mod host;
 mod http;
+pub(crate) mod knowledge_view;
 mod management;
 mod management_lock;
 mod notification;

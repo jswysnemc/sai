@@ -148,6 +148,7 @@ impl PluginHost for AlarmHost {
     ) -> Result<Option<FileInfo>> {
         capabilities.system.check_read_request(&path)?;
         Ok(Some(FileInfo {
+            modified: None,
             is_file: !path.ends_with("folder.wav"),
             is_dir: path.ends_with("folder.wav"),
             len: if path.ends_with("large.wav") {

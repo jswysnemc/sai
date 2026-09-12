@@ -277,7 +277,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             let mode = resolve_agent_mode(&paths, mode_override, PermissionSurface::Tui)?;
             sessions::run_resume(&paths, args, mode, thinking_override.clone()).await
         }
-        Some(Command::Kb(args)) => run_kb(&paths, args).await,
+        Some(Command::Kb(args)) => run_kb(&paths, args, mode_override).await,
         Some(Command::Memory(args)) => run_memory(&paths, args),
         Some(Command::Skills(args)) => run_skills(&paths, args),
         Some(Command::Plugins(args)) => plugins::run(&paths, args, mode_override).await,

@@ -1,6 +1,8 @@
 mod locale;
+mod scoped;
 
 pub use locale::{apply_locale_override_from_args, locale, Locale};
+pub(crate) use scoped::with_locale;
 
 /// 判断当前界面语言是否为中文。
 ///

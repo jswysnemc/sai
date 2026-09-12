@@ -139,7 +139,7 @@ impl Plan {
 /// 【插件写入】【新目录锚定】从最近存在的规范祖先打开句柄，按已授权路径创建缺失目录
 /// @param path 已规范化并完成授权的父目录
 /// @returns 实际父目录句柄
-fn create_anchor(path: &Path) -> Result<Dir> {
+pub(super) fn create_anchor(path: &Path) -> Result<Dir> {
     let mut current = path.to_path_buf();
     let mut missing: Vec<OsString> = Vec::new();
     loop {

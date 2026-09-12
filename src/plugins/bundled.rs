@@ -40,6 +40,7 @@ pub(super) fn default_enabled(config: &AppConfig, id: &str) -> bool {
         "diagnostic-evidence" => config.plugins.diagnostics.enabled,
         "exchange-rate" => config.plugins.exchange_rate.enabled,
         "hash-codec" => config.plugins.hash_codec.enabled,
+        "knowledge-base" => config.plugins.knowledge_base.enabled,
         "input-method-investigation" => config.plugins.deep_diagnose.enabled,
         "linux-game-signals" | "linux-game-investigation" => {
             config.plugins.linux_game_compatibility.enabled

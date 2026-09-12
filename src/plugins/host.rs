@@ -12,6 +12,18 @@ pub(super) struct SaiPluginHost;
 
 #[async_trait]
 impl PluginHost for SaiPluginHost {
+    /// 【插件宿主】【目录创建】按输出目录授权创建普通目录
+    /// @param path 目标；context 为可信上下文；capabilities 为有效授权
+    /// @returns 实际规范目录
+    async fn create_directory(
+        &self,
+        path: String,
+        context: SystemContext,
+        capabilities: Capabilities,
+    ) -> Result<String> {
+        super::binary::create_directory(path, context, capabilities).await
+    }
+
     /// 【插件路径】【宿主解析】复用读取授权与目录句柄边界。
     /// @param path 请求路径；context 为可信目录；capabilities 为授权
     /// @returns 规范绝对路径

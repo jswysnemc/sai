@@ -8,11 +8,13 @@ const LOCALE_ZH_CN: u8 = 2;
 static LOCALE_OVERRIDE: AtomicU8 = AtomicU8::new(LOCALE_AUTO);
 
 /// Sai 支持的界面语言。
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum Locale {
     /// 美式英文。
+    #[serde(rename = "en-US")]
     En,
     /// 简体中文。
+    #[serde(rename = "zh-CN")]
     Zh,
 }
 
@@ -97,8 +99,11 @@ fn detect_from_locale_values<'a>(values: impl IntoIterator<Item = &'a str>) -> L
 /// 返回当前进程采用的界面语言。
 ///
 /// 返回:
-/// - 命令行覆盖语言；未设置覆盖时返回环境检测结果
+/// - 当前同步作用域、命令行覆盖或环境检测得到的语言
 pub fn locale() -> Locale {
+    if let Some(language) = super::scoped::current() {
+        return language;
+    }
     match LOCALE_OVERRIDE.load(Ordering::Relaxed) {
         LOCALE_EN_US => Locale::En,
         LOCALE_ZH_CN => Locale::Zh,

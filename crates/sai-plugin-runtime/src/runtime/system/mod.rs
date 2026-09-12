@@ -1,3 +1,4 @@
+mod directories;
 mod environment;
 mod files;
 mod process;
@@ -38,6 +39,14 @@ pub(super) fn install(
         control.clone(),
     )?;
     removal::install(
+        lua,
+        api,
+        host.clone(),
+        capabilities.clone(),
+        limits.clone(),
+        control.clone(),
+    )?;
+    directories::install(
         lua,
         api,
         host.clone(),

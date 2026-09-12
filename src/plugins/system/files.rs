@@ -141,6 +141,12 @@ pub(in crate::plugins) async fn file_info(
             is_file: metadata.is_file(),
             is_dir: metadata.is_dir(),
             len: metadata.len(),
+            modified: metadata.modified().ok().map(|time| {
+                time.into_std()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs_f64()
+            }),
         })
     })
     .await

@@ -1,7 +1,7 @@
 use crate::config::AppConfig;
 use crate::i18n::text as t;
 use crate::paths::SaiPaths;
-use crate::tools::knowledge_base::{FileRecord, KnowledgeBase};
+use crate::plugins::knowledge_view::{self, FileRecord};
 use anyhow::{bail, Result};
 use crossterm::event::KeyCode;
 use std::io;
@@ -25,13 +25,12 @@ pub(crate) fn edit_knowledge_base(
     paths: &SaiPaths,
     config: &AppConfig,
 ) -> Result<()> {
-    let kb = KnowledgeBase::new(config.clone(), paths.clone())?;
     let mut selected = 0usize;
     let mut status = String::new();
-    // 只在进入、数据变更、手动刷新时重新读库：list()/stats() 都会开库统计
-    // （stats 内部还会再 list 一次），放在每次按键上跑会让光标移动明显发涩
-    let mut files = kb.list().unwrap_or_default();
-    let mut stats = kb.stats().ok();
+    // 1. 【知识库界面】【按需刷新】仅在进入或修改时查询插件，光标移动不重新加载数据
+    let mut files = Vec::new();
+    let mut stats = None;
+    reload_knowledge(paths, config, &mut files, &mut stats);
     loop {
         let summary = stats
             .as_ref()
@@ -91,7 +90,7 @@ pub(crate) fn edit_knowledge_base(
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
             KeyCode::Char('r') => {
-                reload_knowledge(&kb, &mut files, &mut stats);
+                reload_knowledge(paths, config, &mut files, &mut stats);
                 status = t("refreshed", "已刷新").to_string();
             }
             KeyCode::Char('a') => {
@@ -99,21 +98,21 @@ pub(crate) fn edit_knowledge_base(
                     Ok(message) => status = message,
                     Err(err) => status = err.to_string(),
                 }
-                reload_knowledge(&kb, &mut files, &mut stats);
+                reload_knowledge(paths, config, &mut files, &mut stats);
             }
             KeyCode::Enter if selected == 0 => {
                 match add_path(stdout, paths, config) {
                     Ok(message) => status = message,
                     Err(err) => status = err.to_string(),
                 }
-                reload_knowledge(&kb, &mut files, &mut stats);
+                reload_knowledge(paths, config, &mut files, &mut stats);
             }
             KeyCode::Enter if selected == 1 => {
                 match clear_all(stdout, paths, config) {
                     Ok(message) => status = message,
                     Err(err) => status = err.to_string(),
                 }
-                reload_knowledge(&kb, &mut files, &mut stats);
+                reload_knowledge(paths, config, &mut files, &mut stats);
             }
             // 文件行上只认 d：Enter 在这里删除文件与其余界面「Enter 打开/执行」的
             // 语义冲突，且删除同时丢弃已索引向量，无法恢复
@@ -134,7 +133,7 @@ pub(crate) fn edit_knowledge_base(
                             Ok(message) => {
                                 status = message;
                                 selected = selected.saturating_sub(1).max(2);
-                                reload_knowledge(&kb, &mut files, &mut stats);
+                                reload_knowledge(paths, config, &mut files, &mut stats);
                             }
                             Err(err) => status = err.to_string(),
                         },
@@ -151,18 +150,21 @@ pub(crate) fn edit_knowledge_base(
 /// 重新读取知识库文件列表与统计。
 ///
 /// 参数:
-/// - `kb`: 知识库实例
+/// - `paths`: 应用目录
+/// - `config`: 当前配置
 /// - `files`: 待刷新的文件列表
 /// - `stats`: 待刷新的统计信息
 fn reload_knowledge(
-    kb: &KnowledgeBase,
+    paths: &SaiPaths,
+    config: &AppConfig,
     files: &mut Vec<FileRecord>,
     stats: &mut Option<serde_json::Value>,
 ) {
-    *files = kb.list().unwrap_or_default();
-    *stats = kb.stats().ok();
+    *files = block_on(knowledge_view::list(paths, config)).unwrap_or_default();
+    *stats = block_on(knowledge_view::stats(paths, config)).ok();
 }
 
+/// 【知识库界面】【输入导入】参数为输出、目录和配置；返回成功导入数量说明
 fn add_path(stdout: &mut io::Stdout, paths: &SaiPaths, config: &AppConfig) -> Result<String> {
     let mut fields = [Field::new(
         t("Path to file or directory", "文件或目录路径"),
@@ -179,17 +181,17 @@ fn add_path(stdout: &mut io::Stdout, paths: &SaiPaths, config: &AppConfig) -> Re
     if !path.exists() {
         bail!("{}: {}", t("path not found", "路径不存在"), path.display());
     }
-    let kb = KnowledgeBase::new(config.clone(), paths.clone())?;
-    let added = block_on(kb.add_path(&path))?;
-    Ok(format!("{}: {}", t("added", "已添加"), added.len()))
+    let added = block_on(knowledge_view::add(paths, config, &path))?;
+    Ok(format!("{}: {}", t("added", "已添加"), added))
 }
 
+/// 【知识库界面】【单项删除】参数为应用目录、配置和已确认名称；返回结果说明
 fn remove_one(paths: &SaiPaths, config: &AppConfig, name: &str) -> Result<String> {
-    let kb = KnowledgeBase::new(config.clone(), paths.clone())?;
-    kb.remove(name)?;
+    block_on(knowledge_view::remove(paths, config, name))?;
     Ok(format!("{} {name}", t("removed", "已移除")))
 }
 
+/// 【知识库界面】【确认清空】参数为输出、目录和配置；返回实际删除数量说明
 fn clear_all(stdout: &mut io::Stdout, paths: &SaiPaths, config: &AppConfig) -> Result<String> {
     let mut fields = [Field::boolean(
         t(
@@ -208,15 +210,15 @@ fn clear_all(stdout: &mut io::Stdout, paths: &SaiPaths, config: &AppConfig) -> R
     if fields[0].value.trim() != "true" {
         return Ok(t("cancelled", "已取消").to_string());
     }
-    let kb = KnowledgeBase::new(config.clone(), paths.clone())?;
-    let files = kb.list()?;
+    let files = block_on(knowledge_view::list(paths, config))?;
     let count = files.len();
     for file in files {
-        kb.remove(&file.name)?;
+        block_on(knowledge_view::remove(paths, config, &file.name))?;
     }
     Ok(format!("{}: {}", t("cleared files", "已清空文件数"), count))
 }
 
+/// 【知识库界面】【同步桥接】参数为插件 Future；返回完成结果，终端交互仍保留同步调用方式
 fn block_on<F: std::future::Future>(future: F) -> F::Output {
     tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(future))
 }

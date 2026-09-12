@@ -137,6 +137,7 @@ impl PluginHost for DiagnosticHost {
     ) -> Result<Option<FileInfo>> {
         capabilities.system.check_read_request(&path)?;
         Ok((path == "/var/lib/pacman/db.lck").then_some(FileInfo {
+            modified: None,
             is_file: true,
             is_dir: false,
             len: 0,

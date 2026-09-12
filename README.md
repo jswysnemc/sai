@@ -427,7 +427,7 @@ Sai/
 │   ├── agent/            # Agent core: loop, mode, compaction, subagent, context projection
 │   ├── cli/              # CLI subcommand dispatch and REPL implementation
 │   ├── llm/              # LLM client: triple-protocol, streaming, thinking, tool-call stream
-│   ├── tools/            # 30+ built-in tools, registry, progressive loading, subagent, skills
+│   ├── tools/            # Core tools, registry, progressive loading, subagent and skills
 │   ├── plugins/          # Plugin management, host APIs, persistent scheduling and compatibility
 │   ├── memory/           # Long-term memory: facts/episodes/FTS5/decay/association
 │   ├── state/            # Session state: turns WAL, pending, compaction, snapshot, recovery
@@ -443,9 +443,10 @@ Sai/
 │   ├── prompts/          # System prompt templates (obfuscated by build.rs)
 │   ├── i18n/             # Chinese / English i18n
 │   ├── cron/             # Cron job scheduling
-│   └── ...               # memes/knowledge_base/hooks, etc.
-├── plugins/              # Bundled Lua business packages, including alarms
+│   └── ...               # Other host modules
+├── plugins/              # Bundled Lua packages: knowledge base, todo, memes, alarms and more
 ├── crates/sai-plugin-runtime/ # Reusable Lua runtime and capability contracts
+├── crates/sai-sqlite-buffer/  # Fixed-capacity SQLite snapshot buffers
 ├── web/                  # Web workbench frontend (React + Vite)
 ├── assets/               # o200k tokenizer vocabulary
 ├── pics/                 # Screenshots and architecture overview
@@ -457,6 +458,8 @@ Sai/
 ```
 
 ---
+
+The [knowledge base plugin guide](design/lua-plugins/knowledge-base.md) describes command compatibility, background indexing, recovery and capacity limits.
 
 ## Storage layout
 

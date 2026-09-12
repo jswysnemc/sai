@@ -130,7 +130,7 @@ fn schedule(
 ) -> Result<ScheduledTask> {
     // 1. 【插件调度】【执行契约】过期实例不能把未来执行交给已经改变的源码或授权
     request.validate()?;
-    let (_, runtime) = load_current(paths, plugin, revision)?;
+    let (_, runtime) = load_current(paths, plugin, revision, None)?;
     ensure!(
         runtime
             .commands()
@@ -290,7 +290,7 @@ fn resume(
         store.write(&record)?;
         return Ok(record.task);
     }
-    load_current(&record.paths, plugin, &record.revision)?;
+    load_current(&record.paths, plugin, &record.revision, record.language)?;
     ensure!(
         !cancelled.load(Ordering::Acquire),
         "scheduled operation was cancelled before publication"
@@ -301,40 +301,44 @@ fn resume(
 }
 
 /// 【插件调度】【到期授权】读取当前磁盘配置与包，要求启用、调度授权和完整摘要保持一致。
-/// @param paths 宿主路径；plugin 为插件；revision 为创建时摘要
+/// @param paths 宿主路径；plugin 为插件；revision 为创建时摘要；language 为创建时语言，旧记录可省略
 /// @returns 独立命令运行时，不附加模型或工具调用服务
 fn load_current(
     paths: &SaiPaths,
     plugin: &str,
     revision: &str,
+    language: Option<crate::i18n::Locale>,
 ) -> Result<(PluginDescriptor, PluginRuntime)> {
-    let config = AppConfig::load_or_default(paths)?;
-    let descriptor = discover(&config, paths)
-        .plugins
-        .into_iter()
-        .find(|descriptor| descriptor.package.manifest.id == plugin)
-        .context("scheduled plugin is unavailable")?;
-    ensure!(descriptor.setting.enabled, "scheduled plugin is disabled");
-    ensure!(
-        descriptor
-            .capabilities()
-            .intersection(&descriptor.grants())
-            .system
-            .schedule,
-        "plugin scheduling grant was revoked"
-    );
-    ensure!(
-        descriptor.revision()? == revision,
-        "scheduled plugin source, settings or grants changed"
-    );
-    let host = Arc::new(PrivatePluginHost::for_descriptor(paths, &descriptor)?);
-    let runtime = PluginRuntime::load(
-        descriptor.runtime_package(),
-        descriptor.settings().clone(),
-        descriptor.grants(),
-        host,
-    )?;
-    Ok((descriptor, runtime))
+    // 1. 【插件调度】【语言快照】重建派生设置时复用创建语言，实际配置和授权仍须完整匹配
+    crate::i18n::with_locale(language.unwrap_or_else(crate::i18n::locale), || {
+        let config = AppConfig::load_or_default(paths)?;
+        let descriptor = discover(&config, paths)
+            .plugins
+            .into_iter()
+            .find(|descriptor| descriptor.package.manifest.id == plugin)
+            .context("scheduled plugin is unavailable")?;
+        ensure!(descriptor.setting.enabled, "scheduled plugin is disabled");
+        ensure!(
+            descriptor
+                .capabilities()
+                .intersection(&descriptor.grants())
+                .system
+                .schedule,
+            "plugin scheduling grant was revoked"
+        );
+        ensure!(
+            descriptor.revision()? == revision,
+            "scheduled plugin source, settings or grants changed"
+        );
+        let host = Arc::new(PrivatePluginHost::for_descriptor(paths, &descriptor)?);
+        let runtime = PluginRuntime::load(
+            descriptor.runtime_package(),
+            descriptor.settings().clone(),
+            descriptor.grants(),
+            host,
+        )?;
+        Ok((descriptor, runtime))
+    })
 }
 
 /// 【插件调度】【管理标识】限制 CLI 插件标识，任意输入不能改变命名空间结构。

@@ -60,6 +60,37 @@ impl PrivatePluginHost {
 
 #[async_trait]
 impl PluginHost for PrivatePluginHost {
+    /// 【插件宿主】【目录输出】复用二进制目录授权，不开放任意目录创建
+    /// @param path 目录；context 为可信上下文；capabilities 为有效授权
+    /// @returns 规范目录路径
+    async fn create_directory(
+        &self,
+        path: String,
+        context: SystemContext,
+        capabilities: Capabilities,
+    ) -> Result<String> {
+        crate::plugins::binary::create_directory(path, context, capabilities).await
+    }
+
+    /// 【插件宿主】【私有互斥】只使用实例绑定的插件和状态根目录
+    /// @param key 私有键；timeout_ms 为等待上限；capabilities 为有效授权
+    /// @returns 生命周期由运行时子回调持有的锁
+    async fn plugin_lock(
+        &self,
+        key: &str,
+        timeout_ms: u64,
+        capabilities: &Capabilities,
+    ) -> Result<Box<dyn PluginLock>> {
+        super::lock::acquire(
+            self.paths.state_dir.clone(),
+            self.id.clone(),
+            key.into(),
+            timeout_ms,
+            capabilities,
+        )
+        .await
+    }
+
     /// 【插件文件】【删除代理】使用正式宿主状态锁执行独立授权的文件删除或回收站移动
     /// @param request 文件与删除类型；context 为可信目录和权限；capabilities 为有效授权
     /// @returns 成功删除为 true，授权目标缺失为 false

@@ -8,6 +8,8 @@ Lua 业务通过 `sai.fs`、`sai.env` 和 `sai.process` 访问系统能力。运
 
 `sai.fs.remove_file(path)` 与 `sai.fs.trash_file(path)` 分别使用独立的 `system.remove_paths`、`system.trash_paths` 目录授权，并要求可信写入权限。两者只操作单个普通文件，缺失返回 `false`；读取和二进制写入不会间接授予删除。参数、系统回收站平台范围及提交取消边界见[单文件删除](file-removal-api.md)。
 
+`sai.fs.create_dir(path)` 创建授权范围内的目录，复用 `binary.write_paths` 与可信写入许可；不依赖读取或删除授权。
+
 ## 能力声明与授权
 
 ```json
@@ -80,14 +82,17 @@ local absolute = sai.fs.realpath("notes.txt")
 | --- | --- | --- |
 | `read_text(path, options)` | `{text, truncated}` | 1 MiB，进一步受回调输出上限限制 |
 | `read_dir(path, options)` | `{entries, truncated}` | 256 条，最多 1024 条 |
-| `stat(path)` | `{is_file, is_dir, len}` 或 `nil` | 不读取正文 |
+| `stat(path)` | `{is_file, is_dir, len, modified?}` 或 `nil` | 不读取正文；`modified` 为 Unix 秒 |
 | `realpath(path)` | 已授权普通文件或目录的规范 UTF-8 绝对路径 | 严格字符串参数，共用系统调用与输出预算 |
+| `create_dir(path)` | 已存在或完成创建的规范 UTF-8 绝对目录路径 | `binary.write_paths` 及可信写入许可，共用系统调用与输出预算 |
 | `remove_file(path)` | 删除单个普通文件，存在返回 `true`，缺失返回 `false` | 独立 `remove_paths` 目录授权及可信写入权限 |
 | `trash_file(path)` | 移入系统回收站，存在返回 `true`，缺失返回 `false` | 独立 `trash_paths` 授权；当前支持 Linux 同文件系统用户回收站 |
 
-目录条目包含 `name`、`path`、`is_dir`、`is_file`。`len` 是文件系统报告的字节数；例如 `/proc` 伪文件可能报告零长度但仍有可读正文。`truncated=true` 表示还有内容未返回，不能据此认定扫描完整。
+目录条目包含 `name`、`path`、`is_dir`、`is_file`。`len` 是文件系统报告的字节数；例如 `/proc` 伪文件可能报告零长度但仍有可读正文。`stat.modified` 为可带小数的 Unix 秒，获取失败时省略；正式宿主对早于 Unix 纪元的值返回零。`truncated=true` 表示还有内容未返回，不能据此认定扫描完整。
 
 `realpath` 要求对象存在，使用与读取相同的授权路径和可信工作目录。授权内符号链接返回真实目标，越界链接、特殊文件、相对宿主工作目录和非法宿主结果均报错。结果是路径快照；后续读取仍须重新授权与检查，不把返回路径当成永久文件句柄。
+
+`create_dir` 只接受一个字符串路径，可以创建声明根本身以及缺失的子目录，重复创建已存在目录成功。宿主先校验规范祖先和授权范围，再通过目录句柄逐层创建，不跟随校验后替换的链接；普通文件冲突、越界及非法组件拒绝。取消会丢弃迟到结果，但已经创建的目录不回滚。修改 `ctx.allow_writes` 不能绕过只读限制。
 
 请求的字节数和条数收窄到至少 1。`lossy` 默认为 `false`：严格读取遇到非法 UTF-8 会失败；字节上限切到一个有效字符中间时丢弃不完整尾部。`lossy=true` 使用替换字符，替换后的文本仍不能突破字节限制。运行时在接收宿主结果后再次检查单次请求和总结果大小。
 

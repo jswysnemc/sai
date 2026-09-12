@@ -24,12 +24,14 @@ pub struct FileText {
     pub truncated: bool,
 }
 
-/// 【插件】【文件属性】仅公开通用文件类型和字节数。
+/// 【插件】【文件属性】公开通用文件类型、字节数及可选修改时间
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct FileInfo {
     pub is_file: bool,
     pub is_dir: bool,
     pub len: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub modified: Option<f64>,
 }
 
 /// 【插件】【目录条目】返回名称和路径，目录读取不隐式读取子项正文。

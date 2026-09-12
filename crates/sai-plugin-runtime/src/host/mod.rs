@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 pub(crate) mod binary;
 mod binary_revision;
 mod file_removal;
+mod lock;
 mod notification;
 mod private;
 mod scheduler;
@@ -16,6 +17,7 @@ mod vision;
 pub use binary::{BinaryData, BinaryFile, BinaryReadBuffer, BinaryResponse, DisplayedImage};
 pub use binary_revision::{BinaryConditionalWrite, BinaryRevision};
 pub use file_removal::{FileRemovalKind, FileRemovalRequest};
+pub use lock::PluginLock;
 pub use notification::{
     BuiltinSound, NotificationDelivery, NotificationRequest, NotificationSound,
     MAX_NOTIFICATION_AUDIO_BYTES,
@@ -66,6 +68,30 @@ pub struct HttpResponse {
 /// 【插件】【宿主接口】插件运行时所需的异步能力，实现不依赖 Sai 应用配置。
 #[async_trait]
 pub trait PluginHost: Send + Sync {
+    /// 【插件目录】【宿主创建】只创建已授权输出目录及必要父目录
+    /// @param path 目录；context 为可信工作目录与权限；capabilities 为有效授权
+    /// @returns 实际目录绝对路径，存在时幂等成功
+    async fn create_directory(
+        &self,
+        _path: String,
+        _context: SystemContext,
+        _capabilities: Capabilities,
+    ) -> Result<String> {
+        anyhow::bail!("directory creation is unavailable in this host")
+    }
+
+    /// 【插件互斥】【宿主边界】取得绑定插件的私有锁，不接受调用者指定插件身份
+    /// @param key 私有键；timeout_ms 为最大等待时间；capabilities 为有效授权
+    /// @returns 锁租约；取消后实际等待线程必须停止并释放迟到租约
+    async fn plugin_lock(
+        &self,
+        _key: &str,
+        _timeout_ms: u64,
+        _capabilities: &Capabilities,
+    ) -> Result<Box<dyn PluginLock>> {
+        anyhow::bail!("plugin locks are unavailable in this host")
+    }
+
     /// 【插件文件】【删除宿主】只操作独立目录授权内的单个普通文件，回收站失败不得改为永久删除
     /// @param request 路径与删除类型；context 为可信目录和权限；capabilities 为有效授权
     /// @returns 成功删除为 true，授权目标缺失为 false；未实现宿主明确拒绝
