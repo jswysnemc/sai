@@ -106,6 +106,7 @@ mod tests {
             cache_read_tokens: Some(read),
             cache_write_tokens: Some(write),
             session_id: None,
+            workspace_id: None,
             error_kind: None,
         }
     }

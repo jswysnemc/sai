@@ -1,0 +1,50 @@
+.usage-session-ranking {
+  min-width: 0;
+}
+
+.usage-session-ranking h3 {
+  margin: 0;
+}
+
+.usage-session-caption {
+  margin: 0.25rem 0 0;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+.usage-session-ranking .ui-select > button {
+  min-height: 2rem;
+  font-size: var(--text-sm);
+}
+
+.usage-session-ranking .usage-table-wrap {
+  margin-top: 0.75rem;
+}
+
+.usage-session-table .usage-session-name {
+  min-width: 0;
+  max-width: 18rem;
+}
+
+.usage-session-ranking .usage-session-table {
+  min-width: 0;
+}
+
+.usage-session-table .usage-session-primary {
+  width: 6.5rem;
+  white-space: normal;
+}
+
+.usage-session-name strong,
+.usage-session-name small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-session-rank {
+  width: 3rem;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}

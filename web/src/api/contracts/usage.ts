@@ -20,6 +20,7 @@ export type UsageRecord = {
   /** input_tokens 中写入缓存的部分，历史记录可能缺失 */
   cache_write_tokens?: number | null;
   session_id?: string | null;
+  workspace_id?: string | null;
   error_kind?: string | null;
 };
 
@@ -79,6 +80,8 @@ export type UsageStatsResponse = {
   logs: UsageRecord[];
   provider_stats: UsageGroupStats[];
   model_stats: UsageGroupStats[];
+  session_stats: UsageSessionStats[];
+  total_sessions: number;
   total_logs: number;
   skipped_records: number;
 };
@@ -91,4 +94,16 @@ export type UsageStatsQuery = {
   model_search?: string;
   limit?: number;
   offset?: number;
+  session_sort?: UsageSessionSort;
+  session_limit?: number;
+};
+
+export type UsageSessionSort = "total_tokens" | "billable_tokens" | "requests";
+
+export type UsageSessionStats = UsageSummary & {
+  session_id: string;
+  workspace_id?: string | null;
+  title?: string | null;
+  session_available: boolean;
+  last_used_at?: number | null;
 };

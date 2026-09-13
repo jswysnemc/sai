@@ -42,6 +42,9 @@ pub struct UsageRecord {
     pub cache_write_tokens: Option<u64>,
     #[serde(default)]
     pub session_id: Option<String>,
+    /// 会话所属工作区；旧日志缺失时由唯一会话索引补充
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     #[serde(default)]
     pub error_kind: Option<String>,
 }
@@ -160,6 +163,9 @@ pub fn record_model_call(paths: &SaiPaths, input: UsageRecordInput<'_>) -> Resul
         cache_read_tokens: usage_fields.cache_read_tokens,
         cache_write_tokens: usage_fields.cache_write_tokens,
         session_id: input.session_id.map(str::to_string),
+        workspace_id: input
+            .session_id
+            .and_then(|_| crate::state::current_workspace_id().ok()),
         error_kind: input.error_kind.map(str::to_string),
     };
     append_record(&usage_dir(paths), &record)

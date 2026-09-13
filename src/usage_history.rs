@@ -8,6 +8,7 @@ mod billing;
 mod grouping;
 mod query;
 mod record;
+mod session_ranking;
 mod stats;
 mod summary;
 mod trend;

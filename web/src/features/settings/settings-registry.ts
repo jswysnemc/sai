@@ -233,14 +233,15 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     saveHintZh: "只读",
     labelEn: "Usage",
     labelZh: "用量",
-    descriptionEn: "Token trends, providers, models, and request logs",
-    descriptionZh: "Token 趋势、供应商、模型与请求日志",
+    descriptionEn: "Token trends, top-consuming sessions, providers, models, and request logs",
+    descriptionZh: "Token 趋势、高消耗会话、供应商、模型与请求日志",
     icon: BarChart3,
-    searchKeys: ["usage", "token", "stats", "log", "用量", "统计"],
+    searchKeys: ["usage", "token", "stats", "log", "ranking", "用量", "统计", "高消耗", "排行"],
     subviews: [
       { id: "overview", labelEn: "Overview", labelZh: "总览" },
       { id: "providers", labelEn: "By provider", labelZh: "按供应商" },
       { id: "models", labelEn: "By model", labelZh: "按模型" },
+      { id: "sessions", labelEn: "Top sessions", labelZh: "高消耗会话" },
       { id: "logs", labelEn: "Request logs", labelZh: "请求日志" }
     ]
   },

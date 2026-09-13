@@ -67,6 +67,8 @@ describe("settings registry", () => {
     const git = SETTINGS_SECTIONS.find((item) => item.id === "git");
     expect(resolveSettingsSubview(git, "anything")).toBeUndefined();
     expect(resolveSettingsSubview(undefined, "anything")).toBeUndefined();
+    const usage = SETTINGS_SECTIONS.find((item) => item.id === "usage");
+    expect(resolveSettingsSubview(usage, "sessions")).toBe("sessions");
   });
 
   it("gives every non-required section a bilingual save hint", () => {

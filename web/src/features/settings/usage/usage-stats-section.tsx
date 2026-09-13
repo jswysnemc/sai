@@ -9,6 +9,8 @@ import { type UsageView } from "./usage-labels";
 import { UsageLogsTable } from "./usage-logs-table";
 import { UsageOverview } from "./usage-overview";
 import { UsageStatsFilters, type UsageFilterState } from "./usage-stats-filters";
+import { UsageSessionRanking } from "./usage-session-ranking";
+import type { UsageSessionSort } from "../../../api/contracts/usage";
 import "./usage-stats.css";
 
 const LOG_PAGE_SIZE = 15;
@@ -35,9 +37,11 @@ export function UsageStatsSection({ subview }: { subview?: string }) {
   const view = (subview ?? "overview") as UsageView;
   const [filters, setFilters] = useState<UsageFilterState>(INITIAL_FILTERS);
   const [page, setPage] = useState(0);
+  const [sessionSort, setSessionSort] = useState<UsageSessionSort>("total_tokens");
+  const [sessionLimit, setSessionLimit] = useState(10);
 
   const stats = useQuery({
-    queryKey: ["usage-stats", filters, page],
+    queryKey: ["usage-stats", filters, page, sessionSort, sessionLimit],
     queryFn: () =>
       api.usage.stats({
         range: filters.range,
@@ -47,6 +51,8 @@ export function UsageStatsSection({ subview }: { subview?: string }) {
         model_search: filters.modelSearch.trim() || undefined,
         limit: LOG_PAGE_SIZE,
         offset: page * LOG_PAGE_SIZE,
+        session_sort: sessionSort,
+        session_limit: sessionLimit,
       }),
   });
 
@@ -108,6 +114,18 @@ export function UsageStatsSection({ subview }: { subview?: string }) {
       {clear.error && <div className="usage-error">{clear.error.message}</div>}
 
       {data && view === "overview" && <UsageOverview data={data} t={t} locale={locale} />}
+      {data && (view === "overview" || view === "sessions") && (
+        <UsageSessionRanking
+          rows={data.session_stats ?? []}
+          total={data.total_sessions ?? 0}
+          sort={sessionSort}
+          limit={sessionLimit}
+          onSortChange={setSessionSort}
+          onLimitChange={setSessionLimit}
+          t={t}
+          locale={locale}
+        />
+      )}
       {data && view === "providers" && <UsageGroupTable rows={data.provider_stats} type="provider" t={t} locale={locale} />}
       {data && view === "models" && <UsageGroupTable rows={data.model_stats} type="model" t={t} locale={locale} />}
       {data && view === "logs" && (

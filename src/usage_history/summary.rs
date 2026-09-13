@@ -35,7 +35,7 @@ pub struct UsageSummary {
 ///
 /// 返回:
 /// - 请求数、令牌量与平均耗时构成的汇总
-pub(crate) fn summarize(records: &[UsageRecord]) -> UsageSummary {
+pub(crate) fn summarize<'a>(records: impl IntoIterator<Item = &'a UsageRecord>) -> UsageSummary {
     let mut summary = UsageSummary::default();
     let mut duration_total = 0u64;
     for record in records {
@@ -106,6 +106,7 @@ mod tests {
             cache_read_tokens: Some(read),
             cache_write_tokens: Some(write),
             session_id: None,
+            workspace_id: None,
             error_kind: None,
         }
     }

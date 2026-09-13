@@ -22,6 +22,10 @@ pub struct UsageStatsQuery {
     pub offset: Option<usize>,
     #[serde(default)]
     pub limit: Option<usize>,
+    #[serde(default)]
+    pub session_sort: Option<String>,
+    #[serde(default)]
+    pub session_limit: Option<usize>,
 }
 
 fn default_range() -> String {

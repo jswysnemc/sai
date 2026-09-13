@@ -28,6 +28,10 @@ struct StatsQuery {
     limit: Option<usize>,
     #[serde(default)]
     offset: Option<usize>,
+    #[serde(default)]
+    session_sort: Option<String>,
+    #[serde(default)]
+    session_limit: Option<usize>,
 }
 
 fn default_range() -> String {
@@ -49,6 +53,8 @@ async fn stats(
             model_search: query.model_search,
             limit: query.limit,
             offset: query.offset,
+            session_sort: query.session_sort,
+            session_limit: query.session_limit,
         },
     )
     .map_err(WebError::from)?;

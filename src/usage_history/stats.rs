@@ -3,6 +3,7 @@ use super::query::{
     filter_records, range_start, UsageStatsQuery, DEFAULT_LOG_LIMIT, MAX_LOG_LIMIT,
 };
 use super::record::{read_records, usage_dir, UsageRecord};
+use super::session_ranking::{group_session_stats, UsageSessionStats};
 use super::summary::{summarize, UsageSummary};
 use super::trend::{build_trend, UsageTrendPoint};
 use crate::paths::SaiPaths;
@@ -17,6 +18,8 @@ pub struct UsageStatsResponse {
     pub logs: Vec<UsageRecord>,
     pub provider_stats: Vec<UsageGroupStats>,
     pub model_stats: Vec<UsageGroupStats>,
+    pub session_stats: Vec<UsageSessionStats>,
+    pub total_sessions: usize,
     pub total_logs: usize,
     pub skipped_records: usize,
 }
@@ -40,6 +43,7 @@ pub fn get_stats(paths: &SaiPaths, query: UsageStatsQuery) -> Result<UsageStatsR
     let trend = build_trend(&filtered, &query.range);
     let provider_stats = group_provider_stats(&filtered);
     let model_stats = group_model_stats(&filtered);
+    let (session_stats, total_sessions) = group_session_stats(paths, &filtered, &query);
     // 3. 日志明细按分页截取
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(DEFAULT_LOG_LIMIT).min(MAX_LOG_LIMIT);
@@ -50,6 +54,8 @@ pub fn get_stats(paths: &SaiPaths, query: UsageStatsQuery) -> Result<UsageStatsR
         logs,
         provider_stats,
         model_stats,
+        session_stats,
+        total_sessions,
         total_logs,
         skipped_records,
     })

@@ -1,3 +1,7 @@
+import { apiRequest } from "./api-request";
+import { usageApi } from "./usage-client";
+export { apiRequest } from "./api-request";
+export { bootstrapSession, fetchAuthMode, hasActiveSession, loginWithPassword } from "./auth-client";
 import type { BranchSwitchResult, SessionTurnTree } from "./turn-tree-contracts";
 import type {
   ConfigResponse,
@@ -52,8 +56,6 @@ import type {
   AgentRuntimeProfilesResponse,
   SessionTimeline,
   SystemUsage,
-  UsageStatsQuery,
-  UsageStatsResponse,
   Session,
   TerminalInfo,
   SshHost,
@@ -83,76 +85,11 @@ import type {
   SessionDataSelection,
   SessionDataDeleteResult
 } from "./contracts";
-import { ApiError } from "./api-error";
-import { detectInitialLocale, text } from "../features/i18n/locale";
 import type { GoalResponse, GoalUpdateRequest } from "./goal-contracts";
 import type { GitOperationAction, GitOperationOptions } from "./git-contracts";
 import type { McpToolInfo } from "./mcp-tool-contracts";
 import type { ManagedSkill, ManagedSkillDocument } from "./skill-contracts";
 
-/** 服务端当前启用的认证方式。 */
-export async function fetchAuthMode(): Promise<{ password_required: boolean; allow_anonymous: boolean }> {
-  const response = await fetch("/api/auth/mode", { credentials: "same-origin" });
-  if (!response.ok) return { password_required: false, allow_anonymous: false };
-  return (await response.json()) as { password_required: boolean; allow_anonymous: boolean };
-}
-
-/** 使用访问口令建立同源会话。 */
-export async function loginWithPassword(password: string): Promise<void> {
-  const response = await fetch("/api/auth/password", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password })
-  });
-  if (!response.ok) {
-    throw new Error(text(detectInitialLocale(), "Incorrect password", "口令不正确"));
-  }
-}
-
-/** 判断当前浏览器会话是否已通过验证。 */
-export async function hasActiveSession(): Promise<boolean> {
-  const response = await fetch("/api/workspaces", { credentials: "same-origin" });
-  return response.ok;
-}
-
-/** 使用 URL 启动令牌建立同源会话。 */
-export async function bootstrapSession(): Promise<void> {
-  const url = new URL(window.location.href);
-  const token = url.searchParams.get("token");
-  if (!token) return;
-  const response = await fetch(`/api/auth/session?token=${encodeURIComponent(token)}`, {
-    method: "POST",
-    credentials: "same-origin"
-  });
-  // 启用口令验证时令牌不再单独放行，此处失败交由登录页接管
-  if (response.ok) {
-    url.searchParams.delete("token");
-    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-    return;
-  }
-  const mode = await fetchAuthMode().catch(() => ({ password_required: false, allow_anonymous: false }));
-  if (mode.password_required || mode.allow_anonymous) return;
-  throw new Error(text(detectInitialLocale(), "The Sai Web access token is invalid", "Sai Web 访问令牌无效"));
-}
-
-/** 发送 JSON API 请求并统一处理错误。 */
-export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
-    credentials: "same-origin",
-    ...init,
-    headers: {
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...init?.headers
-    }
-  });
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string; detail?: string } | null;
-    const message = body?.error ?? `HTTP ${response.status}`;
-    throw new ApiError(message, body?.detail ?? message);
-  }
-  return response.json() as Promise<T>;
-}
 
 export const api = {
   workspaces: {
@@ -706,21 +643,7 @@ export const api = {
       return apiRequest<SystemUsage>(`/api/system/usage${suffix}`);
     }
   },
-  usage: {
-    stats: (query: UsageStatsQuery = {}) => {
-      const params = new URLSearchParams();
-      if (query.range) params.set("range", query.range);
-      if (query.source) params.set("source", query.source);
-      if (query.status) params.set("status", query.status);
-      if (query.provider_search) params.set("provider_search", query.provider_search);
-      if (query.model_search) params.set("model_search", query.model_search);
-      if (query.limit != null) params.set("limit", String(query.limit));
-      if (query.offset != null) params.set("offset", String(query.offset));
-      const suffix = params.size > 0 ? `?${params.toString()}` : "";
-      return apiRequest<UsageStatsResponse>(`/api/usage/stats${suffix}`);
-    },
-    clear: () => apiRequest<{ ok: boolean }>("/api/usage/logs", { method: "DELETE" })
-  },
+  usage: usageApi,
   skills: {
     list: () => apiRequest<{ skills: Array<{ name: string; description: string }> }>("/api/skills"),
     document: (name: string) =>

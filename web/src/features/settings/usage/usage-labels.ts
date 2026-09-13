@@ -2,7 +2,7 @@
 export type Translate = (en: string, zh: string) => string;
 
 /** 用量面板的视图标识。 */
-export type UsageView = "overview" | "providers" | "models" | "logs";
+export type UsageView = "overview" | "providers" | "models" | "sessions" | "logs";
 
 /**
  * 按标识取双语文案。
@@ -92,6 +92,7 @@ export function viewLabel(view: string, t: Translate) {
       overview: ["Overview", "总览"],
       providers: ["Providers", "供应商"],
       models: ["Models", "模型"],
+      sessions: ["Top sessions", "高消耗会话"],
       logs: ["Logs", "日志"],
     },
     view,
