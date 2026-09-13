@@ -1,4 +1,4 @@
-use super::todo_support::{bundled, context, snapshot};
+use super::todo_support::{context, installed, snapshot};
 use crate::state::StateStore;
 use sai_plugin_runtime::{InvocationContext, PluginRuntime};
 use serde_json::{json, Value};
@@ -29,12 +29,12 @@ async fn call_with_busy_retry(
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn todo_concurrent_additions_keep_all_successful_items() {
     let root = tempfile::tempdir().unwrap();
-    let (paths, reader, _) = bundled(root.path());
+    let (paths, reader, _) = installed(root.path());
     let store = StateStore::new(&paths).unwrap();
     let scope = store.state_dir().display().to_string();
     let mut tasks = Vec::new();
     for number in 0..8 {
-        let (_, plugin, _) = bundled(root.path());
+        let (_, plugin, _) = installed(root.path());
         let ctx = context(root.path(), &scope, true);
         tasks.push(tokio::spawn(async move {
             call_with_busy_retry(
@@ -68,7 +68,7 @@ async fn todo_concurrent_additions_keep_all_successful_items() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn todo_concurrent_updates_merge_and_final_archive_is_unique() {
     let root = tempfile::tempdir().unwrap();
-    let (paths, reader, _) = bundled(root.path());
+    let (paths, reader, _) = installed(root.path());
     let store = StateStore::new(&paths).unwrap();
     let scope = store.state_dir().display().to_string();
     let added = call_with_busy_retry(
@@ -84,7 +84,7 @@ async fn todo_concurrent_updates_merge_and_final_archive_is_unique() {
         json!({"action":"update","id":id,"text":"changed"}),
         json!({"action":"update","id":id,"status":"completed"}),
     ] {
-        let (_, plugin, _) = bundled(root.path());
+        let (_, plugin, _) = installed(root.path());
         let ctx = context(root.path(), &scope, true);
         tasks.push(tokio::spawn(async move {
             call_with_busy_retry(&plugin, update, ctx).await
@@ -99,7 +99,7 @@ async fn todo_concurrent_updates_merge_and_final_archive_is_unique() {
     let last = state["items"][1]["id"].clone();
     let mut tasks = Vec::new();
     for _ in 0..6 {
-        let (_, plugin, _) = bundled(root.path());
+        let (_, plugin, _) = installed(root.path());
         let ctx = context(root.path(), &scope, true);
         let update = json!({"action":"update","id":last,"status":"completed"});
         tasks.push(tokio::spawn(async move {

@@ -10,7 +10,6 @@ export const APP_CONFIG_SECTION_IDS = [
   "providers",
   "agents",
   "cli-tools",
-  "web-search",
   "runtime",
   "prompts",
   "git",

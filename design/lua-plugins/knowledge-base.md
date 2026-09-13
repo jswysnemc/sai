@@ -1,11 +1,11 @@
 # 本地知识库插件
 
-`plugins/knowledge-base` 实现知识文件导入、编辑、删除、关键词与语义搜索，以及后台嵌入重建。六个工具保留原公开名称、完整描述和参数 Schema；`sai kb` 与配置 TUI 调用同一 Lua 包。原 `src/tools/knowledge_base.rs` 和 `src/tools/knowledge_base/` 业务实现已删除。
+`examples/lua-plugins/knowledge-base` 实现知识文件导入、编辑、删除、关键词与语义搜索，以及后台嵌入重建。六个工具使用 `lua__knowledge-base__` 前缀，保留包内名称、完整描述和参数 Schema；`sai kb` 与配置 TUI 调用同一普通安装包，Web 对话通过工具目录使用它。安装与最小授权见[示例说明](../../examples/lua-plugins/knowledge-base/README.md)。
 
 ## 文件职责
 
 ```text
-plugins/knowledge-base/
+examples/lua-plugins/knowledge-base/
 ├── sai-plugin.json                 能力与资源限制
 ├── init.lua                        实例装配
 ├── defaults.lua、settings.lua       默认值与配置校验
@@ -25,11 +25,12 @@ plugins/knowledge-base/
 │   ├── keyword.lua、semantic.lua    两种评分及结果合并
 │   └── run.lua                     关键词与网络查询编排
 └── embedding/
+    ├── provider.lua                独立端点、显式密钥和授权环境读取
     ├── client.lua、chunks.lua       嵌入协议、响应校验和分块
     └── jobs.lua、reindex.lua        队列合并与完整块发布
 ```
 
-Rust 的 `src/cli/kb_commands.rs` 只转换原命令参数；`src/plugins/knowledge_view.rs` 只提供 TUI DTO 和命令桥接。`src/plugins/commands.rs` 执行可信内置命令，`compatibility/knowledge_base.rs` 负责旧配置、当前嵌入供应商及最小能力投影。文件、锁、SQLite 和持久调度宿主不包含知识库表名或评分规则。
+Rust 的 `src/cli/kb_commands.rs` 转换管理参数；`src/plugins/knowledge_view.rs` 提供可选视图和文件导入桥接。`src/plugins/commands.rs` 按普通安装、启停和权限交集执行命令。没有主配置或供应商投影，文件、锁、SQLite 和持久调度宿主不包含知识库表名或评分规则。
 
 ## 工具与管理入口
 
@@ -56,26 +57,27 @@ sai kb stats
 sai kb embed reindex --quiet
 ```
 
-对应插件命令为 `add`、`list`、`search`、`find`、`read`、`remove`、`reindex`、`stats`、`embed-reindex`。它们接收 JSON 对象；`add` 和 `list` 支持 `format="json"`，供配置 TUI 使用。`limit`、`start`、`lines` 接受非负整数或完整十进制字符串，最大为 u64；旧 CLI 把这些参数转换为十进制字符串，避免 Lua 浮点转换丢失精度。未知字段、错误类型与越界值在文件操作前拒绝。
+对应插件命令为 `add`、`add-text`、`list`、`search`、`find`、`read`、`remove`、`reindex`、`stats`、`embed-reindex`。它们接收 JSON 对象；`add`、`add-text` 和 `list` 支持 `format="json"`。`add-text` 接收 `name/content`，保存原始 UTF-8 正文，复用导入事务；聊天上传工具仍添加原有 Markdown 包装。`limit`、`start`、`lines` 接受非负整数或完整十进制字符串，最大为 u64；CLI 转换为十进制字符串以保留精度。未知字段、错误类型与越界值在文件操作前拒绝。
 
-原管理查询会初始化目录，因此九项命令都声明写入权限，并可恢复未完成记录。显式 `--plan` 拒绝这些管理命令；只读工具仍可在计划模式查询现有完整库。配置 TUI 保留原菜单和删除确认，进入页面或完成变更后才刷新数据。
+管理查询会初始化目录，因此十项命令都声明写入权限，并可恢复未完成记录。显式 `--plan` 拒绝这些命令；只读工具可查询现有完整库。配置 TUI 保留菜单和删除确认，进入页面或完成变更后才刷新数据。未安装或禁用时，可选文件列表为空，统计保留原字段并返回 `available:false`；显式修改报告功能不可用。
 
 ## 配置与权限
 
-旧 `plugins.knowledge_base.enabled` 提供缺省启用状态，显式插件启停优先。旧业务设置作为默认值，`plugins.jsonc` 中的包设置按字段覆盖。空 `data_dir` 使用应用数据目录下的 `kb`；相对目录按本次可信工作目录解析。
+安装默认禁用、零授权。设置只来自 `plugins.jsonc` 中的本插件对象；默认 `data_dir` 为 `kb`，相对目录按本次可信工作目录解析。自定义目录必须同时进入清单与用户授权。
 
 | 能力 | 最小范围 |
 | --- | --- |
-| `system.read_paths` | 知识库根目录，以及最多 32 项显式 `input_paths` |
+| `system.read_paths` | 默认 `kb` 和专用导入目录 `.sai/kb-import` |
 | `binary.write_paths` | 知识库根目录 |
 | `system.remove_paths` | 知识库根目录，包含正文和恢复记录删除 |
 | `system.plugin_storage` | 本插件锁与小型后台队列记录 |
 | `system.schedule` | 本插件后台重建命令的创建和查询 |
-| `http`、`http_read_only_post` | 当前嵌入供应商来源和精确 `/embeddings` 端点 |
+| `http`、`http_read_only_post` | 独立嵌入来源和精确端点；默认 OpenAI 来源与 `/v1/embeddings` |
+| `system.environment` | 默认仅声明 `SAI_KB_EMBEDDING_API_KEY`，使用时另行授权 |
 
-`sai kb add` 和配置 TUI 只为用户明确选择的来源增加单次读取授权，不保存到插件设置，也不交给后续后台任务。普通 `plugins run knowledge-base add` 必须已有来源读取授权。索引中的绝对 `path` 不作为实际读取来源；Lua 始终从经过校验的库内相对名称生成路径。
+`sai kb add`、TUI 文件管理和普通 `plugins run knowledge-base add` 均要求文件或目录来源已获读取授权，不临时修改声明或授权。独立 `add-text` 命令接收明确提供的原始正文，保留相同文件与事务限制。索引中的绝对 `path` 不作为实际读取来源，Lua 始终从校验后的库内相对名称生成路径。
 
-供应商投影只包含当前选择的 ID、端点和已解析密钥，兼容单密钥、多密钥选中项、环境引用和私密配置。派生凭据不写入插件配置或调度参数，外部同 ID 包不能继承。显式目录及 HTTP 授权保持固定，更改库路径或端点后仍须满足当前授权交集。
+嵌入默认关闭。独立设置 `embedding_enabled`、`embedding_provider_id`、`embedding_model` 及 `provider`；后者包含完整 `endpoint`、可选 `api_key` 与 `api_key_env`。显式密钥优先，授权环境值在调用时读取，初始化和配置保存不展开凭据。若提供 `provider.id`，它必须与 `embedding_provider_id` 一致。插件不读取宿主模型供应商、主密钥或 secrets 文件；设置变化不会扩大目录、HTTP 或环境权限。
 
 ## 原索引与搜索兼容
 
@@ -125,4 +127,4 @@ sai kb embed reindex --quiet
 
 冻结原版的 229 组纯规则与 307 组业务场景共 536 组对照覆盖分词、评分、片段、六工具、管理查询及正文变更；六项完整工具描述和 Schema 单独对照。仅归一上传时间，不修改预期掩盖业务差异。
 
-正式文件宿主测试覆盖独立授权、计划模式、旧库结构、空库初始化、损坏和 WAL、恢复摘要冲突、跨实例取消、并发写入、HTTP 错误与凭据脱敏、向量批次发布及编辑删除竞争。容量回归包含完整 1 MiB 正文、40 个分块、64 条 1536 维向量，以及会触发缩页的宽字段。真实发布入口、全量回归和程序指纹见[迁移记录](migration.md)。
+正式文件宿主测试覆盖独立授权、计划模式、旧库结构、空库初始化、损坏和 WAL、恢复摘要冲突、跨实例取消、并发写入、HTTP 错误与凭据脱敏、向量批次发布及编辑删除竞争。容量回归包含完整 1 MiB 正文、40 个分块、64 条 1536 维向量，以及会触发缩页的宽字段。历史基线见[迁移记录](migration.md)，普通安装、独立凭据和目录导入的提取验收见[归档状态](../../.doc/archive/2026-09-14-core-plugin-extraction/status.md)。

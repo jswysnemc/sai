@@ -6,11 +6,7 @@ use std::sync::Arc;
 /// 【表情对照】【真实模块】在发布源码快照中追加测试入口，不替换任何业务函数
 /// @returns 可查询原版样本所涉及函数的独立运行时
 fn reference_runtime() -> PluginRuntime {
-    let package = crate::plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|package| package.manifest.id == "memes")
-        .expect("memes package is required");
+    let package = super::example_support::package("memes");
     let mut manifest = package.manifest.clone();
     let mut sources = package.sources().clone();
     manifest.entry = "reference.lua".into();

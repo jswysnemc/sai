@@ -7,11 +7,7 @@ use std::sync::Arc;
 /// @param host 无网络响应的测试宿主
 /// @returns 保留正式源码及纯函数测试入口的 Lua 运行时
 fn reference_runtime(host: Arc<FixtureHost>) -> PluginRuntime {
-    let original = crate::plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|package| package.manifest.id == "input-method-investigation")
-        .unwrap();
+    let original = super::example_support::package("input-method-investigation");
     let mut sources = original.sources().clone();
     sources.get_mut("init.lua").unwrap().push_str(r#"
 local report = require('report')
@@ -66,7 +62,22 @@ async fn lua_reports_excerpts_and_prompts_match_original_rust_results() {
                 )
                 .await
                 .unwrap();
-            assert_eq!(output, case["output"].as_str().unwrap(), "{}", case["name"]);
+            let expected = if case["input"]["kind"] == "prompt" {
+                case["output"]
+                    .as_str()
+                    .unwrap()
+                    .replace(
+                        "可以使用 fcitx5_input_method_wiki_qurey、",
+                        "可以使用 lua__fcitx-wiki__fcitx5_input_method_wiki_qurey、",
+                    )
+                    .replace(
+                        "优先调用 check_issue ",
+                        "优先调用 lua__diagnostic-evidence__check_issue ",
+                    )
+            } else {
+                case["output"].as_str().unwrap().to_string()
+            };
+            assert_eq!(output, expected, "{}", case["name"]);
             total += 1;
         }
     }

@@ -72,7 +72,7 @@ pub(super) fn checkpoint(lua: &Lua) -> mlua::Result<()> {
 /// 【插件】【工作线程预算】把当前执行额度交给原生线程，首个失败保持到本次操作结束
 /// @param lua 当前虚拟机
 /// @returns 同时约束指令、时间和取消的线程安全检查函数
-pub(super) fn worker(lua: &Lua) -> mlua::Result<crate::sqlite::Budget> {
+pub(super) fn worker(lua: &Lua) -> mlua::Result<crate::native::Budget> {
     let budget = current(lua)?;
     let failed = std::sync::Mutex::new(None::<String>);
     Ok(Arc::new(move |units| {

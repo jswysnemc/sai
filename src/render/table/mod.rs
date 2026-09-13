@@ -9,9 +9,7 @@ mod tests;
 
 pub(crate) use layout::compute_table_widths;
 pub(crate) use model::{CellContent, TableAlign};
-pub(crate) use parser::{
-    is_table_separator, looks_like_table_row, parse_table_row,
-};
+pub(crate) use parser::{is_table_separator, looks_like_table_row, parse_table_row};
 pub(crate) use renderer::{
     bottom_border, middle_border, render_table_row, top_border, visible_width,
 };

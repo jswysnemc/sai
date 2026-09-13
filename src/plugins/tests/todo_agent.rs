@@ -37,7 +37,7 @@ async fn todo_agent_reminds_once_per_loop_and_resets_after_updates() {
     let root = tempfile::tempdir().unwrap();
     crate::runtime_cwd::scope(root.path().to_path_buf(), async {
         let (mut agent, state) = agent(root.path(), &model, AgentMode::Yolo, false);
-        seed(&state);
+        seed(root.path(), &state);
         for (id, answer) in [("first", "first answer"), ("second", "second answer")] {
             assert_eq!(
                 agent
@@ -65,7 +65,11 @@ async fn todo_agent_reminds_once_per_loop_and_resets_after_updates() {
             .to_string()
             .contains("todo item not found: missing"));
         let record: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(state.state_dir().join("todos.plugin.json")).unwrap(),
+            &std::fs::read(super::todo_support::record_path(
+                &crate::paths::SaiPaths::for_tests(root.path()),
+                &state.state_dir().display().to_string(),
+            ))
+            .unwrap(),
         )
         .unwrap();
         assert_eq!(record["items"][0]["text"], "changed");
@@ -87,7 +91,10 @@ async fn todo_agent_policy_failure_keeps_tools_and_reply_completed() {
     let root = tempfile::tempdir().unwrap();
     crate::runtime_cwd::scope(root.path().to_path_buf(), async {
         let (mut agent, state) = agent(root.path(), &model, AgentMode::Yolo, false);
-        let record = state.state_dir().join("todos.plugin.json");
+        let record = super::todo_support::record_path(
+            &crate::paths::SaiPaths::for_tests(root.path()),
+            &state.state_dir().display().to_string(),
+        );
         std::fs::write(&record, b"{broken").unwrap();
         assert_eq!(
             agent
@@ -124,7 +131,7 @@ async fn todo_agent_respects_plan_mode_and_filtered_tool_catalogs() {
         let root = tempfile::tempdir().unwrap();
         crate::runtime_cwd::scope(root.path().to_path_buf(), async {
             let (mut agent, state) = agent(root.path(), &model, mode, excluded);
-            seed(&state);
+            seed(root.path(), &state);
             assert_eq!(
                 agent
                     .chat_stream_with_images("Inspect", vec![], Some("filtered".into()), |_| Ok(()))
@@ -133,14 +140,18 @@ async fn todo_agent_respects_plan_mode_and_filtered_tool_catalogs() {
                     .content,
                 "readonly answer"
             );
-            assert!(!state.state_dir().join("todos.plugin.json").exists());
+            assert!(super::todo_support::record_path(
+                &crate::paths::SaiPaths::for_tests(root.path()),
+                &state.state_dir().display().to_string()
+            )
+            .exists());
             let requests = model.requests();
             assert!(requests.iter().all(|request| reminder_count(request) == 0));
             assert!(requests.iter().all(|request| !request["tools"]
                 .as_array()
                 .unwrap()
                 .iter()
-                .any(|tool| tool["function"]["name"] == "todo")));
+                .any(|tool| tool["function"]["name"] == "lua__todo__todo")));
         })
         .await;
     }

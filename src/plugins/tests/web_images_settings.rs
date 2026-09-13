@@ -3,72 +3,60 @@ use crate::tools::ToolPermission;
 use crate::{config::AppConfig, paths::SaiPaths};
 use serde_json::json;
 
-/// 【搜图设置测试】【默认与覆盖】旧设置仅提供默认值，显式 false 保留且派生路径不写回配置文件。
-/// @returns 无；未覆盖字段能继续采用最新旧配置
+/// 【搜图设置测试】【默认与覆盖】设置独立保存，显式 false 保留且清单路径不写回配置文件。
+/// @returns 无；未覆盖字段由插件默认值提供
 #[test]
-fn explicit_web_image_settings_override_legacy_defaults() {
+fn explicit_web_image_settings_do_not_inherit_legacy_defaults() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
-    let mut config = AppConfig::default();
-    config.plugins.web_images.auto_preview = true;
-    config.plugins.web_images.safe_search = true;
-    plugins::configure(
-        &config,
-        &paths,
-        "web-images",
-        json!({"auto_preview":false,"safe_search":false,"max_results":2}),
-    )
-    .unwrap();
-    config.plugins.web_images.timeout_seconds = 47;
+    let config = AppConfig::default();
+    super::example_support::install("web-images", &paths);
+    let explicit = json!({"auto_preview":false,"safe_search":false,"max_results":2});
+    plugins::configure(&config, &paths, "web-images", explicit.clone()).unwrap();
     let found = find(&config, &paths, "web-images").unwrap();
-    assert_eq!(found.settings()["auto_preview"], false);
-    assert_eq!(found.settings()["safe_search"], false);
-    assert_eq!(found.settings()["max_results"], 2);
-    assert_eq!(found.settings()["timeout_seconds"], 47);
-    assert_eq!(
-        found.settings()["cache_dir"],
-        json!(paths.pictures_dir.join("web-images"))
-    );
+    assert_eq!(found.settings(), &explicit);
     assert_eq!(
         found.capabilities().binary.write_paths,
-        [paths
-            .pictures_dir
-            .join("web-images")
-            .to_string_lossy()
-            .into_owned()]
-        .into()
+        ["~/Pictures/sai/web-images".into()].into()
     );
+    assert_eq!(found.grants(), Default::default());
     let saved = std::fs::read_to_string(paths.config_dir.join("plugins.jsonc")).unwrap();
     assert!(!saved.contains("cache_dir"));
     assert!(!saved.contains("timeout_seconds"));
     assert!(!saved.contains("vision_provider_id"));
 }
 
-/// 【搜图设置测试】【双模式注册】普通工具表需要写入权限，只读工具表保留查询，显式开关优先于旧设置。
+/// 【搜图设置测试】【双模式注册】普通工具表需要写入权限，只读工具表保留查询，独立设置控制启停。
 /// @returns 无；两个入口均由真实 Lua 包提供
 #[test]
 fn web_images_keep_readonly_queries_and_explicit_activation_rules() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
-    let mut config = AppConfig::default();
-    config.plugins.web_images.enabled = false;
-    assert!(
-        !crate::tools::builtin_registry_without_mcp(&config, &paths).contains("search_web_images")
-    );
+    let config = AppConfig::default();
+    super::example_support::install("web-images", &paths);
+    assert!(!crate::tools::builtin_registry_without_mcp(&config, &paths)
+        .contains("lua__web-images__search_web_images"));
     plugins::set_enabled(&config, &paths, "web-images", true, GrantUpdate::Keep).unwrap();
     let common = crate::tools::builtin_registry_without_mcp(&config, &paths);
     let readonly = crate::tools::readonly_registry(&config, &paths);
-    assert_eq!(common.plugin_owner("search_web_images"), Some("web-images"));
     assert_eq!(
-        readonly.plugin_owner("search_web_images"),
+        common.plugin_owner("lua__web-images__search_web_images"),
         Some("web-images")
     );
     assert_eq!(
-        common.permission("search_web_images").unwrap(),
+        readonly.plugin_owner("lua__web-images__search_web_images"),
+        Some("web-images")
+    );
+    assert_eq!(
+        common
+            .permission("lua__web-images__search_web_images")
+            .unwrap(),
         ToolPermission::Writes
     );
     assert_eq!(
-        readonly.permission("search_web_images").unwrap(),
+        readonly
+            .permission("lua__web-images__search_web_images")
+            .unwrap(),
         ToolPermission::ReadOnly
     );
     assert!(
@@ -81,24 +69,24 @@ fn web_images_keep_readonly_queries_and_explicit_activation_rules() {
         "{:?}",
         readonly.plugin_diagnostics()
     );
-    config.plugins.web_images.enabled = true;
     plugins::set_enabled(&config, &paths, "web-images", false, GrantUpdate::Keep).unwrap();
-    assert!(
-        !crate::tools::builtin_registry_without_mcp(&config, &paths).contains("search_web_images")
-    );
-    assert!(!crate::tools::readonly_registry(&config, &paths).contains("search_web_images"));
-    assert!(crate::tools::tool_catalog(&config, &paths)
+    assert!(!crate::tools::builtin_registry_without_mcp(&config, &paths)
+        .contains("lua__web-images__search_web_images"));
+    assert!(!crate::tools::readonly_registry(&config, &paths)
+        .contains("lua__web-images__search_web_images"));
+    assert!(!crate::tools::tool_catalog(&config, &paths)
         .iter()
-        .any(|tool| tool.name == "search_web_images"));
+        .any(|tool| tool.name == "lua__web-images__search_web_images"));
 }
 
 /// 【搜图设置测试】【授权固定】显式授权不随缓存目录和搜索来源改变，视觉撤权不影响其他能力。
-/// @returns 无；变更来源必须重新明确授权
+/// @returns 无；变更来源必须同时调整清单与明确授权
 #[test]
 fn explicit_grants_do_not_follow_changed_paths_or_origins() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
     let config = AppConfig::default();
+    super::example_support::install("web-images", &paths);
     plugins::set_enabled(&config, &paths, "web-images", true, GrantUpdate::Declared).unwrap();
     plugins::set_enabled(
         &config,
@@ -122,10 +110,20 @@ fn explicit_grants_do_not_follow_changed_paths_or_origins() {
     let effective = found.capabilities().intersection(&found.grants());
     assert!(!effective.vision);
     assert!(!effective.model);
-    assert!(effective.binary.write_paths.is_empty());
+    assert_eq!(
+        effective.binary.write_paths,
+        ["~/Pictures/sai/web-images".into()].into()
+    );
     assert!(effective.binary.public_downloads);
-    assert_eq!(effective.http, ["https://www.bing.com".into()].into());
-    assert!(effective.tools.contains("print_image"));
+    assert_eq!(
+        effective.http,
+        [
+            "https://duckduckgo.com".into(),
+            "https://www.bing.com".into()
+        ]
+        .into()
+    );
+    assert!(effective.tools.contains("lua__image-display__print_image"));
     let before = std::fs::read(paths.config_dir.join("plugins.jsonc")).unwrap();
     assert!(plugins::set_enabled(
         &config,
@@ -156,8 +154,18 @@ fn explicit_grants_do_not_follow_changed_paths_or_origins() {
     let found = find(&config, &paths, "web-images").unwrap();
     let effective = found.capabilities().intersection(&found.grants());
     assert!(effective.vision);
-    assert!(effective.binary.write_paths.is_empty());
-    assert_eq!(effective.http, ["https://www.bing.com".into()].into());
+    assert_eq!(
+        effective.binary.write_paths,
+        ["~/Pictures/sai/web-images".into()].into()
+    );
+    assert_eq!(
+        effective.http,
+        [
+            "https://duckduckgo.com".into(),
+            "https://www.bing.com".into()
+        ]
+        .into()
+    );
 }
 
 /// 【搜图设置测试】【原子校验】错误类型、未知字段和越界设置不能替换已保存的有效配置。
@@ -167,6 +175,7 @@ fn invalid_web_image_settings_leave_saved_configuration_intact() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
     let config = AppConfig::default();
+    super::example_support::install("web-images", &paths);
     plugins::configure(&config, &paths, "web-images", json!({"safe_search":false})).unwrap();
     let before = std::fs::read(paths.config_dir.join("plugins.jsonc")).unwrap();
     for invalid in [
@@ -202,11 +211,10 @@ fn external_packages_do_not_inherit_web_image_compatibility() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
     let mut config = AppConfig::default();
-    config.plugins.web_images.max_results = 7;
+    super::example_support::install("web-images", &paths);
     config.plugins.vision.vision_provider_id = "private-provider".into();
     let mut descriptor = super::support::descriptor("web-images", "");
     descriptor.setting.settings = json!({"own":true});
-    descriptor.refresh_compatibility(&config, &paths).unwrap();
     assert_eq!(descriptor.settings(), &json!({"own":true}));
     assert!(!descriptor.capabilities().vision);
     assert!(descriptor.capabilities().binary.is_empty());

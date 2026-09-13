@@ -11,7 +11,6 @@ pub(crate) use worker::run as run_worker;
 use self::process::{SystemLauncher, WorkerLauncher};
 use self::record::JobRecord;
 use self::store::Store;
-use super::compatibility::alarm_jobs;
 use super::discovery::{discover, PluginDescriptor};
 use super::private::PrivatePluginHost;
 use crate::{config::AppConfig, paths::SaiPaths};
@@ -193,16 +192,11 @@ fn start(store: &Store, record: &mut JobRecord, launcher: &dyn WorkerLauncher) -
 /// @returns 有界任务列表，不执行后台恢复
 pub(crate) fn list(paths: &SaiPaths, plugin: &str) -> Result<Vec<ScheduledTask>> {
     validate_plugin(plugin)?;
-    let mut tasks: Vec<_> = Store::open(&paths.state_dir, plugin)?
+    let tasks: Vec<_> = Store::open(&paths.state_dir, plugin)?
         .list()?
         .into_iter()
         .map(|record| record.task)
         .collect();
-    if plugin == "alarm" {
-        tasks.extend(alarm_jobs::list(paths)?);
-        tasks
-            .sort_by(|left, right| (left.created_at, &left.id).cmp(&(right.created_at, &right.id)));
-    }
     Ok(tasks)
 }
 
@@ -214,13 +208,10 @@ pub(crate) fn get(paths: &SaiPaths, plugin: &str, id: &str) -> Result<Option<Sch
     if let Some(record) = Store::open(&paths.state_dir, plugin)?.get(id)? {
         return Ok(Some(record.task));
     }
-    if plugin == "alarm" {
-        return alarm_jobs::get(paths, id);
-    }
     Ok(None)
 }
 
-/// 【插件调度】【请求取消】原生任务通过状态取消，旧闹钟由受限兼容层核验并取消。
+/// 【插件调度】【请求取消】只取消当前插件命名空间中的公共任务。
 /// @param paths 应用路径；plugin 为插件；id 为任务标识
 /// @returns 是否接受新的取消请求
 pub(crate) fn cancel(paths: &SaiPaths, plugin: &str, id: &str) -> Result<bool> {
@@ -228,10 +219,6 @@ pub(crate) fn cancel(paths: &SaiPaths, plugin: &str, id: &str) -> Result<bool> {
     let store = Store::open(&paths.state_dir, plugin)?;
     let _lock = store.lock()?;
     let Some(mut record) = store.get(id)? else {
-        drop(_lock);
-        if plugin == "alarm" {
-            return alarm_jobs::cancel(paths, id);
-        }
         return Ok(false);
     };
     if !record.task.status.is_active() {
@@ -271,9 +258,6 @@ fn resume(
         Some(record) => record,
         None => {
             drop(_lock);
-            if plugin == "alarm" && alarm_jobs::get(paths, id)?.is_some() {
-                bail!("legacy alarms cannot be resumed or replayed");
-            }
             bail!("scheduled task not found");
         }
     };

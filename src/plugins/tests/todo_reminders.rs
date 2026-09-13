@@ -59,7 +59,10 @@ async fn todo_lua_matches_native_reminder_sequences() {
                 .unwrap();
             assert_eq!(
                 json!(output.reminder),
-                case["expected"][index]["value"],
+                case["expected"][index]["value"]
+                    .as_str()
+                    .map(|text| json!(text.replace("使用 todo 工具", "使用 lua__todo__todo 工具")))
+                    .unwrap_or(Value::Null),
                 "{session} step {index}"
             );
             state = output.state;

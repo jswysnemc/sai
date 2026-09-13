@@ -67,6 +67,7 @@ pub(super) fn validate_sizes_and_headers(
     request: &HttpRequest,
     output_limit: usize,
 ) -> mlua::Result<()> {
+    request.validate_redirect_limit().map_err(lua_error)?;
     if request.url.len() > 8192
         || request
             .headers

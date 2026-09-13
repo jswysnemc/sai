@@ -1,0 +1,16 @@
+{
+  "api_version": 1,
+  "id": "web-fetch",
+  "version": "1.0.0",
+  "name": "网页读取",
+  "description": "读取已知 HTTP(S) 地址并返回 Markdown、纯文本或 HTML",
+  "entry": "init.lua",
+  "capabilities": {"http_read_any": true},
+  "limits": {
+    "instructions": 20000000,
+    "timeout_ms": 180000,
+    "binary_timeout_ms": 120000,
+    "binary_bytes": 67108864,
+    "output_bytes": 1048576
+  }
+}

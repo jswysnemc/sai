@@ -5,13 +5,35 @@ use serde_json::json;
 /// @param paths 隔离目录；name 为发送名称
 /// @returns 无
 fn write_recent(paths: &SaiPaths, name: &str) {
-    let path = paths.state_dir.join("memes/sai/auto-send.json");
+    let path = paths
+        .state_dir
+        .parent()
+        .unwrap()
+        .join(".sai/state/memes/sai/auto-send.json");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(
         path,
         json!({"last":{"library":"sai","id":"sha256:abcdef","name":{"zh":name,"en":""},
         "description":"图像","usage":"聊天","reason":"问候","sent_at":"2026-01-01T00:00:00+00:00"}})
         .to_string(),
+    )
+    .unwrap();
+}
+
+/// 【回复预览测试】【显式安装】仅为当前隔离工作区启用图库示例
+/// @param paths 测试路径；config 为主配置
+/// @returns 无；设置与授权均经过公共管理入口
+fn install_memes(paths: &SaiPaths, config: &AppConfig) {
+    let directory =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/lua-plugins/memes");
+    crate::plugins::install(&directory, paths, false).unwrap();
+    crate::plugins::configure(config, paths, "memes", json!({"auto_send_enabled":true})).unwrap();
+    crate::plugins::set_enabled(
+        config,
+        paths,
+        "memes",
+        true,
+        crate::plugins::GrantUpdate::Declared,
     )
     .unwrap();
 }
@@ -24,8 +46,8 @@ async fn web_reply_preview_reads_lua_context_and_respects_disabling() {
     let paths = SaiPaths::for_tests(root.path());
     let state = StateStore::new(&paths).unwrap();
     state.init_files().unwrap();
-    let mut config = AppConfig::default();
-    config.plugins.memes.auto_send_enabled = true;
+    let config = AppConfig::default();
+    install_memes(&paths, &config);
     write_recent(&paths, "已发送图片");
     let projection = project_context_runtime(
         &config,
@@ -38,7 +60,14 @@ async fn web_reply_preview_reads_lua_context_and_respects_disabling() {
     .unwrap();
     assert!(projection.plugin_reply_context.contains("已发送图片"));
     assert!(projection.runtime_context.contains("plugin_reply_memes"));
-    config.plugins.memes.enabled = false;
+    crate::plugins::set_enabled(
+        &config,
+        &paths,
+        "memes",
+        false,
+        crate::plugins::GrantUpdate::Keep,
+    )
+    .unwrap();
     let disabled = project_context_runtime(
         &config,
         &paths,
@@ -60,6 +89,7 @@ async fn synchronous_reply_usage_uses_loaded_context_without_waiting_for_a_polic
     let state = StateStore::new(&paths).unwrap();
     state.init_files().unwrap();
     let config = AppConfig::default();
+    install_memes(&paths, &config);
     let resource = crate::agent::plugin_context_updates(
         &std::collections::BTreeMap::from([("memes".into(), "loaded context".into())]),
         None,

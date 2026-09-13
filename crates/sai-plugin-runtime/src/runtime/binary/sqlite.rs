@@ -6,8 +6,7 @@ use crate::{
     },
 };
 use mlua::{Lua, MultiValue, Table, Value};
-use std::{sync::Arc, time::Duration};
-use tokio_util::sync::CancellationToken;
+use std::sync::Arc;
 
 #[cfg(test)]
 #[path = "sqlite_worker_tests.rs"]
@@ -142,32 +141,7 @@ async fn work<T: Send + 'static>(
     timeout_ms: u64,
     operation: impl FnOnce(sqlite::Budget) -> anyhow::Result<T> + Send + 'static,
 ) -> mlua::Result<T> {
-    // 1. 【数据库快照】【取消绑定】捕获可信执行预算，异步等待释放时发出停止信号
-    let execution = super::super::budget::worker(lua)?;
-    let cancel = CancellationToken::new();
-    let _cancel_on_drop = cancel.clone().drop_guard();
-    let budget: sqlite::Budget = Arc::new(move |units| {
-        anyhow::ensure!(
-            !cancel.is_cancelled(),
-            "SQLite snapshot operation cancelled"
-        );
-        execution(units)
-    });
-    let running = budget.clone();
-    // 2. 【数据库快照】【线程所有权】计算闭包持有全部输入和预留，迟到任务先检查取消
-    let worker = tokio::task::spawn_blocking(move || {
-        running(0)?;
-        let result = operation(running.clone());
-        running(0)?;
-        result
-    });
-    // 3. 【数据库快照】【时限交付】排队时间计入局部期限，成功结果仍需复核回调有效期
-    let result = tokio::time::timeout(Duration::from_millis(timeout_ms), worker)
-        .await
-        .map_err(|_| mlua::Error::runtime("SQLite snapshot operation timed out"))?
-        .map_err(super::super::system::error)?;
-    budget(0).map_err(super::super::system::error)?;
-    result.map_err(super::super::system::error)
+    super::super::native::work(lua, timeout_ms, "SQLite snapshot", operation).await
 }
 
 /// 【数据库快照】【句柄归属】拒绝路径、其他实例、过期及已关闭的缓冲

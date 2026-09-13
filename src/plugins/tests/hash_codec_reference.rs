@@ -1,4 +1,5 @@
-use super::support::{runtime, FixtureHost};
+use super::example_support::runtime;
+use super::support::FixtureHost;
 use sai_plugin_runtime::{InvocationContext, ToolAccess};
 use serde_json::{json, Value};
 use std::sync::Arc;

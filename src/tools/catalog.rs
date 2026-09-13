@@ -77,7 +77,6 @@ fn catalog_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     //    某个 Agent 预先勾选它——而 Agent 白名单本就该独立于全局开关
     let catalog = catalog_config(config);
     let mut registry = builtin_registry_without_mcp(&catalog, paths);
-    crate::plugins::register_bundled_catalog_tools(&mut registry, &catalog, paths);
     // 2. 挂上只在会话中注册的工具，保证目录与会话看到同一份工具集合
     register_interactive_tools(
         &mut registry,
@@ -183,11 +182,6 @@ mod tests {
     /// - 插件全关的配置
     fn all_plugins_off() -> AppConfig {
         let mut config = AppConfig::default();
-        config.plugins.archlinux.enabled = false;
-        config.plugins.man.enabled = false;
-        config.plugins.memes.enabled = false;
-        config.plugins.web.enabled = false;
-        config.plugins.knowledge_base.enabled = false;
         config.plugins.memory.enabled = false;
         config.memory.enabled = false;
         config
@@ -207,7 +201,7 @@ mod tests {
             .map(|entry| entry.name)
             .collect();
 
-        for expected in ["write_memory", "read_memory", "search_knowledge_base"] {
+        for expected in ["write_memory", "read_memory"] {
             assert!(names.iter().any(|name| name == expected), "缺少 {expected}");
         }
     }
@@ -225,7 +219,7 @@ mod tests {
             .map(|entry| entry.name)
             .collect();
 
-        for expected in ["subagent", "todo", "ask_question"] {
+        for expected in ["subagent", "ask_question"] {
             assert!(names.iter().any(|name| name == expected), "缺少 {expected}");
         }
     }

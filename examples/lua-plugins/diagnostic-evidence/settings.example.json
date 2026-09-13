@@ -1,0 +1,6 @@
+{
+  "command_timeout_ms": 5000,
+  "max_stdout_chars": 8000,
+  "max_stderr_chars": 4000
+}
+

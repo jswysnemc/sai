@@ -43,40 +43,66 @@ pub(super) fn seed(root: &Path, files: &Value, initialized: bool) {
     }
 }
 
-/// 【知识库测试】【正式描述】旧开关、配置和能力经过真实兼容层
+/// 【知识库测试】【正式描述】测试清单显式声明隔离目录和固定网络样本
 /// @param root 测试目录；config 为主配置；extra 为显式包设置
-/// @returns 实际内置包的固定描述符
-pub(super) fn descriptor(root: &Path, config: &AppConfig, extra: Value) -> PluginDescriptor {
+/// @returns 普通安装并明确授权的固定描述符
+pub(in crate::plugins) fn descriptor(
+    root: &Path,
+    config: &AppConfig,
+    extra: Value,
+) -> PluginDescriptor {
     let paths = SaiPaths::for_tests(root);
-    let mut descriptor = crate::plugins::discover(config, &paths)
-        .plugins
-        .into_iter()
-        .find(|p| p.package.manifest.id == "knowledge-base")
-        .unwrap();
-    descriptor.setting.settings =
-        json!({"data_dir":root.join("kb"),"input_paths":[root.join("input")]});
-    descriptor
-        .setting
-        .settings
+    if !paths.config_dir.join("plugins/knowledge-base").exists() {
+        super::example_support::install_custom("knowledge-base", &paths, |manifest| {
+            let caps = &mut manifest.capabilities;
+            for path in [root.join("kb"), root.join("input")] {
+                caps.system.read_paths.insert(path.display().to_string());
+            }
+            caps.binary
+                .write_paths
+                .insert(root.join("kb").display().to_string());
+            caps.system
+                .remove_paths
+                .insert(root.join("kb").display().to_string());
+            caps.http.insert("https://embedding.test".into());
+            caps.http_read_only_post
+                .insert("https://embedding.test/v1/embeddings".into());
+        });
+    }
+    let mut settings = json!({"data_dir":root.join("kb")});
+    settings
         .as_object_mut()
         .unwrap()
         .extend(extra.as_object().unwrap().clone());
-    descriptor.refresh_compatibility(config, &paths).unwrap();
-    descriptor
+    crate::plugins::configure(config, &paths, "knowledge-base", settings).unwrap();
+    crate::plugins::set_enabled(
+        config,
+        &paths,
+        "knowledge-base",
+        true,
+        crate::plugins::GrantUpdate::Declared,
+    )
+    .unwrap();
+    crate::plugins::discovery::find(config, &paths, "knowledge-base").unwrap()
 }
 
 /// 【知识库测试】【完整实例】追加测试入口但不替换发布业务，授权可单独收窄
-/// @param root 目录；config 为主配置；extra 为设置；host 为宿主；suffix 为测试装配；change 为授权修改
+/// @param root 目录；base 为独立设置；extra 为覆盖值；host 为宿主；suffix 为测试装配；change 为授权修改
 /// @returns 独立 Lua 运行时
 pub(super) fn configured(
     root: &Path,
-    config: &AppConfig,
+    base: &Value,
     extra: Value,
     host: Arc<dyn PluginHost>,
     suffix: &str,
     change: impl FnOnce(&mut Capabilities),
 ) -> PluginRuntime {
-    let descriptor = descriptor(root, config, extra);
+    let mut settings = base.clone();
+    settings
+        .as_object_mut()
+        .unwrap()
+        .extend(extra.as_object().unwrap().clone());
+    let descriptor = descriptor(root, &AppConfig::default(), settings);
     let mut package = descriptor.runtime_package();
     let mut sources = package.sources().clone();
     sources.get_mut("init.lua").unwrap().push_str(suffix);
@@ -95,7 +121,7 @@ pub(super) fn runtime(
 ) -> (PluginRuntime, Arc<super::knowledge_host::KnowledgeHost>) {
     let host = super::knowledge_host::KnowledgeHost::new(root);
     (
-        configured(root, &AppConfig::default(), extra, host.clone(), "", |_| {}),
+        configured(root, &json!({}), extra, host.clone(), "", |_| {}),
         host,
     )
 }
@@ -139,17 +165,11 @@ pub(super) async fn command(
 }
 
 /// 【知识库测试】【嵌入配置】输入无；返回只包含固定测试凭据的供应商和知识库设置
-pub(super) fn embedding_config() -> AppConfig {
-    let mut config = AppConfig::default();
-    let mut provider = crate::config::ProviderConfig::default_openai();
-    provider.id = "embedding-test".into();
-    provider.base_url = "https://embedding.test/v1".into();
-    provider.api_key = Some("fixture-embedding-key".into());
-    config.providers = vec![provider];
-    config.plugins.knowledge_base.embedding_enabled = true;
-    config.plugins.knowledge_base.embedding_provider_id = "embedding-test".into();
-    config.plugins.knowledge_base.embedding_model = "fixture-vector".into();
-    config
+pub(super) fn embedding_config() -> Value {
+    json!({
+        "embedding_enabled": true, "embedding_provider_id": "embedding-test", "embedding_model": "fixture-vector",
+        "provider": {"endpoint":"https://embedding.test/v1/embeddings", "api_key":"fixture-embedding-key", "api_key_env":""}
+    })
 }
 
 /// 【知识库测试】【旧语义行】输入目录、文件名、正文和 JSON 向量；返回无，直接建立独立预期记录

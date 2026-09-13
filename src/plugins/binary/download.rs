@@ -12,6 +12,7 @@ pub(in crate::plugins) async fn download(
     capabilities: Capabilities,
 ) -> Result<BinaryResponse> {
     super::validate_limit(request.max_bytes)?;
+    request.validate_redirect_limit()?;
     if request.method != "GET" || request.body.is_some() || !request.headers.is_empty() {
         bail!("binary download requires an anonymous GET without headers or body");
     }
@@ -31,7 +32,7 @@ async fn follow(
 ) -> Result<BinaryResponse> {
     let deadline = Instant::now() + timeout;
     let mut url = public_address::parse(&request.url)?;
-    for redirects in 0..=5 {
+    for redirects in 0..=request.max_redirects {
         let builder = reqwest::Client::builder().redirect(reqwest::redirect::Policy::none());
         let builder = if capabilities
             .http
@@ -56,12 +57,12 @@ async fn follow(
             .map_err(|error| error.without_url())
             .context("plugin binary download failed")?;
         if !matches!(response.status().as_u16(), 301 | 302 | 303 | 307 | 308) {
-            return super::read(response, request.max_bytes).await;
+            return super::read(response, request.max_bytes, request.read_error_body).await;
         }
         let Some(location) = response.headers().get(reqwest::header::LOCATION) else {
-            return super::read(response, request.max_bytes).await;
+            return super::read(response, request.max_bytes, request.read_error_body).await;
         };
-        if redirects == 5 {
+        if redirects == request.max_redirects {
             bail!("plugin download redirect limit exceeded");
         }
         let target = url

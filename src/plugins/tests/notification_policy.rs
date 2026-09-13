@@ -23,11 +23,7 @@ pub(super) fn event() -> ReplyPresentation {
 /// 【通知迁移测试】【旧版对照】两个交互面、三种状态、双语和四种开关组合保留原有结果。
 #[tokio::test]
 async fn notification_lua_preserves_48_existing_surface_status_locale_and_setting_combinations() {
-    let package = plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|package| package.manifest.id == ID)
-        .unwrap();
+    let package = super::example_support::package(ID);
     for enabled in [false, true] {
         for sound in [false, true] {
             let runtime = PresentationRuntime::load(
@@ -75,6 +71,7 @@ async fn notification_policy_is_loaded_without_adding_model_tools_and_can_be_dis
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
     let config = AppConfig::default();
+    super::example_support::install_enabled(ID, &config, &paths);
     let registry = crate::tools::builtin_registry_without_mcp(&config, &paths);
     assert!(registry.active_plugins().iter().any(|(id, _)| id == ID));
     assert!(registry
@@ -103,6 +100,7 @@ async fn external_notification_policies_require_explicit_grants() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
     let config = AppConfig::default();
+    super::example_support::install_enabled(ID, &config, &paths);
     plugins::set_enabled(&config, &paths, ID, false, GrantUpdate::Keep).unwrap();
     let mut plugin = descriptor(
         "custom-notice",
@@ -185,6 +183,7 @@ async fn notification_failures_are_isolated_and_each_plan_uses_fresh_state() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
     let config = AppConfig::default();
+    super::example_support::install_enabled(ID, &config, &paths);
     for (id, source) in [
         ("a-broken", "sai.on('reply_end', function() error('broken policy') end)"),
         ("a-counter", "local n=0; sai.on('reply_end', function() n=n+1; return {title='Counter',body=tostring(n),desktop=true,sound=false} end)"),
@@ -213,12 +212,13 @@ async fn notification_failures_are_isolated_and_each_plan_uses_fresh_state() {
     }
 }
 
-/// 【通知迁移测试】【撤销默认授权】显式撤销内置通知授权后不能通过默认设置恢复。
+/// 【通知迁移测试】【撤销显式授权】显式撤销通知授权后不能通过默认设置恢复。
 #[tokio::test]
-async fn bundled_notification_authorization_is_revocable() {
+async fn installed_notification_authorization_is_revocable() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
     let config = AppConfig::default();
+    super::example_support::install_enabled(ID, &config, &paths);
     plugins::set_enabled(
         &config,
         &paths,

@@ -13,6 +13,7 @@ pub(crate) enum GrantUpdate {
 #[derive(Default)]
 pub(crate) struct GrantChanges {
     pub http: Option<BTreeSet<String>>,
+    pub http_read_any: Option<bool>,
     pub http_read_only_post: Option<BTreeSet<String>>,
     pub model: Option<bool>,
     pub vision: Option<bool>,
@@ -50,6 +51,7 @@ impl GrantUpdate {
             Self::Declared => declared.clone(),
             Self::Changes(changes) => Capabilities {
                 http: changes.http.unwrap_or(current.http),
+                http_read_any: changes.http_read_any.unwrap_or(current.http_read_any),
                 http_read_only_post: changes
                     .http_read_only_post
                     .unwrap_or(current.http_read_only_post),

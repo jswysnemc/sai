@@ -39,7 +39,6 @@ mod subagent_worktree;
 mod tool_spec;
 mod trash_path;
 mod vision;
-mod web_fetch;
 mod write_file;
 
 use crate::config::AppConfig;
@@ -209,7 +208,6 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     command::register(&mut registry, config, paths, true);
     default_tools::register(&mut registry, config, paths);
     trash_path::register(&mut registry);
-    web_fetch::register(&mut registry);
     configurable_cli_tools::register(&mut registry, config);
     crate::plugins::register_plugins(&mut registry, config, paths, false);
     if config.memory_config().enabled {
@@ -300,7 +298,6 @@ pub fn readonly_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     let mut registry = ToolRegistry::new();
     command::register_readonly(&mut registry, config, paths);
     default_tools::register_readonly(&mut registry, config, paths);
-    web_fetch::register(&mut registry);
     crate::plugins::register_plugins(&mut registry, config, paths, true);
     if config.memory_config().enabled {
         memory::register_readonly(&mut registry, config.clone(), paths.clone());

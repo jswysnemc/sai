@@ -3,14 +3,55 @@ use sai_plugin_runtime::{InvocationContext, PluginPackage, PluginRuntime};
 use serde_json::{json, Value};
 use std::{path::Path, sync::Arc};
 
+/// 【待办测试】【公共记录】定位公共宿主创建的固定命名空间，供损坏及字节保留测试使用
+/// @param paths 隔离应用目录；session 为可信会话作用域
+/// @returns plan 键的实际保存路径
+pub(super) fn record_path(paths: &SaiPaths, session: &str) -> std::path::PathBuf {
+    let (_, directory) = crate::plugins::private::paths::namespace(
+        &paths.state_dir,
+        "plugin-state",
+        "todo",
+        session,
+    )
+    .unwrap();
+    directory.join(format!("{}.json", blake3::hash(b"plan").to_hex()))
+}
+
+/// 【待办测试】【固定公共状态】通过正式宿主写入单条测试记录，避免借用旧会话文件
+/// @param paths 隔离目录；session 为可信作用域；items 为活动项；history 为归档
+/// @returns 无；仅用于构造并发与故障测试前置状态
+pub(super) fn seed(paths: &SaiPaths, session: &str, items: Value, history: Value) {
+    use sai_plugin_runtime::host::{PluginHost, StorageRequest};
+    PrivatePluginHost::new(paths, "todo")
+        .storage(
+            StorageRequest::Set {
+                key: "plan".into(),
+                value: json!({"version":1,"items":items,"history":history}),
+            },
+            session,
+            &package().manifest.capabilities,
+        )
+        .unwrap();
+}
+
+/// 【待办测试】【显式导入】通过发布命令接续固定状态，不使用宿主按 ID 读取旧文件
+/// @param runtime 待办实例；root 为工作目录；session 为可信会话；value 为完整旧状态
+/// @returns 无；导入失败立即终止当前测试
+pub(super) async fn import(runtime: &PluginRuntime, root: &Path, session: &str, value: Value) {
+    runtime
+        .call_command(
+            "import",
+            &json!({"state":value}).to_string(),
+            context(root, session, true),
+        )
+        .await
+        .unwrap();
+}
+
 /// 【待办测试】【发布包】取得实际发布的 Lua 源码，缺失包时直接报告迁移未完成
 /// @returns 完整待办插件包
 pub(super) fn package() -> PluginPackage {
-    crate::plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|package| package.manifest.id == "todo")
-        .expect("todo must be a bundled Lua plugin")
+    super::example_support::package("todo")
 }
 
 /// 【待办测试】【独立运行时】使用正式私有存储验证会话持久化，不替代业务代码
@@ -28,11 +69,12 @@ pub(super) fn runtime(root: &Path) -> PluginRuntime {
     .unwrap()
 }
 
-/// 【待办测试】【正式兼容宿主】通过内置描述符绑定旧会话文件，调用入口与发布程序一致
+/// 【待办测试】【正式安装宿主】显式安装授权后绑定公共会话存储
 /// @param root 隔离应用根目录
-/// @returns 应用路径、内置运行时和宿主
-pub(super) fn bundled(root: &Path) -> (SaiPaths, PluginRuntime, Arc<PrivatePluginHost>) {
+/// @returns 应用路径、普通运行时和宿主
+pub(super) fn installed(root: &Path) -> (SaiPaths, PluginRuntime, Arc<PrivatePluginHost>) {
     let paths = SaiPaths::for_tests(root);
+    super::example_support::install_enabled("todo", &crate::config::AppConfig::default(), &paths);
     let descriptor = crate::plugins::discover(&crate::config::AppConfig::default(), &paths)
         .plugins
         .into_iter()

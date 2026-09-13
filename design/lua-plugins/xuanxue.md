@@ -1,11 +1,11 @@
 # Lua 玄学与骰子
 
-内置 `xuanxue` 包提供周易起卦、塔罗抽牌、吉凶抽签和掷骰子。四个公开工具名称、原参数 Schema、卦牌签文和骰子结果字段保持兼容；业务由 Lua 实现，清单显式声明 `capabilities: {}`。
+可拆卸 `xuanxue` 示例提供周易起卦、塔罗抽牌、吉凶抽签和掷骰子。原参数 Schema、卦牌签文和骰子结果字段保持兼容；业务由 Lua 实现，清单显式声明 `capabilities: {}`。下表为包内工具名，对外统一添加 `lua__xuanxue__` 前缀。
 
 ## 包与工具
 
 ```text
-plugins/xuanxue/
+examples/lua-plugins/xuanxue/
 ├── sai-plugin.json   # 包信息、空能力声明与限额
 ├── init.lua          # 四个只读工具的注册契约
 ├── draw.lua          # 卦象、牌名、正逆位和签文抽取
@@ -50,7 +50,7 @@ Lua 无法单靠转换后的浮点值区分超大无符号整数与浮点输入�
 
 ## 设置与资源
 
-旧主配置 `plugins.xuanxue.enabled` 提供缺省启用值，`plugins.jsonc` 中显式的 `xuanxue.enabled` 优先。普通和只读注册表均按有效开关提供四个工具；禁用后，设置目录仍保留工具条目供白名单配置使用。
+安装默认禁用且没有授权，启用状态保存在 `plugins.jsonc`；旧主配置不再提供缺省开关。普通和只读注册表均按当前启用状态提供四个工具，安装不会修改 Agent 白名单。
 
 ```sh
 sai plugins info xuanxue --json

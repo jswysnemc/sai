@@ -1,7 +1,7 @@
 # Sai
 
 **终端里的二次元 AI 桌面助手**
-多协议 LLM 接入 · 30+ 内置工具 · 长期记忆 · 多平台网关 · Web 工作台 · 跨平台
+多协议 LLM 接入 · 核心工具与 Lua 插件 · 长期记忆 · 多平台网关 · Web 工作台 · 跨平台
 
 [English](README.md) | 简体中文
 
@@ -47,7 +47,9 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 
 ![Agent 工具与 Skills 勾选清单](pics/skills.png)
 
-### 内置工具
+### 工具示例
+
+天气、汇率和图片等业务工具需要先安装对应的 [Lua 示例插件](examples/lua-plugins/README.md)。
 
 ![查询天气](pics/get_weather.png)
 
@@ -82,12 +84,12 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 
 - **三种权限模式** - `Yolo` 自由调用工具、`Audited` 审计模式(沙盒 + 审计日志 + 逐次确认)、`Plan` 只读模式(仅允许只读工具)
 - **渐进式工具加载** - 启动仅暴露 `load` 与基础工具,模型按需调用 `load` 加载工具组或 skill。工具组持久化到 `loaded-tools.json`。每个 skill 在本会话只完整加载一次：再次 `load` 只返回 `already_loaded`，名称列表写在后缀 `<context-resource>`，系统提示前缀可走缓存。压缩后会清空 `loaded-skills.json`，之后可以重新拉取正文。
-- **30+ 内置工具** - 按用途分组:`base` 基础文件命令、`web` 网络查询、`media` 图片与表情包、`research` 深度研究、`memory` 记忆操作、`package` Arch Linux 包管理、`game` 游戏兼容性、`diagnostics` 系统诊断、`knowledge` 知识库、`utilities` 计算与编码、`personal` 闹钟、`ssh` 远程主机、`mcp` 外部工具
+- **核心工具与可选业务** - 宿主提供文件、命令、会话、权限及公共扩展机制；查询、调查、图片、待办、知识库、图库与闹钟等 25 个 Lua 业务包作为独立示例，按需安装、显式授权和卸载。
 - **子代理** - `subagent` 工具启动独立 LLM 循环,带 `max_steps` 预算与超时;可写任务在 git 仓库内自动创建 `.sai-subagents` worktree 隔离,完成后自动 apply 回父工作区并清理。支持 persistent 待命复用与留言通道(REPL `/subagents`、`/msg`)
 - **Skills 技能包** - `SKILL.md` 格式的可复用技能,三级暴露(不暴露 / 仅名称 / 完整);TUI 与 CLI 均可启用 / 禁用 / 列出 / 统计 / 清理。会话内 load 缓存见上。
 - **MCP 协议桥接** - 原生支持 stdio / http 两种 MCP Server,工具名以 `mcp_` 前缀注入注册表,独立 `mcp.jsonc` 配置文件
-- **Lua 插件** - 十九个 Lua 5.4 内置包提供 26 个工具，支持用户命令、生命周期回调、独立配置及逐项能力授权。在线查询、游戏与输入法调查、系统证据采集、AUR 审查安装、答复通知策略、图片生成展示、网页搜图及哈希与文本解码已迁入 Lua。搜图在只读模式下返回远程元数据，下载、排序、视觉筛选与预览编排均由插件完成；视觉请求沿用独立视觉配置，图片预览调用独立显示包。宿主提供有界模型、工具、文件、进程、私有状态和二进制能力。参见[开发指南](design/lua-plugins/getting-started.md)、[接口说明](design/lua-plugins/api.md)和[迁移进度](design/lua-plugins/migration.md)。
-- **会话级 Todo** - 任务计划清单,跨工具轮次跟踪进度
+- **Lua 扩展** - Lua 5.4 包通过公共接口注册工具、命令和生命周期回调，独立管理设置、能力声明与用户授权。参见[示例索引](examples/lua-plugins/README.md)、[开发指南](design/lua-plugins/getting-started.md)、[能力清单](design/lua-plugins/capability-matrix.md)、[接口说明](design/lua-plugins/api.md)、[分发说明](design/lua-plugins/distribution.md)和[旧版迁移说明](design/lua-plugins/bundled-plugins.md)。
+- **可选会话待办** - 安装 [todo 示例](examples/lua-plugins/todo/README.md)后提供清单、历史与工具循环提醒；旧快照通过显式导入接续。
 - **Cron 定时任务** - bash / http / prompt 三种类型,持久化到 `jobs.db`,后台调度器到期触发
 
 ### 长期记忆与上下文管理
@@ -97,7 +99,7 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 - **Markdown 源文件** - 记忆同时以 `memory/files/{facts,episodes}/*.md` 形式落盘,可读可改
 - **半衰期遗忘** - 基于 strength 的衰减算法实现自然遗忘,召回时 reinforce 强化高频记忆
 - **联想召回** - 每轮对话前用关键词从 facts / episodes 召回相关记忆,注入系统消息
-- **按人格隔离** - 记忆、表情包、skills 按 `persona` 目录隔离,不同人格互不干扰
+- **按人格隔离** - 记忆与技能使用独立人格目录；可选图库使用插件自身配置的数据路径。
 
 ### 多聊天平台网关
 
@@ -430,7 +432,7 @@ Sai/
 │   ├── cli/              # CLI 子命令分发与 REPL 实现
 │   ├── llm/              # LLM 客户端:三协议、流式、thinking、工具流解析
 │   ├── tools/            # 核心工具、注册表、渐进加载、子代理和技能
-│   ├── plugins/          # 插件管理、宿主接口、持久调度和兼容适配
+│   ├── plugins/          # 公共插件宿主、管理、授权与调度
 │   ├── memory/           # 长期记忆:facts/episodes/FTS5/衰减/联想
 │   ├── state/            # 会话状态:turns WAL、pending、压缩、快照、恢复
 │   ├── gateways/         # 多平台网关:QQ/微信/OneBot/企业微信、supervisor
@@ -446,7 +448,7 @@ Sai/
 │   ├── i18n/             # 中英文国际化
 │   ├── cron/             # 定时任务调度
 │   └── ...               # 其他宿主模块
-├── plugins/              # 随程序发布的 Lua 业务包：知识库、待办、表情库等
+├── examples/lua-plugins/ # 25 个业务示例和 2 个开发入门示例
 ├── crates/sai-plugin-runtime/ # 独立 Lua 运行时和能力契约
 ├── crates/sai-sqlite-buffer/  # 固定容量的 SQLite 快照缓冲
 ├── web/                  # Web 工作台前端(React + Vite)
@@ -493,7 +495,9 @@ Linux `~/.local/state/sai` / macOS `~/Library/Application Support/sai` / Windows
 | `prompt.sha256` | 系统提示指纹,变更则重置会话 |
 | `profile.md` | 用户画像 |
 | `sai.log` | 运行日志 |
-| `alarms/` | 闹钟状态与日志 |
+| `plugin-jobs/`、`plugin-legacy/` | 公共调度记录与旧闹钟的独立管理状态 |
+| `alarms.json`、`alarm.log` | 保留的旧闹钟快照与日志 |
+| `plugin-state/`、`plugin-storage/` | 公共插件会话记录与跨会话记录 |
 | `permission-audit.jsonl` | 权限审计日志 |
 
 ### 数据目录
@@ -502,12 +506,14 @@ Linux `~/.local/share/sai` / macOS `~/Library/Application Support/sai` / Windows
 
 | 文件 / 目录 | 用途 |
 | --- | --- |
-| `kb/` | 本地知识库:文件 + 关键词索引 + 语义嵌入 |
-| `persona/<name>/memes/` | 表情包图片与索引(按人格隔离) |
+| `kb/` | 旧版知识库目录；通过独立 data_dir 设置与授权接续 |
+| `persona/<name>/memes/` | 旧版图库路径；通过插件独立设置显式接续 |
 | `persona/<name>/memory/memory.db` | 记忆元数据 + FTS5 索引 |
 | `persona/<name>/memory/files/` | Markdown 记忆源文件(facts / episodes) |
 | `persona/<name>/memory/evicted_context.db` | 被裁剪的旧上下文 |
 | `persona/<name>/skills/` | 自动学习的 skill |
+
+示例知识库默认使用工作区的 `kb/`；图库默认使用 `.sai/meme-bases`、`.sai/memes` 和 `.sai/state/memes`。安装与数据迁移以各包 [README](examples/lua-plugins/README.md) 为准。
 
 ### 其他目录
 

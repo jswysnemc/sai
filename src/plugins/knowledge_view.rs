@@ -1,4 +1,7 @@
-use super::commands::{run_bundled, BundledCommand};
+use super::{
+    commands::{run_installed, PluginCommand},
+    discovery::find_optional,
+};
 use crate::{config::AppConfig, paths::SaiPaths};
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -13,7 +16,7 @@ pub(crate) struct FileRecord {
 }
 
 /// 【知识库界面】【命令适配】把显式用户操作交给同一受限插件入口
-/// @param paths 应用目录；config 为配置；command 为内置命令；arguments 为结构化参数
+/// @param paths 应用目录；config 为配置；command 为插件命令；arguments 为结构化参数
 /// @returns 原始命令输出
 async fn call(
     paths: &SaiPaths,
@@ -21,14 +24,13 @@ async fn call(
     command: &'static str,
     arguments: Value,
 ) -> Result<String> {
-    run_bundled(
+    run_installed(
         config,
         paths,
-        BundledCommand {
+        PluginCommand {
             plugin: "knowledge-base",
             command,
             arguments,
-            input: None,
             allow_writes: true,
         },
     )
@@ -39,6 +41,10 @@ async fn call(
 /// @param paths 应用目录；config 为当前配置
 /// @returns Lua 命令返回的文件列表
 pub(crate) async fn list(paths: &SaiPaths, config: &AppConfig) -> Result<Vec<FileRecord>> {
+    if !find_optional(config, paths, "knowledge-base")?.is_some_and(|plugin| plugin.setting.enabled)
+    {
+        return Ok(Vec::new());
+    }
     Ok(serde_json::from_str(
         &call(paths, config, "list", json!({"format":"json"})).await?,
     )?)
@@ -48,32 +54,25 @@ pub(crate) async fn list(paths: &SaiPaths, config: &AppConfig) -> Result<Vec<Fil
 /// @param paths 应用目录；config 为当前配置
 /// @returns 统计 JSON
 pub(crate) async fn stats(paths: &SaiPaths, config: &AppConfig) -> Result<Value> {
+    if !find_optional(config, paths, "knowledge-base")?.is_some_and(|plugin| plugin.setting.enabled)
+    {
+        return Ok(json!({
+            "ok": true, "available": false, "root": "", "files_dir": "",
+            "files": 0, "total_size_kb": 0, "semantic_chunks": 0,
+            "embedding_enabled": false, "embedding_provider_id": "", "embedding_model": ""
+        }));
+    }
     Ok(serde_json::from_str(
         &call(paths, config, "stats", json!({})).await?,
     )?)
 }
 
-/// 【知识库界面】【显式来源】只为用户选择的文件或目录授予临时读取权限
-/// @param paths 应用目录；config 为配置；source 为已确认输入
+/// 【知识库界面】【显式导入】通过普通命令导入文件或目录，来源读取遵守插件授权
+/// @param paths 应用目录；config 为配置；source 为用户选择的文件或目录
 /// @returns 实际成功导入数量
 pub(crate) async fn add(paths: &SaiPaths, config: &AppConfig, source: &Path) -> Result<usize> {
-    let name = source
-        .file_name()
-        .and_then(|name| name.to_str())
-        .context("source path has no valid name")?;
-    let canonical = dunce::canonicalize(source)?;
-    let text = run_bundled(
-        config,
-        paths,
-        BundledCommand {
-            plugin: "knowledge-base",
-            command: "add",
-            arguments: json!({"path":canonical,"name":name,"format":"json"}),
-            input: Some(canonical),
-            allow_writes: true,
-        },
-    )
-    .await?;
+    let source = source.to_str().context("source path must be UTF-8")?;
+    let text = call(paths, config, "add", json!({"path":source,"format":"json"})).await?;
     Ok(serde_json::from_str::<Vec<String>>(&text)?.len())
 }
 

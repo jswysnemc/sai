@@ -20,6 +20,7 @@ pub(super) fn agent(
 ) -> (Agent, StateStore) {
     let paths = SaiPaths::for_tests(root);
     let config = model.config("todo-model");
+    super::example_support::install_enabled("todo", &config, &paths);
     let state = StateStore::new(&paths).unwrap();
     state.init_files().unwrap();
     let descriptor = crate::plugins::discover(&config, &paths)
@@ -56,6 +57,11 @@ pub(super) fn agent(
 /// @param serial 唯一调用标识；name 为工具；arguments 为模型参数
 /// @returns 真实 SSE 增量样本
 pub(super) fn tool(serial: usize, name: &str, arguments: Value) -> ModelReply {
+    let name = if name == "todo" {
+        "lua__todo__todo"
+    } else {
+        name
+    };
     let mut call = tool_call(0, name, arguments);
     call["id"] = json!(format!("todo-call-{serial}"));
     ModelReply::delta(json!({"role":"assistant","tool_calls":[call]}))
@@ -77,13 +83,14 @@ pub(super) fn reminder_count(request: &Value) -> usize {
         .count()
 }
 
-/// 【待办 Agent 测试】【旧清单种子】写入原会话格式，验证 Agent 和 Web 共用兼容文件
-/// @param state 当前会话
+/// 【待办 Agent 测试】【公共清单种子】通过正式存储写入可信完整会话作用域
+/// @param root 隔离工作目录；state 为当前会话
 /// @returns 无
-pub(super) fn seed(state: &StateStore) {
-    std::fs::write(
-        state.state_dir().join("todos.json"),
-        json!([super::todo_support::item("a", "pending")]).to_string(),
-    )
-    .unwrap();
+pub(super) fn seed(root: &Path, state: &StateStore) {
+    super::todo_support::seed(
+        &SaiPaths::for_tests(root),
+        &state.state_dir().display().to_string(),
+        json!([super::todo_support::item("a", "pending")]),
+        json!([]),
+    );
 }

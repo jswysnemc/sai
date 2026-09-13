@@ -6,11 +6,7 @@ use std::sync::Arc;
 /// 【诊断对照测试】【纯函数入口】仅追加测试工具，所有业务函数来自正式发布的 Lua 包。
 /// @returns 可执行固定对照样本的运行时
 fn runtime() -> PluginRuntime {
-    let original = crate::plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|package| package.manifest.id == "diagnostic-evidence")
-        .unwrap();
+    let original = super::example_support::package("diagnostic-evidence");
     let mut sources = original.sources().clone();
     sources.get_mut("init.lua").unwrap().push_str(r#"
 local text = require('text')

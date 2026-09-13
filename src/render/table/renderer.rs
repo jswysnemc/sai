@@ -27,11 +27,7 @@ const VERTICAL: char = '│';
 ///
 /// 返回:
 /// - 带边框的表格行文本
-pub(crate) fn render_table_row(
-    row: &[CellContent],
-    widths: &[usize],
-    header: bool,
-) -> String {
+pub(crate) fn render_table_row(row: &[CellContent], widths: &[usize], header: bool) -> String {
     let wrapped: Vec<Vec<String>> = widths
         .iter()
         .enumerate()

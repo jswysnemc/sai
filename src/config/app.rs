@@ -123,7 +123,6 @@ impl AppConfig {
         }
         self.ensure_usable_active_provider();
         // 旧配置可能存有不带协议前缀的搜索地址，补齐后再进入校验
-        self.plugins.web.normalize_endpoints();
     }
 
     /// 保证 `active_provider` 指向一个已启用的供应商。
@@ -298,63 +297,6 @@ impl AppConfig {
         self.validate_new_session_defaults()?;
         self.validate_compaction_model()?;
         super::prompt_templates::validate_prompt_templates(&self.prompt.templates)?;
-        self.plugins.web.validate()?;
-        if self.plugins.print_image.width_percent == 0
-            || self.plugins.print_image.width_percent > 100
-        {
-            bail!("plugins.print_image.width_percent must be between 1 and 100");
-        }
-        if self.plugins.print_image.height_percent == 0
-            || self.plugins.print_image.height_percent > 100
-        {
-            bail!("plugins.print_image.height_percent must be between 1 and 100");
-        }
-        match self.plugins.deep_diagnose.thinking_depth.as_str() {
-            "minimal" | "low" | "medium" | "high" | "xhigh" => {}
-            value => bail!("plugins.deep_diagnose.thinking_depth is invalid: {value}"),
-        }
-        if self.plugins.deep_diagnose.tool_call_timeout_seconds == 0 {
-            bail!("plugins.deep_diagnose.tool_call_timeout_seconds must be greater than 0");
-        }
-        match self.plugins.image_generation.provider_type.as_str() {
-            "openai" | "rightcode" => {}
-            value => bail!("plugins.image_generation.provider_type is invalid: {value}"),
-        }
-        match self.plugins.image_generation.default_aspect_ratio.as_str() {
-            "自动" | "1:1" | "2:3" | "3:2" | "3:4" | "4:3" | "4:5" | "5:4" | "9:16" | "16:9"
-            | "21:9" => {}
-            value => bail!("plugins.image_generation.default_aspect_ratio is invalid: {value}"),
-        }
-        match self.plugins.image_generation.default_resolution.as_str() {
-            "1K" | "2K" | "4K" => {}
-            value => bail!("plugins.image_generation.default_resolution is invalid: {value}"),
-        }
-        if self.plugins.image_generation.timeout_seconds == 0 {
-            bail!("plugins.image_generation.timeout_seconds must be greater than 0");
-        }
-        if self.plugins.knowledge_base.max_search_results == 0 {
-            bail!("plugins.knowledge_base.max_search_results must be greater than 0");
-        }
-        if self.plugins.knowledge_base.max_read_lines == 0 {
-            bail!("plugins.knowledge_base.max_read_lines must be greater than 0");
-        }
-        if self.plugins.knowledge_base.max_file_size_kb == 0 {
-            bail!("plugins.knowledge_base.max_file_size_kb must be greater than 0");
-        }
-        if self.plugins.knowledge_base.semantic_chunk_chars < 128 {
-            bail!("plugins.knowledge_base.semantic_chunk_chars must be at least 128");
-        }
-        if self.plugins.knowledge_base.semantic_chunk_overlap
-            >= self.plugins.knowledge_base.semantic_chunk_chars
-        {
-            bail!("plugins.knowledge_base.semantic_chunk_overlap must be smaller than semantic_chunk_chars");
-        }
-        if self.plugins.knowledge_base.semantic_top_k == 0 {
-            bail!("plugins.knowledge_base.semantic_top_k must be greater than 0");
-        }
-        if self.plugins.knowledge_base.embedding_timeout_seconds == 0 {
-            bail!("plugins.knowledge_base.embedding_timeout_seconds must be greater than 0");
-        }
         self.provider(None)?;
         Ok(())
     }
@@ -617,10 +559,6 @@ impl AppConfig {
         if self.plugins.vision.vision_provider_id == removed.id {
             self.plugins.vision.vision_provider_id.clear();
             self.plugins.vision.vision_model.clear();
-        }
-        if self.plugins.knowledge_base.embedding_provider_id == removed.id {
-            self.plugins.knowledge_base.embedding_provider_id.clear();
-            self.plugins.knowledge_base.embedding_model.clear();
         }
         self.clear_subagent_model_references(&removed.id, None);
 

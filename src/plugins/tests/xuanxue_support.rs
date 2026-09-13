@@ -7,11 +7,7 @@ use std::sync::Arc;
 /// @param before 入口前的随机替身；after 入口后的验证注册
 /// @returns 保留真实清单和业务模块的完整包
 pub(super) fn package(before: &str, after: &str) -> PluginPackage {
-    let package = crate::plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|package| package.manifest.id == "xuanxue")
-        .expect("missing bundled xuanxue package");
+    let package = super::example_support::package("xuanxue");
     let mut sources = package.sources().clone();
     let entry = sources.get_mut(&package.manifest.entry).unwrap();
     *entry = format!("{before}\n{entry}\n{after}");

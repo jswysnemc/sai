@@ -68,17 +68,11 @@ impl PluginHost for FixtureHost {
     }
 }
 
-/// 【插件测试】【内置运行时】加载实际发布的 Lua 包，注入可观察的 HTTP 宿主。
-/// @param id 内置包 ID；host 为测试或真实网络宿主
+/// 【插件测试】【示例运行时】加载实际示例源码，注入可观察的 HTTP 宿主。
+/// @param id 示例包 ID；host 为测试或真实网络宿主
 /// @returns 使用真实清单、源码和授权声明的运行时
 pub(super) fn runtime(id: &str, host: Arc<dyn PluginHost>) -> PluginRuntime {
-    let package = crate::plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|package| package.manifest.id == id)
-        .unwrap();
-    let grants = package.manifest.capabilities.clone();
-    PluginRuntime::load(package, json!({}), grants, host).unwrap()
+    super::example_support::runtime(id, host)
 }
 
 /// 【插件测试】【JSON 调用】通过真实工具接口执行只读调用并解析结果。
@@ -116,7 +110,6 @@ pub(super) fn descriptor(id: &str, source: &str) -> PluginDescriptor {
             enabled: true,
             ..Default::default()
         },
-        overrides: None,
     }
 }
 

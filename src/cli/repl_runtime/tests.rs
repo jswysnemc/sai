@@ -607,10 +607,14 @@ fn follow_stream_renders_content_deltas_live() {
         .map(|line| line.as_str())
         .collect::<String>();
     let plain = crate::render::activity_animation::strip_ansi_for_test(&rendered);
-    assert!(plain.contains("远端流式正文第一行"), "正文应实时可见: {plain}");
+    assert!(
+        plain.contains("远端流式正文第一行"),
+        "正文应实时可见: {plain}"
+    );
 
     // 轮次结束收敛 live tail,正文仍保留
-    tx.send(follow_event("run.completed", serde_json::json!({}))).unwrap();
+    tx.send(follow_event("run.completed", serde_json::json!({})))
+        .unwrap();
     runtime.drain_follow_events().unwrap();
     let rendered = runtime
         .transcript
@@ -619,7 +623,10 @@ fn follow_stream_renders_content_deltas_live() {
         .map(|line| line.as_str())
         .collect::<String>();
     let plain = crate::render::activity_animation::strip_ansi_for_test(&rendered);
-    assert!(plain.contains("远端流式正文第一行"), "定稿后正文不丢: {plain}");
+    assert!(
+        plain.contains("远端流式正文第一行"),
+        "定稿后正文不丢: {plain}"
+    );
 }
 
 /// 【跟随模式】接入跟随流后读键等待必须周期性唤醒,否则主循环阻塞在读键上,
@@ -627,10 +634,7 @@ fn follow_stream_renders_content_deltas_live() {
 #[test]
 fn follow_stream_wakes_the_idle_tick() {
     let mut runtime = ReplRuntime::new(5_000, options());
-    assert!(
-        runtime.pending_wait().is_none(),
-        "未跟随时无额外唤醒"
-    );
+    assert!(runtime.pending_wait().is_none(), "未跟随时无额外唤醒");
 
     let (_tx, rx) = tokio::sync::mpsc::unbounded_channel();
     runtime.follow_remote_stream(rx);
@@ -640,9 +644,5 @@ fn follow_stream_wakes_the_idle_tick() {
     );
 
     runtime.stop_following();
-    assert!(
-        runtime.pending_wait().is_none(),
-        "停止跟随后不再唤醒"
-    );
+    assert!(runtime.pending_wait().is_none(), "停止跟随后不再唤醒");
 }
-

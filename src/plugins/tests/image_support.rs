@@ -141,28 +141,27 @@ impl PluginHost for ImageHost {
     }
 }
 
-/// 【图片测试】【实际包加载】加载发布源码及原配置兼容层。
+/// 【图片测试】【实际包加载】加载唯一示例源码，为固定响应显式建立测试清单
 /// @param id 包 ID；settings 为显式设置；host 为可观察宿主
 /// @returns 完整真实运行时
 pub(super) fn runtime(id: &str, settings: Value, host: Arc<dyn PluginHost>) -> PluginRuntime {
-    let mut package = crate::plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|p| p.manifest.id == id)
-        .unwrap();
-    let root = tempfile::tempdir().unwrap();
-    let paths = crate::paths::SaiPaths::for_tests(root.path());
-    let overrides = crate::plugins::compatibility::resolve(
-        id,
-        &crate::config::AppConfig::default(),
-        &paths,
-        &settings,
-        &package.manifest.capabilities,
-    )
-    .unwrap()
-    .unwrap();
-    package.manifest.capabilities = overrides.capabilities.clone();
-    PluginRuntime::load(package, overrides.settings, overrides.capabilities, host).unwrap()
+    let mut package = super::example_support::package(id);
+    for key in ["base_url", "duckduckgo_base_url", "bing_base_url"] {
+        if let Some(value) = settings[key].as_str() {
+            let origin = reqwest::Url::parse(value)
+                .unwrap()
+                .origin()
+                .ascii_serialization();
+            package.manifest.capabilities.http.insert(origin);
+        }
+    }
+    for key in ["output_dir", "cache_dir"] {
+        if let Some(value) = settings[key].as_str() {
+            package.manifest.capabilities.binary.write_paths = [value.to_string()].into();
+        }
+    }
+    let grants = package.manifest.capabilities.clone();
+    PluginRuntime::load(package, settings, grants, host).unwrap()
 }
 
 /// 【图片测试】【默认配置】使用固定非真实凭据和输出目录。
@@ -190,12 +189,12 @@ pub(super) struct PreviewServices {
 
 #[async_trait]
 impl InvocationServices for PreviewServices {
-    /// 【图片测试】【显示目录】模拟当前任务是否公开 print_image。
+    /// 【图片测试】【显示目录】模拟当前任务是否公开独立显示包
     /// @returns 可见显示工具或空目录
     fn tools(&self) -> Result<Vec<HostTool>> {
         Ok(if self.enabled {
             vec![HostTool {
-                name: "print_image".into(),
+                name: "lua__image-display__print_image".into(),
                 display_name: "Display".into(),
                 description: "Display".into(),
                 parameters: json!({"type":"object"}),
@@ -210,7 +209,7 @@ impl InvocationServices for PreviewServices {
     /// @param name 精确工具名；arguments 为 JSON 参数
     /// @returns 固定成功文本或预览错误
     async fn call_tool(&self, name: &str, arguments: &str) -> Result<String> {
-        assert_eq!(name, "print_image");
+        assert_eq!(name, "lua__image-display__print_image");
         self.calls
             .lock()
             .unwrap()

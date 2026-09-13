@@ -67,8 +67,8 @@ pub(super) async fn send(context: MeshContext, args: Value) -> Result<String> {
     super::authorize_target(&context, &target)?;
 
     let from = super::self_address(&context).wire();
-    let correlation_id = optional_string_arg(&args, "correlation_id")
-        .unwrap_or_else(|| mailbox::new_id("corr"));
+    let correlation_id =
+        optional_string_arg(&args, "correlation_id").unwrap_or_else(|| mailbox::new_id("corr"));
     let queued_at_ms = unix_millis();
     let envelope = MeshEnvelope {
         id: mailbox::new_id("msg"),

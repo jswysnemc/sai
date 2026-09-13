@@ -9,20 +9,11 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 pkgdir="${TMPDIR:-/tmp}/sai-pkg-${pkgver}-${pkgrel}"
 pkgout="${SAI_PACKAGE_OUT_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/sai/packages}"
 pkgfile="${pkgout}/${pkgname}-${pkgver}-${pkgrel}-${arch}.pkg.tar.zst"
-memes_dir="${pkgdir}/usr/share/sai/memes"
 
 mkdir -p "${pkgout}"
 rm -rf "${pkgdir}" "${pkgfile}"
-mkdir -p "${pkgdir}/usr/bin" "${memes_dir}"
+mkdir -p "${pkgdir}/usr/bin"
 install -Dm755 "${root}/target/release/sai" "${pkgdir}/usr/bin/sai"
-
-# 默认不打包知识库资料；用户可在配置界面或 `sai kb` 自行管理。
-if [[ -d "${root}/src/memes" ]]; then
-    while IFS= read -r -d '' file; do
-        rel="${file#"${root}/src/memes/"}"
-        install -Dm644 "${file}" "${memes_dir}/${rel}"
-    done < <(find "${root}/src/memes" -type f \( -name '*.json' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.png' -o -name '*.gif' -o -name '*.webp' \) -print0 | sort -z)
-fi
 
 size="$(du -sb "${pkgdir}/usr" | cut -f1)"
 cat > "${pkgdir}/.PKGINFO" <<EOF

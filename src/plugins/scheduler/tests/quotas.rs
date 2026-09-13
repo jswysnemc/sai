@@ -2,10 +2,10 @@ use super::super::{record::JobRecord, store::Store};
 use super::fixture;
 use sai_plugin_runtime::host::{ScheduleRequest, MAX_ACTIVE_TASKS, MAX_SCHEDULED_TASKS};
 
-/// 【调度配额测试】【旧任务过渡】旧记录可与满额新历史合并，旧任务不占新建活动配额。
-/// @returns 无，查询覆盖全部 256 条记录
+/// 【调度配额测试】【旧任务隔离】旧记录不进入公共调度列表或消耗新建配额。
+/// @returns 无，两种记录分别有界查询
 #[test]
-fn alarm_legacy_records_merge_without_consuming_native_creation_quota() {
+fn alarm_legacy_records_are_isolated_from_public_scheduler_quota() {
     let (_root, paths, _descriptor) = fixture();
     let store = Store::open(&paths.state_dir, "alarm").unwrap();
     for index in 0..128 {
@@ -38,13 +38,19 @@ fn alarm_legacy_records_merge_without_consuming_native_creation_quota() {
     )
     .unwrap();
     let tasks = super::super::list(&paths, "alarm").unwrap();
-    assert_eq!(tasks.len(), 256);
+    assert_eq!(tasks.len(), 128);
+    assert_eq!(
+        crate::plugins::legacy_alarm_jobs::list(&paths)
+            .unwrap()
+            .len(),
+        128
+    );
     assert!(tasks
         .windows(2)
         .all(|pair| (pair[0].created_at, &pair[0].id) <= (pair[1].created_at, &pair[1].id)));
     assert_eq!(
         tasks.iter().filter(|task| task.status.is_active()).count(),
-        128
+        0
     );
     let _lock = store.lock().unwrap();
     store.reserve().unwrap();

@@ -1,4 +1,4 @@
-use super::todo_support::{bundled, call, context, snapshot};
+use super::todo_support::{call, context, installed, record_path, snapshot};
 use crate::{
     config::AppConfig,
     paths::SaiPaths,
@@ -20,12 +20,44 @@ async fn todo_view_reports_invalid_plugin_configuration() {
     assert!(TodoView::load(&AppConfig::default(), &paths).await.is_err());
 }
 
+/// 【可选视图测试】【缺失与撤权】未安装或未授权业务包时，核心会话查询仍返回空视图
+/// @returns 无；损坏配置继续由独立错误测试覆盖
+#[tokio::test]
+async fn optional_views_work_without_installed_or_authorized_examples() {
+    let root = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(root.path());
+    let config = AppConfig::default();
+    let state = StateStore::new(&paths).unwrap();
+    for installed in [false, true] {
+        if installed {
+            super::example_support::install("todo", &paths);
+            plugins::set_enabled(&config, &paths, "todo", true, GrantUpdate::Keep).unwrap();
+        }
+        let view = TodoView::load(&config, &paths).await.unwrap();
+        let result = view
+            .snapshot(state.session_id(), state.state_dir(), root.path())
+            .await
+            .unwrap();
+        assert!(result.items.is_empty() && result.history.is_empty());
+        assert!(plugins::knowledge_view::list(&paths, &config)
+            .await
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            plugins::knowledge_view::stats(&paths, &config)
+                .await
+                .unwrap()["available"],
+            false
+        );
+    }
+}
+
 /// 【待办设置测试】【启停和计划模式】待办属于 Lua 写入工具，禁用同时移除工具和界面投影
 /// @returns 无；重新启用读取原记录，白名单保留真实插件归属
 #[tokio::test]
 async fn todo_settings_control_tool_registration_and_web_visibility() {
     let root = tempfile::tempdir().unwrap();
-    let (paths, plugin, _) = bundled(root.path());
+    let (paths, plugin, _) = installed(root.path());
     let config = AppConfig::default();
     let store = StateStore::new(&paths).unwrap();
     let scope = store.state_dir().display().to_string();
@@ -36,17 +68,19 @@ async fn todo_settings_control_tool_registration_and_web_visibility() {
         json!({"action":"add","text":"preserved"}),
     )
     .await;
-    let record = std::fs::read(store.state_dir().join("todos.plugin.json")).unwrap();
+    let record = std::fs::read(record_path(&paths, &scope)).unwrap();
     for enabled in [false, true] {
         plugins::set_enabled(&config, &paths, "todo", enabled, GrantUpdate::Keep).unwrap();
         let registry = crate::tools::builtin_registry_without_mcp(&config, &paths);
         assert!(registry.plugin_diagnostics().is_empty());
-        assert_eq!(registry.contains("todo"), enabled);
+        assert_eq!(registry.contains("lua__todo__todo"), enabled);
         let readonly = crate::tools::readonly_registry(&config, &paths);
-        assert!(!readonly.contains("todo"));
+        assert!(!readonly.contains("lua__todo__todo"));
         if enabled {
             assert_eq!(
-                registry.clone_filtered(&["todo"]).plugin_owner("todo"),
+                registry
+                    .clone_filtered(&["lua__todo__todo"])
+                    .plugin_owner("lua__todo__todo"),
                 Some("todo")
             );
         }
@@ -59,10 +93,7 @@ async fn todo_settings_control_tool_registration_and_web_visibility() {
                 .len(),
             usize::from(enabled)
         );
-        assert_eq!(
-            std::fs::read(store.state_dir().join("todos.plugin.json")).unwrap(),
-            record
-        );
+        assert_eq!(std::fs::read(record_path(&paths, &scope)).unwrap(), record);
     }
 }
 
@@ -71,7 +102,7 @@ async fn todo_settings_control_tool_registration_and_web_visibility() {
 #[tokio::test]
 async fn todo_settings_enforce_independent_storage_and_policy_grants() {
     let root = tempfile::tempdir().unwrap();
-    let paths = SaiPaths::for_tests(root.path());
+    let (paths, _, _) = installed(root.path());
     let store = StateStore::new(&paths).unwrap();
     let scope = store.state_dir().display().to_string();
     for (storage, policy) in [(false, true), (true, false)] {
@@ -126,7 +157,7 @@ async fn todo_settings_enforce_independent_storage_and_policy_grants() {
 #[tokio::test]
 async fn todo_external_descriptor_cannot_adopt_bundled_legacy_records() {
     let root = tempfile::tempdir().unwrap();
-    let paths = SaiPaths::for_tests(root.path());
+    let (paths, _, _) = installed(root.path());
     let store = StateStore::new(&paths).unwrap();
     let scope = store.state_dir().display().to_string();
     let old = json!([super::todo_support::item("legacy", "pending")]).to_string();
@@ -157,7 +188,7 @@ async fn todo_external_descriptor_cannot_adopt_bundled_legacy_records() {
         json!({"action":"add","text":"external"}),
     )
     .await;
-    assert!(!store.state_dir().join("todos.plugin.json").exists());
+    assert!(record_path(&paths, &scope).exists());
     assert_eq!(
         std::fs::read_to_string(store.state_dir().join("todos.json")).unwrap(),
         old
@@ -169,7 +200,7 @@ async fn todo_external_descriptor_cannot_adopt_bundled_legacy_records() {
 #[tokio::test]
 async fn todo_storage_isolates_workspaces_and_direct_cli_cleanup() {
     let root = tempfile::tempdir().unwrap();
-    let (paths, plugin, _) = bundled(root.path());
+    let (paths, plugin, _) = installed(root.path());
     let mut scopes = Vec::new();
     for workspace in ["first", "second"] {
         let path = root.path().join(workspace);

@@ -5,26 +5,26 @@ use crate::plugins::config::load_config;
 use crate::plugins::{self, GrantUpdate};
 use serde_json::json;
 
-/// 【通知设置测试】【字段覆盖】旧设置持续作为缺省值，显式 false 保持有效且不固化其他字段。
+/// 【通知设置测试】【字段覆盖】显式 false 保持有效，缺省字段由本包决定。
 #[tokio::test]
-async fn notification_settings_override_legacy_fields_without_pinning_defaults() {
+async fn notification_settings_keep_explicit_values_across_enable_changes() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
-    let mut config = AppConfig::default();
-    config.notification.enabled = false;
-    config.notification.sound = false;
+    let config = AppConfig::default();
+    super::example_support::install_enabled(ID, &config, &paths);
+    plugins::configure(&config, &paths, ID, json!({"enabled":false,"sound":false})).unwrap();
     assert!(plugins::notification_plan(&config, &paths, event())
         .await
         .unwrap()
         .notifications
         .is_empty());
-    plugins::configure(&config, &paths, ID, json!({"sound":true})).unwrap();
+    plugins::configure(&config, &paths, ID, json!({"enabled":false,"sound":true})).unwrap();
     let plan = plugins::notification_plan(&config, &paths, event())
         .await
         .unwrap();
     assert!(!plan.notifications[0].desktop);
     assert!(plan.notifications[0].sound);
-    config.notification.enabled = true;
+    plugins::configure(&config, &paths, ID, json!({"sound":true})).unwrap();
     assert!(
         plugins::notification_plan(&config, &paths, event())
             .await
@@ -33,7 +33,6 @@ async fn notification_settings_override_legacy_fields_without_pinning_defaults()
             .desktop
     );
     plugins::configure(&config, &paths, ID, json!({"enabled":false,"sound":false})).unwrap();
-    config.notification.sound = true;
     assert!(plugins::notification_plan(&config, &paths, event())
         .await
         .unwrap()
@@ -60,6 +59,7 @@ fn invalid_notification_settings_do_not_mutate_configuration() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
     let config = AppConfig::default();
+    super::example_support::install(ID, &paths);
     plugins::configure(&config, &paths, ID, json!({"sound":false})).unwrap();
     let file = paths.config_dir.join("plugins.jsonc");
     let original = std::fs::read(&file).unwrap();
@@ -84,15 +84,9 @@ fn invalid_notification_settings_do_not_mutate_configuration() {
 /// 【通知设置测试】【配置隔离】外部包不能继承主配置中的通知偏好。
 #[test]
 fn external_packages_do_not_inherit_legacy_notification_settings() {
-    let root = tempfile::tempdir().unwrap();
-    let paths = crate::paths::SaiPaths::for_tests(root.path());
-    let mut config = AppConfig::default();
-    config.notification.enabled = false;
-    config.notification.sound = false;
     for id in [ID, "own-notification"] {
         let mut plugin = super::support::descriptor(id, "");
         plugin.setting.settings = json!({"own":true});
-        plugin.refresh_compatibility(&config, &paths).unwrap();
         assert_eq!(plugin.settings(), &json!({"own":true}));
     }
 }

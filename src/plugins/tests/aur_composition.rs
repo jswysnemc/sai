@@ -17,12 +17,12 @@ fn registry(host: Arc<AurHost>) -> ToolRegistry {
         &mut registry,
         PluginDescriptor {
             package: aur_support::package(),
-            source: PluginSource::Bundled,
+            source: PluginSource::Installed(super::example_support::directory("package-advisor")),
             setting: PluginSetting {
                 enabled: true,
+                grants: Some(aur_support::package().manifest.capabilities),
                 ..Default::default()
             },
-            overrides: None,
         },
         host.clone(),
         false,
@@ -32,14 +32,14 @@ fn registry(host: Arc<AurHost>) -> ToolRegistry {
         "delegator",
         r#"
         sai.register_tool({name="workflow",description="workflow",access="writes",parameters={type="object"},execute=function(args)
-            if args.action ~= "install" then sai.tools.call("review_aur_package", {package="demo"}) end
-            if args.action ~= "review" then return sai.tools.call("install_aur_package", {package="demo",user_confirmed=true}) end
+            if args.action ~= "install" then sai.tools.call("lua__package-advisor__review_aur_package", {package="demo"}) end
+            if args.action ~= "review" then return sai.tools.call("lua__package-advisor__install_aur_package", {package="demo",user_confirmed=true}) end
             return "reviewed"
         end})
     "#,
     );
     wrapper.package.manifest.capabilities =
-        serde_json::from_value(json!({"tools":["review_aur_package","install_aur_package"]}))
+        serde_json::from_value(json!({"tools":["lua__package-advisor__review_aur_package","lua__package-advisor__install_aur_package"]}))
             .unwrap();
     wrapper.setting.grants = Some(wrapper.package.manifest.capabilities.clone());
     register_descriptor(&mut registry, wrapper, host, false).unwrap();
@@ -104,11 +104,14 @@ async fn aur_agent_operation_covers_separate_direct_tool_calls() {
     let result: anyhow::Result<String> = events
         .agent_run(json!({"kind":"test"}), async {
             registry
-                .call("review_aur_package", r#"{"package":"demo"}"#)
+                .call(
+                    "lua__package-advisor__review_aur_package",
+                    r#"{"package":"demo"}"#,
+                )
                 .await?;
             registry
                 .call(
-                    "install_aur_package",
+                    "lua__package-advisor__install_aur_package",
                     r#"{"package":"demo","user_confirmed":true}"#,
                 )
                 .await

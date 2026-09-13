@@ -1,4 +1,4 @@
-use super::discovery::{diagnostic, discover, PluginDescriptor, PluginDiagnostic, PluginSource};
+use super::discovery::{diagnostic, discover, PluginDescriptor, PluginDiagnostic};
 use super::private::PrivatePluginHost;
 use super::session::{PluginInstance, PluginSession};
 use crate::config::AppConfig;
@@ -34,32 +34,6 @@ pub(crate) fn register_plugins(
     }
     registry.set_plugin_diagnostics(diagnostics.clone());
     diagnostics
-}
-
-/// 【插件】【兼容目录】允许为已禁用的内置工具预先设置 Agent 白名单，不执行禁用的外部代码。
-/// @param registry 目录注册表；config 为目录配置；paths 为插件配置路径
-/// @returns 无；错误保留在目录诊断中
-pub(crate) fn register_bundled_catalog_tools(
-    registry: &mut ToolRegistry,
-    config: &AppConfig,
-    paths: &SaiPaths,
-) {
-    let found = discover(config, paths);
-    for mut descriptor in found
-        .plugins
-        .into_iter()
-        .filter(|plugin| !plugin.setting.enabled && matches!(plugin.source, PluginSource::Bundled))
-    {
-        descriptor.setting.enabled = true;
-        let id = descriptor.package.manifest.id.clone();
-        let result = PrivatePluginHost::for_descriptor(paths, &descriptor)
-            .and_then(|host| register_descriptor(registry, descriptor, Arc::new(host), false));
-        if let Err(error) = result {
-            let mut diagnostics = registry.plugin_diagnostics().to_vec();
-            diagnostics.push(diagnostic(id, error));
-            registry.set_plugin_diagnostics(diagnostics);
-        }
-    }
 }
 
 /// 【插件】【注册事务】先检查完整包，再一次性提交工具和实例。

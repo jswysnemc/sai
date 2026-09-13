@@ -8,6 +8,7 @@ mod execution;
 mod http;
 mod json_input;
 mod modules;
+mod native;
 mod notification;
 mod private;
 mod registration;

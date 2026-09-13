@@ -8,7 +8,6 @@ import { GitSettingsPanel } from "../git/git-settings-panel";
 import { SshSettingsSection } from "../ssh/ssh-settings-section";
 import { ProviderSettingsSection } from "../provider-settings-section";
 import { CliToolsSettingsSection } from "../cli-tools/cli-tools-settings-section";
-import { WebSearchSettingsSection } from "../web-search/web-search-settings-section";
 import { RuntimeSettingsSection } from "../runtime-settings-section";
 import { MemorySettingsSection } from "../memory/memory-settings-section";
 import { HooksSettingsSection } from "../hooks-settings-section";
@@ -106,14 +105,6 @@ function renderAppConfigSection(
     case "cli-tools":
       return (
         <CliToolsSettingsSection
-          config={config}
-          secretSentinel={settings.secretSentinel}
-          onConfigChange={settings.updateConfig}
-        />
-      );
-    case "web-search":
-      return (
-        <WebSearchSettingsSection
           config={config}
           secretSentinel={settings.secretSentinel}
           onConfigChange={settings.updateConfig}

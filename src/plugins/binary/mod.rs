@@ -19,7 +19,7 @@ use anyhow::{bail, Result};
 use sai_plugin_runtime::host::{BinaryResponse, HttpRequest};
 use sai_plugin_runtime::Capabilities;
 
-/// 【插件二进制】【精确请求】复用 HTTP 来源及重定向授权，保留响应原始字节。
+/// 【插件二进制】【授权请求】复用 HTTP 来源、只读方法及重定向授权，保留原始字节。
 /// @param request 请求；capabilities 为来源授权；allow_writes 为可信写入权限
 /// @returns 受独立字节及时间上限约束的正文
 pub(super) async fn request(
@@ -29,15 +29,20 @@ pub(super) async fn request(
 ) -> Result<BinaryResponse> {
     validate_limit(request.max_bytes)?;
     let max_bytes = request.max_bytes;
+    let read_error_body = request.read_error_body;
     let response =
         super::http::send_with_timeout_limit(request, capabilities, allow_writes, 600_000).await?;
-    read(response, max_bytes).await
+    read(response, max_bytes, read_error_body).await
 }
 
 /// 【插件二进制】【正文读取】状态和响应头属于元数据，正文始终保留为字节数组。
-/// @param response 最终响应；max_bytes 为本次上限
+/// @param response 最终响应；max_bytes 为本次上限；read_error_body 为错误正文策略
 /// @returns 不进行文本解码的结果
-async fn read(response: reqwest::Response, max_bytes: usize) -> Result<BinaryResponse> {
+async fn read(
+    response: reqwest::Response,
+    max_bytes: usize,
+    read_error_body: bool,
+) -> Result<BinaryResponse> {
     let status = response.status().as_u16();
     let url = response.url().to_string();
     let headers = response
@@ -50,7 +55,7 @@ async fn read(response: reqwest::Response, max_bytes: usize) -> Result<BinaryRes
                 .map(|value| (name.to_string(), value.to_string()))
         })
         .collect();
-    let body = super::http::read_bytes(response, max_bytes).await?;
+    let body = super::http::read_optional_body(response, max_bytes, read_error_body).await?;
     Ok(BinaryResponse {
         status,
         url,

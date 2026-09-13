@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 const PLUGIN: &str = "linux-game-investigation";
-const TOOL: &str = "linux_game_compatibility";
-const SIGNALS: &str = "gather_linux_game_compatibility_signals";
+const TOOL: &str = "lua__linux-game-investigation__linux_game_compatibility";
+const SIGNALS: &str = "lua__linux-game-signals__gather_linux_game_compatibility_signals";
 const REPORT: &str = "以下是最终报告\n\n## 调查结果\n绿灯，可以游玩\n\n## 怎么玩\n启用 Proton 9.0-3\n\n## 注意事项\n部分模组需要调整";
 
 /// 【游戏调查测试】【配置类型】false 不能被当成缺省值，否则会绕过预算和显示模式的类型校验。
@@ -19,13 +19,13 @@ fn false_settings_do_not_silently_select_defaults() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
     let config = crate::config::AppConfig::default();
+    super::example_support::install_enabled(PLUGIN, &config, &paths);
     for settings in [
         json!({"max_tool_steps":false}),
         json!({"progress_mode":false}),
     ] {
         let mut plugin = find(&config, &paths, PLUGIN).unwrap();
         plugin.setting.settings = settings;
-        plugin.refresh_compatibility(&config, &paths).unwrap();
         let mut tools = ToolRegistry::new();
         assert!(
             register_descriptor(&mut tools, plugin, Arc::new(FixtureHost::default()), false)
@@ -62,14 +62,13 @@ fn registry(
     change: impl FnOnce(&mut PluginDescriptor),
 ) -> (ToolRegistry, Arc<FixtureHost>) {
     let config = fixture.config("game-model");
+    super::example_support::install_enabled(PLUGIN, &config, paths);
+    super::example_support::install_enabled("linux-game-signals", &config, paths);
     let mut tools = ToolRegistry::new();
     tools.set_plugin_model_client(&fixture.client("game-model", paths));
     let host = signal_host();
     let mut investigation = find(&config, paths, PLUGIN).unwrap();
     investigation.setting.settings = settings;
-    investigation
-        .refresh_compatibility(&config, &paths)
-        .unwrap();
     change(&mut investigation);
     register_descriptor(&mut tools, investigation, host.clone(), false).unwrap();
     register_descriptor(
@@ -117,7 +116,7 @@ async fn real_lua_investigation_uses_signal_plugin_and_counts_each_response_once
     assert_eq!(tools.plugin_owner(SIGNALS), Some("linux-game-signals"));
     let output = investigate(&tools).await;
     assert_eq!(output["ok"], true);
-    assert_eq!(output["kind"], TOOL);
+    assert_eq!(output["kind"], "linux_game_compatibility");
     assert_eq!(output["game_query"], "Cyberpunk 2077");
     assert_eq!(
         output["final_report"],
@@ -156,8 +155,8 @@ async fn multi_tool_response_skips_excess_calls_and_finalizes_without_tools() {
     let fixture = ModelFixture::start(vec![
         ModelReply::delta(json!({"role":"assistant", "tool_calls":[
             tool_call(0, SIGNALS, json!({"game":"Cyberpunk 2077"})),
-            tool_call(1, "web_fetch", json!({"url":"https://example.test"})),
-            tool_call(2, "web_fetch", json!({"url":"https://example.test/again"}))
+            tool_call(1, "lua__web-fetch__web_fetch", json!({"url":"https://example.test"})),
+            tool_call(2, "lua__web-fetch__web_fetch", json!({"url":"https://example.test/again"}))
         ]})),
         ModelReply::text(REPORT),
     ])
@@ -168,7 +167,7 @@ async fn multi_tool_response_skips_excess_calls_and_finalizes_without_tools() {
     let count = Arc::new(AtomicUsize::new(0));
     let calls = count.clone();
     tools.register(ToolSpec::new(
-        "web_fetch",
+        "lua__web-fetch__web_fetch",
         "Count excess requests",
         json!({"type":"object"}),
         move |_| {
@@ -358,7 +357,7 @@ async fn tool_failures_are_visible_in_statistics_transcripts_and_bounded_progres
     for mode in ["summary", "full"] {
         let fixture = ModelFixture::start(vec![ModelReply::delta(json!({"role":"assistant", "tool_calls":[
             tool_call(0, SIGNALS, json!({"game":"Cyberpunk 2077"})),
-            tool_call(1, "web_fetch", json!({"url":"https://example.test", "detail":"中文\"\n".repeat(1500)}))
+            tool_call(1, "lua__web-fetch__web_fetch", json!({"url":"https://example.test", "detail":"中文\"\n".repeat(1500)}))
         ]})), ModelReply::text(REPORT)]).await;
         let root = tempfile::tempdir().unwrap();
         let paths = SaiPaths::for_tests(root.path());
@@ -369,7 +368,7 @@ async fn tool_failures_are_visible_in_statistics_transcripts_and_bounded_progres
             |_| {},
         );
         tools.register(ToolSpec::new(
-            "web_fetch",
+            "lua__web-fetch__web_fetch",
             "Fail query",
             json!({"type":"object"}),
             |_| async { anyhow::bail!("fixture fetch rejected") },

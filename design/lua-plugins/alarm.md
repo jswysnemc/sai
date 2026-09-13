@@ -1,11 +1,11 @@
 # Lua 闹钟
 
-内置 `alarm` 包实现倒计时、时钟提醒、列表和取消，保留 `set_alarm`、`list_alarms`、`cancel_alarm` 三个公开工具名称。时间解析、参数校验、输出字段与声音选择位于 Lua；Rust 提供通用持久调度、受限路径解析、声音投递及旧进程兼容。
+示例 `alarm` 包实现倒计时、时钟提醒、列表和取消，对外提供 `lua__alarm__set_alarm`、`lua__alarm__list_alarms`、`lua__alarm__cancel_alarm`。时间解析、参数校验、输出字段与声音选择位于 Lua；Rust 提供通用持久调度、受限路径解析、声音投递及显式旧任务管理。安装步骤见[示例说明](../../examples/lua-plugins/alarm/README.md)。
 
 ## 包与工具
 
 ```text
-plugins/alarm/
+examples/lua-plugins/alarm/
 ├── sai-plugin.json   # 能力、预算与包信息
 ├── init.lua          # 注册三个工具和 deliver 命令
 ├── time.lua          # 时长、时钟时间和绝对到期时间
@@ -39,12 +39,12 @@ plugins/alarm/
 
 ## 设置与授权
 
-包默认启用，声明 `system.schedule`、`system.notify` 和当前工作目录的 `system.read_paths=["."]`。查询需要调度授权；创建和取消另需可信写入权限；实际投递需要通知授权。启停、调度授权、通知授权和音频读取范围分别生效。
+包默认禁用、零授权，声明 `system.schedule`、`system.notify` 和当前工作目录的 `system.read_paths=["."]`。查询需要调度授权；创建和取消另需可信写入权限；实际投递需要通知授权。启停、调度授权、通知授权和音频读取范围分别生效。
 
-唯一可选设置为 `audio_paths`，最多 64 条路径。例如先准备以下设置文件：
+当前设置为空对象，未知字段（包括旧 `audio_paths`）会被拒绝：
 
 ```json
-{"audio_paths": [".", "~/Music"]}
+{}
 ```
 
 ```sh
@@ -52,10 +52,10 @@ sai plugins configure alarm ./alarm-settings.json
 sai plugins info alarm --json
 ```
 
-设置派生本次加载的读取声明，不会把派生值写回配置。已有显式授权不会跟随设置扩大；需要时再授予相应路径：
+默认声音无需音频读取授权。自选文件必须处于清单声明和用户授权的交集，例如授权当前工作目录：
 
 ```sh
-sai plugins enable alarm --allow-read-path '~/Music'
+sai plugins enable alarm --allow-read-path .
 ```
 
 新任务遵守[持久调度接口](scheduler-api.md)的版本检查：到期时源码、设置或授权与创建时不同，任务会失败。禁用包后三个模型工具消失，管理命令仍可查询和取消历史任务。会话重置不会删除闹钟；系统重启后没有自动恢复。
@@ -64,15 +64,15 @@ sai plugins enable alarm --allow-read-path '~/Music'
 
 兼容层只读取状态目录中的 `alarms.json`，最多 4 MiB、128 条记录。原文件保持不变，独立状态写入按插件隔离的 `plugin-legacy` 类别；短操作锁、取消锁、执行锁和原子替换保护新状态。链接、管道、损坏记录和重复 ID 明确报错。
 
-旧公开 ID 保留在 `deliver` 参数的 `legacy_id` 中，闹钟列表与取消工具仍接受该 ID。通用调度接口使用 `job-` 加 `blake3("sai/legacy-alarm/" + 旧 ID)` 的前 32 位十六进制作为映射标识，管理取消使用这个映射 ID。兼容状态绑定旧记录内容摘要；旧状态从 `scheduled` 改为 `ringing` 不会使已取消任务重新出现。
+只有显式 `sai plugins jobs alarm list/cancel/resume` 管理入口接续旧任务，公共 Lua 调度与三个闹钟工具仅处理新任务。管理记录使用 `job-` 加 `blake3("sai/legacy-alarm/" + 旧 ID)` 的前 32 位十六进制作为映射标识，取消使用该标识。旧公开 ID 保留在 `deliver` 参数的 `legacy_id` 中。兼容状态绑定旧记录内容摘要；旧状态从 `scheduled` 改为 `ringing` 不会使已取消任务重新出现。
 
-新记录最多 128 条，旧记录另最多 128 条；旧任务不占用新建任务的 32 条活动额度。Lua 每页最多 16 条，`offset` 范围为 0–256。无 PID 的旧记录仍可查询和取消，但不会自动执行。查询发现原进程退出或身份变化时返回失败诊断，不重新启动任务。所有旧任务都拒绝 `resume`，防止重复播放。
+新记录最多 128 条，旧记录另最多 128 条；旧任务不占用新建任务的 32 条活动额度。Lua 每页最多 16 条。显式管理可以查询和取消无 PID 的旧记录，但不会自动执行；发现原进程退出或身份变化时返回失败诊断，不重新启动任务。所有旧任务都拒绝 `resume`，防止重复播放。
 
 取消有 PID 的旧任务时，先取得稳定进程句柄，再核对完整 `__alarm-worker` 参数及真实状态目录。新入口先响应状态取消；旧入口通过已核验句柄终止，确认退出后才报告成功。Linux 使用 pidfd，Windows 使用进程对象，macOS 使用任务端口。系统不支持或拒绝稳定句柄时返回错误，不降级为裸 PID 信号。
 
-保留的 `__alarm-worker` 入口最多等待父进程发布记录五秒，要求记录 PID 等于当前进程且全部参数一致。它持有执行锁，等待原 `due_at`，复核当前可信内置包、启用状态、调度和通知授权，然后调用 Lua `deliver`。已开始或终态记录不会再次执行，后台入口不会触发首次配置交互。
+保留的 `__alarm-worker` 入口最多等待父进程发布记录五秒，要求记录 PID 等于当前进程且全部参数一致。它持有执行锁，等待原 `due_at`，复核当前普通安装包、启用状态、调度和通知授权，然后调用 Lua `deliver`。已开始或终态记录不会再次执行，后台入口不会触发首次配置交互。
 
-旧入口仅在用户没有显式授权、也没有设置 `audio_paths` 时，为核验通过的旧记录保留原音频文件的精确读取许可。该许可只存在于本次工作实例，不保存为配置、不扩大到父目录；用户当前的显式范围始终优先。旧标签在列表中保持原样，投递不把旧控制字符交给通知后端。
+旧入口不再注入历史音频许可，使用当前安装包的清单与用户授权。旧标签在列表中保持原样，投递不把旧控制字符交给通知后端。未安装、禁用或缺少授权时不能执行旧投递。
 
 已经运行的旧二进制仍执行原实现，其无锁文件写入与最终记录删除行为保持原状。禁用 Lua 包不会自动终止这些旧进程；管理取消仍可核验并处理它们。兼容层不能修复旧进程之间的覆盖写入，也不承诺恢复原文件中已经丢失的任务。
 
@@ -80,4 +80,4 @@ sai plugins enable alarm --allow-read-path '~/Music'
 
 固定 UTC 整秒的原版时间解析样本保存在 `src/plugins/tests/fixtures/alarm_reference.json`，共 114 组。测试直接执行发布用 Lua 包，并覆盖参数、独立授权、路径、分页、超时释放、旧记录身份、并发取消及禁止重放。
 
-实际发布程序的隔离目录验证和平台检查结果见[迁移记录](migration.md)。Linux 音频验证使用 ALSA 空输出；跨平台模块编译检查不代表已经验证 Windows、macOS 的实际声音或进程权限行为。
+历史发布程序与平台检查见[迁移记录](migration.md)，普通安装包及显式旧任务管理验收见[归档状态](../../.doc/archive/2026-09-14-core-plugin-extraction/status.md)。本次命令验收创建远期任务后立即取消，不播放声音；历史 Linux 音频验证使用 ALSA 空输出。跨平台编译不代表实际验证 Windows、macOS 的声音或进程权限。

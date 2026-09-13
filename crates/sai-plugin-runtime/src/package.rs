@@ -23,6 +23,23 @@ impl PluginPackage {
         &self.sources
     }
 
+    /// 【插件】【清单序列化】输出能再次通过目录加载上限的规范 JSON，保留末尾换行
+    /// @returns 格式化 JSON；接近大小上限时使用紧凑编码，仍超限则返回错误
+    pub fn manifest_json(&self) -> Result<Vec<u8>> {
+        self.manifest.validate()?;
+        let mut bytes = serde_json::to_vec_pretty(&self.manifest)?;
+        bytes.push(b'\n');
+        // 1. 【插件】【编码收窄】排版空白不能使有效清单在保存后变成不可加载的文件
+        if bytes.len() as u64 > MAX_MANIFEST_BYTES {
+            bytes = serde_json::to_vec(&self.manifest)?;
+            bytes.push(b'\n');
+        }
+        if bytes.len() as u64 > MAX_MANIFEST_BYTES {
+            bail!("serialized plugin manifest exceeds 64 KiB");
+        }
+        Ok(bytes)
+    }
+
     /// 【插件】【内置加载】从已取得的清单和源码构造插件快照。
     /// @param manifest 已解析清单；sources 为包内路径到 Lua 源码的映射
     /// @returns 已验证的插件包，缺失入口或超限返回错误
@@ -107,14 +124,25 @@ fn read_sources(
         {
             bail!("plugin source package exceeds size limits");
         }
+        let relative = relative_source_path(root, &path)?;
         let source = std::fs::read_to_string(&path)?;
         *total += source.len();
-        let relative = path
-            .strip_prefix(root)?
-            .to_str()
-            .context("plugin file path is not UTF-8")?
-            .replace('\\', "/");
         sources.insert(relative, source);
     }
     Ok(())
+}
+
+/// 【插件】【源码路径】按真实路径组件生成包内名称，不改写文件名中的字符
+/// @param root 插件根目录；path 为扫描得到的 Lua 文件路径
+/// @returns 通过跨平台规则校验的相对路径，非法名称不会合并到其他源码
+fn relative_source_path(root: &Path, path: &Path) -> Result<String> {
+    let relative = path
+        .strip_prefix(root)?
+        .iter()
+        .map(|component| component.to_str().context("plugin file path is not UTF-8"))
+        .collect::<Result<Vec<_>>>()?
+        .join("/");
+    validate_relative_file(&relative)
+        .with_context(|| format!("invalid plugin source path: {relative:?}"))?;
+    Ok(relative)
 }

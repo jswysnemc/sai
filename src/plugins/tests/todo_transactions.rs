@@ -1,5 +1,5 @@
 use super::{
-    todo_support::{bundled, call, context, item, snapshot},
+    todo_support::{call, context, installed, item, record_path, seed, snapshot},
     todo_transaction_support::{runtime, TransactionHost},
 };
 use crate::state::StateStore;
@@ -11,11 +11,11 @@ use std::{sync::atomic::Ordering, time::Duration};
 #[tokio::test]
 async fn todo_snapshot_does_not_republish_equivalent_json_objects() {
     let root = tempfile::tempdir().unwrap();
-    let (paths, _, inner) = bundled(root.path());
+    let (paths, _, inner) = installed(root.path());
     let store = StateStore::new(&paths).unwrap();
     let scope = store.state_dir().display().to_string();
     let bytes = json!({"version":1,"items":[item("a","pending")],"history":[]}).to_string();
-    std::fs::write(store.state_dir().join("todos.plugin.json"), &bytes).unwrap();
+    std::fs::write(record_path(&paths, &scope), &bytes).unwrap();
     let host = TransactionHost::new(inner);
     for _ in 0..4 {
         let plugin = runtime(host.clone());
@@ -23,7 +23,7 @@ async fn todo_snapshot_does_not_republish_equivalent_json_objects() {
     }
     assert_eq!(host.exchanges.load(Ordering::SeqCst), 0);
     assert_eq!(
-        std::fs::read_to_string(store.state_dir().join("todos.plugin.json")).unwrap(),
+        std::fs::read_to_string(record_path(&paths, &scope)).unwrap(),
         bytes
     );
 }
@@ -34,14 +34,15 @@ async fn todo_snapshot_does_not_republish_equivalent_json_objects() {
 async fn todo_cas_retry_keeps_the_original_index_target() {
     for action in ["update", "remove"] {
         let root = tempfile::tempdir().unwrap();
-        let (paths, _, inner) = bundled(root.path());
+        let (paths, _, inner) = installed(root.path());
         let store = StateStore::new(&paths).unwrap();
         let scope = store.state_dir().display().to_string();
-        std::fs::write(
-            store.state_dir().join("todos.json"),
-            json!([item("a", "pending"), item("b", "pending")]).to_string(),
-        )
-        .unwrap();
+        seed(
+            &paths,
+            &scope,
+            json!([item("a", "pending"), item("b", "pending")]),
+            json!([]),
+        );
         let host = TransactionHost::new(inner);
         *host.replacement.lock().unwrap() = Some(
             json!({"version":1,"items":[item("inserted","pending"),item("a","pending"),item("b","pending")],"history":[]}),
@@ -66,14 +67,15 @@ async fn todo_cas_retry_keeps_the_original_index_target() {
 #[tokio::test]
 async fn todo_cas_retry_rejects_a_removed_original_target() {
     let root = tempfile::tempdir().unwrap();
-    let (paths, _, inner) = bundled(root.path());
+    let (paths, _, inner) = installed(root.path());
     let store = StateStore::new(&paths).unwrap();
     let scope = store.state_dir().display().to_string();
-    std::fs::write(
-        store.state_dir().join("todos.json"),
-        json!([item("a", "pending"), item("b", "pending")]).to_string(),
-    )
-    .unwrap();
+    seed(
+        &paths,
+        &scope,
+        json!([item("a", "pending"), item("b", "pending")]),
+        json!([]),
+    );
     let host = TransactionHost::new(inner);
     *host.replacement.lock().unwrap() =
         Some(json!({"version":1,"items":[item("b","pending")],"history":[]}));
@@ -97,11 +99,11 @@ async fn todo_cas_retry_rejects_a_removed_original_target() {
 #[tokio::test]
 async fn todo_cas_exhaustion_and_publication_failure_are_atomic() {
     let root = tempfile::tempdir().unwrap();
-    let (paths, _, inner) = bundled(root.path());
+    let (paths, _, inner) = installed(root.path());
     let store = StateStore::new(&paths).unwrap();
     let scope = store.state_dir().display().to_string();
-    let legacy = json!([item("a", "pending")]).to_string();
-    std::fs::write(store.state_dir().join("todos.json"), &legacy).unwrap();
+    let legacy = json!({"version":1,"items":[item("a", "pending")],"history":[]}).to_string();
+    std::fs::write(record_path(&paths, &scope), &legacy).unwrap();
     let host = TransactionHost::new(inner);
     let plugin = runtime(host.clone());
     let args = json!({"action":"update","index":1,"status":"completed"});
@@ -124,9 +126,9 @@ async fn todo_cas_exhaustion_and_publication_failure_are_atomic() {
         format!("{error:#}").contains("publication failure"),
         "{error:#}"
     );
-    assert!(!store.state_dir().join("todos.plugin.json").exists());
+    assert!(record_path(&paths, &scope).exists());
     assert_eq!(
-        std::fs::read_to_string(store.state_dir().join("todos.json")).unwrap(),
+        std::fs::read_to_string(record_path(&paths, &scope)).unwrap(),
         legacy
     );
     host.fail.store(0, Ordering::SeqCst);
@@ -141,14 +143,10 @@ async fn todo_cas_exhaustion_and_publication_failure_are_atomic() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn todo_cancellation_after_publication_keeps_one_complete_archive() {
     let root = tempfile::tempdir().unwrap();
-    let (paths, _, inner) = bundled(root.path());
+    let (paths, _, inner) = installed(root.path());
     let store = StateStore::new(&paths).unwrap();
     let scope = store.state_dir().display().to_string();
-    std::fs::write(
-        store.state_dir().join("todos.json"),
-        json!([item("a", "pending")]).to_string(),
-    )
-    .unwrap();
+    seed(&paths, &scope, json!([item("a", "pending")]), json!([]));
     let host = TransactionHost::new(inner);
     let plugin = runtime(host.clone());
     *host.pause.lock().unwrap() = true;

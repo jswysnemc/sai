@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 
 const PLUGIN: &str = "input-method-investigation";
-const TOOL: &str = "linux_input_method_diagnose";
+const TOOL: &str = "lua__input-method-investigation__linux_input_method_diagnose";
 const REPORT: &str = "以下是诊断报告\n\n## 问题分析\n目标进程缺少输入法模块\n\n## 已确认事实\n读取到了目标进程环境\n\n## 推荐修复\n按证据调整启动环境";
 
 /// 【输入法调查测试】【调查注册】加载真实 Lua 包，在其后注册证据工具以验证目录没有提前固定。
@@ -22,12 +22,12 @@ fn registry(
     change: impl FnOnce(&mut PluginDescriptor),
 ) -> ToolRegistry {
     let config = fixture.config("stale-model");
+    super::example_support::install_enabled(PLUGIN, &config, paths);
     let mut tools = ToolRegistry::new();
     tools.configure_plugin_model(&config, paths);
     tools.set_plugin_model_client(&fixture.client("selected-input-model", paths));
     let mut plugin = find(&config, paths, PLUGIN).unwrap();
     plugin.setting.settings = settings;
-    plugin.refresh_compatibility(&config, &paths).unwrap();
     change(&mut plugin);
     register_descriptor(&mut tools, plugin, Arc::new(FixtureHost::default()), false).unwrap();
     register_evidence(&mut tools);
@@ -39,7 +39,7 @@ fn registry(
 /// @returns 无
 fn register_evidence(tools: &mut ToolRegistry) {
     tools.register(ToolSpec::new(
-        "check_issue",
+        "lua__diagnostic-evidence__check_issue",
         "Read input method evidence",
         json!({"type":"object"}),
         |args| async move {
@@ -57,7 +57,7 @@ fn register_evidence(tools: &mut ToolRegistry) {
 /// @returns 一次模型响应
 fn evidence_reply() -> ModelReply {
     ModelReply::delta(json!({"role":"assistant", "tool_calls":[
-        tool_call(0, "check_issue", json!({"area":"input_method", "target":"fixture-app", "depth":"quick"}))
+        tool_call(0, "lua__diagnostic-evidence__check_issue", json!({"area":"input_method", "target":"fixture-app", "depth":"quick"}))
     ]}))
 }
 
@@ -105,7 +105,8 @@ async fn lua_investigation_uses_the_current_model_and_late_registered_evidence()
     let transcript = requests[1]["messages"].as_array().unwrap().last().unwrap()["content"]
         .as_str()
         .unwrap();
-    assert!(transcript.contains("<tool_result name=\"check_issue\" ok=\"true\">"));
+    assert!(transcript
+        .contains("<tool_result name=\"lua__diagnostic-evidence__check_issue\" ok=\"true\">"));
     assert!(transcript.contains("runtime observed"));
     assert!(transcript.contains("zh_CN.UTF-8"));
     assert!(requests
@@ -120,6 +121,9 @@ async fn builtin_registry_exposes_lua_investigation_with_the_complete_current_ca
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
     let config = fixture.config("builtin-input-model");
+    super::example_support::install_enabled(PLUGIN, &config, &paths);
+    super::example_support::install_enabled("fcitx-wiki", &config, &paths);
+    super::example_support::install_enabled("knowledge-base", &config, &paths);
     let mut tools = crate::tools::builtin_registry_without_mcp(&config, &paths);
     assert_eq!(tools.plugin_owner(TOOL), Some(PLUGIN));
     assert!(tools.plugin_diagnostics().is_empty());
@@ -134,9 +138,9 @@ async fn builtin_registry_exposes_lua_investigation_with_the_complete_current_ca
         .map(|tool| tool["function"]["name"].as_str().unwrap())
         .collect::<Vec<_>>();
     for name in [
-        "check_issue",
-        "fcitx5_input_method_wiki_qurey",
-        "search_knowledge_base",
+        "lua__diagnostic-evidence__check_issue",
+        "lua__fcitx-wiki__fcitx5_input_method_wiki_qurey",
+        "lua__knowledge-base__search_knowledge_base",
     ] {
         assert!(
             names.contains(&name),
@@ -154,7 +158,7 @@ async fn each_budget_stops_excess_tools_and_reserves_the_final_report() {
     for boundary in ["business", "host-tools", "model"] {
         let fixture = ModelFixture::start(vec![
             ModelReply::delta(json!({"role":"assistant","tool_calls":[
-                tool_call(0,"check_issue",json!({})),tool_call(1,"web_fetch",json!({}))
+                tool_call(0,"lua__diagnostic-evidence__check_issue",json!({})),tool_call(1,"lua__web-fetch__web_fetch",json!({}))
             ]})),
             ModelReply::text(REPORT),
         ])
@@ -177,7 +181,7 @@ async fn each_budget_stops_excess_tools_and_reserves_the_final_report() {
         let calls = Arc::new(AtomicUsize::new(0));
         let observed = calls.clone();
         tools.register(ToolSpec::new(
-            "web_fetch",
+            "lua__web-fetch__web_fetch",
             "Count second probe",
             json!({"type":"object"}),
             move |_| {
@@ -222,7 +226,7 @@ async fn timed_out_probe_is_released_and_diagnosis_continues() {
     for mode in ["summary", "full"] {
         let fixture = ModelFixture::start(vec![
             ModelReply::delta(json!({"role":"assistant","tool_calls":[
-                tool_call(0,"check_issue",json!({"detail":"中文\"\n".repeat(1500)})),
+                tool_call(0,"lua__diagnostic-evidence__check_issue",json!({"detail":"中文\"\n".repeat(1500)})),
                 tool_call(1,"check_os_info",json!({}))
             ]})),
             ModelReply::text(REPORT),
@@ -239,7 +243,7 @@ async fn timed_out_probe_is_released_and_diagnosis_continues() {
         let released = Arc::new(AtomicBool::new(false));
         let observed = released.clone();
         tools.register(ToolSpec::new(
-            "check_issue",
+            "lua__diagnostic-evidence__check_issue",
             "Blocked probe",
             json!({"type":"object"}),
             move |_| {
@@ -367,7 +371,7 @@ async fn model_revocation_invalid_input_and_tool_grants_are_enforced() {
 #[tokio::test]
 async fn long_diagnosis_respects_message_and_progress_limits() {
     let replies = (0..130).map(|_| ModelReply::delta(json!({"role":"assistant",
-        "content":"## 问题分析\n整理现有证据","tool_calls":[tool_call(0,"check_issue",json!({}))]
+        "content":"## 问题分析\n整理现有证据","tool_calls":[tool_call(0,"lua__diagnostic-evidence__check_issue",json!({}))]
     }))).collect();
     let fixture = ModelFixture::start(replies).await;
     let root = tempfile::tempdir().unwrap();

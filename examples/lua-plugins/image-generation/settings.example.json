@@ -1,0 +1,12 @@
+{
+  "provider_type": "openai",
+  "base_url": "https://api.openai.com",
+  "api_keys": [],
+  "model": "gpt-image-1",
+  "default_aspect_ratio": "自动",
+  "default_resolution": "1K",
+  "output_dir": "~/Pictures/sai/generated-images",
+  "auto_print": false,
+  "timeout_seconds": 180
+}
+

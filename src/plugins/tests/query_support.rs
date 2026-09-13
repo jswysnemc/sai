@@ -6,12 +6,6 @@ use serde_json::Value;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
-pub(super) const QUERIES: [(&str, &str); 3] = [
-    ("weather", "get_weather"),
-    ("exchange-rate", "get_exchange_rate"),
-    ("moegirl", "query_moegirl"),
-];
-
 /// 【查询插件测试】【响应队列】同时表达 HTTP 状态、正文与传输失败，不访问外部服务。
 pub(super) struct QueryHost {
     pub requests: Mutex<Vec<HttpRequest>>,
@@ -65,15 +59,11 @@ impl PluginHost for QueryHost {
     }
 }
 
-/// 【查询插件测试】【真实源码】从发布目录取得指定内置包。
+/// 【查询插件测试】【真实源码】所有查询包只读取独立示例源码
 /// @param id 包标识
 /// @returns 真实清单与源码快照
 pub(super) fn package(id: &str) -> PluginPackage {
-    crate::plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|package| package.manifest.id == id)
-        .unwrap()
+    super::example_support::package(id)
 }
 
 /// 【查询插件测试】【真实运行时】使用包的完整声明和显式测试设置加载 Lua。

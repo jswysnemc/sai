@@ -94,7 +94,7 @@ pub(super) fn settings() -> Value {
     json!({"cache_dir":"output","auto_preview":false,"vision_screening_enabled":false,"language":"en"})
 }
 
-/// 【搜图测试】【完整包】加载正式发布源码和设置兼容层。
+/// 【搜图测试】【完整包】加载独立示例源码和明确测试清单。
 /// @param settings 显式设置；host 为可观察的宿主
 /// @returns 真实 Lua 运行时
 pub(super) fn runtime(settings: Value, host: Arc<dyn PluginHost>) -> PluginRuntime {

@@ -3,7 +3,6 @@ import { SettingsGroup } from "./editor-layout";
 import { StructuredConfigFields } from "./structured-config-fields";
 import { AgentEngineSettings } from "./runtime/agent-engine-settings";
 import { PermissionDefaultSettings } from "./runtime/permission-default-settings";
-import { NotificationSettings } from "./runtime/notification-settings";
 import { TerminalSettingsFields } from "./terminal-settings-fields";
 import { RtkFilterSettings } from "./rtk-filter-settings";
 import { ToggleRow } from "./controls/toggle-row";
@@ -16,7 +15,7 @@ import { DebugSettings } from "./runtime/debug-settings";
 
 type RuntimeSettingsSectionProps = {
   config: AppConfig;
-  /** 当前子页：engine / permissions / notifications / terminal / context / tools */
+  /** 当前子页：engine / permissions / terminal / context / tools */
   subview?: string;
   onConfigChange: (config: AppConfig) => void;
 };
@@ -35,8 +34,6 @@ export function RuntimeSettingsSection({ config, subview, onConfigChange }: Runt
   switch (subview) {
     case "permissions":
       return <PermissionDefaultSettings config={config} onConfigChange={onConfigChange} />;
-    case "notifications":
-      return <NotificationSettings config={config} onConfigChange={onConfigChange} />;
     case "terminal":
       return (
         <div className="runtime-groups">

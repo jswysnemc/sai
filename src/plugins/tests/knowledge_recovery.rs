@@ -1,5 +1,4 @@
 use super::{knowledge_host::KnowledgeHost, knowledge_support::*};
-use crate::config::AppConfig;
 use serde_json::json;
 use std::{sync::Arc, time::Duration};
 
@@ -160,14 +159,7 @@ async fn knowledge_concurrent_runtimes_preserve_all_committed_files() {
     for index in 0..8 {
         let directory = root.path().to_path_buf();
         let host = KnowledgeHost::new(root.path());
-        let plugin = configured(
-            root.path(),
-            &AppConfig::default(),
-            json!({}),
-            host,
-            "",
-            |_| {},
-        );
+        let plugin = configured(root.path(), &json!({}), json!({}), host, "", |_| {});
         tasks.spawn(async move {
             call(
                 &plugin,

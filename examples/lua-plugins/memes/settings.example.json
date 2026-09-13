@@ -1,0 +1,14 @@
+{
+  "libraries": {"default": "sai"},
+  "builtin_dirs": [".sai/meme-bases"],
+  "user_dir": ".sai/memes",
+  "state_dir": ".sai/state/memes",
+  "width_percent": 35,
+  "height_percent": 25,
+  "max_image_mb": 10,
+  "allow_gif_animation": false,
+  "auto_send_enabled": false,
+  "auto_send_probability": 0.2,
+  "auto_send_min_confidence": 0.8,
+  "language": "en"
+}

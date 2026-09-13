@@ -206,11 +206,7 @@ pub(super) const FIXED_TIME: &str = r#"
 /// 【闹钟测试】【实际源码】取得真实发布包并追加测试时钟。
 /// @returns 带固定时钟的源码快照
 pub(super) fn package() -> PluginPackage {
-    let package = crate::plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|package| package.manifest.id == "alarm")
-        .expect("alarm plugin is missing");
+    let package = super::example_support::package("alarm");
     let mut sources = package.sources().clone();
     sources.get_mut("init.lua").unwrap().push_str(FIXED_TIME);
     PluginPackage::new(package.manifest, sources).unwrap()

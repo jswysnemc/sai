@@ -1,27 +1,34 @@
-use super::todo_support::{bundled, call, item, snapshot};
+use super::todo_support::{call, context, import, installed, item, record_path, snapshot};
 use crate::{config::AppConfig, plugins::todo_view::TodoView, state::StateStore};
-use sai_plugin_runtime::host::{PluginHost, StorageRequest};
-use serde_json::{json, Value};
+use serde_json::json;
 
-/// 【待办兼容测试】【旧记录接续】完整接续活动项及历史，清空对话保留计划且旧文件字节不变
-/// @returns 无；新状态和归档通过一个固定会话文件发布
+/// 【待办导入测试】【旧记录接续】只有显式导入才接续旧条目，清空对话遵守公共状态清理规则
+/// @returns 无；旧活动清单、历史和原插件快照均保持原文
 #[tokio::test]
-async fn todo_legacy_records_survive_conversation_reset() {
+async fn todo_explicit_legacy_import_obeys_session_reset_and_preserves_sources() {
     let root = tempfile::tempdir().unwrap();
-    let (paths, runtime, _) = bundled(root.path());
+    let (paths, runtime, _) = installed(root.path());
     let store = StateStore::new(&paths).unwrap();
     let scope = store.state_dir().display().to_string();
-    let old = serde_json::to_vec(&json!([item("a", "pending"), item("b", "pending")])).unwrap();
+    let items = json!([item("a", "pending"), item("b", "pending")]);
     let history = json!([{"archived_at":"old-archive","items":[item("finished","completed")]}]);
-    std::fs::write(store.state_dir().join("todos.json"), &old).unwrap();
-    std::fs::write(
-        store.state_dir().join("todos.history.json"),
-        history.to_string(),
-    )
-    .unwrap();
-    let initial = snapshot(&runtime, root.path(), &scope).await;
-    assert_eq!(initial["items"].as_array().unwrap().len(), 2);
-    assert_eq!(initial["history"], history);
+    let old = json!({"version":1,"items":items,"history":history});
+    for (name, value) in [
+        ("todos.json", &items),
+        ("todos.history.json", &history),
+        ("todos.plugin.json", &old),
+    ] {
+        std::fs::write(store.state_dir().join(name), value.to_string()).unwrap();
+    }
+    assert_eq!(
+        snapshot(&runtime, root.path(), &scope).await,
+        json!({"items":[],"history":[]})
+    );
+    import(&runtime, root.path(), &scope, old.clone()).await;
+    assert_eq!(
+        snapshot(&runtime, root.path(), &scope).await["history"],
+        history
+    );
     call(
         &runtime,
         root.path(),
@@ -29,33 +36,43 @@ async fn todo_legacy_records_survive_conversation_reset() {
         json!({"action":"update","index":1,"status":"completed"}),
     )
     .await;
-    let changed = snapshot(&runtime, root.path(), &scope).await;
-    assert_eq!(changed["items"][0]["status"], "completed");
+    assert_eq!(
+        snapshot(&runtime, root.path(), &scope).await["items"][0]["status"],
+        "completed"
+    );
     store.reset_conversation().unwrap();
-    assert_eq!(snapshot(&runtime, root.path(), &scope).await, changed);
     assert_eq!(
-        std::fs::read(store.state_dir().join("todos.json")).unwrap(),
-        old
+        snapshot(&runtime, root.path(), &scope).await,
+        json!({"items":[],"history":[]})
     );
-    assert_eq!(
-        std::fs::read_to_string(store.state_dir().join("todos.history.json")).unwrap(),
-        history.to_string()
-    );
-    assert!(store.state_dir().join("todos.plugin.json").is_file());
+    import(&runtime, root.path(), &scope, old.clone()).await;
+    for (name, value) in [
+        ("todos.json", &items),
+        ("todos.history.json", &history),
+        ("todos.plugin.json", &old),
+    ] {
+        assert_eq!(
+            std::fs::read_to_string(store.state_dir().join(name)).unwrap(),
+            value.to_string()
+        );
+    }
 }
 
-/// 【待办兼容测试】【界面完成归档】Web 使用实际 Lua 收敛旧完成计划，重复读取不增加历史
-/// @returns 无；保留旧 Web 字段与归档顺序
+/// 【待办导入测试】【界面归档】导入完成计划后，Web 与工具读取同一公共记录
+/// @returns 无；重复查询只保留一份归档
 #[tokio::test]
-async fn todo_web_view_archives_legacy_completion_once() {
+async fn todo_web_view_archives_explicitly_imported_completion_once() {
     let root = tempfile::tempdir().unwrap();
-    let (paths, _, _) = bundled(root.path());
+    let (paths, runtime, _) = installed(root.path());
     let store = StateStore::new(&paths).unwrap();
-    std::fs::write(
-        store.state_dir().join("todos.json"),
-        json!([item("done", "completed")]).to_string(),
+    let scope = store.state_dir().display().to_string();
+    import(
+        &runtime,
+        root.path(),
+        &scope,
+        json!({"version":0,"items":[item("done","completed")],"history":[]}),
     )
-    .unwrap();
+    .await;
     let view = TodoView::load(&AppConfig::default(), &paths).await.unwrap();
     let first = serde_json::to_value(
         view.snapshot(store.session_id(), store.state_dir(), root.path())
@@ -75,94 +92,85 @@ async fn todo_web_view_archives_legacy_completion_once() {
     assert_eq!(first, second);
 }
 
-/// 【待办兼容测试】【墓碑与作用域】显式删除不能重新导入旧记录，伪造目录及无授权读取均拒绝
-/// @returns 无；直接工具作用域继续使用普通私有记录
+/// 【待办导入测试】【覆盖保护】已有活动条目或历史时拒绝导入，清理后也不自动重读旧文件
+/// @returns 无；空快照初始化允许导入，非空记录和旧文件不会被覆盖
 #[tokio::test]
-async fn todo_legacy_scope_and_tombstone_are_authoritative() {
+async fn todo_import_rejects_overwrite_and_never_implicitly_reimports() {
     let root = tempfile::tempdir().unwrap();
-    let (paths, runtime, host) = bundled(root.path());
-    let store = StateStore::new(&paths).unwrap();
-    let scope = store.state_dir().display().to_string();
-    std::fs::write(
-        store.state_dir().join("todos.json"),
-        json!([item("old", "pending")]).to_string(),
-    )
-    .unwrap();
-    let caps = runtime.manifest().capabilities.clone();
-    host.storage(
-        StorageRequest::Set {
-            key: "plan".into(),
-            value: Value::Null,
-        },
-        &scope,
-        &caps,
-    )
-    .unwrap();
+    let (paths, runtime, _) = installed(root.path());
+    let scope = "explicit-import";
+    let value = json!({"version":1,"items":[item("a","pending")],"history":[]});
+    snapshot(&runtime, root.path(), scope).await;
+    import(&runtime, root.path(), scope, value.clone()).await;
+    for archived in [false, true] {
+        if archived {
+            call(
+                &runtime,
+                root.path(),
+                scope,
+                json!({"action":"update","index":1,"status":"completed"}),
+            )
+            .await;
+        }
+        let saved = std::fs::read(record_path(&paths, scope)).unwrap();
+        let result = runtime
+            .call_command(
+                "import",
+                &json!({"state":value}).to_string(),
+                context(root.path(), scope, true),
+            )
+            .await;
+        assert!(format!("{:#}", result.unwrap_err()).contains("empty plan and history"));
+        assert_eq!(std::fs::read(record_path(&paths, scope)).unwrap(), saved);
+    }
+    crate::plugins::clear_session_storage(&paths.state_dir, scope).unwrap();
     assert_eq!(
-        host.storage(StorageRequest::Get { key: "plan".into() }, &scope, &caps)
-            .unwrap(),
-        Value::Null
-    );
-    assert_eq!(
-        snapshot(&runtime, root.path(), &scope).await,
+        snapshot(&runtime, root.path(), scope).await,
         json!({"items":[],"history":[]})
-    );
-    assert!(host
-        .storage(
-            StorageRequest::Get { key: "plan".into() },
-            &root.path().display().to_string(),
-            &caps
-        )
-        .is_err());
-    assert!(host
-        .storage(
-            StorageRequest::Get { key: "plan".into() },
-            &scope,
-            &Default::default()
-        )
-        .is_err());
-    assert_eq!(
-        host.storage(
-            StorageRequest::Get { key: "plan".into() },
-            "cli-tool",
-            &caps
-        )
-        .unwrap(),
-        Value::Null
-    );
-    let external = crate::plugins::private::PrivatePluginHost::new(&paths, "todo");
-    assert_eq!(
-        external
-            .storage(StorageRequest::Get { key: "plan".into() }, &scope, &caps)
-            .unwrap(),
-        Value::Null
     );
 }
 
-/// 【待办兼容测试】【损坏数据】非法旧 JSON 或条目不能覆盖原文件，也不创建新记录
-/// @returns 无；后续修正源文件后同一实例可以继续查询
+/// 【待办导入测试】【损坏来源】非法 JSON、版本和条目不会写入计划或修改导入文件
+/// @returns 无；修正文件后同一实例可完成显式导入
 #[tokio::test]
-async fn todo_legacy_corruption_is_not_silently_overwritten() {
+async fn todo_import_validates_authorized_files_without_rewriting_them() {
     let root = tempfile::tempdir().unwrap();
-    let (paths, runtime, _) = bundled(root.path());
-    let store = StateStore::new(&paths).unwrap();
-    let scope = store.state_dir().display().to_string();
-    let ctx = super::todo_support::context(root.path(), &scope, true);
-    for text in ["{", "{}", "[{}]"] {
-        std::fs::write(store.state_dir().join("todos.json"), text).unwrap();
+    let (paths, runtime, _) = installed(root.path());
+    let directory = root.path().join(".sai/todo-import");
+    std::fs::create_dir_all(&directory).unwrap();
+    let path = directory.join("snapshot.json");
+    for text in [
+        "{",
+        "{}",
+        "[]",
+        r#"{"version":2,"items":[],"history":[]}"#,
+        r#"{"version":1,"items":[{}],"history":[]}"#,
+    ] {
+        std::fs::write(&path, text).unwrap();
         assert!(runtime
-            .call_tool("todo", json!({"action":"add","text":"new"}), ctx.clone())
+            .call_command(
+                "import",
+                &json!({"path":path}).to_string(),
+                context(root.path(), "import", true)
+            )
             .await
             .is_err());
-        assert_eq!(
-            std::fs::read_to_string(store.state_dir().join("todos.json")).unwrap(),
-            text
-        );
-        assert!(!store.state_dir().join("todos.plugin.json").exists());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
+        assert!(!record_path(&paths, "import").exists());
     }
-    std::fs::write(store.state_dir().join("todos.json"), " \n\t").unwrap();
+    let valid = json!({"version":0,"items":[item("old","pending")],"history":[]});
+    std::fs::write(&path, valid.to_string()).unwrap();
+    runtime
+        .call_command(
+            "import",
+            &json!({"path":path}).to_string(),
+            context(root.path(), "import", true),
+        )
+        .await
+        .unwrap();
     assert_eq!(
-        snapshot(&runtime, root.path(), &scope).await["items"],
-        json!([])
+        snapshot(&runtime, root.path(), "import").await["items"],
+        valid["items"]
     );
+    assert_eq!(std::fs::read_to_string(path).unwrap(), valid.to_string());
 }

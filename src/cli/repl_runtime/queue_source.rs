@@ -78,9 +78,7 @@ impl ReplRuntime {
     ///
     /// 返回:
     /// - 队列句柄
-    pub(in crate::cli) fn submission_queue_handle(
-        &self,
-    ) -> Arc<Mutex<VecDeque<QueuedSubmission>>> {
+    pub(in crate::cli) fn submission_queue_handle(&self) -> Arc<Mutex<VecDeque<QueuedSubmission>>> {
         Arc::clone(&self.submission_queue)
     }
 

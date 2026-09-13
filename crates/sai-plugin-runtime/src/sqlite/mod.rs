@@ -3,10 +3,11 @@ mod connection;
 mod query;
 mod validation;
 
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
+
+pub(crate) use crate::native::Budget;
 
 pub(crate) use changes::apply;
 pub(crate) use query::query;
@@ -16,7 +17,6 @@ pub(crate) const MAX_DATABASE_BYTES: usize = 64 * 1024 * 1024;
 pub(crate) const MAX_REQUEST_BYTES: usize = 1024 * 1024;
 pub(crate) const MAX_VALUE_BYTES: usize = 256 * 1024;
 pub(crate) const WORKSPACE_OVERHEAD: usize = 1024 * 1024;
-pub(crate) type Budget = Arc<dyn Fn(u64) -> Result<()> + Send + Sync>;
 pub(crate) type Record = BTreeMap<String, Value>;
 
 /// 【数据库快照】【查询契约】只允许单表投影、相等过滤和有界排序分页

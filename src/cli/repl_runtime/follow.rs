@@ -99,9 +99,8 @@ impl ReplRuntime {
             "run.started" => {
                 self.flush_follow_buffer()?;
                 self.transcript.finalize_live_tail();
-                self.transcript.set_work_status(
-                    crate::render::work_status::WorkStatus::WaitingResponse,
-                );
+                self.transcript
+                    .set_work_status(crate::render::work_status::WorkStatus::WaitingResponse);
                 self.arm_live_ticker();
                 self.sync_transcript(true)?;
             }

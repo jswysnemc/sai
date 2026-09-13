@@ -1,0 +1,18 @@
+{
+  "api_version": 1,
+  "id": "project-notes",
+  "version": "0.1.0",
+  "name": "Project notes",
+  "description": "Inspect project notes and keep a private record of the latest check.",
+  "entry": "init.lua",
+  "capabilities": {
+    "system": {
+      "read_paths": ["notes"],
+      "plugin_storage": true
+    }
+  },
+  "limits": {
+    "timeout_ms": 5000,
+    "output_bytes": 131072
+  }
+}

@@ -7,11 +7,7 @@ use std::sync::Arc;
 /// @param host 不允许发生未声明请求的测试宿主
 /// @returns 使用发布源码和清单的独立运行时，探针只在当前测试中注册
 fn reference_runtime(host: Arc<FixtureHost>) -> PluginRuntime {
-    let original = crate::plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|package| package.manifest.id == "linux-game-signals")
-        .unwrap();
+    let original = super::example_support::package("linux-game-signals");
     let mut sources = original.sources().clone();
     sources.get_mut("init.lua").unwrap().push_str(
         r#"

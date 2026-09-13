@@ -36,7 +36,8 @@ describe("settings registry", () => {
     const bySessionData = filterSettingsSections("会话数据");
     expect(bySessionData.some((item) => item.id === "session-data")).toBe(true);
     const bySearchProvider = filterSettingsSections("tavily");
-    expect(bySearchProvider.some((item) => item.id === "web-search")).toBe(true);
+    expect(bySearchProvider).toEqual([]);
+    expect(resolveSettingsSectionId("web-search")).toBe(DEFAULT_SETTINGS_SECTION);
   });
 
   it("groups sections and skips empty groups when filtered", () => {
@@ -57,7 +58,8 @@ describe("settings registry", () => {
 
   it("resolves subviews with fallback to the first page", () => {
     const runtime = SETTINGS_SECTIONS.find((item) => item.id === "runtime");
-    expect(resolveSettingsSubview(runtime, "notifications")).toBe("notifications");
+    expect(resolveSettingsSubview(runtime, "permissions")).toBe("permissions");
+    expect(resolveSettingsSubview(runtime, "notifications")).toBe("engine");
     // 缺失或非法的子页段回落到首个子页
     expect(resolveSettingsSubview(runtime, undefined)).toBe("engine");
     expect(resolveSettingsSubview(runtime, "not-a-subview")).toBe("engine");

@@ -1,4 +1,3 @@
-use super::bundled;
 use super::config::{load_config, PluginSetting};
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
@@ -8,11 +7,10 @@ use serde::Serialize;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-/// 【插件】【来源】只接受随程序发布的包和用户显式安装的包。
+/// 【插件】【来源】只接受用户显式安装的包。
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "snake_case", tag = "kind", content = "path")]
 pub(crate) enum PluginSource {
-    Bundled,
     Installed(PathBuf),
 }
 
@@ -22,7 +20,6 @@ pub(crate) struct PluginDescriptor {
     pub package: PluginPackage,
     pub source: PluginSource,
     pub setting: PluginSetting,
-    pub(super) overrides: Option<super::compatibility::RuntimeOverrides>,
 }
 
 /// 【插件】【诊断】单个坏包不阻止其他包进入注册事务。
@@ -39,16 +36,10 @@ pub(crate) struct Discovery {
 }
 
 impl PluginDescriptor {
-    /// 【插件】【授权合并】内置包采用兼容后的默认能力授权，外部包缺省没有授权。
+    /// 【插件】【授权读取】缺省没有任何授权。
     /// @returns 用户授权；运行时还会与清单声明求交集
     pub fn grants(&self) -> Capabilities {
-        self.setting
-            .grants
-            .clone()
-            .unwrap_or_else(|| match self.source {
-                PluginSource::Bundled => self.capabilities().clone(),
-                PluginSource::Installed(_) => Capabilities::default(),
-            })
+        self.setting.grants.clone().unwrap_or_default()
     }
 
     /// 【插件】【版本比较】为源码、设置和授权计算稳定标识。
@@ -63,83 +54,43 @@ impl PluginDescriptor {
         Ok(blake3::hash(&bytes).to_hex().to_string())
     }
 
-    /// 【插件】【有效设置】读取执行快照，未迁移配置的包直接使用原始插件设置。
+    /// 【插件】【有效设置】直接读取独立插件配置。
     /// @returns 当前实例可见的设置，不向管理命令提供保存用副本
     pub(super) fn settings(&self) -> &serde_json::Value {
-        self.overrides
-            .as_ref()
-            .map(|value| &value.settings)
-            .unwrap_or(&self.setting.settings)
+        &self.setting.settings
     }
 
-    /// 【插件】【有效声明】读取包含兼容地址的能力声明，显式授权仍须与之求交集。
-    /// @returns 本次加载使用的网络能力声明
+    /// 【插件】【有效声明】读取包中声明，显式授权仍须与之求交集。
+    /// @returns 本次加载使用的能力声明
     pub(crate) fn capabilities(&self) -> &Capabilities {
-        self.overrides
-            .as_ref()
-            .map(|value| &value.capabilities)
-            .unwrap_or(&self.package.manifest.capabilities)
+        &self.package.manifest.capabilities
     }
 
-    /// 【插件】【运行源码】派生运行时清单，保持原始包和管理配置不变。
+    /// 【插件】【运行源码】复制已验证源码快照。
     /// @returns 可传给独立运行时的源码快照
     pub(crate) fn runtime_package(&self) -> PluginPackage {
-        let mut package = self.package.clone();
-        package.manifest.capabilities = self.capabilities().clone();
-        package
+        self.package.clone()
     }
 
-    /// 【插件】【运行清单】派生用于诊断和修订比较的清单，避免复制全部 Lua 源码。
+    /// 【插件】【运行清单】复制用于诊断和修订比较的清单。
     /// @returns 包含有效能力声明的清单
     pub(crate) fn runtime_manifest(&self) -> sai_plugin_runtime::PluginManifest {
-        let mut manifest = self.package.manifest.clone();
-        manifest.capabilities = self.capabilities().clone();
-        manifest
-    }
-
-    /// 【插件】【兼容快照】只为可信内置包解析旧配置，外部包无法继承应用凭据。
-    /// @param config 旧应用配置；paths 为应用目录快照
-    /// @returns 设置和派生能力均合法时成功
-    pub(super) fn refresh_compatibility(
-        &mut self,
-        config: &AppConfig,
-        paths: &SaiPaths,
-    ) -> Result<()> {
-        self.overrides = if matches!(self.source, PluginSource::Bundled) {
-            super::compatibility::resolve(
-                &self.package.manifest.id,
-                config,
-                paths,
-                &self.setting.settings,
-                &self.package.manifest.capabilities,
-            )?
-        } else {
-            None
-        };
-        Ok(())
+        self.package.manifest.clone()
     }
 
     /// 【插件】【工具名称】为外部工具添加插件命名空间并验证供应商长度限制。
     /// @param local 包内工具名
-    /// @returns 对外稳定名称；内置迁移包保留既有工具名
+    /// @returns 带插件命名空间的对外稳定名称
     pub fn tool_name(&self, local: &str) -> Result<String> {
-        public_tool_name(
-            &self.package.manifest.id,
-            local,
-            matches!(self.source, PluginSource::Bundled),
-        )
+        public_tool_name(&self.package.manifest.id, local)
     }
 }
 
 /// 【插件】【工具名称】集中约束所有对模型公开的插件工具名。
-/// @param id 插件标识；local 为包内名称；bundled 表示保留兼容名称
+/// @param id 插件标识；local 为包内名称
 /// @returns 不超过 64 字节的工具名，避免截断后发生冲突
-pub(super) fn public_tool_name(id: &str, local: &str, bundled: bool) -> Result<String> {
-    let name = if bundled {
-        local.to_string()
-    } else {
-        format!("lua__{id}__{local}")
-    };
+pub(super) fn public_tool_name(id: &str, local: &str) -> Result<String> {
+    let name = format!("lua__{id}__{local}");
     if name.len() > 64 {
         bail!("plugin tool name exceeds 64 bytes: {name}");
     }
@@ -147,9 +98,9 @@ pub(super) fn public_tool_name(id: &str, local: &str, bundled: bool) -> Result<S
 }
 
 /// 【插件】【发现】读取受信任目录和显式配置，不执行工作区中的任意插件。
-/// @param config 主配置，用于旧功能开关默认值和内置包定向设置兼容；paths 为 Sai 路径
+/// @param _config 主配置，保留统一调用接口；paths 为 Sai 路径
 /// @returns 稳定排序的包和独立诊断；配置损坏时不采用可能扩大权限的缺省值
-pub(crate) fn discover(config: &AppConfig, paths: &SaiPaths) -> Discovery {
+pub(crate) fn discover(_config: &AppConfig, paths: &SaiPaths) -> Discovery {
     let mut found = Discovery::default();
     let settings = match load_config(paths) {
         Ok(settings) => settings,
@@ -159,35 +110,6 @@ pub(crate) fn discover(config: &AppConfig, paths: &SaiPaths) -> Discovery {
         }
     };
     let mut ids = BTreeSet::new();
-    match bundled::packages() {
-        Ok(packages) => {
-            for package in packages {
-                let id = &package.manifest.id;
-                let setting = settings
-                    .plugins
-                    .get(id)
-                    .cloned()
-                    .unwrap_or_else(|| PluginSetting {
-                        enabled: bundled::default_enabled(config, id),
-                        ..Default::default()
-                    });
-                ids.insert(id.clone());
-                let mut descriptor = PluginDescriptor {
-                    package,
-                    source: PluginSource::Bundled,
-                    setting,
-                    overrides: None,
-                };
-                match descriptor.refresh_compatibility(config, paths) {
-                    Ok(()) => found.plugins.push(descriptor),
-                    Err(error) => found
-                        .diagnostics
-                        .push(diagnostic(descriptor.package.manifest.id.clone(), error)),
-                }
-            }
-        }
-        Err(error) => found.diagnostics.push(diagnostic("bundled", error)),
-    }
     let root = paths.config_dir.join("plugins");
     let entries = match std::fs::read_dir(&root) {
         Ok(entries) => entries,
@@ -228,14 +150,13 @@ pub(crate) fn discover(config: &AppConfig, paths: &SaiPaths) -> Discovery {
                 bail!("installed directory must match manifest id: {id}");
             }
             if !ids.insert(id.clone()) {
-                bail!("plugin id is reserved or duplicated: {id}");
+                bail!("plugin id is duplicated: {id}");
             }
             let setting = settings.plugins.get(id).cloned().unwrap_or_default();
             Ok(PluginDescriptor {
                 package,
                 source: PluginSource::Installed(path.clone()),
                 setting,
-                overrides: None,
             })
         })();
         match result {
@@ -256,7 +177,7 @@ pub(crate) fn discover(config: &AppConfig, paths: &SaiPaths) -> Discovery {
 
 /// 【插件】【选择】从发现结果中选取明确的插件，并保留相关诊断。
 /// @param config 主配置；paths 为 Sai 路径；id 为插件 ID
-/// @returns 已安装或内置的插件描述
+/// @returns 已安装的插件描述
 pub(super) fn find(config: &AppConfig, paths: &SaiPaths, id: &str) -> Result<PluginDescriptor> {
     let found = discover(config, paths);
     found
@@ -273,6 +194,29 @@ pub(super) fn find(config: &AppConfig, paths: &SaiPaths, id: &str) -> Result<Plu
                     .collect::<String>()
             )
         })
+}
+
+/// 【插件】【可选选择】未安装时返回空值，相关配置或源码损坏时保留诊断
+/// @param config 主配置；paths 为应用路径；id 为可选插件标识
+/// @returns 已安装描述符或空值，不屏蔽当前插件的加载错误
+pub(super) fn find_optional(
+    config: &AppConfig,
+    paths: &SaiPaths,
+    id: &str,
+) -> Result<Option<PluginDescriptor>> {
+    let found = discover(config, paths);
+    let root = paths.config_dir.join("plugins");
+    if let Some(error) = found.diagnostics.iter().find(|error| {
+        matches!(error.source.as_str(), "plugins.jsonc" | "plugins directory")
+            || error.source == root.display().to_string()
+            || error.source == root.join(id).display().to_string()
+    }) {
+        bail!("{id} plugin unavailable: {}", error.error);
+    }
+    Ok(found
+        .plugins
+        .into_iter()
+        .find(|plugin| plugin.package.manifest.id == id))
 }
 
 /// 【插件】【错误记录】把错误链转换为可显示的单包诊断。

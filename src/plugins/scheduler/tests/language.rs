@@ -17,10 +17,13 @@ fn fixture() -> (tempfile::TempDir, SaiPaths, AppConfig, PluginDescriptor) {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
     std::fs::create_dir_all(&paths.config_dir).unwrap();
-    let mut config = AppConfig::default();
-    config.plugins.knowledge_base.data_dir = root.path().join("kb").display().to_string();
+    let config = AppConfig::default();
     std::fs::write(&paths.config_file, serde_json::to_vec(&config).unwrap()).unwrap();
-    let descriptor = plugins::discovery::find(&config, &paths, "knowledge-base").unwrap();
+    let descriptor = plugins::tests::knowledge_support::descriptor(
+        root.path(),
+        &config,
+        json!({"language":match crate::i18n::locale() { Locale::Zh => "zh", Locale::En => "en" }}),
+    );
     (root, paths, config, descriptor)
 }
 
@@ -63,7 +66,7 @@ fn knowledge_scheduled_commands_preserve_language_across_resume_and_dispatch() {
         with_locale(worker, || {
             assert!(
                 super::super::load_current(&paths, "knowledge-base", &record.revision, None)
-                    .is_err()
+                    .is_ok()
             );
             super::super::resume(
                 &paths,

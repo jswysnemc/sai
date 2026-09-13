@@ -161,8 +161,12 @@ mod tests {
     /// 验证不需要理由的类型从不提示。
     #[test]
     fn types_without_a_rationale_requirement_are_never_flagged() {
-        assert!(MemoryType::User.missing_rationale("用户是 Rust 开发者").is_none());
-        assert!(MemoryType::Reference.missing_rationale("看板：http://x").is_none());
+        assert!(MemoryType::User
+            .missing_rationale("用户是 Rust 开发者")
+            .is_none());
+        assert!(MemoryType::Reference
+            .missing_rationale("看板：http://x")
+            .is_none());
     }
 
     /// 验证只缺一个小标题时只提示那一个。

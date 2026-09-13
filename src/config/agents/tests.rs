@@ -102,7 +102,7 @@ fn default_surfaces_use_cli_and_code_agents() {
         .enabled_tools
         .iter()
         .any(|t| t == "scientific_calculator"));
-    assert!(runtime
+    assert!(!runtime
         .enabled_tools
         .iter()
         .any(|t| t == "online_man_search"));
@@ -122,10 +122,10 @@ fn default_surfaces_use_cli_and_code_agents() {
         .agent_runtime
         .expect("gateway whitelist")
         .enabled_tools;
-    assert!(gateway_tools.iter().any(|t| t == "get_weather"));
-    assert!(gateway_tools.iter().any(|t| t == "get_exchange_rate"));
-    assert!(gateway_tools.iter().any(|t| t == "query_deepseek_status"));
-    assert!(gateway_tools.iter().any(|t| t == "online_man_get_page"));
+    assert!(!gateway_tools.iter().any(|t| t == "get_weather"));
+    assert!(!gateway_tools.iter().any(|t| t == "get_exchange_rate"));
+    assert!(!gateway_tools.iter().any(|t| t == "query_deepseek_status"));
+    assert!(!gateway_tools.iter().any(|t| t == "online_man_get_page"));
     assert!(!gateway_tools.iter().any(|t| t == "query_weather"));
     assert!(!gateway_tools.iter().any(|t| t == "convert_exchange_rate"));
 }
@@ -181,8 +181,8 @@ fn explore_and_plan_are_readonly_scoped() {
     assert!(!tools.iter().any(|t| t == "edit_file"));
     let plan = apply_agent_override(config, Some(PLAN_AGENT_ID), AgentSurface::Web).unwrap();
     let tools = plan.agent_runtime.unwrap().enabled_tools;
-    assert!(tools.iter().any(|t| t == "web_search"));
-    assert!(tools.iter().any(|t| t == "online_man_search"));
+    assert!(!tools.iter().any(|t| t == "web_search"));
+    assert!(!tools.iter().any(|t| t == "online_man_search"));
     assert!(!tools.iter().any(|t| t == "run_command"));
     assert!(!tools.iter().any(|t| t == "fetch_url"));
     assert!(plan.system_prompt.as_deref().unwrap_or("").contains("Plan"));

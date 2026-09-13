@@ -14,39 +14,15 @@ const TOOLS: [&str; 4] = [
     "roll_dice",
 ];
 
-/// 【玄学迁移测试】【工具归属】四个公开工具由同一个 Lua 包提供，保留旧开关默认值
-/// @returns 无；普通和只读注册表均按有效设置暴露工具
+/// 【玄学迁移测试】【独立启停】四个工具使用普通外部名称并遵守显式开关
+/// @returns 无；禁用移除目录项，启用不产生短名称别名或重复工具
 #[test]
-fn xuanxue_tools_belong_to_lua_and_follow_legacy_defaults() {
+fn xuanxue_installed_switches_control_namespaced_tools() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
-    let mut config = AppConfig::default();
-    for enabled in [true, false] {
-        config.plugins.xuanxue.enabled = enabled;
-        for registry in [
-            crate::tools::builtin_registry_without_mcp(&config, &paths),
-            crate::tools::readonly_registry(&config, &paths),
-        ] {
-            assert!(registry.plugin_diagnostics().is_empty());
-            for tool in TOOLS {
-                assert_eq!(registry.contains(tool), enabled, "{tool}");
-                if enabled {
-                    assert_eq!(registry.plugin_owner(tool), Some("xuanxue"));
-                }
-            }
-        }
-    }
-}
-
-/// 【玄学迁移测试】【显式开关】插件设置覆盖旧开关，目录与过滤后的注册表保留工具信息
-/// @returns 无；禁用不妨碍配置目录列出工具，启用不会留下重复注册
-#[test]
-fn xuanxue_explicit_switches_override_defaults_and_preserve_catalog() {
-    let root = tempfile::tempdir().unwrap();
-    let paths = SaiPaths::for_tests(root.path());
-    let mut config = AppConfig::default();
-    for enabled in [true, false] {
-        config.plugins.xuanxue.enabled = !enabled;
+    let config = AppConfig::default();
+    super::example_support::install("xuanxue", &paths);
+    for enabled in [false, true, false] {
         plugins::set_enabled(&config, &paths, "xuanxue", enabled, GrantUpdate::Keep).unwrap();
         let catalog = crate::tools::tool_catalog(&config, &paths);
         for registry in [
@@ -54,13 +30,18 @@ fn xuanxue_explicit_switches_override_defaults_and_preserve_catalog() {
             crate::tools::readonly_registry(&config, &paths),
         ] {
             assert!(registry.plugin_diagnostics().is_empty());
-            for tool in TOOLS {
-                assert_eq!(registry.contains(tool), enabled);
-                assert_eq!(catalog.iter().filter(|entry| entry.name == tool).count(), 1);
+            for local in TOOLS {
+                let name = format!("lua__xuanxue__{local}");
+                assert!(!registry.contains(local));
+                assert_eq!(registry.contains(&name), enabled);
+                assert_eq!(
+                    catalog.iter().filter(|entry| entry.name == name).count(),
+                    usize::from(enabled)
+                );
                 if enabled {
-                    let filtered = registry.clone_filtered(&[tool]);
+                    let filtered = registry.clone_filtered(&[&name]);
                     assert_eq!(filtered.definitions().len(), 1);
-                    assert_eq!(filtered.plugin_owner(tool), Some("xuanxue"));
+                    assert_eq!(filtered.plugin_owner(&name), Some("xuanxue"));
                 }
             }
         }
@@ -99,8 +80,10 @@ async fn xuanxue_has_no_external_capabilities_and_cannot_acquire_them() {
         sai.register_tool({name="forbidden",description="Capability probe",access="writes",parameters={type="object"},execute=forbidden})
     "#,
     );
-    let manifest: Value =
-        serde_json::from_str(include_str!("../../../plugins/xuanxue/sai-plugin.json")).unwrap();
+    let manifest: Value = serde_json::from_str(include_str!(
+        "../../../examples/lua-plugins/xuanxue/sai-plugin.json"
+    ))
+    .unwrap();
     assert_eq!(manifest["capabilities"], json!({}));
     assert_eq!(package.manifest.capabilities, Capabilities::default());
     let grants: Capabilities = serde_json::from_value(json!({

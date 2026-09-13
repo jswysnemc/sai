@@ -1,5 +1,5 @@
 use super::*;
-use crate::plugins::commands::{run_bundled, BundledCommand};
+use crate::plugins::commands::{run_installed, PluginCommand};
 use anyhow::Context;
 use serde_json::json;
 
@@ -7,8 +7,7 @@ use serde_json::json;
 /// @param paths 应用目录；args 为旧 CLI 参数；mode 为显式权限模式
 /// @returns 命令执行和标准输出结果
 pub(super) async fn run_kb(paths: &SaiPaths, args: KbArgs, mode: Option<AgentMode>) -> Result<()> {
-    let config = AppConfig::load(paths)?;
-    let mut input = None;
+    let config = AppConfig::load_or_default(paths)?;
     let (command, arguments) = match args.command {
         KbCommand::Add(args) => {
             let name = args
@@ -18,7 +17,6 @@ pub(super) async fn run_kb(paths: &SaiPaths, args: KbArgs, mode: Option<AgentMod
                 .context("source path has no valid file or directory name")?;
             let source =
                 dunce::canonicalize(&args.path).context("resolve knowledge base import source")?;
-            input = Some(source.clone());
             ("add", json!({"path":source, "name":name}))
         }
         KbCommand::List => ("list", json!({})),
@@ -41,14 +39,13 @@ pub(super) async fn run_kb(paths: &SaiPaths, args: KbArgs, mode: Option<AgentMod
             KbEmbedCommand::Reindex(args) => ("embed-reindex", json!({"quiet":args.quiet})),
         },
     };
-    let result = run_bundled(
+    let result = run_installed(
         &config,
         paths,
-        BundledCommand {
+        PluginCommand {
             plugin: "knowledge-base",
             command,
             arguments,
-            input,
             allow_writes: !matches!(mode, Some(AgentMode::Plan)),
         },
     )

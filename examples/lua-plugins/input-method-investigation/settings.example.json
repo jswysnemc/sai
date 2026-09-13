@@ -1,0 +1,7 @@
+{
+  "max_tool_steps": 100,
+  "tool_timeout_ms": 90000,
+  "progress_mode": "summary",
+  "language": "zh"
+}
+

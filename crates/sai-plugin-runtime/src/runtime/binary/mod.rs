@@ -1,6 +1,7 @@
 mod buffer;
 mod conditional;
 mod constructors;
+mod document;
 mod files;
 mod inspection;
 mod json;

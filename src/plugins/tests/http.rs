@@ -30,6 +30,8 @@ fn request(url: String, max_bytes: usize) -> HttpRequest {
         body: None,
         max_bytes,
         timeout_ms: 30_000,
+        max_redirects: 5,
+        read_error_body: true,
     }
 }
 

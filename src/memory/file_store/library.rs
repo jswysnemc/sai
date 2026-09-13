@@ -108,7 +108,11 @@ impl FileMemoryLibrary {
         for (_, directory) in self.lookup_order() {
             let existing = std::fs::read_to_string(directory.index_path()).unwrap_or_default();
             let document = IndexDocument::parse(&existing);
-            if let Some(entry) = document.entries().into_iter().find(|entry| entry.file == file) {
+            if let Some(entry) = document
+                .entries()
+                .into_iter()
+                .find(|entry| entry.file == file)
+            {
                 return Ok(Some(entry.hook.clone()));
             }
         }

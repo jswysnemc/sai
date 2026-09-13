@@ -4,7 +4,7 @@ use crate::{
     paths::SaiPaths,
     plugins::{
         self,
-        commands::{run_bundled, BundledCommand},
+        commands::{run_installed, PluginCommand},
         knowledge_view, GrantUpdate,
     },
 };
@@ -17,7 +17,7 @@ async fn knowledge_readonly_tools_do_not_initialize_or_require_write_grants() {
     let root = tempfile::tempdir().unwrap();
     let plugin = configured(
         root.path(),
-        &AppConfig::default(),
+        &json!({}),
         json!({}),
         KnowledgeHost::new(root.path()),
         "",
@@ -101,7 +101,7 @@ async fn knowledge_tools_enforce_read_write_remove_and_lock_grants() {
         seed(root.path(), &json!({"note.md":"keep"}), true);
         let plugin = configured(
             root.path(),
-            &AppConfig::default(),
+            &json!({}),
             json!({}),
             KnowledgeHost::new(root.path()),
             "",
@@ -163,44 +163,72 @@ async fn knowledge_embedding_requires_origin_and_readonly_endpoint_grants() {
     }
 }
 
-/// 【知识库权限测试】【显式导入与界面】用户选择的单文件临时获得读取授权，配置界面使用同一 Lua 业务
-/// @returns 无；没有保存临时授权，禁用同时封锁管理和界面入口
+/// 【知识库权限测试】【显式导入与界面】文件和目录导入共用普通读取授权，界面选择不扩权
+/// @returns 无；未授权来源被拒绝，禁用时列表为空，修改入口明确拒绝
 #[tokio::test]
 async fn knowledge_management_and_tui_share_explicit_import_and_disable_rules() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
-    let mut config = AppConfig::default();
-    config.plugins.knowledge_base.data_dir = root.path().join("kb").display().to_string();
+    let config = AppConfig::default();
+    descriptor(root.path(), &config, json!({}));
+    let stored = std::fs::read(paths.config_dir.join("plugins.jsonc")).unwrap();
     let source = root.path().join("source.md");
     std::fs::write(&source, "user selected file").unwrap();
+    assert!(knowledge_view::add(&paths, &config, &source).await.is_err());
+    let input = root.path().join("input");
+    std::fs::create_dir(&input).unwrap();
+    let authorized_source = input.join("source.md");
+    std::fs::copy(&source, &authorized_source).unwrap();
     assert_eq!(
-        knowledge_view::add(&paths, &config, &source).await.unwrap(),
+        knowledge_view::add(&paths, &config, &authorized_source)
+            .await
+            .unwrap(),
         1
+    );
+    let batch = input.join("batch");
+    std::fs::create_dir(&batch).unwrap();
+    std::fs::write(batch.join("first.md"), "first document").unwrap();
+    std::fs::write(batch.join("second.md"), "second document").unwrap();
+    assert_eq!(
+        knowledge_view::add(&paths, &config, &batch).await.unwrap(),
+        2
     );
     let entries = knowledge_view::list(&paths, &config).await.unwrap();
-    assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0].name, "source.md");
+    assert_eq!(entries.len(), 3);
+    assert!(entries.iter().any(|file| file.name == "source.md"));
     assert_eq!(
         knowledge_view::stats(&paths, &config).await.unwrap()["files"],
-        1
+        3
     );
-    assert!(!paths.config_dir.join("plugins.jsonc").exists());
+    assert_eq!(
+        std::fs::read(paths.config_dir.join("plugins.jsonc")).unwrap(),
+        stored
+    );
     let found = plugins::discovery::find(&config, &paths, "knowledge-base").unwrap();
-    assert_eq!(found.capabilities().system.read_paths.len(), 1);
+    assert!(found
+        .capabilities()
+        .system
+        .read_paths
+        .contains(root.path().join("kb").to_str().unwrap()));
     assert!(!found
         .capabilities()
         .system
         .read_paths
         .contains(source.to_str().unwrap()));
     plugins::set_enabled(&config, &paths, "knowledge-base", false, GrantUpdate::Keep).unwrap();
-    assert!(knowledge_view::list(&paths, &config).await.is_err());
+    assert!(knowledge_view::list(&paths, &config)
+        .await
+        .unwrap()
+        .is_empty());
     assert!(knowledge_view::remove(&paths, &config, "source.md")
         .await
         .is_err());
     plugins::set_enabled(&config, &paths, "knowledge-base", true, GrantUpdate::Keep).unwrap();
-    knowledge_view::remove(&paths, &config, "source.md")
-        .await
-        .unwrap();
+    for file in entries {
+        knowledge_view::remove(&paths, &config, &file.name)
+            .await
+            .unwrap();
+    }
     assert_eq!(
         knowledge_view::stats(&paths, &config).await.unwrap()["files"],
         0
@@ -223,17 +251,16 @@ async fn knowledge_writes_and_compatibility_commands_reject_plan_mode() {
     ] {
         assert!(call(&plugin, root.path(), tool, args, false).await.is_err());
     }
-    let mut config = AppConfig::default();
-    config.plugins.knowledge_base.data_dir = root.path().join("kb").display().to_string();
+    let config = AppConfig::default();
+    descriptor(root.path(), &config, json!({}));
     for command in ["list", "stats", "reindex", "embed-reindex"] {
-        assert!(run_bundled(
+        assert!(run_installed(
             &config,
             &SaiPaths::for_tests(root.path()),
-            BundledCommand {
+            PluginCommand {
                 plugin: "knowledge-base",
                 command,
                 arguments: json!({}),
-                input: None,
                 allow_writes: false
             }
         )

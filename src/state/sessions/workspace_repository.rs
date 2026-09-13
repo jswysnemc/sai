@@ -124,7 +124,7 @@ pub fn delete_sessions_for_workspace(
     migrate_legacy_sessions_to_workspace(paths, &scope.state_dir)?;
     // 索引缺失时先补默认会话，避免空索引下把删除误判成「会话不存在」
     ensure_default_session_for_base(&scope.state_dir)?;
-    delete_sessions_in_base(&scope.state_dir, session_ids)
+    delete_sessions_in_base(paths, &scope.state_dir, session_ids)
 }
 
 /// 返回指定工作区和会话的状态目录。

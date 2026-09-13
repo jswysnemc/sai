@@ -60,7 +60,10 @@ pub(super) async fn probe(context: MeshContext, args: Value) -> Result<String> {
     let total = located.len();
     let mut self_entry = None;
     let mut sessions = Vec::new();
-    for session in located.iter().filter(|session| session_is_active(session, &context)) {
+    for session in located
+        .iter()
+        .filter(|session| session_is_active(session, &context))
+    {
         // 自己那条从 sessions 里分出去：模型遍历列表挑目标时不再可能选中自己。
         // scope=self 除外——那种情况列表本来就只有自己
         if scope != "self" && Path::new(&context.owner_key) == session.state_dir.as_path() {

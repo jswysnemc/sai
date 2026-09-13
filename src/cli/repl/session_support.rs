@@ -318,9 +318,9 @@ mod tests {
     /// 验证 REPL 审计模式构造的工具注册表绑定了权限配置。
     #[test]
     fn audited_repl_registry_intercepts_tools_before_execution() {
-        let paths = SaiPaths::new().unwrap();
-        let config = AppConfig::load_or_default(&paths).unwrap();
         let state_dir = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(state_dir.path());
+        let config = AppConfig::default();
         let registry = build_repl_tool_registry_for_session(
             &config,
             &paths,
@@ -344,9 +344,8 @@ mod tests {
         assert!(!registry
             .requires_permission("read_file", r#"{"path":"src/main.rs"}"#)
             .unwrap());
-        assert!(!registry
-            .requires_permission("todo", r#"{"action":"add","text":"检查"}"#)
-            .unwrap());
+        assert!(!registry.contains("todo"));
+        assert!(!registry.contains("lua__todo__todo"));
     }
 
     /// 历史命令通过 result_ref 恢复完整协议结果，供渲染层提取输出流。

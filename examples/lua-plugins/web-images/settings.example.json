@@ -1,0 +1,14 @@
+{
+  "max_results": 5,
+  "max_download_mb": 4,
+  "safe_search": true,
+  "vision_screening_enabled": false,
+  "auto_preview": false,
+  "preview_count": 1,
+  "timeout_seconds": 20,
+  "language": "zh",
+  "cache_dir": "~/Pictures/sai/web-images",
+  "duckduckgo_base_url": "https://duckduckgo.com",
+  "bing_base_url": "https://www.bing.com"
+}
+

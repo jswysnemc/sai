@@ -164,33 +164,39 @@ async fn deepseek_empty_data_and_invalid_pages_are_distinguished() {
 fn migrated_tools_are_present_in_common_and_readonly_registries() {
     let root = tempfile::tempdir().unwrap();
     let paths = crate::paths::SaiPaths::for_tests(root.path());
-    let mut config = crate::config::AppConfig::default();
-    config.plugins.archlinux.enabled = true;
-    config.plugins.man.enabled = true;
+    let config = crate::config::AppConfig::default();
+    for id in super::example_support::EXTRACTED_IDS {
+        super::example_support::install(id, &paths);
+        crate::plugins::set_enabled(
+            &config,
+            &paths,
+            id,
+            true,
+            crate::plugins::GrantUpdate::Declared,
+        )
+        .unwrap();
+    }
     let common = crate::tools::builtin_registry_without_mcp(&config, &paths);
     let readonly = crate::tools::readonly_registry(&config, &paths);
     for name in [
-        "online_man_search",
-        "online_man_get_page",
-        "query_deepseek_status",
-        "aur_search_packages",
-        "aur_get_package_info",
-        "archlinux_official_package_query",
-        "aur_check_status",
-        "archwiki_query",
-        "fcitx5_input_method_wiki_qurey",
-        "protondb_query",
-        "web_search",
-        "search_web_images",
-        "gather_linux_game_compatibility_signals",
-        "linux_game_compatibility",
-        "linux_input_method_diagnose",
-        "check_issue",
-        "get_weather",
-        "get_exchange_rate",
-        "query_moegirl",
-        "calculate_hash",
-        "decode_encoded_text",
+        "lua__online-man__online_man_search",
+        "lua__online-man__online_man_get_page",
+        "lua__deepseek-status__query_deepseek_status",
+        "lua__archlinux__aur_search_packages",
+        "lua__archlinux__aur_get_package_info",
+        "lua__archlinux__archlinux_official_package_query",
+        "lua__archlinux__aur_check_status",
+        "lua__archlinux__archwiki_query",
+        "lua__fcitx-wiki__fcitx5_input_method_wiki_qurey",
+        "lua__protondb__protondb_query",
+        "lua__web-search__web_search",
+        "lua__web-images__search_web_images",
+        "lua__linux-game-signals__gather_linux_game_compatibility_signals",
+        "lua__linux-game-investigation__linux_game_compatibility",
+        "lua__input-method-investigation__linux_input_method_diagnose",
+        "lua__diagnostic-evidence__check_issue",
+        "lua__exchange-rate__get_exchange_rate",
+        "lua__moegirl__query_moegirl",
     ] {
         assert!(common.contains(name));
         assert!(readonly.contains(name));
@@ -207,31 +213,23 @@ fn migrated_tools_are_present_in_common_and_readonly_registries() {
 
 /// 【插件检查测试】【内置源码】所有内置源码包都必须通过实际管理检查入口，避免发布无法检查的工具名称。
 #[test]
-fn bundled_source_packages_pass_the_management_check() {
-    for package in crate::plugins::bundled::packages().unwrap() {
-        let id = &package.manifest.id;
-        let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("plugins")
-            .join(id);
-        let inspected = crate::plugins::validate_package(&directory)
-            .unwrap_or_else(|error| panic!("bundled package {id} cannot be checked: {error:#}"));
+fn example_source_packages_pass_the_management_check() {
+    for id in super::example_support::EXTRACTED_IDS {
+        let inspected = crate::plugins::validate_package(&super::example_support::directory(id))
+            .unwrap_or_else(|error| panic!("example package {id} cannot be checked: {error:#}"));
         assert_eq!(inspected.manifest.id, *id);
     }
 }
 
-/// 【插件测试】【目录兼容】内置工具禁用后仍可预先加入 Agent 白名单，但不能实际调用。
+/// 【插件测试】【外部目录】禁用已安装包移除工具和目录项，不借用内置保留行为
+/// @returns 无；目录只展示当前可调用的外部工具
 #[test]
-fn disabled_bundled_tools_remain_configurable_without_becoming_callable() {
+fn disabled_installed_tools_are_absent_from_catalog_and_registry() {
     let root = tempfile::tempdir().unwrap();
     let paths = crate::paths::SaiPaths::for_tests(root.path());
     let config = crate::config::AppConfig::default();
-    for id in [
-        "online-man",
-        "archlinux",
-        "fcitx-wiki",
-        "protondb",
-        "web-search",
-    ] {
+    for id in super::example_support::EXTRACTED_IDS {
+        super::example_support::install(id, &paths);
         crate::plugins::set_enabled(
             &config,
             &paths,
@@ -243,56 +241,13 @@ fn disabled_bundled_tools_remain_configurable_without_becoming_callable() {
     }
     let actual = crate::tools::builtin_registry_without_mcp(&config, &paths);
     let catalog = crate::tools::tool_catalog(&config, &paths);
-    for name in [
-        "online_man_search",
-        "aur_search_packages",
-        "aur_get_package_info",
-        "archlinux_official_package_query",
-        "aur_check_status",
-        "archwiki_query",
-        "fcitx5_input_method_wiki_qurey",
-        "protondb_query",
-        "web_search",
-    ] {
-        assert!(!actual.contains(name));
-        assert!(catalog.iter().any(|tool| tool.name == name));
-    }
-}
-
-/// 【插件测试】【Arch 开关】旧配置决定缺省状态，显式插件设置覆盖旧开关。
-#[test]
-fn archlinux_plugin_settings_override_the_legacy_default_in_both_registries() {
-    let root = tempfile::tempdir().unwrap();
-    let paths = crate::paths::SaiPaths::for_tests(root.path());
-    let mut config = crate::config::AppConfig::default();
-    config.plugins.archlinux.enabled = false;
-    let initial = crate::tools::builtin_registry_without_mcp(&config, &paths);
-    assert!(!initial.contains("aur_search_packages"));
-    assert!(initial.contains("fcitx5_input_method_wiki_qurey"));
-    assert!(initial.contains("protondb_query"));
-    for (enabled, legacy) in [(true, false), (false, true)] {
-        config.plugins.archlinux.enabled = legacy;
-        crate::plugins::set_enabled(
-            &config,
-            &paths,
-            "archlinux",
-            enabled,
-            crate::plugins::GrantUpdate::Keep,
-        )
-        .unwrap();
-        for registry in [
-            crate::tools::builtin_registry_without_mcp(&config, &paths),
-            crate::tools::readonly_registry(&config, &paths),
-        ] {
-            for name in [
-                "aur_search_packages",
-                "aur_get_package_info",
-                "archlinux_official_package_query",
-                "aur_check_status",
-                "archwiki_query",
-            ] {
-                assert_eq!(registry.contains(name), enabled);
-            }
+    for id in super::example_support::EXTRACTED_IDS {
+        let checked =
+            crate::plugins::validate_package(&super::example_support::directory(id)).unwrap();
+        for tool in checked.tools {
+            let name = format!("lua__{id}__{}", tool.name);
+            assert!(!actual.contains(&name));
+            assert!(!catalog.iter().any(|entry| entry.name == name));
         }
     }
 }

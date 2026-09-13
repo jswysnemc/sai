@@ -6,7 +6,6 @@ export type SettingsSectionId =
   | "providers"
   | "agents"
   | "cli-tools"
-  | "web-search"
   | "runtime"
   | "prompts"
   | "skills"

@@ -55,6 +55,22 @@ pub struct HttpRequest {
     pub max_bytes: usize,
     #[serde(default = "request_timeout")]
     pub timeout_ms: u64,
+    #[serde(default = "redirect_limit")]
+    pub max_redirects: usize,
+    #[serde(default = "read_error_body")]
+    pub read_error_body: bool,
+}
+
+impl HttpRequest {
+    /// 【插件】【跳转硬上限】运行时和直接宿主调用共用最大跟随次数校验
+    /// @returns 至多十次时成功，零表示不跟随任何重定向
+    pub fn validate_redirect_limit(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.max_redirects <= 10,
+            "plugin HTTP redirect limit exceeds maximum of 10"
+        );
+        Ok(())
+    }
 }
 
 /// 【插件】【HTTP 响应】宿主已完成解码且大小受限的结果。
@@ -345,4 +361,16 @@ fn response_limit() -> usize {
 /// @returns 30 秒对应的毫秒数
 fn request_timeout() -> u64 {
     30_000
+}
+
+/// 【插件】【跳转缺省】新请求默认保持五次重定向上限
+/// @returns 默认跟随次数
+fn redirect_limit() -> usize {
+    5
+}
+
+/// 【插件】【错误正文缺省】现有调用继续读取受限的 HTTP 错误正文
+/// @returns 缺省读取错误正文
+fn read_error_body() -> bool {
+    true
 }

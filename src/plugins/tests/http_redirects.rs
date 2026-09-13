@@ -86,6 +86,8 @@ fn request(origin: &str) -> HttpRequest {
         body: Some("{\"query\":\"Rust\"}".into()),
         max_bytes: 1024,
         timeout_ms: 2000,
+        max_redirects: 5,
+        read_error_body: true,
     }
 }
 

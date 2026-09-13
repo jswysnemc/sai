@@ -11,11 +11,7 @@ const WRITE_TOOLS: [&str; 3] = ["add_meme", "update_meme", "delete_meme"];
 /// @returns 无；读取与写入工具保留原名称和权限分类
 #[test]
 fn memes_publish_all_six_tools_as_lua() {
-    let package = crate::plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|package| package.manifest.id == "memes")
-        .expect("memes must be a bundled Lua package");
+    let package = super::example_support::package("memes");
     let grants = package.manifest.capabilities.clone();
     let runtime =
         PluginRuntime::load(package, json!({}), grants, Arc::new(FixtureHost::default())).unwrap();
@@ -35,49 +31,52 @@ fn memes_publish_all_six_tools_as_lua() {
     }
 }
 
-/// 【表情迁移测试】【真实归属】普通和只读目录使用插件适配，旧开关继续提供默认值
+/// 【表情迁移测试】【真实归属】普通和只读目录使用已安装插件与独立开关
 /// @returns 无；写入工具不进入只读目录，禁用时六个工具均不可调用
 #[test]
-fn memes_registry_uses_lua_and_preserves_legacy_switches() {
+fn memes_registry_uses_installed_lua_and_explicit_enablement() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
-    let mut config = AppConfig::default();
+    let config = AppConfig::default();
+    super::example_support::install("memes", &paths);
     for enabled in [true, false] {
-        config.plugins.memes.enabled = enabled;
+        crate::plugins::set_enabled(
+            &config,
+            &paths,
+            "memes",
+            enabled,
+            crate::plugins::GrantUpdate::Declared,
+        )
+        .unwrap();
         let normal = crate::tools::builtin_registry_without_mcp(&config, &paths);
         let readonly = crate::tools::readonly_registry(&config, &paths);
         assert!(normal.plugin_diagnostics().is_empty());
         assert!(readonly.plugin_diagnostics().is_empty());
         for name in READ_TOOLS.into_iter().chain(WRITE_TOOLS) {
-            assert_eq!(normal.contains(name), enabled, "{name}");
+            let public = format!("lua__memes__{name}");
+            assert_eq!(normal.contains(&public), enabled, "{name}");
             assert_eq!(
-                readonly.contains(name),
+                readonly.contains(&public),
                 enabled && READ_TOOLS.contains(&name),
                 "{name}"
             );
             if enabled {
-                assert_eq!(normal.plugin_owner(name), Some("memes"), "{name}");
+                assert_eq!(normal.plugin_owner(&public), Some("memes"), "{name}");
             }
         }
     }
 }
 
-/// 【表情兼容测试】【设置优先级】旧字段定向进入内置包，显式设置覆盖默认值且不会重写配置
-/// @returns 无；旧默认库保留，显式启用可以覆盖旧开关
+/// 【表情设置测试】【旧配置隔离】主配置旧字段不能进入外部包，独立设置原文保持不变
+/// @returns 无；不自动采用用户的旧图库目录和偏好
 #[test]
 fn memes_settings_override_legacy_values_without_rewriting_configuration() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
-    let mut config = AppConfig::default();
-    config.plugins.memes.enabled = false;
-    config.plugins.memes.width_percent = 51;
-    config.plugins.memes.height_percent = 19;
-    config.plugins.memes.max_image_mb = u64::MAX;
-    config
-        .plugins
-        .memes
-        .libraries
-        .insert("default".into(), "legacy".into());
+    let mut legacy = serde_json::to_value(AppConfig::default()).unwrap();
+    legacy["plugins"]["memes"] = json!({"enabled":true,"width_percent":51,"height_percent":19,"libraries":{"default":"legacy"}});
+    let config: AppConfig = serde_json::from_value(legacy).unwrap();
+    super::example_support::install("memes", &paths);
     std::fs::create_dir_all(&paths.config_dir).unwrap();
     let file = paths.config_dir.join("plugins.jsonc");
     let bytes = serde_json::to_vec(
@@ -92,20 +91,14 @@ fn memes_settings_override_legacy_values_without_rewriting_configuration() {
         .find(|plugin| plugin.package.manifest.id == "memes")
         .unwrap();
     assert_eq!(descriptor.settings()["width_percent"], 23);
-    assert_eq!(descriptor.settings()["height_percent"], 19);
-    assert_eq!(descriptor.settings()["max_image_mb"], u64::MAX);
-    assert_eq!(descriptor.settings()["libraries"]["default"], "legacy");
+    assert_eq!(descriptor.settings(), &json!({"width_percent":23}));
     assert_eq!(
-        descriptor.settings()["user_dir"],
-        json!(paths.data_dir.join("memes"))
-    );
-    assert_eq!(
-        descriptor.settings()["state_dir"],
-        json!(paths.state_dir.join("memes"))
+        descriptor.grants(),
+        sai_plugin_runtime::Capabilities::default()
     );
     let registry = crate::tools::builtin_registry_without_mcp(&config, &paths);
     assert!(registry.plugin_diagnostics().is_empty());
-    assert!(registry.contains("add_meme"));
+    assert!(registry.contains("lua__memes__add_meme"));
     assert_eq!(std::fs::read(file).unwrap(), bytes);
 }
 
@@ -115,12 +108,10 @@ fn memes_settings_override_legacy_values_without_rewriting_configuration() {
 async fn memes_directory_changes_do_not_expand_existing_explicit_grants() {
     let root = tempfile::tempdir().unwrap();
     let config = AppConfig::default();
-    let paths = SaiPaths::for_tests(root.path());
     let mut descriptor = super::memes_support::descriptor(root.path(), &config);
     descriptor.setting.grants = Some(descriptor.grants());
     let changed = root.path().join("changed");
     descriptor.setting.settings["user_dir"] = json!(changed);
-    descriptor.refresh_compatibility(&config, &paths).unwrap();
     let effective = descriptor.capabilities().intersection(&descriptor.grants());
     for directories in [
         &effective.binary.write_paths,
@@ -152,13 +143,12 @@ async fn memes_directory_changes_do_not_expand_existing_explicit_grants() {
 #[test]
 fn memes_external_sources_do_not_inherit_builtin_compatibility() {
     let root = tempfile::tempdir().unwrap();
-    let paths = SaiPaths::for_tests(root.path());
     let config = AppConfig::default();
     let mut descriptor = super::memes_support::descriptor(root.path(), &config);
     descriptor.source =
         crate::plugins::discovery::PluginSource::Installed(root.path().join("installed"));
     descriptor.setting.settings = json!({});
-    descriptor.refresh_compatibility(&config, &paths).unwrap();
+    descriptor.setting.grants = None;
     assert_eq!(descriptor.settings(), &json!({}));
     assert_eq!(
         descriptor.capabilities(),
@@ -176,6 +166,7 @@ fn memes_external_sources_do_not_inherit_builtin_compatibility() {
 fn memes_invalid_settings_fail_without_defaulting_to_broader_permissions() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
+    super::example_support::install("memes", &paths);
     std::fs::create_dir_all(&paths.config_dir).unwrap();
     for settings in [
         json!({"width_percent":256}),

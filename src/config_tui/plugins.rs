@@ -15,7 +15,7 @@ use super::plugin_fields::{apply_plugin_fields, plugin_fields};
 use super::theme::{selection_marks, BOLD, MUTED, RESET};
 use super::ui::{display_width, draw_box, message, pad, truncate};
 
-/// 编辑助手工具（含 Web 搜索）。
+/// 编辑助手工具。
 ///
 /// 参数:
 /// - `stdout`: 终端标准输出
@@ -32,7 +32,7 @@ pub(crate) fn edit_cli_tools(stdout: &mut io::Stdout, config: &mut AppConfig) ->
             KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(count - 1),
-            KeyCode::Char(' ') => toggle_plugin(config, selected),
+            KeyCode::Char(' ') => toggle_plugin(config, cli_tool_names()[selected].0),
             KeyCode::Enter | KeyCode::Char('i') => edit_cli_tool_detail(stdout, config, selected)?,
             _ => {}
         }
@@ -82,8 +82,8 @@ fn draw_cli_tool_menu(stdout: &mut io::Stdout, config: &AppConfig, selected: usi
         if index >= tools.len() {
             break;
         }
-        let (_, name, description) = tools[index];
-        let enabled = plugin_enabled(config, index);
+        let (id, name, description) = tools[index];
+        let enabled = plugin_enabled(config, id);
         let row_width = width.saturating_sub(6) as usize;
         queue!(stdout, MoveTo(x + 2, y + row as u16 + 2))?;
         let (bar, style) = selection_marks(index == selected);
@@ -151,20 +151,12 @@ fn cli_tool_row(state: &str, name: &str, description: &str, width: usize) -> Str
     fixed + &truncate(description, remaining)
 }
 
-/// 返回助手工具菜单目录，下标与历史兼容配置索引一致（0 为 Web 搜索）。
+/// 返回助手工具菜单目录，以稳定配置标识绑定每个表单。
 ///
 /// 返回:
 /// - 历史配置标识、显示名称和说明组成的固定目录
-fn cli_tool_names() -> [(&'static str, &'static str, &'static str); 20] {
+fn cli_tool_names() -> [(&'static str, &'static str, &'static str); 3] {
     [
-        (
-            "web",
-            t("Web search", "Web 搜索"),
-            t(
-                "Web search backends and API credentials",
-                "Web 搜索后端与 API 凭证",
-            ),
-        ),
         (
             "vision",
             t("Vision", "识图"),
@@ -174,175 +166,49 @@ fn cli_tool_names() -> [(&'static str, &'static str, &'static str); 20] {
             ),
         ),
         (
-            "image_generation",
-            t("Image generation", "生图"),
-            t("Generate images from text", "文本生成图片"),
-        ),
-        (
-            "web_images",
-            t("Web images", "搜图"),
-            t(
-                "Web image search, download and review",
-                "网络图片搜索、下载与审核",
-            ),
-        ),
-        (
-            "print_image",
-            t("Print image", "打印图片"),
-            t("Terminal image print size", "终端图片打印尺寸"),
-        ),
-        (
-            "memes",
-            t("Memes", "表情包"),
-            t("Meme library and send size", "表情库与发送尺寸"),
-        ),
-        (
-            "knowledge_base",
-            t("Knowledge base", "知识库"),
-            t(
-                "Local file retrieval and semantic index",
-                "本地文件检索与语义索引",
-            ),
-        ),
-        (
-            "archlinux",
-            "Arch Linux",
-            t("AUR status and ArchWiki query", "AUR 状态与 ArchWiki 查询"),
-        ),
-        (
-            "man",
-            t("Online manuals", "在线手册"),
-            t("Online man page search and read", "在线 man 手册搜索与读取"),
-        ),
-        (
             "memory",
             t("Memory", "记忆"),
             t("Long-term memory and association", "长期记忆与联想"),
-        ),
-        (
-            "package_advisor",
-            t("AUR review", "AUR 审查"),
-            t("PKGBUILD/AUR security review", "PKGBUILD/AUR 安全审查"),
-        ),
-        (
-            "linux_game_compatibility",
-            t("Linux game compatibility", "Linux 游戏兼容"),
-            t(
-                "Proton/anti-cheat/compatibility query",
-                "Proton/反作弊/兼容性查询",
-            ),
-        ),
-        (
-            "deep_diagnose",
-            t("Deep diagnose", "深度诊断"),
-            t("Multi-round diagnosis and review", "多轮诊断与审视修正"),
-        ),
-        (
-            "diagnostics",
-            t("System diagnostics", "系统诊断"),
-            t(
-                "Command limits for diagnostic tools",
-                "诊断工具命令与输出限制",
-            ),
-        ),
-        (
-            "weather",
-            t("Weather", "天气"),
-            t("City weather and forecast query", "城市天气与预报查询"),
-        ),
-        (
-            "exchange_rate",
-            t("Exchange rate", "汇率"),
-            t("Currency conversion and rate query", "货币换算与汇率查询"),
         ),
         (
             "calculator",
             t("Calculator", "计算器"),
             t("Scientific expression evaluation", "科学计算表达式求值"),
         ),
-        (
-            "hash_codec",
-            t("Hash and codec", "哈希与编解码"),
-            t("Hash digests and text encoding", "哈希摘要与文本编解码"),
-        ),
-        (
-            "moegirl",
-            t("Moegirl", "萌娘百科"),
-            t("Moegirl encyclopedia query", "萌娘百科词条查询"),
-        ),
-        (
-            "xuanxue",
-            t("Zhouyi", "周易"),
-            t("Zhouyi hexagram casting", "周易卦象起卦"),
-        ),
     ]
 }
 
-/// 判断历史兼容配置索引对应的工具是否启用。
+/// 判断配置标识对应的工具是否启用。
 ///
 /// 参数:
 /// - `config`: 当前应用配置
-/// - `index`: 历史兼容配置索引，0 表示 Web 搜索
+/// - `id`: 当前工具的稳定配置标识
 ///
 /// 返回:
-/// - 工具或 Web 搜索启用时返回 true
-pub(super) fn plugin_enabled(config: &AppConfig, index: usize) -> bool {
-    match index {
-        0 => config.plugins.web.enabled,
-        1 => config.plugins.vision.enabled,
-        2 => config.plugins.image_generation.enabled,
-        3 => config.plugins.web_images.enabled,
-        4 => config.plugins.print_image.enabled,
-        5 => config.plugins.memes.enabled,
-        6 => config.plugins.knowledge_base.enabled,
-        7 => config.plugins.archlinux.enabled,
-        8 => config.plugins.man.enabled,
-        9 => config.plugins.memory.enabled,
-        10 => config.plugins.package_advisor.enabled,
-        11 => config.plugins.linux_game_compatibility.enabled,
-        12 => config.plugins.deep_diagnose.enabled,
-        13 => config.plugins.diagnostics.enabled,
-        14 => config.plugins.weather.enabled,
-        15 => config.plugins.exchange_rate.enabled,
-        16 => config.plugins.calculator.enabled,
-        17 => config.plugins.hash_codec.enabled,
-        18 => config.plugins.moegirl.enabled,
-        19 => config.plugins.xuanxue.enabled,
+/// - 工具启用时返回 true
+pub(super) fn plugin_enabled(config: &AppConfig, id: &str) -> bool {
+    match id {
+        "vision" => config.plugins.vision.enabled,
+        "memory" => config.plugins.memory.enabled,
+        "calculator" => config.plugins.calculator.enabled,
         _ => false,
     }
 }
 
-/// 切换历史兼容配置索引对应的工具启用状态。
+/// 切换配置标识对应的工具启用状态。
 ///
 /// 参数:
 /// - `config`: 待更新应用配置
-/// - `index`: 历史兼容配置索引，0 表示 Web 搜索
+/// - `id`: 当前工具的稳定配置标识
 ///
 /// 返回:
 /// - 无返回值
-pub(super) fn toggle_plugin(config: &mut AppConfig, index: usize) {
-    let value = !plugin_enabled(config, index);
-    match index {
-        0 => config.plugins.web.enabled = value,
-        1 => config.plugins.vision.enabled = value,
-        2 => config.plugins.image_generation.enabled = value,
-        3 => config.plugins.web_images.enabled = value,
-        4 => config.plugins.print_image.enabled = value,
-        5 => config.plugins.memes.enabled = value,
-        6 => config.plugins.knowledge_base.enabled = value,
-        7 => config.plugins.archlinux.enabled = value,
-        8 => config.plugins.man.enabled = value,
-        9 => config.plugins.memory.enabled = value,
-        10 => config.plugins.package_advisor.enabled = value,
-        11 => config.plugins.linux_game_compatibility.enabled = value,
-        12 => config.plugins.deep_diagnose.enabled = value,
-        13 => config.plugins.diagnostics.enabled = value,
-        14 => config.plugins.weather.enabled = value,
-        15 => config.plugins.exchange_rate.enabled = value,
-        16 => config.plugins.calculator.enabled = value,
-        17 => config.plugins.hash_codec.enabled = value,
-        18 => config.plugins.moegirl.enabled = value,
-        19 => config.plugins.xuanxue.enabled = value,
+pub(super) fn toggle_plugin(config: &mut AppConfig, id: &str) {
+    let value = !plugin_enabled(config, id);
+    match id {
+        "vision" => config.plugins.vision.enabled = value,
+        "memory" => config.plugins.memory.enabled = value,
+        "calculator" => config.plugins.calculator.enabled = value,
         _ => {}
     }
 }
@@ -362,13 +228,14 @@ fn edit_cli_tool_detail(
     index: usize,
 ) -> Result<()> {
     let title = format!(" {}: {} ", t("TOOL", "工具"), cli_tool_names()[index].1);
-    let mut fields = plugin_fields(config, index);
+    let id = cli_tool_names()[index].0;
+    let mut fields = plugin_fields(config, id);
     loop {
         if !run_form(stdout, &title, &mut fields)? {
             return Ok(());
         }
         // 解析失败时就地提示并重新打开表单，沿用已填内容
-        match apply_plugin_fields(config, index, &fields) {
+        match apply_plugin_fields(config, id, &fields) {
             Ok(()) => return Ok(()),
             Err(err) => message(
                 stdout,
@@ -381,47 +248,36 @@ fn edit_cli_tool_detail(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
 
-    /// 验证工具菜单以 Web 搜索开头，且菜单下标与配置索引一一对应。
+    /// 【工具菜单测试】【稳定标识】菜单完整对应当前配置，切换只修改指定工具
+    /// @returns 无；删除业务条目不能造成表单配置错位
     #[test]
-    fn tool_menu_starts_with_web_search_and_maps_indices_directly() {
-        let tools = cli_tool_names();
+    fn tool_menu_uses_stable_ids_for_current_configuration() {
         let mut config = AppConfig::default();
-
-        assert_eq!(tools.len(), 20);
-        assert_eq!(tools[0].0, "web");
-        assert_eq!(tools[1].0, "vision");
-        // 菜单首行切换的正是 Web 搜索开关
-        let before = config.plugins.web.enabled;
-        toggle_plugin(&mut config, 0);
-        assert_ne!(before, config.plugins.web.enabled);
-    }
-
-    /// 验证受开关控制的轻量工具都能在 TUI 中查看与切换。
-    #[test]
-    fn configurable_light_tools_are_reachable_from_menu() {
         let tools = cli_tool_names();
-        let mut config = AppConfig::default();
-
-        for id in [
-            "weather",
-            "exchange_rate",
-            "calculator",
-            "hash_codec",
-            "moegirl",
-            "xuanxue",
-        ] {
-            let position = tools
-                .iter()
-                .position(|(name, _, _)| *name == id)
-                .unwrap_or_else(|| panic!("missing menu entry: {id}"));
-            let before = plugin_enabled(&config, position);
-            toggle_plugin(&mut config, position);
-            assert_ne!(
-                before,
-                plugin_enabled(&config, position),
-                "toggle had no effect: {id}"
-            );
+        let serialized = serde_json::to_value(&config.plugins).unwrap();
+        let expected = serialized
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            tools.iter().map(|entry| entry.0).collect::<BTreeSet<_>>(),
+            expected
+        );
+        for (id, _, _) in tools {
+            let before = serde_json::to_value(&config.plugins).unwrap();
+            toggle_plugin(&mut config, id);
+            let after = serde_json::to_value(&config.plugins).unwrap();
+            for key in before.as_object().unwrap().keys() {
+                if key == id {
+                    assert_ne!(before[key]["enabled"], after[key]["enabled"]);
+                } else {
+                    assert_eq!(before[key], after[key]);
+                }
+            }
         }
     }
 }

@@ -13,7 +13,13 @@ pub(super) async fn execute(
     allow_writes: bool,
 ) -> Result<HttpResponse> {
     let limit = request.max_bytes;
-    read_response(send(request, capabilities, allow_writes).await?, limit).await
+    let read_error_body = request.read_error_body;
+    read_response(
+        send(request, capabilities, allow_writes).await?,
+        limit,
+        read_error_body,
+    )
+    .await
 }
 
 /// 【插件】【请求发送】文本和二进制归档共用来源、重定向、凭据与截止时间校验。
@@ -36,13 +42,14 @@ pub(super) async fn send_with_timeout_limit(
     allow_writes: bool,
     timeout_limit: u64,
 ) -> Result<reqwest::Response> {
+    request.validate_redirect_limit()?;
     let timeout = Duration::from_millis(request.timeout_ms.clamp(1, timeout_limit));
     let deadline = Instant::now() + timeout;
     let client = reqwest::Client::builder()
         .timeout(timeout)
         .redirect(reqwest::redirect::Policy::none())
         .build()?;
-    for redirects in 0..=5 {
+    for redirects in 0..=request.max_redirects {
         let url = capabilities.authorize_request(&request.method, &request.url, allow_writes)?;
         let remaining = deadline
             .checked_duration_since(Instant::now())
@@ -69,7 +76,7 @@ pub(super) async fn send_with_timeout_limit(
         let Some(location) = response.headers().get(reqwest::header::LOCATION) else {
             return Ok(response);
         };
-        if redirects == 5 {
+        if redirects == request.max_redirects {
             bail!("plugin redirect limit exceeded");
         }
         let target = url
@@ -110,9 +117,13 @@ pub(super) async fn send_with_timeout_limit(
 }
 
 /// 【插件】【响应读取】限制传输字节与解码后的 UTF-8 字节，保留 HTTP 状态供 Lua 处理。
-/// @param response 网络响应；max_bytes 为本次请求的字节上限
+/// @param response 网络响应；max_bytes 为字节上限；read_error_body 为错误状态正文策略
 /// @returns 状态、响应头与解码正文
-async fn read_response(response: reqwest::Response, max_bytes: usize) -> Result<HttpResponse> {
+async fn read_response(
+    response: reqwest::Response,
+    max_bytes: usize,
+    read_error_body: bool,
+) -> Result<HttpResponse> {
     let status = response.status().as_u16();
     let headers: BTreeMap<String, String> = response
         .headers()
@@ -124,7 +135,7 @@ async fn read_response(response: reqwest::Response, max_bytes: usize) -> Result<
                 .map(|value| (name.to_string(), value.to_string()))
         })
         .collect();
-    let bytes = read_bytes(response, max_bytes).await?;
+    let bytes = read_optional_body(response, max_bytes, read_error_body).await?;
     let text = decode_body(&bytes, headers.get("content-type").map(String::as_str));
     if text.len() > max_bytes {
         bail!("decoded plugin HTTP response exceeds byte limit");
@@ -134,6 +145,22 @@ async fn read_response(response: reqwest::Response, max_bytes: usize) -> Result<
         headers,
         text,
     })
+}
+
+/// 【插件】【错误状态正文】由调用者选择是否读取 4xx/5xx 正文，状态处理仍交给插件
+/// @param response 最终响应；max_bytes 为上限；read_error_body 为是否读取错误正文
+/// @returns 受限原始正文，跳过读取时返回空字节且立即释放连接
+pub(super) async fn read_optional_body(
+    response: reqwest::Response,
+    max_bytes: usize,
+    read_error_body: bool,
+) -> Result<Vec<u8>> {
+    if !read_error_body
+        && (response.status().is_client_error() || response.status().is_server_error())
+    {
+        return Ok(Vec::new());
+    }
+    read_bytes(response, max_bytes).await
 }
 
 /// 【插件】【有界字节】限制实际传输正文，错误不会附带原始 URL。

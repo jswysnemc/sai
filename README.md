@@ -1,7 +1,7 @@
 # Sai
 
 **A terminal-native AI desktop assistant with a persona**
-Multi-protocol LLM · 30+ built-in tools · Long-term memory · Chat platform gateways · Web workbench · Cross-platform
+Multi-protocol LLM · Core tools and Lua plugins · Long-term memory · Chat platform gateways · Web workbench · Cross-platform
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
@@ -45,7 +45,9 @@ Run `sai config` (also reachable from the REPL) for the terminal configurator. T
 
 ![Agent tool and Skills multi-select](pics/skills.png)
 
-### Built-in tools
+### Tool examples
+
+Weather, exchange-rate, and image tools require the corresponding [Lua example plugins](examples/lua-plugins/README.md).
 
 ![Weather lookup](pics/get_weather.png)
 
@@ -80,12 +82,12 @@ Run `sai config` (also reachable from the REPL) for the terminal configurator. T
 
 - **Three permission modes** - `Yolo` free tool use, `Audited` (sandbox + audit log + per-call confirm), `Plan` read-only
 - **Progressive tool loading** - Only `load` and base tools are exposed at start; the model calls `load` to pull in tool groups or skills on demand. Tool groups persist to `loaded-tools.json`. Each skill is loaded once per session: later `load` calls return `already_loaded` without the body, and the name list lives in a suffix `<context-resource>` so the system-prompt prefix stays cacheable. Compaction clears `loaded-skills.json` so the next load can return the full document.
-- **30+ built-in tools** - Grouped by purpose: `base` file/command, `web` lookup, `media` image/meme, `research` deep research, `memory` recall, `package` Arch Linux, `game` compatibility, `diagnostics` system, `knowledge` base, `utilities` calc/encode, `personal` alarm, `ssh` remote hosts, `mcp` external
+- **Core tools and optional features** - The host provides file, command, session, permission, and extension services. All 25 Lua business packages, including search, investigations, images, todo, knowledge base, memes, and alarms, are standalone examples with explicit installation and grants.
 - **Subagents** - The `subagent` tool starts an independent LLM loop with a `max_steps` budget and timeout; writable tasks auto-create a `.sai-subagents` git worktree for isolation, then apply back and clean up on success. Persistent agents can idle and take follow-ups (REPL `/subagents`, `/msg`)
 - **Skills** - Reusable `SKILL.md` skill packs with three visibility tiers (hidden / name-only / full); enable / disable / list / stats / prune from the TUI or CLI. Session loads are cached as described above.
 - **MCP bridging** - Native stdio / http MCP servers; tools registered with `mcp_` prefix; dedicated `mcp.jsonc` config
-- **Lua plugins** - Twenty-one local Lua 5.4 packages provide 33 tools, with user commands, lifecycle callbacks, separate settings, and explicit HTTP, model, vision, tool, file, environment, process, private storage, workspace, binary download, file output, image display, notification, and scheduling grants. Online queries, complete Linux game and input method investigations, local diagnostic evidence, AUR review/install workflows, reply notification policy, image generation and display, web image search, hash/text decoding, alarms, and divination/dice tools use bundled Lua implementations. Plugins compose authorized tools and use bounded host services. Alarms retain their public tool names and legacy records, with persistent background delivery and separate audio permissions. Divination and dice need no external capabilities, preserve the original numeric input rules, and report total overflow. Web image search keeps metadata queries available in read-only mode; downloads, ranking, visual screening and preview policy run in Lua. Visual screening uses the separately configured vision model, and previews invoke the independent display plugin. See the [plugin guide](design/lua-plugins/getting-started.md), [API](design/lua-plugins/api.md), [alarm guide](design/lua-plugins/alarm.md), [divination and dice guide](design/lua-plugins/xuanxue.md), and [migration status](design/lua-plugins/migration.md) (Chinese).
-- **Session-level Todo** - A plan checklist tracked across tool rounds
+- **Lua extensions** - Lua 5.4 packages register tools, commands, and lifecycle hooks through public APIs, with independent settings, capability declarations, and user grants. See the [example catalog](examples/lua-plugins/README.md), [developer guide](design/lua-plugins/getting-started.md), [capabilities](design/lua-plugins/capability-matrix.md), [API](design/lua-plugins/api.md), [distribution guide](design/lua-plugins/distribution.md), and [migration guide](design/lua-plugins/bundled-plugins.md).
+- **Optional session todo** - Install the [todo example](examples/lua-plugins/todo/README.md) for a checklist, history, and tool-round reminders; import old snapshots explicitly.
 - **Cron jobs** - bash / http / prompt types, persisted to `jobs.db`, triggered by a background scheduler
 
 ### Long-term memory and context
@@ -95,7 +97,7 @@ Run `sai config` (also reachable from the REPL) for the terminal configurator. T
 - **Markdown source files** - Memory is also persisted as `memory/files/{facts,episodes}/*.md`, human-readable and editable
 - **Half-life forgetting** - A strength-based decay algorithm yields natural forgetting; recall reinforces frequently used memories
 - **Associative recall** - Before each turn, keywords recall relevant facts / episodes and inject them as system messages
-- **Per-persona isolation** - Memory, memes, and skills are isolated under the `persona` directory; personas never cross-contaminate
+- **Per-persona isolation** - Memory and skills use separate persona directories. Optional meme libraries use independently configured paths.
 
 ### Chat platform gateways
 
@@ -428,7 +430,7 @@ Sai/
 │   ├── cli/              # CLI subcommand dispatch and REPL implementation
 │   ├── llm/              # LLM client: triple-protocol, streaming, thinking, tool-call stream
 │   ├── tools/            # Core tools, registry, progressive loading, subagent and skills
-│   ├── plugins/          # Plugin management, host APIs, persistent scheduling and compatibility
+│   ├── plugins/          # Public plugin host, management, grants and scheduling
 │   ├── memory/           # Long-term memory: facts/episodes/FTS5/decay/association
 │   ├── state/            # Session state: turns WAL, pending, compaction, snapshot, recovery
 │   ├── gateways/         # Multi-platform gateways: QQ/WeChat/OneBot/WeCom, supervisor
@@ -444,7 +446,7 @@ Sai/
 │   ├── i18n/             # Chinese / English i18n
 │   ├── cron/             # Cron job scheduling
 │   └── ...               # Other host modules
-├── plugins/              # Bundled Lua packages: knowledge base, todo, memes, alarms and more
+├── examples/lua-plugins/ # 25 business examples and 2 starter examples
 ├── crates/sai-plugin-runtime/ # Reusable Lua runtime and capability contracts
 ├── crates/sai-sqlite-buffer/  # Fixed-capacity SQLite snapshot buffers
 ├── web/                  # Web workbench frontend (React + Vite)
@@ -493,6 +495,7 @@ Linux `~/.local/state/sai` / macOS `~/Library/Application Support/sai` / Windows
 | `sai.log` | Runtime log |
 | `plugin-jobs/` | Persistent plugin tasks, including new alarms |
 | `plugin-legacy/` | Isolated compatibility states for legacy alarm records |
+| `plugin-state/`, `plugin-storage/` | Public per-session and persistent plugin records |
 | `alarms.json`, `alarm.log` | Preserved legacy alarm snapshot and log |
 | `permission-audit.jsonl` | Permission audit log |
 
@@ -502,12 +505,14 @@ Linux `~/.local/share/sai` / macOS `~/Library/Application Support/sai` / Windows
 
 | File / Dir | Purpose |
 | --- | --- |
-| `kb/` | Local knowledge base: files + keyword index + semantic embeddings |
-| `persona/<name>/memes/` | Meme images and index (per-persona isolation) |
+| `kb/` | Legacy knowledge-base data; reuse through explicit data_dir settings and grants |
+| `persona/<name>/memes/` | Legacy meme-library path; reuse through independent plugin settings |
 | `persona/<name>/memory/memory.db` | Memory metadata + FTS5 index |
 | `persona/<name>/memory/files/` | Markdown memory sources (facts / episodes) |
 | `persona/<name>/memory/evicted_context.db` | Trimmed old context |
 | `persona/<name>/skills/` | Auto-learned skills |
+
+The knowledge-base example defaults to workspace `kb/`; memes use `.sai/meme-bases`, `.sai/memes`, and `.sai/state/memes`. See each [example README](examples/lua-plugins/README.md) for installation and data migration.
 
 ### Other dirs
 

@@ -142,11 +142,11 @@ sai plugins jobs my-plugin resume job-0123456789abcdef0123456789abcdef --json
 
 ## 旧闹钟兼容
 
-仅 `alarm` 的列表、单条查询和取消接入旧 `alarms.json`。旧公开 ID 保存在命令参数的 `legacy_id`，调度接口使用确定性摘要映射的 `job-...` ID。兼容层不改写原文件，只在独立 `plugin-legacy` 目录记录终态与取消状态。
+只有显式 `sai plugins jobs alarm list/cancel` 管理入口接入旧 `alarms.json`；公共 Lua 调度接口及新闹钟工具只处理通用任务记录。旧公开 ID 保存在命令参数的 `legacy_id`，管理入口使用确定性摘要映射的 `job-...` ID。兼容层不改写原文件，只在独立 `plugin-legacy` 目录记录终态与取消状态。
 
 有 PID 的活动旧记录需要核对完整工作参数及真实状态目录；进程退出或身份不符时，查询返回失败诊断。取消先捕获稳定进程句柄并核验身份，发布取消状态后确认对应进程退出，平台拒绝时返回错误。无 PID 的旧记录可查询和取消，但不自动执行。任何旧记录都拒绝 `resume`。
 
-保留的旧工作入口等待父进程发布 PID，按旧记录绝对时间加载当前可信 Lua 包，复核启用和调度、通知授权；已开始或已终结的任务不再投递。原文件格式、精确旧音频许可及仍在运行的旧二进制边界见[Lua 闹钟](alarm.md)。
+保留的旧工作入口等待父进程发布 PID，按旧记录绝对时间加载当前普通安装包，复核启用和调度、通知、音频读取授权；已开始或已终结的任务不再投递。旧音频路径不派生许可。原文件格式及仍在运行的旧二进制边界见[Lua 闹钟](alarm.md)。
 
 ## 与通知组合
 
@@ -187,4 +187,4 @@ sai plugins enable my-plugin --allow-schedule --allow-notify
 sai plugins run my-plugin remind "检查任务结果"
 ```
 
-声音、本地音频读取和通知取消边界见[主动通知接口](notification-api.md)。[Lua 闹钟](alarm.md)是本接口的内置业务消费者，时间解析和声音选择均由插件负责。
+声音、本地音频读取和通知取消边界见[主动通知接口](notification-api.md)。[Lua 闹钟](alarm.md)是可独立安装的业务示例，时间解析和声音选择均由插件负责。

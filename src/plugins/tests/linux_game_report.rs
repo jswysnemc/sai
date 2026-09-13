@@ -7,11 +7,7 @@ use std::sync::Arc;
 /// @param host 无网络响应的测试宿主
 /// @returns 具有纯文本对照入口的真实 Lua 运行时
 fn reference_runtime(host: Arc<FixtureHost>) -> PluginRuntime {
-    let original = crate::plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|package| package.manifest.id == "linux-game-investigation")
-        .unwrap();
+    let original = super::example_support::package("linux-game-investigation");
     let mut sources = original.sources().clone();
     sources.get_mut("init.lua").unwrap().push_str(r#"
 local report = require('report')

@@ -45,17 +45,6 @@ pub(super) fn execute_plugin(
     if !matches!(request, StorageRequest::Get { .. }) && !allow_writes {
         bail!("read-only plugin callback cannot mutate plugin storage");
     }
-    // 2. 【插件状态】【记录预算】比较值与目标值均需有界，比较失败不能绕过输入限制
-    match &request {
-        StorageRequest::Set { value, .. } => validate_value(value)?,
-        StorageRequest::CompareExchange {
-            expected, value, ..
-        } => {
-            validate_value(expected)?;
-            validate_value(value)?;
-        }
-        StorageRequest::Get { .. } => {}
-    }
     transaction(paths, "plugin-storage", id, "", request)
 }
 
@@ -69,6 +58,17 @@ fn transaction(
     session: &str,
     request: StorageRequest,
 ) -> Result<Value> {
+    // 【插件状态】【记录预算】会话与持久记录均校验比较值，失败比较不能绕过上限
+    match &request {
+        StorageRequest::Set { value, .. } => validate_value(value)?,
+        StorageRequest::CompareExchange {
+            expected, value, ..
+        } => {
+            validate_value(expected)?;
+            validate_value(value)?;
+        }
+        StorageRequest::Get { .. } => {}
+    }
     let key = match &request {
         StorageRequest::Get { key }
         | StorageRequest::Set { key, .. }

@@ -1,0 +1,10 @@
+{
+  "api_version": 1,
+  "id": "url-preview",
+  "version": "0.1.0",
+  "name": "URL preview",
+  "description": "Read a user-selected HTTP(S) URL and return a bounded Markdown preview.",
+  "entry": "init.lua",
+  "capabilities": { "http_read_any": true },
+  "limits": { "timeout_ms": 15000, "output_bytes": 65536 }
+}

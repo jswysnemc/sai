@@ -9,7 +9,6 @@ import {
   GitBranch,
   KeyRound,
   Palette,
-  Search,
   Server,
   SlidersHorizontal,
   Sparkles,
@@ -81,14 +80,13 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     appConfig: "required",
     labelEn: "Runtime",
     labelZh: "运行时",
-    descriptionEn: "Sessions, permissions, notifications, terminal, and display",
-    descriptionZh: "会话、权限、通知、终端与显示",
+    descriptionEn: "Sessions, permissions, terminal, and display",
+    descriptionZh: "会话、权限、终端与显示",
     icon: SlidersHorizontal,
     searchKeys: ["runtime", "session", "model", "thinking", "permission", "notification", "terminal", "context", "display", "tools", "debug", "api", "mesh", "cross_session", "retry", "backoff", "会话", "模型", "思考", "权限", "通知", "终端", "上下文", "压缩比例", "预留", "调试", "网格", "跨会话", "重试", "退避", "失败"],
     subviews: [
       { id: "engine", labelEn: "Engine", labelZh: "对话内核" },
       { id: "permissions", labelEn: "Permissions", labelZh: "权限" },
-      { id: "notifications", labelEn: "Notifications", labelZh: "通知" },
       { id: "terminal", labelEn: "Terminal", labelZh: "终端" },
       { id: "context", labelEn: "Context", labelZh: "上下文" },
       { id: "tools", labelEn: "Tools and display", labelZh: "工具与显示" }
@@ -128,17 +126,6 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     descriptionZh: "配置 CLI 助手可使用的可选工具",
     icon: Wrench,
     searchKeys: ["cli", "assistant", "tool", "optional", "plugin", "助手", "工具", "可选工具", "插件"]
-  },
-  {
-    id: "web-search",
-    group: "integrations",
-    appConfig: "required",
-    labelEn: "Web search",
-    labelZh: "Web 搜索",
-    descriptionEn: "Provider credentials, endpoints, and search behavior",
-    descriptionZh: "搜索供应商、凭据、服务地址与检索行为",
-    icon: Search,
-    searchKeys: ["web", "search", "provider", "tinyfish", "tavily", "firecrawl", "anysearch", "searxng", "网页", "搜索", "供应商"]
   },
   {
     id: "skills",

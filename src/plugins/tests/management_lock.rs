@@ -13,6 +13,7 @@ fn management_locks_are_scoped_and_reusable_after_errors() {
     assert!(mutation_lock(&other).is_ok());
     drop(lock);
     let config = crate::config::AppConfig::default();
+    super::example_support::install("web-search", &paths);
     for enabled in [false, true] {
         assert!(
             crate::plugins::configure(&config, &paths, "web-search", serde_json::json!([]))

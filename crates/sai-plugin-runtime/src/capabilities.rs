@@ -16,6 +16,9 @@ pub use system::{ProcessArgument, ProcessParameter, ProcessTemplate, SystemCapab
 pub struct Capabilities {
     #[serde(default)]
     pub http: BTreeSet<String>,
+    /// 【插件】【任意只读】仅扩大 GET 和 HEAD 的来源范围，必须单独声明并授权
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub http_read_any: bool,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub http_read_only_post: BTreeSet<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -84,6 +87,7 @@ impl Capabilities {
     pub fn intersection(&self, granted: &Self) -> Self {
         Self {
             http: self.http.intersection(&granted.http).cloned().collect(),
+            http_read_any: self.http_read_any && granted.http_read_any,
             http_read_only_post: self
                 .http_read_only_post
                 .intersection(&granted.http_read_only_post)
@@ -104,6 +108,7 @@ impl Capabilities {
     /// @returns 当前集合是否完全包含于声明
     pub fn is_subset(&self, declared: &Self) -> bool {
         self.http.is_subset(&declared.http)
+            && (!self.http_read_any || declared.http_read_any)
             && self
                 .http_read_only_post
                 .is_subset(&declared.http_read_only_post)
@@ -127,13 +132,18 @@ impl Capabilities {
         Ok(url)
     }
 
-    /// 【插件】【请求授权】只读 POST 必须精确匹配端点，其余写入方法必须取得调用授权。
+    /// 【插件】【请求授权】任意来源只读只允许 GET/HEAD，POST 查询和写入仍需要精确来源。
     /// @param method 大写 HTTP 方法；url 为目标地址；allow_writes 来自宿主调用上下文
     /// @returns 已授权的解析地址，初始化请求和每次重定向共用此检查
     pub fn authorize_request(&self, method: &str, url: &str, allow_writes: bool) -> Result<Url> {
-        let url = self.authorize_url(url)?;
+        let url = parse_http_url(url)?;
         if !matches!(method, "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE") {
             bail!("unsupported plugin HTTP method");
+        }
+        if !self.http.contains(&url.origin().ascii_serialization())
+            && !(self.http_read_any && matches!(method, "GET" | "HEAD"))
+        {
+            bail!("plugin HTTP origin is not allowed");
         }
         if allow_writes || matches!(method, "GET" | "HEAD") {
             return Ok(url);

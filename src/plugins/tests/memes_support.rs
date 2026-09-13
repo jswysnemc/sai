@@ -184,41 +184,28 @@ pub(super) fn configured(
     suffix: &str,
     grants: impl FnOnce(&mut Capabilities),
 ) -> PluginRuntime {
-    let package = crate::plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|p| p.manifest.id == "memes")
-        .unwrap();
-    let mut settings = json!({"builtin_dirs":[root.join("builtin")],"user_dir":root.join("user"),"state_dir":root.join("recent"),"input_paths":[root.join("input")]});
+    let descriptor = descriptor(root, &AppConfig::default());
+    let package = descriptor.runtime_package();
+    let mut settings = descriptor.settings().clone();
     settings
         .as_object_mut()
         .unwrap()
         .extend(extra.as_object().unwrap().clone());
-    let overrides = crate::plugins::compatibility::resolve(
-        "memes",
-        &AppConfig::default(),
-        &SaiPaths::for_tests(root),
-        &settings,
-        &package.manifest.capabilities,
-    )
-    .unwrap()
-    .unwrap();
-    let mut manifest = package.manifest.clone();
-    manifest.capabilities = overrides.capabilities.clone();
-    let mut allowed = overrides.capabilities;
+    let manifest = package.manifest.clone();
+    let mut allowed = descriptor.grants();
     grants(&mut allowed);
     let mut sources = package.sources().clone();
     sources.get_mut("init.lua").unwrap().push_str(suffix);
     PluginRuntime::load(
         PluginPackage::new(manifest, sources).unwrap(),
-        overrides.settings,
+        settings,
         allowed,
         host,
     )
     .unwrap()
 }
 
-/// 【表情测试】【应用描述符】通过正式发现流程构建内置包，给 Agent 测试绑定隔离目录
+/// 【表情测试】【应用描述符】普通安装测试清单，显式绑定并授权隔离目录
 /// @param root 临时目录；config 为真实应用配置
 /// @returns 可以交给正式注册入口的描述符
 pub(super) fn descriptor(
@@ -226,14 +213,34 @@ pub(super) fn descriptor(
     config: &AppConfig,
 ) -> crate::plugins::discovery::PluginDescriptor {
     let paths = SaiPaths::for_tests(root);
-    let mut descriptor = crate::plugins::discover(config, &paths)
-        .plugins
-        .into_iter()
-        .find(|p| p.package.manifest.id == "memes")
-        .unwrap();
-    descriptor.setting.settings = json!({"builtin_dirs":[root.join("builtin")],"user_dir":root.join("user"),"state_dir":root.join("recent"),"input_paths":[root.join("input")]});
-    descriptor.refresh_compatibility(config, &paths).unwrap();
-    descriptor
+    if !paths.config_dir.join("plugins/memes").exists() {
+        super::example_support::install_custom("memes", &paths, |manifest| {
+            let caps = &mut manifest.capabilities;
+            caps.system.read_paths = ["builtin", "user", "recent", "input"]
+                .into_iter()
+                .map(|path| root.join(path).display().to_string())
+                .collect();
+            caps.binary.write_paths = ["user", "recent"]
+                .into_iter()
+                .map(|path| root.join(path).display().to_string())
+                .collect();
+            caps.system.remove_paths = [root.join("user").display().to_string()]
+                .into_iter()
+                .collect();
+            caps.system.trash_paths = caps.system.remove_paths.clone();
+        });
+    }
+    let settings = json!({"builtin_dirs":[root.join("builtin")],"user_dir":root.join("user"),"state_dir":root.join("recent")});
+    crate::plugins::configure(config, &paths, "memes", settings).unwrap();
+    crate::plugins::set_enabled(
+        config,
+        &paths,
+        "memes",
+        true,
+        crate::plugins::GrantUpdate::Declared,
+    )
+    .unwrap();
+    crate::plugins::discovery::find(config, &paths, "memes").unwrap()
 }
 
 /// 【表情测试】【可信上下文】固定本次会话和操作归属

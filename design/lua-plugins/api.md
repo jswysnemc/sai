@@ -1,5 +1,7 @@
 # Lua API v1
 
+按场景查找能力、权限和入口见[第三方能力清单](capability-matrix.md)；从零创建独立扩展见[开发指南](getting-started.md)，源码归档与安装维护见[打包分发](distribution.md)。
+
 ## 包格式
 
 ```text
@@ -129,6 +131,10 @@ sai.on("tool_call", check_tool)
 
 外部取消会回收正在运行的 Future，不另外启动后台任务补发结束事件。插件不能依赖结束监听器释放宿主资源；取消、I/O 回收和实例释放由 Rust 负责。
 
+插件可以只注册监听器和用户命令，无需向模型提供工具。工具白名单限制可调用工具，不会关闭已启用插件的监听器；需要停止观察时禁用插件。子任务创建独立 VM，工具过滤仍保留已启用插件的监听器和命令定义，直接命令界面继续限于 CLI/TUI。
+
+同一次宿主操作及其嵌套插件调用使用相同的 `ctx.operation_id`，用于关联 Agent、模型请求与工具事件；不要依赖标识的具体格式。旧的 `ctx.progress` 等带期限的回调在下次调用中失效，保存字段副本不会保留宿主权限；后续独立操作会取得新的标识。[生命周期集成契约](../../src/plugins/tests/lifecycle_workflow.rs)覆盖普通外部包经过真实主请求、子任务执行器及流式取消后的继续调用。
+
 ### 通知纯回调
 
 通知包声明 `"capabilities": {"notifications": true}`。外部包还需要用户通过 `sai plugins enable <id> --allow-notifications` 授权；`--no-notifications` 只撤销这一项，其他分项更新也不会改变通知授权。
@@ -221,6 +227,8 @@ Lua 全局变量属于当前实例，不是持久会话存储。进程重启、�
 
 `sai.binary.request/download/decode_base64/from_bytes/read_file` 使用独立预算保存原始字节，通过句柄读取字节与 JSON 字段、计算 SHA-256、解码和授权写入。本地 `read_file` 复用 `system.read_paths`，读取完整普通文件；读取前预留预算，取消后实际工作线程仍持有额度。`buffer:write_if(path, expected_sha256)` 同时要求读取和写入授权，按目标不存在或完整摘要条件原子发布；正式宿主与普通输出共用文件锁。`sai.terminal.size/display_image` 提供受授权的终端图片能力。`sai.vision.info()` 和 `buffer:analyze_image(...)` 使用独立 `vision` 授权与宿主视觉配置，不随 Agent 文本模型切换。参数、生命周期、目录与视觉边界见[二进制接口](binary-api.md)。
 
+`buffer:document(options?)` 对完整缓冲执行原文、HTML 纯文本或 Markdown 转换，返回有界摘录、完整 Unicode 字符数和截断标志。输入最多 8 MiB，转换与 SQLite 共用原生工作预算；字符计数、JSON 输出限制与取消边界见[正文接口](document-api.md)。
+
 ### SQLite 快照
 
 `sai.sqlite.query(snapshot, query)` 查询当前回调的二进制镜像，`sai.sqlite.apply(snapshot_or_nil, changes, options)` 在独立事务副本中创建或修改普通表、索引和记录。接口接收结构化参数，不接收路径或任意 SQL。纯内存计算可在只读回调使用，文件读取和发布仍分别检查已有目录授权。
@@ -291,10 +299,14 @@ local response = sai.http.request({
     headers = { accept = "application/json" },
     max_bytes = 65536,
     timeout_ms = 12000,
+    max_redirects = 3,
+    read_error_body = false,
 })
 ```
 
 响应包含 `status`、`headers`、`text`。支持 GET、HEAD、POST、PUT、PATCH、DELETE。GET/HEAD 允许在只读回调中使用；其他方法默认要求当前工具或命令取得真实写入许可，并通过 Sai 授权。HTTP 错误状态作为响应返回，由业务代码选择处理方式。
+
+用户给定的任意 URL 可通过独立的 `http_read_any` 声明和授权读取；它包含本地 HTTP(S) 服务，只开放 GET/HEAD，不被匿名下载继承。精确来源、请求字段、错误正文及撤权规则见[HTTP 公共契约](http-api.md)。
 
 搜索等使用 POST 的只读接口可另外声明精确端点：
 
@@ -309,7 +321,9 @@ local response = sai.http.request({
 
 来源与 `http_read_only_post` 都必须获得授权。端点使用规范 HTTP(S) 地址，包含精确路径，不允许查询参数、片段或内嵌凭据；最多 32 个端点。端点授权允许查询参数，不覆盖子路径，也不允许 PUT、PATCH 或 DELETE。该声明表示插件对接口查询用途的契约，插件仍须保证 POST 内容为只读操作。
 
-初始 URL 和每次重定向都使用同一授权检查。保留 POST 的重定向仍须匹配查询端点；303 等按 HTTP 语义改为 GET 后，宿主移除原正文。最多跟随 5 次重定向，整个过程共用同一截止时间。跨来源跳转不转发正文，只保留 Accept、Accept-Language、User-Agent，避免泄露标准或自定义认证头。Host、Connection、Content-Length、Transfer-Encoding 和代理授权头由宿主控制。最多 32 个请求头，总计 16 KiB；URL 最多 8192 字节。
+初始 URL 和每次重定向都使用同一授权检查。保留 POST 的重定向仍须匹配查询端点；303 等按 HTTP 语义改为 GET 后，宿主移除原正文。`max_redirects` 默认 5，接受 0–10；0 在遇到可跟随跳转时返回错误。整个过程共用同一截止时间。跨来源跳转不转发正文，只保留 Accept、Accept-Language、User-Agent，避免泄露标准或自定义认证头。Host、Connection、Content-Length、Transfer-Encoding 和代理授权头由宿主控制。最多 32 个请求头，总计 16 KiB；URL 最多 8192 字节。
+
+`read_error_body` 默认 true；false 时对最终 4xx/5xx 返回状态、响应头和空正文，不等待错误正文。成功响应仍执行正文大小检查，网络、授权和超时错误仍会失败。
 
 请求 `timeout_ms` 默认 30,000 毫秒，运行时将其限制为 1 至清单的 `limits.http_timeout_ms`，该清单值默认同样为 30,000，硬上限为 120,000。请求超时会取消受管 I/O，并作为 Lua 错误交给 `pcall`，便于保留静态规则或已有结果；整个回调仍受清单总时长约束。正文和响应都有字节上限，`max_bytes` 不得突破包的 `output_bytes`。宿主按 Content-Type 的 charset 解码文本，并再次检查解码后的大小。
 
@@ -360,7 +374,7 @@ HTML 和 Unicode 大小写转换前后的 UTF-8 文本均受包内 `output_bytes
 
 摘要每处理最多 64 KiB 检查一次取消和截止时间；解码及文本转换在有界计算前后检查调用状态。最终结果仍受回调输出上限约束。
 
-`plugins/hash-codec` 展示零外部权限组合：保留 `calculate_hash` 与 `decode_encoded_text`，算法列表、别名、HTML 实体替换、ROT13 和结果格式均在 Lua 中实现。默认算法为 SHA-256；`all`、`mainstream` 及空白选择沿用旧列表，其中 `b2sum` 与 BLAKE2b 重复，BLAKE3 需显式指定。`text_encoding` 保留原有兼容行为，Base64 与 Hex 解码仍按 UTF-8 替换非法序列。
+`examples/lua-plugins/hash-codec` 展示零外部权限组合：包内注册 `calculate_hash` 与 `decode_encoded_text`，安装后名称带 `lua__hash-codec__` 前缀。算法列表、别名、HTML 实体替换、ROT13 和结果格式均在 Lua 中实现。默认算法为 SHA-256；`all`、`mainstream` 及空白选择沿用旧列表，其中 `b2sum` 与 BLAKE2b 重复，BLAKE3 需显式指定。`text_encoding` 保留原有兼容行为，Base64 与 Hex 解码仍按 UTF-8 替换非法序列。
 
 ## 资源范围
 

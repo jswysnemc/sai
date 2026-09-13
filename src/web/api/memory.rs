@@ -1,7 +1,9 @@
 use super::super::app_state::WebAppState;
 use super::super::error::{WebError, WebResult};
 use crate::config::AppConfig;
-use crate::memory::file_store::{render_index_injection_for, Frontmatter, MemoryEntry, MemoryScope, MemoryType};
+use crate::memory::file_store::{
+    render_index_injection_for, Frontmatter, MemoryEntry, MemoryScope, MemoryType,
+};
 use crate::memory::MemoryStore;
 use axum::extract::{Path, Query, State};
 use axum::routing::{delete, get, post};
@@ -156,7 +158,9 @@ async fn list(
         })
         .collect();
     entries.truncate(query.limit.unwrap_or(200));
-    Ok(Json(json!({ "ok": true, "count": entries.len(), "entries": entries })))
+    Ok(Json(
+        json!({ "ok": true, "count": entries.len(), "entries": entries }),
+    ))
 }
 
 /// 读取一条记忆的完整内容。
@@ -216,11 +220,12 @@ async fn remember(
     let workspace = workspace_for(&state.workspaces, request.workspace.as_deref());
     let library = store.notes(workspace.as_deref());
     // 必须在 save 之前判断是否已存在：写入同名条目即就地更新
-    let updated = library.load(&request.name).map_err(WebError::from)?.is_some();
+    let updated = library
+        .load(&request.name)
+        .map_err(WebError::from)?
+        .is_some();
     let links = entry.links();
-    library
-        .save(scope, &entry, &hook)
-        .map_err(WebError::from)?;
+    library.save(scope, &entry, &hook).map_err(WebError::from)?;
     let mut result = json!({
         "ok": true,
         "name": request.name,
@@ -431,9 +436,7 @@ mod tests {
             body: "正文".to_string(),
         };
         assert!(!library.load("dup").unwrap().is_some());
-        library
-            .save(MemoryScope::Project, &entry, "摘要")
-            .unwrap();
+        library.save(MemoryScope::Project, &entry, "摘要").unwrap();
         assert!(library.load("dup").unwrap().is_some());
     }
 }

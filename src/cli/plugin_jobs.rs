@@ -1,5 +1,8 @@
-use crate::{paths::SaiPaths, plugins::scheduler};
-use anyhow::Result;
+use crate::{
+    paths::SaiPaths,
+    plugins::{legacy_alarm_jobs, scheduler},
+};
+use anyhow::{bail, Result};
 use clap::{Args, Subcommand};
 use serde_json::json;
 use std::path::PathBuf;
@@ -38,11 +41,32 @@ pub struct WorkerArgs {
 /// @returns JSON 输出结果
 pub(crate) fn run(paths: &SaiPaths, args: &JobsArgs) -> Result<()> {
     let value = match &args.command {
-        JobCommand::List => json!({"jobs":scheduler::list(paths, &args.plugin)?}),
+        JobCommand::List => {
+            let mut tasks = scheduler::list(paths, &args.plugin)?;
+            if args.plugin == "alarm" {
+                tasks.extend(legacy_alarm_jobs::list(paths)?);
+                tasks.sort_by(|left, right| {
+                    (left.created_at, &left.id).cmp(&(right.created_at, &right.id))
+                });
+            }
+            json!({"jobs":tasks})
+        }
         JobCommand::Cancel { id } => {
-            json!({"id":id,"cancelled":scheduler::cancel(paths, &args.plugin, id)?})
+            let cancelled =
+                if args.plugin == "alarm" && scheduler::get(paths, &args.plugin, id)?.is_none() {
+                    legacy_alarm_jobs::cancel(paths, id)?
+                } else {
+                    scheduler::cancel(paths, &args.plugin, id)?
+                };
+            json!({"id":id,"cancelled":cancelled})
         }
         JobCommand::Resume { id } => {
+            if args.plugin == "alarm"
+                && scheduler::get(paths, &args.plugin, id)?.is_none()
+                && legacy_alarm_jobs::get(paths, id)?.is_some()
+            {
+                bail!("legacy alarms cannot be resumed or replayed");
+            }
             json!({"task":scheduler::resume_task(paths, &args.plugin, id)?})
         }
     };

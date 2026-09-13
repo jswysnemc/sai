@@ -1,0 +1,15 @@
+{
+  "name": "web_fetch",
+  "description": "Fetch a URL and return markdown, text, or html. Prefer this for opening a known URL. Does not search the web.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "url": {"type": "string", "description": "Fully-qualified http or https URL."},
+      "format": {"type": "string", "enum": ["markdown", "text", "html"], "description": "Output format. Defaults to markdown."},
+      "timeout": {"type": "integer", "description": "Timeout seconds, max 120."},
+      "max_chars": {"type": "integer", "description": "Maximum characters to return. Defaults to 24000, max 80000."}
+    },
+    "required": ["url"],
+    "additionalProperties": false
+  }
+}

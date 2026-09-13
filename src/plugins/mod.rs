@@ -1,7 +1,5 @@
 mod binary;
-mod bundled;
 pub(crate) mod commands;
-mod compatibility;
 mod config;
 mod discovery;
 mod events;
@@ -10,10 +8,12 @@ mod grants;
 mod host;
 mod http;
 pub(crate) mod knowledge_view;
+pub(crate) mod legacy_alarm_jobs;
 mod management;
 mod management_lock;
 mod notification;
 pub(crate) mod operation;
+mod package_archive;
 mod presentation;
 mod private;
 mod registry;
@@ -23,14 +23,15 @@ mod session;
 mod system;
 pub(crate) mod todo_view;
 
-pub(crate) use compatibility::alarm_jobs::run_worker as run_legacy_alarm_worker;
 pub(crate) use discovery::{discover, PluginDiagnostic, PluginSource};
 pub(crate) use events::PluginEvents;
 pub(crate) use grants::{GrantChanges, GrantUpdate};
+pub(crate) use legacy_alarm_jobs::run_worker as run_legacy_alarm_worker;
 pub(crate) use management::{configure, install, remove, scaffold, set_enabled, validate_package};
+pub(crate) use package_archive::pack;
 pub(crate) use presentation::notification_plan;
 pub(crate) use private::clear_session_storage;
-pub(crate) use registry::{register_bundled_catalog_tools, register_plugins};
+pub(crate) use registry::register_plugins;
 pub(crate) use services::{PluginModelSource, PluginServices, PluginVisionSource};
 pub(crate) use session::PluginSession;
 

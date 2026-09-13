@@ -131,24 +131,26 @@ fn installed_packages_require_activation_and_survive_updates() {
     assert!(setting.grants.unwrap().http.is_empty());
 }
 
-/// 【插件测试】【发现与优先级】显式插件设置覆盖旧开关，坏包不会隐藏其他有效插件。
+/// 【插件测试】【发现隔离】显式开关控制普通安装包，坏包不会隐藏其他有效插件
 #[test]
 fn discovery_isolates_broken_packages_and_honors_explicit_overrides() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
-    let mut config = AppConfig::default();
-    config.plugins.man.enabled = false;
+    let config = AppConfig::default();
+    let source = root.path().join("source");
+    write_package(&source, &descriptor("managed", ""));
+    plugins::install(&source, &paths, false).unwrap();
     let found = plugins::discover(&config, &paths);
     assert!(
         !found
             .plugins
             .iter()
-            .find(|plugin| plugin.package.manifest.id == "online-man")
+            .find(|plugin| plugin.package.manifest.id == "managed")
             .unwrap()
             .setting
             .enabled
     );
-    plugins::set_enabled(&config, &paths, "online-man", true, GrantUpdate::Keep).unwrap();
+    plugins::set_enabled(&config, &paths, "managed", true, GrantUpdate::Keep).unwrap();
     let installed = paths.config_dir.join("plugins/good");
     write_package(&installed, &descriptor("good", ""));
     std::fs::create_dir_all(paths.config_dir.join("plugins/broken")).unwrap();
@@ -158,7 +160,7 @@ fn discovery_isolates_broken_packages_and_honors_explicit_overrides() {
         found
             .plugins
             .iter()
-            .find(|plugin| plugin.package.manifest.id == "online-man")
+            .find(|plugin| plugin.package.manifest.id == "managed")
             .unwrap()
             .setting
             .enabled
@@ -310,20 +312,22 @@ fn read_only_post_grants_are_explicit_and_survive_package_updates() {
         .is_empty());
 }
 
-/// 【插件测试】【管理保护】本地安装不能覆盖内置插件，非法配置也不能覆盖已有文件。
+/// 【插件测试】【管理保护】已安装目录需要显式替换，非法配置不能覆盖已有文件
+/// @returns 无；失败操作保持原有安装和配置
 #[test]
-fn bundled_ids_and_existing_config_are_preserved_on_errors() {
+fn installed_sources_and_existing_config_are_preserved_on_errors() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
     let config = AppConfig::default();
     let source = root.path().join("source");
-    write_package(&source, &descriptor("online-man", ""));
-    assert!(plugins::install(&source, &paths, true).is_err());
-    assert!(plugins::remove(&config, &paths, "online-man").is_err());
-    plugins::set_enabled(&config, &paths, "online-man", false, GrantUpdate::Keep).unwrap();
+    write_package(&source, &descriptor("protected", ""));
+    plugins::install(&source, &paths, false).unwrap();
+    assert!(plugins::install(&source, &paths, false).is_err());
+    assert!(plugins::remove(&config, &paths, "missing").is_err());
+    plugins::set_enabled(&config, &paths, "protected", false, GrantUpdate::Keep).unwrap();
     let before = std::fs::read(paths.config_dir.join("plugins.jsonc")).unwrap();
     let mut bad = load_config(&paths).unwrap();
-    bad.plugins.get_mut("online-man").unwrap().settings = json!([]);
+    bad.plugins.get_mut("protected").unwrap().settings = json!([]);
     assert!(save_config(&paths, &bad).is_err());
     assert_eq!(
         std::fs::read(paths.config_dir.join("plugins.jsonc")).unwrap(),
@@ -331,27 +335,35 @@ fn bundled_ids_and_existing_config_are_preserved_on_errors() {
     );
 }
 
-/// 【插件测试】【并发管理】其他进程持有管理锁时不读改写配置或移动目录。
+/// 【插件测试】【并发管理】其他进程持有管理锁时不能改写配置或移动目录
+/// @returns 无；释放锁后可以完成相同操作
 #[test]
 fn concurrent_management_is_rejected_before_configuration_changes() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
+    let source = root.path().join("source");
+    write_package(&source, &descriptor("locked-example", ""));
+    plugins::install(&source, &paths, false).unwrap();
+    let previous = std::fs::read(paths.config_dir.join("plugins.jsonc")).unwrap();
     let lock = crate::plugins::config::mutation_lock(&paths).unwrap();
     assert!(plugins::set_enabled(
         &AppConfig::default(),
         &paths,
-        "online-man",
-        false,
+        "locked-example",
+        true,
         GrantUpdate::Keep
     )
     .is_err());
-    assert!(!paths.config_dir.join("plugins.jsonc").exists());
+    assert_eq!(
+        std::fs::read(paths.config_dir.join("plugins.jsonc")).unwrap(),
+        previous
+    );
     drop(lock);
     plugins::set_enabled(
         &AppConfig::default(),
         &paths,
-        "online-man",
-        false,
+        "locked-example",
+        true,
         GrantUpdate::Keep,
     )
     .unwrap();

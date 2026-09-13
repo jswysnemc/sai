@@ -1,6 +1,6 @@
-use super::{discover, private::PrivatePluginHost, PluginSource};
+use super::{discovery::find_optional, private::PrivatePluginHost};
 use crate::{config::AppConfig, paths::SaiPaths};
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use sai_plugin_runtime::{InvocationContext, PluginRuntime};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -18,26 +18,22 @@ pub(crate) struct TodoSnapshot {
 pub(crate) struct TodoView(Option<PluginRuntime>);
 
 impl TodoView {
-    /// 【待办界面】【加载当前配置】只执行已启用内置包，文件发现和加载离开异步线程
+    /// 【待办界面】【加载当前配置】只执行已安装并授权的待办包，文件发现离开异步线程
     /// @param config 当前应用配置；paths 为应用路径
     /// @returns 绑定当前源码和授权的查询实例
     pub(crate) async fn load(config: &AppConfig, paths: &SaiPaths) -> Result<Self> {
         let (config, paths) = (config.clone(), paths.clone());
         let runtime = tokio::task::spawn_blocking(move || -> Result<Option<PluginRuntime>> {
-            let found = discover(&config, &paths);
-            if let Some(error) = found
-                .diagnostics
-                .iter()
-                .find(|error| matches!(error.source.as_str(), "todo" | "bundled" | "plugins.jsonc"))
-            {
-                bail!("todo plugin unavailable: {}", error.error);
-            }
-            let Some(descriptor) = found.plugins.into_iter().find(|item| {
-                item.package.manifest.id == "todo" && matches!(item.source, PluginSource::Bundled)
-            }) else {
-                bail!("bundled todo plugin is missing");
+            let Some(descriptor) = find_optional(&config, &paths, "todo")? else {
+                return Ok(None);
             };
-            if !descriptor.setting.enabled {
+            if !descriptor.setting.enabled
+                || !descriptor
+                    .capabilities()
+                    .intersection(&descriptor.grants())
+                    .system
+                    .session_storage
+            {
                 return Ok(None);
             }
             let host = Arc::new(PrivatePluginHost::for_descriptor(&paths, &descriptor)?);

@@ -1,16 +1,23 @@
 use crate::{config::AppConfig, paths::SaiPaths};
 use serde_json::json;
 
-/// 【闹钟设置测试】【声明与授权】音频设置只调整读取声明，既有显式授权不会自动扩大。
+/// 【闹钟设置测试】【声明与授权】音频范围由清单声明，用户授权可以独立收窄。
 /// @returns 无，禁用包不再注册旧工具名称
 #[test]
 fn alarm_settings_respect_explicit_grants_and_disable() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
+    super::example_support::install_custom("alarm", &paths, |manifest| {
+        manifest
+            .capabilities
+            .system
+            .read_paths
+            .insert("~/Music".into());
+    });
     std::fs::create_dir_all(&paths.config_dir).unwrap();
     let file = paths.config_dir.join("plugins.jsonc");
     let content = serde_json::to_vec(&json!({"plugins":{"alarm":{
-        "enabled":true,"settings":{"audio_paths":[".","~/Music"]},
+        "enabled":true,"settings":{},
         "grants":{"system":{"schedule":true,"notify":true,"read_paths":["."]}}
     }}}))
     .unwrap();
@@ -29,7 +36,11 @@ fn alarm_settings_respect_explicit_grants_and_disable() {
     assert_eq!(std::fs::read(&file).unwrap(), content);
     std::fs::write(&file, r#"{"plugins":{"alarm":{"enabled":false}}}"#).unwrap();
     let registry = crate::tools::builtin_registry_without_mcp(&AppConfig::default(), &paths);
-    for name in ["set_alarm", "list_alarms", "cancel_alarm"] {
+    for name in [
+        "lua__alarm__set_alarm",
+        "lua__alarm__list_alarms",
+        "lua__alarm__cancel_alarm",
+    ] {
         assert!(!registry.contains(name));
     }
 }
@@ -40,6 +51,7 @@ fn alarm_settings_respect_explicit_grants_and_disable() {
 fn alarm_settings_reject_invalid_audio_scope() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
+    super::example_support::install("alarm", &paths);
     std::fs::create_dir_all(&paths.config_dir).unwrap();
     for settings in [
         json!({"audio_paths":true}),
@@ -52,32 +64,37 @@ fn alarm_settings_reject_invalid_audio_scope() {
                 .unwrap(),
         )
         .unwrap();
-        let found = crate::plugins::discover(&AppConfig::default(), &paths);
-        assert!(!found
-            .plugins
-            .iter()
-            .any(|plugin| plugin.package.manifest.id == "alarm"));
-        assert!(found
-            .diagnostics
+        let registry = crate::tools::builtin_registry_without_mcp(&AppConfig::default(), &paths);
+        assert!(!registry.contains("lua__alarm__set_alarm"));
+        assert!(registry
+            .plugin_diagnostics()
             .iter()
             .any(|diagnostic| diagnostic.source == "alarm"));
     }
 }
 
-/// 【闹钟迁移测试】【注册归属】三个旧工具名称必须来自真实 Lua 包。
+/// 【闹钟迁移测试】【注册归属】三个工具名称必须包含普通插件命名空间。
 /// @returns 无，普通入口保留写入工具，只读入口只提供查询
 #[test]
 fn alarm_plugin_owns_existing_tool_names() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
     let config = AppConfig::default();
+    super::example_support::install_enabled("alarm", &config, &paths);
     let normal = crate::tools::builtin_registry_without_mcp(&config, &paths);
     assert!(normal.plugin_diagnostics().is_empty());
-    for name in ["set_alarm", "list_alarms", "cancel_alarm"] {
+    for name in [
+        "lua__alarm__set_alarm",
+        "lua__alarm__list_alarms",
+        "lua__alarm__cancel_alarm",
+    ] {
         assert_eq!(normal.plugin_owner(name), Some("alarm"), "{name}");
     }
     let readonly = crate::tools::readonly_registry(&config, &paths);
-    assert_eq!(readonly.plugin_owner("list_alarms"), Some("alarm"));
-    assert!(!readonly.contains("set_alarm"));
-    assert!(!readonly.contains("cancel_alarm"));
+    assert_eq!(
+        readonly.plugin_owner("lua__alarm__list_alarms"),
+        Some("alarm")
+    );
+    assert!(!readonly.contains("lua__alarm__set_alarm"));
+    assert!(!readonly.contains("lua__alarm__cancel_alarm"));
 }

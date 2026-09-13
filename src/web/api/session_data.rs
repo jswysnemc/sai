@@ -639,13 +639,15 @@ fn clear_state_directory(
     state_dir: &FilePath,
     workspace_path: Option<&FilePath>,
 ) -> Result<()> {
-    // 1. 删除整个状态目录，避免辅助文件残留
+    // 1. 【会话数据】【清理插件记录】会话外的公共存储按完整目录清理，保留其他作用域
+    crate::plugins::clear_session_storage(&paths.state_dir, &state_dir.to_string_lossy())?;
+    // 2. 删除整个状态目录，避免辅助文件残留
     if state_dir.exists() {
         std::fs::remove_dir_all(&state_dir)
             .with_context(|| format!("remove session data {}", state_dir.display()))?;
     }
     std::fs::create_dir_all(&state_dir)?;
-    // 2. 重建数据库与基础文件，会话索引和标题保持不变
+    // 3. 重建数据库与基础文件，会话索引和标题保持不变
     match workspace_path {
         Some(path) => StateStore::for_workspace_session(paths, path, session_id)?.init_files(),
         None => StateStore::for_session(paths, session_id)?.init_files(),

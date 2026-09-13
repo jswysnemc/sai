@@ -15,31 +15,12 @@ const GATEWAY_AGENT_TOOLS: &[&str] = &[
     "glob",
     "grep",
     "run_command",
-    "web_search",
-    "web_fetch",
-    "get_weather",
-    "get_exchange_rate",
-    "query_deepseek_status",
     "write_memory",
     "read_memory",
     "list_memory",
     "delete_memory",
     "search_evicted_context",
-    "archwiki_query",
-    "archlinux_official_package_query",
-    "aur_search_packages",
-    "aur_get_package_info",
-    "online_man_search",
-    "online_man_get_page",
     "scientific_calculator",
-    "calculate_hash",
-    "decode_encoded_text",
-    "set_alarm",
-    "list_alarms",
-    "cancel_alarm",
-    "search_knowledge_base",
-    "read_knowledge_base_file",
-    "search_knowledge_base_by_name",
     "cron",
     "send_channel_message",
 ];
@@ -49,7 +30,6 @@ const CODE_AGENT_TOOLS: &[&str] = &[
     "run_command",
     "background_command",
     "subagent",
-    "todo",
     "write_file",
     "str_replace",
     "create_goal",
@@ -61,31 +41,12 @@ const CODE_AGENT_TOOLS: &[&str] = &[
     "glob",
     "grep",
     "ask_question",
-    "web_search",
-    "web_fetch",
     "write_memory",
     "read_memory",
     "list_memory",
     "delete_memory",
     "search_evicted_context",
-    "search_knowledge_base",
-    "search_knowledge_base_by_name",
-    "read_knowledge_base_file",
-    "upload_text_to_knowledge_base",
-    "edit_knowledge_base_file",
-    "check_issue",
-    "linux_input_method_diagnose",
-    "linux_game_compatibility",
-    "archwiki_query",
-    "archlinux_official_package_query",
-    "aur_search_packages",
-    "aur_get_package_info",
-    "online_man_search",
-    "online_man_get_page",
-    "review_aur_package",
     "scientific_calculator",
-    "calculate_hash",
-    "decode_encoded_text",
     "mcp_manager",
     "ssh_list_hosts",
     "ssh_run_command",
@@ -104,37 +65,13 @@ const PLAN_AGENT_TOOLS: &[&str] = &[
     "read_file",
     "glob",
     "grep",
-    "web_search",
-    "web_fetch",
     "ask_question",
-    "archwiki_query",
-    "archlinux_official_package_query",
-    "aur_search_packages",
-    "aur_get_package_info",
-    "online_man_search",
-    "online_man_get_page",
-    "search_knowledge_base",
-    "search_knowledge_base_by_name",
-    "read_knowledge_base_file",
     "read_memory",
     "list_memory",
     "search_evicted_context",
 ];
 
-const EXPLORE_AGENT_TOOLS: &[&str] = &[
-    "check_os_info",
-    "read_file",
-    "glob",
-    "grep",
-    "web_search",
-    "web_fetch",
-];
-
-/// 探索与 Plan Agent 的检索类工具保持初始可见。
-///
-/// 这两个 Agent 的核心动作就是检索，把 web_search / web_fetch 推到 load 后面
-/// 只会让每次调研都先多一轮加载。
-const SEARCH_KEEP_VISIBLE: &[&str] = &["web_search", "web_fetch"];
+const EXPLORE_AGENT_TOOLS: &[&str] = &["check_os_info", "read_file", "glob", "grep"];
 
 /// 网关 Agent 需要保持初始可见的工具。
 ///
@@ -305,7 +242,7 @@ fn builtin_general_agent() -> AgentProfile {
         description: "适合实现、测试、文档和常规工程任务；工具面向长程编程".to_string(),
         system_prompt: GENERAL_AGENT_PROMPT.to_string(),
         enabled_tools: tools_to_owned(CODE_AGENT_TOOLS),
-        deferred_tools: deferred_from_whitelist(CODE_AGENT_TOOLS, SEARCH_KEEP_VISIBLE),
+        deferred_tools: deferred_from_whitelist(CODE_AGENT_TOOLS, &[]),
         thinking_level: "auto".to_string(),
         register_to_main: true,
         load_instruction_files: true,
@@ -327,7 +264,7 @@ fn builtin_explore_agent() -> AgentProfile {
         description: "适合只读检索、代码定位和资料探索；返回证据与路径".to_string(),
         system_prompt: EXPLORE_AGENT_PROMPT.to_string(),
         enabled_tools: tools_to_owned(EXPLORE_AGENT_TOOLS),
-        deferred_tools: deferred_from_whitelist(EXPLORE_AGENT_TOOLS, SEARCH_KEEP_VISIBLE),
+        deferred_tools: deferred_from_whitelist(EXPLORE_AGENT_TOOLS, &[]),
         thinking_level: "auto".to_string(),
         register_to_main: true,
         load_instruction_files: true,
@@ -349,7 +286,7 @@ fn builtin_plan_agent() -> AgentProfile {
         description: "只读调研与方案规划，不改系统状态".to_string(),
         system_prompt: PLAN_AGENT_PROMPT.to_string(),
         enabled_tools: tools_to_owned(PLAN_AGENT_TOOLS),
-        deferred_tools: deferred_from_whitelist(PLAN_AGENT_TOOLS, SEARCH_KEEP_VISIBLE),
+        deferred_tools: deferred_from_whitelist(PLAN_AGENT_TOOLS, &[]),
         thinking_level: "auto".to_string(),
         register_to_main: true,
         load_instruction_files: true,
@@ -469,9 +406,11 @@ mod mesh_visibility_tests {
     fn the_default_agent_still_sees_the_classic_base_tools() {
         let visible = visible_tools_for_default_agent(AgentSurface::Tui);
 
-        for name in ["run_command", "read_file", "write_file", "subagent", "todo"] {
+        for name in ["run_command", "read_file", "write_file", "subagent"] {
             assert!(visible.contains(name), "{name} 不应退回按需加载");
         }
+        assert!(!visible.contains("todo"));
+        assert!(!visible.contains("lua__todo__todo"));
     }
 
     /// 用户显式把网格工具设为按需时，配置必须生效。

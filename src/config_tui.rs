@@ -16,6 +16,5 @@ mod settings;
 mod skills;
 mod theme;
 mod ui;
-mod web_search_fields;
 
 pub use session::run;

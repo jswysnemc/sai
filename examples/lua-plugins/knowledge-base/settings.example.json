@@ -1,0 +1,13 @@
+{
+  "data_dir": "kb",
+  "language": "zh",
+  "upload_tool_enabled": true,
+  "max_file_size_kb": 1024,
+  "embedding_enabled": false,
+  "embedding_provider_id": "",
+  "embedding_model": "",
+  "provider": {
+    "endpoint": "https://api.openai.com/v1/embeddings",
+    "api_key_env": "SAI_KB_EMBEDDING_API_KEY"
+  }
+}

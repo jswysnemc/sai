@@ -2,8 +2,10 @@
 
 mod capabilities;
 mod contracts;
+mod document;
 pub mod host;
 mod manifest;
+mod native;
 mod package;
 mod presentation;
 mod reply_policy;

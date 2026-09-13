@@ -224,11 +224,7 @@ async fn empty_slug_candidates_do_not_create_requests_or_object_shaped_arrays() 
 /// 【游戏信号测试】【授权与错误恢复】撤销网络授权后没有请求抵达宿主，参数错误也不污染下一次调用。
 #[tokio::test]
 async fn revoked_grants_and_invalid_arguments_never_reach_the_host() {
-    let package = crate::plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|package| package.manifest.id == PLUGIN)
-        .unwrap();
+    let package = super::example_support::package(PLUGIN);
     let host = Arc::new(FixtureHost::default());
     let plugin =
         PluginRuntime::load(package, json!({}), Capabilities::default(), host.clone()).unwrap();
@@ -253,27 +249,20 @@ async fn revoked_grants_and_invalid_arguments_never_reach_the_host() {
     }
 }
 
-/// 【游戏信号测试】【旧开关与显式设置】兼容旧启用开关，独立插件设置仍拥有最终优先级。
+/// 【游戏信号测试】【显式安装】查询包独立于仍在迁移的调查包开关
+/// @returns 无；普通与只读入口只按外部包设置公开工具
 #[test]
-fn plugin_settings_override_the_legacy_game_switch() {
-    use crate::plugins::config::{save_config, PluginConfig, PluginSetting};
+fn signals_installation_and_switches_are_independent_of_investigation() {
+    use crate::plugins::{self, GrantUpdate};
     let root = tempfile::tempdir().unwrap();
     let paths = crate::paths::SaiPaths::for_tests(root.path());
-    let mut config = crate::config::AppConfig::default();
-    config.plugins.linux_game_compatibility.enabled = false;
-    assert!(!crate::tools::readonly_registry(&config, &paths).contains(TOOL));
-    let mut settings = PluginConfig::default();
-    settings.plugins.insert(
-        PLUGIN.into(),
-        PluginSetting {
-            enabled: true,
-            ..Default::default()
-        },
-    );
-    save_config(&paths, &settings).unwrap();
-    assert!(crate::tools::readonly_registry(&config, &paths).contains(TOOL));
-    settings.plugins.get_mut(PLUGIN).unwrap().enabled = false;
-    save_config(&paths, &settings).unwrap();
-    config.plugins.linux_game_compatibility.enabled = true;
-    assert!(!crate::tools::builtin_registry_without_mcp(&config, &paths).contains(TOOL));
+    let config = crate::config::AppConfig::default();
+    super::example_support::install(PLUGIN, &paths);
+    let name = format!("lua__{PLUGIN}__{TOOL}");
+    assert!(!crate::tools::readonly_registry(&config, &paths).contains(&name));
+    plugins::set_enabled(&config, &paths, PLUGIN, true, GrantUpdate::Keep).unwrap();
+    assert!(crate::tools::readonly_registry(&config, &paths).contains(&name));
+    plugins::set_enabled(&config, &paths, PLUGIN, false, GrantUpdate::Keep).unwrap();
+    super::example_support::install_enabled("linux-game-investigation", &config, &paths);
+    assert!(!crate::tools::builtin_registry_without_mcp(&config, &paths).contains(&name));
 }

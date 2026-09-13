@@ -18,7 +18,7 @@ pub(super) async fn fill_counts(
             let (_, directory) =
                 crate::state::state_dir_for_workspace_session(paths, workdir, &summary.id)?;
             let snapshot = view.snapshot(&summary.id, &directory, workdir).await?;
-            // 1. 【会话数据】【归档后统计】快照可能接续旧记录，文件统计必须包含本次发布结果
+            // 1. 【会话数据】【查询后统计】快照查询后重新计算会话目录中的现有文件
             let items =
                 tokio::task::spawn_blocking(move || collect_top_level_items(&directory)).await??;
             Ok::<_, anyhow::Error>((snapshot, items))

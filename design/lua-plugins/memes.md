@@ -1,6 +1,6 @@
 # 表情库插件
 
-`plugins/memes` 提供六个原有工具和回复后自动发送策略。索引合并、查询评分、元数据、视觉提示词、删除恢复及发送规则全部由 Lua 实现。原 `src/tools/memes.rs`、`src/tools/memes/` 和专用 Rust 提示词已删除；`src/tools/vision.rs` 仍服务于文件读取，继续保留。
+`examples/lua-plugins/memes` 提供六个 `lua__memes__…` 工具和可选回复后自动发送策略。索引合并、查询评分、元数据、视觉提示词、删除恢复及发送规则全部由 Lua 实现；`src/tools/vision.rs` 仍服务于基础文件读取。安装与最小授权见[示例说明](../../examples/lua-plugins/memes/README.md)。
 
 ## 工具与模块
 
@@ -13,10 +13,10 @@
 | `update_meme` | 写入 | 更新字段、建立内置元数据覆盖、禁用或重新启用 |
 | `delete_meme` | 写入 | 禁用内置图片，或将用户图片移入回收站／显式永久删除 |
 
-六个公开名称、参数 Schema、双语说明和正常结果字段保持兼容。写入工具不进入计划模式目录。PNG、JPEG、WebP、GIF 沿用原扩展名规则；GIF 仍为静态终端预览，`animation_note` 的空值保留 JSON null。
+表中为包内名称，对外统一添加 `lua__memes__` 前缀；参数 Schema、双语说明和正常结果字段保持兼容。写入工具不进入计划模式目录。PNG、JPEG、WebP、GIF 沿用原扩展名规则；GIF 仍为静态终端预览，`animation_note` 的空值保留 JSON null。下文“内置图片”指用户显式提供的只读基础图库图片。
 
 ```text
-plugins/memes/
+examples/lua-plugins/memes/
 ├── init.lua、sai-plugin.json       入口与能力声明
 ├── definitions.lua、descriptions.lua 工具契约与双语说明
 ├── tools.lua、values.lua           工具分发与原参数规则
@@ -35,39 +35,38 @@ plugins/memes/
 
 ## 配置与目录
 
-可信内置包定向继承主配置 `plugins.memes`，`enabled` 仅决定未显式配置时的默认开关。`plugins.jsonc` 中的设置按字段覆盖旧值，不改写主配置。外部包不能继承这些目录、环境设置或默认授权。
+此包使用普通安装身份，默认禁用且无授权。设置只来自 `plugins.jsonc` 中的插件对象，不继承旧主配置、应用目录或 `SAI_MEMES_DIR`。
 
 | 设置 | 默认值或来源 |
 | --- | --- |
-| `libraries` | 旧映射；`default` 缺失时使用 `sai` |
+| `libraries` | 独立库名映射；`default` 缺失时使用 `sai` |
 | `width_percent` / `height_percent` | 35 / 25，保留 0–255 的原范围 |
 | `max_image_mb` | 10，兼容旧 u64 整数范围；读取仍受宿主预算限制 |
 | `allow_gif_animation` | false；当前渲染保持静态 |
-| `auto_send_enabled` | 继承旧主配置；新建主配置默认 true，独立加载包默认 false |
+| `auto_send_enabled` | false |
 | `auto_send_probability` | 0.2，按原 f32 精度计算 |
 | `auto_send_min_confidence` | 0.8，按原 f32 精度计算 |
-| `builtin_dirs` | 设置 `SAI_MEMES_DIR` 时只使用该目录，否则依次尝试 `src/memes`、`/usr/share/sai/memes` |
-| `user_dir` | Sai 应用数据目录下的 `memes` |
-| `state_dir` | Sai 应用状态目录下的 `memes` |
-| `input_paths` | 当前调用工作目录 `.`；其他输入目录必须显式配置 |
-| `language` | 当前界面语言，值为 `en` 或 `zh` |
+| `builtin_dirs` | `[".sai/meme-bases"]`，用户显式安装的只读基础图库 |
+| `user_dir` | `.sai/memes` |
+| `state_dir` | `.sai/state/memes` |
+| `language` | `en`，可选 `zh` |
 
-直接独立加载包时采用 `.sai/memes`、`.sai/state/memes` 等清单默认目录。每个库使用 `<库目录>/index.json` 和 `images/`；最近发送记录沿用 `<state_dir>/<清洗后的默认库名>/auto-send.json`，JSON 根字段为 `last`。
+相对路径以调用工作目录为准。每个库使用 `<根目录>/<库名>/index.json` 和 `images/`；最近发送记录为 `<state_dir>/<清洗后的默认库名>/auto-send.json`，JSON 根字段为 `last`。旧图库资源已经移到示例的 `assets/sai/`，需要单独复制到基础图库目录；宿主和插件源码归档均不自动安装图片。
 
 ```sh
 cat > memes-settings.json <<'JSON'
-{"auto_send_enabled":true,"auto_send_probability":0.2,"input_paths":[".","/home/example/Pictures"]}
+{"auto_send_enabled":true,"auto_send_probability":0.2}
 JSON
 sai plugins configure memes memes-settings.json
 sai plugins enable memes --grant-declared
 sai plugins enable memes --no-reply-policy
 ```
 
-`configure` 用文件内容替换该插件的显式设置。`--grant-declared` 明确授予当前有效声明的全部能力。已有显式授权时，仅修改目录设置不会自动授予新路径；可用各目录授权选项更新对应类别。单独撤销回复策略仍可使用六个工具。
+`configure` 用文件内容替换独立设置，未知字段（含旧 `input_paths`）明确拒绝。`--grant-declared` 明确授予当前清单的全部能力；按用途选择的最小授权见示例 README。自定义目录必须同时修改清单、设置及授权，仅修改设置不会增加任何路径权限。单独撤销回复策略仍可使用六个工具。
 
 | 能力 | 用途 |
 | --- | --- |
-| `system.read_paths` | 输入图片、内置及用户索引、图片真实路径和旧发送记录 |
+| `system.read_paths` | 默认 `.sai/meme-bases`、`.sai/meme-import`、`.sai/memes` 和 `.sai/state/memes` |
 | `binary.write_paths` | 用户图片、用户索引和发送记录的条件写入 |
 | `system.remove_paths` | 显式永久删除、竞争失败图片及替换后的旧图片清理，仅限用户库 |
 | `system.trash_paths` | 用户图片移入系统回收站，仅限用户库 |
@@ -110,4 +109,4 @@ Web 上下文预览通过实际 Lua 读取旧记录，不调用决策模型、�
 
 固定原生样本以提交 `90a911c8859d1bef72e7d983e865a815a0abab47` 为基准，直接运行冻结业务源码，仅替代模型、终端、时钟和随机源。345 条对照包括 211 条文本规则、34 条元数据、25 条参数和 75 条自动决策；对照比较完整提示前缀、候选 JSON、提醒及最终记录。
 
-应用测试还覆盖真实文件、八实例不同内容新增、六实例同内容及禁用后新增、删除取消恢复、视觉原字节、目录变更后的授权、损坏索引、符号链接、完整旧整数范围，以及正式 Agent 和本地 SSE 服务的两轮发送链路。上下文资源、Web 预览和通用运行时契约有独立测试。完整回归及发布入口证据见 [迁移记录](migration.md)。
+应用测试还覆盖真实文件、八实例不同内容新增、六实例同内容及禁用后新增、删除取消恢复、视觉原字节、目录变更后的授权、损坏索引、符号链接、完整旧整数范围，以及正式 Agent 和本地 SSE 服务的两轮发送链路。当前夹具显式安装并授权测试派生清单；上下文资源、Web 预览和通用运行时契约有独立测试。历史基线见[迁移记录](migration.md)，提取后的资源与命令验收见[归档状态](../../.doc/archive/2026-09-14-core-plugin-extraction/status.md)。

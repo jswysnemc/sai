@@ -1,4 +1,4 @@
-use super::todo_support::{bundled, call, context, item, snapshot};
+use super::todo_support::{call, context, installed, item, record_path, snapshot};
 use crate::state::StateStore;
 use sai_plugin_runtime::host::{PluginHost, StorageRequest};
 use serde_json::json;
@@ -8,7 +8,7 @@ use serde_json::json;
 #[tokio::test]
 async fn todo_storage_large_valid_item_returns_success_before_retry_is_possible() {
     let root = tempfile::tempdir().unwrap();
-    let (paths, plugin, _) = bundled(root.path());
+    let (paths, plugin, _) = installed(root.path());
     let store = StateStore::new(&paths).unwrap();
     let scope = store.state_dir().display().to_string();
     let text = "x".repeat(200000);
@@ -21,7 +21,7 @@ async fn todo_storage_large_valid_item_returns_success_before_retry_is_possible(
     .await;
     assert_eq!(result["changed"][0]["text"], text);
     assert_eq!(result["items"][0]["text"], text);
-    let saved = std::fs::read(store.state_dir().join("todos.plugin.json")).unwrap();
+    let saved = std::fs::read(record_path(&paths, &scope)).unwrap();
     assert!(plugin
         .call_tool(
             "todo",
@@ -30,10 +30,7 @@ async fn todo_storage_large_valid_item_returns_success_before_retry_is_possible(
         )
         .await
         .is_err());
-    assert_eq!(
-        std::fs::read(store.state_dir().join("todos.plugin.json")).unwrap(),
-        saved
-    );
+    assert_eq!(std::fs::read(record_path(&paths, &scope)).unwrap(), saved);
 }
 
 /// 【待办存储测试】【新记录校验】损坏和重复标识不能触发旧数据回退或覆盖原文
@@ -41,10 +38,10 @@ async fn todo_storage_large_valid_item_returns_success_before_retry_is_possible(
 #[tokio::test]
 async fn todo_storage_corruption_preserves_authoritative_record() {
     let root = tempfile::tempdir().unwrap();
-    let (paths, runtime, _) = bundled(root.path());
+    let (paths, runtime, _) = installed(root.path());
     let store = StateStore::new(&paths).unwrap();
     let scope = store.state_dir().display().to_string();
-    let record = store.state_dir().join("todos.plugin.json");
+    let record = record_path(&paths, &scope);
     std::fs::write(
         store.state_dir().join("todos.json"),
         json!([item("legacy", "pending")]).to_string(),
@@ -78,37 +75,43 @@ async fn todo_storage_corruption_preserves_authoritative_record() {
     );
 }
 
-/// 【待办存储测试】【字节预算】新旧记录和合并状态都受限，失败时不发布新状态
+/// 【待办存储测试】【字节预算】公共记录和显式导入的合并状态都受限，失败时不发布新状态
 /// @returns 无；原始文件在超限错误之后保持原样
 #[tokio::test]
 async fn todo_storage_rejects_oversized_records_and_combined_legacy_data() {
     let root = tempfile::tempdir().unwrap();
-    let (paths, runtime, host) = bundled(root.path());
+    let (paths, runtime, host) = installed(root.path());
     let store = StateStore::new(&paths).unwrap();
     let scope = store.state_dir().display().to_string();
     let ctx = context(root.path(), &scope, true);
-    for name in ["todos.json", "todos.history.json", "todos.plugin.json"] {
-        let path = store.state_dir().join(name);
-        let bytes = vec![b' '; 262145];
-        std::fs::write(&path, &bytes).unwrap();
-        assert!(runtime
-            .call_command("snapshot", "", ctx.clone())
-            .await
-            .is_err());
-        assert_eq!(std::fs::read(&path).unwrap(), bytes);
-        std::fs::remove_file(path).unwrap();
-    }
+    let path = record_path(&paths, &scope);
+    let bytes = vec![b' '; 262145];
+    std::fs::write(&path, &bytes).unwrap();
+    assert!(runtime
+        .call_command("snapshot", "", ctx.clone())
+        .await
+        .is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    std::fs::remove_file(&path).unwrap();
     let mut long = item("long", "pending");
     long["text"] = json!("x".repeat(140000));
     let items = json!([long]).to_string();
     let history = json!([{"archived_at":"old","items":[long]}]).to_string();
     std::fs::write(store.state_dir().join("todos.json"), &items).unwrap();
     std::fs::write(store.state_dir().join("todos.history.json"), &history).unwrap();
+    assert_eq!(
+        snapshot(&runtime, root.path(), &scope).await["items"],
+        json!([])
+    );
+    let value = json!({"version":0,"items":serde_json::from_str::<serde_json::Value>(&items).unwrap(),"history":serde_json::from_str::<serde_json::Value>(&history).unwrap()});
     assert!(runtime
-        .call_command("snapshot", "", ctx.clone())
+        .call_command("import", &json!({"state":value}).to_string(), ctx.clone())
         .await
         .is_err());
-    assert!(!store.state_dir().join("todos.plugin.json").exists());
+    assert_eq!(
+        snapshot(&runtime, root.path(), &scope).await["items"],
+        json!([])
+    );
     assert_eq!(
         std::fs::read_to_string(store.state_dir().join("todos.json")).unwrap(),
         items
@@ -132,7 +135,7 @@ async fn todo_storage_rejects_oversized_records_and_combined_legacy_data() {
 #[tokio::test]
 async fn todo_storage_busy_lock_preserves_state_and_allows_retry() {
     let root = tempfile::tempdir().unwrap();
-    let (paths, runtime, _) = bundled(root.path());
+    let (paths, runtime, _) = installed(root.path());
     let store = StateStore::new(&paths).unwrap();
     let scope = store.state_dir().display().to_string();
     let lock = std::fs::OpenOptions::new()
@@ -152,7 +155,7 @@ async fn todo_storage_busy_lock_preserves_state_and_allows_retry() {
         .await
         .unwrap_err();
     assert!(format!("{error:#}").contains("busy"), "{error:#}");
-    assert!(!store.state_dir().join("todos.plugin.json").exists());
+    assert!(!record_path(&paths, &scope).exists());
     lock.unlock().unwrap();
     assert_eq!(
         call(
@@ -176,19 +179,18 @@ async fn todo_storage_busy_lock_preserves_state_and_allows_retry() {
             .ends_with(".tmp")));
 }
 
-/// 【待办存储测试】【拒绝链接】旧文件、新文件以及会话目录均不能通过链接访问其他目录
+/// 【待办存储测试】【拒绝链接】公共记录和命名空间目录不能通过链接访问其他目录
 /// @returns 无；外部文件原文保持不变
 #[cfg(unix)]
 #[tokio::test]
 async fn todo_storage_rejects_file_and_directory_symlinks() {
     let root = tempfile::tempdir().unwrap();
-    let (paths, runtime, _) = bundled(root.path());
+    let (paths, runtime, _) = installed(root.path());
     let store = StateStore::new(&paths).unwrap();
     let scope = store.state_dir().display().to_string();
     let outside = root.path().join("outside.json");
     std::fs::write(&outside, "[]").unwrap();
-    for name in ["todos.json", "todos.history.json", "todos.plugin.json"] {
-        let path = store.state_dir().join(name);
+    for path in [record_path(&paths, &scope)] {
         std::os::unix::fs::symlink(&outside, &path).unwrap();
         assert!(runtime
             .call_command("snapshot", "", context(root.path(), &scope, false))
@@ -197,17 +199,21 @@ async fn todo_storage_rejects_file_and_directory_symlinks() {
         assert_eq!(std::fs::read_to_string(&outside).unwrap(), "[]");
         std::fs::remove_file(path).unwrap();
     }
-    let linked = paths.state_dir.join("linked-session");
-    std::os::unix::fs::symlink(store.state_dir(), &linked).unwrap();
+    let linked = record_path(&paths, "linked-session")
+        .parent()
+        .unwrap()
+        .to_path_buf();
+    std::fs::remove_dir(&linked).unwrap();
+    std::os::unix::fs::symlink(record_path(&paths, &scope).parent().unwrap(), &linked).unwrap();
     assert!(runtime
         .call_command(
             "snapshot",
             "",
-            context(root.path(), &linked.display().to_string(), false)
+            context(root.path(), "linked-session", false)
         )
         .await
         .is_err());
-    assert!(!store.state_dir().join("todos.plugin.json").exists());
+    assert!(!record_path(&paths, &scope).exists());
 }
 
 /// 【待办存储测试】【特殊文件】目录和命名管道明确拒绝，读取管道不能阻塞查询
@@ -217,11 +223,10 @@ async fn todo_storage_rejects_file_and_directory_symlinks() {
 async fn todo_storage_rejects_special_files_without_blocking() {
     use std::os::unix::ffi::OsStrExt;
     let root = tempfile::tempdir().unwrap();
-    let (paths, runtime, _) = bundled(root.path());
+    let (paths, runtime, _) = installed(root.path());
     let store = StateStore::new(&paths).unwrap();
     let scope = store.state_dir().display().to_string();
-    for name in ["todos.json", "todos.history.json", "todos.plugin.json"] {
-        let path = store.state_dir().join(name);
+    for path in [record_path(&paths, &scope)] {
         std::fs::create_dir(&path).unwrap();
         assert!(runtime
             .call_command("snapshot", "", context(root.path(), &scope, false))

@@ -21,20 +21,15 @@ fn agent(
     mode: AgentMode,
 ) -> (Agent, StateStore) {
     let paths = SaiPaths::for_tests(root);
-    let mut config = fixture.config("configured-default");
-    config.plugins.memes.auto_send_enabled = true;
-    config.plugins.memes.auto_send_probability = 1.0;
+    let config = fixture.config("configured-default");
     let state = StateStore::new(&paths).unwrap();
     state.init_files().unwrap();
     let mut registry = ToolRegistry::new();
     registry.configure_plugin_model(&config, &paths);
-    crate::plugins::registry::register_descriptor(
-        &mut registry,
-        descriptor(root, &config),
-        host,
-        false,
-    )
-    .unwrap();
+    let mut plugin = descriptor(root, &config);
+    plugin.setting.settings["auto_send_enabled"] = serde_json::json!(true);
+    plugin.setting.settings["auto_send_probability"] = serde_json::json!(1.0);
+    crate::plugins::registry::register_descriptor(&mut registry, plugin, host, false).unwrap();
     (
         Agent::new(
             config,

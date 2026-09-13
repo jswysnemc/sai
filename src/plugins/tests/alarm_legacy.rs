@@ -1,10 +1,13 @@
-use crate::{paths::SaiPaths, plugins::scheduler};
+use crate::{
+    paths::SaiPaths,
+    plugins::{legacy_alarm_jobs, scheduler},
+};
 use serde_json::json;
 
 /// 【闹钟兼容测试】【旧记录查询】既有无进程记录仍可查询，读取不能改写旧工作进程共享的文件。
-/// @returns 无，结果通过通用调度接口交给 Lua
+/// @returns 无，普通调度不暴露旧记录，显式旧任务管理仍可读取
 #[test]
-fn alarm_plugin_can_observe_existing_legacy_records() {
+fn alarm_plugin_cannot_observe_legacy_records_through_public_scheduler() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
     std::fs::create_dir_all(&paths.state_dir).unwrap();
@@ -15,7 +18,8 @@ fn alarm_plugin_can_observe_existing_legacy_records() {
     .unwrap();
     let file = paths.state_dir.join("alarms.json");
     std::fs::write(&file, &content).unwrap();
-    let tasks = scheduler::list(&paths, "alarm").unwrap();
+    assert!(scheduler::list(&paths, "alarm").unwrap().is_empty());
+    let tasks = legacy_alarm_jobs::list(&paths).unwrap();
     assert_eq!(tasks.len(), 1);
     assert_eq!(tasks[0].command, "deliver");
     let payload: serde_json::Value = serde_json::from_str(&tasks[0].arguments).unwrap();

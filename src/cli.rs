@@ -44,6 +44,7 @@ mod message;
 mod model_select;
 mod models_picker;
 mod permission_prompt;
+mod plugin_execute;
 mod plugin_jobs;
 mod plugins;
 mod providers;

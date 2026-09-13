@@ -3,6 +3,7 @@ mod agent_presets;
 mod agent_tool_modes;
 mod agents;
 mod app;
+mod app_config;
 mod app_prompts;
 mod app_validation;
 mod cli_tool_defaults;
@@ -16,7 +17,6 @@ mod model;
 mod model_metadata;
 mod model_thinking;
 mod model_units;
-mod notification;
 mod paths;
 mod permission;
 mod prompt_sections;
@@ -32,8 +32,6 @@ mod tool_whitelist;
 
 #[cfg(test)]
 mod tests;
-#[cfg(test)]
-mod web_search_tests;
 
 #[allow(unused_imports)]
 pub use agent_engine::{AcpEngineConfig, AgentEngineConfig, AgentEngineKind};
@@ -55,7 +53,6 @@ pub use model::*;
 pub use model_metadata::*;
 pub use model_thinking::*;
 pub use model_units::*;
-pub use notification::*;
 pub use permission::*;
 pub use prompt_sections::{PromptSectionToggles, PROMPT_SECTIONS};
 pub use prompt_templates::{PromptTemplateConfig, PromptTemplatesConfig};

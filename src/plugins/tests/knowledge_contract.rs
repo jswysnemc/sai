@@ -19,11 +19,7 @@ pub(super) const WRITE_TOOLS: [&str; 3] = [
 /// @returns 无；工具权限、命令目录和后台入口全部匹配
 #[test]
 fn knowledge_publishes_tools_and_management_commands() {
-    let package = crate::plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|package| package.manifest.id == "knowledge-base")
-        .expect("knowledge-base must be a bundled Lua package");
+    let package = super::example_support::package("knowledge-base");
     let grants = package.manifest.capabilities.clone();
     let runtime =
         PluginRuntime::load(package, json!({}), grants, Arc::new(FixtureHost::default())).unwrap();
@@ -51,6 +47,7 @@ fn knowledge_publishes_tools_and_management_commands() {
         commands,
         [
             "add",
+            "add-text",
             "embed-reindex",
             "find",
             "list",
@@ -67,11 +64,7 @@ fn knowledge_publishes_tools_and_management_commands() {
 /// @returns 无；工具说明、JSON schema 和写入分类均匹配原版
 #[test]
 fn knowledge_preserves_all_native_tool_definitions() {
-    let package = crate::plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|package| package.manifest.id == "knowledge-base")
-        .unwrap();
+    let package = super::example_support::package("knowledge-base");
     let runtime = PluginRuntime::load(
         package.clone(),
         json!({}),
@@ -99,17 +92,31 @@ fn knowledge_preserves_all_native_tool_definitions() {
     }
 }
 
-/// 【知识库迁移测试】【真实归属】工具注册保留旧开关并正确限制只读目录
+/// 【知识库迁移测试】【真实归属】普通安装与独立开关正确限制工具目录
 /// @returns 无；禁用和关闭上传时不会暴露对应写入工具
 #[test]
-fn knowledge_registry_uses_lua_and_legacy_switches() {
+fn knowledge_registry_uses_installed_lua_and_independent_settings() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
-    let mut config = AppConfig::default();
+    let config = AppConfig::default();
+    super::example_support::install("knowledge-base", &paths);
     for enabled in [true, false] {
         for upload in [true, false] {
-            config.plugins.knowledge_base.enabled = enabled;
-            config.plugins.knowledge_base.upload_tool_enabled = upload;
+            crate::plugins::configure(
+                &config,
+                &paths,
+                "knowledge-base",
+                json!({"upload_tool_enabled":upload}),
+            )
+            .unwrap();
+            crate::plugins::set_enabled(
+                &config,
+                &paths,
+                "knowledge-base",
+                enabled,
+                crate::plugins::GrantUpdate::Declared,
+            )
+            .unwrap();
             let normal = crate::tools::builtin_registry_without_mcp(&config, &paths);
             let readonly = crate::tools::readonly_registry(&config, &paths);
             assert!(
@@ -120,14 +127,19 @@ fn knowledge_registry_uses_lua_and_legacy_switches() {
             assert!(readonly.plugin_diagnostics().is_empty());
             for name in READ_TOOLS.into_iter().chain(WRITE_TOOLS) {
                 let expected = enabled && (READ_TOOLS.contains(&name) || upload);
-                assert_eq!(normal.contains(name), expected, "{name}");
+                let public = format!("lua__knowledge-base__{name}");
+                assert_eq!(normal.contains(&public), expected, "{name}");
                 assert_eq!(
-                    readonly.contains(name),
+                    readonly.contains(&public),
                     enabled && READ_TOOLS.contains(&name),
                     "{name}"
                 );
                 if expected {
-                    assert_eq!(normal.plugin_owner(name), Some("knowledge-base"), "{name}");
+                    assert_eq!(
+                        normal.plugin_owner(&public),
+                        Some("knowledge-base"),
+                        "{name}"
+                    );
                 }
             }
         }

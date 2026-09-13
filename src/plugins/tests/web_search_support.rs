@@ -1,7 +1,5 @@
-use crate::config::AppConfig;
-use crate::paths::SaiPaths;
-use crate::plugins::config::{save_config, PluginConfig, PluginSetting};
-use crate::plugins::discovery::PluginDescriptor;
+use crate::plugins::config::PluginSetting;
+use crate::plugins::discovery::{PluginDescriptor, PluginSource};
 use sai_plugin_runtime::host::PluginHost;
 use sai_plugin_runtime::{InvocationContext, PluginRuntime};
 use serde_json::{json, Value};
@@ -12,38 +10,65 @@ pub(super) const RESULT: &str =
     r#"{"results":[{"title":"Rust","url":"https://www.rust-lang.org","content":"语言文档"}]}"#;
 pub(super) const HTML: &str = r#"<a class="result__a" href="https://example.test/?a=1&amp;b=2">输入法&nbsp; Rust</a><a class="result__snippet">中文　与 Lua</a>"#;
 
-/// 【搜索测试】【真实发现】通过独立插件配置生成与应用一致的搜索描述。
-/// @param settings 待覆盖的插件设置
-/// @returns 拥有固定源码、设置及授权的描述，测试密钥不会访问真实服务
+/// 【搜索测试】【独立样本】以普通外部身份加载示例，显式提供冻结业务对照所需设置和来源
+/// @param settings 当前样本的覆盖设置
+/// @returns 不使用主配置或兼容投影的源码描述；实际安装另由生命周期测试覆盖
 pub(super) fn descriptor(settings: Value) -> PluginDescriptor {
-    let root = tempfile::tempdir().unwrap();
-    let paths = SaiPaths::for_tests(root.path());
-    let mut config = AppConfig::default();
-    config.plugins.web.tinyfish_api_keys = vec!["tiny-key".into()];
-    config.plugins.web.tavily_api_keys = vec!["tavily-key".into()];
-    config.plugins.web.firecrawl_api_keys = vec!["firecrawl-key".into()];
-    config.plugins.web.anysearch_api_keys = vec!["anysearch-key".into()];
-    config.plugins.web.searxng_base_url = "https://search.example.test".into();
-    let mut plugins = PluginConfig::default();
-    plugins.plugins.insert(
-        "web-search".into(),
-        PluginSetting {
-            enabled: true,
-            settings,
-            ..Default::default()
-        },
-    );
-    save_config(&paths, &plugins).unwrap();
-    let found = crate::plugins::discover(&config, &paths);
-    assert!(found.diagnostics.is_empty(), "{:?}", found.diagnostics);
-    found
-        .plugins
-        .into_iter()
-        .find(|item| item.package.manifest.id == "web-search")
+    let mut package = super::example_support::package("web-search");
+    let mut merged = json!({
+        "tinyfish_api_keys":["tiny-key"], "tavily_api_keys":["tavily-key"],
+        "firecrawl_api_keys":["firecrawl-key"], "anysearch_api_keys":["anysearch-key"],
+        "searxng_base_url":"https://search.example.test",
+    });
+    merged
+        .as_object_mut()
         .unwrap()
+        .extend(settings.as_object().unwrap().clone());
+    // 1. 【搜索测试】【样本授权】测试来源写入样本清单，产品配置不会执行这一派生
+    for field in [
+        "tinyfish_base_url",
+        "tavily_base_url",
+        "firecrawl_base_url",
+        "anysearch_base_url",
+        "searxng_base_url",
+    ] {
+        if let Some(endpoint) = merged[field].as_str() {
+            if let Ok(mut url) = reqwest::Url::parse(endpoint) {
+                if matches!(url.scheme(), "http" | "https") && url.host_str().is_some() {
+                    package
+                        .manifest
+                        .capabilities
+                        .http
+                        .insert(url.origin().ascii_serialization());
+                    if matches!(
+                        field,
+                        "tavily_base_url" | "firecrawl_base_url" | "anysearch_base_url"
+                    ) {
+                        url.set_query(None);
+                        url.set_fragment(None);
+                        package
+                            .manifest
+                            .capabilities
+                            .http_read_only_post
+                            .insert(url.to_string());
+                    }
+                }
+            }
+        }
+    }
+    let grants = package.manifest.capabilities.clone();
+    PluginDescriptor {
+        package,
+        source: PluginSource::Installed(super::example_support::directory("web-search")),
+        setting: PluginSetting {
+            enabled: true,
+            settings: merged,
+            grants: Some(grants),
+        },
+    }
 }
 
-/// 【搜索测试】【运行时】加载真实搜索包并注入可观察的 HTTP 宿主。
+/// 【搜索测试】【运行时】从示例源码与显式测试权限加载 Lua
 /// @param settings 插件设置；host 为测试网络实现
 /// @returns 独立 Lua 实例
 pub(super) fn runtime(settings: Value, host: Arc<dyn PluginHost>) -> PluginRuntime {
@@ -57,7 +82,7 @@ pub(super) fn runtime(settings: Value, host: Arc<dyn PluginHost>) -> PluginRunti
     .unwrap()
 }
 
-/// 【搜索测试】【查询入口】通过工具接口执行指定供应商查询。
+/// 【搜索测试】【查询入口】通过工具接口执行指定供应商查询
 /// @param plugin 插件实例；provider 为供应商名称
 /// @returns 查询 Rust 所产生的完整 Markdown
 pub(super) async fn search(plugin: &PluginRuntime, provider: &str) -> String {

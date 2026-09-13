@@ -36,7 +36,7 @@ sai plugins enable example --no-image-display
 
 重复的 `--allow-write-path` 替换目录集合，未指定的能力保持原值。`--grant-declared` 与所有分项选项互斥，相应的授权和撤销选项也互斥。修改输出目录不会把旧显式授权自动转移到新目录。声明和授权按字符串求交集，实际文件归属由宿主进一步验证。
 
-`--no-http` 只撤销精确 HTTP 来源和只读 POST 端点；要同时关闭匿名公开下载，另加 `--no-public-downloads`。公开下载能力不能用于任意方法或带凭据请求，也不会开放 `sai.http.request`。
+`--no-http` 撤销精确 HTTP 来源、只读 POST 端点和任意来源读取；`--no-http-read-any` 只撤销任意来源读取。要同时关闭匿名公开下载，另加 `--no-public-downloads`。公开下载能力不能用于任意方法或带凭据请求，也不会开放 `sai.http.request`。
 
 ## 请求和缓冲
 
@@ -57,11 +57,13 @@ image:close()
 return saved
 ```
 
-`sai.binary.request` 的请求字段与文本 HTTP 相同，使用相同精确来源、只读 POST、重定向和凭据检查。两个二进制网络入口返回 `{status, url, headers, body}`，`url` 是最终重定向地址，`body` 是不可序列化的 Lua userdata。状态错误仍作为响应交给插件。
+`sai.binary.request` 的请求字段与文本 HTTP 相同，使用相同精确来源、任意来源 GET/HEAD、只读 POST、重定向和凭据检查；详见[HTTP 公共契约](http-api.md)。两个二进制网络入口返回 `{status, url, headers, body}`，`url` 是最终重定向地址，`body` 是不可序列化的 Lua userdata。状态错误仍作为响应交给插件。
 
-`sai.binary.download({url, max_bytes?, timeout_ms?})` 只接受无正文、无自定义请求头的 GET。每次跳转都重新检查地址；精确授权的来源可以是本地服务，其他来源必须具有 `public_downloads` 授权，且全部 DNS 结果均为公开单播地址。宿主固定实际连接地址并禁用公开下载的代理，防止解析检查与连接目标不一致。每条链最多跟随五次跳转，共用截止时间；不会保存或转发 Cookie。
+`sai.binary.download({url, max_bytes?, timeout_ms?, max_redirects?, read_error_body?})` 只接受无正文、无自定义请求头的 GET，不继承 `http_read_any`。每次跳转都重新检查地址；精确授权的来源可以是本地服务，其他来源必须具有 `public_downloads` 授权，且全部 DNS 结果均为公开单播地址。宿主固定实际连接地址并禁用公开下载的代理，防止解析检查与连接目标不一致。跳转默认最多五次，`max_redirects` 接受 0–10；整条链共用截止时间，不保存或转发 Cookie。
 
 两个入口默认请求大小为 1 MiB、默认请求时限为 30 秒；实际大小收窄到 VM 剩余二进制预算，时限收窄到 `binary_timeout_ms`。请求正文与元数据仍受文本 `output_bytes` 限制。响应原始字节不受文本输出上限限制，也不按 charset 解码。
+
+`read_error_body` 默认 true；false 时对最终 4xx/5xx 返回空缓冲及原状态和响应头，不等待错误正文。成功状态仍检查完整响应大小；`max_redirects=0` 遇可跟随跳转会失败。
 
 | 接口 | 返回值与边界 |
 | --- | --- |
@@ -69,6 +71,7 @@ return saved
 | `buffer:bytes(offset, length)` | 从零基偏移读取原始 Lua 字符串，保留零字节和无效 UTF-8；只接受非负整数，长度不能超过 `output_bytes`，超出缓冲尾部返回已有部分 |
 | `buffer:sha256()` | 小写十六进制 SHA-256；消耗一次系统调用额度，在阻塞线程计算，完成前继续持有字节预算 |
 | `buffer:text(max_bytes?)` | 有界 UTF-8 文本前缀；无效编码替换，不超过 `output_bytes` |
+| `buffer:document(options?)` | `{text, total_chars, truncated}`；对至多 8 MiB 输入执行原文或 HTML 转换，详见[正文接口](document-api.md) |
 | `buffer:json_type(pointer)` | `object`、`array`、`string`、`number`、`boolean`、`null`；字段缺失返回 nil |
 | `buffer:json_string(pointer)` | 字符串或 nil；文本超过输出限制时失败 |
 | `buffer:json_base64(pointer)` | 将字符串字段解码为新缓冲，字段缺失或不是字符串时返回 nil；非法 Base64 失败 |
@@ -182,18 +185,18 @@ return shown.path
 
 宿主使用不超过 64 MiB 的普通文件快照，验证可识别图片及像素上限：每边最多 16384 像素，总计最多 32 Mi 个像素。单元格尺寸最多 300 列、200 行；支持 `WIDTHxHEIGHT`、`WIDTHx`、`xHEIGHT`。渲染继续使用已有终端协议与降级器，Kitty 与 iTerm 均按传入尺寸限制显示范围。图片数据与放置指令完整生成后才一起输出，丢弃渲染结果不会消耗传输缓存。取消后不提交迟到输出，已经开始的阻塞读取或渲染需要自然结束。
 
-## 内置图片包
+## 可拆卸图片示例
 
-`image-generation` 保留 `generate_image`、原 OpenAI/RightCode 请求规则、文件名称及全部结果字段。旧 `plugins.image_generation` 仅为此包提供逐字段默认值，显式设置优先，包括 `auto_print=false`。管理操作只保存显式业务设置，不复制旧凭据或固化旧默认值；明确授予声明能力时，会保存当前 API 来源与输出目录授权。
+`image-generation` 提供 `lua__image-generation__generate_image`，保留原 OpenAI/RightCode 请求规则、文件名称及全部结果字段。供应商、密钥、输出目录和 `auto_print` 由插件独立设置提供，不读取旧主配置。默认输出目录为 `~/Pictures/sai/generated-images`，自动预览默认关闭；修改 API 来源或输出目录必须同步调整清单与用户授权，保存设置不会派生权限。
 
 默认生成请求超时仍为 180 秒，允许设置 1–600 秒；API 响应和图片下载各最多 32 MiB，VM 二进制总预算 64 MiB，工具输出 64 KiB，完整回调最多 1300 秒。长请求使用独立二进制时限，普通文本 HTTP 的 120 秒硬上限保持原规则。
 
-`image-display` 保留只读 `print_image`。宽高参数优先于 `size`，再回退到终端百分比；默认 45% 宽、35% 高，沿用旧 `plugins.print_image` 设置。显式插件设置可覆盖 `width_percent`、`height_percent` 和 `language`（`en` 或 `zh`）。
+`image-display` 提供只读 `lua__image-display__print_image`。宽高参数优先于 `size`，再回退到终端百分比；默认 45% 宽、35% 高。独立设置可覆盖 `width_percent`、`height_percent` 和 `language`（`en` 或 `zh`），不读取旧主配置。
 
-自动预览通过 `sai.tools.list/call` 调用 `print_image`，因此显示包的开关、授权、尺寸和 Agent 工具白名单都参与生效。显示工具不可用时跳过预览，绘制失败时返回 `printed=false` 和 `print_error`，已经保存的图片仍然成功。`generate_image` 保持写入属性，不进入只读工具目录；`print_image` 可以在只读目录中使用。
+自动预览通过 `sai.tools.list/call` 调用 `lua__image-display__print_image`，因此显示包的开关、授权、尺寸和 Agent 工具白名单都参与生效。显示工具不可用时跳过预览，绘制失败时返回 `printed=false` 和 `print_error`，已经保存的图片仍然成功。图片生成保持写入属性，不进入只读工具目录；显示工具可以在只读目录中使用。
 
-`web-images` 保留 `search_web_images`，声明 `optional_writes`。只读模式只返回远程候选元数据；普通模式按用户数量搜索、稳定排序、去重、下载，再根据独立视觉结果筛选。DuckDuckGo 失败或数量不足时回退 Bing；原图失败时尝试缩略图，内容摘要决定 `webimg-<sha256>.<ext>` 名称。审核拒绝后继续候选，审核失败保留图片和失败记录。
+`web-images` 提供 `lua__web-images__search_web_images`，声明 `optional_writes`。只读模式只返回远程候选元数据；普通模式按用户数量搜索、稳定排序、去重、下载，再根据独立视觉结果筛选。DuckDuckGo 失败或数量不足时回退 Bing；原图失败时尝试缩略图，内容摘要决定 `webimg-<sha256>.<ext>` 名称。审核拒绝后继续候选，审核失败保留图片和失败记录。
 
-旧 `plugins.web_images` 提供逐字段默认值。内置缓存默认位于应用图片目录的 `web-images` 子目录，允许显式 `cache_dir`；`duckduckgo_base_url` 与 `bing_base_url` 可配置为独立实例。兼容层只派生精确搜索来源和输出目录声明，已有显式授权不会跟随设置改变；外部包不继承旧设置或目录。
+设置完全归插件。缓存默认位于 `~/Pictures/sai/web-images`，允许显式 `cache_dir`；`duckduckgo_base_url` 与 `bing_base_url` 可配置为独立实例。修改地址或目录须同步更新清单和授权，保存设置不会扩大权限。视觉筛选与自动预览默认关闭，分别需要视觉授权及显示包工具授权。
 
 包最多返回 10 张图片、尝试 16 个下载候选、预览 5 张。单次下载由 `max_download_mb` 限制到 0.1–64 MiB；搜索正文最多 4 MiB，VM 二进制预算为 64 MiB，回调上限 3600 秒，视觉最多 16 次。预览继续通过独立显示包，使用 `printed` 和 `print_errors` 报告结果；显示失败不丢失已保存文件。

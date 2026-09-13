@@ -12,12 +12,7 @@ async fn lua_image_policy_matches_the_original_rust_reference() {
         fixture["source_commit"],
         "1d104bef745dcd24be0ae9d77d10029f4dc663b0"
     );
-    let packages = crate::plugins::bundled::packages().unwrap();
-    let generation = packages
-        .iter()
-        .find(|p| p.manifest.id == "image-generation")
-        .unwrap()
-        .clone();
+    let generation = super::example_support::package("image-generation");
     let mut sources = generation.sources().clone();
     sources.insert("init.lua".into(),r#"
         local request=require('request'); local output=require('output')
@@ -28,11 +23,7 @@ async fn lua_image_policy_matches_the_original_rust_reference() {
         end})
     "#.into());
     let generation = PluginPackage::new(generation.manifest, sources).unwrap();
-    let display = packages
-        .iter()
-        .find(|p| p.manifest.id == "image-display")
-        .unwrap()
-        .clone();
+    let display = super::example_support::package("image-display");
     let mut sources = display.sources().clone();
     sources.insert("init.lua".into(),r#"
         local settings=require('settings')

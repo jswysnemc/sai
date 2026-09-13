@@ -526,7 +526,8 @@ mod tests {
             )
             .unwrap();
             assert!(registry.contains("subagent"), "source: {source:?}");
-            assert!(registry.contains("todo"), "source: {source:?}");
+            assert!(registry.contains("read_file"), "source: {source:?}");
+            assert!(!registry.contains("lua__todo__todo"));
         }
 
         // 2. 非交互式来源不得提供子智能体工具
@@ -543,8 +544,7 @@ mod tests {
             assert!(!registry.contains("subagent"), "source: {source:?}");
         }
 
-        // 3. 命令行入口虽非交互式，但多步任务同样需要计划，因此保留 todo；
-        //    网关没有人查看计划，仍然不提供
+        // 3. 【请求执行测试】【可选业务】未安装待办时，各命令入口保留基础工具
         for source in [SubmissionSource::Command, SubmissionSource::ShellIntercept] {
             let registry = build_submission_tool_registry(
                 &config,
@@ -555,7 +555,9 @@ mod tests {
                 std::path::Path::new("."),
             )
             .unwrap();
-            assert!(registry.contains("todo"), "source: {source:?}");
+            assert!(registry.contains("read_file"), "source: {source:?}");
+            assert!(!registry.contains("todo"));
+            assert!(!registry.contains("lua__todo__todo"));
         }
         let gateway = build_submission_tool_registry(
             &config,
@@ -649,7 +651,9 @@ mod tests {
                 )
                 .unwrap();
             assert!(registry.contains("subagent"));
-            assert!(registry.contains("todo"));
+            assert!(registry.contains("read_file"));
+            assert!(!registry.contains("todo"));
+            assert!(!registry.contains("lua__todo__todo"));
         }
         let gateway = runner
             .load_tool_registry(

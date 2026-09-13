@@ -204,7 +204,7 @@ pub fn delete_session(paths: &SaiPaths, session_id: &str) -> Result<bool> {
 /// - 实际删除的会话 ID 列表
 pub fn delete_sessions(paths: &SaiPaths, session_ids: &[String]) -> Result<Vec<String>> {
     let scope = current_session_scope(paths)?;
-    delete_sessions_in_base(&scope.state_dir, session_ids)
+    delete_sessions_in_base(paths, &scope.state_dir, session_ids)
 }
 
 /// 在指定会话作用域内删除会话并仅写入一次索引。
@@ -214,12 +214,14 @@ pub fn delete_sessions(paths: &SaiPaths, session_ids: &[String]) -> Result<Vec<S
 /// 会静默地一个都删不掉。
 ///
 /// 参数:
+/// - `paths`: 应用路径，用于清理公共插件会话记录
 /// - `state_dir`: 会话作用域的状态目录
 /// - `session_ids`: 待删除会话 ID 列表
 ///
 /// 返回:
 /// - 实际删除的会话 ID 列表
 pub(super) fn delete_sessions_in_base(
+    paths: &SaiPaths,
     state_dir: &Path,
     session_ids: &[String],
 ) -> Result<Vec<String>> {
@@ -237,7 +239,12 @@ pub(super) fn delete_sessions_in_base(
     if deleted.is_empty() {
         return Ok(Vec::new());
     }
-    // 1. 允许删除任意会话（含 default），不再强制保留至少一个
+    // 1. 【会话管理】【清理插件记录】完整目录绑定存储作用域，避免清理其他工作区同名会话
+    for session_id in &deleted {
+        let directory = session_state_dir(state_dir, session_id);
+        crate::plugins::clear_session_storage(&paths.state_dir, &directory.to_string_lossy())?;
+    }
+    // 2. 允许删除任意会话（含 default），不再强制保留至少一个
     sessions.retain(|session| !requested.contains(session.id.as_str()));
     save_sessions_to_base(state_dir, &sessions)?;
     for session_id in &deleted {
@@ -246,7 +253,7 @@ pub(super) fn delete_sessions_in_base(
             std::fs::remove_dir_all(session_dir)?;
         }
     }
-    // 2. 当前会话被删时，切到剩余最新会话；若已删空则写入空标记，下一次 ensure 再补默认
+    // 3. 当前会话被删时，切到剩余最新会话；若已删空则写入空标记，下一次 ensure 再补默认
     let current = read_current_session_id_from_base(state_dir)?;
     if deleted.contains(&current) {
         if let Some(fallback) = sessions.first() {

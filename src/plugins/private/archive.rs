@@ -70,6 +70,8 @@ pub(super) async fn extract(
             body: None,
             max_bytes: request.max_bytes,
             timeout_ms: request.timeout_ms,
+            max_redirects: 5,
+            read_error_body: true,
         },
         capabilities,
         false,

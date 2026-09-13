@@ -53,17 +53,17 @@ sai.storage.set("review/example", nil)
 
 Lua 可用 `value == nil or value == sai.json.null` 判断缺失值。比较按 JSON 值进行，不比较对象字段顺序。键是 1–256 字节且不含控制字符的文本；普通存储将键转换成摘要文件名。每个插件、每个会话最多 128 个键，单个值的 JSON 编码不超过 256 KiB。写入使用同目录临时文件、同步和原子替换。跨进程的短文件锁覆盖读取、比较与写入；锁忙立即返回错误，由调用方决定是否重试，比较不匹配则返回 false。
 
-目录归属由 Rust 绑定的插件标识和完整会话作用域决定。正式 Agent 使用会话目录区分工作区内同名会话；子 Agent 独立隔离。插件 A 调用 B 时，B 使用自身插件命名空间及原用户会话的状态；新建 Lua VM 不会改变这一归属。直接 CLI 工具使用 `cli-tool`，`plugins run` 使用 `plugin-command`，未绑定会话的工具注册表使用 `direct-command`。同一直接入口的不同进程共享其会话记录，允许先审查、后确认；工具和命令入口的会话记录分别隔离。
+目录归属由 Rust 绑定的插件标识和完整会话作用域决定。正式 Agent 使用会话目录区分工作区内同名会话；子 Agent 独立隔离。插件 A 调用 B 时，B 使用自身插件命名空间及原用户会话的状态；新建 Lua VM 不会改变这一归属。`plugins call/run --session <ID>` 使用当前工作区对应的真实会话目录，省略时共用按规范工作目录隔离的 `plugin-command/<目录>` 作用域，允许跨进程先审查、后确认。原生直接工具入口使用 `cli-tool`，未绑定会话的工具注册表使用 `direct-command`。
 
-只读工具和命令可以更新已授权的会话记录，也可以创建私有缓存。事件和 `after_tool` 策略只能读取记录，不能调用 set、compare_exchange 或创建工作目录；后者也没有模型和工具调用服务。修改 Lua 上下文字段不会改变宿主归属。`StateStore` 重置会清除当前作用域的普通插件会话记录，其他会话不受影响；清空会话命令也清理直接 CLI 工具记录。
+只读工具和命令可以更新已授权的会话记录，也可以创建私有缓存。事件和 `after_tool` 策略只能读取记录，不能调用 set、compare_exchange 或创建工作目录；后者也没有模型和工具调用服务。修改 Lua 上下文字段不会改变宿主归属。`StateStore` 重置会清除当前作用域的普通插件会话记录，其他会话不受影响；清空会话命令也清理直接 CLI 工具记录。整体清空或删除会话按完整会话目录清理全部插件记录；其他工作区的同名会话和跨会话持久记录保留。公共会话记录位于应用状态目录的 `plugin-state/`，不计入会话目录字节统计。
 
-### 内置待办兼容记录
+### 待办示例与旧记录导入
 
-只有真实内置 `todo` 描述符可把固定键 `plan` 绑定到完整会话目录中的 `todos.plugin.json`，保存 `{version:1, items, history}`。新记录缺失时，宿主只读提供旧 `todos.json` 和 `todos.history.json` 组成的种子，由 Lua 转换并发布。旧文件原字节保留；新文件存在后是唯一来源。该固定记录的 null 删除保存为墓碑，不移除文件，避免再次导入旧清单；普通存储的 null 删除语义保持不变。
+普通 `todo` 示例在自己的公共会话存储中使用键 `plan`，保存 `{version:1, items, history}`。宿主不按插件 ID 读取 `todos.plugin.json`、`todos.json` 或 `todos.history.json`，同名外部包没有特殊身份。旧数据由用户明确传入完整状态，或把快照放入已声明且已授权的目录，再调用 `import` 命令；支持版本 0 和 1，拒绝覆盖非空计划或历史。
 
-这一兼容记录沿用原待办生命周期：`reset_conversation()` 和 `sai clear --yes` 保留交互会话的待办及历史，整体清理或删除会话数据才删除新旧文件。非路径作用域 `cli-tool`、`plugin-command` 使用普通私有存储并接受通用清理，外部同 ID 包不能继承兼容权限。
+禁用、撤权和卸载保留公共计划。`reset_conversation()` 和 `sai clear --yes` 按公共规则清除当前计划与历史，保留会话目录内的旧快照；整体清空或删除会话还会删除该目录内的旧文件。导入来源不会因导入而改写或删除，需长期保留的备份应放在会话目录外。
 
-待办记录与普通会话存储共用 `.plugin-state.lock`、256 KiB 上限、普通文件和无链接目录约束。活动项与历史一次比较交换提交，Lua 最多重试 16 次比较不匹配；锁忙和文件错误直接失败。只读 `snapshot` 允许导入和完成归档，观察提醒回调只读取。文件发布成功后不能随外层取消回滚。完整业务与查询边界见[会话待办插件](todo.md)。
+待办使用公共存储锁、256 KiB 上限、普通文件和无链接目录约束。活动项与历史一次比较交换提交，Lua 最多重试 16 次比较不匹配；锁忙和文件错误直接失败。只读 `snapshot` 允许初始化空记录和完成归档，不导入旧文件；观察提醒回调只读取。文件发布成功后不能随外层取消回滚。完整业务与查询边界见[会话待办插件](todo.md)。
 
 ## 插件持久记录
 
@@ -122,7 +122,7 @@ local display_path = work:path()
 
 ## 归档展开
 
-`extract_tar_gz` 只接受 GET 下载。初始来源及每次重定向继续使用普通 HTTP 授权，最多 5 次重定向；下载字节不经过文本解码。
+`extract_tar_gz` 只接受 GET 下载。初始来源及每次重定向继续使用普通 HTTP 授权，可以使用精确 `http` 来源或独立的 `http_read_any`；工作目录仍需 `system.workspace`。最多 5 次重定向，下载字节不经过文本解码；它不接受文本/二进制请求的 `max_redirects` 和 `read_error_body` 选项。
 
 | 选项 | 默认值 | 硬上限 |
 | --- | --- | --- |
@@ -154,7 +154,7 @@ Windows 的进程工作目录仍受[系统长度限制](https://learn.microsoft.
 
 ## AUR 插件的业务约束
 
-`package-advisor` 保留 `review_aur_package` 和 `install_aur_package`。前者只读，后者声明 writes；旧 `plugins.package_advisor.enabled` 只决定缺省启用状态，独立插件配置优先。
+`package-advisor` 示例提供 `lua__package-advisor__review_aur_package` 和 `lua__package-advisor__install_aur_package`。前者只读，后者声明 writes；安装默认禁用且没有授权，设置与启用状态由普通插件配置管理。旧主配置不再提供默认值。
 
 审查优先使用可用的 paru，其次 yay，两者都不可用时才下载官方快照；选中的助手执行失败即停止，不再尝试其他助手。审查不执行 PKGBUILD。风险模式、深度两层、80 个文件和每文件 24000 个 Unicode 字符沿用原设计。截断或无法读取的证据会使 `review_complete=false`，禁止安装。新审查开始即撤销旧许可，报告超过输出预算时不留下可安装记录。旧版全局 `aur-review-state.json` 不会迁入新的会话状态，需要重新审查。
 

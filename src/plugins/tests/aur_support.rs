@@ -243,7 +243,7 @@ impl PluginWorkspace for AurWorkspace {
 /// 【AUR 测试】【实际源码】在固定进程测试中模拟 Linux 平台，其他源码和清单保持正式内容。
 /// @returns 只使用假安装进程的包
 pub(super) fn package() -> PluginPackage {
-    let package = super::query_support::package("package-advisor");
+    let package = super::example_support::package("package-advisor");
     let mut sources = package.sources().clone();
     sources
         .get_mut("init.lua")

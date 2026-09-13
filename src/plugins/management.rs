@@ -1,4 +1,3 @@
-use super::bundled;
 use super::config::{load_config, mutation_lock, save_config, PluginSetting};
 use super::discovery::{find, public_tool_name, PluginSource};
 use super::grants::GrantUpdate;
@@ -35,7 +34,7 @@ pub(crate) fn validate_package(directory: &Path) -> Result<PluginInspection> {
 /// 【插件】【初始化检查】与运行时使用同一清单、模块、资源和注册校验。
 /// @param package 固定源码快照
 /// @returns 实际工具、命令和事件定义
-fn inspect_package(package: PluginPackage) -> Result<PluginInspection> {
+pub(super) fn inspect_package(package: PluginPackage) -> Result<PluginInspection> {
     let runtime = PluginRuntime::load(
         package,
         json!({}),
@@ -43,7 +42,7 @@ fn inspect_package(package: PluginPackage) -> Result<PluginInspection> {
         Arc::new(SaiPluginHost),
     )?;
     for tool in runtime.tools() {
-        public_tool_name(&runtime.manifest().id, &tool.name, false)?;
+        public_tool_name(&runtime.manifest().id, &tool.name)?;
     }
     Ok(PluginInspection {
         manifest: runtime.manifest().clone(),
@@ -61,12 +60,6 @@ pub(crate) fn install(directory: &Path, paths: &SaiPaths, replace: bool) -> Resu
     let package = PluginPackage::from_directory(directory)?;
     inspect_package(package.clone())?;
     let id = &package.manifest.id;
-    if bundled::packages()?
-        .iter()
-        .any(|bundled| bundled.manifest.id == *id)
-    {
-        bail!("cannot replace bundled plugin: {id}");
-    }
     let mut config = load_config(paths)?;
     let root = paths.config_dir.join("plugins");
     std::fs::create_dir_all(&root)?;
@@ -116,7 +109,7 @@ pub(crate) fn install(directory: &Path, paths: &SaiPaths, replace: bool) -> Resu
     Ok(destination)
 }
 
-/// 【插件】【启停配置】显式配置优先于内置兼容开关，启用本身不自动扩大外部授权。
+/// 【插件】【启停配置】启用状态与授权分别保存，启用本身不扩大授权。
 /// @param config 主配置；paths 为 Sai 路径；id 为插件 ID；enabled 为启用状态；update 为授权修改
 /// @returns 保存结果，新会话或显式重新加载后生效
 pub(crate) fn set_enabled(
@@ -153,8 +146,7 @@ pub(crate) fn configure(
     }
     let mut descriptor = find(config, paths, id)?;
     descriptor.setting.settings = settings;
-    descriptor.refresh_compatibility(config, paths)?;
-    // 【插件】【配置验证】校验派生设置但只保存原始设置，环境凭据不会写回配置
+    // 【插件】【配置验证】初始化只校验设置，不扩展清单和授权
     PluginRuntime::load(
         descriptor.runtime_package(),
         descriptor.settings().clone(),
@@ -170,13 +162,11 @@ pub(crate) fn configure(
 
 /// 【插件】【卸载】先禁用再移除已确认归属的安装目录。
 /// @param config 主配置；paths 为 Sai 路径；id 为插件 ID
-/// @returns 卸载结果；随程序发布的包只能禁用
+/// @returns 卸载结果；业务数据与已发布任务由独立管理入口保留
 pub(crate) fn remove(config: &AppConfig, paths: &SaiPaths, id: &str) -> Result<()> {
     let _lock = mutation_lock(paths)?;
     let descriptor = find(config, paths, id)?;
-    let PluginSource::Installed(directory) = descriptor.source else {
-        bail!("bundled plugins can only be disabled");
-    };
+    let PluginSource::Installed(directory) = descriptor.source;
     let mut plugin_config = load_config(paths)?;
     let mut setting = descriptor.setting;
     setting.enabled = false;
@@ -219,10 +209,7 @@ pub(crate) fn scaffold(directory: &Path, id: &str) -> Result<PathBuf> {
 /// @param root 空的目标目录；package 为规范插件包
 /// @returns 写入结果，不复制工作区其他文件
 fn write_package(root: &Path, package: &PluginPackage) -> Result<()> {
-    std::fs::write(
-        root.join("sai-plugin.json"),
-        format!("{}\n", serde_json::to_string_pretty(&package.manifest)?),
-    )?;
+    std::fs::write(root.join("sai-plugin.json"), package.manifest_json()?)?;
     for (relative, source) in package.sources() {
         let path = root.join(relative);
         if let Some(parent) = path.parent() {

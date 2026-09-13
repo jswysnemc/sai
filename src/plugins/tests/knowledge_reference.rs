@@ -1,5 +1,4 @@
 use super::knowledge_support::*;
-use crate::config::AppConfig;
 use serde_json::{json, Value};
 
 const PURE_ENTRY: &str = r#"
@@ -61,14 +60,7 @@ fn assert_result(actual: anyhow::Result<Value>, expected: &Value, label: &str) {
 async fn knowledge_matches_native_pure_rules() {
     let root = tempfile::tempdir().unwrap();
     let host = super::knowledge_host::KnowledgeHost::new(root.path());
-    let runtime = configured(
-        root.path(),
-        &AppConfig::default(),
-        json!({}),
-        host,
-        PURE_ENTRY,
-        |_| {},
-    );
+    let runtime = configured(root.path(), &json!({}), json!({}), host, PURE_ENTRY, |_| {});
     for document in [
         include_str!("fixtures/knowledge_pure_01.json"),
         include_str!("fixtures/knowledge_pure_02.json"),

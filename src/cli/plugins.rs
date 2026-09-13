@@ -18,7 +18,7 @@ pub(crate) struct PluginsArgs {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum PluginsCommand {
-    /// List installed and bundled plugins
+    /// List explicitly installed plugins
     List,
     /// Show a plugin manifest, source and effective grants
     Info { id: String },
@@ -26,6 +26,18 @@ pub(crate) enum PluginsCommand {
     Init { id: String, directory: PathBuf },
     /// Validate a plugin package without installing it or granting network access
     Check { directory: PathBuf },
+    /// 【插件命令】【源码分发】校验并打包清单和 Lua，不包含用户配置或授权
+    #[command(about = "Pack a validated Lua source snapshot into a tar.gz archive")]
+    Pack {
+        directory: PathBuf,
+        #[arg(
+            short,
+            long,
+            value_name = "ARCHIVE",
+            help = "Output .tar.gz or .tgz path; defaults to ID-VERSION.tar.gz"
+        )]
+        output: Option<PathBuf>,
+    },
     /// Install a local source snapshot; new plugins remain disabled
     Install {
         directory: PathBuf,
@@ -35,10 +47,17 @@ pub(crate) enum PluginsCommand {
     /// 【插件命令】【启用授权】启用插件，并按声明分别调整各项宿主能力授权
     Enable {
         id: String,
-        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_vision", "no_vision", "allow_tool", "no_tools", "allow_read_path", "no_file_read", "allow_remove_path", "no_file_remove", "allow_trash_path", "no_file_trash", "allow_env", "no_env", "allow_process", "no_processes", "allow_session_storage", "no_session_storage", "allow_plugin_storage", "no_plugin_storage", "allow_workspace", "no_workspace", "allow_notifications", "no_notifications", "allow_reply_policy", "no_reply_policy", "allow_notify", "no_notify", "allow_schedule", "no_schedule", "allow_public_downloads", "no_public_downloads", "allow_write_path", "no_file_write", "allow_image_display", "no_image_display"])]
+        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_any", "no_http_read_any", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_vision", "no_vision", "allow_tool", "no_tools", "allow_read_path", "no_file_read", "allow_remove_path", "no_file_remove", "allow_trash_path", "no_file_trash", "allow_env", "no_env", "allow_process", "no_processes", "allow_session_storage", "no_session_storage", "allow_plugin_storage", "no_plugin_storage", "allow_workspace", "no_workspace", "allow_notifications", "no_notifications", "allow_reply_policy", "no_reply_policy", "allow_notify", "no_notify", "allow_schedule", "no_schedule", "allow_public_downloads", "no_public_downloads", "allow_write_path", "no_file_write", "allow_image_display", "no_image_display"])]
         grant_declared: bool,
         #[arg(long, value_name = "ORIGIN", conflicts_with = "no_http")]
         allow_http: Vec<String>,
+        #[arg(long, conflicts_with_all = ["no_http", "no_http_read_any"], help = "Allow GET and HEAD to any HTTP(S) origin, including local services")]
+        allow_http_read_any: bool,
+        #[arg(
+            long,
+            help = "Revoke arbitrary-origin GET and HEAD without changing exact origins"
+        )]
+        no_http_read_any: bool,
         #[arg(
             long,
             value_name = "ENDPOINT",
@@ -153,8 +172,22 @@ pub(crate) enum PluginsCommand {
     Run {
         id: String,
         command: String,
+        #[arg(long, help = "Use an existing session in the current workspace")]
+        session: Option<String>,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         arguments: Vec<String>,
+    },
+    /// 【插件命令】【直接工具】使用 JSON 参数调用已启用插件的工具
+    #[command(
+        about = "Call an enabled plugin tool with JSON arguments through normal permissions"
+    )]
+    Call {
+        id: String,
+        tool: String,
+        #[arg(long, help = "Use an existing session in the current workspace")]
+        session: Option<String>,
+        #[arg(default_value = "{}")]
+        arguments: String,
     },
 }
 
@@ -199,6 +232,19 @@ pub(crate) async fn run(
                 args.json,
                 json!({"path": path}),
                 &format!("{}: {}", t("Installed", "已安装"), path.display()),
+            );
+        }
+        PluginsCommand::Pack { directory, output } => {
+            let result = plugins::pack(directory, output.as_deref())?;
+            return print_result(
+                args.json,
+                serde_json::to_value(&result)?,
+                &format!(
+                    "{}: {}\nSHA-256: {}",
+                    t("Packed", "已打包"),
+                    result.path.display(),
+                    result.sha256,
+                ),
             );
         }
         _ => {}
@@ -246,7 +292,6 @@ pub(crate) async fn run(
                         t("disabled", "已禁用")
                     };
                     let source = match &plugin.source {
-                        PluginSource::Bundled => t("bundled", "内置").to_string(),
                         PluginSource::Installed(path) => path.display().to_string(),
                     };
                     println!("{}  {}  {status}  {source}", manifest.id, manifest.version);
@@ -272,6 +317,8 @@ pub(crate) async fn run(
             id,
             grant_declared,
             allow_http,
+            allow_http_read_any,
+            no_http_read_any,
             allow_http_read_only_post,
             no_http,
             allow_model,
@@ -314,6 +361,8 @@ pub(crate) async fn run(
             let update = if grant_declared {
                 GrantUpdate::Declared
             } else if no_http
+                || allow_http_read_any
+                || no_http_read_any
                 || !allow_http.is_empty()
                 || allow_model
                 || no_model
@@ -366,6 +415,8 @@ pub(crate) async fn run(
                         .then_some(allow_plugin_storage),
                     workspace: (allow_workspace || no_workspace).then_some(allow_workspace),
                     http: change_http.then(|| allow_http.into_iter().collect()),
+                    http_read_any: (allow_http_read_any || no_http_read_any || no_http)
+                        .then_some(allow_http_read_any),
                     http_read_only_post: change_http
                         .then(|| allow_http_read_only_post.into_iter().collect()),
                     model: (allow_model || no_model).then_some(allow_model),
@@ -449,14 +500,43 @@ pub(crate) async fn run(
             id,
             command,
             arguments,
+            session,
         } => {
             let mode = mode.unwrap_or_else(|| config.permission.cli_mode().into());
-            let output =
-                execute_command(&config, paths, &id, &command, &arguments.join(" "), mode).await?;
+            let output = super::plugin_execute::command(
+                &config,
+                paths,
+                &id,
+                &command,
+                &arguments.join(" "),
+                session.as_deref(),
+                mode,
+            )
+            .await?;
+            print_result(args.json, json!({"output": output}), &output)
+        }
+        PluginsCommand::Call {
+            id,
+            tool,
+            arguments,
+            session,
+        } => {
+            let mode = mode.unwrap_or_else(|| config.permission.cli_mode().into());
+            let output = super::plugin_execute::tool(
+                &config,
+                paths,
+                &id,
+                &tool,
+                &arguments,
+                session.as_deref(),
+                mode,
+            )
+            .await?;
             print_result(args.json, json!({"output": output}), &output)
         }
         PluginsCommand::Init { .. }
         | PluginsCommand::Check { .. }
+        | PluginsCommand::Pack { .. }
         | PluginsCommand::Jobs(_)
         | PluginsCommand::Install { .. } => unreachable!(),
     }
@@ -479,61 +559,6 @@ fn plugin_registry(config: &AppConfig, paths: &SaiPaths) -> Result<ToolRegistry>
         );
     }
     Ok(registry)
-}
-
-/// 【插件命令】【权限执行】复用工具授权、审计和进度流程执行直接用户命令。
-/// @param config 主配置；paths 为 Sai 路径；id、command 定位命令；arguments 为用户文本；mode 为权限模式
-/// @returns 命令文本输出；用户拒绝时不执行 Lua 回调
-async fn execute_command(
-    config: &AppConfig,
-    paths: &SaiPaths,
-    id: &str,
-    command: &str,
-    arguments: &str,
-    mode: crate::agent::AgentMode,
-) -> Result<String> {
-    // 【插件命令】【执行目录】实际调用使用普通 CLI 工具集合，管理查询仍保持轻量
-    let mut registry = crate::tools::builtin_registry_without_mcp(config, paths);
-    if !registry.plugin_diagnostics().is_empty() {
-        bail!(
-            "plugin loading failed: {}",
-            serde_json::to_string(registry.plugin_diagnostics())?
-        );
-    }
-    let tool = registry.plugin_command(id, command)?;
-    let name = tool.name.clone();
-    registry.register(tool);
-    registry.start_plugin_session("plugin-command")?;
-    registry.set_permission_profile(crate::permission::PermissionProfile::new(
-        mode.permission_profile_mode(),
-        crate::runtime_cwd::current_dir()?,
-        Some(crate::permission::PermissionAuditLog::new(
-            paths.data_dir.join("permission-audit-cli.jsonl"),
-            "plugin-command",
-        )),
-    ));
-    let arguments = json!({"arguments": arguments}).to_string();
-    if registry.requires_permission(&name, &arguments)? {
-        registry.record_permission_requested(&name, &arguments)?;
-        let (request, receiver) =
-            crate::permission::request_permission("plugin-command", &name, &arguments);
-        super::prompt_permission_request(&request)?;
-        let decision = receiver.await?;
-        let detail = decision.detail().map(str::to_string);
-        match decision {
-            crate::permission::PermissionDecision::Allow { .. } => {
-                registry.record_permission_approved(&name, &arguments, detail.as_deref())?
-            }
-            crate::permission::PermissionDecision::Deny { reply } => {
-                registry.record_permission_denied(&name, &arguments, reply.as_deref())?;
-                bail!(
-                    "{}",
-                    reply.unwrap_or_else(|| "plugin command denied".to_string())
-                );
-            }
-        }
-    }
-    registry.call(&name, &arguments).await
 }
 
 /// 【插件命令】【变更结果】说明配置已保存以及现有会话的生效方式。

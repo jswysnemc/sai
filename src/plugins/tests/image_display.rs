@@ -52,12 +52,26 @@ async fn generation_composes_with_the_actual_display_plugin_through_tool_service
     for (enabled, authorized) in [(true, true), (true, false), (false, true)] {
         let root = tempfile::tempdir().unwrap();
         let paths = SaiPaths::for_tests(root.path());
-        let mut config = AppConfig::default();
-        config.plugins.image_generation.auto_print = true;
-        config.plugins.image_generation.api_keys = vec!["fixture-key".into()];
-        config.plugins.image_generation.output_dir = "output".into();
-        config.plugins.print_image.width_percent = 20;
-        config.plugins.print_image.height_percent = 25;
+        let config = AppConfig::default();
+        super::example_support::install_custom("image-generation", &paths, |manifest| {
+            manifest.capabilities.binary.write_paths = ["output".into()].into();
+        });
+        super::example_support::install_enabled("image-generation", &config, &paths);
+        super::example_support::install_enabled("image-display", &config, &paths);
+        crate::plugins::configure(
+            &config,
+            &paths,
+            "image-generation",
+            json!({"auto_print":true,"api_keys":["fixture-key"],"output_dir":"output"}),
+        )
+        .unwrap();
+        crate::plugins::configure(
+            &config,
+            &paths,
+            "image-display",
+            json!({"width_percent":20,"height_percent":25}),
+        )
+        .unwrap();
         let host = Arc::new(ImageHost::new(vec![(
             200,
             br#"{"data":[{"b64_json":"aGVsbG8="}]}"#.to_vec(),
@@ -79,7 +93,10 @@ async fn generation_composes_with_the_actual_display_plugin_through_tool_service
             register_descriptor(&mut registry, descriptor, host.clone(), false).unwrap();
         }
         let result = registry
-            .call("generate_image", &json!({"prompt":"preview"}).to_string())
+            .call(
+                "lua__image-generation__generate_image",
+                &json!({"prompt":"preview"}).to_string(),
+            )
             .await
             .unwrap();
         let result: Value = serde_json::from_str(&result).unwrap();

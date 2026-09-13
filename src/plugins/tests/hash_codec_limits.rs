@@ -6,12 +6,8 @@ use std::sync::Arc;
 /// 【哈希边界测试】【实际资源限制】发布包在输入、输出和累计计算超限后仍可处理正常请求
 /// @returns 无；错误来自实际业务和宿主边界，下一次调用获得独立预算
 #[tokio::test]
-async fn bundled_hash_codec_enforces_limits_and_recovers() {
-    let mut package = crate::plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|package| package.manifest.id == "hash-codec")
-        .unwrap();
+async fn example_hash_codec_enforces_limits_and_recovers() {
+    let mut package = super::example_support::package("hash-codec");
     package.manifest.limits.output_bytes = 1024;
     package.manifest.limits.instructions = 4000;
     let plugin = PluginRuntime::load(

@@ -24,7 +24,44 @@ fn item() -> Value {
     json!({"id":"a","text":"pending","status":"pending","created_at":"old","updated_at":"old"})
 }
 
-/// 【会话待办测试】【统计与错误】首次导入文件必须进入数据统计，损坏状态保留局部错误
+/// 【会话待办测试】【显式导入】普通安装并授权示例，通过公开命令导入测试状态
+/// @param paths 隔离应用目录；store 为真实会话；work 为所属工作区
+/// @returns 公共记录路径，供损坏状态及清理边界断言使用
+async fn import_plan(paths: &SaiPaths, store: &StateStore, work: &FilePath) -> PathBuf {
+    let config = AppConfig::default();
+    if !paths.config_dir.join("plugins/todo").exists() {
+        let source = FilePath::new(env!("CARGO_MANIFEST_DIR")).join("examples/lua-plugins/todo");
+        crate::plugins::install(&source, paths, false).unwrap();
+        crate::plugins::set_enabled(&config, paths, "todo", true, GrantUpdate::Declared).unwrap();
+    }
+    let scope = store.state_dir().display().to_string();
+    crate::runtime_cwd::scope(work.to_path_buf(), async {
+        let mut registry = crate::tools::builtin_registry_without_mcp(&config, paths);
+        assert!(registry.plugin_diagnostics().is_empty());
+        registry.start_plugin_session(store.session_id()).unwrap();
+        registry.inherit_plugin_storage_session(&scope);
+        let command = registry.plugin_command("todo", "import").unwrap();
+        let name = command.name.clone();
+        registry.register(command);
+        let arguments = json!({"state":{"version":0,"items":[item()],"history":[]}});
+        registry
+            .call(
+                &name,
+                &json!({"arguments":arguments.to_string()}).to_string(),
+            )
+            .await
+            .unwrap();
+    })
+    .await;
+    paths
+        .state_dir
+        .join("plugin-state")
+        .join(blake3::hash(b"todo").to_hex().to_string())
+        .join(blake3::hash(scope.as_bytes()).to_hex().to_string())
+        .join(format!("{}.json", blake3::hash(b"plan").to_hex()))
+}
+
+/// 【会话待办测试】【统计与错误】只有显式导入才产生待办数量，损坏公共记录保留局部错误
 /// @returns 无；禁用待办后仍可访问会话数据面板
 #[tokio::test]
 async fn session_data_todo_counts_follow_lua_and_preserve_query_errors() {
@@ -41,19 +78,25 @@ async fn session_data_todo_counts_follow_lua_and_preserve_query_errors() {
             json!([item()]).to_string(),
         )
         .unwrap();
+        let mut absent = collect_session_data(&paths, &[info.clone()], &info.id).unwrap();
+        todos::fill_counts(&paths, &mut absent).await.unwrap();
+        assert!(absent.iter().all(|summary| summary.todo_count == Some(0)));
+        let record = import_plan(&paths, &store, &work).await;
         let mut summaries = collect_session_data(&paths, &[info.clone()], &info.id).unwrap();
         todos::fill_counts(&paths, &mut summaries).await.unwrap();
         let summary = summaries.iter().find(|item| item.id == session.id).unwrap();
         assert_eq!(summary.todo_count, Some(1));
-        assert!(summary
-            .items
-            .iter()
-            .any(|item| item.name == "todos.plugin.json"));
+        assert!(summary.items.iter().any(|item| item.name == "todos.json"));
+        assert!(!store.state_dir().join("todos.plugin.json").exists());
+        assert_eq!(
+            std::fs::read_to_string(store.state_dir().join("todos.json")).unwrap(),
+            json!([item()]).to_string()
+        );
         assert_eq!(
             summary.total_bytes,
             summary.items.iter().map(|item| item.bytes).sum::<u64>()
         );
-        std::fs::write(store.state_dir().join("todos.plugin.json"), "{broken").unwrap();
+        std::fs::write(record, "{broken").unwrap();
         let mut summaries = collect_session_data(&paths, &[info.clone()], &info.id).unwrap();
         todos::fill_counts(&paths, &mut summaries).await.unwrap();
         let summary = summaries.iter().find(|item| item.id == session.id).unwrap();
@@ -96,6 +139,7 @@ async fn session_data_clear_removes_todo_files_only_for_selected_workspace() {
             json!([item()]).to_string(),
         )
         .unwrap();
+        import_plan(&paths, &store, &work).await;
         let view = TodoView::load(&AppConfig::default(), &paths).await.unwrap();
         assert_eq!(
             view.snapshot(store.session_id(), store.state_dir(), &work)

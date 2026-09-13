@@ -1,0 +1,10 @@
+{
+  "default_provider": "duckduckgo",
+  "max_results": 5,
+  "timeout_seconds": 20,
+  "tinyfish_api_keys": [],
+  "tavily_api_keys": [],
+  "firecrawl_api_keys": [],
+  "anysearch_api_keys": []
+}
+

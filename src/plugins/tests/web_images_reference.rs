@@ -43,11 +43,7 @@ end})
 /// @returns 无；失败时报告样本序号和完整输入
 #[tokio::test]
 async fn web_image_rules_match_original_rust_reference() {
-    let package = crate::plugins::bundled::packages()
-        .unwrap()
-        .into_iter()
-        .find(|package| package.manifest.id == "web-images")
-        .unwrap();
+    let package = super::example_support::package("web-images");
     let mut sources = package.sources().clone();
     sources.insert("init.lua".into(), REFERENCE.into());
     let package = PluginPackage::new(package.manifest, sources).unwrap();
