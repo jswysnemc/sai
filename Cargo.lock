@@ -5183,6 +5183,7 @@ dependencies = [
  "base64",
  "blake3",
  "cap-fs-ext",
+ "cap-primitives",
  "cap-std",
  "cbc 0.1.2",
  "chrono",

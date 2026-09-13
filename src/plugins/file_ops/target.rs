@@ -97,7 +97,7 @@ pub(super) fn same_file(left: &Metadata, right: &Metadata) -> Result<bool> {
     }
     #[cfg(windows)]
     {
-        use cap_fs_ext::MetadataExt;
+        use cap_primitives::fs::_WindowsByHandle;
         let left = left
             .volume_serial_number()
             .zip(left.file_index())
