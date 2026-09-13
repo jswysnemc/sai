@@ -44,8 +44,10 @@ async fn directory_creation_is_idempotent_and_accepts_granted_root() {
             .call_tool("run", json!({"path":name}), context(root.path()))
             .await
             .unwrap();
+        assert!(Path::new(&output).is_absolute());
+        // 1. 【目录测试】【路径身份】Windows 扩展路径前缀不改变目录身份
         assert_eq!(
-            Path::new(&output),
+            dunce::canonicalize(&output).unwrap(),
             dunce::canonicalize(root.path().join(name)).unwrap()
         );
         assert!(root.path().join(name).is_dir());

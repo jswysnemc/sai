@@ -55,6 +55,14 @@ fn legacy_state_is_bound_to_record_identity_but_not_old_status() {
 /// @returns 无，最终状态完整且原文件没有修改
 #[test]
 fn legacy_concurrent_cancellation_has_one_successful_transition() {
+    for _ in 0..32 {
+        assert_single_cancellation_transition();
+    }
+}
+
+/// 【旧闹钟测试】【取消竞争】从未创建的状态目录开始，同时取消同一任务。
+/// @returns 无，所有线程结束后检查唯一终态
+fn assert_single_cancellation_transition() {
     let (_root, paths, record) = fixture();
     let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
     let mut handles = Vec::new();
@@ -74,10 +82,11 @@ fn legacy_concurrent_cancellation_has_one_successful_transition() {
             panic!("legacy cancellation lock did not become available");
         }));
     }
+    let results: Vec<_> = handles.into_iter().map(|handle| handle.join()).collect();
     assert_eq!(
-        handles
+        results
             .into_iter()
-            .map(|handle| usize::from(handle.join().unwrap()))
+            .map(|result| usize::from(result.unwrap()))
             .sum::<usize>(),
         1
     );

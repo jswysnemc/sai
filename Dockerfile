@@ -24,6 +24,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY Cargo.toml Cargo.lock build.rs ./
+COPY crates ./crates
 COPY assets ./assets
 COPY sidecars ./sidecars
 COPY src ./src

@@ -28,10 +28,13 @@ end
 --- @return string 文件完整路径
 function M.file(config, name) return config.files_dir .. "/" .. M.relative(name) end
 
---- 【知识库路径】【文件名称】沿用以正斜线分隔的公开输出
---- @param path string 相对路径
+--- 【知识库路径】【文件名称】提取平台路径末段，Windows 来源同时支持两种分隔符
+--- @param path string 相对名称或已授权的绝对来源路径
 --- @return string 最后一段名称
-function M.name(path) return path:match("([^/]*)$") end
+function M.name(path)
+    if sai.system.platform == "windows" then path = path:gsub("\\", "/") end
+    return path:match("([^/]*)$")
+end
 
 --- 【知识库路径】【标题后备】只去除最后的扩展名，单个前导点不视为扩展名
 --- @param path string 相对文件路径

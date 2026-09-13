@@ -75,10 +75,13 @@ fn project(paths: &SaiPaths, record: &LegacyRecord, flag: Option<&Flag>) -> Resu
 /// @returns 是否完成一次新的取消；身份不符或平台拒绝时返回错误
 pub(crate) fn cancel(paths: &SaiPaths, id: &str) -> Result<bool> {
     validate_scheduled_id(id)?;
-    let store = Store::open(paths)?;
-    let _cancellation = store.cancellation_lock()?;
+    let store = Store::open(paths).context("open legacy alarm cancellation storage")?;
+    let _cancellation = store
+        .cancellation_lock()
+        .context("acquire legacy alarm cancellation lock")?;
     let Some((record, flag)) = store
-        .snapshot()?
+        .snapshot()
+        .context("load legacy alarm cancellation snapshot")?
         .into_iter()
         .find(|(record, _)| record.task_id() == id)
     else {
@@ -94,7 +97,9 @@ pub(crate) fn cancel(paths: &SaiPaths, id: &str) -> Result<bool> {
     // 1. 【旧闹钟兼容】【取消身份】进程句柄先于状态变更捕获，拒绝按持久 PID 直接发送信号
     let handle = process::capture(&record, &paths.state_dir)?;
     let cancelling = Flag::new(&record, ScheduledStatus::Cancelling, None)?;
-    let current = store.transition(&record, Some(cancelling), ACTIVE)?;
+    let current = store
+        .transition(&record, Some(cancelling), ACTIVE)
+        .context("mark legacy alarm cancelling")?;
     if current.is_none_or(|flag| flag.status != ScheduledStatus::Cancelling) {
         return Ok(false);
     }
@@ -118,10 +123,12 @@ pub(crate) fn cancel(paths: &SaiPaths, id: &str) -> Result<bool> {
         }
     }
     // 3. 【旧闹钟兼容】【终态提交】工作入口可能已经确认取消，既有终态保持不变
-    store.transition(
-        &record,
-        Some(Flag::new(&record, ScheduledStatus::Cancelled, None)?),
-        &[ScheduledStatus::Cancelling],
-    )?;
+    store
+        .transition(
+            &record,
+            Some(Flag::new(&record, ScheduledStatus::Cancelled, None)?),
+            &[ScheduledStatus::Cancelling],
+        )
+        .context("finish legacy alarm cancellation")?;
     Ok(true)
 }

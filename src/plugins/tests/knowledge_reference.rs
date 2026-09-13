@@ -71,9 +71,14 @@ async fn knowledge_matches_native_pure_rules() {
             "1a93197597af34d3702670cb79d85a2cd2406679"
         );
         for (index, case) in fixture["cases"].as_array().unwrap().iter().enumerate() {
+            let mut expected = case["expected"].clone();
+            // 1. 【知识库对照】【平台分隔符】冻结样本来自 Unix，Windows 将反斜线识别为目录分隔符
+            if cfg!(windows) && case["action"] == "path" && expected["ok"] == true {
+                expected["value"] = json!(expected["value"].as_str().unwrap().replace('\\', "/"));
+            }
             assert_result(
                 call(&runtime, root.path(), "reference", case.clone(), false).await,
-                &case["expected"],
+                &expected,
                 &format!("pure {index}: {case}"),
             );
         }

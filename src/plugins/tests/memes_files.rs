@@ -80,8 +80,7 @@ async fn memes_builtin_overlays_keep_images_and_can_be_reenabled() {
     )
     .await;
     call(&runtime, root.path(), "show_meme", json!({"id":"abc"})).await;
-    assert!(host.displays.lock().unwrap()[0]
-        .0
+    assert!(std::path::Path::new(&host.displays.lock().unwrap()[0].0)
         .ends_with("builtin/sai/images/base.png"));
     call(
         &runtime,
@@ -239,5 +238,9 @@ async fn memes_readding_reports_cleanup_failure_after_successful_publication() {
         json!({"id":added["id"]}),
     )
     .await;
-    assert_eq!(host.displays.lock().unwrap()[0].0, added["path"]);
+    // 1. 【表情文件测试】【路径身份】真实路径和配置路径可能使用不同前缀或目录别名
+    assert_eq!(
+        dunce::canonicalize(&host.displays.lock().unwrap()[0].0).unwrap(),
+        dunce::canonicalize(added["path"].as_str().unwrap()).unwrap()
+    );
 }

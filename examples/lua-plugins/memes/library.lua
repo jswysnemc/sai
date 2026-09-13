@@ -80,9 +80,9 @@ end
 function M.display_path(loaded)
     local path, builtin = M.image_path(loaded)
     local root = builtin and (loaded.fallback_root or loaded.root) or loaded.root
-    local directory = sai.fs.realpath(root):gsub("/+$", "") .. "/images/"
+    local directory = paths.for_comparison(sai.fs.realpath(root)):gsub("/+$", "") .. "/images/"
     local absolute = sai.fs.realpath(path)
-    assert(absolute:sub(1, #directory) == directory, "meme image escaped library images directory")
+    assert(paths.for_comparison(absolute):sub(1, #directory) == directory, "meme image escaped library images directory")
     return absolute
 end
 

@@ -149,21 +149,22 @@ async fn session_data_clear_removes_todo_files_only_for_selected_workspace() {
                 .len(),
             1
         );
-        stores.push((work, store));
+        // 1. 【会话待办测试】【清理前释放】仅保留路径，先关闭数据库句柄再删除状态目录
+        stores.push((work, store.state_dir().to_path_buf()));
     }
     clear_session_data_for_workspace(&paths, &stores[0].0, "default").unwrap();
     for file in ["todos.json", "todos.history.json", "todos.plugin.json"] {
-        assert!(!stores[0].1.state_dir().join(file).exists());
+        assert!(!stores[0].1.join(file).exists());
     }
     let view = TodoView::load(&AppConfig::default(), &paths).await.unwrap();
     assert!(view
-        .snapshot("default", stores[0].1.state_dir(), &stores[0].0)
+        .snapshot("default", &stores[0].1, &stores[0].0)
         .await
         .unwrap()
         .items
         .is_empty());
     assert_eq!(
-        view.snapshot("default", stores[1].1.state_dir(), &stores[1].0)
+        view.snapshot("default", &stores[1].1, &stores[1].0)
             .await
             .unwrap()
             .items

@@ -118,7 +118,6 @@ async fn paged_queries_are_bounded_and_have_no_execution_side_effects() {
 /// 【调度操作测试】【取消确认】执行中的任务先进入取消中，工作入口释放回调后记录取消终态。
 #[tokio::test]
 async fn running_commands_observe_cancellation_and_next_jobs_recover() {
-    use sai_plugin_runtime::host::{PluginHost, StorageRequest};
     let (_root, paths, descriptor) = fixture();
     let task = create(&paths, &descriptor, "hold", 1, &Launcher::default());
     let record = Store::open(&paths.state_dir, "schedule-fixture")
@@ -126,24 +125,35 @@ async fn running_commands_observe_cancellation_and_next_jobs_recover() {
         .get(&task.id)
         .unwrap()
         .unwrap();
+    // 1. 【调度操作测试】【开始观察】直接读取原子发布的记录，避免观察过程占用任务写入锁
+    let (_, storage) = crate::plugins::private::paths::namespace(
+        &paths.state_dir,
+        "plugin-storage",
+        "schedule-fixture",
+        "",
+    )
+    .unwrap();
+    let calls = storage.join(format!("{}.json", blake3::hash(b"calls").to_hex()));
     let copy = paths.clone();
     let id = task.id.clone();
     let run = tokio::spawn(async move {
         worker::run(&copy.state_dir, "schedule-fixture", &id, &record.launch).await
     });
-    let host = crate::plugins::private::PrivatePluginHost::new(&paths, "schedule-fixture");
-    tokio::time::timeout(Duration::from_secs(2), async {
+    tokio::time::timeout(Duration::from_secs(10), async {
         loop {
-            let value = host.plugin_storage(
-                StorageRequest::Get {
-                    key: "calls".into(),
-                },
-                &descriptor.grants(),
-                false,
-            );
-            if matches!(value,Ok(ref value) if *value==serde_json::json!(1)) {
+            let value = match std::fs::read(&calls) {
+                Ok(bytes) => Some(serde_json::from_slice::<serde_json::Value>(&bytes).unwrap()),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                Err(error) => panic!("read scheduled command observation: {error}"),
+            };
+            if value == Some(serde_json::json!(1)) {
                 break;
             }
+            assert!(
+                !run.is_finished(),
+                "scheduled command exited before publishing calls: {:?}",
+                get(&paths, "schedule-fixture", &task.id)
+            );
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
     })

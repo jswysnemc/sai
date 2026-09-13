@@ -21,9 +21,11 @@ impl Drop for Lock {
 /// @param base 宿主应用目录
 /// @returns 目录句柄与规范显示路径
 pub(in crate::plugins) fn root(base: &Path) -> Result<(Dir, PathBuf)> {
-    std::fs::create_dir_all(base)?;
-    let path = dunce::canonicalize(base)?;
-    Ok((Dir::open_ambient_dir(&path, ambient_authority())?, path))
+    std::fs::create_dir_all(base).context("create plugin private data root")?;
+    let path = dunce::canonicalize(base).context("resolve plugin private data root")?;
+    let directory = Dir::open_ambient_dir(&path, ambient_authority())
+        .context("open plugin private data root")?;
+    Ok((directory, path))
 }
 
 /// 【插件私有数据】【命名空间】类别、插件和作用域共同隔离数据，相同摘要不能跨类别访问。
@@ -40,11 +42,14 @@ pub(in crate::plugins) fn namespace(
         match directory.create_dir(&name) {
             Ok(()) => {}
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(error) => return Err(error.into()),
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("create private namespace component {name}"))
+            }
         }
-        directory = directory
-            .open_dir_nofollow(&name)
-            .context("open private namespace without following links")?;
+        directory = directory.open_dir_nofollow(&name).with_context(|| {
+            format!("open private namespace component {name} without following links")
+        })?;
         display.push(name);
     }
     Ok((directory, display))
@@ -66,8 +71,15 @@ pub(in crate::plugins) fn lock(directory: &Dir, name: &str) -> Result<Lock> {
         use cap_std::fs::OpenOptionsExt;
         options.custom_flags(libc::O_NONBLOCK);
     }
-    let file = directory.open_with(name, &options)?.into_std();
-    if !file.metadata()?.is_file() {
+    let file = directory
+        .open_with(name, &options)
+        .with_context(|| format!("open plugin private data lock {name}"))?
+        .into_std();
+    if !file
+        .metadata()
+        .context("inspect plugin private data lock")?
+        .is_file()
+    {
         anyhow::bail!("plugin private data lock requires a regular file");
     }
     file.try_lock()

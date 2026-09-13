@@ -80,7 +80,10 @@ fn repl_diff_keeps_symmetric_background_insets() {
 fn cli_diff_wraps_long_lines_with_background_continuation() {
     use crate::render::render_width::with_render_width;
 
-    let temp = tempfile::tempdir().unwrap();
+    let temp = tempfile::Builder::new()
+        .prefix(&"directory-with-y-".repeat(5))
+        .tempdir()
+        .unwrap();
     let path = temp.path().join("long.txt");
     std::fs::write(&path, "short\n").unwrap();
     let args = json!({
@@ -108,7 +111,8 @@ fn cli_diff_wraps_long_lines_with_background_continuation() {
         .lines()
         .filter(|line| {
             let plain = crate::render::activity_animation::strip_ansi_for_test(line);
-            plain.contains('y') && !plain.contains('+')
+            let body = plain.trim();
+            !body.is_empty() && body.chars().all(|ch| ch == 'y')
         })
         .collect::<Vec<_>>();
     assert!(!continuations.is_empty(), "样例必须触发折行");

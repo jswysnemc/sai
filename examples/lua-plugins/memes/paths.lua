@@ -1,6 +1,14 @@
 local values = require("values")
 local M = {}
 
+--- 【表情库】【路径比较】统一 Windows 真实路径的分隔符，保留其他平台的合法文件名
+--- @param path string 宿主解析后的绝对路径
+--- @return string 仅用于目录归属比较的路径
+function M.for_comparison(path)
+    if sai.system.platform == "windows" then return (path:gsub("\\", "/")) end
+    return path
+end
+
 --- 【表情库】【子路径校验】拒绝绝对路径、父目录跳转和跨平台路径分隔歧义
 --- @param relative string 索引中的相对文件或默认库名
 --- @return string 校验后的相对路径

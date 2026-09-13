@@ -241,12 +241,16 @@ impl Store {
         let result = (|| {
             let mut file = self
                 .directory
-                .open_with(&temporary, OpenOptions::new().write(true).create_new(true))?;
-            file.write_all(&bytes)?;
-            file.sync_all()?;
+                .open_with(&temporary, OpenOptions::new().write(true).create_new(true))
+                .context("create legacy alarm state temporary file")?;
+            file.write_all(&bytes)
+                .context("write legacy alarm state temporary file")?;
+            file.sync_all()
+                .context("sync legacy alarm state temporary file")?;
             drop(file);
             self.directory
-                .rename(&temporary, &self.directory, "states.json")?;
+                .rename(&temporary, &self.directory, "states.json")
+                .context("publish legacy alarm state")?;
             Ok(())
         })();
         if result.is_err() {

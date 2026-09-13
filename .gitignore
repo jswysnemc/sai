@@ -11,6 +11,7 @@ __pycache__/
 *.swp
 *.swo
 *.log
+/scripts/.remote-monitor.err
 *.pkg.tar.zst
 *.part
 *.old
