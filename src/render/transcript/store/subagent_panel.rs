@@ -51,6 +51,10 @@ impl TranscriptStore {
             let HistoryCell::Tool(ToolCell::Subagent(subagent)) = cell else {
                 continue;
             };
+            // 1. 【终端】【子任务列表】管理调用保留在时间线，不能创建额外任务条目
+            if !subagent.represents_task() {
+                continue;
+            }
             let overview = subagent.overview();
             let viewing = viewing_id
                 .as_deref()
@@ -182,6 +186,28 @@ fn sort_overview_entries(entries: &mut [SubagentOverviewEntry]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 【终端】【子任务列表】批量等待与查询记录不能成为独立子任务。
+    /// 参数: 无
+    /// 返回: 无，管理操作混入子任务时断言失败
+    #[test]
+    fn regression_management_calls_do_not_create_subagents() {
+        let mut store = TranscriptStore::new(200);
+        for arguments in [
+            r#"{"action":"list"}"#,
+            r#"{"action":"wait","subagent_ids":["task-a","task-b"]}"#,
+            r#"{"action":"wait"}"#,
+            r#"{"action":"status","subagent_id":"missing-status-target"}"#,
+            r#"{"action":"wait","subagent_id":"missing-wait-target"}"#,
+        ] {
+            store.push_tool_call("subagent".into(), arguments.into());
+            store.push_tool_result("subagent".into(), true, r#"{"status":"completed"}"#.into());
+        }
+        assert!(
+            store.subagent_overview().is_empty(),
+            "管理调用混入子任务面板"
+        );
+    }
 
     /// 构造测试概览条目。
     fn entry(label: &str, running: bool, status: &'static str) -> SubagentOverviewEntry {

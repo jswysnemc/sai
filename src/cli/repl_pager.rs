@@ -1,15 +1,17 @@
 use crate::cli::keyboard_enhancement::KeyboardEnhancementState;
 use crate::i18n::text as t;
 use crate::render::render_expandable_body;
+use crate::render::terminal_frame::TerminalFrame;
+use crate::render::terminal_rows::paint_changed_rows;
 use crate::render::transcript::{AnsiLine, ExpandableBlock, ExpandableBlockKind};
 use anyhow::Result;
-use crossterm::cursor::{Hide, MoveTo, Show};
+use crossterm::cursor::{Hide, Show};
 use crossterm::event::{
     self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
     Event, KeyEvent, KeyEventKind,
 };
-use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
-use crossterm::{execute, queue};
+use crossterm::execute;
+use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use std::io::{self, Write};
 
 mod repl_pager_search;
@@ -61,6 +63,8 @@ pub(super) fn open_blocks_pager(
         let mut content_lines = Vec::new();
         // 拖动目标：横向底栏进度条 / 右侧竖向滚动条
         let mut drag_target = ScrollDragTarget::None;
+        let mut previous: Option<(usize, usize, Vec<String>)> = None;
+        let mut frame = TerminalFrame::new();
         loop {
             let (cols, rows) = terminal::size().unwrap_or((80, 24));
             let rows = rows.max(1) as usize;
@@ -101,31 +105,26 @@ pub(super) fn open_blocks_pager(
                 view_label
             };
 
-            queue!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
-            // 全屏视图接管前删除 transcript 的图像放置，避免旧图叠在 pager 上
-            write!(
-                stdout,
-                "{}",
-                crate::render::terminal_image::KITTY_DELETE_PLACEMENTS
-            )?;
-            // 4. 固定顶栏：仅块序号
-            if header_rows > 0 {
+            // 3. 【终端】【历史分页】先组装完整画面，再比较并提交变化行
+            let mut page_lines = vec![String::new(); rows];
+            if previous.is_none() {
                 write!(
-                    stdout,
-                    "\x1b[1m{}\x1b[0m",
-                    truncate_visible(&header_prefix, cols)
+                    frame,
+                    "{}",
+                    crate::render::terminal_image::KITTY_DELETE_PLACEMENTS
                 )?;
+            }
+            if header_rows > 0 {
+                page_lines[0] = format!("\x1b[1m{}\x1b[0m", truncate_visible(&header_prefix, cols));
             }
             let scrollbar = scrollbar_glyphs(view_h, content_lines.len(), state.scroll);
             for row in 0..view_h {
                 // 5. 逐行绝对定位，避免极矮终端的最后一行换行触发滚屏
-                queue!(stdout, MoveTo(0, (header_rows + row) as u16))?;
                 let idx = state.scroll + row;
                 let line = content_lines.get(idx).map(AnsiLine::as_str).unwrap_or("");
                 let line = state.search.highlight(line, idx);
                 let bar = scrollbar.get(row).copied().unwrap_or(' ');
-                write!(
-                    stdout,
+                page_lines[header_rows + row] = format!(
                     "{}\x1b[2m{}\x1b[0m",
                     pad_line(&line, body_width),
                     if cols > 1 {
@@ -133,7 +132,7 @@ pub(super) fn open_blocks_pager(
                     } else {
                         String::new()
                     }
-                )?;
+                );
             }
             // 7. 可拖动进度条（第二底栏上方的横向轨道）
             let end = (state.scroll + view_h).min(content_lines.len());
@@ -145,8 +144,7 @@ pub(super) fn open_blocks_pager(
             if footer_rows > 1 {
                 let track =
                     horizontal_progress_track(cols, content_lines.len(), view_h, state.scroll);
-                queue!(stdout, MoveTo(0, (header_rows + view_h) as u16))?;
-                write!(stdout, "{track}")?;
+                page_lines[header_rows + view_h] = track;
             }
             // 8. 底栏快捷键
             let base_hint = if state.editing_search {
@@ -186,10 +184,15 @@ pub(super) fn open_blocks_pager(
                 )
             };
             if footer_rows > 0 {
-                queue!(stdout, MoveTo(0, (rows - 1) as u16))?;
-                write!(stdout, "\x1b[2m{}\x1b[0m", truncate_visible(&footer, cols))?;
+                page_lines[rows - 1] = format!("\x1b[2m{}\x1b[0m", truncate_visible(&footer, cols));
             }
-            stdout.flush()?;
+            let old_lines = previous
+                .as_ref()
+                .filter(|(old_cols, old_rows, _)| *old_cols == cols && *old_rows == rows)
+                .map(|(_, _, lines)| lines.as_slice());
+            paint_changed_rows(&mut frame, 0, cols, &page_lines, old_lines)?;
+            frame.commit()?;
+            previous = Some((cols, rows, page_lines));
 
             let progress_row = (header_rows + view_h) as u16;
             match event::read()? {

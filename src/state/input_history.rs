@@ -1,7 +1,11 @@
 use crate::paths::SaiPaths;
 use anyhow::{Context, Result};
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+
+mod entry;
+pub use entry::{InputHistoryAttachment, InputHistoryAttachmentKind, InputHistoryEntry};
 
 /// 跨会话共享的输入历史上限。
 ///
@@ -32,6 +36,16 @@ fn history_file(paths: &SaiPaths) -> PathBuf {
 /// 返回:
 /// - 历史输入列表，文件不存在时为空
 pub fn load_input_history(paths: &SaiPaths) -> Result<Vec<String>> {
+    Ok(load_input_history_entries(paths)?
+        .into_iter()
+        .map(|entry| entry.text)
+        .collect())
+}
+
+/// 【输入历史】【读取快照】读取正文及附件，兼容旧版每行只有字符串的历史文件。
+/// 参数: `paths` 为应用路径
+/// 返回: 按时间正序排列的完整输入快照
+pub fn load_input_history_entries(paths: &SaiPaths) -> Result<Vec<InputHistoryEntry>> {
     let path = history_file(paths);
     if !path.exists() {
         return Ok(Vec::new());
@@ -52,25 +66,50 @@ pub fn load_input_history(paths: &SaiPaths) -> Result<Vec<String>> {
 /// 返回:
 /// - 写入结果；空白输入直接跳过
 pub fn append_input_history(paths: &SaiPaths, entry: &str) -> Result<()> {
-    let trimmed = entry.trim();
-    if trimmed.is_empty() {
+    append_input_history_entry(paths, &InputHistoryEntry::from(entry.to_string()))
+}
+
+/// 【输入历史】【保存快照】保存完整输入，去重时同时比较附件，避免同名标签覆盖不同原文。
+/// 参数: `paths` 为应用路径，`entry` 为待保存快照
+/// 返回: 写入结果
+pub fn append_input_history_entry(paths: &SaiPaths, entry: &InputHistoryEntry) -> Result<()> {
+    if entry.text.trim().is_empty() {
         return Ok(());
     }
     let path = history_file(paths);
-    let mut entries = load_input_history(paths)?;
-    // 1. 与最近一条重复时不再追加
-    if entries.last().map(String::as_str) == Some(trimmed) {
+    // 1. 【输入历史】【并发保存】串行更新共享索引，避免多个终端覆盖彼此的新条目
+    fs::create_dir_all(&paths.state_dir)?;
+    let lock = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(paths.state_dir.join("input-history.lock"))?;
+    lock.lock()?;
+    let mut entries = load_input_history_entries(paths)?;
+    // 2. 【输入历史】【保存快照】与最近一条重复时不再追加
+    if entries.last() == Some(entry) {
         return Ok(());
     }
-    // 2. 同样的输入若出现在更早位置，移到末尾而不是留下两份
-    entries.retain(|existing| existing != trimmed);
-    entries.push(trimmed.to_string());
-    // 3. 超出上限时丢弃最旧条目
+    // 3. 【输入历史】【保存快照】把较早的重复条目移到末尾
+    push_input_history_entry(&mut entries, entry.clone());
+    write_history(&path, &entries)
+}
+
+/// 【输入历史】【维护列表】按完整快照去重并限制容量，编辑历史不会修改先前的附件。
+/// 参数: `entries` 为内存历史列表，`entry` 为独立快照
+/// 返回: 无，原地更新列表
+pub fn push_input_history_entry(entries: &mut Vec<InputHistoryEntry>, entry: InputHistoryEntry) {
+    if entry.text.trim().is_empty() {
+        return;
+    }
+    entries.retain(|existing| existing != &entry);
+    entries.push(entry);
+    // 1. 【输入历史】【维护列表】超出上限时丢弃最旧条目
     if entries.len() > INPUT_HISTORY_LIMIT {
         let excess = entries.len() - INPUT_HISTORY_LIMIT;
         entries.drain(..excess);
     }
-    write_history(&path, &entries)
 }
 
 /// 解析历史文件内容。
@@ -80,12 +119,23 @@ pub fn append_input_history(paths: &SaiPaths, entry: &str) -> Result<()> {
 ///
 /// 返回:
 /// - 按文件顺序排列的历史输入
-fn parse_history(content: &str) -> Vec<String> {
-    content
+fn parse_history(content: &str) -> Vec<InputHistoryEntry> {
+    let mut entries: Vec<_> = content
         .lines()
-        .filter_map(|line| serde_json::from_str::<String>(line).ok())
-        .filter(|entry| !entry.trim().is_empty())
-        .collect()
+        .filter_map(|line| {
+            serde_json::from_str::<InputHistoryEntry>(line)
+                .ok()
+                .or_else(|| {
+                    serde_json::from_str::<String>(line)
+                        .ok()
+                        .map(InputHistoryEntry::from)
+                })
+        })
+        .filter(|entry| !entry.text.trim().is_empty())
+        .collect();
+    let excess = entries.len().saturating_sub(INPUT_HISTORY_LIMIT);
+    entries.drain(..excess);
+    entries
 }
 
 /// 覆盖写入历史文件。
@@ -98,119 +148,27 @@ fn parse_history(content: &str) -> Vec<String> {
 ///
 /// 返回:
 /// - 写入结果
-fn write_history(path: &Path, entries: &[String]) -> Result<()> {
+fn write_history(path: &Path, entries: &[InputHistoryEntry]) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("failed to create state dir: {}", parent.display()))?;
     }
     let mut body = String::new();
     for entry in entries {
-        body.push_str(&serde_json::to_string(entry)?);
+        if entry.attachments.is_empty() {
+            body.push_str(&serde_json::to_string(&entry.text)?);
+        } else {
+            body.push_str(&serde_json::to_string(entry)?);
+        }
         body.push('\n');
     }
-    let temp = path.with_extension("jsonl.tmp");
-    fs::write(&temp, body)
-        .with_context(|| format!("failed to write input history: {}", temp.display()))?;
-    fs::rename(&temp, path)
+    // 1. 【输入历史】【原子写入】使用独立临时文件，避免多个终端共享同一临时文件名
+    let mut temp = tempfile::NamedTempFile::new_in(path.parent().unwrap_or(Path::new(".")))?;
+    temp.write_all(body.as_bytes())?;
+    temp.persist(path)
         .with_context(|| format!("failed to replace input history: {}", path.display()))?;
     Ok(())
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// 构造指向临时目录的路径配置。
-    ///
-    /// 参数:
-    /// - `root`: 临时根目录
-    ///
-    /// 返回:
-    /// - 测试用路径配置
-    fn test_paths(root: PathBuf) -> SaiPaths {
-        SaiPaths {
-            config_dir: root.join("config"),
-            config_file: root.join("config/config.jsonc"),
-            secrets_file: root.join("config/secrets.json"),
-            skills_dir: root.join("skills"),
-            data_dir: root.join("data"),
-            cache_dir: root.join("cache"),
-            state_dir: root.join("state"),
-            pictures_dir: root.join("pictures"),
-            fish_hook_file: root.join("shell/sai.fish"),
-            bash_hook_file: root.join("shell/bash-hook.sh"),
-            zsh_hook_file: root.join("shell/zsh-hook.zsh"),
-            powershell_hook_file: root.join("shell/powershell-hook.ps1"),
-        }
-    }
-
-    /// 验证历史按时间正序累积且跨"会话"共享（同一路径重复读取）。
-    #[test]
-    fn appends_entries_in_order() {
-        let temp = tempfile::tempdir().unwrap();
-        let paths = test_paths(temp.path().to_path_buf());
-        append_input_history(&paths, "first").unwrap();
-        append_input_history(&paths, "second").unwrap();
-        assert_eq!(load_input_history(&paths).unwrap(), vec!["first", "second"]);
-    }
-
-    /// 验证连续重复输入不产生新条目。
-    #[test]
-    fn skips_consecutive_duplicates() {
-        let temp = tempfile::tempdir().unwrap();
-        let paths = test_paths(temp.path().to_path_buf());
-        append_input_history(&paths, "same").unwrap();
-        append_input_history(&paths, "same").unwrap();
-        assert_eq!(load_input_history(&paths).unwrap(), vec!["same"]);
-    }
-
-    /// 验证重复出现的旧输入被移动到末尾而不是留下两份。
-    #[test]
-    fn moves_repeated_entry_to_end() {
-        let temp = tempfile::tempdir().unwrap();
-        let paths = test_paths(temp.path().to_path_buf());
-        append_input_history(&paths, "a").unwrap();
-        append_input_history(&paths, "b").unwrap();
-        append_input_history(&paths, "a").unwrap();
-        assert_eq!(load_input_history(&paths).unwrap(), vec!["b", "a"]);
-    }
-
-    /// 验证超出上限时丢弃最旧条目。
-    #[test]
-    fn trims_to_limit() {
-        let temp = tempfile::tempdir().unwrap();
-        let paths = test_paths(temp.path().to_path_buf());
-        for index in 0..(INPUT_HISTORY_LIMIT + 10) {
-            append_input_history(&paths, &format!("entry-{index}")).unwrap();
-        }
-        let entries = load_input_history(&paths).unwrap();
-        assert_eq!(entries.len(), INPUT_HISTORY_LIMIT);
-        assert_eq!(entries.first().unwrap(), "entry-10");
-        assert_eq!(
-            entries.last().unwrap(),
-            &format!("entry-{}", INPUT_HISTORY_LIMIT + 9)
-        );
-    }
-
-    /// 验证空白输入不进入历史。
-    #[test]
-    fn ignores_blank_entries() {
-        let temp = tempfile::tempdir().unwrap();
-        let paths = test_paths(temp.path().to_path_buf());
-        append_input_history(&paths, "   \n  ").unwrap();
-        assert!(load_input_history(&paths).unwrap().is_empty());
-    }
-
-    /// 验证损坏行被跳过而不是导致读取失败。
-    #[test]
-    fn skips_corrupt_lines() {
-        let temp = tempfile::tempdir().unwrap();
-        let paths = test_paths(temp.path().to_path_buf());
-        append_input_history(&paths, "good").unwrap();
-        let path = history_file(&paths);
-        let mut content = fs::read_to_string(&path).unwrap();
-        content.push_str("{not json}\n");
-        fs::write(&path, content).unwrap();
-        assert_eq!(load_input_history(&paths).unwrap(), vec!["good"]);
-    }
-}
+mod tests;

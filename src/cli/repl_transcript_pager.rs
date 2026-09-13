@@ -1,12 +1,13 @@
 use super::repl_runtime::ReplRuntime;
 use crate::i18n::text as t;
+use crate::render::terminal_frame::TerminalFrame;
+use crate::render::terminal_rows::paint_changed_rows;
 use anyhow::Result;
-use crossterm::cursor::{Hide, MoveTo, Show};
+use crossterm::cursor::{Hide, Show};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
-use crossterm::style::Print;
-use crossterm::terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
-use crossterm::{execute, queue};
-use std::io::{self, Write};
+use crossterm::execute;
+use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
+use std::io;
 use std::time::Duration;
 
 /// 在备用屏中浏览完整 transcript，滚动进度由程序自管理。
@@ -59,13 +60,17 @@ fn run_pager_loop(runtime: &mut ReplRuntime) -> Result<()> {
     // 原先每次 250ms 超时都整屏 Clear + 逐行重打，空闲时表现为持续微闪，
     // 在 SSH / 远程会话上还要白白吃掉带宽
     let mut drawn: Option<(u16, u16, usize, usize)> = None;
+    let mut previous_lines = Vec::new();
     loop {
         let view_height = usize::from(rows.max(2)) - 1;
         let max_offset = lines.len().saturating_sub(view_height);
         offset_from_bottom = offset_from_bottom.min(max_offset);
         let frame = (cols, rows, offset_from_bottom, lines.len());
         if drawn != Some(frame) {
-            draw_view(&lines, view_height, cols, offset_from_bottom)?;
+            let previous = drawn
+                .filter(|old| old.0 == cols && old.1 == rows)
+                .map(|_| previous_lines.as_slice());
+            previous_lines = draw_view(&lines, view_height, cols, offset_from_bottom, previous)?;
             drawn = Some(frame);
         }
         if !event::poll(Duration::from_millis(250))? {
@@ -143,18 +148,15 @@ fn draw_view(
     view_height: usize,
     cols: u16,
     offset_from_bottom: usize,
-) -> Result<()> {
-    let mut stdout = io::stdout();
+    previous: Option<&[String]>,
+) -> Result<Vec<String>> {
+    let mut frame = TerminalFrame::new();
+    let mut page_lines = vec![String::new(); view_height + 1];
     let end = lines.len().saturating_sub(offset_from_bottom);
     let start = end.saturating_sub(view_height);
-    for row in 0..view_height {
-        queue!(
-            stdout,
-            MoveTo(0, row.min(usize::from(u16::MAX)) as u16),
-            Clear(ClearType::CurrentLine)
-        )?;
+    for (row, output) in page_lines.iter_mut().take(view_height).enumerate() {
         if let Some(line) = lines.get(start + row).filter(|_| start + row < end) {
-            queue!(stdout, Print(line))?;
+            *output = line.clone();
         }
     }
     // 底部状态行：位置 + 键位提示
@@ -171,14 +173,10 @@ fn draw_view(
         t("bottom", "回到底部"),
         t("close", "关闭")
     );
-    queue!(
-        stdout,
-        MoveTo(0, view_height.min(usize::from(u16::MAX)) as u16),
-        Clear(ClearType::CurrentLine),
-        Print(clip_to_width(&status, usize::from(cols)))
-    )?;
-    stdout.flush()?;
-    Ok(())
+    page_lines[view_height] = clip_to_width(&status, usize::from(cols));
+    paint_changed_rows(&mut frame, 0, usize::from(cols), &page_lines, previous)?;
+    frame.commit()?;
+    Ok(page_lines)
 }
 
 /// 将单行 ANSI 文本截断到终端宽度。

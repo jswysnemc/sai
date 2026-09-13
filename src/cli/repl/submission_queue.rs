@@ -67,7 +67,7 @@ pub(super) async fn drain_submission_queue(
     runtime: &mut ReplRuntime,
     owner_key: &str,
     mode: &mut AgentMode,
-    input_history: &mut Vec<String>,
+    input_history: &mut Vec<crate::state::input_history::InputHistoryEntry>,
     reasoning_mode: render::ReasoningDisplayMode,
     tool_call_mode: render::ToolCallDisplayMode,
     session_link: &super::repl_session_link::ReplSessionLink,
@@ -104,7 +104,11 @@ pub(super) async fn drain_submission_queue(
             if chat_input.message.trim().is_empty() && chat_input.image_url.is_none() {
                 continue;
             }
-            input_history.push(text.clone());
+            crate::cli::repl_input::history::remember_history(
+                paths,
+                input_history,
+                item.clipboard.history_entry(&item.text),
+            );
             runtime.record_input(*mode, echo.clone())?;
             // 跟随端上行的一轮走这条路径，回显要广播回去，否则对端只见回答不见提问
             session_link.broadcast_user_message(

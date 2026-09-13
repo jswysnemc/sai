@@ -4,6 +4,7 @@ use anyhow::Result;
 use base64::Engine as _;
 use crossterm::event::{KeyCode, KeyModifiers};
 
+mod history;
 mod mentions;
 mod submission;
 

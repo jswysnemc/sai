@@ -541,8 +541,8 @@ impl ReplRuntime {
                 self.viewport.apply_terminal_scroll(outcome.scrolled_rows);
                 self.stream
                     .note_scrolled(outcome.scrolled_rows.saturating_sub(absorbed));
-                // 历史插入可能滚过 composer 区域，缓存的签名不再代表屏幕现状
-                if outcome.scrolled_rows > 0 {
+                // 【终端】【帧同步】滚动或历史收缩会擦除输入区，必须重新绘制完整输入框
+                if outcome.scrolled_rows > 0 || new_total < old_total {
                     self.last_composer_signature = None;
                 }
                 self.queue_composer()?;

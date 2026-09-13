@@ -2,13 +2,15 @@ use super::repl_chrome::{chrome_input_content_cols, ReplChrome};
 use super::repl_clipboard::{is_paste_key, paste_image_first, ReplClipboardState};
 use super::repl_external_events::ReplExternalEvents;
 use super::repl_runtime::{QueuePanelIdleResult, ReplRuntime};
-use super::repl_windows_paste::{WindowsPasteKey, WindowsPasteState};
+use super::repl_windows_paste::WindowsPasteState;
 use super::*;
 
 const EXTERNAL_EVENT_INPUT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 mod cleanup;
 mod editing;
+pub(super) mod event_batch;
+pub(super) mod history;
 mod submission;
 
 use cleanup::finish_repl_input;
@@ -34,7 +36,7 @@ pub(super) fn read_repl_input(
     mut mode: AgentMode,
     prefill: Option<String>,
     prefill_clipboard: Option<ReplClipboardState>,
-    history: &[String],
+    history: &[crate::state::input_history::InputHistoryEntry],
     chrome: &mut ReplChrome,
     runtime: &mut ReplRuntime,
     external_events: &mut ReplExternalEvents,
@@ -76,7 +78,8 @@ pub(super) fn read_repl_input(
         // 回执让位给用户按键：自动轮一旦启动就接管终端，而 take_ready 原本无条件
         // 排在读键之前，用户连第一个字符都打不进去（input 始终为空，靠它判断无效）。
         // 先做一次零超时探测，终端里已有待读事件就走正常按键流程。
-        let user_pending = event::poll(Duration::from_secs(0))?;
+        let queued_event = runtime.pop_input_event();
+        let user_pending = queued_event.is_some() || event::poll(Duration::ZERO)?;
         if !user_pending {
             if let Some(wake) = external_events.take_ready() {
                 terminal_guard.finish(&mut stdout)?;
@@ -90,7 +93,6 @@ pub(super) fn read_repl_input(
                 }));
             }
         }
-        let queued_event = runtime.pop_input_event();
         if queued_event.is_none() {
             let wait = match (runtime.pending_wait(), external_events.is_armed()) {
                 (Some(wait), true) => Some(wait.min(EXTERNAL_EVENT_INPUT_POLL_INTERVAL)),
@@ -143,17 +145,7 @@ pub(super) fn read_repl_input(
                 if kind == KeyEventKind::Release {
                     continue;
                 }
-                let replay_key = match code {
-                    KeyCode::Char(ch)
-                        if !modifiers.contains(KeyModifiers::CONTROL)
-                            && !modifiers.contains(KeyModifiers::ALT) =>
-                    {
-                        Some(WindowsPasteKey::Char(ch))
-                    }
-                    KeyCode::Enter if modifiers.is_empty() => Some(WindowsPasteKey::Enter),
-                    KeyCode::Tab if modifiers.is_empty() => Some(WindowsPasteKey::Tab),
-                    _ => None,
-                };
+                let replay_key = event_batch::windows_paste_key(code, modifiers);
                 if replay_key.is_some_and(|key| windows_paste.consume_key(key)) {
                     continue;
                 }
@@ -343,15 +335,13 @@ pub(super) fn read_repl_input(
                                 runtime,
                                 &mut terminal_guard,
                             )?;
-                            return Ok(Some(ReplInputEvent::User(ReplInputSubmission {
-                                mode,
-                                raw_input: "/tree".to_string(),
-                                chat_input: clipboard_state.to_chat_input("/tree"),
-                                echo: crate::render::input_atom::InputEcho {
-                                    text: "/tree".to_string(),
-                                    ..Default::default()
-                                },
-                            })));
+                            return Ok(Some(ReplInputEvent::User(
+                                ReplInputSubmission::from_input(
+                                    mode,
+                                    "/tree".to_string(),
+                                    &clipboard_state,
+                                ),
+                            )));
                         }
                         // 剪贴板占位块整体跳过，保持与删除一致的原子性
                         cursor = clipboard_state.cursor_left(&input, cursor);
@@ -411,11 +401,13 @@ pub(super) fn read_repl_input(
                                         history_index = history.len();
                                     }
                                     history_index = history_index.saturating_sub(1);
-                                    input = history.get(history_index).cloned().unwrap_or_default();
+                                    let draft =
+                                        history::restore_history_entry(&history[history_index]);
+                                    input = draft.text;
+                                    clipboard_state = draft.clipboard_state;
                                     cursor = input.chars().count();
                                     history_clean_index = Some(history_index);
                                     slash_selection = 0;
-                                    clipboard_state.clear();
                                     is_pasted = false;
                                     redraw_input!()?;
                                 }
@@ -447,11 +439,13 @@ pub(super) fn read_repl_input(
                                 ) && history_index + 1 < history.len()
                                 {
                                     history_index += 1;
-                                    input = history.get(history_index).cloned().unwrap_or_default();
+                                    let draft =
+                                        history::restore_history_entry(&history[history_index]);
+                                    input = draft.text;
+                                    clipboard_state = draft.clipboard_state;
                                     cursor = input.chars().count();
                                     history_clean_index = Some(history_index);
                                     slash_selection = 0;
-                                    clipboard_state.clear();
                                     is_pasted = false;
                                 } else if repl_history_is_clean(
                                     &input,
@@ -724,8 +718,9 @@ pub(super) fn read_repl_input(
                             && !modifiers.contains(KeyModifiers::ALT) =>
                     {
                         if !is_disallowed_control_char(ch) {
-                            windows_paste.record_char(ch, Instant::now());
-                            insert_char_at_cursor(&mut input, &mut cursor, ch);
+                            let text = event_batch::take_text_batch(ch, runtime)?;
+                            windows_paste.record_text(&text, Instant::now());
+                            insert_str_at_cursor(&mut input, &mut cursor, &text);
                             history_clean_index = None;
                         }
                         slash_selection = 0;

@@ -1,4 +1,5 @@
 pub(crate) mod activity_animation;
+pub(crate) mod ansi_style;
 mod asset_block;
 mod background_command_event;
 pub(crate) mod background_promotion;
@@ -41,6 +42,7 @@ pub(crate) mod terminal_frame;
 pub(crate) mod terminal_image;
 pub(crate) mod terminal_paint;
 pub(crate) mod terminal_palette;
+pub(crate) mod terminal_rows;
 pub(crate) mod todo_style;
 mod tool_call_blocks;
 mod tool_event_line;

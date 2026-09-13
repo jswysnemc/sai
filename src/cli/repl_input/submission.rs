@@ -8,6 +8,8 @@ pub(in crate::cli) struct ReplInputSubmission {
     pub(in crate::cli) chat_input: clipboard::ClipboardChatInput,
     /// 提交回显的完整正文与原子块元数据
     pub(in crate::cli) echo: InputEcho,
+    /// 提交前冻结的输入与附件，独立于回显和模型消息
+    pub(in crate::cli) history: crate::state::input_history::InputHistoryEntry,
 }
 
 impl ReplInputSubmission {
@@ -24,6 +26,7 @@ impl ReplInputSubmission {
             mode,
             chat_input: clipboard.to_chat_input(&raw_input),
             echo: clipboard.echo_text_for_submit(&raw_input),
+            history: clipboard.history_entry(&raw_input),
             raw_input,
         }
     }
@@ -42,6 +45,7 @@ impl ReplInputSubmission {
     pub(in crate::cli) fn control(mode: AgentMode, command: String) -> Self {
         Self {
             mode,
+            history: crate::state::input_history::InputHistoryEntry::from(command.clone()),
             raw_input: command,
             chat_input: clipboard::ClipboardChatInput {
                 message: String::new(),

@@ -55,12 +55,12 @@ pub(super) fn complete_active_mention(
 /// - 未修改选中历史时返回 true
 pub(in crate::cli) fn repl_history_is_clean(
     input: &str,
-    history: &[String],
+    history: &[impl AsRef<str>],
     history_clean_index: Option<usize>,
 ) -> bool {
     history_clean_index
         .and_then(|index| history.get(index))
-        .is_some_and(|entry| entry == input)
+        .is_some_and(|entry| entry.as_ref() == input)
 }
 
 /// 判断上方向键是否可以进入历史浏览。
@@ -74,7 +74,7 @@ pub(in crate::cli) fn repl_history_is_clean(
 /// - 输入为空或仍为未修改历史时返回 true
 pub(in crate::cli) fn repl_should_browse_history(
     input: &str,
-    history: &[String],
+    history: &[impl AsRef<str>],
     history_clean_index: Option<usize>,
 ) -> bool {
     !history.is_empty()

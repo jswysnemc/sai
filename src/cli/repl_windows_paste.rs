@@ -10,6 +10,7 @@ pub(super) struct WindowsPasteState {
     recent_chars: String,
     last_char_at: Option<Instant>,
     replay: String,
+    replay_offset: usize,
 }
 
 /// Windows 粘贴检测成功后需要替换的输入片段。
@@ -36,7 +37,15 @@ impl WindowsPasteState {
     ///
     /// 返回:
     /// - 无
+    #[cfg(test)]
     pub(super) fn record_char(&mut self, ch: char, now: Instant) {
+        self.record_text(ch.encode_utf8(&mut [0; 4]), now);
+    }
+
+    /// 【终端】【Windows 粘贴】一次登记同批文字，避免重复处理事件时间和输入缓冲。
+    /// 参数: `text` 为连续输入文字，`now` 为接收时间
+    /// 返回: 无
+    pub(super) fn record_text(&mut self, text: &str, now: Instant) {
         // 1. 相邻字符间隔过长时开始新的候选片段
         if self
             .last_char_at
@@ -46,7 +55,7 @@ impl WindowsPasteState {
         }
         // 2. 保留当前连续输入，长首行不受总耗时限制
         self.last_char_at = Some(now);
-        self.recent_chars.push(ch);
+        self.recent_chars.push_str(text);
     }
 
     /// 根据当前输入和系统剪贴板内容识别被拆开的多行粘贴。
@@ -90,6 +99,7 @@ impl WindowsPasteState {
         self.recent_chars.clear();
         self.last_char_at = None;
         self.replay = normalized[separator + 1..].to_string();
+        self.replay_offset = 0;
         Some(WindowsPasteMatch {
             prefix_chars: first_line.chars().count(),
             text: normalized.trim().to_string(),
@@ -132,7 +142,7 @@ impl WindowsPasteState {
     /// 返回:
     /// - 当前按键属于粘贴回放时返回 true
     pub(super) fn consume_key(&mut self, key: WindowsPasteKey) -> bool {
-        let Some(expected) = self.replay.chars().next() else {
+        let Some(expected) = self.replay[self.replay_offset..].chars().next() else {
             return false;
         };
         let actual = match key {
@@ -142,10 +152,15 @@ impl WindowsPasteState {
         };
         if actual != expected {
             self.replay.clear();
+            self.replay_offset = 0;
             return false;
         }
-        let next = expected.len_utf8();
-        self.replay.drain(..next);
+        // 1. 【终端】【Windows 粘贴】仅移动字节游标，避免逐字删除首部造成平方级搬移
+        self.replay_offset += expected.len_utf8();
+        if self.replay_offset == self.replay.len() {
+            self.replay.clear();
+            self.replay_offset = 0;
+        }
         true
     }
 
@@ -157,6 +172,7 @@ impl WindowsPasteState {
         self.recent_chars.clear();
         self.last_char_at = None;
         self.replay.clear();
+        self.replay_offset = 0;
     }
 }
 

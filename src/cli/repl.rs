@@ -44,7 +44,7 @@ pub(super) async fn run_repl(
     let mut client = OpenAiCompatibleClient::from_config(&config, paths)?;
     let mut mode = initial_mode;
     // 输入历史跨会话共享：切换或新建会话都不清空，上限见 INPUT_HISTORY_LIMIT
-    let mut input_history = crate::state::input_history::load_input_history(paths)?;
+    let mut input_history = crate::state::input_history::load_input_history_entries(paths)?;
     let mut prefill = None::<String>;
     let mut prefill_clipboard = None;
     let initial_transcript_options = render::transcript::TranscriptRenderOptions {
@@ -588,9 +588,11 @@ pub(super) async fn run_repl(
             continue;
         }
         if !goal_continuation && !input.trim().is_empty() {
-            input_history.push(input.to_string());
-            // 落盘失败不影响本轮对话，历史只是辅助功能
-            let _ = crate::state::input_history::append_input_history(paths, input);
+            super::repl_input::history::remember_history(
+                paths,
+                &mut input_history,
+                submission.history.clone(),
+            );
         }
         if !goal_continuation {
             runtime.record_input(mode, submission.echo.clone())?;

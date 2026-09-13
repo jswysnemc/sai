@@ -81,6 +81,28 @@ impl SubagentCell {
         self.subagent_id.as_deref()
     }
 
+    /// 【终端】【子任务列表】判断调用是否代表可展示的子任务。
+    /// 参数: 无
+    /// 返回: 已绑定任务或正在创建任务时为 true，批量等待和查询为 false
+    pub(crate) fn represents_task(&self) -> bool {
+        if self
+            .subagent_id
+            .as_deref()
+            .is_some_and(|id| crate::tools::subagent_state::subagent_snapshot(id).is_ok())
+        {
+            return true;
+        }
+        serde_json::from_str::<Value>(&self.arguments)
+            .ok()
+            .is_some_and(|arguments| {
+                arguments
+                    .get("action")
+                    .and_then(Value::as_str)
+                    .unwrap_or("start")
+                    == "start"
+            })
+    }
+
     /// 返回底部 agent 面板需要的概览信息。
     ///
     /// 返回:

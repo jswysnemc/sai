@@ -13,6 +13,10 @@ use crate::web::runs::WebEvent;
 use anyhow::Result;
 use tokio::sync::mpsc;
 
+#[cfg(test)]
+mod tests;
+mod tool_events;
+
 /// 跟随模式下累积的远端输出。
 ///
 /// 工具调用等非正文事件的提示文本；正文分片已经实时进入 live tail，
@@ -127,15 +131,12 @@ impl ReplRuntime {
                     }
                 }
             }
-            "tool.call.started" => {
+            "tool.call.preparing" | "tool.call.started" | "tool.progress" | "tool.result" => {
                 self.flush_follow_buffer()?;
-                self.transcript.finalize_live_tail();
-                let name = event
-                    .payload
-                    .get("name")
-                    .and_then(|name| name.as_str())
-                    .unwrap_or("tool");
-                self.record_meta(format!("· {name}"))?;
+                // 1. 【终端】【远端工具回放】复用本地生命周期，保留参数、结果和子任务身份
+                if let Some(agent_event) = tool_events::decode_tool_event(&event) {
+                    self.record_runner_event(&crate::runner::RunnerEvent::Agent(agent_event))?;
+                }
             }
             "permission.requested" => {
                 self.flush_follow_buffer()?;

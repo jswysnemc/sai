@@ -1,10 +1,5 @@
 use crate::cli::repl_text::visible_width;
 use crate::i18n::text as t;
-use anyhow::Result;
-use crossterm::cursor::MoveTo;
-use crossterm::queue;
-use crossterm::style::Print;
-use std::io::Write;
 use std::path::Path;
 
 /// 输入以 `!` 开头时展示的本地 shell 提示面板。
@@ -72,26 +67,6 @@ impl ShellHintPanel {
             truncate_ansi(&format!("\x1b[38;5;81m  {}\x1b[0m", self.model), cols),
             truncate_ansi(&format!("\x1b[2m  {cwd}\x1b[0m"), cols),
         ]
-    }
-
-    /// 在输入框下方绘制 shell 提示面板。
-    ///
-    /// 参数:
-    /// - `output`: 终端输出
-    /// - `top`: 面板顶部行号
-    /// - `cols`: 终端列数
-    ///
-    /// 返回:
-    /// - 绘制是否成功
-    pub(super) fn draw<W: Write>(&self, output: &mut W, top: u16, cols: usize) -> Result<()> {
-        for (index, line) in self.rendered_lines(cols).into_iter().enumerate() {
-            queue!(
-                output,
-                MoveTo(0, top.saturating_add(index as u16)),
-                Print(line)
-            )?;
-        }
-        Ok(())
     }
 }
 

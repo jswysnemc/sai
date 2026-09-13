@@ -1,10 +1,5 @@
 use crate::cli::repl_mentions::MentionSuggestion;
 use crate::cli::repl_text::visible_width;
-use anyhow::Result;
-use crossterm::cursor::MoveTo;
-use crossterm::queue;
-use crossterm::style::Print;
-use std::io::Write;
 
 /// `#` skill 与 `@` 文件引用的过滤面板。
 pub(super) struct MentionPanel {
@@ -58,26 +53,6 @@ impl MentionPanel {
             .enumerate()
             .map(|(index, suggestion)| format_suggestion(suggestion, cols, index == self.selected))
             .collect()
-    }
-
-    /// 在输入框下方绘制引用面板。
-    ///
-    /// 参数:
-    /// - `output`: 终端输出
-    /// - `top`: 面板顶部行号
-    /// - `cols`: 终端列数
-    ///
-    /// 返回:
-    /// - 绘制是否成功
-    pub(super) fn draw<W: Write>(&self, output: &mut W, top: u16, cols: usize) -> Result<()> {
-        for (index, suggestion) in self.suggestions.iter().enumerate() {
-            queue!(
-                output,
-                MoveTo(0, top.saturating_add(index as u16)),
-                Print(format_suggestion(suggestion, cols, index == self.selected))
-            )?;
-        }
-        Ok(())
     }
 }
 
