@@ -71,8 +71,7 @@ pub(in crate::plugins) fn lock(directory: &Dir, name: &str) -> Result<Lock> {
         use cap_std::fs::OpenOptionsExt;
         options.custom_flags(libc::O_NONBLOCK);
     }
-    let file = directory
-        .open_with(name, &options)
+    let file = crate::plugins::lock_file::open(|| directory.open_with(name, &options))
         .with_context(|| format!("open plugin private data lock {name}"))?
         .into_std();
     if !file

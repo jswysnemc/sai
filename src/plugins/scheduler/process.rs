@@ -32,9 +32,9 @@ pub(super) fn claim(directory: &Dir, id: &str) -> Result<Option<ExecutionLease>>
         use cap_std::fs::OpenOptionsExt;
         options.custom_flags(libc::O_NONBLOCK);
     }
-    let file = directory
-        .open_with(format!("{id}.lock"), &options)?
-        .into_std();
+    let file =
+        crate::plugins::lock_file::open(|| directory.open_with(format!("{id}.lock"), &options))?
+            .into_std();
     ensure!(
         file.metadata()?.is_file(),
         "scheduled execution lock requires a regular file"

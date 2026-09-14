@@ -67,8 +67,7 @@ pub(in crate::plugins) fn acquire(state_dir: &Path, cancelled: &AtomicBool) -> R
         use cap_std::fs::OpenOptionsExt;
         options.custom_flags(libc::O_NONBLOCK);
     }
-    let file = directory
-        .open_with(NAME, &options)
+    let file = crate::plugins::lock_file::open(|| directory.open_with(NAME, &options))
         .context("open plugin binary write lock")?
         .into_std();
     if !file.metadata()?.is_file() {

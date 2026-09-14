@@ -9,6 +9,7 @@ mod host;
 mod http;
 pub(crate) mod knowledge_view;
 pub(crate) mod legacy_alarm_jobs;
+mod lock_file;
 mod management;
 mod management_lock;
 mod notification;

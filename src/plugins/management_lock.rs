@@ -10,12 +10,14 @@ pub(super) struct ManagementLock(File);
 /// @returns 随作用域显式解锁的守卫；已有管理操作时立即返回错误
 pub(super) fn acquire(paths: &SaiPaths) -> Result<ManagementLock> {
     std::fs::create_dir_all(&paths.config_dir)?;
-    let file = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(paths.config_dir.join(".plugins.lock"))?;
+    let file = super::lock_file::open(|| {
+        OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(paths.config_dir.join(".plugins.lock"))
+    })?;
     file.try_lock()
         .context("another plugin management command is in progress")?;
     Ok(ManagementLock(file))
