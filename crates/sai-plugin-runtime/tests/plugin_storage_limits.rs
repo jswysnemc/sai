@@ -139,7 +139,7 @@ async fn timeout_and_cancellation_prevent_later_storage_mutations() {
     use std::time::Duration;
     for cancel in [false, true] {
         let host = Arc::new(StorageHost::default());
-        host.delay_ms.store(150, Ordering::SeqCst);
+        host.delay_ms.store(300, Ordering::SeqCst);
         let plugin = runtime(
             r#"
             sai.register_tool({name="check",description="check",access="writes",parameters={type="object"},execute=function(args)
@@ -174,6 +174,10 @@ async fn timeout_and_cancellation_prevent_later_storage_mutations() {
             assert!(format!("{:#}", call.await.unwrap().unwrap_err()).contains("timed out"));
         }
         host.delay_ms.store(0, Ordering::SeqCst);
+        // 1. 【插件存储测试】【恢复边界】同步宿主调用实际返回后，再验证下一次回调的独立预算
+        tokio::time::timeout(Duration::from_secs(2), host.released.notified())
+            .await
+            .unwrap();
         let recovered = tokio::time::timeout(
             Duration::from_secs(2),
             plugin.call_tool("check", json!({}), writable()),

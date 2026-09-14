@@ -14,7 +14,18 @@ pub struct StorageHost {
     pub failing: AtomicBool,
     pub delay_ms: AtomicU64,
     pub entered: tokio::sync::Notify,
+    pub released: tokio::sync::Notify,
     pub session_calls: AtomicUsize,
+}
+
+struct Flight<'a>(&'a StorageHost);
+
+impl Drop for Flight<'_> {
+    /// 【插件存储测试】【调用结束】在同步宿主方法实际退出时通知测试，不依赖睡眠时长估算。
+    /// @returns 无
+    fn drop(&mut self) {
+        self.0.released.notify_one();
+    }
 }
 
 #[async_trait]
@@ -29,6 +40,7 @@ impl PluginHost for StorageHost {
         allow_writes: bool,
     ) -> Result<Value> {
         assert!(capabilities.system.plugin_storage);
+        let _flight = Flight(self);
         self.calls.lock().unwrap().push((request, allow_writes));
         let delay = self.delay_ms.load(Ordering::SeqCst);
         if delay > 0 {
