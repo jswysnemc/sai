@@ -1,3 +1,4 @@
+#[cfg(test)]
 use super::model::{summarize, SessionTree, TurnTreeNode};
 use crate::state::turns::model::Turn;
 use std::collections::{BTreeMap, HashSet};
@@ -13,6 +14,7 @@ use std::collections::{BTreeMap, HashSet};
 ///
 /// 返回:
 /// - 会话树视图
+#[cfg(test)]
 pub(super) fn build_tree(turns: &[Turn], active_leaf_id: Option<String>) -> SessionTree {
     // 1. 先建节点表，同时记录哪些 turn_id 真实存在
     let known: HashSet<&str> = turns.iter().map(|turn| turn.turn_id.as_str()).collect();
@@ -82,6 +84,7 @@ pub(super) fn build_tree(turns: &[Turn], active_leaf_id: Option<String>) -> Sess
 ///
 /// 返回:
 /// - 已挂载全部后代的节点
+#[cfg(test)]
 fn attach_children(
     turn_id: String,
     by_id: &BTreeMap<String, TurnTreeNode>,
@@ -108,6 +111,7 @@ fn attach_children(
 ///
 /// 返回:
 /// - 占位节点
+#[cfg(test)]
 fn unreachable_node(turn_id: &str) -> TurnTreeNode {
     TurnTreeNode {
         turn_id: turn_id.to_string(),

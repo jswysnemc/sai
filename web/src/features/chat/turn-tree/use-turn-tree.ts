@@ -25,6 +25,8 @@ export function useTurnTree(sessionId?: string, options: TurnTreeOptions = {}) {
     queryKey: ["session-turn-tree", sessionId],
     queryFn: () => api.sessions.turnTree(sessionId ?? ""),
     enabled: Boolean(sessionId),
+    // 1. 【会话分支】【深层历史】避免查询缓存递归比较完整分支
+    structuralSharing: false,
     staleTime: 5_000
   });
 

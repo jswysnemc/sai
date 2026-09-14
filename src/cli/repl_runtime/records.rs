@@ -49,7 +49,8 @@ impl ReplRuntime {
         compaction: Option<&SessionTimelineCompaction>,
     ) -> Result<()> {
         history::append_timeline_with_compaction(&mut self.transcript, turns, compaction);
-        self.sync_transcript(false)
+        // 1. 【会话载入】【终端首屏】历史已保存在 transcript，恢复时只绘制屏幕附近的窗口
+        self.replay(false)
     }
 
     /// 记录控制命令、系统提示或错误信息。

@@ -1,3 +1,7 @@
+pub(super) use super::index::{
+    ensure_default_session_for_base, read_current_session_id_from_base, save_sessions_to_base,
+};
+use super::index::{read_sessions_from_base, write_current_session_id_to_base};
 use super::model::{LocatedSession, SessionInfo, DEFAULT_SESSION_ID};
 use super::repository_paths::{current_session_file, sessions_file};
 use super::workspace::{current_workspace_scope, WorkspaceScope};
@@ -621,104 +625,6 @@ pub fn touch_session_with_message(
     }
     sort_sessions(&mut sessions);
     save_sessions_to_base(base_state_dir, &sessions)
-}
-
-/// 确保默认会话存在。
-///
-/// 参数:
-/// - `paths`: Sai 路径
-///
-/// 返回:
-/// - 会话列表
-pub(super) fn ensure_default_session_for_base(base_state_dir: &Path) -> Result<Vec<SessionInfo>> {
-    std::fs::create_dir_all(base_state_dir)?;
-    let mut sessions = read_sessions_from_base(base_state_dir)?;
-    if !sessions
-        .iter()
-        .any(|session| session.id == DEFAULT_SESSION_ID)
-    {
-        let now = Utc::now().to_rfc3339();
-        sessions.push(SessionInfo::default_with_time(&now));
-    }
-    sort_sessions(&mut sessions);
-    save_sessions_to_base(base_state_dir, &sessions)?;
-    Ok(sessions)
-}
-
-/// 读取当前会话 ID。
-///
-/// 参数:
-/// - `paths`: Sai 路径
-///
-/// 返回:
-/// - 当前会话 ID
-pub(super) fn read_current_session_id_from_base(base_state_dir: &Path) -> Result<String> {
-    let file = current_session_file(base_state_dir);
-    if !file.exists() {
-        write_current_session_id_to_base(base_state_dir, DEFAULT_SESSION_ID)?;
-        return Ok(DEFAULT_SESSION_ID.to_string());
-    }
-    let value = std::fs::read_to_string(file)?;
-    Ok(value.trim().to_string())
-}
-
-/// 写入当前会话 ID。
-///
-/// 参数:
-/// - `paths`: Sai 路径
-/// - `session_id`: 会话 ID
-///
-/// 返回:
-/// - 写入是否成功
-fn write_current_session_id_to_base(base_state_dir: &Path, session_id: &str) -> Result<()> {
-    if let Some(parent) = current_session_file(base_state_dir).parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(
-        current_session_file(base_state_dir),
-        format!("{session_id}\n"),
-    )?;
-    Ok(())
-}
-
-/// 读取会话索引。
-///
-/// 参数:
-/// - `base_state_dir`: 原始状态目录
-///
-/// 返回:
-/// - 会话列表
-fn read_sessions_from_base(base_state_dir: &Path) -> Result<Vec<SessionInfo>> {
-    let file = sessions_file(base_state_dir);
-    if !file.exists() {
-        return Ok(Vec::new());
-    }
-    let raw = std::fs::read_to_string(&file)
-        .with_context(|| format!("failed to read {}", file.display()))?;
-    Ok(
-        serde_json::from_str(&raw)
-            .with_context(|| format!("invalid JSON in {}", file.display()))?,
-    )
-}
-
-/// 保存会话索引。
-///
-/// 参数:
-/// - `base_state_dir`: 原始状态目录
-/// - `sessions`: 会话列表
-///
-/// 返回:
-/// - 保存是否成功
-pub(super) fn save_sessions_to_base(base_state_dir: &Path, sessions: &[SessionInfo]) -> Result<()> {
-    let file = sessions_file(base_state_dir);
-    if let Some(parent) = file.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(
-        file,
-        format!("{}\n", serde_json::to_string_pretty(sessions)?),
-    )?;
-    Ok(())
 }
 
 /// 返回会话状态目录。

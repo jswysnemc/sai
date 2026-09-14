@@ -1,6 +1,6 @@
 use super::super::app_state::WebAppState;
 use super::super::error::{WebError, WebResult};
-use crate::state::{SessionTree, SessionTurnPreview, StateStore};
+use crate::state::{SessionTreeIndex, SessionTurnPreview, StateStore};
 use axum::extract::{Path, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -50,22 +50,22 @@ async fn turn_preview(
     Ok(Json(preview))
 }
 
-/// 读取会话的完整轮次树。
+/// 【会话分支】【完整索引】读取会话的全部轮次关系与短摘要。
 ///
 /// 参数:
 /// - `state`: Web 应用状态
 /// - `id`: 会话标识
 ///
 /// 返回:
-/// - 含全部分支与活动叶子的树
+/// - 含全部分支与活动叶子的扁平节点索引
 async fn turn_tree(
     State(state): State<WebAppState>,
     Path(id): Path<String>,
-) -> WebResult<Json<SessionTree>> {
+) -> WebResult<Json<SessionTreeIndex>> {
     let store = StateStore::for_session(&state.paths, &id)
         .map_err(|error| WebError::not_found(error.to_string()))?;
     let tree = store
-        .session_tree()
+        .session_tree_index()
         .map_err(|error| WebError::conflict(error.to_string()))?;
     Ok(Json(tree))
 }

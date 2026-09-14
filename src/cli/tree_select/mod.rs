@@ -1,10 +1,19 @@
+#[cfg(test)]
 mod flatten;
+mod index;
 
 use super::fuzzy_select::inline_fuzzy_select;
 use crate::i18n::text as t;
 use crate::state::StateStore;
 use anyhow::Result;
-use flatten::flatten_tree;
+use index::flatten_index;
+
+/// 【会话分支】【终端行】保存可选择的轮次标识与展示标签。
+#[derive(Debug, Clone)]
+pub(crate) struct TreeRow {
+    pub(crate) turn_id: Option<String>,
+    pub(crate) label: String,
+}
 
 /// 会话树中可选择的位置，空白起点与取消选择分别表达。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,8 +33,8 @@ pub(super) enum TreeSelection {
 /// 返回:
 /// - 选中的会话起点或轮次；取消时返回空
 pub(super) fn select_turn_interactively(store: &StateStore) -> Result<Option<TreeSelection>> {
-    let tree = store.session_tree()?;
-    let rows = flatten_tree(&tree);
+    let tree = store.session_tree_index()?;
+    let rows = flatten_index(&tree);
     let labels = rows.iter().map(|row| row.label.clone()).collect::<Vec<_>>();
     let Some(index) = inline_fuzzy_select(&labels)? else {
         return Ok(None);

@@ -2,6 +2,10 @@ use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use anyhow::{bail, Result};
 
+#[cfg(test)]
+#[path = "session/loading_tests.rs"]
+mod loading_tests;
+
 /// 创建并切换到新会话。
 ///
 /// 参数:
@@ -78,18 +82,18 @@ pub fn rename_current_session(paths: &SaiPaths, title: &str) -> Result<String> {
 /// 返回:
 /// - `(会话 ID, 展示文本)` 列表，按 `list_sessions` 顺序
 pub fn session_resume_choices(paths: &SaiPaths) -> Result<Vec<(String, String)>> {
-    let active = crate::state::active_session(paths)?;
-    let sessions = crate::state::list_sessions(paths)?;
+    let sessions = crate::state::list_located_sessions(paths)?;
     if sessions.is_empty() {
         bail!("{}", t("no sessions available", "没有可用会话"));
     }
     Ok(sessions
         .into_iter()
         .map(|session| {
-            let marker = if session.id == active.id { "*" } else { " " };
-            let holder = session_loaded_owner(paths, &session.id)
+            let marker = if session.is_current { "*" } else { " " };
+            let holder = session_loaded_owner(&session.state_dir)
                 .map(|owner| holder_label(&owner))
                 .unwrap_or_default();
+            let session = session.info;
             // 选择列表用短 ID、相对时间与加载态，完整 ID 仍作为返回值供切换使用
             let label = format!(
                 "{marker} {:<8}  {:<10}  {:<6}  {}",
@@ -108,16 +112,12 @@ pub fn session_resume_choices(paths: &SaiPaths) -> Result<Vec<(String, String)>>
 /// 终端、网页或网关打开该会话期间会写心跳；过期或无登记视为未加载。
 ///
 /// 参数:
-/// - `paths`: Sai 路径
-/// - `session_id`: 会话 ID
+/// - `state_dir`: 同一次会话索引读取所定位的数据目录
 ///
 /// 返回:
 /// - 存活持有者类型；未加载时为空
-fn session_loaded_owner(paths: &SaiPaths, session_id: &str) -> Option<String> {
-    let Ok((_, state_dir)) = crate::state::locate_session_dirs(paths, session_id) else {
-        return None;
-    };
-    let record = crate::runner::session_holder(&state_dir)?;
+fn session_loaded_owner(state_dir: &std::path::Path) -> Option<String> {
+    let record = crate::runner::session_holder(state_dir)?;
     crate::runner::holder_is_alive(&record).then_some(record.owner)
 }
 

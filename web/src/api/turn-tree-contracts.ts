@@ -22,6 +22,11 @@ export type SessionTurnTree = {
   branch_points: number;
 };
 
+/** 【会话分支】【接口索引】按父标识传输节点，响应深度不随会话长度增长。 */
+export type SessionTurnTreeIndex = Omit<SessionTurnTree, "roots"> & {
+  nodes: Omit<TurnTreeNode, "children">[];
+};
+
 /** 分支操作后的活动叶子。 */
 export type BranchSwitchResult = {
   active_leaf_id: string | null;

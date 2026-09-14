@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { GitBranch, X } from "lucide-react";
 import type { SessionTurnTree } from "../../../api/turn-tree-contracts";
 import { Button } from "../../../shared/ui/button/button";
@@ -24,7 +25,7 @@ type TurnTreePanelProps = {
  */
 export function TurnTreePanel({ tree, busy, onSelect, onClose }: TurnTreePanelProps) {
   const { t } = useI18n();
-  const rows = flattenTurnTree(tree);
+  const rows = useMemo(() => flattenTurnTree(tree), [tree]);
 
   return (
     <aside className="turn-tree-panel" aria-label={t("Session branches", "会话分支")}>

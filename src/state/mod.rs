@@ -51,12 +51,15 @@ pub use session_timeline::{
     TimelinePermissionDecision, TimelineToolEntry, TimelineTurnMessage,
 };
 pub use session_turn_preview::SessionTurnPreview;
+#[cfg(test)]
+pub(crate) use sessions::session_index_io_counts;
 #[allow(unused_imports)]
 pub use sessions::{
     active_session_id_for_workspace, active_state_dir, create_session, create_session_detached,
     create_session_for_workspace, current_workspace_id, delete_session, delete_sessions,
     delete_sessions_for_workspace, ensure_active_session as active_session,
-    ensure_workspace_session, list_all_sessions, list_sessions, list_sessions_for_workspace,
+    ensure_workspace_session, list_all_sessions, list_located_sessions,
+    list_located_sessions_for_workspace, list_sessions, list_sessions_for_workspace,
     locate_session_dirs, rename_session, state_dir_for_workspace_session, switch_session,
     switch_session_located, title_from_message_public, workspace_id_for_path, LocatedSession,
     SessionInfo,
@@ -65,11 +68,11 @@ pub use sessions::{
 pub use tool_history::{
     ToolCallStatus, ToolHistorySummary, ToolResultMaintenanceMode, ToolResultMaintenanceStats,
 };
-#[cfg(test)]
-pub use turns::TurnStatus;
 pub use turns::{
-    turns_to_entries, ConversationDb, SessionTree, StoredConversationEntry, Turn, TurnTreeNode,
+    turns_to_entries, ConversationDb, SessionTreeIndex, StoredConversationEntry, Turn,
 };
+#[cfg(test)]
+pub use turns::{SessionTree, TurnStatus, TurnTreeNode};
 pub use usage::UsageSnapshot;
 /// 撤销最后一轮对话及其工作树修改后的结果。
 #[derive(Debug, Clone)]
@@ -341,7 +344,8 @@ impl StateStore {
     /// 返回:
     /// - 历史入口
     pub fn history(&self, limit: usize) -> Result<Vec<StoredConversationEntry>> {
-        let mut entries = self.load_conversation()?;
+        // 1. 【会话历史】【消息窗口】每轮至少含一个用户入口，最多读取 limit 轮即可
+        let mut entries = turns_to_entries(self.conv_db.recent_active_branch_turns(limit)?);
         let start = entries.len().saturating_sub(limit);
         Ok(entries.split_off(start))
     }
@@ -350,6 +354,7 @@ impl StateStore {
     ///
     /// 返回:
     /// - 旧消息入口视图
+    #[cfg(test)]
     pub fn load_conversation(&self) -> Result<Vec<StoredConversationEntry>> {
         Ok(turns_to_entries(self.conv_db.active_branch_turns()?))
     }
@@ -364,7 +369,7 @@ impl StateStore {
     pub(crate) fn latest_interrupted_turn_has_content(&self, input: &str) -> Result<bool> {
         Ok(self
             .conv_db
-            .active_branch_turns()?
+            .recent_active_branch_turns(1)?
             .last()
             .is_some_and(|turn| {
                 turn.status == turns::TurnStatus::Interrupted
@@ -389,8 +394,21 @@ impl StateStore {
     ///
     /// 返回:
     /// - 含全部分支与活动叶子的树视图
+    #[cfg(test)]
     pub fn session_tree(&self) -> Result<turns::SessionTree> {
         self.conv_db.session_tree()
+    }
+
+    /// 【会话分支】【界面索引】读取不依赖递归序列化的分支展示数据。
+    /// @returns 全部轮次的扁平元数据；无参数
+    pub fn session_tree_index(&self) -> Result<turns::SessionTreeIndex> {
+        self.conv_db.session_tree_index()
+    }
+
+    /// 【会话分支】【会话统计】只读取统计值，不加载历史正文。
+    /// @returns (轮次数量, 分叉点数量)；无参数
+    pub fn session_tree_counts(&self) -> Result<(usize, usize)> {
+        self.conv_db.session_tree_counts()
     }
 
     /// 把活动叶子切换到指定轮次。

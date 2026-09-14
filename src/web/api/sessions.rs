@@ -8,163 +8,20 @@ use axum::response::sse::{Event, Sse};
 use axum::routing::{get, patch, post};
 use axum::{Json, Router};
 use futures_util::stream::Stream;
-use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::path::Path as FilePath;
 
 mod debug;
+mod history;
+mod listing;
+mod types;
+
+use history::{messages, timeline};
+#[cfg(test)]
+use listing::session_loaded_holder;
+use listing::{list, session_response, tree};
+use types::*;
 mod permission_timeline;
-
-#[derive(Serialize)]
-struct SessionResponse {
-    id: String,
-    title: String,
-    created_at: String,
-    updated_at: String,
-    /// 当前工作区选中的会话指针，不等于终端/网页是否已打开该会话。
-    active: bool,
-    /// 终端或网页已加载该会话（持有者心跳仍存活）。
-    loaded: bool,
-    /// 存活持有者类型：`repl` / `web` / `gateway` 等；未加载时为空。
-    holder: Option<String>,
-}
-
-#[derive(Serialize)]
-struct WorkspaceSessionsResponse {
-    workspace_id: String,
-    workspace_name: String,
-    workspace_path: String,
-    is_git_repository: bool,
-    active: bool,
-    sessions: Vec<SessionResponse>,
-}
-
-#[derive(Deserialize)]
-struct CreateSessionRequest {
-    title: Option<String>,
-    workspace_id: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct RenameSessionRequest {
-    title: String,
-}
-
-#[derive(Deserialize)]
-struct BulkDeleteSessionsRequest {
-    ids: Vec<String>,
-}
-
-#[derive(Deserialize)]
-struct CompactSessionRequest {
-    provider_id: Option<String>,
-    model: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct CompactionPolicyRequest {
-    compaction_ratio: Option<f32>,
-    compaction_reserve_tokens: Option<usize>,
-    reset: Option<bool>,
-}
-
-#[derive(Serialize)]
-struct CompactionPolicyResponse {
-    compaction_ratio: f32,
-    compaction_reserve_tokens: usize,
-    compaction_trigger_tokens: usize,
-    compaction_policy_override: bool,
-}
-
-#[derive(Deserialize)]
-struct RollbackSessionRequest {
-    turn_id: String,
-}
-
-#[derive(Deserialize)]
-struct HistoryQuery {
-    limit: Option<usize>,
-}
-
-#[derive(Deserialize)]
-struct SessionEventQuery {
-    after: Option<u64>,
-    /// 会话所属工作区；缺省时使用当前活动工作区
-    workspace_id: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct ToolResultQuery {
-    #[serde(rename = "ref")]
-    result_ref: String,
-}
-
-#[derive(Deserialize)]
-struct ContextPromptQuery {
-    /// 可选 Agent 档案；影响 live 组装路径
-    agent_id: Option<String>,
-    /// 当前供应商；必须与 model 同时提供
-    provider_id: Option<String>,
-    /// 当前模型；必须与 provider_id 同时提供
-    model: Option<String>,
-    /// 当前运行模式
-    mode: Option<String>,
-    /// 界面语言（en / en-US / zh / zh-CN）；缺省跟随服务端环境语言
-    locale: Option<String>,
-}
-
-#[derive(Serialize)]
-struct DeleteResponse {
-    deleted: bool,
-}
-
-#[derive(Serialize)]
-struct BulkDeleteResponse {
-    deleted_ids: Vec<String>,
-}
-
-#[derive(Deserialize)]
-struct RestoreWorktreeRequest {
-    turn_id: String,
-    #[serde(default)]
-    paths: Vec<String>,
-}
-
-#[derive(Serialize)]
-struct RestoreWorktreeResponse {
-    restored: bool,
-}
-
-#[derive(Serialize)]
-struct UndoSessionResponse {
-    removed: usize,
-    prompt: Option<String>,
-    worktree_restored: bool,
-}
-
-#[derive(Serialize)]
-struct RollbackSessionResponse {
-    removed: usize,
-    prompt: Option<String>,
-}
-
-/// 时间线轮次响应：在状态层轮次之上附加本轮使用的模型标识。
-#[derive(Serialize)]
-struct TimelineTurnResponse {
-    #[serde(flatten)]
-    turn: crate::state::SessionTimelineTurn,
-    /// 本轮实际使用的模型；历史轮次未记录时缺省
-    #[serde(skip_serializing_if = "Option::is_none")]
-    model: Option<String>,
-}
-
-/// 会话时间线响应：轮次带模型标识，供前端派生模型切换分割线。
-#[derive(Serialize)]
-struct TimelineResponse {
-    turns: Vec<TimelineTurnResponse>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    compaction: Option<crate::state::SessionTimelineCompaction>,
-}
 
 /// 返回会话管理路由。
 pub(super) fn routes() -> Router<WebAppState> {
@@ -324,43 +181,6 @@ async fn permission_audit(
     Ok(Json(events))
 }
 
-/// 返回按工作区分组的全部会话。
-///
-/// 参数:
-/// - `state`: Web 应用状态
-///
-/// 返回:
-/// - 工作区及其会话树
-async fn tree(State(state): State<WebAppState>) -> WebResult<Json<Vec<WorkspaceSessionsResponse>>> {
-    let active_workspace = state.workspaces.active().map_err(WebError::from)?;
-    let workspaces = state.workspaces.list().map_err(WebError::from)?;
-    let mut result = Vec::with_capacity(workspaces.len());
-    for workspace in workspaces {
-        let path = FilePath::new(&workspace.path);
-        let is_git_repository = crate::web::workspace::is_git_repository(path).await;
-        let active_session_id = crate::state::active_session_id_for_workspace(&state.paths, path)
-            .map_err(WebError::from)?;
-        let sessions = crate::state::list_sessions_for_workspace(&state.paths, path)
-            .map_err(WebError::from)?
-            .into_iter()
-            .map(|session| {
-                let selected =
-                    workspace.id == active_workspace.id && session.id == active_session_id;
-                session_response(&state.paths, path, session, selected)
-            })
-            .collect();
-        result.push(WorkspaceSessionsResponse {
-            active: workspace.id == active_workspace.id,
-            workspace_id: workspace.id,
-            workspace_name: workspace.name,
-            workspace_path: workspace.path,
-            is_git_repository,
-            sessions,
-        });
-    }
-    Ok(Json(result))
-}
-
 /// 手动压缩指定会话的旧轮次。
 ///
 /// 参数:
@@ -449,23 +269,6 @@ async fn update_compaction_policy(
         compaction_trigger_tokens: resolved.policy.trigger_chars(window),
         compaction_policy_override: resolved.session_override,
     }))
-}
-
-/// 列出当前工作区会话。
-async fn list(State(state): State<WebAppState>) -> WebResult<Json<Vec<SessionResponse>>> {
-    let workspace = state.workspaces.active().map_err(WebError::from)?;
-    let workspace_path = FilePath::new(&workspace.path);
-    let active = crate::state::active_session(&state.paths).map_err(WebError::from)?;
-    let sessions = crate::state::list_sessions(&state.paths).map_err(WebError::from)?;
-    Ok(Json(
-        sessions
-            .into_iter()
-            .map(|session| {
-                let selected = session.id == active.id;
-                session_response(&state.paths, workspace_path, session, selected)
-            })
-            .collect(),
-    ))
 }
 
 /// 创建并切换到新会话。
@@ -588,57 +391,6 @@ async fn remove_many(
     Ok(Json(BulkDeleteResponse { deleted_ids }))
 }
 
-/// 读取指定会话消息历史。
-async fn messages(
-    State(state): State<WebAppState>,
-    Path(id): Path<String>,
-    Query(query): Query<HistoryQuery>,
-) -> WebResult<Json<Vec<crate::state::StoredConversationEntry>>> {
-    let store = StateStore::for_session(&state.paths, &id)
-        .map_err(|error| WebError::not_found(error.to_string()))?;
-    let history = store
-        .history(query.limit.unwrap_or(200).clamp(1, 2000))
-        .map_err(WebError::from)?;
-    Ok(Json(history))
-}
-
-/// 读取指定会话的结构化轮次与工具时间线。
-///
-/// 参数:
-/// - `state`: Web 应用状态
-/// - `id`: 会话 ID
-/// - `query`: 轮次数量限制
-///
-/// 返回:
-/// - 带每轮模型标识的会话时间线
-async fn timeline(
-    State(state): State<WebAppState>,
-    Path(id): Path<String>,
-    Query(query): Query<HistoryQuery>,
-) -> WebResult<Json<TimelineResponse>> {
-    let store = StateStore::for_session(&state.paths, &id)
-        .map_err(|error| WebError::not_found(error.to_string()))?;
-    let mut timeline = store
-        .session_timeline_with_compaction(query.limit.unwrap_or(200).clamp(1, 2000))
-        .map_err(WebError::from)?;
-    permission_timeline::attach_permission_decisions(&store, &mut timeline.turns)
-        .map_err(WebError::from)?;
-    // 附加每轮记录的模型标识，前端据此在模型变化处绘制切换分割线
-    let mut models = store.turn_models().map_err(WebError::from)?;
-    let turns = timeline
-        .turns
-        .into_iter()
-        .map(|turn| {
-            let model = models.remove(&turn.turn_id);
-            TimelineTurnResponse { turn, model }
-        })
-        .collect();
-    Ok(Json(TimelineResponse {
-        turns,
-        compaction: timeline.compaction,
-    }))
-}
-
 /// 撤销指定会话最后一轮及该轮造成的工作树修改。
 ///
 /// 参数:
@@ -740,71 +492,6 @@ pub(super) async fn reject_session_run(state: &WebAppState, session_id: &str) ->
     Ok(workspace_id)
 }
 
-/// 从会话状态目录解析所属工作区标识。
-///
-/// 参数:
-/// - `paths`: Sai 路径集合
-/// - `session_id`: 会话标识
-///
-/// 返回:
-/// - 会话所属工作区标识
-/// 组装会话 API 响应：选中指针与终端/网页加载态分开。
-///
-/// 参数:
-/// - `paths`: Sai 路径集合
-/// - `workspace_path`: 会话所属工作区路径
-/// - `session`: 会话索引记录
-/// - `selected`: 是否为该工作区当前选中会话
-///
-/// 返回:
-/// - 含加载态的会话响应
-fn session_response(
-    paths: &crate::paths::SaiPaths,
-    workspace_path: &FilePath,
-    session: crate::state::SessionInfo,
-    selected: bool,
-) -> SessionResponse {
-    let (loaded, holder) = session_loaded_holder(paths, workspace_path, &session.id);
-    SessionResponse {
-        id: session.id,
-        title: session.title,
-        created_at: session.created_at,
-        updated_at: session.updated_at,
-        active: selected,
-        loaded,
-        holder,
-    }
-}
-
-/// 读取会话存活持有者：终端 REPL、网页或网关打开会话期间会写心跳。
-///
-/// 参数:
-/// - `paths`: Sai 路径集合
-/// - `workspace_path`: 会话所属工作区路径
-/// - `session_id`: 会话标识
-///
-/// 返回:
-/// - `(是否已加载, 持有者类型)`
-fn session_loaded_holder(
-    paths: &crate::paths::SaiPaths,
-    workspace_path: &FilePath,
-    session_id: &str,
-) -> (bool, Option<String>) {
-    let Ok((_, state_dir)) =
-        crate::state::state_dir_for_workspace_session(paths, workspace_path, session_id)
-    else {
-        return (false, None);
-    };
-    let Some(record) = crate::runner::session_holder(&state_dir) else {
-        return (false, None);
-    };
-    if crate::runner::holder_is_alive(&record) {
-        (true, Some(record.owner))
-    } else {
-        (false, None)
-    }
-}
-
 fn session_workspace_id(
     paths: &crate::paths::SaiPaths,
     session_id: &str,
@@ -818,113 +505,4 @@ fn session_workspace_id(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// 创建会话 API 测试路径。
-    fn test_paths(root: &std::path::Path) -> crate::paths::SaiPaths {
-        crate::paths::SaiPaths {
-            config_dir: root.join("config"),
-            config_file: root.join("config/config.jsonc"),
-            secrets_file: root.join("config/secrets.jsonc"),
-            skills_dir: root.join("config/skills"),
-            data_dir: root.join("data"),
-            cache_dir: root.join("cache"),
-            state_dir: root.join("state"),
-            pictures_dir: root.join("pictures"),
-            fish_hook_file: root.join("fish/sai.fish"),
-            bash_hook_file: root.join("shell/bash-hook.sh"),
-            zsh_hook_file: root.join("shell/zsh-hook.zsh"),
-            powershell_hook_file: root.join("shell/powershell-hook.ps1"),
-        }
-    }
-
-    #[tokio::test]
-    async fn session_workspace_id_uses_session_owner() {
-        let temp = tempfile::tempdir().unwrap();
-        let paths = test_paths(temp.path());
-        let active = temp.path().join("active");
-        let owner = temp.path().join("owner");
-        std::fs::create_dir_all(&active).unwrap();
-        std::fs::create_dir_all(&owner).unwrap();
-
-        crate::runtime_cwd::scope(active, async {
-            let session =
-                crate::state::create_session_for_workspace(&paths, &owner, Some("owned")).unwrap();
-
-            let actual = session_workspace_id(&paths, &session.id).unwrap();
-            // workspace_scope 会 canonicalize 路径，期望值需与落盘 ID 使用同一口径
-            let expected = crate::platform::windows_path::canonicalize(&owner)
-                .map(|path| crate::state::workspace_id_for_path(&path))
-                .unwrap_or_else(|_| crate::state::workspace_id_for_path(&owner));
-            assert_eq!(actual, expected);
-        })
-        .await;
-    }
-
-    /// 【Web会话】【Git 工作区】验证嵌套目录可识别上级 Git 仓库。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 无
-    #[tokio::test]
-    async fn workspace_git_flag_detects_repository_ancestors() {
-        let temp = tempfile::tempdir().unwrap();
-        let repository = temp.path().join("repository");
-        let nested = repository.join("nested");
-        let ordinary = temp.path().join("ordinary");
-        std::fs::create_dir_all(&nested).unwrap();
-        std::fs::create_dir_all(&ordinary).unwrap();
-        let status = std::process::Command::new("git")
-            .args(["init", "--quiet"])
-            .current_dir(&repository)
-            .status()
-            .unwrap();
-        assert!(status.success());
-
-        assert!(crate::web::workspace::is_git_repository(&nested).await);
-        assert!(!crate::web::workspace::is_git_repository(&ordinary).await);
-    }
-
-    /// 【会话加载】【持有者心跳】未打开的会话不算加载，终端持有后才算加载。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 无
-    #[tokio::test]
-    async fn session_loaded_follows_alive_terminal_or_web_holder() {
-        let temp = tempfile::tempdir().unwrap();
-        let paths = test_paths(temp.path());
-        let workspace = temp.path().join("workspace");
-        std::fs::create_dir_all(&workspace).unwrap();
-
-        crate::runtime_cwd::scope(workspace.clone(), async {
-            let session =
-                crate::state::create_session_for_workspace(&paths, &workspace, Some("held"))
-                    .unwrap();
-            assert_eq!(
-                session_loaded_holder(&paths, &workspace, &session.id),
-                (false, None)
-            );
-
-            let (_, state_dir) =
-                crate::state::state_dir_for_workspace_session(&paths, &workspace, &session.id)
-                    .unwrap();
-            let _guard = crate::runner::SessionHolderGuard::acquire(
-                &state_dir,
-                &session.id,
-                crate::runner::SessionOwner::Repl,
-            )
-            .unwrap();
-            assert_eq!(
-                session_loaded_holder(&paths, &workspace, &session.id),
-                (true, Some("repl".to_string()))
-            );
-        })
-        .await;
-    }
-}
+mod tests;

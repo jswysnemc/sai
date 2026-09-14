@@ -1,8 +1,15 @@
+mod index;
+mod listing;
+
 mod model;
 mod repository;
 mod repository_paths;
 mod workspace;
 mod workspace_repository;
+
+#[cfg(test)]
+pub(crate) use index::session_index_io_counts;
+pub use listing::{list_located_sessions, list_located_sessions_for_workspace};
 
 #[allow(unused_imports)]
 pub use model::{LocatedSession, SessionInfo};

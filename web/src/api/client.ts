@@ -1,8 +1,9 @@
+import { loadTurnTree } from "./turn-tree-client";
 import { apiRequest } from "./api-request";
 import { usageApi } from "./usage-client";
 export { apiRequest } from "./api-request";
 export { bootstrapSession, fetchAuthMode, hasActiveSession, loginWithPassword } from "./auth-client";
-import type { BranchSwitchResult, SessionTurnTree } from "./turn-tree-contracts";
+import type { BranchSwitchResult } from "./turn-tree-contracts";
 import type {
   ConfigResponse,
   McpConfig,
@@ -168,7 +169,7 @@ export const api = {
         body: JSON.stringify({ turn_id: turnId })
       }),
     permissionAudit: (id: string) => apiRequest<PermissionAuditEvent[]>(`/api/sessions/${id}/permission-audit?limit=200`),
-    turnTree: (id: string) => apiRequest<SessionTurnTree>(`/api/sessions/${id}/turn-tree`),
+    turnTree: loadTurnTree,
     switchBranch: (id: string, turnId: string) =>
       apiRequest<BranchSwitchResult>(`/api/sessions/${id}/turn-tree/switch`, {
         method: "POST",

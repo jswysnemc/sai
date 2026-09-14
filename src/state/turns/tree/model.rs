@@ -1,7 +1,9 @@
+#[cfg(test)]
 use serde::{Deserialize, Serialize};
 
 /// 会话树中的一个轮次节点。
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg(test)]
 pub struct TurnTreeNode {
     /// 轮次标识
     pub turn_id: String,
@@ -23,6 +25,7 @@ pub struct TurnTreeNode {
 
 /// 会话树整体视图。
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg(test)]
 pub struct SessionTree {
     /// 根节点，通常只有一个
     pub roots: Vec<TurnTreeNode>,
@@ -47,14 +50,21 @@ const SUMMARY_CHARS: usize = 80;
 /// 返回:
 /// - 单行摘要，超长时截断并加省略号
 pub(super) fn summarize(text: &str) -> String {
-    let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    if flat.chars().count() <= SUMMARY_CHARS {
-        return flat;
+    // 1. 【会话分支】【摘要长度】空白按原规则归一化，但只收集摘要需要的字符
+    let mut characters = text
+        .split_whitespace()
+        .enumerate()
+        .flat_map(|(index, word)| {
+            std::iter::once(' ')
+                .take(usize::from(index > 0))
+                .chain(word.chars())
+        });
+    let mut prefix = characters.by_ref().take(SUMMARY_CHARS).collect::<Vec<_>>();
+    if characters.next().is_some() {
+        prefix.truncate(SUMMARY_CHARS - 1);
+        prefix.push('…');
     }
-    format!(
-        "{}…",
-        flat.chars().take(SUMMARY_CHARS - 1).collect::<String>()
-    )
+    prefix.into_iter().collect()
 }
 
 #[cfg(test)]

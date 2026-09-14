@@ -1,13 +1,5 @@
+use super::TreeRow;
 use crate::state::{SessionTree, TurnTreeNode};
-
-/// 压平后的树行，供选择器展示与回选。
-#[derive(Debug, Clone)]
-pub(crate) struct TreeRow {
-    /// 该行对应的轮次，空值表示首条消息之前的会话起点
-    pub(crate) turn_id: Option<String>,
-    /// 已经拼好装订线与摘要的展示文本
-    pub(crate) label: String,
-}
 
 /// 把会话树压平成带装订线的行列表。
 ///

@@ -4,6 +4,9 @@ import { HistoryTurn, LiveRunMessage } from "./chat-message";
 import { deriveModelSwitchMarkers } from "./model-switch-divider";
 import { ModelSwitchDivider } from "./message/model-switch-divider";
 import type { LiveRunState } from "./run-event-reducer";
+import { DeferredHistoryTurn } from "./deferred-history-turn";
+
+const INITIAL_HISTORY_TURNS = 8;
 
 type HistoryActions = Omit<ComponentProps<typeof HistoryTurn>, "turn" | "canRetry" | "canSideConversation">;
 type ChatConversationProps = {
@@ -26,14 +29,18 @@ export function ChatConversation({ turns, liveRuns, running, lastTurnId, actions
   ]), [turns, liveRuns]);
   return (
     <>
-      {turns.map((turn) => {
+      {turns.map((turn, index) => {
         const marker = markers.get(turn.turn_id);
         return (
           <Fragment key={turn.turn_id}>
             {marker && <ModelSwitchDivider marker={marker} />}
-            <section className="conversation-turn" data-overview-id={`turn-${turn.turn_id}`}>
+            <DeferredHistoryTurn
+              turnId={turn.turn_id}
+              eager={index >= turns.length - INITIAL_HISTORY_TURNS}
+              estimatedHeightRem={Math.min(80, Math.max(12, (turn.user.content.length + turn.assistant.content.length) / 65))}
+            >
               <HistoryTurn {...actions} turn={turn} canRetry={turn.turn_id === lastTurnId && !running} canSideConversation={turn.status === "completed" && Boolean(turn.assistant.content.trim())} />
-            </section>
+            </DeferredHistoryTurn>
           </Fragment>
         );
       })}

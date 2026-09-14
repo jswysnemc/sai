@@ -1,4 +1,7 @@
-use super::builder::{build_tree, path_to_leaf};
+#[cfg(test)]
+use super::builder::build_tree;
+use super::builder::path_to_leaf;
+#[cfg(test)]
 use super::model::SessionTree;
 use crate::state::turns::model::SESSION_ROOT_TURN_ID;
 use crate::state::turns::repository::{active_leaf_locked, set_active_leaf_locked, ConversationDb};
@@ -20,6 +23,7 @@ impl ConversationDb {
     ///
     /// 返回:
     /// - 含全部分支的会话树视图
+    #[cfg(test)]
     pub fn session_tree(&self) -> Result<SessionTree> {
         let turns = self.load_turns()?;
         let leaf = {

@@ -499,10 +499,10 @@ fn collect_state_metrics(
     let mut metrics = StateMetrics::default();
     match StateStore::for_workspace_session(paths, workspace_path, session_id) {
         Ok(store) => {
-            match store.session_tree() {
-                Ok(tree) => {
-                    metrics.turn_count = Some(tree.total_turns);
-                    metrics.branch_points = Some(tree.branch_points);
+            match store.session_tree_counts() {
+                Ok((turns, branches)) => {
+                    metrics.turn_count = Some(turns);
+                    metrics.branch_points = Some(branches);
                 }
                 Err(error) => metrics.errors.push(error.to_string()),
             }

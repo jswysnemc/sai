@@ -1,4 +1,7 @@
 import type { SessionTurnTree, TurnTreeNode } from "../../../api/turn-tree-contracts";
+import { indexTurnTree } from "./turn-tree-index";
+
+const MAX_ANCESTOR_BARS = 6;
 
 /** 压平后的树行，供面板逐行渲染。 */
 export type TurnTreeRow = {
@@ -7,7 +10,7 @@ export type TurnTreeRow = {
   depth: number;
   /** 是否为同级最后一个，决定用 └ 还是 ├ */
   isLast: boolean;
-  /** 各祖先层级是否还有后续兄弟，决定是否画竖线 */
+  /** 最近六层祖先是否还有后续兄弟，决定是否画竖线 */
   ancestorBars: boolean[];
   /** 是否为当前所在轮次 */
   isActive: boolean;
@@ -26,54 +29,25 @@ export type TurnTreeRow = {
 export function flattenTurnTree(tree: SessionTurnTree): TurnTreeRow[] {
   const activePath = new Set(collectActivePath(tree));
   const rows: TurnTreeRow[] = [];
-  const rootCount = tree.roots.length;
-  tree.roots.forEach((root, index) => {
-    pushNode(root, 0, index + 1 === rootCount, [], activePath, tree.active_leaf_id, rows);
-  });
+  const pending = tree.roots.map((node, index) => ({
+    node, depth: 0, isLast: index + 1 === tree.roots.length, ancestorBars: [] as boolean[],
+  })).reverse();
+  const seen = new Set<string>();
+  while (pending.length > 0) {
+    const item = pending.pop()!;
+    if (seen.has(item.node.turn_id)) continue;
+    seen.add(item.node.turn_id);
+    rows.push({ ...item, isActive: item.node.turn_id === tree.active_leaf_id, onActivePath: activePath.has(item.node.turn_id) });
+    // 1. 【会话分支】【缩进上限】面板只展示最近六层，避免长链为每轮复制全部祖先
+    const childBars = item.depth === 0 ? [] : [...item.ancestorBars, !item.isLast].slice(-MAX_ANCESTOR_BARS);
+    for (let index = item.node.children.length - 1; index >= 0; index--) {
+      pending.push({
+        node: item.node.children[index], depth: item.depth + 1,
+        isLast: index + 1 === item.node.children.length, ancestorBars: childBars,
+      });
+    }
+  }
   return rows;
-}
-
-/**
- * 递归写入节点及其后代。
- *
- * @param node 当前节点
- * @param depth 当前缩进层级
- * @param isLast 是否为同级最后一个
- * @param ancestorBars 各祖先层级是否还有后续兄弟
- * @param activePath 活动分支上的轮次集合
- * @param activeLeafId 当前所在轮次
- * @param rows 输出行
- * @returns 无返回值
- */
-function pushNode(
-  node: TurnTreeNode,
-  depth: number,
-  isLast: boolean,
-  ancestorBars: boolean[],
-  activePath: Set<string>,
-  activeLeafId: string | null,
-  rows: TurnTreeRow[]
-): void {
-  rows.push({
-    node,
-    depth,
-    isLast,
-    ancestorBars,
-    isActive: node.turn_id === activeLeafId,
-    onActivePath: activePath.has(node.turn_id)
-  });
-  const childBars = depth === 0 ? [] : [...ancestorBars, !isLast];
-  node.children.forEach((child, index) => {
-    pushNode(
-      child,
-      depth + 1,
-      index + 1 === node.children.length,
-      childBars,
-      activePath,
-      activeLeafId,
-      rows
-    );
-  });
 }
 
 /**
@@ -86,12 +60,7 @@ function pushNode(
  */
 export function collectActivePath(tree: SessionTurnTree): string[] {
   if (!tree.active_leaf_id) return [];
-  const parents = new Map<string, string | null>();
-  const walk = (node: TurnTreeNode) => {
-    parents.set(node.turn_id, node.parent_turn_id);
-    node.children.forEach(walk);
-  };
-  tree.roots.forEach(walk);
+  const { parents } = indexTurnTree(tree);
 
   const path: string[] = [];
   const seen = new Set<string>();
@@ -116,18 +85,7 @@ export function findSiblingBranches(
   tree: SessionTurnTree,
   turnId: string
 ): { siblings: TurnTreeNode[]; index: number } | null {
-  let result: { siblings: TurnTreeNode[]; index: number } | null = null;
-  const visit = (nodes: TurnTreeNode[]) => {
-    const index = nodes.findIndex((node) => node.turn_id === turnId);
-    // 只有真正存在分叉时才需要版本切换
-    if (index >= 0 && nodes.length > 1) {
-      result = { siblings: nodes, index };
-      return;
-    }
-    nodes.forEach((node) => visit(node.children));
-  };
-  visit(tree.roots);
-  return result;
+  return indexTurnTree(tree).siblings.get(turnId) ?? null;
 }
 
 /**
@@ -139,14 +97,15 @@ export function findSiblingBranches(
  * @returns 应恢复的叶节点标识
  */
 export function preferredBranchLeafId(branch: TurnTreeNode): string {
-  const leaves: TurnTreeNode[] = [];
-  const visit = (node: TurnTreeNode) => {
-    if (node.children.length === 0) leaves.push(node);
-    node.children.forEach(visit);
-  };
-  visit(branch);
-  return leaves.reduce(
-    (preferred, node) => node.seq > preferred.seq ? node : preferred,
-    leaves[0] ?? branch
-  ).turn_id;
+  const pending = [branch];
+  const seen = new Set<string>();
+  let preferred: TurnTreeNode | undefined;
+  while (pending.length > 0) {
+    const node = pending.pop()!;
+    if (seen.has(node.turn_id)) continue;
+    seen.add(node.turn_id);
+    if (node.children.length === 0 && (!preferred || node.seq > preferred.seq)) preferred = node;
+    for (let index = node.children.length - 1; index >= 0; index--) pending.push(node.children[index]);
+  }
+  return (preferred ?? branch).turn_id;
 }
