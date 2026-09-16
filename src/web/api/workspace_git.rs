@@ -8,6 +8,9 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
+#[path = "workspace_git_stats.rs"]
+mod stats;
+
 #[derive(Deserialize)]
 struct GitRepositoryQuery {
     repo_root: Option<String>,
@@ -121,6 +124,7 @@ struct GitStashQuery {
 /// - Git 状态、资源、历史和操作路由
 pub(super) fn routes() -> Router<WebAppState> {
     Router::new()
+        .merge(stats::routes())
         .route("/api/workspace/git", axum::routing::post(git_action))
         .route("/api/workspace/git/repositories", get(git_repositories))
         .route("/api/workspace/git/status", get(git_status))

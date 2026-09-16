@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SessionTimelineTurn } from "../../api/contracts";
 import { initialRunState } from "./run-event-reducer";
+import { projectConversationDisplay } from "./conversation-display";
 import {
   createLiveOverviewItem,
   createOverviewSummary,
@@ -33,6 +34,32 @@ function timelineTurn(patch: Partial<SessionTimelineTurn> = {}): SessionTimeline
 }
 
 describe("message overview utils", () => {
+  it("流式投影生成新数组时复用已完成历史的概览", () => {
+    const completed = timelineTurn();
+    const active = timelineTurn({ turn_id: "live-turn", status: "running" });
+    const history = [completed, active];
+    const live = { ...initialRunState, runId: "live-turn", content: "first" };
+    const first = createTimelineOverviewItems(projectConversationDisplay(history, [live]).historyTurns, live);
+    const updatedLive = { ...live, content: "first second" };
+    const next = createTimelineOverviewItems(projectConversationDisplay(history, [updatedLive]).historyTurns, updatedLive);
+
+    expect(next[0]).toBe(first[0]);
+    expect(next[1].summary).toBe("first second");
+  });
+
+  it("轮次内容或语言变化时更新对应概览", () => {
+    const original = timelineTurn();
+    const [first] = createTimelineOverviewItems([original]);
+    const changed = { ...original, assistant: { ...original.assistant, content: "新的摘要" } };
+    const [next] = createTimelineOverviewItems([changed]);
+    const [english] = createTimelineOverviewItems([original], undefined, "en-US");
+
+    expect(next).not.toBe(first);
+    expect(next.summary).toBe("新的摘要");
+    expect(english.label).toBe("Completed");
+    expect(createTimelineOverviewItems([original])[0]).toBe(first);
+  });
+
   it("清理 Markdown、压缩空白并按字符数截断", () => {
     const source = "# 标题\n\n- [链接](https://example.com)  **正文**\n- `src/chat.tsx`";
 

@@ -1,12 +1,15 @@
+import { lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./app-shell";
-import { GatewaysPage } from "../features/gateways/gateways-page";
-import { CronJobsPage } from "../features/cron-jobs/cron-jobs-page";
-import { SettingsPage } from "../features/settings/settings-page";
-import { CodingPage } from "../features/workspace/coding-page";
 import { ChatAgentProvider } from "../features/agents/chat-agent-context";
 import { DialogProvider } from "../shared/ui/dialog/dialog-provider";
 import { I18nProvider } from "../features/i18n/i18n-context";
+
+// 1. 【前端性能】【路由加载】页面模块在对应路由激活时加载
+const CodingPage = lazy(() => import("../features/workspace/coding-page").then((module) => ({ default: module.CodingPage })));
+const SettingsPage = lazy(() => import("../features/settings/settings-page").then((module) => ({ default: module.SettingsPage })));
+const GatewaysPage = lazy(() => import("../features/gateways/gateways-page").then((module) => ({ default: module.GatewaysPage })));
+const CronJobsPage = lazy(() => import("../features/cron-jobs/cron-jobs-page").then((module) => ({ default: module.CronJobsPage })));
 
 /**
  * 组合应用级上下文和页面路由。

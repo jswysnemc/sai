@@ -1,5 +1,7 @@
+import { Suspense } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { ErrorBoundary } from "../shared/ui/error-boundary/error-boundary";
+import { LoadingPanel } from "../shared/ui/loading-panel";
 import { appViewKey } from "./app-view-key";
 import "./app-shell.css";
 
@@ -23,7 +25,9 @@ export function AppShell() {
       <main className="app-content">
         <div className="app-view" key={appViewKey(location.pathname)}>
           <ErrorBoundary>
-            <Outlet />
+            <Suspense fallback={<LoadingPanel />}>
+              <Outlet />
+            </Suspense>
           </ErrorBoundary>
         </div>
       </main>

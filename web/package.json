@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/check-initial-bundle.mjs && node scripts/compress-assets.mjs",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "postinstall": "node scripts/copy-material-icons.mjs"

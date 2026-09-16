@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react";
 import hljs from "highlight.js/lib/core";
 import bash from "highlight.js/lib/languages/bash";
 import css from "highlight.js/lib/languages/css";
@@ -53,7 +54,7 @@ const LANGUAGE_ALIASES: Record<string, string> = {
  * @param props 代码语言和源代码
  * @returns 带语法分类的代码元素
  */
-export function SyntaxHighlighter({
+export const SyntaxHighlighter = memo(function SyntaxHighlighter({
   language,
   source,
   showLineNumbers = false
@@ -62,14 +63,15 @@ export function SyntaxHighlighter({
   source: string;
   showLineNumbers?: boolean;
 }) {
-  const result = highlightSource(source, language);
+  const result = useMemo(() => highlightSource(source, language), [source, language]);
+  const lines = useMemo(() => showLineNumbers ? splitHighlightedLines(result.value) : [], [result, showLineNumbers]);
   const className = `hljs${result.language ? ` language-${result.language}` : ""}`;
   if (!showLineNumbers) {
     return <code className={className} dangerouslySetInnerHTML={{ __html: result.value }} />;
   }
   return (
     <code className={`${className} syntax-lines`}>
-      {splitHighlightedLines(result.value).map((line, index) => (
+      {lines.map((line, index) => (
         <span className="syntax-line" key={index}>
           <span className="syntax-line-number" aria-hidden="true">{index + 1}</span>
           <span
@@ -80,7 +82,7 @@ export function SyntaxHighlighter({
       ))}
     </code>
   );
-}
+});
 
 /**
  * 为代码块与差异视图生成统一的安全着色标记。

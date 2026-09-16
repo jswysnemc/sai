@@ -428,12 +428,16 @@ export function ChatPage({ toolbar }: { toolbar?: ReactNode }) {
     setInput(prompt ?? "");
   };
 
+  const historyOverviewItems = useMemo(
+    () => createTimelineOverviewItems(display.historyTurns, undefined, locale),
+    [display.historyTurns, locale]
+  );
   const overviewItems = useMemo(
     () => [
-      ...createTimelineOverviewItems(display.historyTurns, undefined, locale),
+      ...historyOverviewItems,
       ...activeLiveRuns.map((state) => createLiveOverviewItem(state, locale)).filter((item) => item !== null)
     ],
-    [activeLiveRuns, display.historyTurns, locale]
+    [activeLiveRuns, historyOverviewItems, locale]
   );
 
   // 重试与编辑重发共用同一套分支语义，抽到 hook 内维护

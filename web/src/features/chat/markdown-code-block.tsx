@@ -1,5 +1,5 @@
 import { Check, Copy } from "lucide-react";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { SyntaxHighlighter } from "./syntax-highlighter";
 import { useI18n } from "../i18n/use-i18n";
 import {
@@ -19,7 +19,7 @@ type MarkdownCodeBlockProps = {
  * @param props 代码语言和源代码
  * @returns Markdown 代码块
  */
-export function MarkdownCodeBlock({
+export const MarkdownCodeBlock = memo(function MarkdownCodeBlock({
   language,
   source,
   style = DEFAULT_MARKDOWN_STYLE_PREFERENCES.codeBlock
@@ -56,4 +56,4 @@ export function MarkdownCodeBlock({
       <pre><SyntaxHighlighter language={language} source={source} showLineNumbers={style.lineNumbers} /></pre>
     </div>
   );
-}
+});

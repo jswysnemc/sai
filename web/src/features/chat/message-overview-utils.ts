@@ -1,6 +1,7 @@
 import type { SessionTimelineTurn } from "../../api/contracts";
 import type { LiveRunState, ToolLifecycle } from "./run-event-reducer";
 import { text, type Locale } from "../i18n/locale";
+import { cachedHistoryOverview } from "./message-overview-cache";
 
 export type MessageOverviewCategory = "history" | "live";
 
@@ -39,7 +40,7 @@ export function createTimelineOverviewItems(
   liveState?: LiveRunState,
   locale: Locale = "zh-CN"
 ): MessageOverviewItem[] {
-  const items = turns.map((turn) => createHistoryOverviewItem(turn, locale));
+  const items = turns.map((turn) => cachedHistoryOverview(turn, locale, createHistoryOverviewItem));
   const liveItem = liveState ? createLiveOverviewItem(liveState, locale) : null;
   return liveItem ? [...items, liveItem] : items;
 }

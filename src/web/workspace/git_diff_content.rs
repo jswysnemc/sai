@@ -256,19 +256,9 @@ pub(super) fn truncate_patch(value: String) -> (String, bool) {
 /// - 小型文本文件的 patch，目录、二进制或大文件返回空
 async fn build_untracked_file_patch(repo_root: &Path, path: &str) -> Result<Option<String>> {
     let clean = validate_repo_relative_path(path)?;
-    let absolute = repo_root.join(&clean);
-    let metadata = match tokio::fs::metadata(&absolute).await {
-        Ok(metadata) => metadata,
-        Err(_) => return Ok(None),
+    let Some(text) = read_untracked_text(repo_root, &clean).await? else {
+        return Ok(None);
     };
-    if !metadata.is_file() || metadata.len() > 128 * 1024 {
-        return Ok(None);
-    }
-    let bytes = tokio::fs::read(&absolute).await?;
-    if bytes.contains(&0) {
-        return Ok(None);
-    }
-    let text = String::from_utf8_lossy(&bytes);
     let mut patch = format!(
         "diff --git a/{clean} b/{clean}\nnew file mode 100644\n--- /dev/null\n+++ b/{clean}\n"
     );
@@ -286,4 +276,23 @@ async fn build_untracked_file_patch(repo_root: &Path, path: &str) -> Result<Opti
         }
     }
     Ok(Some(patch))
+}
+
+/// 【工作区】【未跟踪文本】读取补丁与统计接口共用的小型文本内容。
+/// 参数：`repo_root` 为仓库根目录，`path` 为相对路径；返回文本，目录、二进制或大文件返回空。
+pub(super) async fn read_untracked_text(repo_root: &Path, path: &str) -> Result<Option<String>> {
+    let clean = validate_repo_relative_path(path)?;
+    let absolute = repo_root.join(clean);
+    let metadata = match tokio::fs::metadata(&absolute).await {
+        Ok(metadata) => metadata,
+        Err(_) => return Ok(None),
+    };
+    if !metadata.is_file() || metadata.len() > 128 * 1024 {
+        return Ok(None);
+    }
+    let bytes = tokio::fs::read(&absolute).await?;
+    if bytes.contains(&0) {
+        return Ok(None);
+    }
+    Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
 }

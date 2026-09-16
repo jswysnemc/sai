@@ -1,10 +1,7 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { ErrorBoundary } from "../../shared/ui/error-boundary/error-boundary";
-import { EditorPane } from "./editor-pane";
+import { LoadingPanel } from "../../shared/ui/loading-panel";
 import { FileTree } from "./file-tree";
-import { TerminalDock } from "../terminal/terminal-dock";
-import { BackgroundTasksPanel } from "../background-tasks/background-tasks-panel";
-import { SubagentWorkspace } from "../subagents/subagent-workspace";
 import type { TerminalManager } from "../terminal/use-terminal-manager";
 import { createWorkspacePanelTab, type PaneTab, type WorkspacePanelTab } from "./workspace-tab";
 import { workspacePanelTitle, type WorkspacePanelAction } from "./workspace-panel-options";
@@ -15,14 +12,20 @@ import { ensureTerminalTab } from "../terminal/terminal-tab-state";
 import { WorkspaceEmptyState } from "./workspace-empty-state";
 import { SshHostPickerDialog } from "../terminal/ssh-host-picker-dialog";
 import type { WorkspacePassiveDiff } from "./workspace-passive-diff";
-import { TargetedDiffPane } from "./targeted-diff-pane";
-import { SourceControlPane } from "../source-control/source-control-pane";
 import { WorkspaceFileSplit } from "./workspace-file-split";
-import { SideConversationPane } from "../side-conversation/side-conversation-pane";
 import type { SideConversationRequest } from "../side-conversation/side-conversation-events";
 import { useWorkspaceGitEntries } from "./use-workspace-git-entries";
 import { useFileNavigationHistory } from "./use-file-navigation-history";
 import { selectExistingWorkspacePanel } from "./workspace-panel-selection";
+
+// 1. 【前端性能】【面板加载】空工作区只加载导航，各功能在创建面板后加载
+const EditorPane = lazy(() => import("./editor-pane").then((module) => ({ default: module.EditorPane })));
+const TerminalDock = lazy(() => import("../terminal/terminal-dock").then((module) => ({ default: module.TerminalDock })));
+const BackgroundTasksPanel = lazy(() => import("../background-tasks/background-tasks-panel").then((module) => ({ default: module.BackgroundTasksPanel })));
+const SubagentWorkspace = lazy(() => import("../subagents/subagent-workspace").then((module) => ({ default: module.SubagentWorkspace })));
+const TargetedDiffPane = lazy(() => import("./targeted-diff-pane").then((module) => ({ default: module.TargetedDiffPane })));
+const SourceControlPane = lazy(() => import("../source-control/source-control-pane").then((module) => ({ default: module.SourceControlPane })));
+const SideConversationPane = lazy(() => import("../side-conversation/side-conversation-pane").then((module) => ({ default: module.SideConversationPane })));
 
 type WorkspacePaneProps = {
   selectedFile: string | null;
@@ -328,55 +331,57 @@ export function WorkspacePane({
         onCollapse={onCollapse}
       />
       <ErrorBoundary key={activeTab?.id ?? "empty"} label={t("This panel failed to render", "该面板渲染失败")}>
-      <div id="workspace-panel-content" className="pane-body" role={activeTab ? "tabpanel" : undefined} aria-labelledby={activeTab ? `workspace-tab-${activeTab.id}` : undefined}>
-        {!activeTab && (
-          <WorkspaceEmptyState onOpen={(type) => void addTab(type)} />
-        )}
-        {activeTab?.type === "files" && (
-          <WorkspaceFileSplit
-            open={fileTreeOpen}
-            onOverlayChange={setFileTreeOverlay}
-            editor={<EditorPane
-              path={activeTab.path ?? selectedFile}
-              onSelectFile={onSelectFile}
-              fileTreeOpen={fileTreeOpen}
-              onToggleFileTree={toggleFileTree}
-              gitEntries={gitEntries}
-              navigation={navigation}
-            />}
-            tree={fileTreeOpen ? (
-              <FileTree
-                selectedFile={activeTab.path ?? selectedFile}
-                onSelectFile={selectFileFromTree}
-                onClearFile={onClearFile}
-                onClose={() => {
-                  setFileTreeOpen(false);
-                  setFileTreeOverlay(false);
-                }}
+        <Suspense fallback={<LoadingPanel />}>
+          <div id="workspace-panel-content" className="pane-body" role={activeTab ? "tabpanel" : undefined} aria-labelledby={activeTab ? `workspace-tab-${activeTab.id}` : undefined}>
+            {!activeTab && (
+              <WorkspaceEmptyState onOpen={(type) => void addTab(type)} />
+            )}
+            {activeTab?.type === "files" && (
+              <WorkspaceFileSplit
+                open={fileTreeOpen}
+                onOverlayChange={setFileTreeOverlay}
+                editor={<EditorPane
+                  path={activeTab.path ?? selectedFile}
+                  onSelectFile={onSelectFile}
+                  fileTreeOpen={fileTreeOpen}
+                  onToggleFileTree={toggleFileTree}
+                  gitEntries={gitEntries}
+                  navigation={navigation}
+                />}
+                tree={fileTreeOpen ? (
+                  <FileTree
+                    selectedFile={activeTab.path ?? selectedFile}
+                    onSelectFile={selectFileFromTree}
+                    onClearFile={onClearFile}
+                    onClose={() => {
+                      setFileTreeOpen(false);
+                      setFileTreeOverlay(false);
+                    }}
+                  />
+                ) : null}
               />
-            ) : null}
-          />
-        )}
-        {activeTab?.type === "diff" && (
-          activeTab.path
-            ? <TargetedDiffPane path={activeTab.path} source={activeTab.diffSource ?? ""} />
-            : <SourceControlPane />
-        )}
-        {activeTab?.type === "terminal" && (
-          <TerminalDock terminalId={activeTab.terminalId} title={activeTab.title} error={terminalManager.error} />
-        )}
-        {activeTab?.type === "tasks" && <BackgroundTasksPanel />}
-        {activeTab?.type === "subagents" && <SubagentWorkspace />}
-        {tabs.filter((tab) => tab.type === "side-chat" && tab.sideConversation).map((tab) => (
-          <div
-            className="workspace-side-chat-host"
-            hidden={activeTab?.id !== tab.id}
-            key={tab.id}
-          >
-            <SideConversationPane request={tab.sideConversation!} />
+            )}
+            {activeTab?.type === "diff" && (
+              activeTab.path
+                ? <TargetedDiffPane path={activeTab.path} source={activeTab.diffSource ?? ""} />
+                : <SourceControlPane />
+            )}
+            {activeTab?.type === "terminal" && (
+              <TerminalDock terminalId={activeTab.terminalId} title={activeTab.title} error={terminalManager.error} />
+            )}
+            {activeTab?.type === "tasks" && <BackgroundTasksPanel />}
+            {activeTab?.type === "subagents" && <SubagentWorkspace />}
+            {tabs.filter((tab) => tab.type === "side-chat" && tab.sideConversation).map((tab) => (
+              <div
+                className="workspace-side-chat-host"
+                hidden={activeTab?.id !== tab.id}
+                key={tab.id}
+              >
+                <SideConversationPane request={tab.sideConversation!} />
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </Suspense>
       </ErrorBoundary>
       <SshHostPickerDialog
         open={sshPickerOpen}

@@ -40,6 +40,9 @@ mod conflict_workflows;
 #[path = "git_tests/file_changes.rs"]
 mod file_changes;
 
+#[path = "git_tests/diff_stats.rs"]
+mod diff_stats;
+
 #[path = "git_tests/history_graph.rs"]
 mod history_graph;
 

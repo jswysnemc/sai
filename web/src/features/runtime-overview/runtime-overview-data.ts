@@ -1,12 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";
+import { fetchGitDiffStats } from "../../api/git-stats-client";
 import type { Subagent, TodoItem, TodoSnapshot } from "../../api/contracts";
 import type { Goal } from "../../api/goal-contracts";
-
-type GitLineStats = {
-  added: number;
-  removed: number;
-};
 
 /**
  * 归一化新旧 Todo 接口返回结构。
@@ -27,23 +23,6 @@ export function normalizeTodoItems(data: TodoSnapshot | TodoItem[] | undefined):
  */
 export function selectTodoOverviewItems(items: readonly TodoItem[]): TodoItem[] {
   return [...items];
-}
-
-/**
- * 统计 Git 补丁中的新增与删除行数。
- *
- * @param patch Git unified diff 文本
- * @returns 新增和删除行数
- */
-export function countGitPatchLines(patch: string | undefined): GitLineStats {
-  if (!patch) return { added: 0, removed: 0 };
-  let added = 0;
-  let removed = 0;
-  for (const line of patch.split("\n")) {
-    if (line.startsWith("+") && !line.startsWith("+++")) added += 1;
-    if (line.startsWith("-") && !line.startsWith("---")) removed += 1;
-  }
-  return { added, removed };
 }
 
 /**
@@ -70,9 +49,10 @@ export function sortSubagentOverviewItems(items: readonly Subagent[]): Subagent[
  * 读取右上角运行总览所需的 Git、Todo 和子智能体状态。
  *
  * @param sessionId 当前会话标识
+ * @param includeGitStats 当前界面是否需要展示增删行统计
  * @returns 三类运行状态及聚合统计
  */
-export function useRuntimeOverviewData(sessionId?: string) {
+export function useRuntimeOverviewData(sessionId?: string, includeGitStats = true) {
   const git = useQuery({
     queryKey: ["runtime-overview", "git-status"],
     queryFn: () => api.workspace.gitStatus(),
@@ -82,10 +62,11 @@ export function useRuntimeOverviewData(sessionId?: string) {
   const gitSignature = git.data?.entries
     .map((entry) => `${entry.path}:${entry.index_status}:${entry.worktree_status}`)
     .join("|") ?? "";
-  const gitDiff = useQuery({
-    queryKey: ["runtime-overview", "git-diff", gitSignature],
-    queryFn: () => api.workspace.gitReviewDiff("working_tree"),
-    enabled: git.data?.status === "ready" && (git.data.entries.length > 0),
+  // 1. 【工作概览】【按需统计】仅在展示增删行数时获取轻量统计，折叠的工具栏概览停止查询
+  const gitStats = useQuery({
+    queryKey: ["runtime-overview", "git-diff-stats", git.data?.repo_root, gitSignature],
+    queryFn: () => fetchGitDiffStats(git.data?.repo_root),
+    enabled: includeGitStats && git.data?.status === "ready" && (git.data.entries.length > 0),
     refetchInterval: 5000,
     retry: false
   });
@@ -119,7 +100,7 @@ export function useRuntimeOverviewData(sessionId?: string) {
   const goalItem: Goal | null = goal.data?.goal ?? null;
   const subagentItems: Subagent[] = subagents.data ?? [];
   const changedCount = git.data?.entries.length ?? 0;
-  const lineStats = countGitPatchLines(gitDiff.data?.patch);
+  const lineStats = gitStats.data ?? { added: 0, removed: 0 };
   const completedTodos = todoItems.filter((item) => item.status === "completed").length;
   const runningSubagents = subagentItems.filter((item) => item.status === "running").length;
   const runningTasks = tasks.data?.tasks.filter((task) => task.status === "running").length ?? 0;

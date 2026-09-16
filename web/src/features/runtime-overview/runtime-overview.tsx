@@ -60,16 +60,16 @@ type RuntimeOverviewProps = {
 export function RuntimeOverview({ sessionId, placement = "floating" }: RuntimeOverviewProps) {
   const { locale, t } = useI18n();
   const panelId = useId();
-  const data = useRuntimeOverviewData(sessionId);
-  const pulse = useActivityPulse(data.snapshot);
-  const [responsiveOpen, setResponsiveOpen] = useState(false);
-  const rootRef = useRef<HTMLElement>(null);
   const [collapsed, setCollapsed] = useState(() => {
     if (placement === "toolbar") return true;
     if (typeof window === "undefined") return false;
     if (window.matchMedia("(max-width: 48rem)").matches) return true;
     return window.localStorage.getItem(COLLAPSED_STORAGE_KEY) === "true";
   });
+  const data = useRuntimeOverviewData(sessionId, placement !== "toolbar" || !collapsed);
+  const pulse = useActivityPulse(data.snapshot);
+  const [responsiveOpen, setResponsiveOpen] = useState(false);
+  const rootRef = useRef<HTMLElement>(null);
   useOutsidePointerDown(rootRef, () => setCollapsed(true), placement === "toolbar" && !collapsed);
 
   useEffect(() => {

@@ -28,18 +28,21 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
     sourcemap: false,
+    manifest: true,
     rollupOptions: {
       output: {
+        onlyExplicitManualChunks: true,
+        /**
+         * 【前端性能】【依赖分包】只归并目标库本身，保持共享依赖与包装层的加载边界。
+         * @param id 构建模块的完整路径
+         * @returns 手动分包名称，其余模块由构建器拆分
+         */
         manualChunks(id) {
-          if (id.includes("monaco-editor")) return "monaco";
-          // 语言高亮包由 language-data 按需异步加载，交给 Rollup 自动拆分，
-          // 并入核心分包会让全部语言随编辑器一次性加载
-          if (/@codemirror\/(lang-(?!markdown|html)|legacy-modes)/.test(id)) return undefined;
-          if (/@lezer\/(?!common|highlight|lr|markdown)/.test(id)) return undefined;
-          if (id.includes("@codemirror") || id.includes("@lezer")) return "codemirror";
-          if (id.includes("mermaid")) return "mermaid";
+          const path = id.replace(/\\/g, "/");
+          if (path.includes("/node_modules/monaco-editor/") && !path.includes("?worker")) return "monaco";
+          // 【前端性能】【依赖顺序】CodeMirror、Lezer 与 Mermaid 保留原生拆分，避免语言解析器循环初始化或提前载入布局引擎
           if (id.includes("@xterm")) return "terminal";
-          if (id.includes("react") || id.includes("scheduler")) return "react";
+          if (/\/node_modules\/(?:react|react-dom|scheduler)\//.test(path)) return "react";
           return undefined;
         }
       }

@@ -1,12 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import type { CSSProperties } from "react";
-import { useEffect, useReducer, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useReducer, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { ChatPage } from "../chat/chat-page";
 import { SessionSidebar } from "../sessions/session-sidebar";
 import { SessionSidebarResizeHandle } from "../sessions/session-sidebar-resize-handle";
 import { useSessionSidebarLayout } from "../sessions/use-session-sidebar-layout";
-import { WorkspacePane } from "./workspace-pane";
 import { WorkspaceResizeHandle } from "./workspace-resize-handle";
 import { useWorkspaceLayout } from "./use-workspace-layout";
 import { WorkbenchToolbar } from "./workbench-toolbar";
@@ -20,7 +19,7 @@ import { Button } from "../../shared/ui/button/button";
 import { workspaceRelativePath } from "./workspace-path-utils";
 import type { PaneTab } from "./workspace-tab";
 import { useTerminalManager } from "../terminal/use-terminal-manager";
-import { BottomTerminalPanel } from "../terminal/bottom-terminal-panel";
+import { LoadingPanel } from "../../shared/ui/loading-panel";
 import {
   initialMobileWorkbenchState,
   MOBILE_SIDEBAR_TOGGLE_EVENT,
@@ -44,6 +43,9 @@ import {
   readStoredChatModelSelection,
   readStoredThinkingLevel
 } from "../chat/session-preference-storage";
+
+const WorkspacePane = lazy(() => import("./workspace-pane").then((module) => ({ default: module.WorkspacePane })));
+const BottomTerminalPanel = lazy(() => import("../terminal/bottom-terminal-panel").then((module) => ({ default: module.BottomTerminalPanel })));
 
 type WorkspaceLayoutProps = {
   selectedFile: string | null;
@@ -322,32 +324,36 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
           {layout.workspaceOpen && layout.chatOpen && !layout.workspaceMaximized && <WorkspaceResizeHandle swapped={layout.swapped} onResize={layout.resizeWorkspace} />}
           {(layout.workspaceOpen || workspaceMounted) && (
             <aside className="coding-workspace" hidden={!layout.workspaceOpen} inert={!layout.workspaceOpen || (isMobile && mobilePane === "chat")}>
-              <WorkspacePane
-                selectedFile={selectedFile}
-                activeType={paneTab}
-                passiveDiff={passiveDiff}
-                fileTreeRequestId={fileTreeRequestId}
-                onFileTreeRequestHandled={() => setFileTreeRequestId(0)}
-                maximized={layout.workspaceMaximized}
-                onActiveTypeChange={setPaneTab}
-                onSelectFile={onSelectFile}
-                onClearFile={onClearFile}
-                onToggleMaximized={layout.toggleWorkspaceMaximized}
-                onCollapse={closeWorkspace}
-                terminalManager={terminalManager}
-                sideConversationRequest={sideConversationRequest}
-                onRequestSideConversation={openLatestSideConversation}
-              />
+              <Suspense fallback={<LoadingPanel />}>
+                <WorkspacePane
+                  selectedFile={selectedFile}
+                  activeType={paneTab}
+                  passiveDiff={passiveDiff}
+                  fileTreeRequestId={fileTreeRequestId}
+                  onFileTreeRequestHandled={() => setFileTreeRequestId(0)}
+                  maximized={layout.workspaceMaximized}
+                  onActiveTypeChange={setPaneTab}
+                  onSelectFile={onSelectFile}
+                  onClearFile={onClearFile}
+                  onToggleMaximized={layout.toggleWorkspaceMaximized}
+                  onCollapse={closeWorkspace}
+                  terminalManager={terminalManager}
+                  sideConversationRequest={sideConversationRequest}
+                  onRequestSideConversation={openLatestSideConversation}
+                />
+              </Suspense>
             </aside>
           )}
         </div>
         {layout.terminalOpen && (
-          <BottomTerminalPanel
-            manager={terminalManager}
-            height={layout.terminalHeight}
-            onResize={layout.resizeTerminal}
-            onClose={layout.closeTerminal}
-          />
+          <Suspense fallback={<LoadingPanel />}>
+            <BottomTerminalPanel
+              manager={terminalManager}
+              height={layout.terminalHeight}
+              onResize={layout.resizeTerminal}
+              onClose={layout.closeTerminal}
+            />
+          </Suspense>
         )}
         <WorkbenchStatusBar branch={git.data?.status === "ready" ? git.data.head : undefined} terminalOpen={layout.terminalOpen} />
       </div>

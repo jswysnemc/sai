@@ -32,8 +32,10 @@ export function projectConversationDisplay(
       .map((run) => run.runId as string)
   );
 
+  // 1. 【前端性能】【历史投影】实时轮次没有替换历史时保留数组引用，使历史派生缓存继续生效
+  const replacesHistory = [...livePreferredIds].some((id) => historyById.has(id));
   return {
-    historyTurns: turns.filter((turn) => !livePreferredIds.has(turn.turn_id)),
+    historyTurns: replacesHistory ? turns.filter((turn) => !livePreferredIds.has(turn.turn_id)) : turns,
     liveRuns: sessionRuns.filter((run) => {
       if (!run.runId || !run.completed) return true;
       const history = historyById.get(run.runId);

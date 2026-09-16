@@ -21,6 +21,11 @@ mod support;
 #[path = "git_diff_content.rs"]
 mod diff_content;
 
+#[path = "git_diff_stats.rs"]
+mod diff_stats;
+
+pub(crate) use diff_stats::{git_diff_stats, GitDiffStats};
+
 #[path = "git_file_compare.rs"]
 mod file_compare;
 

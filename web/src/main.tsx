@@ -3,13 +3,10 @@ import "@fontsource/inter/latin-500.css";
 import "@fontsource/inter/latin-600.css";
 import "@fontsource/fira-code/latin-400.css";
 import "@fontsource/fira-code/latin-500.css";
-// 中文自托管：系统 CJK 字体（苹方/雅黑/Noto）跨平台字形与字重差异大，
-// 且多数缺 500/600 档，各浏览器合成加粗策略不同导致观感不一致。
-// fontsource 的 CJK 包按 unicode-range 切片，浏览器只下载用到的片段。
-import "@fontsource/noto-sans-sc/chinese-simplified-400.css";
-import "@fontsource/noto-sans-sc/chinese-simplified-500.css";
-import "@fontsource/noto-sans-sc/chinese-simplified-600.css";
-import "@xterm/xterm/css/xterm.css";
+// 【前端性能】【中文字体】按 unicode-range 加载实际使用的字符片段，并保留完整字重
+import "@fontsource/noto-sans-sc/400.css";
+import "@fontsource/noto-sans-sc/500.css";
+import "@fontsource/noto-sans-sc/600.css";
 import "katex/dist/katex.min.css";
 import "./shared/styles/tokens.css";
 import "./shared/styles/tailwind.css";
@@ -18,17 +15,19 @@ import "./shared/styles/scrollbar.css";
 import "./shared/styles/surfaces.css";
 
 import { QueryClientProvider } from "@tanstack/react-query";
-import { StrictMode, useState } from "react";
+import { lazy, StrictMode, Suspense, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import { App } from "./app/app";
 import { queryClient } from "./app/query-client";
 import { bootstrapSession, fetchAuthMode, hasActiveSession } from "./api/client";
 import { PasswordLogin } from "./features/auth/password-login";
 import { initializeTheme } from "./features/theme/theme";
 import { detectInitialLocale, text } from "./features/i18n/locale";
-import { configureMonacoEnvironment } from "./features/workspace/monaco-environment";
 import { enableAutoHideScrollbars } from "./shared/styles/auto-hide-scrollbar";
+import { ErrorBoundary } from "./shared/ui/error-boundary/error-boundary";
+import { LoadingPanel } from "./shared/ui/loading-panel";
+
+const App = lazy(() => import("./app/app").then((module) => ({ default: module.App })));
 
 /**
  * 按认证状态在登录页与工作台之间切换。
@@ -40,9 +39,13 @@ function Root({ authenticated }: { authenticated: boolean }) {
   const [ready, setReady] = useState(authenticated);
   if (!ready) return <PasswordLogin onAuthenticated={() => setReady(true)} />;
   return (
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <ErrorBoundary>
+      <Suspense fallback={<LoadingPanel />}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 
@@ -52,8 +55,6 @@ function Root({ authenticated }: { authenticated: boolean }) {
  */
 async function start() {
   initializeTheme();
-  // 尽早配置 Monaco，避免设置页 JSON 编辑器在未进代码页时触发 toUrl 报错
-  configureMonacoEnvironment();
   // 滚动条默认隐藏，滚动/悬停时短暂显示
   enableAutoHideScrollbars();
   await bootstrapSession();

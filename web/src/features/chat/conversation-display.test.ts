@@ -57,6 +57,16 @@ function run(id: string, content: string, completed: boolean): LiveRunState {
 }
 
 describe("projectConversationDisplay", () => {
+  it("流式正文变化时保留未被替换的历史数组引用", () => {
+    const history = [turn("run-1", "inspect", "completed")];
+    const live = run("run-2", "continue", false);
+    const first = projectConversationDisplay(history, [live]);
+    const next = projectConversationDisplay(history, [{ ...live, content: "new token" }]);
+
+    expect(first.historyTurns).toBe(history);
+    expect(next.historyTurns).toBe(first.historyTurns);
+  });
+
   it("renders a running turn only from live state", () => {
     const projection = projectConversationDisplay(
       [turn("run-1", "inspect", "running")],
