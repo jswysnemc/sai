@@ -98,7 +98,8 @@ async fn both_ordinary_and_conditional_writes_wait_on_the_same_lock_and_cancel_c
         .unwrap();
     lock.lock().unwrap();
     let plugin = configured(root.path(), &["output"], &["output"], |manifest| {
-        manifest.limits.binary_timeout_ms = 40
+        // 1. 【条件取消测试】【恢复时限】持锁保证前两次调用超时，同一实例恢复写入需要真实文件操作时间
+        manifest.limits.binary_timeout_ms = 2_000
     });
     for ordinary in [true, false] {
         let error = plugin
