@@ -19,6 +19,7 @@ mod live_tool_status;
 mod markdown;
 mod markdown_blocks;
 mod markdown_inline;
+mod markdown_quote;
 pub(crate) mod omitted_line;
 mod permission;
 pub(crate) mod render_expand;

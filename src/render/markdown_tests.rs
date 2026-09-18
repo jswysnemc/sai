@@ -133,22 +133,21 @@ fn source_preview_snapshots_open_table_with_latest_widths() {
 fn blockquote_is_visually_distinct() {
     let mut renderer = MarkdownStreamRenderer::new();
     let output = renderer.push(">> quoted\n");
-    // 嵌套引用：弱化细竖条按层级叠加，正文 dim；不再借用绿色语义
-    assert!(output.contains("\x1b[2m▏▏\x1b[0m"));
+    // 嵌套引用：弱化细竖线以空格分隔，正文保持正常对比度
+    assert!(output.contains("\x1b[2m│ │ \x1b[0mquoted"));
     assert!(!output.contains("\x1b[32m"));
-    assert!(output.contains("\x1b[2mquoted"));
+    assert!(!output.contains("\x1b[2mquoted"));
     assert!(!output.contains("| "));
     assert!(!output.contains("48;5;236"));
 }
 
 #[test]
-fn blockquote_keeps_dim_after_inline_styles() {
+fn blockquote_keeps_body_readable_after_inline_styles() {
     let mut renderer = MarkdownStreamRenderer::new();
     let output = renderer.push("> plain **bold** tail\n");
-    assert!(output.contains("\x1b[2m▏\x1b[0m"));
-    // 行内加粗的 reset 之后补回 dim，尾部文本保持引用观感
-    assert!(output.contains("\x1b[0m\x1b[2m"));
-    assert!(output.contains("tail"));
+    assert!(output.contains("\x1b[2m│ \x1b[0mplain "));
+    // 行内加粗结束后回到正常正文，引用栏样式不延伸到文字
+    assert!(output.contains("\x1b[1mbold\x1b[0m tail"));
 }
 
 #[test]

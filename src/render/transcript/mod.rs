@@ -24,6 +24,8 @@ mod animation_tests;
 #[cfg(test)]
 mod assistant_body_tests;
 #[cfg(test)]
+mod blockquote_tests;
+#[cfg(test)]
 mod layout_hierarchy_tests;
 #[cfg(test)]
 mod test_support;

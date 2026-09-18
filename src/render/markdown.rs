@@ -7,10 +7,10 @@ pub(crate) use crate::render::markdown_inline::render_table_cell;
 #[cfg(test)]
 pub(crate) use crate::render::markdown_inline::render_table_cell_content;
 use crate::render::markdown_inline::{render_inline_with_math_mode, InlineMathMode};
+use crate::render::markdown_quote;
 use crate::render::streaming_asset_block::StreamingAssetBlock;
 use crate::render::style::{
-    FOOTNOTE_DEF_STYLE, MD_H1_STYLE, MD_H2_STYLE, MD_H3_STYLE, MD_LIST_MARKER_STYLE,
-    MD_QUOTE_BAR_STYLE, RESET,
+    FOOTNOTE_DEF_STYLE, MD_H1_STYLE, MD_H2_STYLE, MD_H3_STYLE, MD_LIST_MARKER_STYLE, RESET,
 };
 use crate::render::table;
 use crate::render::table::streaming::StreamingTable;
@@ -424,7 +424,7 @@ impl MarkdownLineRenderer {
 /// - `line`: 原始 Markdown 行
 ///
 /// 返回:
-/// - 渲染后的终端文本，不包含结尾换行
+/// - 渲染后的终端文本，引用可能预折行，不包含结尾换行
 pub(crate) fn render_markdown_line(line: &str) -> String {
     render_markdown_line_with_math_mode(line, InlineMathMode::TerminalImage)
 }
@@ -436,7 +436,7 @@ pub(crate) fn render_markdown_line(line: &str) -> String {
 /// - `math_mode`: 行内公式渲染策略
 ///
 /// 返回:
-/// - 渲染后的终端文本，不包含结尾换行
+/// - 渲染后的终端文本，引用可能预折行，不包含结尾换行
 fn render_markdown_line_with_math_mode(line: &str, math_mode: InlineMathMode) -> String {
     let trimmed = line.trim_start();
     let indent = &line[..line.len() - trimmed.len()];
@@ -450,13 +450,8 @@ fn render_markdown_line_with_math_mode(line: &str, math_mode: InlineMathMode) ->
             render_inline_for_mode(rest, math_mode)
         );
     }
-    if let Some((depth, rest)) = parse_blockquote(trimmed) {
-        // 引用条：左侧弱化细竖条（嵌套层级叠加）+ dim 正文；
-        // 行内样式的 reset 会中断 dim，重置后补回保持整行统一
-        let bars = "▏".repeat(depth);
-        let body =
-            render_inline_for_mode(rest, math_mode).replace(RESET, &format!("{RESET}\x1b[2m"));
-        return format!("{indent}{MD_QUOTE_BAR_STYLE}{bars}{RESET} \x1b[2m{body}\x1b[0m");
+    if let Some((depth, rest)) = markdown_quote::parse(trimmed) {
+        return markdown_quote::render(indent, depth, &render_inline_for_mode(rest, math_mode));
     }
     if let Some(rest) = trimmed
         .strip_prefix("- ")
@@ -517,23 +512,6 @@ fn parse_footnote_definition(line: &str) -> Option<(&str, &str)> {
     }
     let body = rest[close + 2..].trim_start();
     Some((label, body))
-}
-
-/// 解析 Markdown 引用层级。
-///
-/// 参数:
-/// - `line`: 原始行
-///
-/// 返回:
-/// - 引用层级和剩余文本
-fn parse_blockquote(line: &str) -> Option<(usize, &str)> {
-    let mut depth = 0;
-    let mut rest = line;
-    while let Some(stripped) = rest.strip_prefix('>') {
-        depth += 1;
-        rest = stripped.strip_prefix(' ').unwrap_or(stripped);
-    }
-    (depth > 0).then_some((depth, rest))
 }
 
 /// 渲染 Markdown 标题。
