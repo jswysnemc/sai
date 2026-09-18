@@ -1,38 +1,63 @@
 /* MCP 分区：表单/JSON 模式切换、JSON 布局与提示卡 */
 
-.mcp-mode-tabs {
-  display: inline-flex;
-  gap: 0;
-  margin: 0;
-  border-bottom: 0;
+.mcp-editor > .editor-header {
+  flex-direction: row;
+  flex-wrap: wrap;
 }
 
-.mcp-mode-tabs button {
+.mcp-editor .editor-header-copy {
+  flex: 1 1 18rem;
+  overflow-wrap: anywhere;
+}
+
+.mcp-editor .editor-header-actions {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.mcp-mode-switch {
   display: inline-flex;
   align-items: center;
-  gap:var(--space-2xs);
-  min-height: 2rem;
-  padding:0 var(--space-md);
+  flex-shrink: 0;
+  gap: var(--space-3xs);
+  height: 2.125rem;
+  padding: var(--space-3xs);
   border: 1px solid var(--line);
-  border-radius: 0;
-  background: var(--paper);
-  color: var(--ink-soft);
-  font-size:var(--text-sm);
+  border-radius: var(--radius-3);
+  background: var(--control-surface);
 }
 
-.mcp-mode-tabs button:first-child {
-  border-radius:var(--radius-3) 0 0 var(--radius-3);
+.mcp-mode-switch .ui-button {
+  flex: 1 0 auto;
+  gap: var(--space-xs);
+  min-height: 0;
+  height: 100%;
+  padding-inline: var(--space-md);
+  border-radius: var(--radius-2);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
 }
 
-.mcp-mode-tabs button:last-child {
-  border-left: 0;
-  border-radius:0 var(--radius-3) var(--radius-3) 0;
+.mcp-mode-switch .ui-button[aria-checked="true"] {
+  border-color: var(--line);
+  background: var(--paper-raised);
+  color: var(--ink);
+  box-shadow: var(--elevation-1);
 }
 
-.mcp-mode-tabs button.active {
-  border-color: color-mix(in srgb, var(--signal) 45%, var(--line));
-  background: color-mix(in srgb, var(--signal) 10%, var(--paper));
-  color: var(--signal);
+.mcp-editor-actions > .ui-button {
+  height: 2.125rem;
+  border-radius: var(--radius-3);
+  white-space: nowrap;
+}
+
+.mcp-editor-actions .settings-switch {
+  min-height: 2.125rem;
+  white-space: nowrap;
 }
 
 .mcp-json-layout {

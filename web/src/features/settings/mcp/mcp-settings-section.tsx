@@ -3,6 +3,7 @@ import { toDisplayError } from "../../../api/api-error";
 import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import { JsonCodeEditor } from "../../../shared/ui/code-editor/json-code-editor";
 import { Button } from "../../../shared/ui/button/button";
+import { SegmentedControl } from "../../../shared/ui/segmented-control";
 import { EditorHeader } from "../editor-layout";
 import { ObjectListPanel } from "../object-list-panel";
 import { useI18n } from "../../i18n/use-i18n";
@@ -116,7 +117,7 @@ export function McpSettingsSection() {
         />
       )}
 
-      <section className="settings-editor">
+      <section className="settings-editor mcp-editor">
         <EditorHeader
           kicker="MCP"
           title={mode === "json" ? t("MCP JSON", "MCP JSON") : (server?.id || t("MCP servers", "MCP 服务"))}
@@ -126,31 +127,35 @@ export function McpSettingsSection() {
           )}
           actions={
             <>
-              <nav className="settings-tabs mcp-mode-tabs" aria-label={t("MCP editor mode", "MCP 编辑模式")}>
-                <Button className={mode === "form" ? "settings-secondary active" : "settings-secondary"} onClick={() => switchMode("form")}>
-                  <FormInput size={13} />{t("Form", "表单")}
-                </Button>
-                <Button className={mode === "json" ? "settings-secondary active" : "settings-secondary"} onClick={() => switchMode("json")}>
-                  <Braces size={13} />JSON
-                </Button>
-              </nav>
-              {saveBar}
-              {mode === "form" && server && (
-                <>
-                  <label className="settings-switch">
-                    <input
-                      type="checkbox"
-                      checked={server.enabled !== false}
-                      onChange={(event) => updateServer(selectedIndex, { enabled: event.target.checked })}
-                    />
-                    <span />
-                    <strong>{server.enabled !== false ? t("Enabled", "已启用") : t("Disabled", "已禁用")}</strong>
-                  </label>
-                  <Button variant="danger" onClick={() => void deleteServer()}>
-                    <Trash2 size={14} />{t("Delete", "删除")}
-                  </Button>
-                </>
-              )}
+              <SegmentedControl
+                value={mode}
+                onChange={switchMode}
+                ariaLabel={t("MCP editor mode", "MCP 编辑模式")}
+                className="mcp-mode-switch max-sm:w-full"
+                options={[
+                  { value: "form", label: t("Form", "表单"), icon: <FormInput size={14} /> },
+                  { value: "json", label: "JSON", icon: <Braces size={14} /> }
+                ]}
+              />
+              <div className="mcp-editor-actions flex flex-wrap items-center gap-2 max-sm:w-full max-sm:justify-between">
+                {saveBar}
+                {mode === "form" && server && (
+                  <>
+                    <label className="settings-switch">
+                      <input
+                        type="checkbox"
+                        checked={server.enabled !== false}
+                        onChange={(event) => updateServer(selectedIndex, { enabled: event.target.checked })}
+                      />
+                      <span />
+                      <strong>{server.enabled !== false ? t("Enabled", "已启用") : t("Disabled", "已禁用")}</strong>
+                    </label>
+                    <Button variant="ghost-danger" onClick={() => void deleteServer()}>
+                      <Trash2 size={14} />{t("Delete", "删除")}
+                    </Button>
+                  </>
+                )}
+              </div>
             </>
           }
         />
