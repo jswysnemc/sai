@@ -1,6 +1,7 @@
 import { BookOpen, FileText, SquareTerminal, Target, X, type LucideIcon } from "lucide-react";
 import { createRoot, type Root } from "react-dom/client";
 import { parseComposerAtoms, type ComposerAtomSegment } from "./composer-atom-token";
+import { fileMentionLabel } from "./file-mention-label";
 
 const ATOM_ATTRIBUTE = "data-composer-atom";
 const iconRoots = new WeakMap<HTMLElement, Root>();
@@ -241,7 +242,7 @@ function createAtom(segment: Exclude<ComposerAtomSegment, { type: "text" }>): HT
 
 /** 返回不同输入原子的图标、标签和悬停说明。 */
 function atomPresentation(segment: Exclude<ComposerAtomSegment, { type: "text" }>): { Icon: LucideIcon; label: string; title: string } {
-  if (segment.type === "file") return { Icon: FileText, label: segment.path, title: segment.path };
+  if (segment.type === "file") return { Icon: FileText, label: fileMentionLabel(segment.path), title: segment.path };
   if (segment.type === "skill") return { Icon: BookOpen, label: `/${segment.name}`, title: `Skill: ${segment.name}` };
   if (segment.type === "goal") return { Icon: Target, label: "/goal", title: "Use the remaining input as the session goal" };
   const lines = segment.content.split(/\r?\n/u).length;

@@ -1,5 +1,6 @@
 import { BookOpen, FileText, SquareTerminal, Target, type LucideIcon } from "lucide-react";
 import type { ComposerAtomSegment } from "../composer/composer-atom-token";
+import { fileMentionLabel } from "../composer/file-mention-label";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
 
@@ -60,7 +61,7 @@ export function UserMessageAtom({ atom, expanded = false, onActivate }: UserMess
  * @returns 原子视觉信息
  */
 function atomPresentation(atom: MessageAtom): { Icon: LucideIcon; label: string; title: string } {
-  if (atom.type === "file") return { Icon: FileText, label: atom.path, title: atom.path };
+  if (atom.type === "file") return { Icon: FileText, label: fileMentionLabel(atom.path), title: atom.path };
   if (atom.type === "skill") return { Icon: BookOpen, label: `/${atom.name}`, title: `Skill: ${atom.name}` };
   if (atom.type === "goal") return { Icon: Target, label: "/goal", title: "Session goal" };
   const lines = atom.content.split(/\r?\n/u).length;
