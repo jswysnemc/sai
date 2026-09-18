@@ -51,11 +51,14 @@ async fn regression_background_silence_wakes_the_session() {
     let paths = SaiPaths::for_tests(temp.path());
     let state = StateStore::new(&paths).unwrap();
     state.init_files().unwrap();
+    let policy =
+        super::super::external_wake_policy::ExternalWakePolicy::capture(&paths, &state).unwrap();
     let (_, store) = quiet_task(&paths, state.session_id());
     let monitor = ExternalEventMonitor {
         paths,
         state,
         config: AppConfig::default(),
+        scope: policy.scope(),
     };
     let polled = monitor.poll_once().await.unwrap();
     let ExternalEventPoll::Ready(ExternalEventWake::Completion(batch)) = polled else {
@@ -64,6 +67,30 @@ async fn regression_background_silence_wakes_the_session() {
     assert!(batch.prompt().contains("quiet-task"));
     assert!(!batch.prompt().contains("以下后台工作已经结束"));
     assert!(!store.load().unwrap()[0].completion_notified);
+}
+
+/// 【会话重开】【旧进展提醒】重新打开不能被旧任务的静默提醒唤醒。
+/// 参数: 无
+/// 返回: 无；旧进展提醒触发自动对话时断言失败
+#[tokio::test]
+async fn reopening_ignores_old_background_attention() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(temp.path());
+    let state = StateStore::new(&paths).unwrap();
+    state.init_files().unwrap();
+    quiet_task(&paths, state.session_id());
+    let policy =
+        super::super::external_wake_policy::ExternalWakePolicy::capture(&paths, &state).unwrap();
+    let monitor = ExternalEventMonitor {
+        paths,
+        state,
+        config: AppConfig::default(),
+        scope: policy.scope(),
+    };
+    assert!(matches!(
+        monitor.poll_once().await.unwrap(),
+        ExternalEventPoll::Idle
+    ));
 }
 
 /// 检查提醒确认后进入冷却，但同一任务结束时仍能收到独立完成回执。

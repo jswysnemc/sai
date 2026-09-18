@@ -83,6 +83,12 @@ impl InterMessageSource for AutomaticInputSource {
                 return Ok(Some(message));
             }
         }
+        if let Some(batch) = &self.batch {
+            if !self.monitor.is_pending(batch)? {
+                self.pending.store(false, Ordering::Release);
+                return Ok(None);
+            }
+        }
         Ok(self
             .pending
             .load(Ordering::Acquire)

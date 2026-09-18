@@ -23,24 +23,29 @@ export async function cancelSessionBranchQueries(
  *
  * @param queryClient React Query 客户端
  * @param sessionId 当前会话标识
- * @returns 新树和新时间线读取完成后的 Promise
+ * @param options 是否在后台刷新辅助数据；重发只需等待新分支时间线
+ * @returns 必需数据读取完成后的 Promise，时间线读取失败时抛出异常
  */
 export async function refreshSessionBranchQueries(
   queryClient: QueryClient,
-  sessionId?: string
+  sessionId?: string,
+  options: { backgroundMetadata?: boolean } = {}
 ): Promise<void> {
   if (!sessionId) return;
   await cancelSessionBranchQueries(queryClient, sessionId);
-  await Promise.all([
-    queryClient.refetchQueries({
+  // 1. 【会话分支】【缓存刷新】时间线决定消息归属，必须完成后才能展示新运行
+  const timeline = queryClient.invalidateQueries({
+    queryKey: ["timeline", sessionId],
+    refetchType: "active"
+  }, { throwOnError: true });
+  // 2. 【会话分支】【缓存刷新】辅助列表照常刷新，重发无需等待这些请求
+  const metadata = Promise.all([
+    queryClient.invalidateQueries({
       queryKey: ["session-turn-tree", sessionId],
-      type: "active"
-    }),
-    queryClient.refetchQueries({
-      queryKey: ["timeline", sessionId],
-      type: "active"
+      refetchType: "active"
     }),
     queryClient.invalidateQueries({ queryKey: ["sessions"] }),
     queryClient.invalidateQueries({ queryKey: ["session-tree"] })
   ]);
+  await Promise.all([timeline, options.backgroundMetadata ? undefined : metadata]);
 }

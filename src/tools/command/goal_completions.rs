@@ -27,7 +27,8 @@ pub(crate) struct BackgroundCompletionNotice {
 ///
 /// 返回:
 /// - 完成通知列表和仍在运行的任务数量
-pub(crate) async fn poll_background_completions(
+#[cfg(test)]
+async fn poll_background_completions(
     paths: &SaiPaths,
     config: &AppConfig,
     session_id: &str,
@@ -55,6 +56,24 @@ pub(crate) async fn poll_session_background_completions(
 ) -> Result<(Vec<BackgroundCompletionNotice>, usize)> {
     poll_background_completions_matching(paths, config, |task| {
         owned_by_session(task, session_id) && task.goal_id.is_none()
+    })
+    .await
+}
+
+/// 【自动续聊】【任务范围】只检查当前打开范围允许接收的后台任务。
+/// 参数: paths 为路径，config 为配置，session_id 与 goal_id 为归属，include 判断任务是否有效
+/// 返回: 有效完成通知与仍在运行的任务数，不把旧任务计入自动等待
+pub(crate) async fn poll_background_completions_in_scope(
+    paths: &SaiPaths,
+    config: &AppConfig,
+    session_id: &str,
+    goal_id: Option<&str>,
+    include: impl Fn(&str) -> bool,
+) -> Result<(Vec<BackgroundCompletionNotice>, usize)> {
+    poll_background_completions_matching(paths, config, |task| {
+        owned_by_session(task, session_id)
+            && task.goal_id.as_deref() == goal_id
+            && include(&task.id)
     })
     .await
 }
@@ -136,6 +155,7 @@ fn owned_by_session(task: &BackgroundCommandTask, session_id: &str) -> bool {
 }
 
 /// 判断后台任务是否属于指定会话 Goal。
+#[cfg(test)]
 fn owned_by_goal(task: &BackgroundCommandTask, session_id: &str, goal_id: &str) -> bool {
     owned_by_session(task, session_id) && task.goal_id.as_deref() == Some(goal_id)
 }

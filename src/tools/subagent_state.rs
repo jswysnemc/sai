@@ -30,7 +30,7 @@ pub(crate) use lifecycle::{
 pub(crate) use messaging::{
     drain_subagent_inbox, queue_subagent_mesh_message, queue_subagent_message,
     queue_subagent_message_for_owner, request_subagent_stop_for_owner, subagent_inbox_len,
-    subagent_messages, subagent_stop_requested,
+    subagent_message_counts, subagent_messages, subagent_stop_requested,
 };
 use persistence::{
     ensure_owner_loaded, persist_owner_locked, publish_record, subagents, unix_seconds,

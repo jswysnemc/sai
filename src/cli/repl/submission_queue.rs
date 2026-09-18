@@ -122,7 +122,7 @@ pub(super) async fn drain_submission_queue(
             agent.prepare_for_turn()?;
             // 用户主动发话：清除积压的未消费回执，避免上一轮遗留整包注入
             let _ = agent.discard_stale_external_completion_notices().await;
-            let runner_submission = repl_runner_submission(
+            let mut runner_submission = repl_runner_submission(
                 chat_input,
                 *mode,
                 reasoning_mode,
@@ -130,6 +130,12 @@ pub(super) async fn drain_submission_queue(
                 stream_render_options(config),
                 false,
             );
+            // 1. 【会话同步】【排队执行】把远端运行标识交给持久化层与终端事件广播
+            if let crate::runner::RunnerSubmissionKind::UserInput(input) =
+                &mut runner_submission.kind
+            {
+                input.turn_id = item.turn_id;
+            }
             let outcome = execute_repl_turn(
                 paths,
                 config,

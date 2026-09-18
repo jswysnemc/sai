@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import type { RunMode, RunModelSelection, ThinkingLevel, WebEvent } from "../../api/contracts";
 import { api } from "../../api/client";
 import { runFailureEvent } from "./run-failure-event";
@@ -8,6 +8,7 @@ import { useI18n } from "../i18n/use-i18n";
 import { text } from "../i18n/locale";
 import { createReplyNotifier } from "../../shared/notify/reply-notification";
 import { initialSessionRunsState, sessionRunsReducer, type HistoryTurnKey, type SessionRunsAction, type SessionRunsState } from "./session-runs-reducer";
+import { createSessionRunScope } from "./session-run-scope";
 export { applyEventsToSessionRuns, sessionRunsReducer, upsertRunFromEvent, updateQueuedRunState } from "./session-runs-reducer";
 export type { HistoryTurnKey } from "./session-runs-reducer";
 
@@ -74,6 +75,8 @@ export function useRunStream(
 ) {
   const { locale } = useI18n();
   const queryClient = useQueryClient();
+  const scopes = useRef(createSessionRunScope()).current;
+  const scope = scopes.select(workspaceId, sessionId);
   const reducer = useCallback(
     (state: SessionRunsState, action: SessionRunsAction) => sessionRunsReducer(state, action, locale),
     [locale]
@@ -82,6 +85,11 @@ export function useRunStream(
   const pendingEventsRef = useRef<WebEvent[]>([]);
   const coalesceFrameRef = useRef<number | null>(null);
   const notificationRef = useRef<ReturnType<typeof createReplyNotifier> | null>(null);
+
+  useEffect(() => {
+    pendingEventsRef.current = [];
+    dispatch({ type: "reset" });
+  }, [scope]);
 
   useEffect(() => {
     if (!workspaceId || !sessionId) return;
@@ -125,7 +133,7 @@ export function useRunStream(
       return;
     }
     flushPendingEvents();
-    if (event.type === "run.merged") {
+    if (event.type === "run.merged" && !event.replayed) {
       onQueueMerged?.(typeof event.payload.input === "string" ? event.payload.input : "");
     }
     dispatch({ type: "event", event });
@@ -195,6 +203,7 @@ export function useRunStream(
     };
 
     const openSource = () => {
+      if (!scopes.isCurrent(scope)) return;
       closedByClient = false;
       const lastSequence = lastSequenceRef.current;
       const query = new URLSearchParams({ workspace_id: workspaceId });
@@ -205,6 +214,15 @@ export function useRunStream(
       source = next;
 
       const handle = (message: MessageEvent<string>) => {
+        if (closedByClient || source !== next || !scopes.isCurrent(scope)) return;
+        // 1. 【会话同步】【流恢复】丢事件提示没有普通事件字段，先按 SSE 类型处理
+        if (message.type === "stream.lagged") {
+          closedByClient = true;
+          next.onerror = null;
+          next.close();
+          reconnectTimer = window.setTimeout(openSource, 100);
+          return;
+        }
         let event: WebEvent;
         try {
           event = JSON.parse(message.data) as WebEvent;
@@ -216,12 +234,13 @@ export function useRunStream(
             errorDetail(error, message.data)
           );
         }
+        if (!scopes.accepts(scope, event, lastSequenceRef.current)) return;
         if (typeof event.sequence === "number" && event.sequence > lastSequenceRef.current) {
           lastSequenceRef.current = event.sequence;
         }
         reconnectAttempts = 0;
         void notificationRef.current?.accept(event, locale);
-        if (event.type === "run.interrupted"
+        if (!event.replayed && event.type === "run.interrupted"
           && event.payload.discard_user_turn === true
           && event.payload.queued !== true) {
           onInterruptedWithoutReply?.(String(event.payload.restore_input ?? ""));
@@ -235,6 +254,8 @@ export function useRunStream(
           return;
         }
         enqueueEvent(event);
+        // 2. 【会话同步】【补发副作用】历史事件不恢复旧草稿，也不逐条重取会话列表
+        if (event.replayed) return;
         if (event.type === "workspace.changed") onWorkspaceChanged?.();
         if (event.type === "compaction.finished" && event.payload.applied === true) {
           void Promise.all([
@@ -263,6 +284,13 @@ export function useRunStream(
           onSettled();
         }
       };
+      next.onopen = () => {
+        if (closedByClient || source !== next || !scopes.isCurrent(scope)) return;
+        void Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["timeline", sessionId] }),
+          queryClient.invalidateQueries({ queryKey: ["session-turn-tree", sessionId] })
+        ]);
+      };
       for (const type of EVENT_TYPES) next.addEventListener(type, handle as EventListener);
       next.onerror = () => {
         if (closedByClient) return;
@@ -280,14 +308,16 @@ export function useRunStream(
     openSource();
     return () => {
       window.clearTimeout(reconnectTimer);
-      flushPendingEvents();
+      pendingEventsRef.current = [];
+      if (coalesceFrameRef.current !== null) cancelAnimationFrame(coalesceFrameRef.current);
+      coalesceFrameRef.current = null;
       if (source) {
         closedByClient = true;
         source.onerror = null;
         source.close();
       }
     };
-  }, [enqueueEvent, flushPendingEvents, locale, onInterruptedWithoutReply, onSettled, onWorkspaceChanged, queryClient, sessionId, workspaceId]);
+  }, [enqueueEvent, flushPendingEvents, locale, onInterruptedWithoutReply, onSettled, onWorkspaceChanged, queryClient, scope, scopes, sessionId, workspaceId]);
 
   /**
    * 提交一轮运行；同会话已有运行时由后端持久化排队。
@@ -313,6 +343,7 @@ export function useRunStream(
     displayInput?: string
   ) => {
     const run = await api.runs.start(targetSessionId, input, mode, selection, imageUrls, thinkingLevel, agentId);
+    if (!scopes.isCurrent(scope)) return;
     notificationRef.current?.trackActiveRuns([run]);
     // 记录本次请求的模型，落库前实时消息即可参与模型切换分割线派生
     dispatch({ type: "start", run, sessionId: targetSessionId, userInput: displayInput ?? input, imageUrls, model: selection?.model });
@@ -340,6 +371,7 @@ export function useRunStream(
     displayInput?: string
   ) => {
     const run = await api.runs.startGoal(targetSessionId, mode, selection, thinkingLevel, agentId);
+    if (!scopes.isCurrent(scope)) return;
     dispatch({ type: "start", run, sessionId: targetSessionId, userInput: displayInput ?? "", model: selection?.model });
   };
 
@@ -349,6 +381,7 @@ export function useRunStream(
     selection?: RunModelSelection
   ) => {
     const run = await api.sessions.compact(targetSessionId, selection);
+    if (!scopes.isCurrent(scope)) return;
     dispatch({ type: "start", run, sessionId: targetSessionId, userInput: "" });
   };
 
@@ -461,8 +494,9 @@ export function useRunStream(
     dispatch({ type: "prune-settled", historyTurns });
   }, []);
 
+  const sessionRuns = useMemo(() => state.runs.filter((run) => run.sessionId === sessionId), [sessionId, state.runs]);
   return {
-    states: state.runs,
+    states: sessionRuns,
     start,
     startGoal,
     startCompaction,
@@ -474,6 +508,7 @@ export function useRunStream(
     removeQueuedRun,
     pruneSettled,
     reset: () => {
+      if (!scopes.isCurrent(scope)) return;
       flushPendingEvents();
       dispatch({ type: "reset" });
     }

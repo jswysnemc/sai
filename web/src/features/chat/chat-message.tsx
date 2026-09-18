@@ -131,6 +131,7 @@ export const HistoryTurn = memo(function HistoryTurn({
           <RunErrorNotice
             message={t("The run failed", "运行失败")}
             detail={historicalFailureDetail(turn, t)}
+            busy={actionBusy}
             onRetry={canRetry && onRetry
               ? () => onRetry(turn.user.content, turn.user.image_urls, turn.turn_id)
               : undefined}
@@ -233,6 +234,7 @@ export const LiveRunMessage = memo(function LiveRunMessage({
               message={state.error}
               detail={state.errorDetail}
               onRetry={onRetry && state.completed ? onRetry : undefined}
+              busy={actionBusy}
             />
           )}
           {!running && (state.content || onRetry) && (

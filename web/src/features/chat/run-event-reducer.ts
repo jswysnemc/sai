@@ -44,6 +44,8 @@ export type RunErrorDetail = {
 };
 
 export type LiveRunState = {
+  /** 仅由历史补发重建；未经活动运行或新实时事件确认 */
+  replayed?: boolean;
   runId: string | null;
   sessionId: string | null;
   status: "idle" | "queued" | "waiting_response" | "waiting_external" | "waiting_permission" | "waiting_question" | "waiting_ssh_secret" | "thinking" | "working" | "compacting" | "reconnecting";
@@ -655,4 +657,3 @@ function closeActiveReasoning(state: LiveRunState, timestamp: string): LiveRunSt
 export function parseQueueInsertAt(value: unknown): QueueInsertAt | undefined {
   return value === "request" || value === "turn" ? value : undefined;
 }
-

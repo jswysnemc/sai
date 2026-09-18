@@ -3,6 +3,8 @@ use super::*;
 use crate::agent::{Agent, AgentEvent, ExternalEventBatch, ExternalEventWake};
 use crate::cli::repl_runtime::{StreamCommandContext, StreamInputAction};
 
+mod identity;
+
 /// 自动唤醒对应的 runner submission 与待确认事件批次。
 pub(super) struct AutomaticReplSubmission {
     pub(super) submission: crate::runner::RunnerSubmission,
@@ -140,7 +142,7 @@ pub(super) async fn execute_repl_turn(
     agent: &mut Agent,
     runtime: &mut ReplRuntime,
     owner_key: &str,
-    submission: crate::runner::RunnerSubmission,
+    mut submission: crate::runner::RunnerSubmission,
     event_bus: Option<crate::runner::ActorHandle>,
 ) -> Result<ReplTurnOutcome> {
     let runner = crate::runner::SessionRunner::new(paths)
@@ -153,14 +155,8 @@ pub(super) async fn execute_repl_turn(
     let (event_tx, event_rx) = std::sync::mpsc::channel::<crate::runner::RunnerEvent>();
     // 同一事件还要进会话事件总线：跟随端靠它实时看到本轮的流式输出与工具
     // 活动。总线只入队不 await，失败也不影响本地渲染——对端失联不该拖垮本轮
-    let (run_input, run_images) = match submission.kind {
-        crate::runner::RunnerSubmissionKind::UserInput(ref input) => {
-            (input.input.clone(), input.image_urls.clone())
-        }
-        _ => (String::new(), Vec::new()),
-    };
+    let (run_id, run_input, run_images) = identity::prepare_run_identity(&mut submission);
     if let Some(bus) = event_bus.as_ref() {
-        let run_id = format!("run_{}", uuid::Uuid::new_v4().simple());
         let _ = bus.begin_run(&run_id, &run_input, &run_images);
     }
     let mut sink = |event: crate::runner::RunnerEvent| {

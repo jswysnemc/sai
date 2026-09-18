@@ -72,7 +72,9 @@ export function sessionRunsReducer(state: SessionRunsState, action: SessionRunsA
         }, locale),
         status: run.status === "queued" ? "queued" as const : "waiting_response" as const
       }));
-    return { runs: [...state.runs, ...attached] };
+    const activeIds = new Set(action.runs.map((run) => run.run_id));
+    return { runs: [...state.runs.map((run) => !run.completed && run.runId && activeIds.has(run.runId)
+      ? { ...run, replayed: false } : run), ...attached] };
   }
   if (action.type === "start") {
     // 服务端随后会广播同一轮的 run.started。两条路径可能任意先后到达，
@@ -84,6 +86,7 @@ export function sessionRunsReducer(state: SessionRunsState, action: SessionRunsA
         runs: state.runs.map((run, index) => (index === existing
           ? {
             ...run,
+            replayed: false,
             userInput: action.userInput,
             model: run.model ?? action.model ?? null
           }
@@ -204,7 +207,7 @@ function applyEventToSessionRuns(
   const runs = state.runs.map((run) => {
     if (run.runId !== event.run_id) return run;
     changed = true;
-    return runEventReducer(run, { type: "event", event }, locale);
+    return runEventReducer(event.replayed ? run : { ...run, replayed: false }, { type: "event", event }, locale);
   });
   return changed ? { runs } : state;
 }
@@ -230,7 +233,7 @@ export function upsertRunFromEvent(
   if (existing >= 0) {
     return {
       runs: state.runs.map((run, index) => (
-        index === existing ? runEventReducer(run, { type: "event", event }, locale) : run
+        index === existing ? runEventReducer(event.replayed ? run : { ...run, replayed: false }, { type: "event", event }, locale) : run
       ))
     };
   }
@@ -245,7 +248,7 @@ export function upsertRunFromEvent(
     insertAt: parseQueueInsertAt(event.payload.insert_at)
   }, locale);
   return {
-    runs: [...state.runs, { ...created, status: statusForRunEntryEvent(event.type) }]
+    runs: [...state.runs, { ...created, replayed: event.replayed === true, status: statusForRunEntryEvent(event.type) }]
   };
 }
 
@@ -300,7 +303,7 @@ export function applyEventsToSessionRuns(
       if (!batch?.length) return run;
       changed = true;
       return batch.reduce(
-        (current, event) => runEventReducer(current, { type: "event", event }, locale),
+        (current, event) => runEventReducer(event.replayed ? current : { ...current, replayed: false }, { type: "event", event }, locale),
         run
       );
     });
@@ -351,4 +354,3 @@ export function updateQueuedRunState(
     runs: state.runs.map((run) => run.status === "queued" ? queued[queuedIndex++] : run)
   };
 }
-

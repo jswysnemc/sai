@@ -329,14 +329,25 @@ pub(crate) fn find(state_dir: &Path, correlation_id: &str) -> Option<MeshEnvelop
 ///
 /// 返回:
 /// - 待投递消息；没有则 `None`
+#[cfg(test)]
 pub(crate) fn next_pending(state_dir: &Path, session_id: &str) -> Option<MeshEnvelope> {
-    let acked = load_acked(state_dir);
-    list(state_dir).into_iter().find(|envelope| {
-        !acked.iter().any(|id| id == &envelope.id) && directed_at_session(envelope, session_id)
-    })
+    pending_messages(state_dir, session_id).into_iter().next()
 }
 
-/// 标记消息已被 Agent 队列消费，后续 `next_pending` 不再返回它们。
+/// 【自动续聊】【信箱读取】按原顺序读取本会话尚未确认的消息，不改变确认状态。
+/// 参数: state_dir 为会话目录，session_id 为会话标识
+/// 返回: 仅发给当前会话或广播的待处理消息
+pub(crate) fn pending_messages(state_dir: &Path, session_id: &str) -> Vec<MeshEnvelope> {
+    let acked = load_acked(state_dir);
+    list(state_dir)
+        .into_iter()
+        .filter(|envelope| {
+            !acked.iter().any(|id| id == &envelope.id) && directed_at_session(envelope, session_id)
+        })
+        .collect()
+}
+
+/// 标记消息已被 Agent 队列消费，后续 `pending_messages` 不再返回它们。
 ///
 /// 消息本身仍留在信箱里，便于按 correlation_id 对上同一条线程。
 ///

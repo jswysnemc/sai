@@ -1,8 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { useRef, useState } from "react";
 import { api } from "../../../api/client";
-import type { RunMode, RunModelSelection, ThinkingLevel } from "../../../api/contracts";
+import type { RunMode, RunModelSelection, SessionTimeline, ThinkingLevel } from "../../../api/contracts";
 import { retryableTurnId } from "../conversation-display";
 import { refreshSessionBranchQueries } from "./branch-query-cache";
+import { createSessionRunScope } from "../session-run-scope";
 
 type ResendOptions = {
   sessionId?: string;
@@ -28,10 +30,14 @@ type ResendOptions = {
  * 于是新回答成为旧轮次的兄弟分支，旧轮次原样保留在树里。
  *
  * @param options 会话状态、运行参数与分支操作
- * @returns 重试与编辑重发方法
+ * @returns 重试与编辑重发方法、进行中状态
  */
 export function useResendActions(options: ResendOptions) {
   const queryClient = useQueryClient();
+  const scopes = useRef(createSessionRunScope()).current;
+  const scope = scopes.select(undefined, options.sessionId);
+  const [pendingScope, setPendingScope] = useState<typeof scope | null>(null);
+  const pendingRef = useRef<typeof scope | null>(null);
 
   /**
    * 退回目标轮次的父节点后以给定内容重新发起。
@@ -50,13 +56,21 @@ export function useResendActions(options: ResendOptions) {
     requireTurn: boolean
   ) => {
     const sessionId = options.sessionId;
-    if (!sessionId || options.running) return;
+    if (!sessionId || options.running || pendingRef.current === scope || !scopes.isCurrent(scope)) return;
     if (!content.trim() && !(imageUrls && imageUrls.length > 0)) return;
+    // 1. 【会话重发】【操作反馈】同步拦截重复点击，并在请求前更新界面状态
+    pendingRef.current = scope;
+    setPendingScope(scope);
     try {
-      // 1. 主动读取最新时间线，避免终态事件与后台刷新之间的竞态
-      const refreshed = await api.sessions.timeline(sessionId);
-      const turnId = retryableTurnId(refreshed.turns, candidateTurnId);
-      // 2. 解析不到轮次时，编辑动作必须中止而不是静默追加到末尾
+      // 2. 【会话重发】【轮次定位】已展示的持久化轮次直接使用缓存，实时轮次缺失时再读取最新时间线
+      const cached = queryClient.getQueryData<SessionTimeline>(["timeline", sessionId]);
+      let turnId = retryableTurnId(cached?.turns ?? [], candidateTurnId);
+      if (!turnId) {
+        const refreshed = await api.sessions.timeline(sessionId);
+        if (!scopes.isCurrent(scope)) return;
+        turnId = retryableTurnId(refreshed.turns, candidateTurnId);
+      }
+      // 3. 【会话重发】【轮次校验】编辑目标缺失时中止，避免追加到会话末尾
       if (!turnId && requireTurn) {
         options.onError(
           new Error("turn not found"),
@@ -65,20 +79,24 @@ export function useResendActions(options: ResendOptions) {
         );
         return;
       }
-      // 3. 只移动活动叶子；旧轮次保留在树里，新回答成为它的兄弟分支
+      // 4. 【会话重发】【分支切换】保留旧轮次，清理旧实时投影并等待新分支时间线
       if (turnId && !(await options.moveToParent(turnId))) return;
-      // 4. 清理旧实时投影，避免旧轮和新轮同时渲染相同的用户消息
+      if (!scopes.isCurrent(scope)) return;
       options.resetRun();
-      // 5. 等待新活动分支进入缓存后再启动运行，避免回应挂到旧分支
-      await refreshSessionBranchQueries(queryClient, sessionId);
-      // 6. 复用当前模式、模型与思考等级重新提交
+      await refreshSessionBranchQueries(queryClient, sessionId, { backgroundMetadata: true });
+      if (!scopes.isCurrent(scope)) return;
+      // 5. 【会话重发】【运行提交】复用当前模式、模型与思考等级重新提交
       await options.startRun(content, imageUrls);
     } catch (error) {
-      options.onError(error, "Failed to resend the turn", "重新发送失败");
+      if (scopes.isCurrent(scope)) options.onError(error, "Failed to resend the turn", "重新发送失败");
+    } finally {
+      if (pendingRef.current === scope) pendingRef.current = null;
+      setPendingScope((current) => current === scope ? null : current);
     }
   };
 
   return {
+    pending: pendingScope === scope,
     /**
      * 以原内容重试某一轮。
      *

@@ -41,6 +41,24 @@ function event(payload: Record<string, unknown>): WebEvent {
 }
 
 describe("sessionRunsReducer", () => {
+  it("补发来源保留到活动运行确认或新实时事件到达", () => {
+    const replayed = sessionRunsReducer({ runs: [] }, {
+      type: "event",
+      event: { ...broadcast("run.started", { input: "问题" }), replayed: true }
+    });
+    expect(replayed.runs[0].replayed).toBe(true);
+    const attached = sessionRunsReducer(replayed, {
+      type: "attach", sessionId: "session",
+      runs: [{ run_id: "run-2", workspace_id: "workspace", session_id: "session", status: "running" }]
+    });
+    expect(attached.runs[0].replayed).toBe(false);
+    const live = applyEventsToSessionRuns(replayed, [
+      broadcast("message.content.delta", { text: "新的正文" }),
+      broadcast("message.content.delta", { text: "继续正文" })
+    ]);
+    expect(live.runs[0].replayed).toBe(false);
+  });
+
   it("removes the live user bubble when interruption has no assistant reply", () => {
     const started = sessionRunsReducer({ runs: [] }, {
       type: "start",

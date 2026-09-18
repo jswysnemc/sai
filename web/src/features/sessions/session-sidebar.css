@@ -242,7 +242,8 @@
 
 .sidebar-footer {
   position: relative;
-  margin-top:var(--space-sm);
+  flex-shrink: 0;
+  margin-top: auto;
   padding-top:var(--space-sm);
   border-top: 1px solid var(--line);
 }
@@ -311,6 +312,9 @@
 
 /* 会话列表加载骨架：内边距与真实列表项对齐，加载完成后条目不位移 */
 .sidebar-skeleton {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   padding:var(--space-lg) var(--space-sm);
 }
 

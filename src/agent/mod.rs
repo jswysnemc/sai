@@ -12,6 +12,7 @@ mod event;
 mod external_events;
 mod external_tool_history;
 mod external_turn;
+mod external_wake_policy;
 mod instruction_files;
 mod inter_message;
 mod lifecycle;

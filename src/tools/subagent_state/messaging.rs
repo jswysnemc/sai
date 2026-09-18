@@ -158,6 +158,23 @@ pub(crate) fn subagent_inbox_len(id: &str) -> usize {
         .unwrap_or(0)
 }
 
+/// 【自动续聊】【消息边界】查询子任务接收与消费的消息数量，不复制消息正文。
+/// 参数: id 为子任务标识
+/// 返回: 已接收总数与已消费数量；记录不存在时均为零
+pub(crate) fn subagent_message_counts(id: &str) -> (usize, usize) {
+    subagents()
+        .lock()
+        .expect("subagent state lock")
+        .get(id)
+        .map(|record| {
+            (
+                record.message_log.len() + record.inbox.len(),
+                record.message_log.len(),
+            )
+        })
+        .unwrap_or_default()
+}
+
 /// 读取子智能体收到过的全部消息（已注入历史 + 待注入队列）。
 ///
 /// 参数:

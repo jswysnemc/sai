@@ -3,8 +3,10 @@ use crate::tools::command::{
     acknowledge_background_attention, acknowledge_background_completions,
     poll_background_attention, BackgroundCommandStore,
 };
-use crate::tools::mesh::{acknowledge_mesh_messages, next_pending};
-use crate::tools::subagent_state::{acknowledge_finished_notices, pending_finished_notices};
+use crate::tools::mesh::acknowledge_mesh_messages;
+use crate::tools::subagent_state::{
+    acknowledge_finished_notices, pending_finished_notices, subagent_snapshot_for_owner,
+};
 use anyhow::Result;
 
 impl ExternalEventMonitor {
@@ -16,6 +18,9 @@ impl ExternalEventMonitor {
     /// 返回:
     /// - 通知尚未确认、读取或清理时返回 true
     pub(crate) fn is_pending(&self, batch: &ExternalEventBatch) -> Result<bool> {
+        if !self.scope.is_active() || batch.scope_id.is_some_and(|id| id != self.scope.id) {
+            return Ok(false);
+        }
         let goal_id = self
             .state
             .goal()?
@@ -28,7 +33,12 @@ impl ExternalEventMonitor {
                 goal_id.as_deref(),
             )?
             .iter()
-            .any(|pending| pending.event_id == notice.event_id));
+            .any(|pending| {
+                pending.event_id == notice.event_id
+                    && self
+                        .scope
+                        .allows_background(&pending.task_id, goal_id.as_deref())
+            }));
         }
         if !batch.background_task_ids.is_empty() {
             let tasks = BackgroundCommandStore::new(self.paths.state_dir.clone()).load()?;
@@ -38,19 +48,24 @@ impl ExternalEventMonitor {
                     && task.goal_id == goal_id
                     && task.status != "running"
                     && !task.completion_notified
+                    && self
+                        .scope
+                        .allows_background(&task.id, task.goal_id.as_deref())
             }));
         }
         if !batch.subagent_ids.is_empty() {
             let owner_key = self.state.state_dir().display().to_string();
             return Ok(pending_finished_notices(&owner_key).iter().any(|notice| {
-                notice.goal_id == goal_id && batch.subagent_ids.contains(&notice.id)
+                notice.goal_id == goal_id
+                    && batch.subagent_ids.contains(&notice.id)
+                    && subagent_snapshot_for_owner(&owner_key, &notice.id)
+                        .is_ok_and(|task| self.scope.allows_subagent(&task))
             }));
         }
         if !batch.mesh_message_ids.is_empty() {
-            return Ok(
-                next_pending(self.state.state_dir(), self.state.session_id())
-                    .is_some_and(|envelope| batch.mesh_message_ids.contains(&envelope.id)),
-            );
+            return Ok(self
+                .next_mesh()
+                .is_some_and(|envelope| batch.mesh_message_ids.contains(&envelope.id)));
         }
         Ok(false)
     }
@@ -63,6 +78,9 @@ impl ExternalEventMonitor {
     /// 返回:
     /// - 各来源确认结果；失败时保留可重试状态
     pub(crate) fn acknowledge(&self, batch: &ExternalEventBatch) -> Result<()> {
+        if !self.scope.is_active() || batch.scope_id.is_some_and(|id| id != self.scope.id) {
+            return Ok(());
+        }
         let owner_key = self.state.state_dir().display().to_string();
         acknowledge_background_completions(
             &self.paths,

@@ -144,18 +144,18 @@ export function ChatPage({ toolbar }: { toolbar?: ReactNode }) {
       "切换会话分支失败"
     ))
   });
-  // 运行状态在模型偏好之前计算：运行中点选的模型要暂存为待生效
-  const runningStates = run.states.filter((state) => !state.completed);
+  const display = useMemo(
+    () => projectConversationDisplay(timeline.data?.turns ?? [], run.states, activeSession?.id),
+    [activeSession?.id, timeline.data?.turns, run.states]
+  );
+  // 运行状态只来自当前会话与分支，补发的旧轮次不能阻塞输入区
+  const runningStates = display.liveRuns.filter((state) => !state.completed);
   const activeRun = runningStates.find((state) => state.status !== "queued") ?? runningStates[0];
   const running = runningStates.length > 0;
   const chatModel = useChatModel(activeSession?.id, running);
   const thinking = useThinkingLevel(activeSession?.id, chatModel.thinkingLevels);
   const composerAttachments = useComposerAttachments(activeSession?.id);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const display = useMemo(
-    () => projectConversationDisplay(timeline.data?.turns ?? [], run.states, activeSession?.id),
-    [activeSession?.id, timeline.data?.turns, run.states]
-  );
   const [submittedEmptySessionId, setSubmittedEmptySessionId] = useState<string | null>(null);
   const activeLiveRuns = useMemo(
     () => display.liveRuns.filter((state) => state.status !== "queued"),
@@ -264,7 +264,7 @@ export function ChatPage({ toolbar }: { toolbar?: ReactNode }) {
 
   /** 提交当前输入内容和模型选择。 */
   const submit = async () => {
-    if (turnTree.switchBranch.isPending || branchActions.pending || submitting) return;
+    if (turnTree.switchBranch.isPending || branchActions.pending || resend.pending || submitting) return;
     const value = input.trim();
     if ((!value && composerAttachments.attachments.length === 0) || !activeSession) return;
     const renameCommand = parseRenameCommand(value);
@@ -443,7 +443,7 @@ export function ChatPage({ toolbar }: { toolbar?: ReactNode }) {
   // 重试与编辑重发共用同一套分支语义，抽到 hook 内维护
   const resend = useResendActions({
     sessionId: activeSession?.id,
-    running,
+    running: running || branchTransitioning || submitting,
     mode,
     selection: chatModel.selection ?? undefined,
     thinkingLevel: thinking.thinkingLevel,
@@ -472,7 +472,7 @@ export function ChatPage({ toolbar }: { toolbar?: ReactNode }) {
    * @returns 重发完成的 Promise
    */
   const editAndResend = async (turnId: string | null, content: string, imageUrls: string[]) => {
-    if (actionBusy) return;
+    if (actionBusy || resend.pending || branchTransitioning) return;
     const accepted = await confirm({
       title: t("Edit and resend this turn?", "编辑并重新发送这一轮？"),
       description: t("The conversation will branch from this turn. The original turn stays in the tree.", "对话将从这一轮分出新分支。原来的一轮仍留在分支树中。"),
@@ -534,15 +534,15 @@ export function ChatPage({ toolbar }: { toolbar?: ReactNode }) {
       pendingSelection={chatModel.pendingSelection}
       modelLoading={chatModel.isLoading}
       running={running}
-      submitBlocked={branchTransitioning}
+      submitBlocked={branchTransitioning || resend.pending}
       runStatus={activeRun?.status ?? "idle"}
       sessionAvailable={Boolean(activeSession)}
-      undoAvailable={Boolean(timeline.data?.turns.length) && !branchTransitioning}
+      undoAvailable={Boolean(timeline.data?.turns.length) && !branchTransitioning && !resend.pending}
       agentChoices={chatAgent.choices}
       agentSelection={chatAgent.selection}
       agentLoading={chatAgent.isLoading}
       sessionId={activeSession?.id}
-      submitting={submitting}
+      submitting={submitting || resend.pending}
       onChange={setInput}
       onModeChange={setMode}
       onThinkingLevelChange={thinking.setThinkingLevel}
@@ -619,7 +619,7 @@ export function ChatPage({ toolbar }: { toolbar?: ReactNode }) {
     <div className={centerEmptySession ? "chat-page empty-session" : "chat-page"}>
       <div className="chat-page-navigation">
         {header}
-        {treeOpen && turnTree.tree.data && <TurnTreePanel tree={turnTree.tree.data} busy={turnTree.switchBranch.isPending || running} onSelect={(turnId) => turnTree.switchBranch.mutate(turnId)} onClose={() => setTreeOpen(false)} />}
+        {treeOpen && turnTree.tree.data && <TurnTreePanel tree={turnTree.tree.data} busy={turnTree.switchBranch.isPending || running || resend.pending} onSelect={(turnId) => turnTree.switchBranch.mutate(turnId)} onClose={() => setTreeOpen(false)} />}
       </div>
       <div className="message-scroll-region">
         <div className="message-scroll" ref={scrollRef}>
@@ -666,9 +666,9 @@ export function ChatPage({ toolbar }: { toolbar?: ReactNode }) {
                 onSideConversation: openTurnSideConversation,
                 canEditResend: !running,
                 onEditResend: editAndResend,
-                actionBusy: actionBusy || branchTransitioning,
+                actionBusy: actionBusy || branchTransitioning || resend.pending,
                 branchTree: turnTree.tree.data,
-                branchBusy: turnTree.switchBranch.isPending || running,
+                branchBusy: turnTree.switchBranch.isPending || running || resend.pending,
                 onSwitchBranch: turnTree.switchBranch.mutate
               }}
             />}

@@ -9,6 +9,7 @@ use crate::tools::ToolRegistry;
 
 /// 保存单个会话 Agent 的运行依赖和可变状态。
 pub struct Agent {
+    pub(super) external_wake_policy: super::external_wake_policy::ExternalWakePolicy,
     pub(super) state: StateStore,
     pub(super) client: OpenAiCompatibleClient,
     pub(super) compaction_client: OpenAiCompatibleClient,

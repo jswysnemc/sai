@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../api/client";
 import type { ApiError } from "../../../api/api-error";
 import { cancelSessionBranchQueries, refreshSessionBranchQueries } from "./branch-query-cache";
+import { createSessionRunScope } from "../session-run-scope";
 
 type BranchActionsOptions = {
   /** 当前会话标识 */
@@ -28,7 +29,10 @@ type BranchActionsOptions = {
  */
 export function useBranchActions({ sessionId, running, onFocusComposer, resetRun, onError }: BranchActionsOptions) {
   const queryClient = useQueryClient();
-  const [pending, setPending] = useState(false);
+  const scopes = useRef(createSessionRunScope()).current;
+  const scope = scopes.select(undefined, sessionId);
+  const [pendingScope, setPendingScope] = useState<typeof scope | null>(null);
+  const pendingRef = useRef<typeof scope | null>(null);
 
   /**
    * 在同一次守卫与错误处理下执行一个分支动作。
@@ -40,14 +44,16 @@ export function useBranchActions({ sessionId, running, onFocusComposer, resetRun
    */
   const runGuarded = async (action: () => Promise<void>, fallbackEn: string, fallbackZh: string) => {
     // 1. 无会话或运行中时不改动分支指针，后端同样会拒绝
-    if (!sessionId || running || pending) return;
-    setPending(true);
+    if (!sessionId || running || pendingRef.current === scope || !scopes.isCurrent(scope)) return;
+    pendingRef.current = scope;
+    setPendingScope(scope);
     try {
       await action();
     } catch (error) {
-      onError?.(error as ApiError, fallbackEn, fallbackZh);
+      if (scopes.isCurrent(scope)) onError?.(error as ApiError, fallbackEn, fallbackZh);
     } finally {
-      setPending(false);
+      if (pendingRef.current === scope) pendingRef.current = null;
+      setPendingScope((current) => current === scope ? null : current);
     }
   };
 
@@ -64,10 +70,11 @@ export function useBranchActions({ sessionId, running, onFocusComposer, resetRun
     runGuarded(
       async () => {
         await cancelSessionBranchQueries(queryClient, sessionId);
+        if (!scopes.isCurrent(scope)) return;
         await api.sessions.switchBranch(sessionId ?? "", turnId);
-        resetRun?.();
+        if (scopes.isCurrent(scope)) resetRun?.();
         await refreshSessionBranchQueries(queryClient, sessionId);
-        onFocusComposer?.();
+        if (scopes.isCurrent(scope)) onFocusComposer?.();
       },
       "Failed to continue from this turn",
       "从该轮次继续失败"
@@ -85,8 +92,9 @@ export function useBranchActions({ sessionId, running, onFocusComposer, resetRun
     runGuarded(
       async () => {
         await cancelSessionBranchQueries(queryClient, sessionId);
+        if (!scopes.isCurrent(scope)) return;
         await api.sessions.undoToParent(sessionId ?? "", turnId);
-        resetRun?.();
+        if (scopes.isCurrent(scope)) resetRun?.();
         await refreshSessionBranchQueries(queryClient, sessionId);
       },
       "Failed to undo to the previous turn",
@@ -102,11 +110,12 @@ export function useBranchActions({ sessionId, running, onFocusComposer, resetRun
    * @returns 切换是否成功
    */
   const moveToParentForRetry = async (turnId: string): Promise<boolean> => {
-    if (!sessionId) return false;
+    if (!sessionId || !scopes.isCurrent(scope)) return false;
     await cancelSessionBranchQueries(queryClient, sessionId);
+    if (!scopes.isCurrent(scope)) return false;
     await api.sessions.undoToParent(sessionId, turnId);
-    return true;
+    return scopes.isCurrent(scope);
   };
 
-  return { continueFrom, undoToParent, moveToParentForRetry, pending };
+  return { continueFrom, undoToParent, moveToParentForRetry, pending: pendingScope === scope };
 }

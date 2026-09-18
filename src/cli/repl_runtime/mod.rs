@@ -154,6 +154,8 @@ impl QueueInsertAt {
 #[derive(Clone, Debug)]
 pub(in crate::cli) struct QueuedSubmission {
     pub(in crate::cli) id: String,
+    /// 【会话同步】【转交执行】远端提交的稳定运行标识，本地排队项在执行时分配
+    pub(in crate::cli) turn_id: Option<String>,
     pub(in crate::cli) mode: AgentMode,
     pub(in crate::cli) text: String,
     /// 草稿携带的剪贴板附件；缺失时占位符会以字面文本发给模型
@@ -170,6 +172,7 @@ impl QueuedSubmission {
     ) -> Self {
         Self {
             id: next_queued_id(),
+            turn_id: None,
             mode,
             text,
             clipboard,

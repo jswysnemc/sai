@@ -13,7 +13,11 @@ use crate::state::LocatedSession;
 use crate::tools::ToolRegistry;
 pub(crate) use address::{session_scope_for_call, MeshAddress};
 use anyhow::{anyhow, bail, Result};
-pub(crate) use mailbox::{acknowledge as acknowledge_mesh_messages, next_pending, MeshEnvelope};
+#[cfg(test)]
+pub(crate) use mailbox::next_pending;
+pub(crate) use mailbox::{
+    acknowledge as acknowledge_mesh_messages, pending_messages, MeshEnvelope,
+};
 use serde_json::Value;
 use std::path::Path;
 

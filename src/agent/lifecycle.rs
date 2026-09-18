@@ -115,7 +115,10 @@ impl Agent {
         );
         let external_engine = crate::agent_engine::build_external_engine(&config.agent, governance)
             .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let external_wake_policy =
+            external_wake_policy::ExternalWakePolicy::capture(paths, &state)?;
         Ok(Self {
+            external_wake_policy,
             state,
             client,
             compaction_client: compaction_runtime.client,
@@ -383,11 +386,14 @@ impl Agent {
     /// 返回:
     /// - 切换是否成功
     pub fn replace_state(&mut self, state: StateStore) -> Result<()> {
+        let external_wake_policy =
+            external_wake_policy::ExternalWakePolicy::capture(&self.paths, &state)?;
         self.tools.start_plugin_session(state.session_id())?;
         self.plugin_reply_contexts.clear();
         self.tools
             .inherit_plugin_storage_session(&state.state_dir().to_string_lossy());
         self.state = state;
+        self.external_wake_policy = external_wake_policy;
         crate::goal::register_tools_for_config(
             &mut self.tools,
             self.state.goal_file(),

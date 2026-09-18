@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRef } from "react";
 import { api } from "../../../api/client";
 import { cancelSessionBranchQueries, refreshSessionBranchQueries } from "./branch-query-cache";
+import { createSessionRunScope } from "../session-run-scope";
+import type { BranchSwitchResult } from "../../../api/turn-tree-contracts";
 
 type TurnTreeOptions = {
   /** 分支指针变更成功后的本地状态清理回调 */
@@ -20,6 +23,10 @@ type TurnTreeOptions = {
  */
 export function useTurnTree(sessionId?: string, options: TurnTreeOptions = {}) {
   const queryClient = useQueryClient();
+  const scopes = useRef(createSessionRunScope()).current;
+  const scope = scopes.select(undefined, sessionId);
+  const pendingRef = useRef<typeof scope | null>(null);
+  type BranchRequest = { sessionId: string; turnId: string; scope: typeof scope };
 
   const tree = useQuery({
     queryKey: ["session-turn-tree", sessionId],
@@ -30,21 +37,50 @@ export function useTurnTree(sessionId?: string, options: TurnTreeOptions = {}) {
     staleTime: 5_000
   });
 
-  const switchBranch = useMutation({
-    mutationFn: (turnId: string) => api.sessions.switchBranch(sessionId ?? "", turnId),
-    onMutate: () => cancelSessionBranchQueries(queryClient, sessionId),
-    onSuccess: () => options.onBranchChanged?.(),
-    onError: (error) => options.onError?.(error),
-    onSettled: () => refreshSessionBranchQueries(queryClient, sessionId)
+  /**
+   * 【会话同步】【分支请求】把会话归属写入请求变量，避免等待期间被下一次渲染替换。
+   * @param action 分支接口
+   * @returns 固定请求归属的变更配置
+   */
+  const mutationOptions = (action: (id: string, turnId: string) => Promise<BranchSwitchResult>) => ({
+    mutationFn: (request: BranchRequest) => action(request.sessionId, request.turnId),
+    onMutate: (request: BranchRequest) => cancelSessionBranchQueries(queryClient, request.sessionId),
+    onSuccess: (_result: BranchSwitchResult, request: BranchRequest) => {
+      if (scopes.isCurrent(request.scope)) options.onBranchChanged?.();
+    },
+    onError: (error: Error, request: BranchRequest) => {
+      if (scopes.isCurrent(request.scope)) options.onError?.(error);
+    },
+    onSettled: async (_result: BranchSwitchResult | undefined, _error: Error | null, request: BranchRequest) => {
+      try {
+        await refreshSessionBranchQueries(queryClient, request.sessionId);
+      } finally {
+        if (pendingRef.current === request.scope) pendingRef.current = null;
+      }
+    }
+  });
+  const switchMutation = useMutation(mutationOptions(api.sessions.switchBranch));
+  const undoMutation = useMutation(mutationOptions(api.sessions.undoToParent));
+
+  /**
+   * 绑定当前选择与同步操作守卫。
+   * @param mutation 实际分支变更对象
+   * @returns 接收轮次标识的公开操作
+   */
+  const bindMutation = (mutation: typeof switchMutation) => ({
+    ...mutation,
+    isPending: mutation.isPending && mutation.variables?.scope === scope,
+    mutate: (turnId: string) => {
+      if (!sessionId || !scopes.isCurrent(scope) || pendingRef.current === scope) return;
+      pendingRef.current = scope;
+      mutation.mutate({ sessionId, turnId, scope });
+    },
+    mutateAsync: (turnId: string) => {
+      if (!sessionId || !scopes.isCurrent(scope) || pendingRef.current === scope) return Promise.resolve(undefined);
+      pendingRef.current = scope;
+      return mutation.mutateAsync({ sessionId, turnId, scope });
+    }
   });
 
-  const undoToParent = useMutation({
-    mutationFn: (turnId: string) => api.sessions.undoToParent(sessionId ?? "", turnId),
-    onMutate: () => cancelSessionBranchQueries(queryClient, sessionId),
-    onSuccess: () => options.onBranchChanged?.(),
-    onError: (error) => options.onError?.(error),
-    onSettled: () => refreshSessionBranchQueries(queryClient, sessionId)
-  });
-
-  return { tree, switchBranch, undoToParent };
+  return { tree, switchBranch: bindMutation(switchMutation), undoToParent: bindMutation(undoMutation) };
 }

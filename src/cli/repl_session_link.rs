@@ -191,14 +191,15 @@ impl ReplSessionLink {
     ///
     /// 参数:
     /// - `queue`: 用户提交队列
-    /// - `request`: 上行的一轮参数
+    /// - `submission`: 上行的一轮参数与原始运行标识
     ///
     /// 返回:
     /// - 该轮在本进程的状态（`queued`）
     fn accept_remote_submission(
         queue: &Arc<Mutex<VecDeque<QueuedSubmission>>>,
-        request: &StartRunRequest,
+        submission: &SubmittedRun,
     ) -> Result<String> {
+        let request = &submission.request;
         let mode = AgentMode::parse(request.mode.as_deref()).unwrap_or(AgentMode::Yolo);
         let mut clipboard = ReplClipboardState::default();
         let mut text = request.input.clone();
@@ -211,6 +212,8 @@ impl ReplSessionLink {
             clipboard.insert_image_data_url(&mut text, &mut cursor, data_url);
         }
         let mut item = QueuedSubmission::new(mode, text, clipboard);
+        // 1. 【会话同步】【转交执行】Web 的排队消息、终端广播和最终落盘必须保留同一标识
+        item.turn_id = Some(submission.run_id.clone());
         // 轮次间隔：本终端正在跑一轮时，上行的一轮排到本轮结束后
         item.insert_at = crate::cli::repl_runtime::QueueInsertAt::Turn;
         queue
@@ -239,7 +242,7 @@ impl ReplSessionLink {
             while let Some(request) = rx.recv().await {
                 match request {
                     HolderRequest::Submit { request, reply } => {
-                        let outcome = Self::accept_remote_submission(&queue, &request.request);
+                        let outcome = Self::accept_remote_submission(&queue, &request);
                         let _ = reply.send(outcome);
                     }
                     HolderRequest::Abort { reply, .. } => {
@@ -449,10 +452,18 @@ mod tests {
             thinking_level: None,
             insert_at: crate::web::runs::QueueInsertAt::Turn,
         };
-        ReplSessionLink::accept_remote_submission(&queue, &request).unwrap();
+        let submission = SubmittedRun {
+            submit_id: "submission".to_string(),
+            run_id: "web-run".to_string(),
+            workspace_id: "workspace".to_string(),
+            workspace_path: String::new(),
+            request,
+        };
+        ReplSessionLink::accept_remote_submission(&queue, &submission).unwrap();
 
         let queued = queue.lock().unwrap();
         assert_eq!(queued.len(), 1);
+        assert_eq!(queued[0].turn_id.as_deref(), Some("web-run"));
         // 占位块带着真实尺寸，写死 0x0 会让回显里出现假尺寸
         assert!(queued[0].text.contains("[image 1 800x600]"));
         let chat = queued[0].clipboard.to_chat_input(&queued[0].text);

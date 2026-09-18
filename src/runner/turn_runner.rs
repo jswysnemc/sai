@@ -75,6 +75,14 @@ impl<'agent> TurnRunner<'agent> {
     where
         S: RunnerEventSink,
     {
+        // 1. 【自动续聊】【主动继续】普通输入与显式 Goal 续作可恢复目标，旧完成回执不能自行恢复
+        if input
+            .automatic_input
+            .as_ref()
+            .is_none_or(|automatic| automatic.kind == super::AutomaticInputKind::GoalContinuation)
+        {
+            self.agent.resume_external_goal();
+        }
         let active_goal = self
             .agent
             .state()

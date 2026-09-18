@@ -6,6 +6,7 @@ import type { WorkspaceSessions } from "../../api/contracts";
 import type { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { switchWithTerminalConfirm } from "../workspaces/workspace-switcher";
 import { initializeNewSessionPreferences } from "./new-session-preferences";
+import { commitSessionSelection, enqueueSessionNavigation } from "./session-navigation";
 
 type ConfirmFn = ReturnType<typeof useConfirm>;
 
@@ -61,30 +62,32 @@ export function useSessionActions({ confirm, t, tree, onNavigate }: SessionActio
     workspaceId: string,
     sessionId: string,
     workspaceActive: boolean,
-    sessionActive: boolean
+    _sessionActive: boolean
   ) => {
     setNavigationError(null);
-    try {
-      if (workspaceActive && sessionActive) {
+    await enqueueSessionNavigation(queryClient, async (navigation) => {
+      try {
+        const active = navigation.workspaceActive(workspaceId, workspaceActive);
+        if (!active) {
+          const switched = await switchWithTerminalConfirm(workspaceId, confirm, t);
+          if (!switched) return;
+        }
+        navigation.selectWorkspace(workspaceId);
+        if (!navigation.isCurrent()) return;
+        const selected = await api.sessions.switch(sessionId);
+        if (!navigation.isCurrent()) return;
+        // 1. 【会话导航】【切换项目】跨项目时重新建立文件、Git 和终端上下文
+        if (!workspaceActive || !active) {
+          window.location.reload();
+          return;
+        }
+        await commitSessionSelection(queryClient, workspaceId, selected);
         onNavigate?.();
-        return;
+        await Promise.all([queryClient.invalidateQueries({ queryKey: ["workspaces"] }), refresh()]);
+      } catch (cause) {
+        if (navigation.isCurrent()) setNavigationError(toDisplayError(cause, "Failed to open session", "打开会话失败"));
       }
-      if (!workspaceActive) {
-        const switched = await switchWithTerminalConfirm(workspaceId, confirm, t);
-        if (!switched) return;
-      }
-      await api.sessions.switch(sessionId);
-      // 1. 【会话导航】【切换项目】文件、Git 和终端缓存绑定服务端活动项目，重新载入后统一建立新上下文
-      if (!workspaceActive) {
-        window.location.reload();
-        return;
-      }
-      await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
-      await refresh();
-      onNavigate?.();
-    } catch (cause) {
-      setNavigationError(toDisplayError(cause, "Failed to open session", "打开会话失败"));
-    }
+    });
   };
 
   /** 切换到指定工作区；工作区视图不强制打开某个会话。 */

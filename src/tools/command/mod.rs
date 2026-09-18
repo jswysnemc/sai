@@ -41,7 +41,7 @@ pub(crate) use background_attention::{
     acknowledge_background_attention, poll_background_attention, BackgroundAttentionNotice,
 };
 pub(crate) use goal_completions::{
-    acknowledge_background_completions, poll_background_completions,
+    acknowledge_background_completions, poll_background_completions_in_scope,
     poll_session_background_completions, BackgroundCompletionNotice,
 };
 pub(crate) use process::{process_exists, spawn_background_shell, terminate_process};

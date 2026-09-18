@@ -57,6 +57,28 @@ function run(id: string, content: string, completed: boolean): LiveRunState {
 }
 
 describe("projectConversationDisplay", () => {
+  it("重连补发的旧分支不能重新出现在当前消息分支中", () => {
+    const current = turn("new-branch", "重发后的问题", "completed");
+    const old = { ...run("old-branch", "重发前的问题", true), replayed: true };
+    expect(projectConversationDisplay([current], [old], "session").liveRuns).toEqual([]);
+  });
+
+  it("截断补发中缺少终态的旧轮次不能遮盖已完成的持久化回答", () => {
+    const current = turn("run-1", "问题", "completed");
+    const replayed = { ...run("run-1", "问题", false), replayed: true };
+    const display = projectConversationDisplay([current], [replayed], "session");
+    expect(display.historyTurns).toEqual([current]);
+    expect(display.liveRuns).toEqual([]);
+  });
+
+  it("当前分支仍在运行的补发轮次保留实时正文", () => {
+    const current = turn("run-1", "问题", "running");
+    const replayed = { ...run("run-1", "问题", false), replayed: true, content: "已有部分回复" };
+    const display = projectConversationDisplay([current], [replayed], "session");
+    expect(display.historyTurns).toEqual([]);
+    expect(display.liveRuns).toEqual([replayed]);
+  });
+
   it("流式正文变化时保留未被替换的历史数组引用", () => {
     const history = [turn("run-1", "inspect", "completed")];
     const live = run("run-2", "continue", false);

@@ -1,5 +1,5 @@
 import { CircleAlert, RotateCcw } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ApiError } from "../../../api/api-error";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
@@ -10,6 +10,7 @@ type RunErrorNoticeProps = {
   message: ReactNode;
   detail?: string | null;
   onRetry?: () => void;
+  busy?: boolean;
 };
 
 /**
@@ -17,10 +18,10 @@ type RunErrorNoticeProps = {
  *
  * 单层卡片：标题行左摘要、右操作；详情展开时只加顶部分隔，不再套内层灰框。
  *
- * @param props 错误摘要、详情和重试回调
+ * @param props 错误摘要、详情、重试回调和进行中状态
  * @returns 响应式运行错误提示
  */
-export function RunErrorNotice({ message, detail, onRetry }: RunErrorNoticeProps) {
+export function RunErrorNotice({ message, detail, onRetry, busy = false }: RunErrorNoticeProps) {
   const { t } = useI18n();
   const [detailOpen, setDetailOpen] = useState(false);
   const text = typeof message === "string" ? message : "";
@@ -63,9 +64,9 @@ export function RunErrorNotice({ message, detail, onRetry }: RunErrorNoticeProps
             />
           )}
           {onRetry && (
-            <Button className="run-error-retry" variant="secondary" onClick={onRetry}>
-              <RotateCcw size={12} />
-              <span>{t("Retry", "重试")}</span>
+            <Button className="run-error-retry" variant="secondary" onClick={onRetry} disabled={busy} aria-busy={busy}>
+              <RotateCcw size={12} className={busy ? "animate-spin motion-reduce:animate-none" : undefined} />
+              <span>{busy ? t("Submitting…", "正在提交…") : t("Retry", "重试")}</span>
             </Button>
           )}
         </div>

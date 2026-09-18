@@ -18,10 +18,14 @@ export function projectConversationDisplay(
   runs: LiveRunState[],
   sessionId?: string
 ): ConversationDisplayProjection {
-  const sessionRuns = sessionId
-    ? runs.filter((run) => run.sessionId === sessionId)
-    : runs;
   const historyById = new Map(turns.map((turn) => [turn.turn_id, turn]));
+  // 1. 【会话同步】【补发过滤】补发只补齐当前分支运行中的正文，不复活旧分支或窗口之外的历史
+  const sessionRuns = runs.filter((run) => {
+    if (sessionId && run.sessionId !== sessionId) return false;
+    const history = run.runId ? historyById.get(run.runId) : undefined;
+    if (history && history.status !== "running") return false;
+    return !run.replayed || history?.status === "running";
+  });
   const livePreferredIds = new Set(
     sessionRuns
       .filter((run) => {
