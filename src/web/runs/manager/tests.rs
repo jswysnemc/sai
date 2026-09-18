@@ -35,7 +35,7 @@ fn test_paths(root: PathBuf) -> SaiPaths {
 ///
 /// 返回:
 /// - 测试运行检查点
-fn test_checkpoint(
+pub(super) fn test_checkpoint(
     root: &std::path::Path,
     run_id: &str,
     status: RunCheckpointStatus,

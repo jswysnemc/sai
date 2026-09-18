@@ -4,6 +4,8 @@ pub(crate) mod context_breakdown;
 pub(super) mod context_prompt;
 mod context_prompt_section;
 mod context_runtime;
+#[cfg(test)]
+mod model_endpoint_config_tests;
 pub(super) mod prompt_service;
 pub(crate) mod provider_models;
 pub(super) mod provider_probe;

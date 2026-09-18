@@ -16,6 +16,8 @@ pub(super) struct SessionBuses {
     pub(super) entries: HashMap<String, ActorHandle>,
     /// 会话的跨进程链接；与事件总线同生命周期，便于诊断当前角色。
     pub(super) links: HashMap<String, SessionLink>,
+    /// 【Web】【事件日志】持有订阅守卫，删除会话时一并取消后台任务
+    pub(super) console_logs: HashMap<String, crate::web::server_logging::ConsoleSubscription>,
 }
 
 impl RunManager {
@@ -38,6 +40,11 @@ impl RunManager {
         }
         let journal_path = self.session_event_path(&key);
         let (link, bus) = spawn_session_bus(self, workspace_id, session_id, journal_path).await;
+        if self.console_logging {
+            if let Some(subscription) = crate::web::server_logging::subscribe_runs(&bus) {
+                buses.console_logs.insert(key.clone(), subscription);
+            }
+        }
         buses.links.insert(key.clone(), link);
         buses.entries.insert(key, bus.clone());
         bus
@@ -78,6 +85,7 @@ impl RunManager {
         let key = session_key(workspace_id, session_id);
         // 释放句柄即关闭命令通道，事件总线任务随之退出
         let mut buses = self.buses.write().await;
+        buses.console_logs.remove(&key);
         buses.entries.remove(&key);
         buses.links.remove(&key);
         drop(buses);

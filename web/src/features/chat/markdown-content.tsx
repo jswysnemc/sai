@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { LightboxImage } from "../../shared/ui/image-lightbox";
 import { MarkdownCodeBlock } from "./markdown-code-block";
+import { ContextJsonBlock } from "./message/context-json-block";
 import { MermaidDiagram } from "./mermaid-diagram";
 import { MarkdownSvgBlock } from "./markdown-svg-block";
 import { remarkSvgBlocks } from "./markdown-svg";
@@ -34,6 +35,7 @@ const streamingRemarkPlugins = [remarkGfm];
 const streamingRehypePlugins: typeof rehypePlugins = [];
 export const EMPTY_INLINE_ATOMS: readonly ReactNode[] = [];
 const inlineAtomContext = createContext<readonly ReactNode[]>(EMPTY_INLINE_ATOMS);
+const collapseJsonContext = createContext(false);
 const markdownStyleContext = createContext<MarkdownStylePreferences>(DEFAULT_MARKDOWN_STYLE_PREFERENCES);
 const INLINE_ATOM_PATTERN = /^sai-atom-(\d+)$/u;
 
@@ -62,12 +64,14 @@ const markdownComponents: Components = {
     const text = String(children).replace(/\n$/, "");
     const inlineAtoms = useContext(inlineAtomContext);
     const markdownStyle = useContext(markdownStyleContext);
+    const collapseJson = useContext(collapseJsonContext);
     const atomIndex = !language ? INLINE_ATOM_PATTERN.exec(text)?.[1] : undefined;
     if (atomIndex !== undefined) {
       return <>{inlineAtoms[Number(atomIndex)] ?? children}</>;
     }
     if (language === "mermaid") return <MermaidDiagram source={text} />;
     if (language === "svg") return <MarkdownSvgBlock source={text} />;
+    if (language === "json" && collapseJson) return <ContextJsonBlock source={text} style={markdownStyle.codeBlock} />;
     if (language || text.includes("\n")) {
       return <MarkdownCodeBlock language={language} source={text} style={markdownStyle.codeBlock} />;
     }
@@ -103,42 +107,46 @@ export const MarkdownContent = memo(function MarkdownContent({
   source,
   inlineAtoms,
   style,
-  streaming
+  streaming,
+  collapseJson = false
 }: {
   source: string;
   inlineAtoms: readonly ReactNode[];
   style: MarkdownStylePreferences;
   /** 流式输出时延后解析并使用轻量插件集 */
   streaming: boolean;
+  collapseJson?: boolean;
 }) {
   return (
     <markdownStyleContext.Provider value={style}>
-      <inlineAtomContext.Provider value={inlineAtoms}>
-        <div
-          className="markdown-body"
-          data-md-preset={style.preset}
-          data-table-border={style.table.borderStyle}
-          data-table-density={style.table.density}
-          data-table-width={style.table.fullWidth ? "full" : "content"}
-          data-table-striped={String(style.table.stripedRows)}
-          data-table-header={String(style.table.headerBackground)}
-          data-table-wrap={String(style.table.wrapCells)}
-          data-code-wrap={String(style.codeBlock.wrapLongLines)}
-          data-code-border={String(style.codeBlock.showBorder)}
-          data-code-font-size={style.codeBlock.fontSize}
-          data-code-tab-size={style.codeBlock.tabSize}
-          data-code-max-height={style.codeBlock.maxHeight}
-        >
-          <ReactMarkdown
-            remarkPlugins={streaming ? streamingRemarkPlugins : remarkPlugins}
-            rehypePlugins={streaming ? streamingRehypePlugins : rehypePlugins}
-            urlTransform={transformUrl}
-            components={markdownComponents}
+      <collapseJsonContext.Provider value={collapseJson}>
+        <inlineAtomContext.Provider value={inlineAtoms}>
+          <div
+            className="markdown-body"
+            data-md-preset={style.preset}
+            data-table-border={style.table.borderStyle}
+            data-table-density={style.table.density}
+            data-table-width={style.table.fullWidth ? "full" : "content"}
+            data-table-striped={String(style.table.stripedRows)}
+            data-table-header={String(style.table.headerBackground)}
+            data-table-wrap={String(style.table.wrapCells)}
+            data-code-wrap={String(style.codeBlock.wrapLongLines)}
+            data-code-border={String(style.codeBlock.showBorder)}
+            data-code-font-size={style.codeBlock.fontSize}
+            data-code-tab-size={style.codeBlock.tabSize}
+            data-code-max-height={style.codeBlock.maxHeight}
           >
-            {source}
-          </ReactMarkdown>
-        </div>
-      </inlineAtomContext.Provider>
+            <ReactMarkdown
+              remarkPlugins={streaming ? streamingRemarkPlugins : remarkPlugins}
+              rehypePlugins={streaming ? streamingRehypePlugins : rehypePlugins}
+              urlTransform={transformUrl}
+              components={markdownComponents}
+            >
+              {source}
+            </ReactMarkdown>
+          </div>
+        </inlineAtomContext.Provider>
+      </collapseJsonContext.Provider>
     </markdownStyleContext.Provider>
   );
 });

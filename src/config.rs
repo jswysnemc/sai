@@ -14,6 +14,7 @@ mod git;
 mod mcp_file;
 mod mesh;
 mod model;
+mod model_endpoints;
 mod model_metadata;
 mod model_thinking;
 mod model_units;
@@ -50,6 +51,7 @@ pub use mcp_file::{
     validate_mcp_config,
 };
 pub use model::*;
+pub use model_endpoints::ModelEndpointConfig;
 pub use model_metadata::*;
 pub use model_thinking::*;
 pub use model_units::*;

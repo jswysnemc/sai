@@ -8,6 +8,8 @@ pub(crate) mod password;
 // 会话事件总线（src/runner/session_actor.rs）需要复用 Web 事件与事件日志类型
 pub(crate) mod runs;
 mod server;
+mod server_logging;
+mod server_shutdown;
 pub(crate) mod services;
 pub(crate) mod ssh;
 mod system_monitor;

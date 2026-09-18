@@ -11,6 +11,10 @@ const COPIED_HINT_DELAY = 1600;
 
 type PasswordFieldProps = {
   value: string;
+  /** 输入框的稳定标识，用于和外部标签关联 */
+  id?: string;
+  /** 无法使用可见标签时提供的辅助技术名称 */
+  ariaLabel?: string;
   placeholder?: string;
   disabled?: boolean;
   /** 已保存敏感值的标记文案，非空时在框内显示以区分「已保存」与「未设置」 */
@@ -68,6 +72,8 @@ export function isExternalValueChange(
  */
 export function PasswordField({
   value,
+  id,
+  ariaLabel,
   placeholder,
   disabled,
   savedValueHint,
@@ -191,6 +197,8 @@ export function PasswordField({
   return (
     <div className="ui-password-field">
       <input
+        id={id}
+        aria-label={ariaLabel}
         type={state.visible ? "text" : "password"}
         value={displayed}
         placeholder={placeholder}

@@ -23,81 +23,17 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tokio::task::JoinHandle;
 
+mod execution;
 mod history;
+mod model;
+mod shutdown;
+pub(crate) use model::{ActiveRunInfo, QueueInsertAt, RunKind, StartRunRequest};
 mod message_queue;
 mod queue;
 #[cfg(test)]
 mod tests;
 
 pub(crate) use queue::QueuedRunUpdate;
-
-/// 排队消息插入当前对话的位置。
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum QueueInsertAt {
-    /// 当前轮下一次模型请求前插入，续在同一轮
-    Request,
-    /// 本轮结束后作为新一轮插入
-    #[default]
-    Turn,
-}
-
-/// 启动一轮 Web 对话所需参数。
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub(crate) struct StartRunRequest {
-    #[serde(default)]
-    pub kind: RunKind,
-    pub session_id: String,
-    pub input: String,
-    // 本地 Agent 选择字段，不会原样进入上游请求。
-    #[serde(default)]
-    pub agent_id: Option<String>,
-    #[serde(default)]
-    pub image_url: Option<String>,
-    #[serde(default)]
-    pub image_urls: Vec<String>,
-    #[serde(default)]
-    pub mode: Option<String>,
-    // provider_id/thinking_level 仅由 resolve_run_config 消费；model 用于本地选择，
-    // 解析后的模型名会作为 Chat Completions 协议的 model 字段发送。
-    #[serde(default)]
-    pub provider_id: Option<String>,
-    #[serde(default)]
-    pub model: Option<String>,
-    #[serde(default)]
-    pub thinking_level: Option<String>,
-    /// 排队时插入位置；立即启动的一轮忽略该字段。
-    #[serde(default)]
-    pub insert_at: QueueInsertAt,
-}
-
-/// Web 运行种类。
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum RunKind {
-    #[default]
-    Conversation,
-    Compaction,
-    GoalContinuation,
-}
-
-/// 活动运行摘要。
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub(crate) struct ActiveRunInfo {
-    pub run_id: String,
-    pub workspace_id: String,
-    pub session_id: String,
-    pub input: String,
-    pub image_urls: Vec<String>,
-    pub status: RunCheckpointStatus,
-    #[serde(default)]
-    pub discard_user_turn: bool,
-    #[serde(default)]
-    pub restore_input: Option<String>,
-    /// 排队插入点；非排队运行保持默认轮次间隔。
-    #[serde(default)]
-    pub insert_at: QueueInsertAt,
-}
 
 struct ActiveRun {
     info: ActiveRunInfo,
@@ -134,6 +70,10 @@ pub(crate) struct RunManager {
     /// 超出的必然早已结束，不需要精确的完成通知。
     remote_runs: Arc<Mutex<VecDeque<(String, String)>>>,
     checkpoints: RunCheckpointStore,
+    /// 服务关闭后拒绝新请求及自动启动下一项
+    shutting_down: Arc<std::sync::atomic::AtomicBool>,
+    /// 仅服务进程订阅控制台日志，TUI 共用管理器时不输出
+    console_logging: bool,
 }
 
 impl RunManager {
@@ -162,6 +102,8 @@ impl RunManager {
             buses: Arc::new(RwLock::new(SessionBuses::default())),
             remote_runs: Arc::new(Mutex::new(VecDeque::new())),
             checkpoints,
+            shutting_down: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            console_logging: false,
         };
         // 启动恢复只处理「没有活着的持有者」的那一轮：持有者还活着说明这一轮
         // 正被另一个进程（TUI 或另一个 sai web 实例）驱动，按崩溃恢复会在对端
@@ -270,6 +212,9 @@ impl RunManager {
         }
         AgentMode::parse(request.mode.as_deref())?;
         let _scheduling = self.scheduling.lock().await;
+        if self.shutting_down.load(std::sync::atomic::Ordering::SeqCst) {
+            bail!("Web server is shutting down");
+        }
         let key = session_key(&workspace.id, &request.session_id);
         let has_active = self.active.lock().await.contains_key(&key);
         let has_queued = self
@@ -503,60 +448,6 @@ impl RunManager {
         })
     }
 
-    /// 启动已经取得会话执行权的运行。
-    fn spawn_run(
-        &self,
-        key: String,
-        queued: QueuedRun,
-        bus: ActorHandle,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
-        Box::pin(async move {
-            let (start_tx, start_rx) = oneshot::channel();
-            let manager = self.clone();
-            let task_info = queued.info.clone();
-            let inter_message_source: Arc<dyn InterMessageSource> = Arc::new(WebMessageQueue::new(
-                self.clone(),
-                key.clone(),
-                task_info.run_id.clone(),
-            ));
-            let workspace_path = std::path::PathBuf::from(&queued.workspace.path);
-            let paths = self.paths.clone();
-            let task_key = key.clone();
-            // 标志在 spawn 前创建：stop 需要在任务被 abort 之前置位
-            let cancel_requested = Arc::new(std::sync::atomic::AtomicBool::new(false));
-            let task_cancel = cancel_requested.clone();
-            let handle = tokio::spawn(async move {
-                let _ = start_rx.await;
-                let terminal = crate::runtime_cwd::scope(
-                    workspace_path,
-                    run_agent(
-                        paths,
-                        queued.request,
-                        task_info.clone(),
-                        bus.clone(),
-                        inter_message_source,
-                        task_cancel,
-                    ),
-                )
-                .await;
-                let _ = manager
-                    .checkpoints
-                    .update_status(&task_info.run_id, terminal);
-                manager.clear_active_if(&task_key).await;
-                manager.launch_next(&task_key).await;
-            });
-            self.active.lock().await.insert(
-                key,
-                ActiveRun {
-                    info: queued.info,
-                    handle,
-                    cancel_requested,
-                },
-            );
-            let _ = start_tx.send(());
-        })
-    }
-
     /// 返回全部活动运行。
     ///
     /// 返回:
@@ -710,7 +601,9 @@ impl RunManager {
     fn launch_next<'a>(&'a self, key: &'a str) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             let _scheduling = self.scheduling.lock().await;
-            if self.active.lock().await.contains_key(key) {
+            if self.shutting_down.load(std::sync::atomic::Ordering::SeqCst)
+                || self.active.lock().await.contains_key(key)
+            {
                 return;
             }
             let queued = {
@@ -740,88 +633,6 @@ impl RunManager {
             self.spawn_run(key.to_string(), queued, bus).await;
         })
     }
-}
-
-/// 执行 Agent 并把 RunnerEvent 写入会话事件总线。
-async fn run_agent(
-    paths: SaiPaths,
-    request: StartRunRequest,
-    info: ActiveRunInfo,
-    bus: ActorHandle,
-    inter_message_source: Arc<dyn InterMessageSource>,
-    cancel_requested: Arc<std::sync::atomic::AtomicBool>,
-) -> RunCheckpointStatus {
-    let mode = match AgentMode::parse(request.mode.as_deref()) {
-        Ok(mode) => mode,
-        Err(error) => {
-            let _ = bus.emit(WebEvent::new(
-                &info.run_id,
-                &info.workspace_id,
-                &info.session_id,
-                "run.failed",
-                json!({ "message": error.to_string(), "detail": crate::llm::error_detail_text(&error) }),
-            ));
-            return RunCheckpointStatus::Failed;
-        }
-    };
-    let submission = match request.kind {
-        RunKind::Conversation => {
-            let mut input = UserInputSubmission::new(request.input, mode);
-            input = input.with_image_urls(request.image_url.into_iter().chain(request.image_urls));
-            input = input.with_turn_id(info.run_id.clone());
-            RunnerSubmission::user_input(SubmissionSource::Web, input)
-        }
-        RunKind::Compaction => RunnerSubmission::control(
-            SubmissionSource::Web,
-            mode,
-            ControlSubmission::new(crate::control_commands::ControlCommand::Compact),
-        ),
-        RunKind::GoalContinuation => RunnerSubmission::user_input(
-            SubmissionSource::Web,
-            UserInputSubmission::new(String::new(), mode).with_goal_continuation(),
-        ),
-    }
-    .with_session_id(info.session_id.clone())
-    .with_final_summary(true);
-    // 会话级组装器由事件总线持有，这里只声明轮次边界
-    let _ = bus.begin_run(&info.run_id, &info.input, &info.image_urls);
-    let mut sink = |event| bus.publish(event);
-    let run_config = match resolve_run_config(
-        &paths,
-        request.agent_id.as_deref(),
-        request.provider_id.as_deref(),
-        request.model.as_deref(),
-        request.thinking_level.as_deref(),
-    ) {
-        Ok(config) => config,
-        Err(error) => {
-            let _ = bus.emit(WebEvent::new(
-                &info.run_id,
-                &info.workspace_id,
-                &info.session_id,
-                "run.failed",
-                json!({ "message": error.to_string(), "detail": crate::llm::error_detail_text(&error) }),
-            ));
-            return RunCheckpointStatus::Failed;
-        }
-    };
-    let runner = match run_config {
-        Some(config) => SessionRunner::new(&paths).with_config(config),
-        None => SessionRunner::new(&paths),
-    }
-    .with_inter_message_source(inter_message_source)
-    .with_cancel_flag(cancel_requested);
-    if let Err(error) = runner.run_submission(submission, &mut sink).await {
-        let _ = bus.emit(WebEvent::new(
-            &info.run_id,
-            &info.workspace_id,
-            &info.session_id,
-            "run.failed",
-            json!({ "message": error.to_string(), "detail": crate::llm::error_detail_text(&error) }),
-        ));
-        return RunCheckpointStatus::Failed;
-    }
-    RunCheckpointStatus::Completed
 }
 
 /// 生成工作区会话级调度键。

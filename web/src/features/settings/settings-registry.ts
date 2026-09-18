@@ -50,8 +50,8 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     id: "providers",
     group: "general",
     appConfig: "required",
-    labelEn: "Providers and models",
-    labelZh: "供应商与模型",
+    labelEn: "LLM providers",
+    labelZh: "LLM 供应商",
     descriptionEn: "Endpoints, credentials, and model lists",
     descriptionZh: "接口、凭据和模型列表",
     icon: KeyRound,
@@ -62,6 +62,22 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
       { id: "behavior", labelEn: "Behavior", labelZh: "行为" },
       { id: "advanced", labelEn: "Advanced", labelZh: "高级" }
     ]
+  },
+  {
+    id: "image-models", group: "general", appConfig: "required",
+    labelEn: "Image models", labelZh: "生图模型",
+    descriptionEn: "Image model request endpoints and API keys",
+    descriptionZh: "生图模型的独立请求地址和 API Key",
+    icon: Palette,
+    searchKeys: ["image", "generation", "model", "endpoint", "生图", "图片", "密钥"]
+  },
+  {
+    id: "jev-models", group: "general", appConfig: "required",
+    labelEn: "JEV models", labelZh: "JEV 模型",
+    descriptionEn: "JEV model request endpoints and API keys",
+    descriptionZh: "JEV 模型的独立请求地址和 API Key",
+    icon: Braces,
+    searchKeys: ["jev", "typesafe", "model", "endpoint", "决策", "密钥"]
   },
   {
     id: "agents",

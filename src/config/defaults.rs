@@ -12,6 +12,7 @@ impl Default for AppConfig {
             prompt_sections: Default::default(),
             active_provider: OPENCODE_PROVIDER_ID.to_string(),
             providers: ProviderConfig::default_templates(),
+            model_endpoints: Vec::new(),
             agent: crate::config::AgentEngineConfig::default(),
             permission: PermissionConfig::default(),
             session: SessionConfig::default(),

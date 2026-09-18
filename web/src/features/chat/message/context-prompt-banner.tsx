@@ -314,7 +314,7 @@ export function ContextPromptBanner({
             <div ref={markdownRef} className="context-prompt-banner-markdown">
               {renderedSections.map((section) => (
                 <section key={section.id} data-context-section={section.id}>
-                  <MarkdownRenderer source={section.rendered} />
+                  <MarkdownRenderer source={section.rendered} collapseJson={section.id === "tools"} />
                 </section>
               ))}
               {renderedFallback && <MarkdownRenderer source={renderedFallback} />}

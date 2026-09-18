@@ -11,6 +11,9 @@ use serde::{Deserialize, Serialize};
 pub struct AppConfig {
     pub active_provider: String,
     pub providers: Vec<ProviderConfig>,
+    /// 专用模型独立接入，不参与普通 LLM 选择或运行
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub model_endpoints: Vec<super::ModelEndpointConfig>,
     /// 执行对话轮次的内核：sai 自带或外部 ACP agent
     #[serde(default)]
     pub agent: crate::config::AgentEngineConfig,

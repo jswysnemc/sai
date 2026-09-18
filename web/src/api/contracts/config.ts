@@ -49,6 +49,19 @@ export type ModelMetadata = {
   deepseek_anchor_mode?: "off" | "anchored_standard";
 };
 
+/** 独立模型接入类型，不参与普通 LLM 供应商选择。 */
+export type ModelEndpointKind = "image_generation" | "jev";
+
+/** 专用模型的连接信息；endpoint 保存完整请求地址，包括端口和路径。 */
+export type ModelEndpointConfig = {
+  id: string;
+  kind: ModelEndpointKind;
+  name: string;
+  endpoint: string;
+  api_key: string;
+  model: string;
+};
+
 export type QqGatewayConfig = {
   enabled: boolean;
   transport: string;
@@ -170,6 +183,7 @@ export type GitConfig = {
 export type AppConfig = {
   active_provider: string;
   providers: ProviderConfig[];
+  model_endpoints?: ModelEndpointConfig[];
   permission?: PermissionConfig;
   /** 执行对话轮次的内核 */
   agent?: AgentEngineConfig;

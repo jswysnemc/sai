@@ -8,6 +8,8 @@ import type { SettingsSectionId } from "./settings-types";
  */
 export const APP_CONFIG_SECTION_IDS = [
   "providers",
+  "image-models",
+  "jev-models",
   "agents",
   "cli-tools",
   "runtime",

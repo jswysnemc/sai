@@ -4,6 +4,8 @@ import type { LucideIcon } from "lucide-react";
 /** 设置页 section 标识。 */
 export type SettingsSectionId =
   | "providers"
+  | "image-models"
+  | "jev-models"
   | "agents"
   | "cli-tools"
   | "runtime"

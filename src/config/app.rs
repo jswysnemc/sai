@@ -159,6 +159,7 @@ impl AppConfig {
     }
 
     pub fn validate(&self) -> Result<()> {
+        super::model_endpoints::validate(&self.model_endpoints)?;
         if self.active_provider.trim().is_empty() {
             bail!("active_provider cannot be empty");
         }

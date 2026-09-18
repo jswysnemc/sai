@@ -147,6 +147,19 @@ impl TerminalManager {
         Ok(false)
     }
 
+    /// 【Web】【终端回收】移出全部会话后终止 shell 与 SSH 连接。
+    /// 参数: 无；返回清理结果
+    pub(crate) async fn shutdown(&self) -> Result<()> {
+        let sessions = self
+            .lock_sessions()?
+            .drain()
+            .map(|(_, session)| session)
+            .collect::<Vec<_>>();
+        let results =
+            futures_util::future::join_all(sessions.iter().map(|session| session.kill())).await;
+        results.into_iter().collect::<Result<Vec<_>>>().map(|_| ())
+    }
+
     /// 判断是否存在活动终端。
     pub(crate) fn has_sessions(&self) -> Result<bool> {
         Ok(!self.lock_sessions()?.is_empty())

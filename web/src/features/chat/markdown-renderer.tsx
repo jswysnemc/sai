@@ -12,12 +12,15 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
   source,
   inlineAtoms = EMPTY_INLINE_ATOMS,
   stylePreferences,
-  streaming = false
+  streaming = false,
+  collapseJson = false
 }: {
   source: string;
   inlineAtoms?: readonly ReactNode[];
   stylePreferences?: MarkdownStylePreferences;
   streaming?: boolean;
+  /** 上下文工具区默认折叠参数定义，不影响普通聊天代码块 */
+  collapseJson?: boolean;
 }) {
   const storedStyle = useMarkdownStylePreferences();
   const deferredSource = useDeferredValue(source);
@@ -27,6 +30,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
       inlineAtoms={inlineAtoms}
       style={stylePreferences ?? storedStyle.preferences}
       streaming={streaming}
+      collapseJson={collapseJson}
     />
   );
 });
