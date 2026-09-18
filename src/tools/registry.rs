@@ -11,6 +11,8 @@ mod plugins;
 #[path = "registry_reply.rs"]
 mod reply;
 pub(crate) use reply::{PluginReplyContexts, PreparedPluginReplies};
+#[path = "registry_session.rs"]
+mod session;
 #[path = "registry_tool_policy.rs"]
 mod tool_policy;
 pub(crate) use tool_policy::PluginToolPolicyStates;

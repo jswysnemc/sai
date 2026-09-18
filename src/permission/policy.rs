@@ -167,6 +167,20 @@ impl PermissionProfile {
         self
     }
 
+    /// 【会话权限】【身份重绑】迁移会话审计并清除旧批准，保留工作区边界和热切换模式句柄。
+    /// 参数: state_dir 为新会话目录，session_id 为新会话标识
+    /// 返回: 已绑定新会话的权限配置
+    pub(crate) fn rebind_session(mut self, state_dir: &Path, session_id: &str) -> Self {
+        if self.audit.is_some() {
+            self.audit = Some(PermissionAuditLog::new(
+                state_dir.join("permission-audit.jsonl"),
+                session_id,
+            ));
+        }
+        self.approved = Arc::new(Mutex::new(HashSet::new()));
+        self.with_session(&state_dir.to_string_lossy(), session_id)
+    }
+
     /// 设置是否允许网格工具跨越会话边界。
     ///
     /// 参数:

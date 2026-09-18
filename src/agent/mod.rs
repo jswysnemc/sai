@@ -31,6 +31,8 @@ pub(crate) mod repeat_guard;
 mod reply_context_tests;
 mod reply_policy;
 mod runtime_context;
+#[cfg(test)]
+mod session_binding_tests;
 mod skill_load;
 pub(crate) mod system_prompt;
 mod tool_attachments;

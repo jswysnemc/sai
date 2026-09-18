@@ -46,6 +46,7 @@ impl Agent {
         mode: AgentMode,
         extra_system_prompt: Option<&str>,
     ) -> Result<Self> {
+        tools.rebind_interactive_session(&config, paths, state.session_id(), state.state_dir());
         tools.start_plugin_session(state.session_id())?;
         tools.inherit_plugin_storage_session(&state.state_dir().to_string_lossy());
         tools.set_plugin_model_client(&client);
@@ -234,6 +235,12 @@ impl Agent {
     /// 返回:
     /// - 模式切换与会话工具状态恢复结果
     pub fn switch_mode(&mut self, mode: AgentMode, mut tools: ToolRegistry) -> Result<()> {
+        tools.rebind_interactive_session(
+            &self.config,
+            &self.paths,
+            self.state.session_id(),
+            self.state.state_dir(),
+        );
         tools.continue_plugin_session(&self.tools);
         tools.set_plugin_model_client(&self.client);
         let loaded = if !self.tool_visibility.is_progressive() {
@@ -279,6 +286,12 @@ impl Agent {
     /// 返回:
     /// - 无
     pub fn replace_tools(&mut self, mut tools: ToolRegistry) {
+        tools.rebind_interactive_session(
+            &self.config,
+            &self.paths,
+            self.state.session_id(),
+            self.state.state_dir(),
+        );
         tools.continue_plugin_session(&self.tools);
         tools.set_plugin_model_client(&self.client);
         let loaded = self.tool_visibility.loaded_tool_names();
@@ -338,6 +351,12 @@ impl Agent {
         mut tools: ToolRegistry,
         mode: AgentMode,
     ) -> Result<()> {
+        tools.rebind_interactive_session(
+            &config,
+            &self.paths,
+            self.state.session_id(),
+            self.state.state_dir(),
+        );
         tools.continue_plugin_session(&self.tools);
         tools.set_plugin_model_client(&client);
         let compaction_runtime =
@@ -388,6 +407,12 @@ impl Agent {
     pub fn replace_state(&mut self, state: StateStore) -> Result<()> {
         let external_wake_policy =
             external_wake_policy::ExternalWakePolicy::capture(&self.paths, &state)?;
+        self.tools.rebind_interactive_session(
+            &self.config,
+            &self.paths,
+            state.session_id(),
+            state.state_dir(),
+        );
         self.tools.start_plugin_session(state.session_id())?;
         self.plugin_reply_contexts.clear();
         self.tools
