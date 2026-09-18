@@ -1,6 +1,5 @@
 use super::*;
 use crate::cli::repl_input::ReplInputSubmission;
-use crate::ipc::LinkRole;
 use crate::paths::SaiPaths;
 use crate::tools::subagent_state;
 
@@ -56,8 +55,8 @@ impl Fixture {
         }
     }
 
-    /// 【终端】【接管测试】投递草稿；参数为会话角色，返回子代理路由结果
-    fn submit(&mut self, role: LinkRole) -> Option<Result<()>> {
+    /// 【终端】【接管测试】投递草稿；无参数，返回子代理路由结果
+    fn submit(&mut self) -> Option<Result<()>> {
         let draft = self.runtime.stream_draft();
         let submission =
             ReplInputSubmission::from_input(AgentMode::Yolo, draft.text.clone(), &draft.clipboard);
@@ -65,7 +64,6 @@ impl Fixture {
             &mut self.runtime,
             &self.owner,
             &submission,
-            role,
         )
     }
 }
@@ -105,12 +103,12 @@ fn idle_submission_expands_pasted_text_and_main_view_is_not_routed() {
     draft
         .clipboard
         .paste_text_into_input(&mut draft.text, &mut draft.cursor, pasted.clone());
-    assert!(fixture.submit(LinkRole::Holder).unwrap().is_ok());
+    assert!(fixture.submit().unwrap().is_ok());
     let inbox = subagent_state::drain_subagent_inbox(&fixture.id);
     assert_eq!(inbox[0].text, pasted.trim());
     assert!(fixture.runtime.queued_items().is_empty());
     fixture.runtime.transcript.exit_subagent_view();
-    assert!(fixture.submit(LinkRole::Holder).is_none());
+    assert!(fixture.submit().is_none());
     assert!(subagent_state::drain_subagent_inbox(&fixture.id).is_empty());
 }
 
@@ -153,7 +151,6 @@ fn image_submission_is_rejected_before_text_delivery() {
         &mut fixture.runtime,
         &fixture.owner,
         &submission,
-        LinkRole::Holder,
     );
     assert!(result.unwrap().is_err());
     assert!(fixture.runtime.subagent_input_error.is_some());
@@ -161,14 +158,13 @@ fn image_submission_is_rejected_before_text_delivery() {
     assert!(fixture.runtime.queued_items().is_empty());
 }
 
-/// 【终端】【接管归属】跟随终端与错误父会话均不允许本地写入目标收件箱；无参数，无返回值
+/// 【终端】【接管归属】错误父会话不允许本地写入目标收件箱；无参数，无返回值
 #[test]
-fn observer_and_wrong_owner_never_deliver_to_main_or_child() {
+fn wrong_owner_never_delivers_to_main_or_child() {
     let mut fixture = Fixture::new();
     fixture.runtime.stream_draft_mut().text = "retain this message".into();
-    assert!(fixture.submit(LinkRole::Observer).unwrap().is_err());
     fixture.owner.push_str("-wrong-owner");
-    assert!(fixture.submit(LinkRole::Holder).unwrap().is_err());
+    assert!(fixture.submit().unwrap().is_err());
     fixture
         .owner
         .truncate(fixture.owner.len() - "-wrong-owner".len());

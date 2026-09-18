@@ -568,6 +568,11 @@ fn deepseek_anchor_available(
 /// 返回:
 /// - 上下文同步与恢复结果
 fn prepare_session_context(state: &StateStore, base_system_prompt: &str) -> Result<()> {
+    // 【会话执行】【并发打开】另一个进程正在执行时只读取历史，不把其轮次当作崩溃恢复
+    if crate::runner::active_run(state.state_dir()).is_some_and(|run| run.pid != std::process::id())
+    {
+        return Ok(());
+    }
     let prompt = match state.context_epoch_baseline()? {
         Some(baseline) => {
             super::instruction_files::freeze_instruction_files(base_system_prompt, &baseline)

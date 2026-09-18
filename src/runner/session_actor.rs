@@ -1,89 +1,49 @@
 use super::RunnerEvent;
-use crate::ipc::frame::{Frame, KIND_EVT_MIRROR};
-use crate::ipc::link::SessionLink;
 use crate::web::runs::{EventAssembler, EventJournal, WebEvent};
 use anyhow::{anyhow, Result};
-use serde_json::Value;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
 use tokio::sync::mpsc;
 
-/// 观察者的事件缓冲容量。
-///
-/// 本地与远程观察者共用：缓冲满了就摘除消费者并留 lagged 标记，
-/// 让客户端按最后收到的序号从落盘日志补发，而不是把事件静默丢掉。
 const WATCHER_CAPACITY: usize = 1024;
 
-/// 会话事件总线的命令。
+/// 【会话事件】【本地命令】只在当前进程内组装、保存和分发事件。
 pub(crate) enum ActorCmd {
-    /// 开启新一轮：重置组装器的轮次边界状态并记录该轮的用户输入。
     BeginRun {
         run_id: String,
         input: String,
         image_urls: Vec<String>,
     },
-    /// 把 runner 事件组装成 Web 事件后发布。
     Publish(RunnerEvent),
-    /// 发布一条已经组装好的控制类 Web 事件。
     Emit(WebEvent),
-    /// 发布一条其它进程经 IPC 上行、已经组装好的事件。
-    ///
-    /// 与 [`ActorCmd::Publish`] 的区别：它不再经过本进程的组装器——
-    /// 对端已经组装完毕，这里只负责分配序号、落盘并扇出。
-    Mirror(WebEvent),
-    /// 附加一个观察者。
     Attach(Watcher),
-    /// 安装观察者后确认，供重连端在读取历史前建立确定的事件边界。
     AttachReady(Watcher, tokio::sync::oneshot::Sender<()>),
 }
 
-/// 会话事件观察者。
+/// 【会话事件】【本地订阅】有界通道避免慢浏览器阻塞运行。
 pub(crate) enum Watcher {
-    /// 本进程内的订阅者（SSE 流等）。
     Local {
         tx: mpsc::Sender<WebEvent>,
-        /// 因通道已满而丢弃的事件数量；订阅端持有同一计数以便提示前端。
-        dropped: Arc<AtomicUsize>,
-    },
-    /// 经 IPC 连接的其它进程。
-    ///
-    /// 投递只把帧放进有界 `mpsc`，真正的 socket 写入由连接任务在另一个 task 完成。
-    /// 这是必须的：[`Watcher::deliver`] 是同步的（扇出发生在事件总线的串行循环里），
-    /// 而 socket 写入是异步的——在 `deliver` 里 await 会让一个慢网络观察者
-    /// 卡住整个会话的事件总线。
-    Remote {
-        tx: mpsc::Sender<Frame>,
         dropped: Arc<AtomicUsize>,
     },
 }
 
-/// 会话事件订阅。
+/// 【会话事件】【订阅句柄】接收同一 Web 服务中的会话事件。
 pub(crate) struct SessionSubscription {
-    /// 实时事件接收端；观察者被摘除后返回空，客户端应带序号重连。
     pub(crate) events: mpsc::Receiver<WebEvent>,
-    /// 因消费者跟不上而丢弃的事件数量。
     pub(crate) dropped: Arc<AtomicUsize>,
 }
 
 impl SessionSubscription {
-    /// 返回自订阅以来因消费者跟不上而丢弃的事件数量。
-    ///
-    /// 返回:
-    /// - 丢弃数量；非零表示存在事件空洞，需要按最后收到的序号补发
+    /// 【会话事件】【丢弃计数】无参数；返回需要从日志补发的事件数量。
     pub(crate) fn dropped_events(&self) -> usize {
         self.dropped.load(Ordering::Relaxed)
     }
 }
 
 impl Watcher {
-    /// 创建本地观察者，并与订阅端共享丢弃计数。
-    ///
-    /// 参数:
-    /// - `capacity`: 事件缓冲容量
-    ///
-    /// 返回:
-    /// - 观察者与订阅端
+    /// 【会话事件】【创建订阅】参数为通道容量；返回订阅者和接收句柄。
     pub(crate) fn local(capacity: usize) -> (Self, SessionSubscription) {
         let (tx, events) = mpsc::channel(capacity);
         let dropped = Arc::new(AtomicUsize::new(0));
@@ -96,77 +56,21 @@ impl Watcher {
         )
     }
 
-    /// 创建远程观察者。
-    ///
-    /// 参数:
-    /// - `capacity`: 帧缓冲容量
-    ///
-    /// 返回:
-    /// - 观察者、帧接收端（交给连接任务写 socket）与丢弃计数
-    pub(crate) fn remote(capacity: usize) -> (Self, mpsc::Receiver<Frame>, Arc<AtomicUsize>) {
-        let (tx, frames) = mpsc::channel(capacity);
-        let dropped = Arc::new(AtomicUsize::new(0));
-        (
-            Self::Remote {
-                tx,
-                dropped: dropped.clone(),
-            },
-            frames,
-            dropped,
-        )
-    }
-
-    /// 投递事件。
-    ///
-    /// 通道满时不再等待：慢消费者会被摘除并留下 lagged 标记，前端重连时
-    /// 按最后收到的序号从落盘日志补发，避免像 broadcast 那样静默丢事件。
-    ///
-    /// 参数:
-    /// - `event`: 已落盘并分配序号的事件
-    ///
-    /// 返回:
-    /// - 观察者是否仍然有效
+    /// 【会话事件】【非阻塞投递】参数为已落盘事件；返回订阅者是否仍可用。
     pub(crate) fn deliver(&mut self, event: &WebEvent) -> bool {
-        match self {
-            Self::Local { tx, dropped } => match tx.try_send(event.clone()) {
-                Ok(()) => true,
-                Err(mpsc::error::TrySendError::Full(_)) => {
-                    dropped.fetch_add(1, Ordering::Relaxed);
-                    false
-                }
-                Err(mpsc::error::TrySendError::Closed(_)) => false,
-            },
-            Self::Remote { tx, dropped } => match tx.try_send(remote_frame(event)) {
-                Ok(()) => true,
-                Err(mpsc::error::TrySendError::Full(_)) => {
-                    dropped.fetch_add(1, Ordering::Relaxed);
-                    false
-                }
-                Err(mpsc::error::TrySendError::Closed(_)) => false,
-            },
+        let Self::Local { tx, dropped } = self;
+        match tx.try_send(event.clone()) {
+            Ok(()) => true,
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                dropped.fetch_add(1, Ordering::Relaxed);
+                false
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => false,
         }
     }
 }
 
-/// 把已落盘的事件编码成下行帧。
-///
-/// 参数:
-/// - `event`: 已分配序号的事件
-///
-/// 返回:
-/// - 待写入 IPC 的帧
-fn remote_frame(event: &WebEvent) -> Frame {
-    Frame {
-        kind: KIND_EVT_MIRROR.to_string(),
-        sequence: Some(event.sequence),
-        payload: serde_json::to_value(event).unwrap_or(Value::Null),
-    }
-}
-
-/// 会话事件执行者。
-///
-/// 单任务串行处理命令，保证同一会话的事件序号单调递增，并向所有观察者
-/// 扇出同一份事件。本阶段 Agent 仍按轮次创建，执行者只负责事件总线。
+/// 【会话事件】【串行处理】保持同一服务中事件落盘与订阅顺序一致。
 pub(crate) struct SessionActor {
     journal: EventJournal,
     assembler: EventAssembler,
@@ -174,65 +78,17 @@ pub(crate) struct SessionActor {
     cmds: mpsc::UnboundedReceiver<ActorCmd>,
 }
 
-/// 事件总线的角色实现。
-///
-/// 同一个句柄可以在运行期从观察者升级为持有者（见 [`ActorHandle::promote_to_holder`]），
-/// 所以这里放在锁后面而不是让句柄直接持有某一个实现。
-enum ActorInner {
-    /// 本进程是会话持有者：事件落盘后扇出给本地与远程观察者。
-    Local {
-        tx: mpsc::UnboundedSender<ActorCmd>,
-        journal: EventJournal,
-    },
-    /// 本进程是观察者：事件经 IPC 上行给持有者，本进程不写事件文件。
-    Remote(RemoteBus),
-}
-
-/// 观察者侧的事件总线：本地组装后上行，落盘与序号分配都交给持有者。
-///
-/// 这样整个会话的事件文件始终只有一个写者，两个进程各自累加的序号不会撞车。
-struct RemoteBus {
-    assembler: EventAssembler,
-    link: SessionLink,
-}
-
-/// 会话事件总线句柄。
-///
-/// 可克隆。`publish` / `emit` 只入队不 await，因此可以直接用作同步 sink。
+/// 【会话事件】【发送句柄】不含远程执行、持有者或角色切换逻辑。
 #[derive(Clone)]
 pub(crate) struct ActorHandle {
-    inner: Arc<Mutex<ActorInner>>,
+    tx: mpsc::UnboundedSender<ActorCmd>,
+    journal: EventJournal,
 }
 
 impl SessionActor {
-    /// 启动会话事件总线（持有者模式）。
-    ///
-    /// 参数:
-    /// - `path`: 会话事件日志文件
-    /// - `workspace_id`: 工作区标识
-    /// - `session_id`: 会话标识
-    ///
-    /// 返回:
-    /// - 事件总线句柄
+    /// 【会话事件】【启动】参数为日志路径、工作区与会话标识；返回本进程事件总线。
     pub(crate) fn spawn(path: PathBuf, workspace_id: &str, session_id: &str) -> ActorHandle {
         let journal = EventJournal::persistent(path);
-        Self::spawn_with_journal(journal, workspace_id, session_id)
-    }
-
-    /// 用指定事件日志启动会话事件总线。
-    ///
-    /// 参数:
-    /// - `journal`: 事件日志
-    /// - `workspace_id`: 工作区标识
-    /// - `session_id`: 会话标识
-    ///
-    /// 返回:
-    /// - 事件总线句柄
-    fn spawn_with_journal(
-        journal: EventJournal,
-        workspace_id: &str,
-        session_id: &str,
-    ) -> ActorHandle {
         let (tx, cmds) = mpsc::unbounded_channel();
         let actor = Self {
             journal: journal.clone(),
@@ -241,10 +97,10 @@ impl SessionActor {
             cmds,
         };
         tokio::spawn(actor.run());
-        ActorHandle::holder(tx, journal)
+        ActorHandle { tx, journal }
     }
 
-    /// 串行消费命令直到句柄全部释放。
+    /// 【会话事件】【消费循环】无参数；全部发送句柄释放后结束。
     async fn run(mut self) {
         while let Some(command) = self.cmds.recv().await {
             match command {
@@ -254,13 +110,11 @@ impl SessionActor {
                     image_urls,
                 } => self.assembler.begin_run(&run_id, &input, &image_urls),
                 ActorCmd::Publish(event) => {
-                    let events = self.assembler.map(event);
-                    for event in events {
+                    for event in self.assembler.map(event) {
                         self.emit(event);
                     }
                 }
                 ActorCmd::Emit(event) => self.emit(event),
-                ActorCmd::Mirror(event) => self.emit(event),
                 ActorCmd::Attach(watcher) => self.watchers.push(watcher),
                 ActorCmd::AttachReady(watcher, ready) => {
                     self.watchers.push(watcher);
@@ -270,7 +124,7 @@ impl SessionActor {
         }
     }
 
-    /// 落盘一次并向所有观察者扇出。
+    /// 【会话事件】【持久化】参数为事件；先落盘再分发，无返回值。
     fn emit(&mut self, event: WebEvent) {
         let event = self.journal.publish(event);
         self.watchers.retain_mut(|watcher| watcher.deliver(&event));
@@ -278,260 +132,56 @@ impl SessionActor {
 }
 
 impl ActorHandle {
-    /// 构造持有者侧句柄。
-    fn holder(tx: mpsc::UnboundedSender<ActorCmd>, journal: EventJournal) -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(ActorInner::Local { tx, journal })),
-        }
-    }
-
-    /// 构造观察者侧句柄。
-    ///
-    /// 参数:
-    /// - `workspace_id`: 工作区标识
-    /// - `session_id`: 会话标识
-    /// - `link`: 该会话的跨进程链接
-    ///
-    /// 返回:
-    /// - 事件总线句柄
-    pub(crate) fn observer(workspace_id: &str, session_id: &str, link: SessionLink) -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(ActorInner::Remote(RemoteBus {
-                assembler: EventAssembler::new(workspace_id, session_id),
-                link,
-            }))),
-        }
-    }
-
-    /// 返回当前角色实现。
-    fn lock(&self) -> MutexGuard<'_, ActorInner> {
-        self.inner.lock().unwrap_or_else(|error| error.into_inner())
-    }
-
-    /// 返回会话事件日志，供补发历史与回读使用。
-    ///
-    /// 仅持有者模式下有意义：观察者不持有事件文件的写视图，这里返回一个空日志。
-    /// 需要读历史请用 [`Self::replay`]——它只读地扫描共享文件尾部，不会像
-    /// `EventJournal::persistent` 那样在超限时重写文件、把持有者刚追加的事件丢掉。
+    /// 【会话事件】【日志访问】无参数；返回本地日志句柄。
     pub(crate) fn journal(&self) -> EventJournal {
-        match &*self.lock() {
-            ActorInner::Local { journal, .. } => journal.clone(),
-            ActorInner::Remote(_) => EventJournal::new(),
-        }
+        self.journal.clone()
     }
 
-    /// 返回指定序号之后的历史事件。
-    ///
-    /// 持有者从内存里的有界日志补发；观察者只读地扫描共享文件尾部，
-    /// 因此持有者失联、本进程降级期间仍然能补齐空洞。
-    ///
-    /// 参数:
-    /// - `after`: 已接收的最后事件序号
-    ///
-    /// 返回:
-    /// - 需要补发的事件
+    /// 【会话事件】【历史补发】参数为最后接收序号；返回该序号之后的事件。
     pub(crate) fn replay(&self, after: u64) -> Vec<WebEvent> {
-        match &*self.lock() {
-            ActorInner::Local { journal, .. } => journal.events_after(after),
-            ActorInner::Remote(bus) => bus.link.replay(after),
-        }
+        self.journal.events_after(after)
     }
 
-    /// 本进程是否是该会话的持有者。
-    pub(crate) fn is_holder(&self) -> bool {
-        matches!(&*self.lock(), ActorInner::Local { .. })
-    }
-
-    /// 开启新一轮，重置轮次边界状态。
-    ///
-    /// 参数:
-    /// - `run_id`: 运行标识
-    /// - `input`: 本轮用户输入
-    /// - `image_urls`: 本轮图片列表
-    ///
-    /// 返回:
-    /// - 入队结果
+    /// 【会话事件】【轮次边界】参数为运行标识、正文与图片；返回入队结果。
     pub(crate) fn begin_run(&self, run_id: &str, input: &str, image_urls: &[String]) -> Result<()> {
-        match &mut *self.lock() {
-            ActorInner::Local { tx, .. } => tx
-                .send(ActorCmd::BeginRun {
-                    run_id: run_id.to_string(),
-                    input: input.to_string(),
-                    image_urls: image_urls.to_vec(),
-                })
-                .map_err(|_| anyhow!("session event bus is closed")),
-            // 观察者自己组装，持有者不需要知道轮次边界
-            ActorInner::Remote(bus) => {
-                bus.assembler.begin_run(run_id, input, image_urls);
-                Ok(())
-            }
-        }
+        self.send(ActorCmd::BeginRun {
+            run_id: run_id.into(),
+            input: input.into(),
+            image_urls: image_urls.to_vec(),
+        })
     }
 
-    /// 入队一条 runner 事件，由执行者组装后统一发布。
-    ///
-    /// 参数:
-    /// - `event`: runner 事件
-    ///
-    /// 返回:
-    /// - 入队结果
+    /// 【会话事件】【运行事件】参数为 Runner 事件；返回入队结果。
     pub(crate) fn publish(&self, event: RunnerEvent) -> Result<()> {
-        match &mut *self.lock() {
-            ActorInner::Local { tx, .. } => tx
-                .send(ActorCmd::Publish(event))
-                .map_err(|_| anyhow!("session event bus is closed")),
-            ActorInner::Remote(bus) => {
-                for event in bus.assembler.map(event) {
-                    bus.link.mirror(event);
-                }
-                // 上行失败不判本轮失败：对端挂了只影响同步，不影响本轮对话
-                Ok(())
-            }
-        }
+        self.send(ActorCmd::Publish(event))
     }
 
-    /// 入队一条已组装的事件。
-    ///
-    /// 参数:
-    /// - `event`: Web 事件
-    ///
-    /// 返回:
-    /// - 入队结果
+    /// 【会话事件】【控制事件】参数为已组装事件；返回入队结果。
     pub(crate) fn emit(&self, event: WebEvent) -> Result<()> {
-        match &*self.lock() {
-            ActorInner::Local { tx, .. } => tx
-                .send(ActorCmd::Emit(event))
-                .map_err(|_| anyhow!("session event bus is closed")),
-            ActorInner::Remote(bus) => {
-                bus.link.mirror(event);
-                Ok(())
-            }
-        }
+        self.send(ActorCmd::Emit(event))
     }
 
-    /// 发布一条来自其它进程的已组装事件。
-    ///
-    /// 持有者侧由 IPC 连接任务调用；观察者侧退化成上行（不应发生，保留兜底）。
-    ///
-    /// 参数:
-    /// - `event`: 已组装的事件
-    ///
-    /// 返回:
-    /// - 入队结果
-    pub(crate) fn mirror(&self, event: WebEvent) -> Result<()> {
-        match &*self.lock() {
-            ActorInner::Local { tx, .. } => tx
-                .send(ActorCmd::Mirror(event))
-                .map_err(|_| anyhow!("session event bus is closed")),
-            ActorInner::Remote(bus) => {
-                bus.link.mirror(event);
-                Ok(())
-            }
-        }
+    /// 【会话事件】【命令入队】参数为本地命令；返回通道发送结果。
+    fn send(&self, command: ActorCmd) -> Result<()> {
+        self.tx
+            .send(command)
+            .map_err(|_| anyhow!("session event bus is closed"))
     }
 
-    /// 附加一个本地观察者，或订阅持有者的事件流。
-    ///
-    /// 返回:
-    /// - 会话事件订阅；执行者已停止时返回空
+    /// 【会话事件】【订阅】无参数；返回本进程订阅，总线关闭时返回空。
     pub(crate) fn attach(&self) -> Option<SessionSubscription> {
-        match &mut *self.lock() {
-            ActorInner::Local { tx, .. } => {
-                let (watcher, subscription) = Watcher::local(WATCHER_CAPACITY);
-                tx.send(ActorCmd::Attach(watcher)).ok()?;
-                Some(subscription)
-            }
-            ActorInner::Remote(bus) => Some(bus.link.subscribe()),
-        }
-    }
-
-    /// 【会话总线】【订阅确认】等待订阅安装后返回，后续读取历史不会遗漏排队中的事件。
-    /// 参数: 无；返回就绪订阅，总线关闭时返回空
-    pub(crate) async fn attach_ready(&self) -> Option<SessionSubscription> {
-        let (subscription, ready) = {
-            let mut inner = self.lock();
-            match &mut *inner {
-                ActorInner::Local { tx, .. } => {
-                    let (watcher, subscription) = Watcher::local(WATCHER_CAPACITY);
-                    let (send, receive) = tokio::sync::oneshot::channel();
-                    tx.send(ActorCmd::AttachReady(watcher, send)).ok()?;
-                    (subscription, receive)
-                }
-                // 1. 【会话总线】【远端订阅】链接在互斥锁下同步安装订阅，无需等待命令队列
-                ActorInner::Remote(bus) => return Some(bus.link.subscribe()),
-            }
-        };
-        ready.await.ok()?;
+        let (watcher, subscription) = Watcher::local(WATCHER_CAPACITY);
+        self.send(ActorCmd::Attach(watcher)).ok()?;
         Some(subscription)
     }
 
-    /// 附加一个远程观察者（持有者侧由 IPC 连接任务调用）。
-    ///
-    /// 返回的接收端交给连接任务写 socket；观察者被摘除后它返回 `None`，
-    /// 连接任务据此结束这条连接。
-    ///
-    /// 参数:
-    /// - `capacity`: 帧缓冲容量
-    ///
-    /// 返回:
-    /// - 帧接收端与丢弃计数；本进程不是持有者时返回空
-    pub(crate) fn attach_remote(
-        &self,
-        capacity: usize,
-    ) -> Option<(mpsc::Receiver<Frame>, Arc<AtomicUsize>)> {
-        match &*self.lock() {
-            ActorInner::Local { tx, .. } => {
-                let (watcher, frames, dropped) = Watcher::remote(capacity);
-                tx.send(ActorCmd::Attach(watcher)).ok()?;
-                Some((frames, dropped))
-            }
-            ActorInner::Remote(_) => None,
-        }
-    }
-
-    /// 把观察者句柄就地升级为持有者（failover 接管）。
-    ///
-    /// 事件日志从文件尾部接续：接管前由旧持有者落盘的事件不会与新一轮重号。
-    /// 升级后原来经 IPC 订阅的观察者仍然收到事件——本地总线会桥接回链接的扇出中心，
-    /// 否则已经在看这个会话的 SSE 流会在接管瞬间变哑。
-    ///
-    /// 参数:
-    /// - `journal_path`: 会话事件日志文件
-    ///
-    /// 返回:
-    /// - 是否完成了升级；本进程已经是持有者时返回 false
-    pub(crate) fn promote_to_holder(&self, journal_path: &Path) -> bool {
-        let (workspace_id, session_id, link) = {
-            let inner = self.lock();
-            match &*inner {
-                ActorInner::Local { .. } => return false,
-                ActorInner::Remote(bus) => (
-                    bus.link.workspace_id(),
-                    bus.link.session_id(),
-                    bus.link.clone(),
-                ),
-            }
-        };
-        let journal = EventJournal::persistent(journal_path.to_path_buf());
-        let (tx, cmds) = mpsc::unbounded_channel();
-        let (bridge, bridge_subscription) = Watcher::local(WATCHER_CAPACITY);
-        let mut bridge_rx = bridge_subscription.events;
-        let actor = SessionActor {
-            journal: journal.clone(),
-            assembler: EventAssembler::new(&workspace_id, &session_id),
-            watchers: vec![bridge],
-            cmds,
-        };
-        // 接管后旧订阅者继续从扇出中心收事件，避免已打开的 SSE 流在接管瞬间变哑
-        let fanout = link.clone();
-        tokio::spawn(async move {
-            while let Some(event) = bridge_rx.recv().await {
-                fanout.post(event);
-            }
-        });
-        tokio::spawn(actor.run());
-        *self.lock() = ActorInner::Local { tx, journal };
-        true
+    /// 【会话事件】【订阅确认】无参数；等待订阅安装后返回，保证读取历史与新事件间没有空洞。
+    pub(crate) async fn attach_ready(&self) -> Option<SessionSubscription> {
+        let (watcher, subscription) = Watcher::local(WATCHER_CAPACITY);
+        let (send, receive) = tokio::sync::oneshot::channel();
+        self.send(ActorCmd::AttachReady(watcher, send)).ok()?;
+        receive.await.ok()?;
+        Some(subscription)
     }
 }
 

@@ -13,7 +13,6 @@ mod gateways;
 mod goal;
 mod hooks;
 mod i18n;
-mod ipc;
 mod llm;
 mod mcp;
 mod media;

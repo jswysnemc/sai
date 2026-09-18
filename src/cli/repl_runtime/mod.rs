@@ -4,7 +4,6 @@ mod bottom_panel;
 mod composer;
 mod composer_frame;
 mod event_loop;
-mod follow;
 mod history;
 mod history_insert;
 mod history_replay;
@@ -43,7 +42,6 @@ use crate::render::terminal_frame::TerminalFrame;
 use crate::render::terminal_paint::paint_lock;
 use crate::render::transcript::{TranscriptRenderOptions, TranscriptStore, WelcomeCell};
 use crate::state::{SessionTimelineCompaction, SessionTimelineTurn};
-use crate::web::runs::WebEvent;
 use anyhow::Result;
 use crossterm::event::Event;
 use std::collections::VecDeque;
@@ -114,10 +112,6 @@ pub(super) struct ReplRuntime {
     live_usage: live_usage::LiveTurnUsage,
     /// 当前帧的终端输出缓冲：整帧攒齐后一次提交
     frame: TerminalFrame,
-    /// 跟随模式（本进程是会话观察者）下持有者下行事件的接收端
-    follow_events: Option<tokio::sync::mpsc::UnboundedReceiver<WebEvent>>,
-    /// 跟随模式下尚未落进 transcript 的远端正文
-    follow_buffer: follow::FollowBuffer,
     /// 流式阶段 Ctrl+Y 清空队列需按第二次确认
     pending_clear_queue: bool,
 }
@@ -157,8 +151,6 @@ impl QueueInsertAt {
 #[derive(Clone, Debug)]
 pub(in crate::cli) struct QueuedSubmission {
     pub(in crate::cli) id: String,
-    /// 【会话同步】【转交执行】远端提交的稳定运行标识，本地排队项在执行时分配
-    pub(in crate::cli) turn_id: Option<String>,
     pub(in crate::cli) mode: AgentMode,
     pub(in crate::cli) text: String,
     /// 草稿携带的剪贴板附件；缺失时占位符会以字面文本发给模型
@@ -175,7 +167,6 @@ impl QueuedSubmission {
     ) -> Self {
         Self {
             id: next_queued_id(),
-            turn_id: None,
             mode,
             text,
             clipboard,
@@ -234,8 +225,6 @@ impl ReplRuntime {
             stream_active: false,
             live_usage: live_usage::LiveTurnUsage::default(),
             frame: TerminalFrame::new(),
-            follow_events: None,
-            follow_buffer: follow::FollowBuffer::default(),
             pending_clear_queue: false,
         }
     }
@@ -372,13 +361,7 @@ impl ReplRuntime {
         let animation_wait = (self.transcript.viewing_running_subagent()
             || self.transcript.has_running_background_commands())
         .then_some(LIVE_REFRESH_INTERVAL);
-        // 跟随模式下远端事件持续到达：读键必须周期性醒来排空，
-        // 否则主循环阻塞在 event::read，跟随端要等用户按键才更新
-        let follow_wait = self
-            .follow_events
-            .is_some()
-            .then_some(LIVE_REFRESH_INTERVAL);
-        [reflow_wait, subagent_wait, animation_wait, follow_wait]
+        [reflow_wait, subagent_wait, animation_wait]
             .into_iter()
             .flatten()
             .min()

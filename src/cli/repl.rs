@@ -19,9 +19,7 @@ pub(super) mod subagent_commands;
 pub(super) mod subagent_input;
 mod submission_queue;
 
-use crate::ipc::LinkRole;
 use exit_hint::print_repl_resume_hint;
-use repl_session_link::{role_badge, ReplSessionLink};
 use session_support::{
     apply_ready_tool_registry, record_repl_history, reload_repl_agent, repl_welcome_model,
 };
@@ -119,30 +117,35 @@ pub(super) async fn run_repl(
     )?;
     let mut external_events = ReplExternalEvents::new();
     plugin_commands::show_diagnostics(&agent, &mut runtime)?;
-    // 跨进程会话链接：本终端是否驱动这一会话，取决于有没有别的 sai 实例先抢到租约
-    let mut session_link =
-        ReplSessionLink::attach(paths, &state, runtime.submission_queue_handle()).await;
+    let mut presence: Option<crate::runner::SessionPresenceGuard> = None;
 
     let mut pending_undo = false;
     loop {
-        // 会话切换（/new、/resume）或持有者更替后重新链接并同步界面提示
+        // 【终端】【会话在线】切换后仅更新探测记录，输入始终在本终端执行
         runtime.bind_background_session(paths, state.session_id());
-        session_link.refresh(paths, &state, &mut runtime).await?;
+        if presence
+            .as_ref()
+            .is_none_or(|record| !record.matches(state.state_dir()))
+        {
+            presence = crate::runner::SessionPresenceGuard::register(
+                state.state_dir(),
+                state.session_id(),
+                crate::runner::SessionOwner::Repl,
+            )
+            .ok();
+        }
         // 每次进入输入循环都重新绑定当前 Agent，会话切换后不会消费旧监听结果
         external_events.arm(&agent);
         apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
         // 每轮刷新底栏上下文/模型信息
         let mut chrome = ReplChrome::from_runtime(&config, paths, &state, mode);
-        // 跟随者常驻标记：角色会随持有者更替变化，每轮都要重取
-        chrome.set_role_badge(role_badge(session_link.role()));
         let transcript_options = render::transcript::TranscriptRenderOptions {
             reasoning_mode: render::ReasoningDisplayMode::from_config(&config.display.reasoning),
             tool_call_mode: render::ToolCallDisplayMode::from_config(&config.display.tool_calls),
         };
         runtime.update_options(config.display.repl_transcript_row_cap, transcript_options);
         runtime.set_mention_skills(super::repl_mentions::load_mention_skills(&config, paths));
-        // 2. 先把排队中的消息跑掉：跟随端上行的一轮在本终端空闲时落到这里。
-        //    队列为空时这一步是空操作，本地单终端行为完全不变
+        // 2. 优先执行本终端运行期间排队的消息
         if runtime.queue_len() > 0 {
             external_events.cancel();
             external_events.resume();
@@ -157,7 +160,6 @@ pub(super) async fn run_repl(
                 &mut input_history,
                 transcript_options.reasoning_mode,
                 transcript_options.tool_call_mode,
-                &session_link,
             )
             .await?;
             if exit {
@@ -205,7 +207,6 @@ pub(super) async fn run_repl(
                         transcript_options.reasoning_mode,
                         transcript_options.tool_call_mode,
                         wake,
-                        session_link.event_bus(),
                     )
                     .await?;
                     if outcome.exit_requested {
@@ -235,7 +236,6 @@ pub(super) async fn run_repl(
                         &mut input_history,
                         transcript_options.reasoning_mode,
                         transcript_options.tool_call_mode,
-                        &session_link,
                     )
                     .await?;
                     if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {
@@ -570,7 +570,6 @@ pub(super) async fn run_repl(
                 &mut runtime,
                 &state.state_dir().to_string_lossy(),
                 &submission,
-                session_link.role(),
             ) {
                 if result.is_err() {
                     input_restore::restore_submitted_input(
@@ -580,28 +579,6 @@ pub(super) async fn run_repl(
                     );
                 }
                 continue;
-            }
-        }
-        // 跟随端：本终端不持有 Agent，整包上行给持有者执行。回显与流式输出
-        // 由持有者经事件流广播回来，本终端不再本地回显，否则同一条消息会出现两次。
-        // 整包上行，因此放在取出 chat_input 之前，技能引用由持有者侧展开
-        if session_link.role() == LinkRole::Observer {
-            let workspace_id = crate::state::current_workspace_id().unwrap_or_default();
-            match session_link
-                .forward_turn(&submission, state.session_id(), &workspace_id)
-                .await
-            {
-                Ok(()) => continue,
-                Err(error) => {
-                    // 上行失败必须可见并退回输入框：用户输入绝不能静默消失
-                    runtime.record_meta(error.to_string())?;
-                    input_restore::restore_submitted_input(
-                        &submission.history,
-                        &mut prefill,
-                        &mut prefill_clipboard,
-                    );
-                    continue;
-                }
             }
         }
         let mut chat_input = submission.chat_input;
@@ -620,11 +597,6 @@ pub(super) async fn run_repl(
         if !goal_continuation {
             runtime.record_input(mode, submission.echo.clone())?;
         }
-        // 持有者是会话事件的唯一写者，回显也要广播，否则跟随端只见回答不见提问
-        session_link.broadcast_user_message(
-            &submission.echo.text,
-            chat_input.image_url.clone().into_iter().collect(),
-        );
         // 4. 模式变化时换工具表；每轮只做轻量 prepare
         if agent.installed_mode() != mode {
             let registry = build_repl_tool_registry(&config, paths, mode)?;
@@ -655,7 +627,6 @@ pub(super) async fn run_repl(
             &mut runtime,
             &owner_key,
             runner_submission,
-            session_link.event_bus(),
         )
         .await?;
         apply_stream_mode(&runtime, &mut mode);
@@ -685,7 +656,6 @@ pub(super) async fn run_repl(
                 &mut input_history,
                 transcript_options.reasoning_mode,
                 transcript_options.tool_call_mode,
-                &session_link,
             )
             .await?;
             if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {
@@ -727,7 +697,6 @@ pub(super) async fn run_repl(
             &mut input_history,
             transcript_options.reasoning_mode,
             transcript_options.tool_call_mode,
-            &session_link,
         )
         .await?;
         if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {

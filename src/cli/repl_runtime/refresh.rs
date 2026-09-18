@@ -62,8 +62,6 @@ impl ReplRuntime {
     pub(in crate::cli) fn process_idle_tick(&mut self) -> Result<bool> {
         let reflowed = self.maybe_reflow_due(false)?;
         let subagents = self.tick_subagents()?;
-        // 观察者模式下主循环卡在读键上，远端事件只能借空闲节拍落地
-        let followed = self.drain_follow_events()?;
         // 停留在运行中的子智能体视图，或后台仍有子智能体运行（底部面板
         // 的流光与实时统计）时，空闲期也要驱动 live 刷新
         if self.next_live_refresh.is_none()
@@ -74,6 +72,6 @@ impl ReplRuntime {
             self.next_live_refresh = Some(Instant::now());
         }
         let animated = self.tick_live()?;
-        Ok(reflowed || subagents || followed || animated)
+        Ok(reflowed || subagents || animated)
     }
 }

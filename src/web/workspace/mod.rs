@@ -12,8 +12,8 @@ pub(crate) use git_diff::{
     git_diff, git_diff_stats, git_file_compare, git_log, git_op, git_repositories_with_options,
     git_repository_statuses, git_resources, git_stash_diff, git_status, is_git_repository,
     read_git_diff, validate_git_repository_root, GitBranchesResponse, GitCommitDetailsResponse,
-    GitConflictContent, GitDiff, GitDiffResponse, GitDiffStats, GitLogResponse, GitOperationRequest,
-    GitOperationResponse, GitRepositoriesResponse, GitRepositoryDiscoveryOptions,
-    GitRepositoryResources, GitRepositoryState, GitRepositoryStatusesResponse, GitWatchEvent,
-    RepositoryWatcher,
+    GitConflictContent, GitDiff, GitDiffResponse, GitDiffStats, GitLogResponse,
+    GitOperationRequest, GitOperationResponse, GitRepositoriesResponse,
+    GitRepositoryDiscoveryOptions, GitRepositoryResources, GitRepositoryState,
+    GitRepositoryStatusesResponse, GitWatchEvent, RepositoryWatcher,
 };

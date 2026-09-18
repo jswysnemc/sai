@@ -75,7 +75,7 @@ async fn workspace_git_flag_detects_repository_ancestors() {
 /// 返回:
 /// - 无
 #[tokio::test]
-async fn session_loaded_follows_alive_terminal_or_web_holder() {
+async fn session_loaded_reports_open_terminal_or_web_instance() {
     let temp = tempfile::tempdir().unwrap();
     let paths = test_paths(temp.path());
     let workspace = temp.path().join("workspace");
@@ -91,7 +91,7 @@ async fn session_loaded_follows_alive_terminal_or_web_holder() {
 
         let (_, state_dir) =
             crate::state::state_dir_for_workspace_session(&paths, &workspace, &session.id).unwrap();
-        let _guard = crate::runner::SessionHolderGuard::acquire(
+        let _guard = crate::runner::SessionPresenceGuard::register(
             &state_dir,
             &session.id,
             crate::runner::SessionOwner::Repl,

@@ -56,7 +56,6 @@ pub(super) fn take_stream_draft_prefill(
 /// - `input_history`: 输入历史
 /// - `reasoning_mode`: 推理显示模式
 /// - `tool_call_mode`: 工具显示模式
-/// - `session_link`: 会话链接，用于把用户回显广播给跟随端
 ///
 /// 返回:
 /// - 队列执行结果，以及是否收到退出请求
@@ -70,7 +69,6 @@ pub(super) async fn drain_submission_queue(
     input_history: &mut Vec<crate::state::input_history::InputHistoryEntry>,
     reasoning_mode: render::ReasoningDisplayMode,
     tool_call_mode: render::ToolCallDisplayMode,
-    session_link: &super::repl_session_link::ReplSessionLink,
 ) -> Result<bool> {
     loop {
         let queued = runtime.take_turn_interval_queue();
@@ -110,11 +108,6 @@ pub(super) async fn drain_submission_queue(
                 item.clipboard.history_entry(&item.text),
             );
             runtime.record_input(*mode, echo.clone())?;
-            // 跟随端上行的一轮走这条路径，回显要广播回去，否则对端只见回答不见提问
-            session_link.broadcast_user_message(
-                &echo.text,
-                chat_input.image_url.clone().into_iter().collect(),
-            );
             if agent.installed_mode() != *mode {
                 let registry = build_repl_tool_registry(config, paths, *mode)?;
                 agent.switch_mode(*mode, registry)?;
@@ -122,7 +115,7 @@ pub(super) async fn drain_submission_queue(
             agent.prepare_for_turn()?;
             // 用户主动发话：清除积压的未消费回执，避免上一轮遗留整包注入
             let _ = agent.discard_stale_external_completion_notices().await;
-            let mut runner_submission = repl_runner_submission(
+            let runner_submission = repl_runner_submission(
                 chat_input,
                 *mode,
                 reasoning_mode,
@@ -130,22 +123,9 @@ pub(super) async fn drain_submission_queue(
                 stream_render_options(config),
                 false,
             );
-            // 1. 【会话同步】【排队执行】把远端运行标识交给持久化层与终端事件广播
-            if let crate::runner::RunnerSubmissionKind::UserInput(input) =
-                &mut runner_submission.kind
-            {
-                input.turn_id = item.turn_id;
-            }
-            let outcome = execute_repl_turn(
-                paths,
-                config,
-                agent,
-                runtime,
-                owner_key,
-                runner_submission,
-                session_link.event_bus(),
-            )
-            .await?;
+            let outcome =
+                execute_repl_turn(paths, config, agent, runtime, owner_key, runner_submission)
+                    .await?;
             apply_stream_mode(runtime, mode);
             if outcome.exit_requested {
                 discard_remaining_queue(runtime, pending)?;

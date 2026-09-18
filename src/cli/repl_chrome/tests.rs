@@ -14,24 +14,8 @@ fn test_chrome() -> ReplChrome {
         directory: "/workspace".to_string(),
         cache_hit_ratio: None,
         activity: None,
-        role_badge: None,
         status_plugin: None,
     }
-}
-
-/// 角色标记常驻底栏，且排在活动提示之前。
-#[test]
-fn role_badge_sits_at_the_left_of_the_footer() {
-    let mut chrome = test_chrome();
-    assert!(!chrome.footer_line(60).contains("跟随中"));
-
-    chrome.set_role_badge(Some("跟随中".to_string()));
-    assert!(chrome.footer_line(60).contains("跟随中"));
-    // 活动提示（Ctrl+C 停止）出现时角色标记仍在
-    let busy = chrome.footer_line_with_activity(60, Some("Ctrl+C"));
-    assert!(busy.contains("跟随中"));
-    assert!(busy.contains("Ctrl+C"));
-    assert!(busy.find("跟随中").unwrap() < busy.find("Ctrl+C").unwrap());
 }
 
 /// 【TUI】【实时用量】验证实报读数覆盖上下文占比并带出缓存命中。
@@ -125,7 +109,6 @@ fn footer_puts_mode_before_context() {
         directory: "/workspace".to_string(),
         cache_hit_ratio: None,
         activity: None,
-        role_badge: None,
         status_plugin: None,
     };
     let line = chrome.footer_line(80);
@@ -160,7 +143,6 @@ fn footer_line_never_exceeds_terminal_cols() {
         directory: "/home/snemc/workspace/sai/very/long/path/segment".to_string(),
         cache_hit_ratio: None,
         activity: None,
-        role_badge: None,
         status_plugin: None,
     };
     for cols in [20usize, 40, 59, 60, 80, 120] {

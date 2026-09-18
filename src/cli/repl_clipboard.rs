@@ -1,7 +1,6 @@
 use crate::clipboard::{self, ClipboardChatInput, ClipboardPayload};
 use crate::config::PasteImageKey;
 use anyhow::Result;
-use base64::Engine as _;
 use crossterm::event::{KeyCode, KeyModifiers};
 
 mod history;
@@ -356,38 +355,6 @@ impl ReplClipboardState {
         target
     }
 
-    /// 把另一终端转发过来的图片挂进剪贴板状态。
-    ///
-    /// 转发只带 data URL，尺寸得自己从 PNG 头里读出来：占位块文本带着
-    /// 宽高，写死成 0x0 会让回显里出现 `[image 1 0x0]` 这种假尺寸。
-    ///
-    /// 参数:
-    /// - `input`: 当前输入内容
-    /// - `cursor`: 当前光标字符位置
-    /// - `data_url`: 图片的 PNG data URL
-    ///
-    /// 返回:
-    /// - 成功插入时返回 true
-    pub(super) fn insert_image_data_url(
-        &mut self,
-        input: &mut String,
-        cursor: &mut usize,
-        data_url: String,
-    ) -> bool {
-        let Some((width, height)) = png_data_url_size(&data_url) else {
-            return false;
-        };
-        self.insert_payload(
-            input,
-            cursor,
-            ClipboardPayload::ImageDataUrl {
-                data_url,
-                width,
-                height,
-            },
-        )
-    }
-
     /// 插入指定剪贴板载荷，测试可直接覆盖文本和图片分支。
     ///
     /// 参数:
@@ -512,28 +479,6 @@ impl ReplClipboardItem {
             Self::Reference { kind, .. } => *kind,
         }
     }
-}
-
-/// 读出 PNG data URL 的像素尺寸。
-///
-/// 只读 PNG 头的 IHDR：转发过来的图片只需要宽高来拼占位块文本，
-/// 整图解一次码纯属浪费。
-///
-/// 参数:
-/// - `data_url`: 形如 `data:image/png;base64,…` 的 data URL
-///
-/// 返回:
-/// - 读取成功时的（宽, 高）
-fn png_data_url_size(data_url: &str) -> Option<(usize, usize)> {
-    let encoded = data_url.split_once("base64,")?.1;
-    // 宽高是 IHDR 的头两个字段，落在第 16 字节起；取前 24 字节足够
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(encoded)
-        .ok()?;
-    let ihdr = bytes.get(16..24)?;
-    let width = u32::from_be_bytes(ihdr[0..4].try_into().ok()?);
-    let height = u32::from_be_bytes(ihdr[4..8].try_into().ok()?);
-    Some((width as usize, height as usize))
 }
 
 /// 在指定字符位置插入文本。

@@ -16,7 +16,6 @@ fn frame() -> ComposerFrame {
         directory: "/workspace".into(),
         cache_hit_ratio: None,
         activity: None,
-        role_badge: None,
         status_plugin: None,
     };
     let mut frame = ComposerFrame::new(chrome, "draft".into(), 5, false, Vec::new(), 0);

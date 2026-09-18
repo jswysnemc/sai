@@ -61,7 +61,7 @@ fn session_is_running(state_dir: &Path, session_id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runner::{ActiveRunGuard, SessionHolderGuard, SessionOwner};
+    use crate::runner::{ActiveRunGuard, SessionOwner, SessionPresenceGuard};
 
     /// 验证只打开终端不算运行，轮次完成后立即撤销运行状态。
     /// 参数：无；返回：无。
@@ -69,7 +69,7 @@ mod tests {
     fn only_running_turns_show_activity() {
         let root = tempfile::tempdir().unwrap();
         let _holder =
-            SessionHolderGuard::acquire(root.path(), "session_activity", SessionOwner::Repl)
+            SessionPresenceGuard::register(root.path(), "session_activity", SessionOwner::Repl)
                 .unwrap();
         assert!(!session_is_running(root.path(), "session_activity"));
         let guard = ActiveRunGuard::acquire_with_state_dir(

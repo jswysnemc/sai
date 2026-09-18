@@ -75,7 +75,7 @@ pub(super) fn session_response(
     response_with_holder(session, selected, holder)
 }
 
-/// 读取会话存活持有者：终端 REPL、网页或网关打开会话期间会写心跳。
+/// 读取已打开会话的实例类型，仅用于列表展示。
 ///
 /// 参数:
 /// - `paths`: Sai 路径集合
@@ -83,7 +83,7 @@ pub(super) fn session_response(
 /// - `session_id`: 会话标识
 ///
 /// 返回:
-/// - `(是否已加载, 持有者类型)`
+/// - `(是否已加载, 实例类型)`
 pub(super) fn session_loaded_holder(
     paths: &crate::paths::SaiPaths,
     workspace_path: &FilePath,
@@ -98,7 +98,7 @@ pub(super) fn session_loaded_holder(
     (holder.is_some(), holder)
 }
 
-/// 【会话载入】【列表响应】使用已定位目录获取心跳，不逐行读取工作区索引。
+/// 【会话载入】【列表响应】使用已定位目录获取在线实例，不逐行读取工作区索引。
 /// @param session 含已知目录的索引记录；selected 为界面选中状态
 /// @returns 可直接展示的会话响应
 fn located_session_response(
@@ -109,16 +109,18 @@ fn located_session_response(
     response_with_holder(session.info, selected, holder)
 }
 
-/// 【会话载入】【存活持有者】只读取指定会话的心跳记录。
+/// 【会话载入】【在线实例】只读取指定会话的非独占记录。
 /// @param state_dir 索引确认的会话数据目录
-/// @returns 存活持有者类型；无心跳或已失效时为空
+/// @returns 在线实例类型；无实例或进程已退出时为空
 fn loaded_holder(state_dir: &FilePath) -> Option<String> {
-    let record = crate::runner::session_holder(state_dir)?;
-    crate::runner::holder_is_alive(&record).then_some(record.owner)
+    crate::runner::session_instances(state_dir)
+        .into_iter()
+        .next()
+        .map(|record| record.owner)
 }
 
-/// 【会话载入】【响应组装】复用同一份索引与心跳数据构造列表或管理操作结果。
-/// @param session 会话元数据；selected 为选中状态；holder 为存活持有者
+/// 【会话载入】【响应组装】复用同一份索引与在线记录构造列表或管理操作结果。
+/// @param session 会话元数据；selected 为选中状态；holder 为兼容字段，仅表示第一个在线实例的类型
 /// @returns 会话响应
 fn response_with_holder(
     session: crate::state::SessionInfo,

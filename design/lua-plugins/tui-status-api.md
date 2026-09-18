@@ -25,7 +25,7 @@ sai.on("tui_status", render)
 | `context_window_tokens` | 整数 | 上下文窗口大小 |
 | `cache_hit_ratio` | 数字或 null | 当前轮累计缓存命中率；Lua 中须先检查 `type(...) == "number"` |
 
-返回 `nil` 或 `{left=string, right=string}`，不接受额外字段。每侧最多 2048 字节，禁止控制字符、换行和 Unicode 行分隔符。一个包的多个监听器至多返回一个非空布局，否则整包失败。宿主统一着色、按字符显示宽度裁剪；角色标记、工作状态和停止快捷键由宿主保留。
+返回 `nil` 或 `{left=string, right=string}`，不接受额外字段。每侧最多 2048 字节，禁止控制字符、换行和 Unicode 行分隔符。一个包的多个监听器至多返回一个非空布局，否则整包失败。宿主统一着色、按字符显示宽度裁剪；工作状态和停止快捷键由宿主保留。
 
 输入总量最多 16 KiB。不会交付用户输入、对话正文、凭据或会话存储。`ctx.session_id`、`ctx.workdir` 为空，`ctx.allow_writes` 为 false。
 

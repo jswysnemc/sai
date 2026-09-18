@@ -1,6 +1,6 @@
 use super::{optional_string_arg, sessions_in_scope, unix_seconds, MeshContext};
 use crate::i18n::text as t;
-use crate::runner::{holder_is_alive, session_holder};
+use crate::runner::{active_run, session_instances};
 use crate::state::LocatedSession;
 use crate::tools::subagent_state::{list_subagents_for_owner, SubagentSnapshot};
 use crate::tools::{ToolRegistry, ToolSpec};
@@ -20,8 +20,8 @@ pub(super) fn register(registry: &mut ToolRegistry, context: MeshContext) {
     registry.register(ToolSpec::new(
         "agent_probe",
         t(
-            "Inspect subagents without disturbing them. scope=self (default) lists the current session's subagents, owner lists subagents of every session held by this process, all lists subagents of every session on disk including those owned by other processes. Pass agent_id to look up one subagent. Each entry reports type, status, step, last tool, elapsed seconds, token usage, and queued messages. Read-only: use the subagent tool to start, message, or cancel one.",
-            "查看子智能体而不打扰它们。scope=self(默认)列出当前会话的子智能体,owner 列出本进程持有的所有会话的子智能体,all 列出磁盘上所有会话的子智能体(含其它进程持有的)。传 agent_id 可精确查一个。每条记录包含类型、状态、步数、最近工具、已耗时、token 用量与待处理消息数。只读工具:启动、发消息、取消请用 subagent 工具。",
+            "Inspect subagents without disturbing them. scope=self (default) lists the current session's subagents, owner lists subagents of every session opened by this process, all lists subagents of every session on disk including those owned by other processes. Pass agent_id to look up one subagent. Each entry reports type, status, step, last tool, elapsed seconds, token usage, and queued messages. Read-only: use the subagent tool to start, message, or cancel one.",
+            "查看子智能体而不打扰它们。scope=self(默认)列出当前会话的子智能体,owner 列出本进程打开的所有会话的子智能体,all 列出磁盘上所有会话的子智能体(含其它进程打开的)。传 agent_id 可精确查一个。每条记录包含类型、状态、步数、最近工具、已耗时、token 用量与待处理消息数。只读工具:启动、发消息、取消请用 subagent 工具。",
         ),
         json!({
             "type": "object",
@@ -29,7 +29,7 @@ pub(super) fn register(registry: &mut ToolRegistry, context: MeshContext) {
                 "scope": {
                     "type": "string",
                     "enum": ["self", "owner", "all"],
-                    "description": t("self = current session, owner = every session held by this process, all = every session on disk. Defaults to self.", "self=当前会话,owner=本进程持有的所有会话,all=磁盘上的所有会话。默认 self。")
+                    "description": t("self = current session, owner = every session opened by this process, all = every session on disk. Defaults to self.", "self=当前会话,owner=本进程打开的所有会话,all=磁盘上的所有会话。默认 self。")
                 },
                 "agent_id": {
                     "type": "string",
@@ -55,12 +55,12 @@ pub(super) fn register(registry: &mut ToolRegistry, context: MeshContext) {
 /// - JSON 形式的子智能体清单
 pub(super) async fn probe(context: MeshContext, args: Value) -> Result<String> {
     let scope = super::scope_arg(&args, &["self", "owner", "all"], "self")?;
-    // owner 与 all 都要跨会话扫描，区别只在于是否过滤到本进程持有的会话
+    // owner 与 all 都要跨会话扫描，区别只在于是否过滤到本进程打开的会话
     let sessions = sessions_in_scope(&context, if scope == "self" { "self" } else { "all" })?;
     let sessions = match scope.as_str() {
         "owner" => sessions
             .into_iter()
-            .filter(|session| held_by_this_process(session, &context))
+            .filter(|session| opened_by_this_process(session, &context))
             .collect::<Vec<_>>(),
         _ => sessions,
     };
@@ -97,25 +97,26 @@ pub(super) async fn probe(context: MeshContext, args: Value) -> Result<String> {
     }))?)
 }
 
-/// 判断会话是否由当前进程持有。
+/// 判断会话是否由当前进程打开。
 ///
-/// 当前会话即使还没有登记持有者也算本进程的；其它会话按持有者登记的 pid 判断。
+/// 当前会话即使还没有登记在线实例也算本进程的；其它会话按在线实例登记的 pid 判断。
 ///
 /// 参数:
 /// - `session`: 已定位的会话
 /// - `context`: 网格探测上下文
 ///
 /// 返回:
-/// - 是否由当前进程持有
-fn held_by_this_process(session: &LocatedSession, context: &MeshContext) -> bool {
+/// - 是否由当前进程打开
+fn opened_by_this_process(session: &LocatedSession, context: &MeshContext) -> bool {
     Path::new(&context.owner_key) == session.state_dir.as_path()
-        || session_holder(Path::new(&session.state_dir))
-            .is_some_and(|record| record.pid == std::process::id())
+        || session_instances(&session.state_dir)
+            .iter()
+            .any(|record| record.pid == std::process::id())
 }
 
 /// 列出单个会话的子智能体。
 ///
-/// 本进程持有的会话读内存状态（最新），其它会话只读其持久化文件，
+/// 本进程打开的会话读内存状态（最新），其它会话只读其持久化文件，
 /// 避免探测行为改写别的会话的子智能体状态。
 ///
 /// 参数:
@@ -126,7 +127,7 @@ fn held_by_this_process(session: &LocatedSession, context: &MeshContext) -> bool
 /// - 该会话的子智能体探测结果
 fn describe_session_agents(session: &LocatedSession, context: &MeshContext) -> Vec<Value> {
     let state_dir = Path::new(&session.state_dir);
-    let in_process = held_by_this_process(session, context);
+    let in_process = opened_by_this_process(session, context);
     let owner_key = session.state_dir.display().to_string();
     let snapshots: Vec<SubagentSnapshot> = if in_process {
         list_subagents_for_owner(&owner_key)
@@ -137,15 +138,13 @@ fn describe_session_agents(session: &LocatedSession, context: &MeshContext) -> V
             .map(|record| record.snapshot)
             .collect()
     };
-    // 当前进程自己持有的会话可能还没登记持有者（登记晚于工具注册），
-    // 没有登记时按是否本进程持有判断存活，否则自己的会话会被报成失联
-    let holder_alive = match session_holder(state_dir) {
-        Some(record) => holder_is_alive(&record),
-        None => in_process,
-    };
+    // 当前进程自己打开的会话可能还没登记在线实例（登记晚于工具注册），
+    // 没有登记时按是否本进程打开判断存活，否则自己的会话会被报成失联
+    let session_online =
+        in_process || !session_instances(state_dir).is_empty() || active_run(state_dir).is_some();
     snapshots
         .iter()
-        .map(|snapshot| describe_agent(session, snapshot, holder_alive))
+        .map(|snapshot| describe_agent(session, snapshot, session_online))
         .collect()
 }
 
@@ -154,14 +153,14 @@ fn describe_session_agents(session: &LocatedSession, context: &MeshContext) -> V
 /// 参数:
 /// - `session`: 子智能体所属会话
 /// - `snapshot`: 子智能体快照
-/// - `holder_alive`: 所属会话的持有者进程是否存活
+/// - `session_online`: 所属会话的在线实例进程是否存活
 ///
 /// 返回:
 /// - 单个子智能体的探测结果
 fn describe_agent(
     session: &LocatedSession,
     snapshot: &SubagentSnapshot,
-    holder_alive: bool,
+    session_online: bool,
 ) -> Value {
     let now = unix_seconds();
     let total_tokens = snapshot
@@ -189,7 +188,7 @@ fn describe_agent(
         "turns_completed": snapshot.turns_completed,
         "persistent": snapshot.persistent,
         "goal_id": snapshot.goal_id,
-        "holder_alive": holder_alive,
+        "session_online": session_online,
         "error": snapshot.error,
     })
 }

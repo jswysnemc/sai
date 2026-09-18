@@ -107,21 +107,23 @@ pub fn session_resume_choices(paths: &SaiPaths) -> Result<Vec<(String, String)>>
         .collect())
 }
 
-/// 读取会话存活持有者类型。
+/// 读取会话在线实例类型。
 ///
-/// 终端、网页或网关打开该会话期间会写心跳；过期或无登记视为未加载。
+/// 每个界面独立登记在线状态，不限制其他实例打开或执行。
 ///
 /// 参数:
 /// - `state_dir`: 同一次会话索引读取所定位的数据目录
 ///
 /// 返回:
-/// - 存活持有者类型；未加载时为空
+/// - 在线实例类型；未加载时为空
 fn session_loaded_owner(state_dir: &std::path::Path) -> Option<String> {
-    let record = crate::runner::session_holder(state_dir)?;
-    crate::runner::holder_is_alive(&record).then_some(record.owner)
+    crate::runner::session_instances(state_dir)
+        .into_iter()
+        .next()
+        .map(|record| record.owner)
 }
 
-/// 把持有者类型收成列表里的短标签。
+/// 把界面类型收成列表里的短标签。
 ///
 /// 参数:
 /// - `owner`: `repl` / `web` / `gateway` 等
@@ -241,7 +243,7 @@ mod tests {
         let held = crate::state::create_session(&paths, Some("held")).unwrap();
         let idle = crate::state::create_session(&paths, Some("idle")).unwrap();
         let (_, state_dir) = crate::state::locate_session_dirs(&paths, &held.id).unwrap();
-        let _guard = crate::runner::SessionHolderGuard::acquire(
+        let _guard = crate::runner::SessionPresenceGuard::register(
             &state_dir,
             &held.id,
             crate::runner::SessionOwner::Web,

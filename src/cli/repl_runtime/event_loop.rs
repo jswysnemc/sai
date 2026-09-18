@@ -377,7 +377,6 @@ fn dispatch_stream_command(
                 runtime,
                 &ctx.owner_key,
                 &submission,
-                crate::ipc::LinkRole::Holder,
             ) {
                 if result.is_ok() {
                     let mode = runtime.stream_draft().mode;

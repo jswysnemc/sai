@@ -20,8 +20,6 @@ pub(super) struct ReplChrome {
     pub(super) cache_hit_ratio: Option<f32>,
     /// 底栏左侧附加活动提示，如 `Ctrl+C 停止`
     pub(super) activity: Option<String>,
-    /// 底栏左侧常驻的主从角色标记，如 `跟随中`；持有者与单进程时为空
-    pub(super) role_badge: Option<String>,
     pub(super) status_plugin: Option<crate::plugins::TuiStatusRenderer>,
 }
 
@@ -71,7 +69,6 @@ impl ReplChrome {
             directory,
             cache_hit_ratio: None,
             activity: None,
-            role_badge: None,
             status_plugin: Some(crate::plugins::TuiStatusRenderer::start(
                 config.clone(),
                 paths.clone(),
@@ -96,20 +93,6 @@ impl ReplChrome {
     /// - 无
     pub(super) fn set_activity(&mut self, activity: Option<String>) {
         self.activity = activity;
-    }
-
-    /// 写入底栏常驻主从标记。
-    ///
-    /// 与 `activity` 分开：活动提示只在轮次进行中有值，角色标记只要本终端
-    /// 不是会话持有者就一直挂着，让用户随时知道轮次由谁驱动。
-    ///
-    /// 参数:
-    /// - `badge`: 角色标记文本；空则清除
-    ///
-    /// 返回:
-    /// - 无
-    pub(super) fn set_role_badge(&mut self, badge: Option<String>) {
-        self.role_badge = badge;
     }
 
     /// 左侧上下文占用文案。

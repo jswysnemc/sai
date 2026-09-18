@@ -1,11 +1,8 @@
 use super::{session_key, RunManager};
-use crate::ipc::link::{HolderRequest, SessionLink};
-use crate::runner::{ActorHandle, SessionActor, SessionOwner};
+use crate::runner::{ActorHandle, SessionActor, SessionOwner, SessionPresenceGuard};
 use anyhow::Result;
 use std::collections::HashMap;
-use std::future::Future;
 use std::path::PathBuf;
-use std::pin::Pin;
 
 /// 保存会话级事件总线。
 ///
@@ -14,8 +11,8 @@ use std::pin::Pin;
 #[derive(Default)]
 pub(super) struct SessionBuses {
     pub(super) entries: HashMap<String, ActorHandle>,
-    /// 会话的跨进程链接；与事件总线同生命周期，便于诊断当前角色。
-    pub(super) links: HashMap<String, SessionLink>,
+    /// 【Web】【会话在线】仅供网格探测，不转交运行或选举持有者
+    presence: HashMap<String, SessionPresenceGuard>,
     /// 【Web】【事件日志】持有订阅守卫，删除会话时一并取消后台任务
     pub(super) console_logs: HashMap<String, crate::web::server_logging::ConsoleSubscription>,
 }
@@ -39,13 +36,19 @@ impl RunManager {
             return bus.clone();
         }
         let journal_path = self.session_event_path(&key);
-        let (link, bus) = spawn_session_bus(self, workspace_id, session_id, journal_path).await;
+        let bus = SessionActor::spawn(journal_path, workspace_id, session_id);
+        if let Ok((_, state_dir)) = crate::state::locate_session_dirs(&self.paths, session_id) {
+            if let Ok(presence) =
+                SessionPresenceGuard::register(&state_dir, session_id, SessionOwner::Web)
+            {
+                buses.presence.insert(key.clone(), presence);
+            }
+        }
         if self.console_logging {
             if let Some(subscription) = crate::web::server_logging::subscribe_runs(&bus) {
                 buses.console_logs.insert(key.clone(), subscription);
             }
         }
-        buses.links.insert(key.clone(), link);
         buses.entries.insert(key, bus.clone());
         bus
     }
@@ -87,7 +90,7 @@ impl RunManager {
         let mut buses = self.buses.write().await;
         buses.console_logs.remove(&key);
         buses.entries.remove(&key);
-        buses.links.remove(&key);
+        buses.presence.remove(&key);
         drop(buses);
         let path = self.session_event_path(&key);
         match std::fs::remove_file(path) {
@@ -112,54 +115,4 @@ impl RunManager {
         };
         crate::web::runs::session_event_path(&self.paths.state_dir, workspace_id, session_id)
     }
-}
-
-/// 建立会话事件总线：先尝试跨进程链接，拿不到端点时退回本地总线。
-///
-/// 跨进程链接会决定本进程是该会话的持有者还是观察者：
-/// 持有者写会话事件文件并代跑观察者上行的一轮，观察者把自己的事件与提交
-/// 上行给持有者。任何一步失败都退回 [`SessionActor::spawn`]，语义与 P3 完全一致。
-///
-/// 返回的 future 显式装箱成 `Send`：持有者侧要在专属任务里执行观察者上行的
-/// 一轮（见 [`RunManager::serve_holder_requests`]），那条链路会一路 await 到这里；
-/// 靠 `async fn` 的自动推导时 rustc 无法穿过这么多层不透明 future 证明 `Send`。
-///
-/// 参数:
-/// - `manager`: 运行管理器，登记为持有者侧的执行器
-/// - `workspace_id`: 工作区标识
-/// - `session_id`: 会话标识
-/// - `journal_path`: 会话事件日志文件
-///
-/// 返回:
-/// - （会话链接，事件总线句柄）
-fn spawn_session_bus<'a>(
-    manager: &'a RunManager,
-    workspace_id: &'a str,
-    session_id: &'a str,
-    journal_path: PathBuf,
-) -> Pin<Box<dyn Future<Output = (SessionLink, ActorHandle)> + Send + 'a>> {
-    Box::pin(async move {
-        // 会话状态目录决定了 IPC 端点；定位不到就只能是单进程模式
-        let Ok((_, state_dir)) = crate::state::locate_session_dirs(&manager.paths, session_id)
-        else {
-            return (
-                SessionLink::detached(&journal_path, workspace_id, session_id),
-                SessionActor::spawn(journal_path, workspace_id, session_id),
-            );
-        };
-        let (link, bus) = SessionLink::attach(
-            SessionOwner::Web,
-            &state_dir,
-            session_id,
-            journal_path.clone(),
-            workspace_id,
-        )
-        .await;
-        // 登记执行器与角色无关：接管后本进程可能从观察者变持有者，
-        // 执行器必须提前就位，否则接管后观察者上行的一轮只会被拒绝
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<HolderRequest>();
-        link.set_holder_sink(tx);
-        tokio::spawn(manager.clone().serve_holder_requests(rx));
-        (link, bus)
-    })
 }

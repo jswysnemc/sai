@@ -189,60 +189,6 @@ async fn marks_watcher_lagged_instead_of_blocking() {
     assert!(subscription.events.recv().await.is_none());
 }
 
-/// 远程观察者：事件被编码成带序号的帧，且不阻塞扇出。
-#[tokio::test]
-async fn fans_out_to_remote_watchers_as_numbered_frames() {
-    let (handle, _temp) = bus();
-    let (mut frames, dropped) = handle.attach_remote(16).unwrap();
-
-    handle.begin_run("run-1", "你好", &[]).unwrap();
-    handle
-        .emit(WebEvent::new(
-            "run-1",
-            "workspace",
-            "session",
-            "message.content.delta",
-            json!({ "text": "hi" }),
-        ))
-        .unwrap();
-    settle(&handle, 1).await;
-
-    let frame = frames.recv().await.expect("远程观察者应当收到帧");
-    assert_eq!(frame.kind, KIND_EVT_MIRROR);
-    assert_eq!(frame.sequence, Some(1));
-    assert_eq!(frame.payload["type"], "message.content.delta");
-    assert_eq!(frame.payload["payload"]["text"], "hi");
-    assert_eq!(dropped.load(Ordering::Relaxed), 0);
-}
-
-/// 远程观察者跟不上时同样被摘除并留下 lagged 标记，扇出不被拖慢。
-#[tokio::test]
-async fn marks_slow_remote_watcher_lagged_instead_of_blocking() {
-    let (handle, _temp) = bus();
-    let capacity = 4;
-    // 1. 全程不读接收端，模拟卡住的 socket
-    let (frames, dropped) = handle.attach_remote(capacity).unwrap();
-    let total = capacity * 4;
-    for sequence in 0..total {
-        handle
-            .emit(WebEvent::new(
-                "run",
-                "workspace",
-                "session",
-                "message.content.delta",
-                json!({ "text": sequence.to_string() }),
-            ))
-            .unwrap();
-    }
-    settle(&handle, total).await;
-
-    // 2. 摘除后留下丢弃计数，且接收端关闭让连接任务结束
-    assert!(dropped.load(Ordering::Relaxed) > 0);
-    drop(frames);
-    // 3. 落盘不受影响：远程观察者重连后按序号补发即可补齐空洞
-    assert_eq!(handle.journal().events_after(0).len(), total);
-}
-
 /// 新连接按序号补发历史：只发 `after` 之后的事件，序号严格递增。
 #[tokio::test]
 async fn replays_backlog_from_requested_sequence() {
@@ -268,27 +214,4 @@ async fn replays_backlog_from_requested_sequence() {
         .collect::<Vec<_>>();
     assert_eq!(sequences, vec![5, 6]);
     assert!(handle.replay(6).is_empty());
-}
-
-/// 上行事件（观察者 → 持有者）不再经过组装器，直接落盘并扇出。
-#[tokio::test]
-async fn mirrors_remote_events_without_reassembling() {
-    let (handle, _temp) = bus();
-    let mut subscription = handle.attach().unwrap();
-
-    handle
-        .mirror(WebEvent::new(
-            "run-remote",
-            "workspace",
-            "session",
-            "message.content.delta",
-            json!({ "text": "来自另一个前端" }),
-        ))
-        .unwrap();
-    settle(&handle, 1).await;
-
-    let events = drain(&mut subscription);
-    assert_eq!(events.len(), 1, "上行事件不应被组装器拆成多条");
-    assert_eq!(events[0].run_id, "run-remote");
-    assert_eq!(events[0].payload["text"], "来自另一个前端");
 }

@@ -25,12 +25,6 @@ impl ReplChrome {
         cols: usize,
         activity: Option<&str>,
     ) -> String {
-        let badge = self
-            .role_badge
-            .as_deref()
-            .filter(|badge| !badge.is_empty())
-            .map(|badge| format!("{badge}  "))
-            .unwrap_or_default();
         if let Some(layout) = self.plugin_layout(cols) {
             let activity = activity
                 .filter(|text| !text.is_empty())
@@ -38,21 +32,21 @@ impl ReplChrome {
                 .unwrap_or_default();
             return self.compose_footer_line(
                 cols,
-                &format!("{badge}{activity}{}", layout.left),
+                &format!("{activity}{}", layout.left),
                 &layout.right,
                 true,
             );
         }
         let left_plain = match activity.filter(|text| !text.is_empty()) {
             Some(activity) => format!(
-                "{badge}{activity}  {}  {}  {}  {}",
+                "{activity}  {}  {}  {}  {}",
                 self.mode_plain(),
                 self.context_status(),
                 self.model,
                 self.thinking
             ),
             None => format!(
-                "{badge}{}  {}  {}  {}",
+                "{}  {}  {}  {}",
                 self.mode_plain(),
                 self.context_status(),
                 self.model,
