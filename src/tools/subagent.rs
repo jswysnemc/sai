@@ -51,7 +51,6 @@ const EXPLORE_ALLOWED: &[&str] = &[
 
 const GENERAL_EXCLUDED: &[&str] = &[
     "subagent",
-    "background_command",
     "deep_diagnose",
     "linux_input_method_diagnose",
     "linux_game_compatibility",

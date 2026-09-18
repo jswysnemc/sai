@@ -142,10 +142,11 @@ impl SubagentProgress {
             return;
         }
         if self.mode == ProgressMode::Summary {
+            let status = if ok { "done" } else { "failed" };
             self.progress.report(if is_zh() {
-                format!("工具 #{step}：{} ok", readable_tool_name(name))
+                format!("工具 #{step}：{} {status}", readable_tool_name(name))
             } else {
-                format!("tool #{step}: {name} ok")
+                format!("tool #{step}: {name} {status}")
             });
         }
         if self.mode == ProgressMode::Full {

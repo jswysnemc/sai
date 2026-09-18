@@ -140,7 +140,7 @@ impl StreamSummary {
     /// 生成定稿推理摘要文本（过去式标题）。
     ///
     /// 返回:
-    /// - 如 `◦ Thought (12s) · 12 tokens`
+    /// - 如 `› Thought (12s) · 12 tokens`
     fn finalized_reasoning_text(&self) -> String {
         self.reasoning_title(true)
     }
@@ -526,7 +526,7 @@ mod tests {
 
         let output = summary.reasoning_text();
 
-        // CLI Summary 固化与 live/TUI 共用 ◦，不再用工具行的 •
+        // CLI Summary 固化与 live/TUI 共用 ›，不再用工具行的 •
         assert!(
             output.starts_with(format!("{} ", reasoning_cell::THINKING_MARKER).as_str()),
             "output={output:?}"
@@ -565,7 +565,7 @@ mod tests {
         assert!(!zero.contains('('));
     }
 
-    /// CLI Summary 固化后应使用 ◦，并清空 live 状态（与 TUI 思考标记对齐）。
+    /// CLI Summary 固化后应使用 ›，并清空 live 状态（与 TUI 思考标记对齐）。
     #[test]
     fn reasoning_summary_finalize_keeps_thinking_marker() {
         let mut summary = StreamSummary::new(false);

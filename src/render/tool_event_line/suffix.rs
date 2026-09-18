@@ -1,5 +1,8 @@
 use serde_json::Value;
 use std::path::Path;
+#[path = "command_summary.rs"]
+mod command_summary;
+use command_summary::command_summary;
 
 /// 解析工具参数 JSON。
 ///
@@ -81,22 +84,6 @@ pub(super) fn tool_suffix_from_partial_text(name: &str, arguments: &str) -> Opti
         "load" => load_suffix_from_partial(arguments),
         _ => None,
     }
-}
-
-/// 提取命令首个非空行作为单行展示摘要。
-///
-/// 参数:
-/// - `value`: 原始命令文本
-///
-/// 返回:
-/// - 压缩后的首行摘要
-pub(super) fn command_summary(value: String) -> String {
-    let first_line = value
-        .lines()
-        .map(str::trim)
-        .find(|line| !line.is_empty())
-        .unwrap_or("");
-    compact_text(first_line.to_string())
 }
 
 /// 从 edit_file patch 参数提取首个目标文件 basename。

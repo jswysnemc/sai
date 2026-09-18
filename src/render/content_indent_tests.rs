@@ -30,7 +30,9 @@ fn aligns_symbols_and_content_on_opposite_sides() {
         "\x1b[36m●\x1b[0m input"
     );
     assert_eq!(align_to_guide_column("• tool"), "● tool");
-    assert_eq!(align_to_guide_column("◦ Thinking"), "○ Thinking");
+    assert_eq!(align_to_guide_column("◦ Thinking"), "› Thinking");
+    assert_eq!(align_to_guide_column("○ Thought"), "› Thought");
+    assert_eq!(align_to_guide_column("› Thought"), "› Thought");
     // 通栏 turn 线保持顶格；短 MD 线（正文列内再左右内收）收入引导区右侧
     let full = crate::render::markdown_blocks::horizontal_rule_width();
     let turn = "─".repeat(full);
@@ -56,7 +58,7 @@ fn aligns_symbols_and_content_on_opposite_sides() {
     );
     assert_eq!(
         align_to_guide_column("\x1b[2m› 已切换模型\x1b[0m"),
-        "\x1b[2m○ 已切换模型\x1b[0m"
+        "\x1b[2m› 已切换模型\x1b[0m"
     );
     assert_eq!(align_to_guide_column(" diff"), "   diff");
     assert_eq!(

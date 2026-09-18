@@ -58,7 +58,7 @@ impl StreamRenderer {
                     // 中间一旦出错（管道被 head 关掉、Ctrl+C、终端异常）`?` 直接返回，
                     // 前景色就留在暗青上，用户之后的 shell 提示符与输出全被染色
                     execute!(stdout, SetForegroundColor(Color::DarkCyan))?;
-                    // 与 TUI / Summary live 共用 ◦，避免思考行退化成工具 •
+                    // 与 TUI / Summary live 共用 ›，避免思考行退化成工具 •
                     let written = writeln!(
                         stdout,
                         "{} {}",

@@ -193,7 +193,7 @@ mod tests {
             let plain = strip_ansi_for_test(line.as_str());
             let ok = plain.is_empty()
                 || plain.starts_with("  ")
-                || plain.starts_with('○')
+                || plain.starts_with('›')
                 || plain.starts_with('●');
             assert!(ok, "历史行未对齐引导区: {plain:?}");
             assert!(visible_width(line.as_str()) <= 8, "历史行超出终端宽度");
@@ -223,10 +223,10 @@ mod tests {
             .expect("plain content should be rendered");
 
         assert!(marker.as_str().starts_with("\x1b[38;5;208m●"));
-        // 系统提示用 ○ 挂在引导列，与正文缩进区分
+        // 系统提示用箭头挂在引导列，与正文缩进区分
         assert!(
-            strip_ansi_for_test(plain.as_str()).starts_with('○'),
-            "meta should keep ○ on the guide column: {:?}",
+            strip_ansi_for_test(plain.as_str()).starts_with('›'),
+            "meta should keep › on the guide column: {:?}",
             plain.as_str()
         );
     }

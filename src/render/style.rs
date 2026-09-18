@@ -36,13 +36,13 @@ pub(crate) const CODE_COMMENT_STYLE: &str = "\x1b[2m\x1b[38;2;110;106;134m";
 pub(crate) const TABLE_BORDER_STYLE: &str = "\x1b[2m";
 pub(crate) const ASSET_ERROR_STYLE: &str = "\x1b[31m";
 pub(crate) const TOOL_BULLET: &str = "•";
-/// 视觉引导列统一使用相同直径的实心与空心圆。
+/// 工具状态使用实心圆，思考与提示使用统一的单列箭头。
 pub(crate) const GUIDE_FILLED: char = '●';
-pub(crate) const GUIDE_HOLLOW: char = '○';
+pub(crate) const GUIDE_PROMPT: char = '›';
 
 // ── Markdown 正文统一视觉体系 ────────────────────────────────────
 //
-// 设计原则（与转录区引导符号 `•`/`◦`/`›`、命令输出 dim gutter 同一语言）：
+// 设计原则（与转录区引导符号 `•`/`›`、命令输出 dim gutter 同一语言）：
 // 1. 结构符号一律弱化（dim）：列表符号、引用竖线、分隔线、语言标签、
 //    表格边框、URL——让内容凸显、骨架后退；
 // 2. 层级靠字重：标题不占用色相，H1 加下划线、H2 加粗、H3+ 加粗弱化；

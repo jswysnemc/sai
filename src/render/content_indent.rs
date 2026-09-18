@@ -30,7 +30,7 @@ fn is_guide_marker(ch: char) -> bool {
     )
 }
 
-/// 【终端】【视觉引导】统一历史与实时标题的圆形字形，保留原有状态颜色。
+/// 【终端】【视觉引导】统一历史与实时标题的引导字形，保留原有状态颜色。
 ///
 /// 参数: `text` 为待对齐的 ANSI 行
 /// 返回: 首个引导符号经过归一化的行
@@ -40,7 +40,7 @@ pub(crate) fn normalize_guide_marker(text: &str) -> String {
     };
     let glyph = match marker.ch {
         '•' | '✗' => crate::render::style::GUIDE_FILLED,
-        '◦' | '›' => crate::render::style::GUIDE_HOLLOW,
+        '○' | '◦' | '›' => crate::render::style::GUIDE_PROMPT,
         _ => return text.to_string(),
     };
     format!("{}{glyph}{}", &text[..marker.start], &text[marker.end..])

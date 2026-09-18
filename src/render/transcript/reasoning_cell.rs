@@ -10,8 +10,8 @@ use std::time::Duration;
 
 const THINKING_LABEL: &str = "Thinking";
 const THOUGHT_LABEL: &str = "Thought";
-/// 思考专用引导符：与工具行的 `•`、正文无符缩进区分开（CLI Summary / Full / 非流式共用）
-pub(crate) const THINKING_MARKER: &str = "◦";
+/// 思考与系统提示共用单列箭头（CLI Summary / Full / 非流式共用）。
+pub(crate) const THINKING_MARKER: char = crate::render::style::GUIDE_PROMPT;
 
 /// reasoning 内容的原始 source 数据。
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -103,7 +103,7 @@ pub(crate) fn render_live(
     )
     .trim_start()
     .to_string();
-    // 【终端】【思考状态】1. 活动思考使用呼吸竖条，定稿后恢复空心圆
+    // 【终端】【思考状态】1. 活动思考使用呼吸圆点，定稿后使用统一箭头
     let title = render_activity_line(THINKING_LABEL, &detail, frame);
     match mode {
         ReasoningDisplayMode::Hidden => String::new(),
@@ -190,7 +190,7 @@ fn render_thinking_body_with_cols(
     terminal_cols: usize,
 ) -> String {
     let tokens = token_counter::count(source);
-    // 定稿标题用弱化 ◦，避免与工具行的加粗 • 抢同一层级
+    // 【终端】【思考状态】定稿标题使用弱化箭头，保留标题层级
     let title = format!(
         "\x1b[2m\x1b[36m{THINKING_MARKER}\x1b[0m \x1b[2m{}\x1b[0m\x1b[2m{}\x1b[0m",
         thought_label(duration),

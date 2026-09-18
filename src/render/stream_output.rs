@@ -64,7 +64,7 @@ pub fn print_markdown(markdown: &str) {
 fn print_reasoning(reasoning: &str) -> Result<()> {
     let mut stdout = io::stdout();
     execute!(stdout, SetForegroundColor(Color::DarkCyan))?;
-    // 非流式打印也用 ◦，与 TUI / CLI 流式思考标题一致
+    // 非流式打印也用 ›，与 TUI / CLI 流式思考标题一致
     writeln!(
         stdout,
         "{} {}",

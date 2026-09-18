@@ -1,3 +1,9 @@
+#[path = "tests/command_output.rs"]
+mod command_output;
+#[path = "tests/reasoning.rs"]
+mod reasoning;
+#[path = "tests/subagent_panels.rs"]
+mod subagent_panels;
 use super::line::AnsiLine;
 use super::test_support::{chunk, options};
 use super::{TranscriptMode, TranscriptRenderOptions, TranscriptStore};
@@ -107,48 +113,6 @@ fn live_tool_argument_preview_is_visible_until_the_call_is_finalized() {
 }
 
 #[test]
-fn reasoning_cell_lines_fit_display_width() {
-    // 渲染宽度上下文注入后，thinking 正文折行必须与 display 宽度一致，
-    // 不得产生被 wrap_block 二次折断的无缩进续行
-    let source =
-        "The user is asking \"你好,你能做什么\" - which means \"Hello, what can you do?\" \
-                  in Chinese. This is a general question about my capabilities. Let me give a \
-                  concise but helpful overview of what I can do.";
-    let mut cell =
-        crate::render::transcript::reasoning_cell::ReasoningCell::new(source.to_string());
-    cell.expanded = true;
-    let cell = super::cell::HistoryCell::Reasoning(cell);
-    for width in [40usize, 60, 81, 100] {
-        let lines = cell.display_lines(
-            width,
-            &TranscriptRenderOptions {
-                reasoning_mode: ReasoningDisplayMode::Full,
-                tool_call_mode: ToolCallDisplayMode::Summary,
-            },
-        );
-        for (index, line) in lines.iter().enumerate() {
-            let plain = strip_ansi(line.as_str());
-            let display_width: usize = plain
-                .chars()
-                .map(|ch| unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0))
-                .sum();
-            assert!(
-                display_width <= width,
-                "width={width} line {index} overflows: {plain:?}"
-            );
-            // 区块前空行与 ◦ 标题行跳过；正文必须带 gutter（`  └ ` 或四空格）
-            if plain.is_empty() || plain.starts_with('◦') {
-                continue;
-            }
-            assert!(
-                plain.starts_with("  └ ") || plain.starts_with("    "),
-                "width={width} line {index} lost gutter: {plain:?}"
-            );
-        }
-    }
-}
-
-#[test]
 fn streaming_content_grows_without_live_cap() {
     // 普通正文流式渲染稳定：必须完整进入窗口并随内容增长，
     // 不能被 live 上限困在固定高度内反复重绘
@@ -198,64 +162,6 @@ fn open_table_preview_stays_capped() {
     );
 }
 
-#[test]
-fn expanded_render_context_unfolds_reasoning() {
-    // 备用屏回看：展开渲染上下文下折叠的思考正文全量输出，且不污染主屏缓存
-    let mut store = TranscriptStore::new(200);
-    let source = (1..=12)
-        .map(|n| format!("thinking line {n}"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    store.push_chunk(&chunk(ChatStreamKind::Reasoning, &source));
-    store.finalize_live_tail();
-
-    let folded = store
-        .display_tail(80, &options())
-        .iter()
-        .map(|line| line.as_str())
-        .collect::<String>();
-    assert!(!folded.contains("thinking line 6"), "默认应折叠中段");
-
-    let expanded = crate::render::render_expand::with_expanded_render(|| {
-        store
-            .display_tail(80, &options())
-            .iter()
-            .map(|line| line.as_str())
-            .collect::<String>()
-    });
-    assert!(expanded.contains("thinking line 6"));
-    assert!(!expanded.contains("Ctrl+O"));
-
-    // 退出展开上下文后主屏仍是折叠渲染（缓存未被展开结果污染）
-    let folded_again = store
-        .display_tail(80, &options())
-        .iter()
-        .map(|line| line.as_str())
-        .collect::<String>();
-    assert!(!folded_again.contains("thinking line 6"));
-}
-
-/// 【终端】【Ctrl+O】定稿思考可用内联展开，并失效渲染缓存。
-#[test]
-fn toggle_inline_expand_unfolds_finalized_reasoning() {
-    let mut store = TranscriptStore::new(200);
-    let source = (1..=12)
-        .map(|n| format!("thinking line {n}"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    store.push_chunk(&chunk(ChatStreamKind::Reasoning, &source));
-    store.finalize_live_tail();
-    let _ = store.display_tail(80, &options());
-
-    assert!(store.toggle_inline_expand());
-    let expanded = store
-        .display_tail(80, &options())
-        .iter()
-        .map(|line| line.as_str())
-        .collect::<String>();
-    assert!(expanded.contains("thinking line 6"));
-}
-
 /// 【终端】【Ctrl+O】定稿 diff 进入分页列表，内联展开会失效缓存。
 #[test]
 fn toggle_inline_expand_unfolds_finalized_diff() {
@@ -292,137 +198,6 @@ fn toggle_inline_expand_unfolds_finalized_diff() {
     assert!(
         !expanded.contains("Ctrl+O"),
         "expanded diff should drop fold hint: {expanded}"
-    );
-}
-
-#[test]
-fn subagent_view_switch_replaces_display_window() {
-    let mut store = TranscriptStore::new(100);
-    store.push_meta("主会话内容".to_string());
-    store.push_tool_call(
-        "subagent".to_string(),
-        r#"{"description":"检查项目"}"#.to_string(),
-    );
-    // 绑定后台 ID：running 状态下 finish 只记录 ID
-    store.push_tool_result(
-        "subagent".to_string(),
-        true,
-        r#"{"subagent":{"id":"sub-test-1","status":"running"}}"#.to_string(),
-    );
-
-    // 1. 进入子智能体视图：窗口内容替换为其会话时间线
-    assert!(store.enter_subagent_view(1));
-    assert_eq!(store.viewing_subagent_id(), Some("sub-test-1"));
-    let view = store
-        .display_tail(80, &options())
-        .iter()
-        .map(|line| line.as_str())
-        .collect::<String>();
-    // 子智能体视图标题与主视图工具行同语汇（Delegating/Delegated）
-    assert!(view.contains("Delegating") || view.contains("Delegated"));
-    assert!(!view.contains("主会话内容"));
-
-    // 2. 返回主视图：恢复主会话内容
-    assert!(store.exit_subagent_view());
-    assert!(!store.exit_subagent_view());
-    let main = store
-        .display_tail(80, &options())
-        .iter()
-        .map(|line| line.as_str())
-        .collect::<String>();
-    assert!(main.contains("主会话内容"));
-}
-
-/// 【终端】【agent 面板】已结束的子智能体保留在面板里。
-///
-/// 并发跑完一批子智能体后，用户要能在一处看到每个任务的结果与最终
-/// 用量；此前终态条目会直接从列表消失，跑完就再也查不到消耗。
-#[test]
-fn subagent_overview_keeps_finished_entries() {
-    let mut store = TranscriptStore::new(100);
-    store.push_tool_call(
-        "subagent".to_string(),
-        r#"{"description":"完成的"}"#.to_string(),
-    );
-    store.push_tool_result("subagent".to_string(), true, "plain result".to_string());
-    let overview = store.subagent_overview();
-    assert_eq!(overview.len(), 1, "finished subagents stay in the panel");
-    assert!(!overview[0].running);
-    assert!(overview[0].label.contains("完成的"));
-}
-
-/// 【终端】【agent 面板】同一子智能体的多次工具调用只保留一个面板条目。
-///
-/// 主代理每次 subagent 调用（start / wait / send / result）都会产生
-/// 一个 transcript cell，此前每个 cell 都各占一行导致面板大量重复。
-#[test]
-fn subagent_overview_deduplicates_repeated_calls_by_id() {
-    let (subagent, _cancel) = crate::tools::subagent_state::create_subagent(
-        "诗歌文本多阶段分析".to_string(),
-        "explore".to_string(),
-        3,
-    );
-    let bound_result = format!(
-        r#"{{"subagent":{{"id":"{}","status":"running"}}}}"#,
-        subagent.id
-    );
-    let mut store = TranscriptStore::new(100);
-    // 同一个子智能体：start + 多次 wait/send，每次调用都是一个独立 cell
-    for _ in 0..3 {
-        store.push_tool_call(
-            "subagent".to_string(),
-            format!(r#"{{"action":"wait","id":"{}"}}"#, subagent.id),
-        );
-        store.push_tool_result("subagent".to_string(), true, bound_result.clone());
-    }
-
-    let overview = store.subagent_overview();
-
-    assert_eq!(overview.len(), 1, "同一子智能体必须去重: {overview:?}");
-    assert!(overview[0].running);
-    assert_eq!(overview[0].status, "run");
-}
-
-/// 【终端】【agent 面板】尚未返回的 wait 调用按参数中的 subagent_id 归并。
-///
-/// 回归：子智能体 ID 此前只从工具输出解析，进行中的调用还没有输出，于是
-/// 拿不到 ID 也就无法去重。并发等待四个子智能体时，四条 wait 会各占一行，
-/// 和真正的委派条目混在一起。
-#[test]
-fn subagent_overview_merges_pending_waits_by_argument_id() {
-    let (subagent, _cancel) = crate::tools::subagent_state::create_subagent(
-        "并发等待".to_string(),
-        "general".to_string(),
-        3,
-    );
-    let mut store = TranscriptStore::new(100);
-    // 1. start 已返回并绑定后台 ID
-    store.push_tool_call(
-        "subagent".to_string(),
-        r#"{"description":"并发等待"}"#.to_string(),
-    );
-    store.push_tool_result(
-        "subagent".to_string(),
-        true,
-        format!(
-            r#"{{"subagent":{{"id":"{}","status":"running"}}}}"#,
-            subagent.id
-        ),
-    );
-    // 2. 三次仍在进行中的 wait，没有任何结果可供解析
-    for _ in 0..3 {
-        store.push_tool_call(
-            "subagent".to_string(),
-            format!(r#"{{"action":"wait","subagent_id":"{}"}}"#, subagent.id),
-        );
-    }
-
-    let overview = store.subagent_overview();
-
-    assert_eq!(
-        overview.len(),
-        1,
-        "进行中的 wait 应归并到同一条目: {overview:?}"
     );
 }
 
@@ -569,74 +344,6 @@ fn compaction_started_updates_in_place_without_x0() {
 }
 
 #[test]
-fn command_output_updates_live_cell_and_toggles_expansion() {
-    let mut store = TranscriptStore::new(100);
-    store.push_tool_call(
-        "run_command".to_string(),
-        r#"{"command":"test"}"#.to_string(),
-    );
-    let chunk = crate::tools::command::CommandOutputChunk {
-        stream: crate::tools::command::CommandOutputStream::Stdout,
-        bytes: b"one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\n"
-            .to_vec(),
-        omitted_bytes: 0,
-    };
-    assert!(store.push_command_output("run_command", &chunk));
-    let collapsed = store
-        .display_tail(120, &options())
-        .iter()
-        .map(|line| line.as_str())
-        .collect::<String>();
-    // 前 2 后 4：可见 one/two 与 nine..twelve
-    assert!(collapsed.contains("one"));
-    assert!(collapsed.contains("two") || collapsed.contains("twelve"));
-    assert!(collapsed.contains("twelve"));
-    assert!(!collapsed.contains("five") || collapsed.contains("…"));
-    assert!(collapsed.contains("…") || collapsed.contains("lines"));
-    assert!(collapsed.contains("Ctrl+O"));
-
-    assert!(store.toggle_latest_command_output());
-    let expanded = store
-        .display_tail(120, &options())
-        .iter()
-        .map(|line| line.as_str())
-        .collect::<String>();
-    assert!(expanded.contains("six"));
-    assert!(expanded.contains("seven"));
-    assert!(!expanded.contains("Ctrl+O"));
-
-    store.push_tool_result(
-        "run_command".to_string(),
-        true,
-        serde_json::json!({
-            "success": true,
-            "exit_code": 0,
-            "stdout": "final result was truncated",
-            "stderr": ""
-        })
-        .to_string(),
-    );
-    let completed_expanded = store
-        .display_tail(120, &options())
-        .iter()
-        .map(|line| line.as_str())
-        .collect::<String>();
-    assert!(completed_expanded.contains("six"));
-    assert!(completed_expanded.contains("twelve"));
-    assert!(!completed_expanded.contains("Ctrl+O"));
-
-    assert!(store.toggle_latest_command_output());
-    let completed_collapsed = store
-        .display_tail(120, &options())
-        .iter()
-        .map(|line| line.as_str())
-        .collect::<String>();
-    assert!(completed_collapsed.contains("one"));
-    assert!(completed_collapsed.contains("twelve"));
-    assert!(completed_collapsed.contains("Ctrl+O"));
-}
-
-#[test]
 fn user_echo_uses_a_prominent_bullet() {
     let mut store = TranscriptStore::new(100);
     store.push_user_echo(TranscriptMode::Yolo, "inspect resize".to_string());
@@ -732,61 +439,6 @@ fn row_cap_trims_prewrapped_rows_not_source_cells() {
     assert!(!lines.iter().any(|line| line.as_str().contains("second")));
 }
 
-/// 验证权限交互附着在既有命令视图并保留最终决定。
-///
-/// 参数:
-/// - 无
-///
-/// 返回:
-/// - 无
-#[test]
-fn permission_audit_stays_inside_existing_command_view() {
-    let mut store = TranscriptStore::new(100);
-    store.push_tool_call(
-        "run_command".to_string(),
-        r#"{"command":"cargo test","cwd":"/workspace"}"#.to_string(),
-    );
-    store.push_permission_request(crate::permission::PermissionRequest {
-        id: "permission".to_string(),
-        session_id: "session".to_string(),
-        tool: "run_command".to_string(),
-        arguments: r#"{"command":"cargo test","cwd":"/workspace"}"#.to_string(),
-        auto_audit: false,
-    });
-    let pending = store
-        .display_tail(100, &options())
-        .iter()
-        .map(|line| line.as_str())
-        .collect::<String>();
-    assert!(pending.contains("❯"));
-    assert!(pending.contains("Allow once"));
-    assert!(!pending.contains("Allowed once"));
-    assert!(store.set_permission_reply_draft("permission", Some("请改为只读检查".to_string())));
-    let reply = store
-        .display_tail(100, &options())
-        .iter()
-        .map(|line| line.as_str())
-        .collect::<String>();
-    assert!(reply.contains("请改为只读检查"));
-    assert!(reply.contains("Enter submit"));
-    assert!(store.resolve_permission(
-        "permission",
-        crate::permission::PermissionDecision::allow_once()
-    ));
-
-    let rendered = store
-        .display_tail(100, &options())
-        .iter()
-        .map(|line| line.as_str())
-        .collect::<String>();
-
-    assert!(rendered.contains("cargo"));
-    assert!(rendered.contains("test"));
-    assert!(rendered.contains("Allowed once"));
-    assert!(!rendered.contains(r#"{"command""#));
-    assert!(!rendered.contains("Permission required"));
-}
-
 /// 验证编辑类权限选择附着在摘要行与 diff 正文下方（无旧式 Added 标题）。
 #[test]
 fn permission_audit_stays_inside_existing_diff_view() {
@@ -866,45 +518,6 @@ fn diff_cell_keeps_pre_edit_snapshot_after_file_changes() {
 }
 
 #[test]
-fn background_subagent_cell_reads_persisted_timeline() {
-    let (subagent, _cancel) = crate::tools::subagent_state::create_subagent(
-        "检查项目".to_string(),
-        "explore".to_string(),
-        5,
-    );
-    let mut store = TranscriptStore::new(100);
-    store.push_tool_call(
-        "subagent".to_string(),
-        r#"{"description":"检查项目"}"#.to_string(),
-    );
-    store.push_tool_result(
-        "subagent".to_string(),
-        true,
-        serde_json::json!({"ok":true,"subagent":subagent.clone()}).to_string(),
-    );
-    crate::tools::subagent_state::timeline_streaming_text(&subagent.id, "正在检查", true);
-
-    assert!(store.has_running_subagents());
-    let running_signature = store.subagent_signature();
-    let rendered = store
-        .display_tail(100, &options())
-        .iter()
-        .map(|line| line.as_str())
-        .collect::<String>();
-    assert!(rendered.contains("检查项目"));
-
-    crate::tools::subagent_state::finish_subagent(
-        &subagent.id,
-        "completed",
-        Some("检查完成".to_string()),
-        None,
-        None,
-    );
-    assert!(!store.has_running_subagents());
-    assert_ne!(store.subagent_signature(), running_signature);
-}
-
-#[test]
 fn diff_fill_reapplies_background_before_el() {
     // EL 必须在 reset 之前，背景才能铺满整行
     let lines = AnsiLine::wrap_block(
@@ -918,32 +531,6 @@ fn diff_fill_reapplies_background_before_el() {
     assert!(reset_after.is_some());
     // K 之前应仍有背景（48;5;22）
     assert!(s[..k].contains("48;5;22"));
-}
-
-#[test]
-fn run_command_success_keeps_growing_output_in_summary() {
-    use crate::render::tool_view::{self, ToolView};
-    use crate::render::ToolCallDisplayMode;
-
-    let mut view = ToolView::running(
-        "run_command".to_string(),
-        r#"{"command":"echo hi"}"#.to_string(),
-    );
-    let before = tool_view::render(&view, ToolCallDisplayMode::Summary);
-    view.finish(
-        true,
-        r#"{"success":true,"exit_code":0,"stdout":"hi\n","stderr":""}"#.to_string(),
-    );
-    let after = tool_view::render(&view, ToolCallDisplayMode::Summary);
-    assert!(
-        !after.is_empty(),
-        "success should not swallow the command view"
-    );
-    assert!(
-        after.len() >= before.len(),
-        "result should not shrink the view"
-    );
-    assert!(after.contains("hi") || after.contains("output") || after.contains("echo"));
 }
 
 #[test]

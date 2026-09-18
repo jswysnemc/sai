@@ -30,10 +30,10 @@ fn mixed_cells_use_distinct_markers_and_section_gaps() {
     assert!(snapshot[0][0].is_empty());
     assert!(snapshot[0][1].starts_with('●'));
 
-    // reasoning: 仅前空行 + ◦（不再 trailing，避免与后续 Markdown 前空行叠成两行）
+    // reasoning: 仅前空行与箭头，避免与后续 Markdown 前空行叠成两行
     assert!(snapshot[1][0].is_empty());
     assert!(
-        snapshot[1][1].starts_with('◦'),
+        snapshot[1][1].starts_with('›'),
         "thinking marker: {:?}",
         snapshot[1][1]
     );
@@ -85,7 +85,7 @@ fn assembled_window_separates_body_from_following_tool() {
         .iter()
         .map(|line| strip_ansi_for_test(line.as_str()))
         .collect();
-    let think = plain.iter().position(|line| line.starts_with('◦'));
+    let think = plain.iter().position(|line| line.starts_with('›'));
     let first_tool = plain.iter().position(|line| line.starts_with('•'));
     let body = plain.iter().position(|line| line.contains("Here is"));
     let second_tool = plain
