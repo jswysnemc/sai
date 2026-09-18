@@ -75,6 +75,9 @@ pub(super) fn read_repl_input(
     }
     redraw_input!()?;
     loop {
+        for diagnostic in chrome.status_diagnostics() {
+            runtime.record_meta(diagnostic)?;
+        }
         // 回执让位给用户按键：自动轮一旦启动就接管终端，而 take_ready 原本无条件
         // 排在读键之前，用户连第一个字符都打不进去（input 始终为空，靠它判断无效）。
         // 先做一次零超时探测，终端里已有待读事件就走正常按键流程。
@@ -100,6 +103,7 @@ pub(super) fn read_repl_input(
                 (None, true) => Some(EXTERNAL_EVENT_INPUT_POLL_INTERVAL),
                 (None, false) => None,
             };
+            let wait = chrome.status_poll_wait(wait);
             // 占位提示为静态文本，空输入无需额外唤醒重绘，直接沿用挂起等待
             if let Some(wait) = wait {
                 if !event::poll(wait)? {

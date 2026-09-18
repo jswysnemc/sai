@@ -1,0 +1,8 @@
+{
+  "left": ["mode", "model", "context", "cache"],
+  "right": ["directory"],
+  "separator": " · ",
+  "directory_style": "name",
+  "label": "Sai",
+  "compact_below": 60
+}

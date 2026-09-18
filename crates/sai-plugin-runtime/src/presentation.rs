@@ -81,7 +81,7 @@ impl Notification {
 }
 
 /// 【插件展示】【纯宿主】独立展示实例不提供网络、文件、进程、模型或存储服务。
-struct PresentationHost;
+pub(crate) struct PresentationHost;
 
 #[async_trait]
 impl PluginHost for PresentationHost {

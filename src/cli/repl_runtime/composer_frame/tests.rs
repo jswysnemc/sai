@@ -22,6 +22,7 @@ fn draws_at_viewport_bottom_and_restores_input_cursor() {
         cache_hit_ratio: None,
         activity: None,
         role_badge: None,
+        status_plugin: None,
     };
     let frame = ComposerFrame::new(chrome, "hello".to_string(), 5, false, Vec::new(), 0);
     let mut viewport = InlineViewport::new();
@@ -53,6 +54,7 @@ fn repaint_hides_cursor_first_and_shows_it_last() {
         cache_hit_ratio: None,
         activity: None,
         role_badge: None,
+        status_plugin: None,
     };
     let frame = ComposerFrame::new(chrome, "hello".to_string(), 5, false, Vec::new(), 0);
     let mut viewport = InlineViewport::new();
@@ -100,6 +102,7 @@ fn skips_repaint_when_nothing_changed() {
         cache_hit_ratio: None,
         activity: None,
         role_badge: None,
+        status_plugin: None,
     };
     let frame = ComposerFrame::new(chrome, "hello".to_string(), 5, false, Vec::new(), 0);
     let mut viewport = InlineViewport::new();
@@ -145,6 +148,7 @@ fn repaints_after_the_input_changes() {
         cache_hit_ratio: None,
         activity: None,
         role_badge: None,
+        status_plugin: None,
     };
     let first_frame =
         ComposerFrame::new(chrome.clone(), "hello".to_string(), 5, false, Vec::new(), 0);
@@ -179,6 +183,7 @@ fn bang_prefix_shows_shell_hint_instead_of_footer() {
         cache_hit_ratio: None,
         activity: None,
         role_badge: None,
+        status_plugin: None,
     };
     let frame = ComposerFrame::new(chrome, "!".to_string(), 1, false, Vec::new(), 0);
     let mut viewport = InlineViewport::new();
@@ -214,6 +219,7 @@ fn slash_panel_keeps_input_frame_visible_above_command_descriptions() {
         cache_hit_ratio: None,
         activity: None,
         role_badge: None,
+        status_plugin: None,
     };
     let frame = ComposerFrame::new(chrome, "/".to_string(), 1, false, Vec::new(), 0);
     let mut viewport = InlineViewport::new();
@@ -245,6 +251,7 @@ fn panel_lines_render_above_chrome_and_extend_height() {
         cache_hit_ratio: None,
         activity: None,
         role_badge: None,
+        status_plugin: None,
     };
     let mut frame = ComposerFrame::new(chrome, String::new(), 0, false, Vec::new(), 0);
     let base_height = frame.height(72);
@@ -280,6 +287,7 @@ fn empty_composer_shows_placeholder() {
         cache_hit_ratio: None,
         activity: None,
         role_badge: None,
+        status_plugin: None,
     };
     let frame = ComposerFrame::new(chrome, String::new(), 0, false, Vec::new(), 0);
     let mut viewport = InlineViewport::new();
@@ -309,6 +317,7 @@ fn floating_composer_clears_stale_rows_below() {
         cache_hit_ratio: None,
         activity: None,
         role_badge: None,
+        status_plugin: None,
     };
     let frame = ComposerFrame::new(chrome, String::new(), 0, false, Vec::new(), 0);
     let mut viewport = InlineViewport::new();
@@ -339,6 +348,7 @@ fn bottom_pinned_composer_keeps_footer_row() {
         cache_hit_ratio: None,
         activity: None,
         role_badge: None,
+        status_plugin: None,
     };
     let frame = ComposerFrame::new(chrome, String::new(), 0, false, Vec::new(), 0);
     let mut viewport = InlineViewport::new();

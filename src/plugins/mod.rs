@@ -23,6 +23,7 @@ mod services;
 mod session;
 mod system;
 pub(crate) mod todo_view;
+mod tui_status;
 
 pub(crate) use discovery::{discover, PluginDiagnostic, PluginSource};
 pub(crate) use events::PluginEvents;
@@ -35,6 +36,7 @@ pub(crate) use private::clear_session_storage;
 pub(crate) use registry::register_plugins;
 pub(crate) use services::{PluginModelSource, PluginServices, PluginVisionSource};
 pub(crate) use session::PluginSession;
+pub(crate) use tui_status::TuiStatusRenderer;
 
 #[cfg(test)]
 mod tests;

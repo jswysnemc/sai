@@ -30,7 +30,7 @@
 ---@field access? SaiCommandAccess 默认 read_only
 ---@field execute fun(arguments: string, ctx: SaiContext): any 返回字符串或可序列化 JSON 值；nil 表示空文本
 
----@alias SaiEventName 'agent_start'|'agent_end'|'turn_start'|'turn_end'|'message_start'|'message_end'|'tool_call'|'tool_result'
+---@alias SaiEventName 'agent_start'|'agent_end'|'turn_start'|'turn_end'|'message_start'|'message_end'|'tool_call'|'tool_result'|'reply_end'|'tui_status'
 
 --- tool_result 的有界观察数据，监听器返回值不会修改真实结果
 ---@class SaiToolResultEvent

@@ -17,6 +17,7 @@ fn frame() -> ComposerFrame {
         cache_hit_ratio: None,
         activity: None,
         role_badge: None,
+        status_plugin: None,
     };
     let mut frame = ComposerFrame::new(chrome, "draft".into(), 5, false, Vec::new(), 0);
     frame.set_panel_lines(vec!["Working 1s".into()]);

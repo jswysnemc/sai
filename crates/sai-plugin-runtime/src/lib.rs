@@ -13,6 +13,7 @@ mod runtime;
 mod schema;
 mod sqlite;
 mod tool_policy;
+mod tui_status;
 
 pub use capabilities::{
     BinaryCapabilities, Capabilities, ProcessArgument, ProcessParameter, ProcessTemplate,
@@ -32,3 +33,4 @@ pub use runtime::{InvocationContext, PluginRuntime, ProgressCallback};
 pub use tool_policy::{
     ToolPolicyInput, ToolPolicyOutput, MAX_TOOL_POLICY_INPUT_BYTES, MAX_TOOL_POLICY_STATE_BYTES,
 };
+pub use tui_status::{TuiStatusContext, TuiStatusLine, TuiStatusRuntime};

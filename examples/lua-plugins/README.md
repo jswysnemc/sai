@@ -4,6 +4,7 @@
 
 | 示例 | 用途 | 最小能力 |
 | --- | --- | --- |
+| [tui-status](tui-status/README.md) | 配置 TUI 底栏字段、顺序与窄窗口显示 | `tui_status` 纯展示 |
 | [hash-codec](hash-codec/README.md) | 摘要与文本解码 | 无外部能力 |
 | [weather](weather/README.md) | 当前天气查询 | `https://wttr.in` 的 HTTP 读取 |
 | [archlinux](archlinux/README.md) | AUR、官方软件包、Wiki 与状态 | 对应 Arch 来源的 HTTP 读取 |

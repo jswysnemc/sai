@@ -90,7 +90,7 @@ pub(super) async fn run_repl(
     record_repl_history(&mut runtime, &state)?;
     // 1. 重量级初始化前先呈现输入框，避免版本信息后长时间没有输入区
     {
-        let chrome = ReplChrome::from_runtime(&config, &state, mode);
+        let chrome = ReplChrome::from_runtime(&config, paths, &state, mode);
         runtime.update_composer(&chrome, "", 0, false, Vec::new(), 0)?;
         runtime.draw_composer()?;
     }
@@ -132,7 +132,7 @@ pub(super) async fn run_repl(
         external_events.arm(&agent);
         apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
         // 每轮刷新底栏上下文/模型信息
-        let mut chrome = ReplChrome::from_runtime(&config, &state, mode);
+        let mut chrome = ReplChrome::from_runtime(&config, paths, &state, mode);
         // 跟随者常驻标记：角色会随持有者更替变化，每轮都要重取
         chrome.set_role_badge(role_badge(session_link.role()));
         let transcript_options = render::transcript::TranscriptRenderOptions {

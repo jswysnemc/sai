@@ -1,0 +1,9 @@
+{
+  "api_version": 1,
+  "id": "tui-status",
+  "version": "1.0.0",
+  "name": "自定义 TUI 底栏",
+  "description": "配置底栏状态字段、左右位置、排列顺序和分隔符",
+  "entry": "init.lua",
+  "capabilities": { "tui_status": true }
+}
