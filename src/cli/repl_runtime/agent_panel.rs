@@ -216,12 +216,25 @@ impl super::ReplRuntime {
 
     /// 返回当前正在查看的子智能体 ID。
     ///
-    /// 供 `/msg` 留言命令把未显式指定目标的消息投递给查看中的子智能体。
+    /// 供普通输入与 `/msg` 将未显式指定目标的消息投递给查看中的子智能体。
     ///
     /// 返回:
     /// - 处于子智能体视图时返回其 ID
     pub(in crate::cli) fn viewing_subagent_id(&self) -> Option<String> {
         self.transcript.viewing_subagent_id().map(str::to_string)
+    }
+
+    /// 【终端】【接管反馈】更新当前子代理的输入错误并刷新视图。
+    /// 参数: id 为投递目标，error 为失败原因，成功时为空
+    /// 返回: 重绘结果
+    pub(in crate::cli) fn show_subagent_input_result(
+        &mut self,
+        id: &str,
+        error: Option<String>,
+    ) -> anyhow::Result<()> {
+        self.subagent_input_error = error.map(|error| (id.to_string(), error));
+        self.refresh_bottom_panel()?;
+        self.redraw()
     }
 
     /// 面板按键核心处理（不负责重绘输入框）。

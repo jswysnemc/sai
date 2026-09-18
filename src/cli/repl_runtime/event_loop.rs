@@ -1,4 +1,6 @@
 mod keys;
+#[cfg(test)]
+mod takeover_tests;
 use keys::handle_stream_key;
 
 use super::stream_commands::{StreamCommandContext, StreamInputAction};
@@ -364,7 +366,32 @@ fn dispatch_stream_command(
             runtime.redraw_stream_composer()?;
             Ok(StreamInputAction::Continue)
         }
-        StreamCommandPolicy::NotCommand => enqueue_stream_draft(runtime),
+        StreamCommandPolicy::NotCommand => {
+            let draft = runtime.stream_draft();
+            let submission = crate::cli::repl_input::ReplInputSubmission::from_input(
+                runtime.stream_mode(AgentMode::Yolo),
+                draft.text.clone(),
+                &draft.clipboard,
+            );
+            if let Some(result) = crate::cli::repl::subagent_input::deliver_viewed_submission(
+                runtime,
+                &ctx.owner_key,
+                &submission,
+                crate::ipc::LinkRole::Holder,
+            ) {
+                if result.is_ok() {
+                    let mode = runtime.stream_draft().mode;
+                    *runtime.stream_draft_mut() = StreamComposerDraft {
+                        mode,
+                        ..StreamComposerDraft::default()
+                    };
+                }
+                runtime.redraw_stream_composer()?;
+                Ok(StreamInputAction::Continue)
+            } else {
+                enqueue_stream_draft(runtime)
+            }
+        }
     }
 }
 

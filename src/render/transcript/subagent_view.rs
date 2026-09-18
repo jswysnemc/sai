@@ -123,7 +123,18 @@ fn render_view_text(id: &str, label: &str, frame: usize) -> String {
                     tense,
                 );
                 output.push('\n');
-                let heading = tool_event_text(&label, status);
+                let heading = if name == "run_command" {
+                    // 1. 【终端】【命令样式】与主会话共享命令符、续行缩进和语法着色
+                    crate::render::command_output::render_command_block_with_action(
+                        args_preview,
+                        crate::render::tool_event_line::tool_verb(name, tense),
+                        crate::render::status_style::ToolHealth::from_status(status),
+                    )
+                    .trim_end()
+                    .to_string()
+                } else {
+                    tool_event_text(&label, status)
+                };
                 if status == "run" {
                     output.push_str(&crate::render::content_indent::animate_guide_marker(
                         &heading, frame,
@@ -166,7 +177,7 @@ fn render_view_text(id: &str, label: &str, frame: usize) -> String {
         output.push_str(&format!(
             "\x1b[38;5;110m● {}\x1b[0m \x1b[2m{}\x1b[0m",
             t("idle, waiting for follow-ups", "待命中"),
-            t("leave a message with /msg", "可用 /msg 留言追加指令")
+            t("type a message to follow up", "直接输入消息追加指令")
         ));
     }
     output
@@ -176,6 +187,64 @@ fn render_view_text(id: &str, label: &str, frame: usize) -> String {
 mod tests {
     use super::*;
     use crate::render::activity_animation::strip_ansi_for_test;
+
+    /// 【终端】【子代理命令】命令从运行到完成都使用主会话的命令块；无参数，无返回值
+    #[test]
+    fn takeover_regression_command_uses_shared_shell_heading() {
+        let root = tempfile::tempdir().unwrap();
+        let owner = root.path().to_string_lossy().into_owned();
+        let (snapshot, _cancel) = crate::tools::subagent_state::create_subagent_for_owner(
+            &owner,
+            "command test".into(),
+            "general".into(),
+            4,
+        );
+        let args = r#"{"command":"printf hello"}"#;
+        crate::tools::subagent_state::timeline_tool_started(&snapshot.id, "run_command", args);
+        let running = strip_ansi_for_test(&render_view_text(&snapshot.id, "command test", 0));
+        crate::tools::subagent_state::timeline_tool_finished(
+            &snapshot.id,
+            "run_command",
+            true,
+            "hello",
+        );
+        let done = strip_ansi_for_test(&render_view_text(&snapshot.id, "command test", 0));
+        crate::tools::subagent_state::clear_subagents_for_owner(&owner);
+        assert!(running.contains("Running $ printf hello"), "{running}");
+        assert!(done.contains("Ran $ printf hello"), "{done}");
+    }
+
+    /// 【终端】【命令边界】多行参数沿用主会话命令块，普通工具不添加命令符；无参数，无返回值
+    #[test]
+    fn shell_heading_wraps_and_non_shell_tools_keep_plain_labels() {
+        use crate::tools::subagent_state as state;
+        let root = tempfile::tempdir().unwrap();
+        let owner = root.path().to_string_lossy().into_owned();
+        let (snapshot, _cancel) =
+            state::create_subagent_for_owner(&owner, "render".into(), "general".into(), 4);
+        let args = serde_json::json!({"command": "printf first\nprintf second"}).to_string();
+        state::timeline_tool_started(&snapshot.id, "run_command", &args);
+        state::timeline_tool_finished(&snapshot.id, "run_command", false, "command failed");
+        state::timeline_tool_started(&snapshot.id, "read_file", r#"{"path":"src/main.rs"}"#);
+        let rendered = render_view_lines(&snapshot.id, "render", 32, 0);
+        let plain = rendered
+            .iter()
+            .map(|line| strip_ansi_for_test(line.as_str()))
+            .collect::<Vec<_>>()
+            .join("\n");
+        state::clear_subagents_for_owner(&owner);
+        assert!(plain.contains("Ran $ printf first"), "{plain}");
+        assert!(plain.contains("printf second"), "{plain}");
+        assert!(plain.contains("command failed"), "{plain}");
+        assert!(plain.contains("Reading main.rs"), "{plain}");
+        assert!(!plain.contains("Reading $"));
+        for line in rendered {
+            assert!(
+                unicode_width::UnicodeWidthStr::width(strip_ansi_for_test(line.as_str()).as_str())
+                    <= 32
+            );
+        }
+    }
 
     #[test]
     fn view_renders_title_and_placeholder_without_snapshot() {

@@ -13,11 +13,10 @@ use crate::render::command_result_streams;
 use crate::state::{SessionTimelineTurn, StateStore};
 use anyhow::Result;
 
-const REPL_HISTORY_TURN_LIMIT: usize = 50;
 const REPL_HISTORY_COMMAND_OUTPUT_FILE_LIMIT: usize = 12;
 const REPL_HISTORY_COMMAND_OUTPUT_BYTE_LIMIT: usize = 2 * 1024 * 1024;
 
-/// 读取当前会话最近的持久化轮次并渲染到 TUI。
+/// 读取当前会话活动分支的全部持久化轮次并渲染到 TUI。
 ///
 /// 参数:
 /// - `runtime`: 当前 TUI 运行期
@@ -26,7 +25,7 @@ const REPL_HISTORY_COMMAND_OUTPUT_BYTE_LIMIT: usize = 2 * 1024 * 1024;
 /// 返回:
 /// - 历史读取与渲染结果
 pub(super) fn record_repl_history(runtime: &mut ReplRuntime, state: &StateStore) -> Result<()> {
-    let mut timeline = state.session_timeline_with_compaction(REPL_HISTORY_TURN_LIMIT)?;
+    let mut timeline = state.session_timeline_with_compaction(usize::MAX)?;
     // 【终端】【历史子任务】1. 先恢复所属会话的快照，使首次渲染即可显示真实终态
     let _ = crate::tools::subagent_state::list_subagents_for_owner(
         &state.state_dir().to_string_lossy(),
@@ -257,6 +256,38 @@ mod tests {
     use super::*;
     use crate::state::{TimelineMessage, TimelineToolEntry};
     use std::cell::Cell;
+
+    /// 【会话载入】【完整历史】超过五十轮时保留最早和最新问答；无参数，无返回值
+    #[test]
+    fn takeover_regression_restores_more_than_fifty_turns() {
+        let root = tempfile::tempdir().unwrap();
+        let state = StateStore::new(&SaiPaths::for_tests(root.path())).unwrap();
+        for index in 0..60 {
+            let id = format!("turn-{index}");
+            state
+                .start_turn(&id, &format!("question-{index:03}"))
+                .unwrap();
+            state
+                .complete_turn(&id, &format!("answer-{index:03}"), None)
+                .unwrap();
+        }
+        let mut runtime = ReplRuntime::new(
+            5,
+            crate::render::transcript::TranscriptRenderOptions {
+                reasoning_mode: crate::render::ReasoningDisplayMode::Summary,
+                tool_call_mode: crate::render::ToolCallDisplayMode::Summary,
+            },
+        );
+        record_repl_history(&mut runtime, &state).unwrap();
+        let full = runtime
+            .expanded_transcript_lines(80)
+            .iter()
+            .map(|line| line.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(full.contains("question-000"), "oldest question missing");
+        assert!(full.contains("answer-059"), "latest answer missing");
+    }
 
     /// 构造包含历史命令结果的最小轮次。
     ///

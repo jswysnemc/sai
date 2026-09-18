@@ -28,7 +28,7 @@ pub(in crate::cli) enum StreamInputAction {
 pub(in crate::cli) struct StreamCommandContext {
     paths: SaiPaths,
     /// 子智能体作用域键：子智能体按父会话隔离
-    owner_key: String,
+    pub(super) owner_key: String,
     /// 本轮启动时的权限模式
     turn_mode: AgentMode,
 }

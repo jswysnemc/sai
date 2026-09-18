@@ -92,10 +92,24 @@ impl ReplRuntime {
     fn bottom_panel_lines(&self, cols: usize) -> Vec<String> {
         let queued = self.queued_items();
         let queue_lines = self.queue_panel.panel_lines(&queued, self.stream_active);
-        let agent_lines = self.agent_panel.panel_lines(
+        let mut agent_lines = self.agent_panel.panel_lines(
             &self.transcript.subagent_overview(),
             self.transcript.live_animation_frame(),
         );
+        if let Some((_, error)) = self
+            .subagent_input_error
+            .as_ref()
+            .filter(|(id, _)| self.transcript.viewing_subagent_id() == Some(id.as_str()))
+        {
+            agent_lines.extend(
+                crate::render::transcript::AnsiLine::wrap_block(
+                    &format!("\x1b[31m{error}\x1b[0m"),
+                    cols.saturating_sub(4).max(1),
+                )
+                .into_iter()
+                .map(|line| line.as_str().to_string()),
+            );
+        }
         super::bottom_panel::render_panel_lines(
             self.transcript.latest_todo_items(),
             &queue_lines,

@@ -63,7 +63,8 @@ pub(super) fn replay_full<W: Write>(
 ) -> Result<usize> {
     let rows = usize::from(viewport.size().rows).max(1);
     let composer = usize::from(viewport.composer_height());
-    let visible_budget = rows.saturating_sub(composer).max(1);
+    // 首次恢复尚无输入框时，末尾换行仍占一行，不能将其计为可见历史
+    let visible_budget = rows.saturating_sub(composer.max(1)).max(1);
     // 绘制期间隐藏光标：光标会随整屏重放扫过全部内容行，
     // 可见状态下表现为一次跳动；最终位置由 composer 的 Show 恢复
     queue!(output, Hide)?;

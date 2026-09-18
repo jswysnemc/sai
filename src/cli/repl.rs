@@ -16,6 +16,7 @@ mod navigation;
 mod plugin_commands;
 mod session_support;
 pub(super) mod subagent_commands;
+pub(super) mod subagent_input;
 mod submission_queue;
 
 use crate::ipc::LinkRole;
@@ -563,6 +564,23 @@ pub(super) async fn run_repl(
         }
         if input.is_empty() {
             continue;
+        }
+        if !goal_continuation {
+            if let Some(result) = subagent_input::deliver_viewed_submission(
+                &mut runtime,
+                &state.state_dir().to_string_lossy(),
+                &submission,
+                session_link.role(),
+            ) {
+                if result.is_err() {
+                    input_restore::restore_submitted_input(
+                        &submission.history,
+                        &mut prefill,
+                        &mut prefill_clipboard,
+                    );
+                }
+                continue;
+            }
         }
         // 跟随端：本终端不持有 Agent，整包上行给持有者执行。回显与流式输出
         // 由持有者经事件流广播回来，本终端不再本地回显，否则同一条消息会出现两次。

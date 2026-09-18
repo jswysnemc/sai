@@ -8,6 +8,7 @@ mod follow;
 mod history;
 mod history_insert;
 mod history_replay;
+mod history_restore;
 mod layout;
 mod live_usage;
 mod mention_panel;
@@ -90,6 +91,8 @@ pub(super) struct ReplRuntime {
     last_chrome: Option<ReplChrome>,
     /// 底部主/子 agent 切换面板状态
     agent_panel: agent_panel::AgentPanelState,
+    /// 当前子代理输入错误，绑定目标 ID，切换视图后不显示旧目标错误
+    subagent_input_error: Option<(String, String)>,
     /// 用户消息队列管理面板状态
     queue_panel: queue_panel::QueuePanelState,
     /// 最近一次 composer 绘制后的光标屏幕行（高度变化重锚探测用）
@@ -221,6 +224,7 @@ impl ReplRuntime {
             live_session_id: None,
             last_chrome: None,
             agent_panel: agent_panel::AgentPanelState::default(),
+            subagent_input_error: None,
             queue_panel: queue_panel::QueuePanelState::default(),
             last_cursor_row: None,
             last_composer_signature: None,
@@ -425,6 +429,7 @@ impl ReplRuntime {
         self.stream_draft = StreamComposerDraft::default();
         self.lock_queue().clear();
         self.agent_panel.deactivate();
+        self.subagent_input_error = None;
         self.queue_panel.deactivate();
         self.replay(false)
     }
