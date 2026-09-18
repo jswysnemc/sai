@@ -5,6 +5,7 @@ use std::io;
 use std::time::Duration;
 
 const MAX_TEXT_BATCH_CHARS: usize = 512;
+const MAX_TEXT_BATCH_EVENTS: usize = MAX_TEXT_BATCH_CHARS * 2;
 
 /// 【终端】【输入批处理】读取已排队或立即可用的事件，避免跨轮次丢失按键。
 /// 参数: `runtime` 为输入事件队列的持有者
@@ -42,19 +43,26 @@ fn collect_text(
     mut next: impl FnMut() -> io::Result<Option<Event>>,
 ) -> io::Result<(String, Option<Event>)> {
     let mut text = String::from(first);
-    for _ in 1..MAX_TEXT_BATCH_CHARS {
+    let mut chars = 1;
+    for _ in 1..MAX_TEXT_BATCH_EVENTS {
+        if chars == MAX_TEXT_BATCH_CHARS {
+            break;
+        }
         let Some(event) = next()? else { break };
         if let Event::Key(key) = &event {
-            if key.kind != KeyEventKind::Release {
-                if let KeyCode::Char(ch) = key.code {
-                    if !key
-                        .modifiers
-                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
-                        && !ch.is_control()
-                    {
-                        text.push(ch);
-                        continue;
-                    }
+            // 1. 【终端】【Windows 粘贴】释放事件不修改输入，跳过它们以合并后续按下事件
+            if key.kind == KeyEventKind::Release {
+                continue;
+            }
+            if let KeyCode::Char(ch) = key.code {
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+                    && !ch.is_control()
+                {
+                    text.push(ch);
+                    chars += 1;
+                    continue;
                 }
             }
         }
@@ -121,5 +129,86 @@ mod tests {
         assert_eq!(text.len(), MAX_TEXT_BATCH_CHARS);
         assert_eq!(count, MAX_TEXT_BATCH_CHARS - 1);
         assert!(pending.is_none());
+    }
+
+    /// 【终端】【输入调度】连续释放事件也有读取上限，不独占输入处理循环。
+    /// 参数: 无
+    /// 返回: 无；释放事件导致无限读取时断言失败
+    #[test]
+    fn release_only_stream_has_a_bounded_read_budget() {
+        let mut reads = 0;
+        let (text, pending) = collect_text('a', || {
+            reads += 1;
+            assert!(reads < MAX_TEXT_BATCH_EVENTS);
+            Ok(Some(Event::Key(KeyEvent::new_with_kind(
+                KeyCode::Char('a'),
+                KeyModifiers::NONE,
+                KeyEventKind::Release,
+            ))))
+        })
+        .unwrap();
+        assert_eq!(text, "a");
+        assert_eq!(reads, MAX_TEXT_BATCH_EVENTS - 1);
+        assert!(pending.is_none());
+    }
+
+    /// 【终端】【Windows 粘贴】交错的按下与释放事件不得把大段输入拆成逐字绘制。
+    /// 参数: 无
+    /// 返回: 无；一万字符需要超过有界字符批次数时断言失败
+    #[test]
+    fn windows_paste_release_events_do_not_force_per_character_redraws() {
+        let text = "中文abc".repeat(2_000);
+        let mut events = VecDeque::new();
+        for ch in text.chars() {
+            for kind in [KeyEventKind::Press, KeyEventKind::Release] {
+                events.push_back(Event::Key(KeyEvent::new_with_kind(
+                    KeyCode::Char(ch),
+                    KeyModifiers::NONE,
+                    kind,
+                )));
+            }
+        }
+        let interrupt = Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+        events.push_back(interrupt.clone());
+        let mut actual = String::new();
+        let mut redraws = 0;
+        let mut interrupted = false;
+        let started = std::time::Instant::now();
+        while let Some(event) = events.pop_front() {
+            if event == interrupt {
+                interrupted = true;
+                break;
+            }
+            let Event::Key(key) = event else {
+                panic!("unexpected event")
+            };
+            if key.kind == KeyEventKind::Release {
+                continue;
+            }
+            let KeyCode::Char(first) = key.code else {
+                panic!("unexpected key")
+            };
+            let (batch, pending) = collect_text(first, || Ok(events.pop_front())).unwrap();
+            actual.push_str(&batch);
+            redraws += 1;
+            std::hint::black_box(crate::cli::repl_input_render::repl_visible_input_lines(
+                "",
+                &[actual.clone()],
+                crate::cli::REPL_MAX_VISIBLE_INPUT_ROWS,
+                false,
+            ));
+            if let Some(pending) = pending {
+                events.push_front(pending);
+            }
+        }
+        assert_eq!(actual, text);
+        assert!(interrupted, "粘贴之后的 Ctrl+C 必须留给中断处理");
+        assert!(events.is_empty());
+        eprintln!(
+            "Windows paste: chars={}, redraws={redraws}, elapsed={:?}",
+            text.chars().count(),
+            started.elapsed()
+        );
+        assert_eq!(redraws, text.chars().count().div_ceil(MAX_TEXT_BATCH_CHARS));
     }
 }

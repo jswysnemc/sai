@@ -10,6 +10,7 @@ use crate::agent::Agent;
 mod agent_selection;
 mod compact;
 mod exit_hint;
+mod input_restore;
 mod model_selection;
 mod navigation;
 mod plugin_commands;
@@ -576,7 +577,11 @@ pub(super) async fn run_repl(
                 Err(error) => {
                     // 上行失败必须可见并退回输入框：用户输入绝不能静默消失
                     runtime.record_meta(error.to_string())?;
-                    prefill = Some(submission.raw_input.clone());
+                    input_restore::restore_submitted_input(
+                        &submission.history,
+                        &mut prefill,
+                        &mut prefill_clipboard,
+                    );
                     continue;
                 }
             }
@@ -642,8 +647,12 @@ pub(super) async fn run_repl(
             break;
         }
         if outcome.interrupted {
-            if !state.latest_interrupted_turn_has_content(&submitted_input)? {
-                prefill = Some(submitted_input);
+            if !goal_continuation && !state.latest_interrupted_turn_has_content(&submitted_input)? {
+                input_restore::restore_submitted_input(
+                    &submission.history,
+                    &mut prefill,
+                    &mut prefill_clipboard,
+                );
             } else if let Some(draft) = outcome.leftover_draft {
                 prefill = Some(draft);
             }
@@ -673,10 +682,16 @@ pub(super) async fn run_repl(
         if let Err(error) = outcome.result {
             // 断连类错误保留可重试提示，其余错误展示完整错误链
             runtime.record_failure(turn_failure_text(&error))?;
-            if crate::llm::is_transient_transport_error(&error) {
-                prefill = Some(submitted_input.clone());
-            } else if let Some(draft) = outcome.leftover_draft {
+            if !goal_continuation && crate::llm::is_transient_transport_error(&error) {
+                input_restore::restore_submitted_input(
+                    &submission.history,
+                    &mut prefill,
+                    &mut prefill_clipboard,
+                );
+            }
+            if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {
                 prefill = Some(draft);
+                prefill_clipboard = Some(clipboard);
             }
             continue;
         }
