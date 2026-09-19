@@ -1,5 +1,8 @@
 use super::ToolCallStreamProgress;
 
+#[cfg(test)]
+mod progress_tests;
+
 const PROGRESS_BYTE_STEP: usize = 8 * 1024;
 const ARGUMENTS_PREVIEW_CHARS: usize = 4096;
 /// 编辑/命令正文字段预览上限：需覆盖流式 +N -M 跳动，不能卡在 4K
@@ -119,12 +122,21 @@ impl ToolCallProgressTracker {
         } else {
             ARGUMENTS_PREVIEW_CHARS
         };
+        let arguments_chars = arguments.chars().count();
+        // 1. 【终端】【行数进度】预览有长度上限，计数必须覆盖上限之后的正文与字段
+        let edit_diff_counts =
+            if arguments_chars > preview_limit && matches!(name, "write_file" | "str_replace") {
+                super::streamed_diff_counts(arguments)
+            } else {
+                None
+            };
         Some(ToolCallStreamProgress {
             index,
             name: (!name.trim().is_empty()).then(|| name.to_string()),
-            arguments_chars: arguments.chars().count(),
+            arguments_chars,
             arguments_bytes,
             arguments_preview: arguments.chars().take(preview_limit).collect(),
+            edit_diff_counts,
         })
     }
 }

@@ -1,24 +1,5 @@
 use super::*;
-use crate::cli::repl_mentions::{find_mention_trigger, mention_suggestions, MentionSuggestion};
-
-/// 返回光标处可见的引用建议。
-///
-/// 参数:
-/// - `input`: 当前输入
-/// - `cursor`: 光标字符偏移
-/// - `skills`: skill 目录
-///
-/// 返回:
-/// - 过滤后的建议
-pub(super) fn active_mention_suggestions(
-    input: &str,
-    cursor: usize,
-    skills: &[(String, String)],
-) -> Vec<MentionSuggestion> {
-    find_mention_trigger(input, cursor)
-        .map(|trigger| mention_suggestions(&trigger, skills))
-        .unwrap_or_default()
-}
+use crate::cli::repl_mentions::find_mention_trigger;
 
 /// 确认当前引用建议，替换触发片段。
 ///
@@ -27,7 +8,7 @@ pub(super) fn active_mention_suggestions(
 /// - `cursor`: 光标字符偏移
 /// - `clipboard`: 接收原子块登记的输入状态
 /// - `selected`: 选中下标
-/// - `skills`: skill 目录
+/// - `runtime`: 异步候选运行期
 ///
 /// 返回:
 /// - 新输入与新光标；无建议时为空
@@ -35,11 +16,14 @@ pub(super) fn complete_active_mention(
     input: &str,
     cursor: usize,
     selected: usize,
-    skills: &[(String, String)],
+    runtime: &ReplRuntime,
     clipboard: &mut ReplClipboardState,
 ) -> Option<(String, usize)> {
     let trigger = find_mention_trigger(input, cursor)?;
-    let suggestions = mention_suggestions(&trigger, skills);
+    let suggestions = runtime.mention_candidates(input, cursor);
+    if runtime.mention_completion_pending() {
+        return Some((input.to_string(), cursor));
+    }
     let item = suggestions.get(selected.min(suggestions.len().saturating_sub(1)))?;
     Some(clipboard.complete_mention(input, &trigger, item))
 }

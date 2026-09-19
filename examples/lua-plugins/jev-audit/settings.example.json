@@ -1,0 +1,7 @@
+{
+  "base_url": "https://api.typesafe.ai/v1",
+  "model": "jev-latest",
+  "timeout_seconds": 10,
+  "minimum_probability": 0.9,
+  "minimum_confidence": 0.8
+}

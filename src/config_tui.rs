@@ -1,4 +1,5 @@
 mod agents;
+pub(crate) mod compaction;
 mod form;
 mod gateways;
 mod input;

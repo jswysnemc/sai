@@ -38,7 +38,7 @@ impl ReplRuntime {
             clipboard_blocks,
             slash_selection,
         );
-        frame.set_mention_skills(self.mention_skills.clone());
+        frame.set_mention_candidates(self.mention_candidates(input, cursor));
         frame.set_panel_lines(self.bottom_panel_lines(usize::from(size.cols)));
         // 运行期间置灰打断类命令：排队会让用户不知道命令何时才执行，
         // 而提示"本轮结束后可用"至少是可预期的
@@ -57,16 +57,12 @@ impl ReplRuntime {
         frame.set_panels_dismissed(self.panels_dismissed.is_some());
         self.last_chrome = Some(chrome.clone());
         self.composer = Some(frame);
-        // 终端尺寸已变化：旧 origin 上的 reserve 计算全部失效，
-        // 直接触发 source-backed 重锚重放（replay 内部会绘制新 composer）
-        if size != self.viewport.size() {
-            self.reflow.observe(size, false);
-            self.reflow.schedule_immediate();
-            self.maybe_reflow_due(false)?;
-            return Ok((
-                self.viewport.composer_top(),
-                self.viewport.composer_height(),
-            ));
+        // 【终端】【尺寸预览】输入立即适配新尺寸，源码重排仍等待 debounce
+        if size != self.viewport.size() || self.resize_preview.is_some() {
+            self.reflow.observe(size, self.stream_active);
+            self.preview_resize(size)?;
+            let viewport = self.drawing_viewport();
+            return Ok((viewport.composer_top(), viewport.composer_height()));
         }
         let previous_size = self.viewport.size();
         let previous_history = self.viewport.history_height();
@@ -210,6 +206,7 @@ impl ReplRuntime {
     /// 返回:
     /// - 绘制结果
     pub(in crate::cli) fn queue_composer(&mut self) -> Result<()> {
+        let viewport = self.drawing_viewport();
         let Some(composer) = &self.composer else {
             return Ok(());
         };
@@ -217,7 +214,7 @@ impl ReplRuntime {
         // 逐行清除再打印，Windows Terminal 下这一空窗表现为底部闪烁
         let (cursor_row, signature) = composer.draw_lines(
             &mut self.frame,
-            &self.viewport,
+            &viewport,
             self.last_composer_signature.as_ref(),
         )?;
         self.last_composer_signature = Some(signature);
@@ -510,8 +507,8 @@ impl ReplRuntime {
     /// - `rows`: 新终端行数
     ///
     /// 返回:
-    /// - 无
-    pub(in crate::cli) fn observe_input_resize(&mut self, cols: u16, rows: u16) {
+    /// - 尺寸预览绘制结果
+    pub(in crate::cli) fn observe_input_resize(&mut self, cols: u16, rows: u16) -> Result<()> {
         self.observe_size(
             TerminalSize {
                 cols: cols.max(1),
@@ -519,6 +516,10 @@ impl ReplRuntime {
             },
             false,
         );
+        self.preview_resize(TerminalSize {
+            cols: cols.max(1),
+            rows: rows.max(1),
+        })
     }
 
     /// 处理流式阶段的 Resize 事件。
@@ -530,8 +531,8 @@ impl ReplRuntime {
     /// - `rows`: 新终端行数
     ///
     /// 返回:
-    /// - 无
-    pub(in crate::cli) fn observe_stream_resize(&mut self, cols: u16, rows: u16) {
+    /// - 尺寸预览绘制结果
+    pub(in crate::cli) fn observe_stream_resize(&mut self, cols: u16, rows: u16) -> Result<()> {
         self.observe_size(
             TerminalSize {
                 cols: cols.max(1),
@@ -539,6 +540,10 @@ impl ReplRuntime {
             },
             true,
         );
+        self.preview_resize(TerminalSize {
+            cols: cols.max(1),
+            rows: rows.max(1),
+        })
     }
 
     /// 收起 slash / @ / # 补全面板。
@@ -554,6 +559,10 @@ impl ReplRuntime {
     /// - 无
     pub(in crate::cli) fn dismiss_composer_panels(&mut self, input: &str, cursor: usize) {
         self.panels_dismissed = Some((input.to_string(), cursor));
+        self.mention_completion
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .cancel();
     }
 
     /// 补全面板当前是否已收起。

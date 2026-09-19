@@ -15,7 +15,12 @@ impl LiveTail {
     /// - 对应的历史 cell
     fn into_cell(self, duration: Option<std::time::Duration>) -> HistoryCell {
         match self.kind {
-            ChatStreamKind::Content => HistoryCell::markdown(self.source),
+            ChatStreamKind::Content => {
+                HistoryCell::Markdown(super::super::markdown_cell::MarkdownCell {
+                    source: self.source,
+                    table_layouts: self.table_layouts,
+                })
+            }
             ChatStreamKind::Reasoning => {
                 let mut cell =
                     crate::render::transcript::reasoning_cell::ReasoningCell::new(self.source);
@@ -307,6 +312,8 @@ impl TranscriptStore {
                     kind: chunk.kind,
                     source: chunk.text.clone(),
                     expanded: false,
+                    table_layouts: Default::default(),
+                    markdown_cache: Default::default(),
                 });
             }
             None => {
@@ -316,6 +323,8 @@ impl TranscriptStore {
                     kind: chunk.kind,
                     source: chunk.text.clone(),
                     expanded: false,
+                    table_layouts: Default::default(),
+                    markdown_cache: Default::default(),
                 });
             }
         }
@@ -332,6 +341,7 @@ impl TranscriptStore {
         self.live_tool_call = Some(LiveToolCall {
             name: progress.name.clone().unwrap_or_else(|| "tool".to_string()),
             arguments_preview: progress.arguments_preview.clone(),
+            edit_diff_counts: progress.edit_diff_counts,
         });
     }
 

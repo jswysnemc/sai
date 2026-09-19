@@ -15,6 +15,21 @@
 ---@alias SaiToolAccess 'read_only'|'writes'|'optional_writes'
 ---@alias SaiCommandAccess 'read_only'|'writes'
 
+--- 宿主提供的完整权限审核事实
+---@class SaiPermissionAuditInput
+---@field tool string 实际工具名
+---@field arguments table<string, any> 完整参数对象
+---@field arguments_json string 保留超大整数精度的完整 JSON 参数文本
+---@field context string 近期上下文摘要
+---@field policy string 宿主审核规则
+
+---@class SaiPermissionAuditOutput
+---@field decision 'allow'|'deny'|'abstain' 仅针对当前请求的决定
+---@field reason? string 最多 2048 字节且不含控制字符的说明
+
+---@class SaiPermissionAuditDefinition
+---@field review fun(input: SaiPermissionAuditInput, ctx: SaiContext): SaiPermissionAuditOutput? 错误或 nil 交还人工
+
 --- 工具定义由宿主在加载时完整校验，参数 Schema 必须描述对象
 ---@class SaiToolDefinition
 ---@field name string 包内名称，最多 48 字节，外部完整工具名还受 64 字节限制

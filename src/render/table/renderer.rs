@@ -71,7 +71,7 @@ pub(crate) fn render_table_row(row: &[CellContent], widths: &[usize], header: bo
                 .map(String::as_str)
                 .unwrap_or("");
             let is_protocol = is_image && is_graphics_protocol_line(raw_line);
-            let line = if header && !raw_line.is_empty() {
+            let line = if header && !raw_line.is_empty() && !is_protocol {
                 format!("\x1b[1m{raw_line}\x1b[0m")
             } else {
                 raw_line.to_string()
@@ -145,7 +145,7 @@ pub(super) fn push_image_cell_line(
 ///
 /// 返回:
 /// - 是否为 Kitty、iTerm2 或 Sixel 协议
-fn is_graphics_protocol_line(line: &str) -> bool {
+pub(super) fn is_graphics_protocol_line(line: &str) -> bool {
     line.starts_with("\x1b_G") || line.starts_with("\x1b]1337;") || line.starts_with("\x1bP")
 }
 
@@ -225,6 +225,7 @@ pub(super) fn wrap_ansi_text(text: &str, width: usize) -> Vec<String> {
     let mut current = String::new();
     let mut current_width = 0usize;
     let mut active_style = String::new();
+    let mut word_start = true;
     let mut index = 0usize;
     while index < text.len() {
         let ch = text[index..].chars().next().unwrap_or_default();
@@ -237,7 +238,15 @@ pub(super) fn wrap_ansi_text(text: &str, width: usize) -> Vec<String> {
         }
         let grapheme = text[index..].graphemes(true).next().unwrap_or("");
         let grapheme_width = text_display_width(grapheme);
-        if current_width > 0 && current_width + grapheme_width > width {
+        let whitespace = grapheme.chars().all(char::is_whitespace);
+        // 1. 能完整放进一列的单词整体换行，超长命令和中文仍按字素拆分
+        let word_width = if word_start && !whitespace {
+            visible_width(text[index..].split_whitespace().next().unwrap_or(""))
+        } else {
+            0
+        };
+        let wrap_word = word_width <= width && current_width + word_width > width;
+        if current_width > 0 && (current_width + grapheme_width > width || wrap_word) {
             if !active_style.is_empty() {
                 current.push_str(RESET);
             }
@@ -247,6 +256,7 @@ pub(super) fn wrap_ansi_text(text: &str, width: usize) -> Vec<String> {
         }
         current.push_str(grapheme);
         current_width += grapheme_width;
+        word_start = whitespace;
         index += grapheme.len();
     }
     // 末行同样要收尾：否则单元格最后一段停在粗体 / 行内代码色上时，

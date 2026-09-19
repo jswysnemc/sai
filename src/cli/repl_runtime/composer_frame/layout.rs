@@ -42,14 +42,12 @@ impl ComposerFrame {
             // 收起后重新输入前不再弹出，避免 Esc 看起来失灵
             MentionPanel::new(Vec::new(), 0)
         } else {
-            mention_panel_for(
-                &self.input,
-                self.cursor,
-                self.slash_selection,
-                &self.mention_skills,
-            )
+            MentionPanel::new(self.mention_candidates.clone(), self.slash_selection)
         };
-        let slash_panel = if self.panels_dismissed || mention_panel.is_visible() {
+        let slash_panel = if self.panels_dismissed
+            || mention_panel.is_visible()
+            || self.cursor != self.input.chars().count()
+        {
             SlashPanel::new("", 0, self.streaming)
         } else {
             SlashPanel::new(&self.input, self.slash_selection, self.streaming)
@@ -99,28 +97,6 @@ fn placeholder_text() -> String {
 /// 首条是输入引导，之后每轮换一条功能提示，见 placeholder_tips。
 fn static_placeholder_tip() -> &'static str {
     crate::cli::repl_runtime::placeholder_tips::current_tip()
-}
-
-/// 构造当前光标处的引用面板。
-///
-/// 参数:
-/// - `input`: 当前输入
-/// - `cursor`: 光标字符偏移
-/// - `selected`: 选中项
-/// - `skills`: skill 目录
-///
-/// 返回:
-/// - 引用面板
-fn mention_panel_for(
-    input: &str,
-    cursor: usize,
-    selected: usize,
-    skills: &[(String, String)],
-) -> MentionPanel {
-    let suggestions = find_mention_trigger(input, cursor)
-        .map(|trigger| mention_suggestions(&trigger, skills))
-        .unwrap_or_default();
-    MentionPanel::new(suggestions, selected)
 }
 
 /// 按原始输入行起点给显示行应用剪贴板块颜色。

@@ -14,7 +14,7 @@ use crate::render::transcript::{
 /// - `options`: transcript 渲染选项
 /// - `min_rows`: 窗口至少覆盖的行数
 /// - `max_start`: 窗口首行允许的最大全局行号
-/// - `live_cap`: 临时 live 预览的最大行数
+/// - `live_cap`: 表格允许重新分配列宽的行数预算，超过后固定布局并继续输出
 ///
 /// 返回:
 /// - 已按净正文宽度折行并增加左侧留白的窗口
@@ -122,15 +122,15 @@ impl ReplRuntime {
     }
 }
 
-/// 计算 live 预览允许占用的最大行数。
+/// 【终端】【流式表格】计算允许重排列宽的可见行数预算。
 ///
-/// live 预览行一旦进入原生 scrollback 便无法修补，上限保证只有定稿内容进入回滚区。
+/// 表格超过预算后固定列宽，所有已完成行继续滚入终端历史，不裁剪前缀。
 ///
 /// 参数:
 /// - `size`: 当前终端尺寸
 ///
 /// 返回:
-/// - live 预览行数上限
+/// - 可变列宽预算
 pub(super) fn live_preview_cap(size: TerminalSize) -> usize {
     (usize::from(size.rows) / 2).max(8)
 }
@@ -403,6 +403,7 @@ mod tests {
         .to_string();
         let mut transcript = TranscriptStore::new(100);
         transcript.push_tool_call_progress(&crate::llm::ToolCallStreamProgress {
+            edit_diff_counts: None,
             index: 0,
             name: Some("str_replace".to_string()),
             arguments_chars: arguments.chars().count(),

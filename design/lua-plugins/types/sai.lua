@@ -7,6 +7,7 @@
 ---@field limits table<string, integer> 清单资源上限视图，修改它不会提高实际额度
 ---@field register_tool fun(definition: SaiToolDefinition): nil 初始化时注册工具
 ---@field register_command fun(definition: SaiCommandDefinition): nil 初始化时注册用户命令
+---@field register_permission_audit fun(definition: SaiPermissionAuditDefinition): nil 初始化时注册独立授权的权限审核回调
 ---@field on fun(event: SaiEventName, callback: fun(event: table, ctx: SaiToolContext): any): nil 初始化时订阅普通生命周期事件
 ---@field json SaiJson JSON 值与文本转换
 ---@field text SaiText 有界纯文本处理

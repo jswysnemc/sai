@@ -1,29 +1,10 @@
 use crate::cli::repl_commands::MAX_REPL_COMMAND_SUGGESTIONS;
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
-use crate::runtime_cwd;
 use crate::tools::{load_installed_skill_document, skill_catalog};
-use std::path::{Path, PathBuf};
-use std::sync::Mutex;
-use std::time::{Duration, Instant};
-
-/// 目录条目缓存有效期。
-const DIR_CACHE_TTL: Duration = Duration::from_millis(500);
-
-/// 单条目录列表缓存。
-struct DirCacheEntry {
-    /// 缓存键：目录路径 + 插入前缀
-    key: String,
-    show_hidden: bool,
-    fetched_at: Instant,
-    entries: Vec<MentionSuggestion>,
-}
-
-/// 目录条目缓存。
-///
-/// 补全面板每帧都会重算（32ms 一次），而 read_dir + 逐条 stat 在大目录上
-/// 可能要几十毫秒，未缓存时输入 `@` 会直接把界面卡住。
-static DIR_CACHE: Mutex<Option<DirCacheEntry>> = Mutex::new(None);
+pub(in crate::cli) mod completion;
+mod files;
+mod worker;
 
 /// 输入框引用触发类型。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,24 +66,6 @@ pub(super) fn find_mention_trigger(input: &str, cursor: usize) -> Option<Mention
         end: cursor,
         query: chars[start + 1..cursor].iter().collect(),
     })
-}
-
-/// 根据触发词生成可见建议。
-///
-/// 参数:
-/// - `trigger`: 当前触发范围
-/// - `skills`: 已缓存的 skill 名称与描述
-///
-/// 返回:
-/// - 不超过面板容量的建议
-pub(super) fn mention_suggestions(
-    trigger: &MentionTrigger,
-    skills: &[(String, String)],
-) -> Vec<MentionSuggestion> {
-    match trigger.kind {
-        MentionKind::Skill => filter_skills(skills, &trigger.query),
-        MentionKind::File => list_cwd_files(&trigger.query),
-    }
 }
 
 /// 用选中项替换触发片段。
@@ -221,150 +184,6 @@ fn filter_skills(skills: &[(String, String)], query: &str) -> Vec<MentionSuggest
         .collect()
 }
 
-/// 列出当前目录（或查询前缀目录）中匹配的文件与子目录。
-///
-/// 参数:
-/// - `query`: `@` 后的过滤词，可含路径前缀
-///
-/// 返回:
-/// - 匹配的文件建议
-fn list_cwd_files(query: &str) -> Vec<MentionSuggestion> {
-    let cwd = runtime_cwd::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let (dir, filter) = split_file_query(query);
-    let root = if dir.is_empty() {
-        cwd.clone()
-    } else {
-        cwd.join(&dir)
-    };
-    let keyword = filter.to_ascii_lowercase();
-    let show_hidden = filter.starts_with('.')
-        || dir
-            .trim_end_matches('/')
-            .rsplit('/')
-            .next()
-            .is_some_and(|part| part.starts_with('.'));
-    let mut entries = cached_dir_entries(&root, &dir, show_hidden);
-    if !keyword.is_empty() {
-        entries.retain(|entry| entry.label.to_ascii_lowercase().contains(&keyword));
-    }
-    entries.truncate(MAX_REPL_COMMAND_SUGGESTIONS);
-    entries
-}
-
-/// 把查询拆成目录前缀和最后一段过滤词。
-///
-/// 参数:
-/// - `query`: `@` 后的文本
-///
-/// 返回:
-/// - 相对目录与文件名过滤词
-fn split_file_query(query: &str) -> (String, String) {
-    match query.rfind('/') {
-        Some(index) => (query[..=index].to_string(), query[index + 1..].to_string()),
-        None => (String::new(), query.to_string()),
-    }
-}
-
-/// 读取目录条目并在短时间内复用结果。
-///
-/// 过滤词每次按键都变，但目录内容不会，因此按目录缓存原始条目、
-/// 过滤留在缓存之外做，避免每帧重复扫盘。
-///
-/// 参数:
-/// - `root`: 绝对或工作区路径
-/// - `prefix`: 插入时使用的相对前缀
-/// - `show_hidden`: 是否列出点开头的条目
-///
-/// 返回:
-/// - 已排序的目录与文件建议
-fn cached_dir_entries(root: &Path, prefix: &str, show_hidden: bool) -> Vec<MentionSuggestion> {
-    let key = format!("{}\u{0}{prefix}", root.display());
-    if let Ok(guard) = DIR_CACHE.lock() {
-        if let Some(entry) = guard.as_ref() {
-            if entry.key == key
-                && entry.show_hidden == show_hidden
-                && entry.fetched_at.elapsed() < DIR_CACHE_TTL
-            {
-                return entry.entries.clone();
-            }
-        }
-    }
-    let entries = read_dir_entries(root, prefix, show_hidden);
-    if let Ok(mut guard) = DIR_CACHE.lock() {
-        *guard = Some(DirCacheEntry {
-            key,
-            show_hidden,
-            fetched_at: Instant::now(),
-            entries: entries.clone(),
-        });
-    }
-    entries
-}
-
-/// 读取一个目录下的文件与子目录。
-///
-/// 参数:
-/// - `root`: 绝对或工作区路径
-/// - `prefix`: 插入时使用的相对前缀，含尾部 `/`
-/// - `show_hidden`: 是否列出点开头的条目
-///
-/// 返回:
-/// - 已排序的目录与文件建议
-fn read_dir_entries(root: &Path, prefix: &str, show_hidden: bool) -> Vec<MentionSuggestion> {
-    let Ok(read) = std::fs::read_dir(root) else {
-        return Vec::new();
-    };
-    let mut dirs = Vec::new();
-    let mut files = Vec::new();
-    for entry in read.flatten() {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if name == "." || name == ".." {
-            continue;
-        }
-        if !show_hidden && name.starts_with('.') {
-            continue;
-        }
-        if is_ignored_dir(&name) {
-            continue;
-        }
-        let is_dir = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
-        let relative = format!("{prefix}{name}");
-        if is_dir {
-            dirs.push(MentionSuggestion {
-                insert: format!("@{relative}/"),
-                label: format!("{relative}/"),
-                description: "directory".to_string(),
-                continue_filter: true,
-            });
-        } else {
-            files.push(MentionSuggestion {
-                insert: format!("@{relative}"),
-                label: relative,
-                description: "file".to_string(),
-                continue_filter: false,
-            });
-        }
-    }
-    dirs.sort_by(|left, right| left.label.cmp(&right.label));
-    files.sort_by(|left, right| left.label.cmp(&right.label));
-    dirs.extend(files);
-    dirs
-}
-
-/// 判断目录名是否应跳过。
-///
-/// 参数:
-/// - `name`: 目录名
-///
-/// 返回:
-/// - 常见构建与依赖目录为真
-fn is_ignored_dir(name: &str) -> bool {
-    matches!(
-        name,
-        ".git" | "node_modules" | "target" | "dist" | "build" | ".sai" | "__pycache__"
-    )
-}
-
 /// 读取可供 TUI 引用的 skill 目录。
 ///
 /// 参数:
@@ -417,7 +236,7 @@ mod tests {
             end: 4,
             query: "dra".to_string(),
         };
-        let items = mention_suggestions(&trigger, &skills);
+        let items = filter_skills(&skills, &trigger.query);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].insert, "#drawio");
     }

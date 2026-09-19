@@ -18,7 +18,7 @@ use crate::cli::repl_clipboard::ReplClipboardBlockSpan;
 use crate::cli::repl_input_render::{
     repl_cursor_position_for_cols, repl_prompt_rows_for_cols, repl_visible_input_lines,
 };
-use crate::cli::repl_mentions::{find_mention_trigger, mention_suggestions};
+use crate::cli::repl_mentions::MentionSuggestion;
 use crate::cli::repl_text::repl_input_lines;
 use crate::cli::REPL_MAX_VISIBLE_INPUT_ROWS;
 use anyhow::Result;
@@ -50,8 +50,8 @@ pub(super) struct ComposerFrame {
     is_pasted: bool,
     clipboard_blocks: Vec<ReplClipboardBlockSpan>,
     slash_selection: usize,
-    /// `#` 引用可用的 skill 名称与描述
-    mention_skills: Vec<(String, String)>,
+    /// 与输入快照一致的引用候选，绘制期间不访问文件系统
+    mention_candidates: Vec<MentionSuggestion>,
     /// 输入框上方的沉底面板行（todo 快照 / 排队消息 / agent 提示）
     panel_lines: Vec<String>,
     /// 是否已用 Esc 收起补全面板（slash / @ / #）
@@ -91,7 +91,7 @@ impl ComposerFrame {
             is_pasted,
             clipboard_blocks,
             slash_selection,
-            mention_skills: Vec::new(),
+            mention_candidates: Vec::new(),
             panel_lines: Vec::new(),
             panels_dismissed: false,
             streaming: false,
@@ -120,15 +120,15 @@ impl ComposerFrame {
         self.panels_dismissed = dismissed;
     }
 
-    /// 设置 `#` 引用使用的 skill 目录。
+    /// 设置已经完成并验证的引用候选。
     ///
     /// 参数:
-    /// - `skills`: 名称与描述
+    /// - `items`: 当前输入对应的候选
     ///
     /// 返回:
     /// - 无
-    pub(super) fn set_mention_skills(&mut self, skills: Vec<(String, String)>) {
-        self.mention_skills = skills;
+    pub(super) fn set_mention_candidates(&mut self, items: Vec<MentionSuggestion>) {
+        self.mention_candidates = items;
     }
 
     /// 设置输入框上方的沉底面板行。

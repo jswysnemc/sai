@@ -7,6 +7,7 @@ pub mod host;
 mod manifest;
 mod native;
 mod package;
+mod permission_audit;
 mod presentation;
 mod reply_policy;
 mod runtime;
@@ -22,6 +23,10 @@ pub use capabilities::{
 pub use contracts::{EventContext, EventKind, PluginCommand, PluginTool, ToolAccess};
 pub use manifest::{ExecutionLimits, PluginManifest, API_VERSION};
 pub use package::PluginPackage;
+pub use permission_audit::{
+    PermissionAuditDecision, PermissionAuditInput, PermissionAuditOutput,
+    MAX_PERMISSION_AUDIT_INPUT_BYTES,
+};
 pub use presentation::{
     Notification, PresentationRuntime, PresentationSurface, ReplyPresentation, ReplyStatus,
     MAX_NOTIFICATIONS,

@@ -164,6 +164,7 @@ fn edit_progress_waits_for_renderable_diff_before_consuming_preview() {
 
     renderer
         .write_tool_call_progress(&ToolCallStreamProgress {
+            edit_diff_counts: None,
             index: 0,
             name: Some("str_replace".to_string()),
             arguments_chars: 0,
@@ -181,6 +182,7 @@ fn edit_progress_waits_for_renderable_diff_before_consuming_preview() {
         format!(r#"{{"path":{path_json},"old_string":"old","new_string":"new","#);
     renderer
         .write_tool_call_progress(&ToolCallStreamProgress {
+            edit_diff_counts: None,
             index: 0,
             name: Some("str_replace".to_string()),
             arguments_chars: arguments_preview.chars().count(),
@@ -204,6 +206,7 @@ fn command_progress_keeps_single_line_status_until_final_call() {
 
     renderer
         .write_tool_call_progress(&ToolCallStreamProgress {
+            edit_diff_counts: None,
             index: 0,
             name: Some("run_command".to_string()),
             arguments_chars: 0,

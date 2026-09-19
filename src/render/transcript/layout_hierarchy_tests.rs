@@ -119,6 +119,7 @@ fn live_content_and_tool_preview_keep_section_gap() {
     store.push_user_echo(TranscriptMode::Automatic, "ask".into());
     store.push_chunk(&chunk(ChatStreamKind::Content, "Here is the answer.\n"));
     store.push_tool_call_progress(&crate::llm::ToolCallStreamProgress {
+        edit_diff_counts: None,
         index: 0,
         name: Some("read_file".into()),
         arguments_chars: 16,
@@ -141,6 +142,7 @@ fn finalized_body_and_live_tool_preview_keep_section_gap() {
     store.push_chunk(&chunk(ChatStreamKind::Content, "Here is the answer."));
     store.finalize_live_tail();
     store.push_tool_call_progress(&crate::llm::ToolCallStreamProgress {
+        edit_diff_counts: None,
         index: 0,
         name: Some("read_file".into()),
         arguments_chars: 16,
@@ -207,6 +209,7 @@ fn live_reasoning_and_tool_preview_share_single_gap_rules() {
     store.push_user_echo(TranscriptMode::Automatic, "ask".into());
     store.push_chunk(&chunk(ChatStreamKind::Reasoning, "consider options\n"));
     store.push_tool_call_progress(&crate::llm::ToolCallStreamProgress {
+        edit_diff_counts: None,
         index: 0,
         name: Some("read_file".into()),
         arguments_chars: 16,

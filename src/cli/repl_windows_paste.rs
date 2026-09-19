@@ -2,6 +2,13 @@
 use crate::clipboard::{self, ClipboardPayload};
 use std::time::{Duration, Instant};
 
+#[cfg(windows)]
+mod native;
+#[cfg(all(windows, test))]
+mod native_tests;
+#[cfg(any(windows, test))]
+mod replay;
+
 const WINDOWS_PASTE_BURST_WINDOW: Duration = Duration::from_millis(250);
 
 /// Windows 终端将多行剪贴板拆成普通按键时的粘贴状态。
@@ -29,6 +36,19 @@ pub(super) enum WindowsPasteKey {
 }
 
 impl WindowsPasteState {
+    /// 【终端】【Windows 粘贴】批量消费已确认属于剪贴板的控制台事件
+    /// 参数: 无；返回本次消费的原生事件数，其他平台或接口不可用时返回零
+    pub(super) fn drain_console_replay(&mut self) -> usize {
+        #[cfg(windows)]
+        {
+            native::drain(self).unwrap_or_default()
+        }
+        #[cfg(not(windows))]
+        {
+            0
+        }
+    }
+
     /// 记录一个普通字符，为后续 Windows 粘贴识别保留短时突发输入。
     ///
     /// 参数:

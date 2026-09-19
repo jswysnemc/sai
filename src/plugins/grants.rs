@@ -20,6 +20,7 @@ pub(crate) struct GrantChanges {
     pub notifications: Option<bool>,
     pub tui_status: Option<bool>,
     pub reply_policy: Option<bool>,
+    pub permission_audit: Option<bool>,
     pub tools: Option<BTreeSet<String>>,
     pub read_paths: Option<BTreeSet<String>>,
     pub remove_paths: Option<BTreeSet<String>>,
@@ -61,6 +62,7 @@ impl GrantUpdate {
                 notifications: changes.notifications.unwrap_or(current.notifications),
                 tui_status: changes.tui_status.unwrap_or(current.tui_status),
                 reply_policy: changes.reply_policy.unwrap_or(current.reply_policy),
+                permission_audit: changes.permission_audit.unwrap_or(current.permission_audit),
                 tools: changes.tools.unwrap_or(current.tools),
                 binary: BinaryCapabilities {
                     public_downloads: changes

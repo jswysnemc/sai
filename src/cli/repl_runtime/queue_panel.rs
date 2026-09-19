@@ -121,6 +121,14 @@ impl QueuePanelState {
         }
         self.pending_delete = false;
         match code {
+            KeyCode::PageUp | KeyCode::Home => {
+                self.selected = 0;
+                QueuePanelAction::Consumed
+            }
+            KeyCode::PageDown | KeyCode::End => {
+                self.selected = len.saturating_sub(1);
+                QueuePanelAction::Consumed
+            }
             KeyCode::Up => {
                 self.selected = self.selected.saturating_sub(1);
                 QueuePanelAction::Consumed

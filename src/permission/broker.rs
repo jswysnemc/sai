@@ -24,7 +24,7 @@ pub(crate) enum PermissionAllowSource {
     /// 人工确认允许
     #[default]
     Human,
-    /// LLM 自动审核允许
+    /// 所选模型或 Lua 插件自动审核允许
     AutoAudit,
 }
 

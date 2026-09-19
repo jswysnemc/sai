@@ -54,6 +54,7 @@ mod repl_background;
 mod repl_chrome;
 mod repl_clipboard;
 mod repl_commands;
+mod repl_completion;
 mod repl_editor;
 mod repl_editor_buffer;
 mod repl_external_events;
@@ -64,6 +65,7 @@ mod repl_input_render;
 mod repl_input_tests;
 mod repl_mentions;
 mod repl_pager;
+mod repl_panel_focus;
 mod repl_runtime;
 mod repl_shell;
 mod repl_text;
@@ -105,10 +107,7 @@ use repl::run_repl;
 use repl_background::run_repl_background_manager;
 #[cfg(test)]
 use repl_commands::repl_command_suggestions;
-use repl_commands::{
-    complete_repl_command, repl_command_rest, unknown_slash_command_hint,
-    visible_repl_command_suggestions,
-};
+use repl_commands::{repl_command_rest, unknown_slash_command_hint};
 use repl_editor::edit_input_buffer;
 use repl_input::read_repl_input;
 use repl_input_navigation::{move_cursor_down_by_visual_row, move_cursor_up_by_visual_row};

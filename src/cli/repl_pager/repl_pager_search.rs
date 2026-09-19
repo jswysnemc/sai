@@ -1,4 +1,4 @@
-use crate::render::activity_animation::strip_ansi_for_test;
+use super::search_index::{SearchIndex, SourceSpan};
 use crate::render::transcript::AnsiLine;
 
 /// Ctrl+O 阅读面板的搜索状态。
@@ -10,6 +10,8 @@ pub(super) struct PagerSearch {
     pub(super) matches: Vec<usize>,
     /// 当前高亮的命中序号
     pub(super) selected: usize,
+    index: SearchIndex,
+    hits: Vec<Vec<SourceSpan>>,
 }
 
 impl PagerSearch {
@@ -30,21 +32,14 @@ impl PagerSearch {
     /// 返回:
     /// - 无
     pub(super) fn update(&mut self, query: &str, content_lines: &[AnsiLine]) {
-        self.query = query.to_string();
-        self.matches.clear();
-        self.selected = 0;
-        if !self.active() {
+        let changed = self.index.refresh(content_lines);
+        if self.query == query && !changed {
             return;
         }
-        let needle = self.query.to_lowercase();
-        for (index, line) in content_lines.iter().enumerate() {
-            if strip_ansi_for_test(line.as_str())
-                .to_lowercase()
-                .contains(&needle)
-            {
-                self.matches.push(index);
-            }
-        }
+        self.query = query.to_string();
+        self.selected = 0;
+        self.hits = self.index.find(query);
+        self.matches = self.hits.iter().map(|hit| hit[0].row).collect();
     }
 
     /// 追加一个字符到搜索词。
@@ -85,20 +80,12 @@ impl PagerSearch {
         self.selected = selected.min(self.matches.len().saturating_sub(1));
     }
 
-    /// 高亮命中行的可见文字，避免原有 ANSI 样式覆盖搜索结果。
+    /// 高亮命中文字，保留 ANSI 颜色和跨行匹配。
     ///
     /// 参数: `line` 为原始样式行，`index` 为内容行下标
-    /// 返回: 命中时返回反色文字，其余行保留原样
+    /// 返回: 只在实际命中范围插入高亮样式
     pub(super) fn highlight(&self, line: &str, index: usize) -> String {
-        if self.matches.binary_search(&index).is_err() {
-            return line.to_string();
-        }
-        let style = if self.current() == Some(index) {
-            "\x1b[1m\x1b[7m"
-        } else {
-            "\x1b[4m"
-        };
-        format!("{style}{}\x1b[0m", strip_ansi_for_test(line))
+        super::search_highlight::highlight(line, index, &self.hits, self.selected)
     }
 
     /// 跳到下一个命中。
@@ -167,6 +154,37 @@ mod tests {
             .iter()
             .map(|value| AnsiLine::new(value.to_string()))
             .collect()
+    }
+
+    /// 跨行短语只高亮命中文字，两处同一行命中可独立导航
+    #[test]
+    fn highlights_exact_cross_line_and_repeated_matches() {
+        let content = lines(&["prefix alpha", "  beta suffix alpha beta"]);
+        let mut search = PagerSearch::default();
+        search.update("alpha beta", &content);
+        assert_eq!(search.matches, vec![0, 1]);
+        let first = search.highlight(content[0].as_str(), 0);
+        assert!(first.starts_with("prefix \x1b[1m\x1b[7malpha"));
+        let second = search.highlight(content[1].as_str(), 1);
+        assert!(second.contains("beta\x1b[0m suffix \x1b[4malpha beta"));
+        search.update("a", &lines(&["a a"]));
+        assert_eq!(search.matches, vec![0, 0]);
+        assert_eq!(search.next(), Some(0));
+        assert_eq!(search.selected, 1);
+    }
+
+    /// 颜色片段、中文与大小写展开仍映射到完整原字符，图片载荷不参与搜索
+    #[test]
+    fn preserves_ansi_images_and_unicode_boundaries() {
+        let content = lines(&["\x1b[31m前 İ\x1b[0m中 e\u{301} 后\x1b_Gf=100;hidden\x1b\\"]);
+        let mut search = PagerSearch::default();
+        search.update("i\u{307}中", &content);
+        assert_eq!(search.matches, vec![0]);
+        let highlighted = search.highlight(content[0].as_str(), 0);
+        assert!(highlighted.starts_with("\x1b[31m前 "));
+        assert!(highlighted.contains("\x1b_Gf=100;hidden\x1b\\"));
+        search.update("hidden", &content);
+        assert!(search.matches.is_empty());
     }
 
     /// 搜索命中按大小写不敏感统计，导航循环。

@@ -87,6 +87,10 @@ pub(in crate::cli) fn stream_command_policy(input: &str) -> StreamCommandPolicy 
         input,
         crate::control_commands::ControlSurface::Repl,
     ) {
+        // 【上下文】【策略编辑】生成期间沿用交互面板禁用规则，避免争用终端输入
+        Ok(Some(crate::control_commands::ControlCommand::Context {
+            update: Some(crate::control_commands::ContextPolicyUpdate::Edit),
+        })) => StreamCommandPolicy::Disabled,
         // 只读查询：自建 StateStore 或读子智能体目录，不触碰 Agent
         Ok(Some(
             crate::control_commands::ControlCommand::Help
@@ -165,6 +169,9 @@ pub(super) fn repl_command_suggestions(input: &str, streaming: bool) -> Vec<Repl
     if !input.starts_with('/') {
         return Vec::new();
     }
+    if input.contains(char::is_whitespace) {
+        return super::repl_completion::arguments(input, streaming);
+    }
     // 前缀匹配大小写不敏感，与执行侧的 eq_ignore_ascii_case 口径一致
     let lowered = input.to_ascii_lowercase();
     repl_commands()
@@ -241,6 +248,7 @@ pub(super) fn visible_repl_command_suggestions(
 ///
 /// 返回:
 /// - 唯一补全结果
+#[cfg(test)]
 pub(super) fn complete_repl_command(input: &str, streaming: bool) -> Option<&'static str> {
     let suggestions: Vec<ReplCommandSuggestion> = repl_command_suggestions(input, streaming)
         .into_iter()
@@ -269,8 +277,8 @@ fn command_description(command: &str) -> &'static str {
             "在当前会话执行插件命令",
         ),
         "/context" => t(
-            "show context usage and compaction policy",
-            "查看上下文占用与压缩策略",
+            "show context usage; /context edit opens compaction settings",
+            "查看上下文占用；/context edit 打开压缩设置",
         ),
         "/new" => t("start a new session", "新建会话"),
         "/resume" => t("resume or switch sessions", "恢复或切换会话"),
@@ -478,6 +486,7 @@ mod tests {
     #[test]
     fn stateful_commands_are_disabled_while_streaming() {
         for command in [
+            "/context edit",
             "/new",
             "/resume",
             "/compact",

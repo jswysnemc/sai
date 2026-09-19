@@ -1,9 +1,13 @@
+mod fallback;
 mod layout;
+pub(crate) mod live_layout;
 mod model;
 mod parser;
 mod renderer;
 pub(crate) mod streaming;
 
+#[cfg(test)]
+mod regression_tests;
 #[cfg(test)]
 mod tests;
 
@@ -14,8 +18,6 @@ pub(crate) use renderer::{
     bottom_border, middle_border, render_table_row, top_border, visible_width,
 };
 
-#[cfg(test)]
-use layout::readable_table_min_width;
 #[cfg(test)]
 use parser::split_table_cells;
 #[cfg(test)]
@@ -29,16 +31,40 @@ use renderer::{push_image_cell_line, wrap_ansi_text};
 ///
 /// 返回:
 /// - 带细实线边框的终端表格文本
+#[cfg(test)]
 pub(crate) fn render_table<F>(lines: &[String], render_cell: F) -> String
+where
+    F: Fn(&str) -> CellContent + Copy,
+{
+    render_table_with_widths(lines, render_cell, None).0
+}
+
+/// 【表格】【稳定布局】使用已固定的列宽渲染，公式图片仍按最终列宽适配
+/// 参数: lines 为源码行，render_cell 为单元格渲染器，fixed 为可选固定列宽
+/// 返回: 表格文本与实际采用的列宽，空列宽表示纵向降级
+fn render_table_with_widths<F>(
+    lines: &[String],
+    render_cell: F,
+    fixed: Option<&[usize]>,
+) -> (String, Vec<usize>)
 where
     F: Fn(&str) -> CellContent + Copy,
 {
     let rows = lines
         .iter()
-        .filter(|line| !is_table_separator(line))
-        .map(|line| parse_table_row(line, render_cell))
+        .enumerate()
+        .filter(|(index, line)| *index != 1 || !is_table_separator(line))
+        .map(|(_, line)| parse_table_row(line, render_cell))
         .collect::<Vec<_>>();
-    let widths = compute_table_widths(&rows);
+    let widths = fixed
+        .map(<[usize]>::to_vec)
+        .unwrap_or_else(|| compute_table_widths(&rows));
+    if widths.is_empty() {
+        return (
+            fallback::render_stacked(&rows, layout::available_width()),
+            widths,
+        );
+    }
     let mut rows = rows;
     refit_math_image_cells(&mut rows, &widths);
 
@@ -51,7 +77,7 @@ where
         }
     }
     output.push_str(&bottom_border(&widths));
-    output
+    (output, widths)
 }
 
 /// 按最终列宽重新渲染过宽的公式图片单元格。

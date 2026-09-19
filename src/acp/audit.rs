@@ -1,6 +1,6 @@
 use crate::agent::AgentEvent;
 use crate::agent_engine::EventSender;
-use crate::llm::OpenAiCompatibleClient;
+use crate::permission::AutoAuditBackend;
 use crate::permission::{PermissionDecision, PermissionProfile};
 use crate::tools::ToolPermission;
 use anyhow::{bail, Result};
@@ -51,21 +51,13 @@ pub(crate) async fn ensure_authorized(
     );
     let request_id = request.id.clone();
     let auto_task = auto_audit.map(|runtime| {
-        let client = runtime.client.clone();
+        let backend = runtime.backend.clone();
+        let workdir = runtime.workdir.clone();
         let context = runtime.context.clone();
-        let request_id = request_id.clone();
-        let tool = tool.to_string();
-        let arguments_text = arguments_text.clone();
+        let audit_request = request.clone();
         tokio::spawn(async move {
             // 失败或超时静默回退人工审核，与自带内核一致
-            let _ = crate::permission::run_auto_audit(
-                &client,
-                &request_id,
-                &tool,
-                &arguments_text,
-                &context,
-            )
-            .await;
+            let _ = backend.run(&audit_request, &context, &workdir).await;
         })
     });
     // 3. 权限卡送到界面，等待人工或自动审核给出结论
@@ -112,8 +104,9 @@ pub(crate) async fn ensure_authorized(
 /// 让审核模型至少知道这次操作发生在什么场景下。
 #[derive(Clone)]
 pub(crate) struct AutoAuditRuntime {
-    /// 审核模型客户端
-    pub(crate) client: OpenAiCompatibleClient,
+    /// 所选自动审核后端
+    pub(crate) backend: AutoAuditBackend,
+    pub(crate) workdir: std::path::PathBuf,
     /// 供审核模型参考的上下文摘要
     pub(crate) context: String,
 }

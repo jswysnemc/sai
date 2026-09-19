@@ -172,8 +172,12 @@ impl HistoryCell {
     ///
     /// 返回:
     /// - 助手 Markdown cell
+    #[cfg(test)]
     pub(crate) fn markdown(source: String) -> Self {
-        Self::Markdown(MarkdownCell { source })
+        Self::Markdown(MarkdownCell {
+            source,
+            table_layouts: Default::default(),
+        })
     }
 
     /// 构造 reasoning cell。

@@ -47,7 +47,7 @@ pub(crate) enum PluginsCommand {
     /// 【插件命令】【启用授权】启用插件，并按声明分别调整各项宿主能力授权
     Enable {
         id: String,
-        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_any", "no_http_read_any", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_vision", "no_vision", "allow_tool", "no_tools", "allow_read_path", "no_file_read", "allow_remove_path", "no_file_remove", "allow_trash_path", "no_file_trash", "allow_env", "no_env", "allow_process", "no_processes", "allow_session_storage", "no_session_storage", "allow_plugin_storage", "no_plugin_storage", "allow_workspace", "no_workspace", "allow_notifications", "no_notifications", "allow_tui_status", "no_tui_status", "allow_reply_policy", "no_reply_policy", "allow_notify", "no_notify", "allow_schedule", "no_schedule", "allow_public_downloads", "no_public_downloads", "allow_write_path", "no_file_write", "allow_image_display", "no_image_display"])]
+        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_any", "no_http_read_any", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_vision", "no_vision", "allow_tool", "no_tools", "allow_read_path", "no_file_read", "allow_remove_path", "no_file_remove", "allow_trash_path", "no_file_trash", "allow_env", "no_env", "allow_process", "no_processes", "allow_session_storage", "no_session_storage", "allow_plugin_storage", "no_plugin_storage", "allow_workspace", "no_workspace", "allow_notifications", "no_notifications", "allow_tui_status", "no_tui_status", "allow_reply_policy", "no_reply_policy", "allow_permission_audit", "no_permission_audit", "allow_notify", "no_notify", "allow_schedule", "no_schedule", "allow_public_downloads", "no_public_downloads", "allow_write_path", "no_file_write", "allow_image_display", "no_image_display"])]
         grant_declared: bool,
         #[arg(long, value_name = "ORIGIN", conflicts_with = "no_http")]
         allow_http: Vec<String>,
@@ -91,6 +91,14 @@ pub(crate) enum PluginsCommand {
         allow_reply_policy: bool,
         #[arg(long)]
         no_reply_policy: bool,
+        #[arg(
+            long,
+            conflicts_with = "no_permission_audit",
+            help = "Allow the explicitly selected automatic permission reviewer"
+        )]
+        allow_permission_audit: bool,
+        #[arg(long)]
+        no_permission_audit: bool,
         #[arg(
             long,
             conflicts_with = "no_notify",
@@ -339,6 +347,8 @@ pub(crate) async fn run(
             no_tui_status,
             allow_reply_policy,
             no_reply_policy,
+            allow_permission_audit,
+            no_permission_audit,
             allow_notify,
             no_notify,
             allow_schedule,
@@ -384,6 +394,8 @@ pub(crate) async fn run(
                 || no_tui_status
                 || allow_reply_policy
                 || no_reply_policy
+                || allow_permission_audit
+                || no_permission_audit
                 || allow_notify
                 || no_notify
                 || allow_schedule
@@ -438,6 +450,8 @@ pub(crate) async fn run(
                     tui_status: (allow_tui_status || no_tui_status).then_some(allow_tui_status),
                     reply_policy: (allow_reply_policy || no_reply_policy)
                         .then_some(allow_reply_policy),
+                    permission_audit: (allow_permission_audit || no_permission_audit)
+                        .then_some(allow_permission_audit),
                     notify: (allow_notify || no_notify).then_some(allow_notify),
                     schedule: (allow_schedule || no_schedule).then_some(allow_schedule),
                     tools: (no_tools || !allow_tool.is_empty())

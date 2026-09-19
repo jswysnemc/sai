@@ -1,4 +1,7 @@
 mod audit;
+mod audit_backend;
+#[cfg(test)]
+mod audit_backend_tests;
 mod auto_audit;
 mod broker;
 mod command_policy;
@@ -17,4 +20,5 @@ pub(crate) use interaction::{PermissionInteractionState, PermissionTransition};
 #[allow(unused_imports)]
 pub(crate) use policy::{PermissionProfile, PermissionProfileMode, SessionScope};
 
-pub(crate) use auto_audit::{build_audit_context, resolve_auto_audit_client, run_auto_audit};
+pub(crate) use audit_backend::AutoAuditBackend;
+pub(crate) use auto_audit::build_audit_context;

@@ -1,7 +1,7 @@
 use super::line::AnsiLine;
 use super::spacing;
 use super::store::TranscriptStore;
-use super::{assistant_body, markdown_cell, reasoning_cell, TranscriptRenderOptions};
+use super::{assistant_body, reasoning_cell, TranscriptRenderOptions};
 use crate::llm::ChatStreamKind;
 
 /// 一次增量同步所需的 transcript 视图数据。
@@ -55,22 +55,11 @@ impl TranscriptStore {
         self.display_window_with_live_cap(width, options, min_rows, max_start, usize::MAX)
     }
 
-    /// 渲染尾部窗口，并对临时 live 预览限制行数。
+    /// 【终端】【完整流式输出】渲染尾部窗口，长表格固定列宽后继续增长
     ///
-    /// 未闭合表格的列宽随后续行回溯变化，已渲染行一旦被真实滚动推入
-    /// 原生 scrollback 就无法再修补，成为永久残留；这类临时预览截断为
-    /// 尾部 `live_cap` 行。普通流式正文渲染稳定，**不截断**，
-    /// 否则正文会被困在固定高度内反复重绘而无法向下增长。
-    ///
-    /// 参数:
-    /// - `width`: 当前终端列数
-    /// - `options`: transcript 渲染选项
-    /// - `min_rows`: 窗口至少覆盖的行数
-    /// - `max_start`: 窗口首行不得晚于该全局行号
-    /// - `live_cap`: live 预览最多保留的尾部行数
-    ///
-    /// 返回:
-    /// - 增量同步视图
+    /// 参数: width 为正文宽度，options 为展示选项，min_rows 为最小窗口行数，
+    /// max_start 为最晚起点，live_cap 为允许表格重排列宽的行数预算
+    /// 返回: 保留所有流式内容的增量窗口，超屏部分交由终端写入滚动历史
     pub(crate) fn display_window_with_live_cap(
         &mut self,
         width: usize,
@@ -98,15 +87,8 @@ impl TranscriptStore {
             };
         }
         let frame = self.live_animation_frame();
-        let (live_full, transient) = self.display_live_tail_parts(width, options);
-        // 仅临时结构（未闭合表格预览）截断到尾部 live_cap 行；
-        // 稳定正文必须完整参与窗口，才能正常增长并滚入 scrollback
-        let live_skip = if transient {
-            live_full.len().saturating_sub(live_cap.max(1))
-        } else {
-            0
-        };
-        let mut live: Vec<AnsiLine> = live_full.into_iter().skip(live_skip).collect();
+        // 1. 【终端】【长表格】保留全部已完成行，超过预算只固定布局，不删除前缀
+        let mut live = self.render_live_tail(width, options, live_cap);
         // 1. 统计每个 cell 的行数（缓存命中时只读长度，不重新渲染）
         let mut counts = Vec::with_capacity(self.cells.len());
         let mut gap_before = vec![false; self.cells.len()];
@@ -210,38 +192,37 @@ impl TranscriptStore {
     /// - 当前 live 尾部的预换行 ANSI 行
     #[cfg(test)]
     pub(crate) fn display_live_tail(
-        &self,
+        &mut self,
         width: usize,
         options: &TranscriptRenderOptions,
     ) -> Vec<AnsiLine> {
-        self.display_live_tail_parts(width, options).0
+        self.render_live_tail(width, options, usize::MAX)
     }
 
-    /// 渲染 live 尾部，并报告其中是否含随后续内容回溯变化的临时结构。
-    ///
-    /// 参数:
-    /// - `width`: 当前终端列数
-    /// - `options`: transcript 渲染选项
-    ///
-    /// 返回:
-    /// - `(预换行 ANSI 行, 是否含临时结构)`
-    fn display_live_tail_parts(
-        &self,
+    /// 【终端】【流式正文】渲染全部流式内容并记住长表格列宽
+    /// 参数: width 为正文净宽，options 为展示选项，live_cap 为列宽可变预算
+    /// 返回: 包含前置正文、表格和状态行的完整显示行
+    fn render_live_tail(
+        &mut self,
         width: usize,
         options: &TranscriptRenderOptions,
-    ) -> (Vec<AnsiLine>, bool) {
+        live_cap: usize,
+    ) -> Vec<AnsiLine> {
+        let frame = self.live_animation_frame();
         let mut lines = Vec::new();
-        let mut transient = false;
         let mut emitted_live_content = false;
-        if let Some(tail) = &self.live_tail {
+        if let Some(tail) = &mut self.live_tail {
             // 【终端】【流式正文】1. 按内容类型选择渲染方式，避免宽度与折行分支漂移
             let mut rendered_lines = match tail.kind {
                 ChatStreamKind::Content => {
-                    let (rendered, open) =
-                        crate::render::render_width::with_render_width(width, || {
-                            markdown_cell::render_completed_parts(&tail.source)
-                        });
-                    transient = open;
+                    let rendered = crate::render::render_width::with_render_width(width, || {
+                        tail.markdown_cache.render(
+                            &tail.source,
+                            width,
+                            &mut tail.table_layouts,
+                            live_cap,
+                        )
+                    });
                     // 【终端】【正文引导】2. Markdown 流式正文添加与定稿正文一致的引导区
                     assistant_body::display_lines(&rendered, width)
                 }
@@ -254,7 +235,7 @@ impl TranscriptStore {
                         reasoning_cell::render_live(
                             &tail.source,
                             options.reasoning_mode,
-                            self.live_animation_frame(),
+                            frame,
                             elapsed,
                             tail.expanded,
                         )
@@ -290,13 +271,11 @@ impl TranscriptStore {
                     &tool_call.name,
                     &tool_call.arguments_preview,
                     options.tool_call_mode,
+                    tool_call.edit_diff_counts,
                 )
             });
-            let rendered = if self.live_animation_frame() > 0 {
-                crate::render::content_indent::animate_guide_marker(
-                    &rendered,
-                    self.live_animation_frame(),
-                )
+            let rendered = if frame > 0 {
+                crate::render::content_indent::animate_guide_marker(&rendered, frame)
             } else {
                 rendered
             };
@@ -316,14 +295,12 @@ impl TranscriptStore {
                     .work_status_started
                     .map(|started| started.elapsed())
                     .unwrap_or_default();
-                let mut status_lines = AnsiLine::wrap_block(
-                    &status.render_line(self.live_animation_frame(), elapsed),
-                    width,
-                );
+                let mut status_lines =
+                    AnsiLine::wrap_block(&status.render_line(frame, elapsed), width);
                 spacing::trim_trailing_visual_blanks(&mut status_lines);
                 lines.extend(status_lines);
             }
         }
-        (lines, transient)
+        lines
     }
 }

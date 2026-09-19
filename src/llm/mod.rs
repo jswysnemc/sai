@@ -2,6 +2,7 @@ mod http_debug;
 mod openai_compatible;
 mod stream_event;
 mod thinking;
+mod tool_argument_stats;
 mod tool_call_stream;
 mod transport_retry;
 
@@ -9,6 +10,7 @@ pub use http_debug::RequestContextGuard as HttpDebugRequestContextGuard;
 pub use http_debug::SessionGuard as HttpDebugSessionGuard;
 pub use openai_compatible::OpenAiCompatibleClient;
 pub use stream_event::{ChatStreamEvent, ToolCallStreamProgress};
+pub(crate) use tool_argument_stats::streamed_diff_counts;
 pub(crate) use transport_retry::{error_detail_text, is_transient_transport_error};
 
 use serde::{Deserialize, Serialize};

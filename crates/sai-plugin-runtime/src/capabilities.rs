@@ -31,6 +31,8 @@ pub struct Capabilities {
     pub tui_status: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub reply_policy: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub permission_audit: bool,
     #[serde(default, skip_serializing_if = "BinaryCapabilities::is_empty")]
     pub binary: BinaryCapabilities,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
@@ -100,6 +102,7 @@ impl Capabilities {
             notifications: self.notifications && granted.notifications,
             tui_status: self.tui_status && granted.tui_status,
             reply_policy: self.reply_policy && granted.reply_policy,
+            permission_audit: self.permission_audit && granted.permission_audit,
             binary: self.binary.intersection(&granted.binary),
             tools: self.tools.intersection(&granted.tools).cloned().collect(),
             system: self.system.intersection(&granted.system),
@@ -120,6 +123,7 @@ impl Capabilities {
             && (!self.notifications || declared.notifications)
             && (!self.tui_status || declared.tui_status)
             && (!self.reply_policy || declared.reply_policy)
+            && (!self.permission_audit || declared.permission_audit)
             && self.binary.is_subset(&declared.binary)
             && self.tools.is_subset(&declared.tools)
             && self.system.is_subset(&declared.system)

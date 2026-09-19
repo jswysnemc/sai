@@ -1,0 +1,19 @@
+{
+  "api_version": 1,
+  "id": "jev-audit",
+  "version": "1.0.0",
+  "name": "Jev 权限审核",
+  "description": "通过 TypeSafe 官方 Jev 结构化判断审核工具操作，不确定或调用失败时交还人工",
+  "entry": "init.lua",
+  "capabilities": {
+    "permission_audit": true,
+    "http": ["https://api.typesafe.ai"],
+    "http_read_only_post": ["https://api.typesafe.ai/v1/systemone"],
+    "system": {"environment": ["TYPESAFE_KEY", "TYPESAFE_API_KEY"]}
+  },
+  "limits": {
+    "timeout_ms": 15000,
+    "http_timeout_ms": 10000,
+    "output_bytes": 262144
+  }
+}

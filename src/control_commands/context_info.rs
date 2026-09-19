@@ -623,6 +623,9 @@ fn apply_context_policy_update(
         return Ok(());
     };
     match update {
+        crate::control_commands::ContextPolicyUpdate::Edit => {
+            anyhow::bail!("interactive context editor requires a terminal")
+        }
         crate::control_commands::ContextPolicyUpdate::Reset => state.clear_compaction_policy(),
         crate::control_commands::ContextPolicyUpdate::Set {
             ratio_percent,

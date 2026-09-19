@@ -24,16 +24,6 @@ fn table_draws_middle_borders_between_all_rows() {
 }
 
 #[test]
-fn readable_table_min_width_returns_expected_values() {
-    assert_eq!(readable_table_min_width(0), 0);
-    assert_eq!(readable_table_min_width(1), 16);
-    assert_eq!(readable_table_min_width(2), 14);
-    assert_eq!(readable_table_min_width(3), 10);
-    assert_eq!(readable_table_min_width(4), 10);
-    assert_eq!(readable_table_min_width(5), 8);
-}
-
-#[test]
 fn short_tables_use_content_width() {
     let output = sample_table(&[
         "| 项目 | 内容 |",

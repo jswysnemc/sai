@@ -176,7 +176,7 @@ pub(super) fn prompt_permission_request_tui(
                 );
             }
             if let Event::Resize(cols, rows) = event {
-                runtime.observe_input_resize(cols, rows);
+                runtime.observe_input_resize(cols, rows)?;
                 runtime.update_permission_choice(&request.id, state.selected())?;
                 runtime.update_permission_reply(
                     &request.id,

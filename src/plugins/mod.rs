@@ -15,6 +15,7 @@ mod management_lock;
 mod notification;
 pub(crate) mod operation;
 mod package_archive;
+pub(crate) mod permission_audit;
 mod presentation;
 mod private;
 mod registry;

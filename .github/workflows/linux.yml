@@ -65,6 +65,14 @@ jobs:
       - name: Verify Linux executable
         run: test -x target/release/sai
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Run terminal emulator regressions
+        env:
+          SAI_TEST_BINARY: target/release/sai
+        run: uv run scripts/tui_regression.py
+
       - name: Upload Linux executable
         uses: actions/upload-artifact@v4
         with:

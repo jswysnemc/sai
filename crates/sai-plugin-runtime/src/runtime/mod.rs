@@ -10,6 +10,7 @@ mod json_input;
 mod modules;
 mod native;
 mod notification;
+mod permission_audit;
 mod private;
 mod registration;
 mod reply_execution;
@@ -63,6 +64,8 @@ pub struct PluginRuntime {
     reply_registered: bool,
     reply_allowed: bool,
     tool_policy_registered: bool,
+    audit_registered: bool,
+    audit_allowed: bool,
     vm: Arc<Mutex<Vm>>,
 }
 
@@ -72,6 +75,7 @@ struct Vm {
     commands: BTreeMap<String, RegisteredCommand>,
     events: BTreeMap<EventKind, Vec<mlua::Function>>,
     reply_policy: Option<reply_policy::RegisteredReplyPolicy>,
+    permission_audit: Option<mlua::Function>,
     control: Arc<control::CallControl>,
 }
 
@@ -82,6 +86,7 @@ enum Invocation {
     ReplyPrepare(String),
     ReplyComplete(Value),
     AfterTool(Value, Value),
+    PermissionAudit(Value),
 }
 
 impl PluginRuntime {
@@ -99,6 +104,7 @@ impl PluginRuntime {
         let manifest = Arc::new(package.manifest.clone());
         let capabilities = package.manifest.capabilities.intersection(&granted);
         let reply_allowed = capabilities.reply_policy;
+        let audit_allowed = capabilities.permission_audit;
         let lua = Lua::new_with(
             StdLib::TABLE | StdLib::STRING | StdLib::MATH | StdLib::UTF8,
             LuaOptions::default(),
@@ -147,6 +153,7 @@ impl PluginRuntime {
         let commands = std::mem::take(&mut registrations.commands);
         let events = std::mem::take(&mut registrations.events);
         let reply_policy = registrations.reply_policy.take();
+        let permission_audit = registrations.permission_audit.take();
         registrations.closed = true;
         let metadata = tools.values().map(|tool| tool.definition.clone()).collect();
         let command_metadata = commands
@@ -162,6 +169,8 @@ impl PluginRuntime {
             commands: Arc::new(command_metadata),
             events: Arc::new(event_metadata),
             reply_registered: reply_policy.is_some(),
+            audit_registered: permission_audit.is_some(),
+            audit_allowed,
             tool_policy_registered: reply_policy
                 .as_ref()
                 .is_some_and(|policy| policy.after_tool.is_some()),
@@ -172,6 +181,7 @@ impl PluginRuntime {
                 commands,
                 events,
                 reply_policy,
+                permission_audit,
                 control,
             })),
         })

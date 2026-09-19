@@ -85,6 +85,14 @@ impl AgentPanelState {
         }
         let total = entries.len() + 1;
         match code {
+            KeyCode::PageUp | KeyCode::Home => {
+                self.selected = 0;
+                AgentPanelAction::Consumed
+            }
+            KeyCode::PageDown | KeyCode::End => {
+                self.selected = total.saturating_sub(1);
+                AgentPanelAction::Consumed
+            }
             KeyCode::Up => {
                 if self.selected == 0 {
                     // 主项再按 ↑：收成单行，焦点回到输入框

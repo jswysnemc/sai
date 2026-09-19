@@ -54,6 +54,7 @@ mod image_support;
 mod input_method_investigation;
 mod input_method_report;
 mod input_method_settings;
+mod jev_audit;
 mod knowledge_commands;
 mod knowledge_contract;
 mod knowledge_embedding;

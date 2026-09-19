@@ -474,15 +474,13 @@ impl Agent {
                         let (auto_task, auto_audit_active) = if self.mode() == AgentMode::AutoAudit
                         {
                             let context = crate::permission::build_audit_context(&messages, 2_500);
-                            let tool_name = call.function.name.clone();
-                            let arguments = call.function.arguments.clone();
-                            match crate::permission::resolve_auto_audit_client(
+                            match crate::permission::AutoAuditBackend::resolve(
                                 &self.config,
                                 &self.paths,
                             ) {
                                 Ok(audit_client) => {
                                     // 先占位 request_id，创建请求后再克隆给任务
-                                    (Some((audit_client, context, tool_name, arguments)), true)
+                                    (Some((audit_client, context)), true)
                                 }
                                 Err(_) => {
                                     // 客户端不可用：静默回退人工审核
@@ -500,38 +498,31 @@ impl Agent {
                                 auto_audit_active,
                             );
                         let request_id = request.id.clone();
-                        let auto_task =
-                            auto_task.map(|(audit_client, context, tool_name, arguments)| {
-                                let audit_request_id = request_id.clone();
-                                tokio::spawn(async move {
-                                    // 超时或失败时静默回退人工审核
-                                    match crate::permission::run_auto_audit(
-                                        &audit_client,
-                                        &audit_request_id,
-                                        &tool_name,
-                                        &arguments,
-                                        &context,
-                                    )
-                                    .await
-                                    {
-                                        Ok(_) => {}
-                                        Err(error) => {
-                                            let message = format!("{error:#}");
-                                            // 超时 / 竞态：完全静默；其它失败仅提示一次后回退人工
-                                            if message.contains("timed out")
-                                                || message.contains("timeout")
-                                                || message.contains("no longer pending")
-                                                || message.contains("no longer running")
-                                            {
-                                                return;
-                                            }
-                                            eprintln!(
-                                                "[sai] auto-audit fallback to human: {message}"
-                                            );
+                        let auto_task = auto_task.map(|(audit_client, context)| {
+                            let audit_request = request.clone();
+                            let workdir = crate::runtime_cwd::current_dir()
+                                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+                            tokio::spawn(async move {
+                                // 超时或失败时静默回退人工审核
+                                match audit_client.run(&audit_request, &context, &workdir).await {
+                                    Ok(_) => {}
+                                    Err(error) => {
+                                        let message = format!("{error:#}");
+                                        // 超时 / 竞态：完全静默；其它失败仅提示一次后回退人工
+                                        if message.contains("timed out")
+                                            || message.contains("timeout")
+                                            || message.contains("no longer pending")
+                                            || message.contains("no longer running")
+                                        {
+                                            return;
                                         }
+                                        eprintln!(
+                                            "【权限审核】【人工接管】自动审核失败: {message}"
+                                        );
                                     }
-                                })
-                            });
+                                }
+                            })
+                        });
                         on_event(AgentEvent::PermissionRequested(request.clone()))?;
                         let decision = match decision_rx.await {
                             Ok(decision) => {

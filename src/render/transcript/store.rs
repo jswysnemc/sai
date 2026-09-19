@@ -24,11 +24,12 @@ pub(crate) struct TranscriptRenderOptions {
 }
 
 /// 仍在生成中的文本 source。
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct LiveTail {
     pub(super) kind: ChatStreamKind,
     pub(super) source: String,
     pub(super) expanded: bool,
+    pub(super) table_layouts: crate::render::table::live_layout::TableLayouts,
+    pub(super) markdown_cache: super::markdown_stream_cache::MarkdownStreamCache,
 }
 
 /// 正在接收参数的工具调用预览。
@@ -36,6 +37,7 @@ pub(super) struct LiveTail {
 pub(super) struct LiveToolCall {
     pub(super) name: String,
     pub(super) arguments_preview: String,
+    pub(super) edit_diff_counts: Option<(usize, usize)>,
 }
 
 /// 最近一次 todo 工具快照中的单个条目（供沉底面板展示）。

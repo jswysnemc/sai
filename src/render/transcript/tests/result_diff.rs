@@ -50,6 +50,7 @@ fn tool_result_restores_diff_when_file_already_written() {
 
     // 1. 参数流阶段：流式统计随分片跳动
     store.push_tool_call_progress(&ToolCallStreamProgress {
+        edit_diff_counts: None,
         index: 0,
         name: Some("write_file".to_string()),
         arguments_chars: arguments.len(),

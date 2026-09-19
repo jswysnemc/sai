@@ -133,6 +133,10 @@ fn repl_only_help_lines() -> Vec<String> {
     vec![
         t("REPL:", "REPL:").to_string(),
         format!(
+            "  /context edit       {}",
+            t("open visual compaction settings", "打开可视化压缩设置")
+        ),
+        format!(
             "  /context [85] [8k]  {}",
             t(
                 "show context usage; optional session compact ratio and reserve",

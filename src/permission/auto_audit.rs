@@ -1,7 +1,7 @@
 use crate::config::AppConfig;
 use crate::llm::{ChatMessage, ChatStreamEvent, OpenAiCompatibleClient};
 use crate::paths::SaiPaths;
-use crate::permission::{decide_permission, PermissionDecision};
+use crate::permission::PermissionDecision;
 use crate::prompts;
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
@@ -99,17 +99,7 @@ pub(crate) async fn run_auto_audit(
     let content = result.content.trim();
     let decision = parse_auto_audit_response(content)?;
     // 3. 提交决定；若人工已先处理则请求已不存在
-    match decide_permission(request_id, decision) {
-        Ok(()) => Ok(true),
-        Err(error) => {
-            let message = error.to_string();
-            if message.contains("no longer pending") || message.contains("no longer running") {
-                Ok(false)
-            } else {
-                Err(error)
-            }
-        }
-    }
+    super::audit_backend::submit(request_id, decision)
 }
 
 /// 解析 LLM JSON 审核结果。

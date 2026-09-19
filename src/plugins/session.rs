@@ -57,6 +57,7 @@ impl PluginInstance {
             self.runtime.events(),
             self.runtime.has_reply_policy(),
             self.runtime.has_tool_policy(),
+            self.runtime.has_permission_audit(),
         ))?;
         let current = serde_json::to_value((
             fresh.runtime.tools(),
@@ -64,6 +65,7 @@ impl PluginInstance {
             fresh.runtime.events(),
             fresh.runtime.has_reply_policy(),
             fresh.runtime.has_tool_policy(),
+            fresh.runtime.has_permission_audit(),
         ))?;
         if original != current {
             bail!(

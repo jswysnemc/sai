@@ -1,5 +1,9 @@
 #[path = "tests/command_output.rs"]
 mod command_output;
+#[path = "tests/long_tables.rs"]
+mod long_tables;
+#[path = "tests/markdown_cache.rs"]
+mod markdown_cache;
 #[path = "tests/reasoning.rs"]
 mod reasoning;
 #[path = "tests/subagent_panels.rs"]
@@ -89,6 +93,7 @@ fn live_table_is_emitted_once_without_cursor_replacement_sequences() {
 fn live_tool_argument_preview_is_visible_until_the_call_is_finalized() {
     let mut store = TranscriptStore::new(100);
     store.push_tool_call_progress(&ToolCallStreamProgress {
+        edit_diff_counts: None,
         index: 0,
         name: Some("read_file".to_string()),
         arguments_chars: 12,
@@ -144,9 +149,8 @@ fn streaming_content_grows_without_live_cap() {
 }
 
 #[test]
-fn open_table_preview_stays_capped() {
-    // 未闭合表格的列宽会回溯变化：其预览必须受 live 上限约束，
-    // 避免中间帧被滚入 scrollback 成为残留
+fn open_table_preview_grows_past_mutable_layout_budget() {
+    // 【终端】【长表格】超过可变布局预算后只固定列宽，全部行仍参与输出
     let mut store = TranscriptStore::new(500);
     let mut source = String::from("| 列一 | 列二 |\n|---|---|\n");
     for n in 1..=40 {
@@ -156,8 +160,8 @@ fn open_table_preview_stays_capped() {
 
     let window = store.display_window_with_live_cap(80, &options(), 64, usize::MAX, 12);
     assert!(
-        window.total <= 12,
-        "开放表格预览应截断到 live 上限: total={}",
+        window.total > 40,
+        "开放表格应保留全部数据行: total={}",
         window.total
     );
 }

@@ -4,6 +4,7 @@ pub(crate) mod command_output;
 mod diff_cell;
 mod line;
 mod markdown_cell;
+mod markdown_stream_cache;
 mod meta_cell;
 pub(crate) mod reasoning_cell;
 mod render_cache;

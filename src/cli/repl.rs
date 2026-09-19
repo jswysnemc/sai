@@ -304,6 +304,13 @@ pub(super) async fn run_repl(
                     }
                     crate::control_commands::ControlCommand::Context { update } => {
                         runtime.record_user(mode, input.to_string(), false)?;
+                        if update == Some(crate::control_commands::ContextPolicyUpdate::Edit) {
+                            let result = crate::config_tui::compaction::run_session(paths);
+                            runtime.redraw()?;
+                            runtime
+                                .record_meta(result.unwrap_or_else(|error| error.to_string()))?;
+                            continue;
+                        }
                         match crate::control_commands::context_info_for_mode_with_update(
                             paths, mode, update,
                         ) {

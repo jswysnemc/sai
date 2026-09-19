@@ -135,8 +135,24 @@ impl MarkdownStreamRenderer {
     ///
     /// 返回:
     /// - 当前最优渲染；无开放结构时为空
-    pub(crate) fn snapshot_open_structures(&self) -> String {
+    pub(crate) fn snapshot_open_structures(&mut self) -> String {
         self.line_renderer.snapshot_open()
+    }
+
+    /// 【终端】【表格布局】恢复已输出表格的固定列宽
+    /// 参数: layouts 为布局记录，freeze_after 为可变预览预算；返回: 无
+    pub(crate) fn set_table_layouts(
+        &mut self,
+        layouts: table::live_layout::TableLayouts,
+        freeze_after: Option<usize>,
+    ) {
+        self.line_renderer.table.set_layouts(layouts, freeze_after);
+    }
+
+    /// 【终端】【表格布局】提取本轮渲染采用的固定列宽
+    /// 返回: 后续预览和定稿需要复用的布局记录
+    pub(crate) fn take_table_layouts(&mut self) -> table::live_layout::TableLayouts {
+        self.line_renderer.table.take_layouts()
     }
 }
 
@@ -369,7 +385,7 @@ impl MarkdownLineRenderer {
     ///
     /// 返回:
     /// - 预览文本；无开放结构时为空
-    fn snapshot_open(&self) -> String {
+    fn snapshot_open(&mut self) -> String {
         if self.table.is_active() {
             return self.table.snapshot();
         }

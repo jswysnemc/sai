@@ -37,11 +37,12 @@ impl Vm {
             storage_session,
             !matches!(
                 invocation,
-                Invocation::Event(..) | Invocation::AfterTool(..)
+                Invocation::Event(..) | Invocation::AfterTool(..) | Invocation::PermissionAudit(..)
             ),
         )?;
         let ctx = context_table(&self.lua, &context, self.control.clone())?;
         match invocation {
+            Invocation::PermissionAudit(input) => self.review_permission(input, ctx).await,
             Invocation::AfterTool(input, state) => self.after_tool(input, state, ctx).await,
             Invocation::ReplyPrepare(input) => {
                 self.prepare_reply(input, ctx, context.allow_writes).await

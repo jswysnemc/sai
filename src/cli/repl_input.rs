@@ -10,6 +10,7 @@ const EXTERNAL_EVENT_INPUT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 mod cleanup;
 mod editing;
 pub(super) mod event_batch;
+mod external_editor;
 pub(super) mod history;
 mod submission;
 
@@ -120,7 +121,7 @@ pub(super) fn read_repl_input(
         }
         let event = queued_event.map(Ok).unwrap_or_else(event::read)?;
         match event {
-            Event::Resize(cols, rows) => runtime.observe_input_resize(cols, rows),
+            Event::Resize(cols, rows) => runtime.observe_input_resize(cols, rows)?,
             Event::Paste(text) => {
                 windows_paste.reset();
                 // Windows 终端把 Ctrl+V 转成括号粘贴的文本事件，图片不会以文本
@@ -151,6 +152,7 @@ pub(super) fn read_repl_input(
                 }
                 let replay_key = event_batch::windows_paste_key(code, modifiers);
                 if replay_key.is_some_and(|key| windows_paste.consume_key(key)) {
+                    windows_paste.drain_console_replay();
                     continue;
                 }
                 if code != KeyCode::Esc {
@@ -160,7 +162,20 @@ pub(super) fn read_repl_input(
                 {
                     last_ctrl_c = None;
                 }
-                if super::repl_transcript_pager::is_jump_to_output_bottom_key(code, modifiers) {
+                let focus = runtime.panel_focus(&input, cursor);
+                if runtime.navigate_completion(
+                    &input,
+                    cursor,
+                    &mut slash_selection,
+                    code,
+                    modifiers,
+                ) {
+                    redraw_input!()?;
+                    continue;
+                }
+                if !focus.owns_viewport_keys()
+                    && super::repl_transcript_pager::is_jump_to_output_bottom_key(code, modifiers)
+                {
                     runtime.jump_to_output_bottom(false)?;
                     input_row = 0;
                     rendered_rows = 0;
@@ -261,7 +276,7 @@ pub(super) fn read_repl_input(
                             &input,
                             cursor,
                             slash_selection,
-                            runtime.mention_skills(),
+                            runtime,
                             &mut clipboard_state,
                         ) {
                             input = next;
@@ -269,7 +284,13 @@ pub(super) fn read_repl_input(
                             slash_selection = 0;
                             history_clean_index = None;
                         } else if input.starts_with('/') {
-                            if let Some(completed) = complete_repl_command(&input, false) {
+                            if let Some(completed) = super::repl_completion::accept(
+                                &input,
+                                cursor,
+                                slash_selection,
+                                false,
+                                false,
+                            ) {
                                 input = completed.to_string();
                                 cursor = input.chars().count();
                                 history_clean_index = None;
@@ -280,19 +301,6 @@ pub(super) fn read_repl_input(
                         redraw_input!()?;
                     }
                     KeyCode::Esc => {
-                        // 补全面板打开时，单次 Esc 先收起面板。
-                        // 面板是最显眼的界面元素，却只有「双击 Esc（顺带清空草稿
-                        // 和剪贴板附件）」能关掉，单击看起来像按键失灵
-                        let panel_open =
-                            !active_mention_suggestions(&input, cursor, runtime.mention_skills())
-                                .is_empty()
-                                || !visible_repl_command_suggestions(&input, false).is_empty();
-                        if panel_open && !runtime.composer_panels_dismissed() {
-                            runtime.dismiss_composer_panels(&input, cursor);
-                            last_escape = None;
-                            redraw_input!()?;
-                            continue;
-                        }
                         let now = Instant::now();
                         if last_escape.is_some_and(|previous| {
                             now.duration_since(previous) <= REPL_ESC_CLEAR_WINDOW
@@ -370,102 +378,62 @@ pub(super) fn read_repl_input(
                         redraw_input!()?;
                     }
                     KeyCode::Up => {
-                        let mentions =
-                            active_mention_suggestions(&input, cursor, runtime.mention_skills());
-                        if !mentions.is_empty() {
-                            slash_selection = (slash_selection % mentions.len())
-                                .checked_sub(1)
-                                .unwrap_or(mentions.len().saturating_sub(1));
+                        let plain_prefix = String::new();
+                        // 折行宽度必须与 composer 绘制时一致：绘制用的是去掉
+                        // "> " 边距后的内容宽，用整宽会让落点逐行偏移
+                        if let Some(next_cursor) = move_cursor_up_by_visual_row(
+                            &plain_prefix,
+                            &input,
+                            cursor,
+                            chrome_input_content_cols(terminal_cols()),
+                        ) {
+                            cursor = next_cursor;
                             redraw_input!()?;
-                        } else {
-                            let suggestions = visible_repl_command_suggestions(&input, false);
-                            if !suggestions.is_empty() {
-                                slash_selection = (slash_selection % suggestions.len())
-                                    .checked_sub(1)
-                                    .unwrap_or(suggestions.len().saturating_sub(1));
-                                redraw_input!()?;
-                            } else {
-                                let plain_prefix = String::new();
-                                // 折行宽度必须与 composer 绘制时一致：绘制用的是去掉
-                                // "> " 边距后的内容宽，用整宽会让落点逐行偏移
-                                if let Some(next_cursor) = move_cursor_up_by_visual_row(
-                                    &plain_prefix,
-                                    &input,
-                                    cursor,
-                                    chrome_input_content_cols(terminal_cols()),
-                                ) {
-                                    cursor = next_cursor;
-                                    redraw_input!()?;
-                                } else if repl_should_browse_history(
-                                    &input,
-                                    history,
-                                    history_clean_index,
-                                ) {
-                                    if input.is_empty() {
-                                        history_index = history.len();
-                                    }
-                                    history_index = history_index.saturating_sub(1);
-                                    let draft =
-                                        history::restore_history_entry(&history[history_index]);
-                                    input = draft.text;
-                                    clipboard_state = draft.clipboard_state;
-                                    cursor = input.chars().count();
-                                    history_clean_index = Some(history_index);
-                                    slash_selection = 0;
-                                    is_pasted = false;
-                                    redraw_input!()?;
-                                }
+                        } else if repl_should_browse_history(&input, history, history_clean_index) {
+                            if input.is_empty() {
+                                history_index = history.len();
                             }
+                            history_index = history_index.saturating_sub(1);
+                            let draft = history::restore_history_entry(&history[history_index]);
+                            input = draft.text;
+                            clipboard_state = draft.clipboard_state;
+                            cursor = input.chars().count();
+                            history_clean_index = Some(history_index);
+                            slash_selection = 0;
+                            is_pasted = false;
+                            redraw_input!()?;
                         }
                     }
                     KeyCode::Down => {
-                        let mentions =
-                            active_mention_suggestions(&input, cursor, runtime.mention_skills());
-                        if !mentions.is_empty() {
-                            slash_selection = (slash_selection + 1) % mentions.len();
-                        } else {
-                            let suggestions = visible_repl_command_suggestions(&input, false);
-                            if !suggestions.is_empty() {
-                                slash_selection = (slash_selection + 1) % suggestions.len();
-                            } else {
-                                let plain_prefix = String::new();
-                                if let Some(next_cursor) = move_cursor_down_by_visual_row(
-                                    &plain_prefix,
-                                    &input,
-                                    cursor,
-                                    chrome_input_content_cols(terminal_cols()),
-                                ) {
-                                    cursor = next_cursor;
-                                } else if repl_history_is_clean(
-                                    &input,
-                                    history,
-                                    history_clean_index,
-                                ) && history_index + 1 < history.len()
-                                {
-                                    history_index += 1;
-                                    let draft =
-                                        history::restore_history_entry(&history[history_index]);
-                                    input = draft.text;
-                                    clipboard_state = draft.clipboard_state;
-                                    cursor = input.chars().count();
-                                    history_clean_index = Some(history_index);
-                                    slash_selection = 0;
-                                    is_pasted = false;
-                                } else if repl_history_is_clean(
-                                    &input,
-                                    history,
-                                    history_clean_index,
-                                ) && history_index < history.len()
-                                {
-                                    history_index = history.len();
-                                    input.clear();
-                                    cursor = input.chars().count();
-                                    history_clean_index = None;
-                                    slash_selection = 0;
-                                    clipboard_state.clear();
-                                    is_pasted = false;
-                                }
-                            }
+                        let plain_prefix = String::new();
+                        if let Some(next_cursor) = move_cursor_down_by_visual_row(
+                            &plain_prefix,
+                            &input,
+                            cursor,
+                            chrome_input_content_cols(terminal_cols()),
+                        ) {
+                            cursor = next_cursor;
+                        } else if repl_history_is_clean(&input, history, history_clean_index)
+                            && history_index + 1 < history.len()
+                        {
+                            history_index += 1;
+                            let draft = history::restore_history_entry(&history[history_index]);
+                            input = draft.text;
+                            clipboard_state = draft.clipboard_state;
+                            cursor = input.chars().count();
+                            history_clean_index = Some(history_index);
+                            slash_selection = 0;
+                            is_pasted = false;
+                        } else if repl_history_is_clean(&input, history, history_clean_index)
+                            && history_index < history.len()
+                        {
+                            history_index = history.len();
+                            input.clear();
+                            cursor = input.chars().count();
+                            history_clean_index = None;
+                            slash_selection = 0;
+                            clipboard_state.clear();
+                            is_pasted = false;
                         }
                         redraw_input!()?;
                     }
@@ -497,7 +465,7 @@ pub(super) fn read_repl_input(
                             &input,
                             cursor,
                             slash_selection,
-                            runtime.mention_skills(),
+                            runtime,
                             &mut clipboard_state,
                         ) {
                             input = next;
@@ -508,12 +476,21 @@ pub(super) fn read_repl_input(
                             redraw_input!()?;
                             continue;
                         }
-                        let suggestions = visible_repl_command_suggestions(&input, false);
-                        if let Some(selected) = suggestions
-                            .get(slash_selection.min(suggestions.len().saturating_sub(1)))
-                        {
-                            input = selected.command.to_string();
-                            slash_selection = 0;
+                        if !runtime.composer_panels_dismissed() {
+                            if let Some(completed) = super::repl_completion::accept(
+                                &input,
+                                cursor,
+                                slash_selection,
+                                false,
+                                true,
+                            ) {
+                                input = completed;
+                                cursor = input.chars().count();
+                                slash_selection = 0;
+                                history_clean_index = None;
+                                redraw_input!()?;
+                                continue;
+                            }
                         }
                         input = strip_terminal_control_sequences(&input);
                         if super::repl_commands::is_repl_exit_command(&input) {
@@ -559,31 +536,11 @@ pub(super) fn read_repl_input(
                         clear_repl_input(&mut stdout, input_row, rendered_rows)?;
                         runtime.end_composer()?;
                         terminal_guard.finish(&mut stdout)?;
-                        // 长文本占位块展开为正文进入编辑器，图片占位块先摘出，退出后按锚点复位
-                        let editor_buffer = super::repl_editor_buffer::prepare_editor_buffer(
-                            &input,
-                            &clipboard_state,
-                        );
-                        let had_text_blocks = clipboard_state.has_text_blocks(&input);
-                        match edit_input_buffer(&editor_buffer.text) {
-                            Ok(edited) => {
-                                let cleaned = strip_terminal_control_sequences(&edited);
-                                input = super::repl_editor_buffer::restore_editor_buffer(
-                                    &editor_buffer,
-                                    &cleaned,
-                                );
-                                cursor = input.chars().count();
-                                slash_selection = 0;
-                                history_clean_index = None;
-                                // 长文本已在编辑器里展开成正文，对应的占位块不再有承载对象；
-                                // 只有图片占位块需要保留登记，否则提交时取不到图片数据
-                                if had_text_blocks {
-                                    clipboard_state.forget_text_blocks();
-                                }
-                            }
-                            Err(err) => {
-                                eprintln!("{err}");
-                            }
+                        if let Some(edited) = external_editor::edit(&input, &mut clipboard_state) {
+                            input = edited;
+                            cursor = input.chars().count();
+                            slash_selection = 0;
+                            history_clean_index = None;
                         }
                         terminal_guard =
                             super::terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;

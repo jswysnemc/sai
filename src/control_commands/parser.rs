@@ -6,6 +6,8 @@ use super::GoalCommand;
 /// `/context` 对本会话压缩策略的改写。
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ContextPolicyUpdate {
+    /// 仅终端入口支持的交互策略面板
+    Edit,
     /// 清除会话覆盖，回到全局默认
     Reset,
     /// 写入本会话比例（50–99），可选同时改预留
@@ -84,6 +86,17 @@ pub fn parse_control_command(
         return Ok(Some(ControlCommand::Help));
     }
     if matches_surface_alias(&name, surface, "context", &["上下文"]) {
+        if rest.trim().eq_ignore_ascii_case("edit") {
+            if surface != ControlSurface::Repl {
+                bail!(t(
+                    "Use /context [ratio] [reserve] or /context reset",
+                    "请使用 /context [比例] [预留] 或 /context reset"
+                ));
+            }
+            return Ok(Some(ControlCommand::Context {
+                update: Some(ContextPolicyUpdate::Edit),
+            }));
+        }
         return Ok(Some(ControlCommand::Context {
             update: parse_context_policy_update(rest)?,
         }));
@@ -350,6 +363,13 @@ mod tests {
 
     #[test]
     fn parses_context_policy_arguments() {
+        assert_eq!(
+            parse_control_command("/context edit", ControlSurface::Repl).unwrap(),
+            Some(ControlCommand::Context {
+                update: Some(ContextPolicyUpdate::Edit)
+            })
+        );
+        assert!(parse_control_command("/context edit", ControlSurface::Gateway).is_err());
         assert_eq!(
             parse_control_command("/context", ControlSurface::Repl).unwrap(),
             Some(ControlCommand::Context { update: None })

@@ -1,6 +1,5 @@
-use super::{is_table_separator, render_table};
+use super::{is_table_separator, live_layout::TableLayouts};
 use crate::render::content_indent::cli_content_width;
-use crate::render::markdown_inline::render_table_cell_content;
 use crate::render::streaming_replace::{
     clear_rendered_rows, raw_visual_rows, rendered_visual_rows,
 };
@@ -24,6 +23,9 @@ pub(crate) struct StreamingTable {
     /// 确认后最近一次预览表格占用的视觉行数（CLI 清屏用）。
     preview_visual_rows: usize,
     preview_mode: PreviewMode,
+    layouts: TableLayouts,
+    freeze_after: Option<usize>,
+    table_index: usize,
 }
 
 impl StreamingTable {
@@ -37,6 +39,9 @@ impl StreamingTable {
             raw_visual_rows: 0,
             preview_visual_rows: 0,
             preview_mode: PreviewMode::ReplaceTerminalRows,
+            layouts: TableLayouts::default(),
+            freeze_after: None,
+            table_index: 0,
         }
     }
 
@@ -52,6 +57,9 @@ impl StreamingTable {
             raw_visual_rows: 0,
             preview_visual_rows: 0,
             preview_mode: PreviewMode::StableFinal,
+            layouts: TableLayouts::default(),
+            freeze_after: None,
+            table_index: 0,
         }
     }
 
@@ -67,6 +75,9 @@ impl StreamingTable {
             raw_visual_rows: 0,
             preview_visual_rows: 0,
             preview_mode: PreviewMode::Snapshot,
+            layouts: TableLayouts::default(),
+            freeze_after: None,
+            table_index: 0,
         }
     }
 
@@ -83,10 +94,11 @@ impl StreamingTable {
     /// 返回:
     /// - 第二行是否为 Markdown 表格分隔行
     pub(crate) fn is_confirmed(&self) -> bool {
-        self.lines
-            .get(1)
-            .map(String::as_str)
-            .is_some_and(is_table_separator)
+        self.lines.get(1).map(String::as_str).is_some_and(|line| {
+            is_table_separator(line)
+                && super::parser::split_table_cells(line).len()
+                    == super::parser::split_table_cells(&self.lines[0]).len()
+        })
     }
 
     /// 推入表格候选行并返回即时预览。
@@ -97,6 +109,15 @@ impl StreamingTable {
     /// 返回:
     /// - 当前输出表面应立即展示的文本（可能含清屏重绘）
     pub(crate) fn push_line(&mut self, line: &str) -> String {
+        // 1. 候选表头之后没有匹配的分隔行时，将旧候选恢复为正文
+        if self.lines.len() == 1
+            && (!is_table_separator(line)
+                || super::parser::split_table_cells(line).len()
+                    != super::parser::split_table_cells(&self.lines[0]).len())
+        {
+            let output = self.finish();
+            return output + &self.push_line(line);
+        }
         let was_confirmed = self.is_confirmed();
         self.lines.push(line.to_string());
         let now_confirmed = self.is_confirmed();
@@ -124,19 +145,23 @@ impl StreamingTable {
     /// 返回:
     /// - 确认表格的替换/最终文本；非表格时按模式恢复原文或保持已输出原文
     pub(crate) fn finish(&mut self) -> String {
+        let confirmed = self.is_confirmed();
         let output = match self.preview_mode {
             PreviewMode::ReplaceTerminalRows if self.is_confirmed() => {
                 self.redraw_cli_preview(true)
             }
             PreviewMode::ReplaceTerminalRows => String::new(),
             PreviewMode::StableFinal | PreviewMode::Snapshot if self.is_confirmed() => {
-                render_table(&self.lines, render_table_cell_content)
+                self.render_current()
             }
             PreviewMode::StableFinal | PreviewMode::Snapshot => self.render_raw_source(),
         };
         self.lines.clear();
         self.raw_visual_rows = 0;
         self.preview_visual_rows = 0;
+        if confirmed {
+            self.table_index += 1;
+        }
         output
     }
 
@@ -146,12 +171,12 @@ impl StreamingTable {
     /// - 已确认：按当前行集合重算列宽后的表格
     /// - 未确认：原始 Markdown 候选行
     /// - 无缓冲：空串
-    pub(crate) fn snapshot(&self) -> String {
+    pub(crate) fn snapshot(&mut self) -> String {
         if self.lines.is_empty() {
             return String::new();
         }
         if self.is_confirmed() {
-            render_table(&self.lines, render_table_cell_content)
+            self.render_current()
         } else {
             self.render_raw_source()
         }
@@ -175,7 +200,7 @@ impl StreamingTable {
             };
             output.push_str(&clear_rendered_rows(rows));
         }
-        let table = render_table(&self.lines, render_table_cell_content);
+        let table = self.render_current();
         self.preview_visual_rows = rendered_visual_rows(&table, cli_content_width());
         self.raw_visual_rows = 0;
         output.push_str(&table);
@@ -188,6 +213,26 @@ impl StreamingTable {
     /// - 每行保留换行符的原始候选文本
     fn render_raw_source(&self) -> String {
         self.lines.iter().map(|line| format!("{line}\n")).collect()
+    }
+
+    /// 【表格】【流式布局】按当前表格序号渲染全部内容并更新固定列宽
+    /// 返回: 完整表格文本
+    fn render_current(&mut self) -> String {
+        self.layouts
+            .render(self.table_index, &self.lines, self.freeze_after)
+    }
+
+    /// 【表格】【流式布局】恢复同一回复已经输出的表格布局
+    /// 参数: layouts 为布局记录，freeze_after 为可变预览预算；返回: 无
+    pub(crate) fn set_layouts(&mut self, layouts: TableLayouts, freeze_after: Option<usize>) {
+        self.layouts = layouts;
+        self.freeze_after = freeze_after;
+    }
+
+    /// 【表格】【流式布局】提取布局，供下次预览和定稿复用
+    /// 返回: 当前回复的固定列宽记录
+    pub(crate) fn take_layouts(&mut self) -> TableLayouts {
+        std::mem::take(&mut self.layouts)
     }
 }
 

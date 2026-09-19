@@ -65,6 +65,9 @@ pub struct PermissionConfig {
     /// 自动审核专用模型；空则使用当前会话模型。
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub auto_audit_model: String,
+    /// 指定 Lua 自动审核插件；为空时继续使用聊天模型审核。
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub auto_audit_plugin_id: String,
 }
 
 impl Default for PermissionConfig {
@@ -75,6 +78,7 @@ impl Default for PermissionConfig {
             cli_mode: None,
             auto_audit_provider_id: String::new(),
             auto_audit_model: String::new(),
+            auto_audit_plugin_id: String::new(),
         }
     }
 }
@@ -102,6 +106,7 @@ mod tests {
         assert_eq!(config.tui_mode(), DefaultPermissionMode::Yolo);
         assert_eq!(config.cli_mode(), DefaultPermissionMode::Yolo);
         assert!(config.auto_audit_provider_id.is_empty());
+        assert!(config.auto_audit_plugin_id.is_empty());
     }
 
     #[test]

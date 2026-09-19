@@ -51,10 +51,11 @@ impl AcpGovernance {
         // 与自带内核的处理一致，不因为审核模型不可用就阻断会话
         let auto_audit = match (&profile, paths) {
             (Some(profile), Some(paths)) if profile.is_auto_audit() => {
-                crate::permission::resolve_auto_audit_client(&config, paths)
+                crate::permission::AutoAuditBackend::resolve(&config, paths)
                     .ok()
-                    .map(|client| super::audit::AutoAuditRuntime {
-                        client,
+                    .map(|backend| super::audit::AutoAuditRuntime {
+                        backend,
+                        workdir: workspace.clone(),
                         context: crate::i18n::text(
                             "The operation comes from an external ACP agent running in this workspace.",
                             "该操作来自在本工作区运行的外部 ACP 内核。",

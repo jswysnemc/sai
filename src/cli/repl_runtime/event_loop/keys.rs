@@ -16,6 +16,13 @@ pub(super) fn handle_stream_key(
     code: KeyCode,
     modifiers: KeyModifiers,
 ) -> Result<StreamInputAction> {
+    let draft = runtime.stream_draft();
+    let (text, cursor, mut selected) = (draft.text.clone(), draft.cursor, draft.slash_selection);
+    if runtime.navigate_completion(&text, cursor, &mut selected, code, modifiers) {
+        runtime.stream_draft_mut().slash_selection = selected;
+        runtime.redraw_stream_composer()?;
+        return Ok(StreamInputAction::Continue);
+    }
     match code {
         KeyCode::BackTab => {
             // 部分终端把 Shift+Tab 发成 BackTab：立即生效
@@ -40,9 +47,12 @@ pub(super) fn handle_stream_key(
             }
             if runtime.stream_draft().text.starts_with('/') {
                 // 运行期间不补全置灰命令：Tab 出一条执行不了的命令没有意义
-                let completed = crate::cli::repl_commands::complete_repl_command(
+                let completed = crate::cli::repl_completion::accept(
                     &runtime.stream_draft().text,
+                    runtime.stream_draft().cursor,
+                    runtime.stream_draft().slash_selection,
                     true,
+                    false,
                 );
                 if let Some(completed) = completed {
                     let draft = runtime.stream_draft_mut();
@@ -63,65 +73,6 @@ pub(super) fn handle_stream_key(
             // 与 Enter 同一套分发：置灰命令拒绝留在输入框，避免本轮结束后悄悄执行
             return dispatch_stream_command(runtime, ctx);
         }
-        KeyCode::Up => {
-            // 引用或斜杠面板可见时上下键移动选中项
-            let draft = runtime.stream_draft();
-            let mentions =
-                crate::cli::repl_mentions::find_mention_trigger(&draft.text, draft.cursor)
-                    .map(|trigger| {
-                        crate::cli::repl_mentions::mention_suggestions(
-                            &trigger,
-                            runtime.mention_skills(),
-                        )
-                    })
-                    .unwrap_or_default();
-            if !mentions.is_empty() {
-                let draft = runtime.stream_draft_mut();
-                draft.slash_selection = (draft.slash_selection % mentions.len())
-                    .checked_sub(1)
-                    .unwrap_or(mentions.len().saturating_sub(1));
-                runtime.redraw_stream_composer()?;
-                return Ok(StreamInputAction::Continue);
-            }
-            let suggestions = crate::cli::repl_commands::visible_repl_command_suggestions(
-                &runtime.stream_draft().text,
-                true,
-            );
-            if !suggestions.is_empty() {
-                let draft = runtime.stream_draft_mut();
-                draft.slash_selection = (draft.slash_selection % suggestions.len())
-                    .checked_sub(1)
-                    .unwrap_or(suggestions.len().saturating_sub(1));
-                runtime.redraw_stream_composer()?;
-            }
-        }
-        KeyCode::Down => {
-            let draft = runtime.stream_draft();
-            let mentions =
-                crate::cli::repl_mentions::find_mention_trigger(&draft.text, draft.cursor)
-                    .map(|trigger| {
-                        crate::cli::repl_mentions::mention_suggestions(
-                            &trigger,
-                            runtime.mention_skills(),
-                        )
-                    })
-                    .unwrap_or_default();
-            if !mentions.is_empty() {
-                let draft = runtime.stream_draft_mut();
-                draft.slash_selection = (draft.slash_selection + 1) % mentions.len();
-                runtime.redraw_stream_composer()?;
-                return Ok(StreamInputAction::Continue);
-            }
-            let suggestions = crate::cli::repl_commands::visible_repl_command_suggestions(
-                &runtime.stream_draft().text,
-                true,
-            );
-            if !suggestions.is_empty() {
-                let draft = runtime.stream_draft_mut();
-                draft.slash_selection = (draft.slash_selection + 1) % suggestions.len();
-                runtime.redraw_stream_composer()?;
-            }
-        }
         KeyCode::Enter => {
             if modifiers.contains(KeyModifiers::SHIFT) {
                 let draft = runtime.stream_draft_mut();
@@ -134,19 +85,22 @@ pub(super) fn handle_stream_key(
             if complete_stream_mention(runtime)? {
                 return Ok(StreamInputAction::Continue);
             }
-            // Enter：面板可见时先落选中命令，否则 /model 会被当普通文本发出
-            let suggestions = crate::cli::repl_commands::visible_repl_command_suggestions(
-                &runtime.stream_draft().text,
-                true,
-            );
-            if !suggestions.is_empty() {
-                let draft = runtime.stream_draft_mut();
-                let selected = suggestions[draft
-                    .slash_selection
-                    .min(suggestions.len().saturating_sub(1))];
-                draft.text = selected.command.to_string();
-                draft.cursor = draft.text.chars().count();
-                draft.slash_selection = 0;
+            if !runtime.composer_panels_dismissed() {
+                let draft = runtime.stream_draft();
+                if let Some(completed) = crate::cli::repl_completion::accept(
+                    &draft.text,
+                    draft.cursor,
+                    draft.slash_selection,
+                    true,
+                    true,
+                ) {
+                    let draft = runtime.stream_draft_mut();
+                    draft.text = completed;
+                    draft.cursor = draft.text.chars().count();
+                    draft.slash_selection = 0;
+                    runtime.redraw_stream_composer()?;
+                    return Ok(StreamInputAction::Continue);
+                }
             }
             return dispatch_stream_command(runtime, ctx);
         }

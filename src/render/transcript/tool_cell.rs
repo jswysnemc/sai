@@ -101,6 +101,7 @@ fn compaction_started_label(turn_count: usize, model: &str) -> String {
 /// - `name`: 工具名称
 /// - `arguments_preview`: 当前参数预览
 /// - `mode`: 工具展示模式
+/// - `edit_diff_counts`: 预览截断时完整参数的行数统计
 ///
 /// 返回:
 /// - 可重绘的临时工具视图
@@ -108,10 +109,22 @@ pub(crate) fn render_live_call(
     name: &str,
     arguments_preview: &str,
     mode: ToolCallDisplayMode,
+    edit_diff_counts: Option<(usize, usize)>,
 ) -> String {
+    if mode == ToolCallDisplayMode::Hidden {
+        return String::new();
+    }
     // 1. 编辑类在参数流阶段固定 Summary：`Write/Replace path +N -M` 随分片跳动。
     //    不提前倾倒 Added diff；Full 正文等定稿 ToolView 再挂。
     if is_file_edit_tool(name) {
+        // 1. 【终端】【行数进度】长参数采用单独传来的统计，避免数字固定在预览末尾
+        if let Some((added, removed)) = edit_diff_counts {
+            return crate::render::tool_event_line::tool_status_line(
+                &crate::render::tool_event_line::tool_event_label(name, Some(arguments_preview)),
+                &crate::render::edit_diff::format_diff_stat_status(added, removed),
+                crate::render::status_style::ToolHealth::Pending,
+            );
+        }
         return tool_view::render(
             &ToolView::preparing(name.to_string(), arguments_preview.to_string()),
             ToolCallDisplayMode::Summary,

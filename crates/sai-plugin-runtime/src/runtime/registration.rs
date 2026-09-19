@@ -23,6 +23,7 @@ pub(super) struct Registrations {
     pub commands: BTreeMap<String, RegisteredCommand>,
     pub events: BTreeMap<EventKind, Vec<Function>>,
     pub reply_policy: Option<super::reply_policy::RegisteredReplyPolicy>,
+    pub permission_audit: Option<Function>,
 }
 
 /// 【插件】【注册接口】向 Lua 安装工具、命令和事件注册入口。
@@ -34,6 +35,7 @@ pub(super) fn install(
     registrations: Arc<Mutex<Registrations>>,
 ) -> mlua::Result<()> {
     super::reply_policy::install(lua, api, registrations.clone())?;
+    super::permission_audit::install(lua, api, registrations.clone())?;
     let tools = registrations.clone();
     api.set(
         "register_tool",
@@ -118,7 +120,8 @@ pub(super) fn ensure_open(registrations: &Registrations) -> mlua::Result<()> {
     let count = registrations.tools.len()
         + registrations.commands.len()
         + registrations.events.values().map(Vec::len).sum::<usize>()
-        + usize::from(registrations.reply_policy.is_some());
+        + usize::from(registrations.reply_policy.is_some())
+        + usize::from(registrations.permission_audit.is_some());
     if registrations.closed || count >= 128 {
         return Err(mlua::Error::runtime(
             "plugin registrations are closed or exceed 128 entries",

@@ -16,6 +16,8 @@ use std::io::{self, Write};
 
 mod repl_pager_search;
 mod scroll;
+mod search_highlight;
+mod search_index;
 mod state;
 
 use scroll::{apply_mouse, horizontal_progress_track, scrollbar_glyphs, ScrollDragTarget};

@@ -10,6 +10,7 @@ mod history_replay;
 mod history_restore;
 mod layout;
 mod live_usage;
+mod mention_completion;
 mod mention_panel;
 mod placeholder_tips;
 mod queue_panel;
@@ -18,6 +19,7 @@ mod records;
 mod reflow;
 mod reflow_state;
 mod refresh;
+mod resize_preview;
 mod runner_events;
 mod shell_hint_panel;
 mod slash_panel;
@@ -29,6 +31,8 @@ pub(in crate::cli) use queue_panel::QueuePanelIdleResult;
 
 #[cfg(test)]
 mod full_pager_tests;
+#[cfg(test)]
+mod long_table_tests;
 #[cfg(test)]
 mod tests;
 
@@ -64,6 +68,7 @@ pub(super) struct ReplRuntime {
     transcript: TranscriptStore,
     options: TranscriptRenderOptions,
     viewport: InlineViewport,
+    resize_preview: Option<InlineViewport>,
     reflow: ReflowState,
     stream: StreamState,
     composer: Option<ComposerFrame>,
@@ -99,6 +104,7 @@ pub(super) struct ReplRuntime {
     last_composer_signature: Option<composer_frame::ComposerSignature>,
     /// `#` 引用可用的 skill 名称与描述
     mention_skills: Vec<(String, String)>,
+    mention_completion: Mutex<crate::cli::repl_mentions::completion::MentionCompletion>,
     /// Esc 是否已收起补全面板，以及收起时的输入快照
     ///
     /// 快照用于在输入变化后自动恢复面板：收起只对当前这一次输入生效，
@@ -198,6 +204,7 @@ impl ReplRuntime {
             transcript: TranscriptStore::new(row_cap),
             options,
             viewport,
+            resize_preview: None,
             reflow,
             stream: StreamState::default(),
             composer: None,
@@ -220,6 +227,7 @@ impl ReplRuntime {
             last_cursor_row: None,
             last_composer_signature: None,
             mention_skills: Vec::new(),
+            mention_completion: Mutex::default(),
             panels_dismissed: None,
             todo_panel_compact: true,
             stream_active: false,
@@ -257,14 +265,10 @@ impl ReplRuntime {
     /// - 无
     pub(in crate::cli) fn set_mention_skills(&mut self, skills: Vec<(String, String)>) {
         self.mention_skills = skills;
-    }
-
-    /// 返回当前缓存的 skill 引用目录。
-    ///
-    /// 返回:
-    /// - 名称与描述
-    pub(in crate::cli) fn mention_skills(&self) -> &[(String, String)] {
-        &self.mention_skills
+        self.mention_completion
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .cancel();
     }
 
     /// 切换沉底 todo 单行 / 多行模式。
@@ -333,7 +337,11 @@ impl ReplRuntime {
     /// 返回:
     /// - 操作是否成功
     pub(super) fn observe_terminal_size(&mut self, streaming: bool) -> Result<()> {
-        self.observe_size(TerminalSize::current(), streaming);
+        let size = TerminalSize::current();
+        self.observe_size(size, streaming);
+        if size != self.drawing_viewport().size() {
+            self.preview_resize(size)?;
+        }
         Ok(())
     }
 
@@ -361,7 +369,10 @@ impl ReplRuntime {
         let animation_wait = (self.transcript.viewing_running_subagent()
             || self.transcript.has_running_background_commands())
         .then_some(LIVE_REFRESH_INTERVAL);
-        [reflow_wait, subagent_wait, animation_wait]
+        let completion_wait = self
+            .mention_completion_pending()
+            .then_some(Duration::from_millis(20));
+        [reflow_wait, subagent_wait, animation_wait, completion_wait]
             .into_iter()
             .flatten()
             .min()
@@ -404,6 +415,7 @@ impl ReplRuntime {
     pub(super) fn clear(&mut self) -> Result<()> {
         self.transcript.clear();
         self.reflow.clear();
+        self.resize_preview = None;
         self.stream = StreamState::default();
         self.next_live_refresh = None;
         self.live_sync_pending = false;
@@ -477,6 +489,9 @@ impl ReplRuntime {
                 self.reflow.schedule_immediate();
             }
             self.live_sync_pending = true;
+            if current != self.drawing_viewport().size() {
+                self.preview_resize(current)?;
+            }
             return Ok(());
         }
         if self.reflow.pending_until().is_some() {
@@ -549,11 +564,12 @@ impl ReplRuntime {
         self.commit_frame()?;
         let size = TerminalSize::current();
         let previous = self.viewport.size();
-        // 1. 分层重锚：仅高度变化时折行不变，scrollback 内容依旧有效，
-        //    用光标位移只修正记账即可保留回滚历史与用户滚动进度；
-        //    宽度变化或探测失败才清空 scrollback 全量重建
-        let full_reanchor = size != previous
-            && !(size.cols == previous.cols && self.reanchor_for_height_change(size));
+        let previewed = self.resize_preview.take().is_some();
+        // 1. 【终端】【尺寸重排】临时预览已改变可见区域，稳定后重新锚定；
+        //    未预览的纯高度变化仍按光标位移修正，原生滚动历史始终保留
+        let full_reanchor = previewed
+            || size != previous
+                && !(size.cols == previous.cols && self.reanchor_for_height_change(size));
         if full_reanchor {
             self.viewport.restart_at(size, 0);
         }

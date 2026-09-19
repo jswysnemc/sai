@@ -110,6 +110,7 @@ impl ReplRuntime {
 /// 返回:
 /// - 处理是否成功
 pub(crate) fn process_stream_tick(runtime: &mut ReplRuntime) -> Result<()> {
+    runtime.poll_mention_completion()?;
     runtime.observe_terminal_size(true)?;
     runtime.maybe_reflow_due(true)?;
     runtime.tick_live()?;
@@ -143,9 +144,7 @@ pub(crate) fn process_stream_input(
         };
         match input {
             Event::Resize(cols, rows) => {
-                // 流式期间只登记（streaming 语义），由 25ms tick 的 debounce
-                // 到期重放统一重锚；立即重绘会用旧 origin 画错位置
-                runtime.observe_stream_resize(cols, rows);
+                runtime.observe_stream_resize(cols, rows)?;
             }
             Event::Paste(text) => {
                 let draft = runtime.stream_draft_mut();
@@ -175,6 +174,36 @@ pub(crate) fn process_stream_input(
                         .windows_paste
                         .consume_key(candidate)
                 }) {
+                    runtime
+                        .stream_draft_mut()
+                        .windows_paste
+                        .drain_console_replay();
+                    continue;
+                }
+                // 1. 【终端】【面板焦点】中断保持全局可用，其余按键先交给焦点面板
+                if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                    runtime.pending_clear_queue = false;
+                    return Ok(StreamInputAction::Interrupt);
+                }
+                if runtime.handle_queue_panel_key(key.code, key.modifiers)? {
+                    continue;
+                }
+                if (runtime.agent_panel_active() || runtime.stream_draft().text.is_empty())
+                    && runtime.handle_agent_panel_key(key.code)?
+                {
+                    continue;
+                }
+                let draft = runtime.stream_draft().clone();
+                let mut selected = draft.slash_selection;
+                if runtime.navigate_completion(
+                    &draft.text,
+                    draft.cursor,
+                    &mut selected,
+                    key.code,
+                    key.modifiers,
+                ) {
+                    runtime.stream_draft_mut().slash_selection = selected;
+                    runtime.redraw_stream_composer()?;
                     continue;
                 }
                 if super::super::repl_transcript_pager::is_jump_to_output_bottom_key(
@@ -269,16 +298,6 @@ pub(crate) fn process_stream_input(
                     )?;
                     continue;
                 }
-                if matches!(key.code, KeyCode::Char('c'))
-                    && key.modifiers.contains(KeyModifiers::CONTROL)
-                {
-                    // 2. Ctrl+C 中断当前轮
-                    return Ok(StreamInputAction::Interrupt);
-                }
-                // 3. 用户消息队列管理（Ctrl+↑ 进入，↓ 离开末项回到输入框）
-                if runtime.handle_queue_panel_key(key.code, key.modifiers)? {
-                    continue;
-                }
                 if matches!(key.code, KeyCode::Enter) && key.modifiers.is_empty() {
                     let paste = {
                         let draft = runtime.stream_draft_mut();
@@ -302,12 +321,6 @@ pub(crate) fn process_stream_input(
                         runtime.redraw_stream_composer()?;
                         continue;
                     }
-                }
-                // 4. 底部 agent 面板优先消费按键（空输入 ↓ 展开、↑ 收回到输入框）
-                if (runtime.agent_panel_active() || runtime.stream_draft().text.is_empty())
-                    && runtime.handle_agent_panel_key(key.code)?
-                {
-                    continue;
                 }
                 // 5. 其他键写入运行中输入框
                 let action = handle_stream_key(runtime, ctx, key.code, key.modifiers)?;
@@ -420,8 +433,10 @@ fn complete_stream_mention(runtime: &mut ReplRuntime) -> Result<bool> {
     else {
         return Ok(false);
     };
-    let suggestions =
-        crate::cli::repl_mentions::mention_suggestions(&trigger, runtime.mention_skills());
+    let suggestions = runtime.mention_candidates(&draft.text, draft.cursor);
+    if runtime.mention_completion_pending() {
+        return Ok(true);
+    }
     let Some(item) = suggestions
         .get(
             draft

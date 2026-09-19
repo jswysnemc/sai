@@ -28,6 +28,21 @@ pub(super) enum SyncPlan {
 }
 
 impl StreamState {
+    /// 【终端】【尺寸预览】取得有限数量的缓存尾行并按新宽度换行
+    /// 参数: width 为新列数，rows 为屏幕高度；返回少量 ANSI 行，不推进滚动记账
+    pub(super) fn preview_lines(&self, width: usize, rows: usize) -> Vec<AnsiLine> {
+        self.window
+            .iter()
+            .skip(self.window.len().saturating_sub(rows))
+            .flat_map(|line| AnsiLine::wrap_block(line.as_str(), width.max(1)))
+            .rev()
+            .take(rows.saturating_mul(2))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect()
+    }
+
     /// 返回已滚入原生 scrollback 的行数（也是屏幕上首个受管行的全局行号）。
     ///
     /// 参数:
