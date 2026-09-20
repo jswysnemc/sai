@@ -42,7 +42,8 @@ export const ToolLifecycleCard = memo(function ToolLifecycleCard({
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list, staleTime: 30_000 });
   const workspacePath = workspaces.data?.workspaces.find((item) => item.id === workspaces.data?.active_id)?.path ?? "";
   // 失败默认展开；用户展开后按 tool.id 记忆，流式更新不自动收缩
-  const [expanded, setExpanded] = usePersistedExpand(tool.id, tool.status === "failed");
+  const isImageGeneration = tool.name === "generate_image";
+  const [expanded, setExpanded] = usePersistedExpand(tool.id, tool.status === "failed" || isImageGeneration);
   // 执行中的卡片需要推进计时；结束后停表，历史卡片不占用任何定时器。
   // 编辑类不展示耗时（进度由行数与增删统计表达），也就不需要时钟
   const running = tool.status === "preparing" || tool.status === "running";
@@ -84,6 +85,7 @@ export const ToolLifecycleCard = memo(function ToolLifecycleCard({
     : "";
   const relativePath = headerPath ? displayPath(headerPath, workspacePath) : "";
   const summary = todoHeadline
+    || (isImageGeneration ? stringField(parsedArguments, "prompt") : "")
     || (headerPath ? "" : fullCommand || toolCardSummary(tool.name, argumentsText, locale, workspacePath) || tool.progress);
   const target = headerPath
     ? <ToolFileReference path={headerPath} label={relativePath || headerPath} className="tool-shell-file" icon={false} />
@@ -209,7 +211,8 @@ export function readableToolName(name: string, backgroundTask = false): string {
     list_dir: "List",
     trash_path: "Trash",
     todo: "Todo",
-    load: "Load"
+    load: "Load",
+    generate_image: "Generate image"
   };
   return labels[name] ?? name.replaceAll("_", " ");
 }

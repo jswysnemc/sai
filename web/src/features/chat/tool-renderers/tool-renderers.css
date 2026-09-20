@@ -1,7 +1,8 @@
 .shell-tool-view,
 .bg-task-view,
 .edit-tool-view,
-.generic-tool-view {
+.generic-tool-view,
+.image-generation-tool-view {
   display: grid;
   min-width: 0;
   max-width: 100%;
@@ -9,6 +10,84 @@
   background: transparent;
   color: var(--technical-text);
   font-family: var(--font-code);
+}
+
+.image-generation-tool-view {
+  padding: var(--space-sm) var(--space-md) var(--space-md);
+  color: var(--technical-text);
+  font-family: var(--font-ui);
+}
+
+.image-generation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-sm);
+  max-width: 100%;
+}
+
+.image-generation-item {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--technical-border);
+  border-radius: var(--radius-2);
+  background: color-mix(in srgb, var(--technical-border) 18%, transparent);
+}
+
+.image-generation-preview {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  background: var(--paper-deep);
+}
+
+.image-generation-item figcaption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  min-width: 0;
+  padding: var(--space-xs) var(--space-sm);
+  color: var(--technical-muted);
+  font-size: var(--text-xs);
+}
+
+.image-generation-item figcaption > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-generation-download {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid var(--technical-border);
+  border-radius: var(--radius-1);
+  color: var(--technical-text);
+}
+
+.image-generation-download:hover {
+  background: color-mix(in srgb, var(--technical-border) 30%, transparent);
+}
+
+.image-generation-empty {
+  margin: 0;
+  color: var(--technical-muted);
+  font-size: var(--text-sm);
+}
+
+.image-generation-waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--technical-muted);
+  font-size: var(--text-sm);
 }
 
 .shell-command-line {

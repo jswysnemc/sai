@@ -34,6 +34,9 @@ pub(crate) fn render_framed(view: &ToolView, mode: ToolCallDisplayMode, frame: u
     if let Some(rendered) = super::background::render(view, frame) {
         return rendered;
     }
+    if let Some(rendered) = super::image::render(view, mode, frame) {
+        return rendered;
+    }
     if view.name == "run_command" {
         return render_command_tool(view, mode);
     }

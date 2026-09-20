@@ -3,6 +3,7 @@ import { EditToolView } from "./edit-tool-view";
 import { GenericToolView } from "./generic-tool-view";
 import { ReadToolView } from "./read-tool-view";
 import { ShellToolView } from "./shell-tool-view";
+import { ImageGenerationToolView } from "./image-generation-tool-view";
 
 type ToolResultViewProps = {
   name: string;
@@ -18,6 +19,9 @@ type ToolResultViewProps = {
  * @returns 工具结果视图
  */
 export function ToolResultView({ name, argumentsText, output, headerPath }: ToolResultViewProps) {
+  if (name === "generate_image") {
+    return <ImageGenerationToolView output={output} />;
+  }
   if (name === "run_command") {
     return <ShellToolView argumentsText={argumentsText} output={output} />;
   }

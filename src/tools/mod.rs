@@ -12,6 +12,7 @@ mod file_edit;
 mod file_read;
 pub(crate) mod fs_path;
 pub(crate) mod groups;
+mod image_generation;
 mod memory;
 pub(crate) mod mesh;
 mod native_search;
@@ -207,6 +208,7 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     let mut registry = ToolRegistry::new();
     command::register(&mut registry, config, paths, true);
     default_tools::register(&mut registry, config, paths);
+    image_generation::register(&mut registry, config, paths);
     trash_path::register(&mut registry);
     configurable_cli_tools::register(&mut registry, config);
     crate::plugins::register_plugins(&mut registry, config, paths, false);

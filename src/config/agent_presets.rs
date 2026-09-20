@@ -41,6 +41,7 @@ const CODE_AGENT_TOOLS: &[&str] = &[
     "glob",
     "grep",
     "ask_question",
+    "generate_image",
     "write_memory",
     "read_memory",
     "list_memory",

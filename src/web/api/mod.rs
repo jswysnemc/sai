@@ -6,6 +6,7 @@ mod cron_jobs;
 mod engine_connection;
 mod gateway_weixin_login;
 mod gateways;
+mod generated_images;
 mod goals;
 mod health;
 mod input_history;
@@ -80,6 +81,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         .merge(sessions::routes())
         .merge(runs::routes())
         .merge(workspace::routes())
+        .merge(generated_images::routes())
         .merge(workspace_git::routes())
         .merge(workspace_git_events::routes())
         .merge(system::routes())

@@ -51,7 +51,7 @@ pub use mcp_file::{
     validate_mcp_config,
 };
 pub use model::*;
-pub use model_endpoints::ModelEndpointConfig;
+pub use model_endpoints::{ModelEndpointConfig, ModelEndpointKind};
 pub use model_metadata::*;
 pub use model_thinking::*;
 pub use model_units::*;

@@ -71,6 +71,23 @@ impl StreamRenderer {
             }
         }
         if self.tool_call_mode == ToolCallDisplayMode::Summary {
+            if crate::render::tool_view::is_image_generation_tool(name) && ok {
+                self.finish_live_tool_status()?;
+                let mut stdout = io::stdout();
+                writeln!(
+                    stdout,
+                    "{}",
+                    crate::render::tool_view::render_result(
+                        name,
+                        ok,
+                        output,
+                        ToolCallDisplayMode::Full,
+                    )
+                )?;
+                stdout.flush()?;
+                self.resume_work_spinner()?;
+                return Ok(());
+            }
             if tool_call_has_visible_block(name) || command_block_result {
                 if name == "run_command" {
                     let mut stdout = io::stdout();

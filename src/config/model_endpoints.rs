@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -22,6 +22,25 @@ pub struct ModelEndpointConfig {
     pub api_key: String,
     #[serde(default)]
     pub model: String,
+}
+
+impl ModelEndpointConfig {
+    /// 解析专用端点的 API Key，支持配置文件中的环境变量引用。
+    ///
+    /// 返回:
+    /// - 实际请求密钥；环境变量不存在时返回错误
+    pub fn resolved_api_key(&self) -> Result<String> {
+        let value = self.api_key.trim();
+        if let Some(name) = value.strip_prefix("$env:") {
+            let name = name.trim();
+            if name.is_empty() {
+                bail!("model endpoint API key environment variable is empty");
+            }
+            return std::env::var(name)
+                .with_context(|| format!("environment variable {name} is not set"));
+        }
+        Ok(self.api_key.clone())
+    }
 }
 
 /// 【模型接入】【配置校验】检查稳定标识和独立请求地址，不发起网络请求。

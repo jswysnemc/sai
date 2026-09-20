@@ -68,6 +68,9 @@ pub(crate) fn tool_event_label_tense(
     if name == "todo" {
         return todo_call_label(arguments, tense);
     }
+    if name == "generate_image" || name.ends_with("__generate_image") {
+        return image_call_label(name, arguments, tense);
+    }
     let action = tool_verb(name, tense);
     let suffix = arguments.and_then(|arguments| tool_suffix_from_text(name, arguments));
     match suffix {
@@ -103,6 +106,39 @@ fn subagent_call_label(arguments: Option<&str>, tense: ToolVerbTense) -> String 
         Some(suffix) if !suffix.trim().is_empty() => format!("{verb} {suffix}"),
         _ => verb.to_string(),
     }
+}
+
+/// 生图工具摘要显示提示词，避免摘要态只显示抽象的工具名。
+///
+/// 参数:
+/// - name: 工具名
+/// - arguments: 工具参数 JSON
+/// - tense: 工具时态
+///
+/// 返回:
+/// - 带有限提示词摘要的生图动作
+fn image_call_label(name: &str, arguments: Option<&str>, tense: ToolVerbTense) -> String {
+    let action = tool_verb(name, tense);
+    let prompt = arguments
+        .and_then(|value| serde_json::from_str::<Value>(value).ok())
+        .and_then(|value| {
+            value
+                .get("prompt")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(|value| {
+            let mut prompt = value.chars().take(72).collect::<String>();
+            if value.chars().count() > 72 {
+                prompt.push_str("...");
+            }
+            prompt
+        });
+    prompt
+        .map(|prompt| format!("{action} {prompt}"))
+        .unwrap_or_else(|| action.to_string())
 }
 
 /// 子智能体各 action 对应的展示动词。
@@ -415,6 +451,8 @@ pub(crate) fn tool_call_status_text(label: &str, status: &str) -> String {
 /// - 展示用动词
 pub(crate) fn tool_verb(name: &str, tense: ToolVerbTense) -> &'static str {
     match (name, tense) {
+        (name, ToolVerbTense::Progressive) if name.ends_with("__generate_image") => "Generating",
+        (name, ToolVerbTense::Perfect) if name.ends_with("__generate_image") => "Generated",
         ("run_command", ToolVerbTense::Progressive) => "Running",
         ("run_command", ToolVerbTense::Perfect) => "Ran",
         ("edit_file", ToolVerbTense::Progressive) => "Editing",
@@ -441,6 +479,8 @@ pub(crate) fn tool_verb(name: &str, tense: ToolVerbTense) -> &'static str {
         ("check_os_info", ToolVerbTense::Perfect) => "Checked",
         ("load", ToolVerbTense::Progressive) => "Loading",
         ("load", ToolVerbTense::Perfect) => "Loaded",
+        ("generate_image", ToolVerbTense::Progressive) => "Generating",
+        ("generate_image", ToolVerbTense::Perfect) => "Generated",
         ("create_directory", ToolVerbTense::Progressive) => "Creating",
         ("create_directory", ToolVerbTense::Perfect) => "Created",
         ("list_directory", ToolVerbTense::Progressive) => "Listing",
@@ -493,6 +533,7 @@ fn is_builtin_tool_verb(name: &str) -> bool {
             | "load"
             | "create_directory"
             | "list_directory"
+            | "generate_image"
     )
 }
 
