@@ -52,7 +52,9 @@ pub(super) fn complete(
         if cancelled() {
             return None;
         }
-        if keyword.is_empty() || entry.label.to_ascii_lowercase().contains(&keyword) {
+        // 1. 【终端】【文件补全】查询词只匹配文件名，目录前缀保留用于显示和插入
+        let name = entry.label.strip_prefix(prefix).unwrap_or(&entry.label);
+        if keyword.is_empty() || name.to_ascii_lowercase().contains(&keyword) {
             result.push(entry.clone());
             if result.len() == MAX_REPL_COMMAND_SUGGESTIONS {
                 break;
