@@ -29,6 +29,7 @@ pub(super) async fn tree(
             workspace_id: workspace.id,
             workspace_name: workspace.name,
             workspace_path: workspace.path,
+            last_opened_at: workspace.last_opened_at,
             is_git_repository,
             sessions,
         });

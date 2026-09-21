@@ -3,7 +3,7 @@ import { Select } from "../../shared/ui/select/select";
 import { useI18n } from "../i18n/use-i18n";
 import "./session-scope-control.css";
 
-export type SessionScope = "current" | "all";
+export type SessionScope = "current" | "recent";
 export const SESSION_SCOPE_KEY = "sai.sidebar.session-scope";
 
 /**
@@ -13,11 +13,11 @@ export const SESSION_SCOPE_KEY = "sai.sidebar.session-scope";
  */
 export function SessionScopeControl({ value, onChange }: { value: SessionScope; onChange: (value: SessionScope) => void }) {
   const { t } = useI18n();
-  const label = value === "current" ? t("Current workspace", "当前工作区") : t("All workspaces", "全部工作区");
+  const label = value === "current" ? t("Current workspace", "当前工作区") : t("Recent sessions", "最近会话");
   return <div className="session-scope-control" title={label}>
     <Select value={value} onChange={onChange} ariaLabel={t(`Session workspace scope: ${label}`, `会话工作区范围：${label}`)} menuPreferredWidth={180} menuMinimumWidth={160} menuAlign="right" options={[
       { value: "current", label: t("Current workspace", "当前工作区"), icon: <Folder size={13} /> },
-      { value: "all", label: t("All workspaces", "全部工作区"), icon: <Folders size={13} /> }
+      { value: "recent", label: t("Recent sessions", "最近会话"), icon: <Folders size={13} /> }
     ]} />
   </div>;
 }

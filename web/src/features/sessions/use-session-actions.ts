@@ -5,8 +5,9 @@ import { toDisplayError } from "../../api/api-error";
 import type { WorkspaceSessions } from "../../api/contracts";
 import type { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { switchWithTerminalConfirm } from "../workspaces/workspace-switcher";
+import { invalidateWorkspaceContext } from "../workspaces/invalidate-workspace-context";
 import { initializeNewSessionPreferences } from "./new-session-preferences";
-import { commitSessionSelection, enqueueSessionNavigation } from "./session-navigation";
+import { commitLocalSessionSelection, enqueueSessionNavigation } from "./session-navigation";
 
 type ConfirmFn = ReturnType<typeof useConfirm>;
 
@@ -18,6 +19,8 @@ type SessionActionsOptions = {
   tree: () => WorkspaceSessions[] | undefined;
   /** 打开会话后的导航回调（如关闭移动端抽屉） */
   onNavigate?: () => void;
+  /** 在当前浏览器标签页记录会话选择，不修改其他标签页共享的服务端指针 */
+  onSessionSelected?: (workspaceId: string, sessionId: string) => void;
 };
 
 /**
@@ -29,7 +32,7 @@ type SessionActionsOptions = {
  * @param options 确认框、文本、树数据与导航回调
  * @returns 会话与工作区操作集合
  */
-export function useSessionActions({ confirm, t, tree, onNavigate }: SessionActionsOptions) {
+export function useSessionActions({ confirm, t, tree, onNavigate, onSessionSelected }: SessionActionsOptions) {
   const queryClient = useQueryClient();
   const [navigationError, setNavigationError] = useState<Error | null>(null);
 
@@ -50,12 +53,11 @@ export function useSessionActions({ confirm, t, tree, onNavigate }: SessionActio
   };
 
   /**
-   * 切换工作区和会话，跨工作区时完成切换后重新载入工作台。
+   * 切换工作区和会话；工作区变化只刷新相关查询，会话变化只更新当前标签页。
    *
    * @param workspaceId 目标工作区 ID
    * @param sessionId 目标会话 ID
    * @param workspaceActive 目标工作区是否已经激活
-   * @param sessionActive 目标会话是否已经激活
    * @returns 切换流程完成后返回
    */
   const openSession = async (
@@ -74,16 +76,13 @@ export function useSessionActions({ confirm, t, tree, onNavigate }: SessionActio
         }
         navigation.selectWorkspace(workspaceId);
         if (!navigation.isCurrent()) return;
-        const selected = await api.sessions.switch(sessionId);
-        if (!navigation.isCurrent()) return;
-        // 1. 【会话导航】【切换项目】跨项目时重新建立文件、Git 和终端上下文
-        if (!workspaceActive || !active) {
-          window.location.reload();
-          return;
-        }
-        await commitSessionSelection(queryClient, workspaceId, selected);
+        // 1. 【会话导航】【标签页选择】会话选择保存在当前标签页，避免覆盖其他并行会话的服务端指针
+        onSessionSelected?.(workspaceId, sessionId);
+        commitLocalSessionSelection(queryClient, workspaceId, sessionId);
         onNavigate?.();
-        await Promise.all([queryClient.invalidateQueries({ queryKey: ["workspaces"] }), refresh()]);
+        if (!active) {
+          await invalidateWorkspaceContext(queryClient);
+        }
       } catch (cause) {
         if (navigation.isCurrent()) setNavigationError(toDisplayError(cause, "Failed to open session", "打开会话失败"));
       }
@@ -96,7 +95,9 @@ export function useSessionActions({ confirm, t, tree, onNavigate }: SessionActio
     setNavigationError(null);
     try {
       const switched = await switchWithTerminalConfirm(workspaceId, confirm, t);
-      if (switched) window.location.reload();
+      if (switched) {
+        await invalidateWorkspaceContext(queryClient);
+      }
     } catch (cause) {
       setNavigationError(toDisplayError(cause, "Failed to open workspace", "打开工作区失败"));
     }
@@ -193,7 +194,7 @@ export function useSessionActions({ confirm, t, tree, onNavigate }: SessionActio
         const switched = await switchWithTerminalConfirm(fallback.workspace_id, confirm, t);
         if (!switched) return;
         await api.workspaces.remove(workspaceId);
-        window.location.reload();
+        await invalidateWorkspaceContext(queryClient);
         return;
       }
       removeWorkspace.mutate(workspaceId);
@@ -210,7 +211,9 @@ export function useSessionActions({ confirm, t, tree, onNavigate }: SessionActio
   const openDirectory = async (path: string) => {
     const workspace = await api.workspaces.add(path);
     const switched = await switchWithTerminalConfirm(workspace.id, confirm, t);
-    if (switched) window.location.reload();
+    if (switched) {
+      await invalidateWorkspaceContext(queryClient);
+    }
   };
 
   const error =

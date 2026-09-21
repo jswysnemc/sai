@@ -19,6 +19,7 @@ pub(super) struct WorkspaceSessionsResponse {
     pub(super) workspace_id: String,
     pub(super) workspace_name: String,
     pub(super) workspace_path: String,
+    pub(super) last_opened_at: String,
     pub(super) is_git_repository: bool,
     pub(super) active: bool,
     pub(super) sessions: Vec<SessionResponse>,

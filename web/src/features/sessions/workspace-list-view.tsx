@@ -2,6 +2,7 @@ import { MoreHorizontal, Plus, X } from "lucide-react";
 import type { RefObject } from "react";
 import type { WorkspaceSessions } from "../../api/contracts";
 import { localizeApiMessage } from "../../api/api-error";
+import { formatRelativeTime } from "../../shared/format-relative-time";
 import { useI18n } from "../i18n/use-i18n";
 import { ActiveAgentIndicator } from "./active-agent-indicator";
 import { SessionWorkspaceIcon } from "./session-workspace-icon";
@@ -18,6 +19,7 @@ type WorkspaceListViewProps = {
   onOpenWorkspace: (workspaceId: string, active: boolean) => void;
   onCreateSession: (workspaceId: string, active: boolean) => void;
   createPending: boolean;
+  now: number;
   onCloseWorkspace: (workspaceId: string, name: string, active: boolean) => void;
 };
 
@@ -41,13 +43,14 @@ export function WorkspaceListView({
   onOpenWorkspace,
   onCreateSession,
   createPending,
+  now,
   onCloseWorkspace
 }: WorkspaceListViewProps) {
   const { locale, t } = useI18n();
   const canClose = workspaces.length > 1;
   return (
     <div className="session-list sidebar-workspaces-view">
-      {workspaces.map((workspace) => {
+      {[...workspaces].sort((left, right) => right.last_opened_at.localeCompare(left.last_opened_at)).map((workspace) => {
         const name = localizeApiMessage(workspace.workspace_name, locale);
         const running = workspace.sessions.some((session) => runningSessions.has(sessionActivityKey(workspace.workspace_id, session.id)));
         return (
@@ -63,7 +66,10 @@ export function WorkspaceListView({
                 <span className="workspace-summary">
                   <strong>{name}</strong>
                   {running && <ActiveAgentIndicator />}
-                  <small>{t(`${workspace.sessions.length} sessions`, `${workspace.sessions.length} 个会话`)}</small>
+                  <span className="workspace-meta">
+                    <small title={new Date(workspace.last_opened_at).toLocaleString(locale)}>{formatRelativeTime(workspace.last_opened_at, locale, now)}</small>
+                    <small>{t(`${workspace.sessions.length} sessions`, `${workspace.sessions.length} 个会话`)}</small>
+                  </span>
                 </span>
               </button>
               <span className="workspace-tree-actions">

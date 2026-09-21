@@ -9,7 +9,7 @@ it("终端改变共享指针后，侧栏仍与 Web 消息区的当前会话一�
   const sessions: Session[] = ["A", "B"].map((id) => ({ id, title: id, active: id === "A", created_at: "now", updated_at: "now" }));
   client.setQueryData(["sessions"], sessions);
   client.setQueryData<WorkspaceSessions[]>(["session-tree"], [{
-    workspace_id: "workspace", workspace_name: "Test", workspace_path: "/tmp/test", active: true,
+    workspace_id: "workspace", workspace_name: "Test", workspace_path: "/tmp/test", last_opened_at: "now", active: true,
     is_git_repository: false, sessions: sessions.map((session) => ({ ...session, active: session.id === "B" }))
   }]);
   let selected: string | undefined;

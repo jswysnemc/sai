@@ -1,15 +1,17 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronsLeftRight, FolderGit2, FolderOpen, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../../api/client";
 import { localizeApiMessage } from "../../api/api-error";
+import { formatRelativeTime } from "../../shared/format-relative-time";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { useAnchoredPopover } from "../../shared/ui/popover/use-anchored-popover";
 import { ServerDirectoryDialog } from "./server-directory-dialog";
 import "./workspace-switcher.css";
 import { useI18n } from "../i18n/use-i18n";
 import { switchWithTerminalConfirm } from "./workspace-switch-confirmation";
+import { invalidateWorkspaceContext } from "./invalidate-workspace-context";
 
 export { switchWithTerminalConfirm } from "./workspace-switch-confirmation";
 
@@ -28,12 +30,16 @@ export function WorkspaceSwitcher() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const confirm = useConfirm();
+  const queryClient = useQueryClient();
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list });
   const active = workspaces.data?.workspaces.find((workspace) => workspace.id === workspaces.data.active_id);
   const activeName = active ? localizeApiMessage(active.name, locale) : t("Workspace", "工作区");
   const switchWorkspace = useMutation({
     mutationFn: (id: string) => switchWithTerminalConfirm(id, confirm, t),
-    onSuccess: (switched) => { if (switched) window.location.reload(); }
+    onSuccess: async (switched) => {
+      if (!switched) return;
+      await invalidateWorkspaceContext(queryClient);
+    }
   });
   const menuStyle = useAnchoredPopover({ open, anchorRef: triggerRef, preferredWidth: 520, minimumWidth: 240, maxHeight: 560 });
 
@@ -52,7 +58,9 @@ export function WorkspaceSwitcher() {
   const openDirectory = async (path: string) => {
     const workspace = await api.workspaces.add(path);
     const switched = await switchWithTerminalConfirm(workspace.id, confirm, t);
-    if (switched) window.location.reload();
+    if (switched) {
+      await invalidateWorkspaceContext(queryClient);
+    }
   };
 
   return (
@@ -76,9 +84,9 @@ export function WorkspaceSwitcher() {
         <div ref={menuRef} className="workspace-menu" style={menuStyle}>
           <div className="workspace-menu-head"><span><strong>{activeName}</strong><small>{active?.path}</small></span><button type="button" aria-label={t("Close workspace menu", "关闭工作区菜单")} onClick={() => setOpen(false)}><X size={15} /></button></div>
           <div className="workspace-items">
-            {workspaces.data?.workspaces.map((workspace) => (
+            {[...(workspaces.data?.workspaces ?? [])].sort((left, right) => right.last_opened_at.localeCompare(left.last_opened_at)).map((workspace) => (
               <button type="button" className="workspace-item" key={workspace.id} onClick={() => workspace.id !== workspaces.data?.active_id && switchWorkspace.mutate(workspace.id)}>
-                <span><strong>{localizeApiMessage(workspace.name, locale)}</strong><small>{workspace.path}</small></span>{workspace.id === workspaces.data?.active_id && <Check size={14} />}
+                <span><strong>{localizeApiMessage(workspace.name, locale)}</strong><small title={workspace.path}>{workspace.path}</small><small>{formatRelativeTime(workspace.last_opened_at, locale, Date.now())}</small></span>{workspace.id === workspaces.data?.active_id && <Check size={14} />}
               </button>
             ))}
           </div>

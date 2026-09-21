@@ -34,6 +34,8 @@ type SessionSidebarProps = {
   selectedFile: string | null;
   onSelectFile: (path: string) => void;
   onClearFile: () => void;
+  selectedSessionId?: string;
+  onSessionSelected?: (workspaceId: string, sessionId: string) => void;
 };
 
 /**
@@ -45,7 +47,7 @@ type SessionSidebarProps = {
  * @param props 折叠状态和切换回调
  * @returns 会话侧栏
  */
-export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selectedFile, onSelectFile, onClearFile }: SessionSidebarProps) {
+export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selectedFile, onSelectFile, onClearFile, selectedSessionId, onSessionSelected }: SessionSidebarProps) {
   const { t } = useI18n();
   const confirm = useConfirm();
   const navigate = useNavigate();
@@ -54,7 +56,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
   const [browserOpen, setBrowserOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [sidebarView, setSidebarView] = useState<SidebarView>("sessions");
-  const [sessionScope, setSessionScope] = useState<SessionScope>(() => localStorage.getItem(SESSION_SCOPE_KEY) === "all" ? "all" : "current");
+  const [sessionScope, setSessionScope] = useState<SessionScope>(() => localStorage.getItem(SESSION_SCOPE_KEY) === "recent" || localStorage.getItem(SESSION_SCOPE_KEY) === "all" ? "recent" : "current");
   const runningSessions = useRunningSessions();
   useEffect(() => { localStorage.setItem(SESSION_SCOPE_KEY, sessionScope); }, [sessionScope]);
   // 相对时间每分钟刷新一次
@@ -64,13 +66,14 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
     return () => window.clearInterval(id);
   }, []);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const { tree } = useSessionTree();
+  const { tree } = useSessionTree(selectedSessionId);
 
   const actions = useSessionActions({
     confirm,
     t,
     tree: () => tree.data,
-    onNavigate
+    onNavigate,
+    onSessionSelected
   });
   const selection = useSessionSelection({
     confirm,
@@ -201,7 +204,15 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
       )}
       {sidebarView === "sessions" && !tree.isLoading && (
         <div className={`sidebar-projects${sessionScope === "current" ? " is-current-workspace" : ""}`}>
-          {(tree.data ?? []).filter((workspace) => sessionScope === "all" || workspace.active).map((workspace) => {
+          {[...(tree.data ?? [])]
+            .filter((workspace) => sessionScope === "recent" || workspace.active)
+            .sort((left, right) => {
+              if (sessionScope !== "recent") return 0;
+              const leftDate = left.sessions.reduce((latest, session) => session.updated_at > latest ? session.updated_at : latest, "");
+              const rightDate = right.sessions.reduce((latest, session) => session.updated_at > latest ? session.updated_at : latest, "");
+              return rightDate.localeCompare(leftDate);
+            })
+            .map((workspace) => {
             const sessions = <SessionListView
               key={workspace.workspace_id}
               workspace={workspace}
@@ -247,6 +258,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
             onOpenWorkspace={(workspaceId, active) => void actions.openWorkspace(workspaceId, active)}
             onCreateSession={(workspaceId, active) => actions.create.mutate(active ? undefined : workspaceId)}
             createPending={actions.create.isPending}
+            now={nowTick}
             onCloseWorkspace={(workspaceId, name, active) => void actions.closeWorkspace(workspaceId, name, active)}
           />
         ) : (

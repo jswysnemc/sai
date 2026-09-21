@@ -41,28 +41,25 @@ export function enqueueSessionNavigation(
 }
 
 /**
- * 【会话导航】【选中同步】取消旧列表请求，同时更新消息区和侧栏选中项。
+ * 【会话导航】【标签页选择】只更新当前查询缓存中的选中标记，不写入服务端共享指针。
+ *
  * @param client 当前页面查询客户端
  * @param workspaceId 目标工作区标识
- * @param selected 服务端确认的目标会话
- * @returns 两份会话缓存同步完成后的 Promise
+ * @param sessionId 当前标签页选中的会话标识
+ * @returns 无返回值
  */
-export async function commitSessionSelection(client: QueryClient, workspaceId: string, selected: Session): Promise<void> {
-  await Promise.all([
-    client.cancelQueries({ queryKey: ["sessions"] }),
-    client.cancelQueries({ queryKey: ["session-tree"] })
-  ]);
+export function commitLocalSessionSelection(client: QueryClient, workspaceId: string, sessionId: string): void {
   notifyManager.batch(() => {
     client.setQueryData<Session[]>(["sessions"], (sessions) => {
-      const items = sessions?.some((session) => session.id === selected.id) ? sessions : [...sessions ?? [], selected];
-      return items.map((session) => session.id === selected.id ? { ...selected, active: true } : { ...session, active: false });
+      if (!sessions?.some((session) => session.id === sessionId)) return sessions;
+      return sessions.map((session) => ({ ...session, active: session.id === sessionId }));
     });
     client.setQueryData<WorkspaceSessions[]>(["session-tree"], (tree) => tree?.map((workspace) => {
       if (workspace.workspace_id !== workspaceId) return workspace;
-      const items = workspace.sessions.some((session) => session.id === selected.id)
-        ? workspace.sessions : [...workspace.sessions, selected];
-      return { ...workspace, sessions: items.map((session) => session.id === selected.id
-        ? { ...selected, active: true } : { ...session, active: false }) };
+      return {
+        ...workspace,
+        sessions: workspace.sessions.map((session) => ({ ...session, active: session.id === sessionId }))
+      };
     }));
   });
 }

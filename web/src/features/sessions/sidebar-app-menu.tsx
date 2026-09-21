@@ -1,4 +1,4 @@
-import { Cable, CalendarClock, FolderOpen, Settings, Sparkles } from "lucide-react";
+import { Cable, CalendarClock, FolderOpen, ImagePlus, Settings, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { ActionMenu } from "../../shared/ui/menu/action-menu";
 import { useI18n } from "../i18n/use-i18n";
@@ -36,6 +36,7 @@ export function SidebarAppMenu({ collapsed = false, onOpenDirectory, onAfterNavi
         { id: "settings", label: t("Settings", "设置"), icon: <Settings size={15} />, onSelect: () => openPage("/settings") },
         { id: "skills", label: t("Skills", "技能"), icon: <Sparkles size={15} />, onSelect: () => openPage("/settings/skills") },
         { id: "cron", label: t("Scheduled tasks", "定时任务"), icon: <CalendarClock size={15} />, onSelect: () => openPage("/cron-jobs") },
+        { id: "image-workbench", label: t("Image workbench", "生图工作台"), icon: <ImagePlus size={15} />, onSelect: () => openPage("/image-workbench") },
         { id: "gateways", label: t("Gateways", "网关"), icon: <Cable size={15} />, onSelect: () => openPage("/gateways") },
         { id: "directory", label: t("Open server directory", "打开服务端目录"), icon: <FolderOpen size={15} />, separator: true, onSelect: onOpenDirectory }
       ]}

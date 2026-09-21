@@ -263,12 +263,16 @@
 
 /* 服务端目录对话框：导航栏 + 工具行（根目录 · 搜索）+ 列表 + 底栏 */
 .server-directory-dialog {
+  position: relative;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap:var(--space-sm);
   height: min(460px, 64vh);
   min-height: 0;
 }
+
+.server-directory-dialog.is-drop-target { outline: 2px solid color-mix(in srgb, var(--signal) 58%, transparent); outline-offset: -3px; }
+.directory-drop-hint { position: absolute; inset: var(--space-md); z-index: 2; display: grid; place-items: center; border: 1px dashed var(--signal); border-radius: var(--radius-3); background: color-mix(in srgb, var(--signal) 10%, var(--paper-raised)); color: var(--signal); font-size: var(--text-sm); pointer-events: none; }
 
 .directory-input-shell {
   display: flex;

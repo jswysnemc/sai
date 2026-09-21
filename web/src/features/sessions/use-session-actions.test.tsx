@@ -24,22 +24,15 @@ function deferred() {
  */
 function setup() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
-  let activeId = "A";
-  const gates = { A: deferred(), B: deferred(), C: deferred() };
   /** 根据服务端活动指针生成会话列表，返回三个会话。 */
   const sessions = (): Session[] => ["A", "B", "C"].map((id) => ({
-    id, title: id, active: id === activeId, created_at: "now", updated_at: "now"
+    id, title: id, active: id === "A", created_at: "now", updated_at: "now"
   }));
   /** 根据服务端活动指针生成侧栏树，返回当前工作区。 */
   const tree = (): WorkspaceSessions[] => [{
-    workspace_id: "workspace", workspace_name: "Project", workspace_path: "/tmp/project",
+    workspace_id: "workspace", workspace_name: "Project", workspace_path: "/tmp/project", last_opened_at: "now",
     is_git_repository: false, active: true, sessions: sessions()
   }];
-  vi.spyOn(api.sessions, "switch").mockImplementation(async (id) => {
-    await gates[id as keyof typeof gates].promise;
-    activeId = id;
-    return sessions().find((session) => session.id === id)!;
-  });
   vi.spyOn(api.sessions, "list").mockImplementation(async () => sessions());
   vi.spyOn(api.sessions, "tree").mockImplementation(async () => tree());
   client.setQueryData(["sessions"], sessions());
@@ -64,35 +57,30 @@ function setup() {
   }
   renderToStaticMarkup(<QueryClientProvider client={client}><Probe /></QueryClientProvider>);
   return {
-    actions, client, gates, tree, onNavigate,
-    activeId: () => activeId,
+    actions, client, tree, onNavigate,
+    activeId: () => "A",
     displayedId: () => client.getQueryData<Session[]>(["sessions"])?.find((session) => session.active)?.id,
     sidebarId: () => client.getQueryData<WorkspaceSessions[]>(["session-tree"])?.[0].sessions.find((session) => session.active)?.id
   };
 }
 
 describe("会话切换并发", () => {
-  it("快速选择 B、C 时，较晚返回的 B 不覆盖最后选择的 C", async () => {
+  it("快速选择 B、C 时，当前标签页保留最后选择且不修改服务端指针", async () => {
     const test = setup();
     const first = test.actions.openSession("workspace", "B", true, false);
-    await vi.waitFor(() => expect(api.sessions.switch).toHaveBeenCalledWith("B"));
+    await vi.waitFor(() => expect(test.displayedId()).toBe("B"));
     const last = test.actions.openSession("workspace", "C", true, false);
-    test.gates.C.resolve();
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    test.gates.B.resolve();
     await Promise.all([first, last]);
-    expect(test.activeId()).toBe("C");
+    expect(test.activeId()).toBe("A");
     expect(test.displayedId()).toBe("C");
     expect(test.sidebarId()).toBe("C");
   });
 
-  it("A 切到 B 的过程中再次选择 A，应保留最后一次选择", async () => {
+  it("连续切回 A 时，应保留最后一次选择", async () => {
     const test = setup();
     const first = test.actions.openSession("workspace", "B", true, false);
-    await vi.waitFor(() => expect(api.sessions.switch).toHaveBeenCalledWith("B"));
+    await vi.waitFor(() => expect(test.displayedId()).toBe("B"));
     const last = test.actions.openSession("workspace", "A", true, true);
-    test.gates.A.resolve();
-    test.gates.B.resolve();
     await Promise.all([first, last]);
     expect(test.activeId()).toBe("A");
     expect(test.displayedId()).toBe("A");
@@ -106,7 +94,6 @@ describe("会话切换并发", () => {
       return test.tree();
     });
     const switchRequest = test.actions.openSession("workspace", "B", true, false);
-    test.gates.B.resolve();
     await vi.waitFor(() => expect(test.displayedId()).toBe("B"));
     const sidebarId = test.sidebarId();
     treeGate.resolve();

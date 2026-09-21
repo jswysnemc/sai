@@ -9,9 +9,12 @@ import { isSideConversationSessionTitle } from "../side-conversation/side-conver
  *
  * @returns 会话树查询
  */
-export function useSessionTree() {
+export function useSessionTree(selectedSessionId?: string) {
   const sessions = useQuery({ queryKey: ["sessions"], queryFn: api.sessions.list });
   const activeSessionId = sessions.data?.find((session) => session.active)?.id;
+  const localSessionId = selectedSessionId && sessions.data?.some((session) => session.id === selectedSessionId)
+    ? selectedSessionId
+    : activeSessionId;
   const tree = useQuery({
     queryKey: ["session-tree"],
     queryFn: api.sessions.tree,
@@ -20,7 +23,7 @@ export function useSessionTree() {
       ...workspace,
       // 1. 【会话同步】【侧栏选择】与消息区共用当前选择，避免独立轮询采用终端的另一份指针快照
       sessions: workspace.sessions.filter((session) => !isSideConversationSessionTitle(session.title)).map((session) =>
-        workspace.active && sessions.data ? { ...session, active: session.id === activeSessionId } : session)
+        workspace.active && sessions.data ? { ...session, active: session.id === localSessionId } : session)
     }))
   });
 

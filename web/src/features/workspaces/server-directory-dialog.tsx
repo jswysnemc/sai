@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
-import type { DirectoryEntry } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
 import { Modal } from "../../shared/ui/dialog/modal";
 import { useI18n } from "../i18n/use-i18n";
@@ -13,6 +12,7 @@ import {
   normalizeSlashes,
   stripTrailingSlash
 } from "./directory-path-input";
+import { sortDirectoryEntries } from "./directory-sorting";
 
 type ServerDirectoryDialogProps = {
   open: boolean;
@@ -50,6 +50,8 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
   const [createError, setCreateError] = useState<Error | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<Error | null>(null);
+  const [dropActive, setDropActive] = useState(false);
+  const [dropError, setDropError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   // 返回上级后待高亮的来源目录名，列表加载完成后定位
@@ -63,7 +65,7 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
     enabled: props.open
   });
   const entries = useMemo(() => {
-    const sorted = sortEntries(listing.data?.entries ?? []);
+    const sorted = sortDirectoryEntries(listing.data?.entries ?? []);
     const needle = filter.trim().toLowerCase();
     if (!needle) return sorted;
     return sorted.filter((entry) => entry.name.toLowerCase().includes(needle));
@@ -82,6 +84,8 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
     setNewFolderName("");
     setCreateError(null);
     setSubmitError(null);
+    setDropError(null);
+    setDropActive(false);
     pendingSelectionRef.current = null;
     window.setTimeout(() => inputRef.current?.focus(), 50);
   }, [props.open]);
@@ -161,6 +165,31 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  /** 从浏览器拖放数据中提取本地文件管理器提供的目录路径。 */
+  const droppedDirectoryPath = (event: React.DragEvent<HTMLDivElement>): string | null => {
+    const uri = event.dataTransfer.getData("text/uri-list").split("\n").find((item) => item && !item.startsWith("#"));
+    if (uri?.startsWith("file://")) {
+      try { return normalizeDroppedPath(decodeURIComponent(new URL(uri).pathname)); } catch { return normalizeDroppedPath(uri.slice("file://".length)); }
+    }
+    const text = event.dataTransfer.getData("text/plain").trim();
+    if (text.startsWith("/") || /^[A-Za-z]:[\\/]/u.test(text)) return normalizeDroppedPath(text);
+    const file = event.dataTransfer.files[0] as (File & { path?: string; webkitRelativePath?: string }) | undefined;
+    return normalizeDroppedPath(file?.path || file?.webkitRelativePath?.split(/[\\/]/u)[0] || "");
+  };
+
+  /** 处理从文件管理器拖入目录的导航。 */
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDropActive(false);
+    const path = droppedDirectoryPath(event);
+    if (!path) {
+      setDropError(t("The browser did not expose the dropped folder path. Type the server path above instead.", "浏览器没有提供拖入文件夹的路径，请在上方输入服务端路径。"));
+      return;
+    }
+    setDropError(null);
+    enterDirectory(path);
   };
 
   /** 在当前浏览目录下创建子目录，成功后刷新并进入。 */
@@ -302,7 +331,15 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
       size="large"
       onClose={props.onClose}
     >
-      <div className="server-directory-dialog">
+      <div
+        className={`server-directory-dialog${dropActive ? " is-drop-target" : ""}`}
+        onDragEnter={(event) => { event.preventDefault(); setDropActive(true); }}
+        onDragOver={(event) => event.preventDefault()}
+        onDragLeave={(event) => { if (event.currentTarget === event.target) setDropActive(false); }}
+        onDrop={handleDrop}
+      >
+        {dropActive && <div className="directory-drop-hint">{t("Drop a folder to browse it", "拖入文件夹即可浏览")}</div>}
+        {dropError && <div className="directory-error">{dropError}</div>}
         <div className="directory-input-shell">
           <button
             type="button"
@@ -464,16 +501,12 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
 }
 
 /**
- * 目录排序：普通目录在前、点开头目录靠后，同组按本地化名称排序。
+ * 兼容 Windows 文件 URI 以斜杠包裹盘符的格式。
  *
- * @param entries 服务端目录条目
- * @returns 排序后的目录条目
+ * @param path 拖放数据中的原始路径
+ * @returns 可提交给服务端目录接口的标准路径
  */
-function sortEntries(entries: DirectoryEntry[]): DirectoryEntry[] {
-  return [...entries].sort((left, right) => {
-    const leftHidden = left.name.startsWith(".") ? 1 : 0;
-    const rightHidden = right.name.startsWith(".") ? 1 : 0;
-    if (leftHidden !== rightHidden) return leftHidden - rightHidden;
-    return left.name.localeCompare(right.name);
-  });
+function normalizeDroppedPath(path: string): string {
+  const normalized = normalizeSlashes(path.trim());
+  return normalized.replace(/^\/(?:([A-Za-z]):\/)/u, "$1:/");
 }
