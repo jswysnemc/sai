@@ -96,8 +96,11 @@ export type {
 } from "./contracts/cron";
 
 export type {
-  ProviderApiKey,
   ProviderConfig,
+  ProviderApiKey,
+  ModelEndpointApiKey,
+  ModelEndpointConfig,
+  ModelEndpointKind,
   ModelMetadata,
   QqGatewayConfig,
   WeixinGatewayConfig,
@@ -133,6 +136,7 @@ export type {
   ProviderProbeMode,
   ProviderProbeReport,
   ProviderProbeStage,
+  ImageEndpointProbeReport,
   HookHttpRequest,
   HookItem,
   HooksConfig,

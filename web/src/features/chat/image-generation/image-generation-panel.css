@@ -1,0 +1,51 @@
+.chat-image-generation-result {
+  display: grid;
+  gap: var(--space-sm);
+  margin: 1rem 0 1.75rem;
+  padding: var(--space-md);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--paper-raised);
+}
+
+.chat-image-generation-prompt {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.chat-image-generation-prompt p {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.chat-image-generation-marker {
+  flex: 0 0 auto;
+  width: 0.625rem;
+  height: 0.625rem;
+  margin-top: 0.3rem;
+  border-radius: 50%;
+  background: var(--signal);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 14%, transparent);
+}
+
+.chat-image-generation-status,
+.chat-image-generation-error {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+.chat-image-generation-error { color: var(--danger); }
+.chat-image-generation-spin { animation: ui-spin 0.9s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-image-generation-spin { animation: none; }
+}

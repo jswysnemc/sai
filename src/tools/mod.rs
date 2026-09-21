@@ -12,7 +12,7 @@ mod file_edit;
 mod file_read;
 pub(crate) mod fs_path;
 pub(crate) mod groups;
-mod image_generation;
+pub(crate) mod image_generation;
 mod memory;
 pub(crate) mod mesh;
 mod native_search;

@@ -9,6 +9,7 @@ mod gateways;
 mod generated_images;
 mod goals;
 mod health;
+mod image_generation;
 mod input_history;
 mod mcp_config;
 mod memory;
@@ -81,7 +82,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         .merge(sessions::routes())
         .merge(runs::routes())
         .merge(workspace::routes())
-        .merge(generated_images::routes())
+        .merge(image_generation::routes())
         .merge(workspace_git::routes())
         .merge(workspace_git_events::routes())
         .merge(system::routes())
@@ -93,6 +94,8 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         ));
     Router::new()
         .route("/api/health", get(health::health))
+        // 生图结果由浏览器的原生 img 请求读取，不能依赖 API 客户端附加的认证头；文件名为随机缓存名。
+        .merge(generated_images::routes())
         .route("/api/auth/mode", get(auth::auth_mode))
         .route("/api/auth/session", post(auth::create_session))
         .route("/api/auth/password", post(auth::password_login))

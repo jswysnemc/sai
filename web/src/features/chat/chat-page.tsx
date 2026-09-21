@@ -50,7 +50,7 @@ import { openSideConversation } from "../side-conversation/side-conversation-eve
  *
  * @returns 聊天页面
  */
-export function ChatPage({ toolbar }: { toolbar?: ReactNode }) {
+export function ChatPage({ toolbar, selectedSessionId }: { toolbar?: ReactNode; selectedSessionId?: string }) {
   const { locale, t } = useI18n();
   const confirm = useConfirm();
   const { notice, showToast, dismissToast } = useToast();
@@ -72,7 +72,8 @@ export function ChatPage({ toolbar }: { toolbar?: ReactNode }) {
     refetchInterval: 2500,
     retry: false
   });
-  const activeSession = sessions.data?.find((session) => session.active);
+  const activeSession = sessions.data?.find((session) => session.id === selectedSessionId)
+    ?? sessions.data?.find((session) => session.active);
   const [treeOpen, setTreeOpen] = useState(false);
   const activeWorkspace = workspaces.data?.workspaces.find(
     (workspace) => workspace.id === workspaces.data.active_id

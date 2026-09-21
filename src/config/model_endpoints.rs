@@ -2,6 +2,8 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+use super::provider_keys::ProviderApiKey;
+
 /// 独立模型接入类型；与普通对话供应商分开存储。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -18,10 +20,36 @@ pub struct ModelEndpointConfig {
     pub name: String,
     /// 完整请求地址，包括端口及请求路径，不自动拼接普通聊天端点
     pub endpoint: String,
+    /// 生图协议：auto、openai-images 或 gemini
+    #[serde(
+        default = "default_image_protocol",
+        skip_serializing_if = "is_default_image_protocol"
+    )]
+    pub protocol: String,
     #[serde(default)]
     pub api_key: String,
+    /// 多密钥列表；非空时优先于单值密钥
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub api_keys: Vec<ProviderApiKey>,
+    /// 关闭负载均衡时使用的密钥标识
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key_selected: Option<String>,
+    /// 是否在多个密钥之间轮换；当前请求以首个密钥作为稳定回退
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub api_key_balance: bool,
+    /// 远端模型目录；由设置页导入
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub models: Vec<String>,
     #[serde(default)]
     pub model: String,
+}
+
+fn default_image_protocol() -> String {
+    "auto".to_string()
+}
+
+fn is_default_image_protocol(value: &str) -> bool {
+    value.trim().eq_ignore_ascii_case("auto")
 }
 
 impl ModelEndpointConfig {
@@ -30,6 +58,27 @@ impl ModelEndpointConfig {
     /// 返回:
     /// - 实际请求密钥；环境变量不存在时返回错误
     pub fn resolved_api_key(&self) -> Result<String> {
+        if self.api_key_balance && !self.api_keys.is_empty() {
+            let tick = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_nanos() as usize)
+                .unwrap_or_default();
+            let key = &self.api_keys[tick % self.api_keys.len()];
+            return resolve_key_value(&key.api_key);
+        }
+        self.resolved_api_key_for_key(self.api_key_selected.as_deref())
+    }
+
+    /// 按指定密钥标识解析专用模型端点的真实 API Key。
+    pub fn resolved_api_key_for_key(&self, key_id: Option<&str>) -> Result<String> {
+        if let Some(key) = self
+            .api_keys
+            .iter()
+            .find(|key| Some(key.id.as_str()) == key_id)
+            .or_else(|| self.api_keys.first())
+        {
+            return resolve_key_value(&key.api_key);
+        }
         let value = self.api_key.trim();
         if let Some(name) = value.strip_prefix("$env:") {
             let name = name.trim();
@@ -41,6 +90,20 @@ impl ModelEndpointConfig {
         }
         Ok(self.api_key.clone())
     }
+}
+
+/// 展开专用模型端点密钥中的环境变量引用。
+fn resolve_key_value(value: &str) -> Result<String> {
+    let value = value.trim();
+    if let Some(name) = value.strip_prefix("$env:") {
+        let name = name.trim();
+        if name.is_empty() {
+            bail!("model endpoint API key environment variable is empty");
+        }
+        return std::env::var(name)
+            .with_context(|| format!("environment variable {name} is not set"));
+    }
+    Ok(value.to_string())
 }
 
 /// 【模型接入】【配置校验】检查稳定标识和独立请求地址，不发起网络请求。
@@ -94,7 +157,12 @@ mod tests {
             kind: ModelEndpointKind::Jev,
             name: "JEV".into(),
             endpoint: "http://localhost:9087/custom/decisions".into(),
+            protocol: "auto".into(),
             api_key: "key".into(),
+            api_keys: Vec::new(),
+            api_key_selected: None,
+            api_key_balance: false,
+            models: Vec::new(),
             model: "jev-latest".into(),
         };
         validate(&[endpoint.clone()]).unwrap();

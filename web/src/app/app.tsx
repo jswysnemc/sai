@@ -10,6 +10,7 @@ const CodingPage = lazy(() => import("../features/workspace/coding-page").then((
 const SettingsPage = lazy(() => import("../features/settings/settings-page").then((module) => ({ default: module.SettingsPage })));
 const GatewaysPage = lazy(() => import("../features/gateways/gateways-page").then((module) => ({ default: module.GatewaysPage })));
 const CronJobsPage = lazy(() => import("../features/cron-jobs/cron-jobs-page").then((module) => ({ default: module.CronJobsPage })));
+const ImageWorkbenchPage = lazy(() => import("../features/image-workbench/image-workbench-page").then((module) => ({ default: module.ImageWorkbenchPage })));
 
 /**
  * 组合应用级上下文和页面路由。
@@ -28,6 +29,7 @@ export function App() {
               <Route path="settings/:sectionId/:subview?" element={<SettingsPage />} />
               <Route path="gateways" element={<GatewaysPage />} />
               <Route path="cron-jobs" element={<CronJobsPage />} />
+              <Route path="image-workbench" element={<ImageWorkbenchPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

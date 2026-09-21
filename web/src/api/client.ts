@@ -47,6 +47,8 @@ import type {
   ProviderSecretResponse,
   ProviderProbeReport,
   ProviderProbeMode,
+  ModelEndpointConfig,
+  ImageEndpointProbeReport,
   RunMode,
   RunModelSelection,
   ThinkingLevel,
@@ -486,6 +488,12 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ provider_id: providerId, key_id: keyId })
       }),
+    /** 按需读取专用模型端点真实 API Key。 */
+    modelEndpointSecret: (endpointId: string, keyId?: string) =>
+      apiRequest<ProviderSecretResponse>("/api/config/model-endpoint-secret", {
+        method: "POST",
+        body: JSON.stringify({ endpoint_id: endpointId, key_id: keyId })
+      }),
     loadMcp: () => apiRequest<McpConfigResponse>("/api/config/mcp"),
     rtkStatus: () => apiRequest<import("./contracts").RtkStatusResponse>("/api/config/rtk-status"),
     /** 读取当前对话内核状态，供界面标注失效信息 */
@@ -517,6 +525,32 @@ export const api = {
       apiRequest<ProviderProbeReport>("/api/providers/test", {
         method: "POST",
         body: JSON.stringify({ provider, model, mode })
+      })
+  },
+  imageModels: {
+    /** 获取当前生图端点公开的模型目录。 */
+    models: (endpoint: ModelEndpointConfig) =>
+      apiRequest<{ models: string[] }>("/api/image-models/models", {
+        method: "POST",
+        body: JSON.stringify({ endpoint })
+      }),
+    /** 用一次最小真实图片请求探测生图端点。 */
+    test: (endpoint: ModelEndpointConfig) =>
+      apiRequest<ImageEndpointProbeReport>("/api/image-models/test", {
+        method: "POST",
+        body: JSON.stringify({ endpoint })
+      }),
+    /** 根据聊天中的提示词直接请求图片模型。 */
+    generate: (request: { endpointId: string; model?: string; prompt: string; aspectRatio: string; resolution: string }) =>
+      apiRequest<Record<string, unknown>>("/api/image-models/generate", {
+        method: "POST",
+        body: JSON.stringify({
+          endpoint_id: request.endpointId,
+          model: request.model,
+          prompt: request.prompt,
+          aspect_ratio: request.aspectRatio,
+          resolution: request.resolution
+        })
       })
   },
   prompts: {

@@ -1,3 +1,4 @@
+pub(crate) mod request;
 mod response;
 mod storage;
 
@@ -6,6 +7,7 @@ use crate::config::{AppConfig, ModelEndpointConfig, ModelEndpointKind};
 use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use anyhow::{bail, Context, Result};
+use request::{prepare_generation_request, ImageAuth};
 use response::{client, decode_response};
 use serde_json::{json, Value};
 use std::time::Duration;
@@ -79,7 +81,7 @@ pub(super) fn register(registry: &mut ToolRegistry, config: &AppConfig, paths: &
 ///
 /// 返回:
 /// - 小体积 JSON 摘要，包含图片本地路径和 Web 媒体 URL
-async fn generate(
+pub(crate) async fn generate(
     args: Value,
     endpoints: Vec<ModelEndpointConfig>,
     cache_dir: std::path::PathBuf,
@@ -95,26 +97,25 @@ async fn generate(
         bail!("prompt exceeds {} characters", MAX_PROMPT_CHARS);
     }
     let endpoint = select_endpoint(&endpoints, args.get("endpoint_id").and_then(Value::as_str))?;
-    let model = endpoint.model.trim();
-    let mut request = serde_json::Map::new();
-    if !model.is_empty() {
-        request.insert("model".into(), Value::String(model.to_string()));
-    }
-    request.insert("prompt".into(), Value::String(prompt.to_string()));
-    request.insert("n".into(), Value::Number(1.into()));
-    add_string_field(&mut request, &args, "aspect_ratio");
-    add_string_field(&mut request, &args, "resolution");
-    add_string_field_as_size(&mut request, &args, "resolution");
+    let request = prepare_generation_request(
+        endpoint,
+        prompt,
+        args.get("aspect_ratio").and_then(Value::as_str),
+        args.get("resolution").and_then(Value::as_str),
+    )?;
 
     progress.report(format!("请求图片模型：{}", endpoint.name));
     let client = client()?;
     let api_key = endpoint.resolved_api_key()?;
     let mut request_builder = client
-        .post(&endpoint.endpoint)
+        .post(&request.url)
         .timeout(Duration::from_secs(180))
-        .json(&Value::Object(request));
+        .json(&request.body);
     if !api_key.trim().is_empty() {
-        request_builder = request_builder.bearer_auth(api_key.trim());
+        request_builder = match request.auth {
+            ImageAuth::Bearer => request_builder.bearer_auth(api_key.trim()),
+            ImageAuth::GeminiQueryKey => request_builder.query(&[("key", api_key.trim())]),
+        };
     }
     progress.report("图片生成中".to_string());
     let response = request_builder.send().await?.error_for_status()?;
@@ -169,31 +170,6 @@ fn select_endpoint<'a>(
         .context("no image generation endpoint configured")
 }
 
-/// 把非空字符串参数复制到请求 JSON。
-fn add_string_field(target: &mut serde_json::Map<String, Value>, args: &Value, name: &str) {
-    if let Some(value) = args
-        .get(name)
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        target.insert(name.to_string(), Value::String(value.to_string()));
-    }
-}
-
-/// 同时提供 OpenAI 图片接口常用的 size 字段。
-fn add_string_field_as_size(target: &mut serde_json::Map<String, Value>, args: &Value, name: &str) {
-    let Some(value) = args
-        .get(name)
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| value.contains('x'))
-    else {
-        return;
-    };
-    target.insert("size".to_string(), Value::String(value.to_string()));
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,7 +182,12 @@ mod tests {
             kind: ModelEndpointKind::ImageGeneration,
             name: id.into(),
             endpoint: "https://example.com/images".into(),
+            protocol: "auto".into(),
             api_key: String::new(),
+            api_keys: Vec::new(),
+            api_key_selected: None,
+            api_key_balance: false,
+            models: Vec::new(),
             model: "image-model".into(),
         }
     }
@@ -233,6 +214,7 @@ mod tests {
             let mut request = vec![0; 4096];
             let length = stream.read(&mut request).await.unwrap();
             let request = String::from_utf8_lossy(&request[..length]);
+            assert!(request.starts_with("POST /images/generations HTTP/1.1"));
             assert!(request.contains("\"prompt\":\"a red square\""));
             let header = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",

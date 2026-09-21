@@ -10,7 +10,7 @@ import type { AppConfig, ModelEndpointConfig, ModelEndpointKind } from "../../..
 export function newModelEndpoint(endpoints: readonly ModelEndpointConfig[], kind: ModelEndpointKind, name: string): ModelEndpointConfig {
   let index = 1;
   while (endpoints.some((item) => item.id === `${kind}-${index}`)) index += 1;
-  return { id: `${kind}-${index}`, kind, name, endpoint: "", api_key: "", model: "" };
+  return { id: `${kind}-${index}`, kind, name, endpoint: "", protocol: "auto", api_key: "", api_keys: [{ id: "key-1", api_key: "", label: "" }], api_key_selected: "key-1", api_key_balance: false, models: [], model: "" };
 }
 
 /**

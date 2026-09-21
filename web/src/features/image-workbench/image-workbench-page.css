@@ -1,0 +1,15 @@
+.image-workbench-page { min-height: 100%; padding: clamp(1rem, 3vw, 3rem); background: var(--paper); }
+.image-workbench-layout { display: grid; grid-template-columns: minmax(18rem, 28rem) minmax(0, 1fr); gap: var(--space-xl); max-width: 1180px; margin: 0 auto; }
+.image-workbench-form, .image-workbench-result { min-width: 0; padding: var(--space-lg); border: 1px solid var(--line); border-radius: var(--radius-4); background: var(--paper-raised); box-shadow: var(--shadow-subtle); }
+.image-workbench-form { display: grid; align-content: start; gap: var(--space-md); }
+.image-workbench-form-heading { display: flex; gap: var(--space-sm); align-items: flex-start; }
+.image-workbench-icon { display: grid; width: 2rem; height: 2rem; flex: 0 0 auto; place-items: center; border-radius: var(--radius-2); background: color-mix(in srgb, var(--signal) 14%, var(--paper)); color: var(--signal); }
+.image-workbench-form h1 { margin: 0; font-size: var(--text-lg); }
+.image-workbench-form p { margin: var(--space-2xs) 0 0; color: var(--ink-soft); font-size: var(--text-xs); line-height: 1.5; }
+.image-workbench-prompt, .image-workbench-settings label { display: grid; gap: var(--space-2xs); color: var(--ink-soft); font-size: var(--text-xs); }
+.image-workbench-prompt textarea { width: 100%; min-height: 8rem; resize: vertical; padding: var(--space-sm); border: 1px solid var(--line); border-radius: var(--radius-2); background: var(--paper); color: var(--ink); font: inherit; line-height: 1.5; }
+.image-workbench-settings { display: grid; gap: var(--space-sm); }
+.image-workbench-result { min-height: 25rem; }
+.image-workbench-empty { display: grid; min-height: 23rem; place-items: center; color: var(--ink-soft); font-size: var(--text-sm); }
+.image-workbench-spin { animation: ui-spin .9s linear infinite; }
+@media (max-width: 760px) { .image-workbench-page { padding: var(--space-md); } .image-workbench-layout { grid-template-columns: 1fr; gap: var(--space-md); } .image-workbench-result { min-height: 16rem; } .image-workbench-empty { min-height: 12rem; } }

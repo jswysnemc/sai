@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// 稳定 `id` 是脱敏与哨兵回填的对齐键：前端编辑后提交时，
 /// 服务端按 `id` 匹配旧值，避免删除或重排后串用密钥。
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProviderApiKey {
     /// 稳定标识，由前端生成，用于脱敏回填对齐
     pub id: String,

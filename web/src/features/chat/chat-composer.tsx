@@ -42,7 +42,7 @@ export function ChatComposer(props: ChatComposerProps) {
   };
   const placeholder = !props.sessionAvailable ? t("Select a session first", "请先选择会话")
     : props.running ? t("Add a follow-up. Enter to queue it.", "补充任务内容，Enter 加入队列")
-      : t("Describe a task, or type @ to add context", "描述任务，或输入 @ 添加上下文");
+        : t("Describe a task, or type @ to add context", "描述任务，或输入 @ 添加上下文");
 
   return (
     <div className="composer-shell">

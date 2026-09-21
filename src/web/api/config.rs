@@ -23,6 +23,12 @@ struct ProviderSecretRequest {
     key_id: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct ModelEndpointSecretRequest {
+    endpoint_id: String,
+    key_id: Option<String>,
+}
+
 #[derive(Serialize)]
 struct ProviderSecretResponse {
     api_key: String,
@@ -57,6 +63,10 @@ pub(super) fn routes() -> Router<WebAppState> {
     Router::new()
         .route("/api/config", get(load).put(save))
         .route("/api/config/provider-secret", post(provider_secret))
+        .route(
+            "/api/config/model-endpoint-secret",
+            post(model_endpoint_secret),
+        )
         .route("/api/config/rtk-status", get(rtk_status))
         .route("/api/config/engine-status", get(engine_status))
 }
@@ -79,6 +89,31 @@ async fn provider_secret(
         request.key_id.as_deref(),
     )
     .map_err(|error| WebError::bad_request(error.to_string()))?;
+    let mut response = Json(ProviderSecretResponse { api_key }).into_response();
+    response.headers_mut().insert(
+        CACHE_CONTROL,
+        HeaderValue::from_static("no-store, max-age=0"),
+    );
+    response
+        .headers_mut()
+        .insert(PRAGMA, HeaderValue::from_static("no-cache"));
+    Ok(response)
+}
+
+/// 按需读取专用模型端点的真实 API Key。
+async fn model_endpoint_secret(
+    State(state): State<WebAppState>,
+    Json(request): Json<ModelEndpointSecretRequest>,
+) -> WebResult<Response> {
+    let config = crate::config::AppConfig::load_or_default(&state.paths).map_err(WebError::from)?;
+    let endpoint = config
+        .model_endpoints
+        .iter()
+        .find(|endpoint| endpoint.id == request.endpoint_id)
+        .ok_or_else(|| WebError::not_found("model endpoint not found"))?;
+    let api_key = endpoint
+        .resolved_api_key_for_key(request.key_id.as_deref())
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
     let mut response = Json(ProviderSecretResponse { api_key }).into_response();
     response.headers_mut().insert(
         CACHE_CONTROL,

@@ -6,6 +6,9 @@ export type ProviderApiKey = {
   label?: string;
 };
 
+/** 独立模型端点的密钥条目，与普通供应商共用稳定标识语义。 */
+export type ModelEndpointApiKey = ProviderApiKey;
+
 export type ProviderConfig = {
   id: string;
   display_name: string;
@@ -58,7 +61,13 @@ export type ModelEndpointConfig = {
   kind: ModelEndpointKind;
   name: string;
   endpoint: string;
+  /** 生图请求格式：auto、openai-images 或 gemini。 */
+  protocol?: string;
   api_key: string;
+  api_keys?: ModelEndpointApiKey[];
+  api_key_selected?: string;
+  api_key_balance?: boolean;
+  models?: string[];
   model: string;
 };
 
@@ -350,6 +359,20 @@ export type ProviderProbeReport = {
   stages: ProviderProbeStage[];
   error_kind?: ProviderProbeErrorKind;
   tokens?: number;
+};
+
+/** 生图端点最小探测报告。 */
+export type ImageEndpointProbeReport = {
+  ok: boolean;
+  endpoint_id: string;
+  model: string;
+  total_ms: number;
+  stages: Array<{
+    stage: string;
+    ok: boolean;
+    duration_ms: number;
+    detail: string;
+  }>;
 };
 
 export type HookHttpRequest = {
