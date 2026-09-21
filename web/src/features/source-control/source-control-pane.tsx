@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { localizeApiMessage, toDisplayError } from "../../api/api-error";
@@ -6,6 +6,7 @@ import type { GitOperationAction, GitOperationOptions } from "../../api/git-cont
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { useI18n } from "../i18n/use-i18n";
 import { switchWithTerminalConfirm } from "../workspaces/workspace-switcher";
+import { invalidateWorkspaceContext } from "../workspaces/invalidate-workspace-context";
 import { groupGitChanges } from "./changes/change-groups";
 import { resolveGitReviewDiffMode } from "./diff/diff-mode";
 import { useFileComparison } from "./diff/use-file-comparison";
@@ -28,6 +29,7 @@ import { resolveScmCountBadge } from "./state/scm-count-badge";
 import type { RunGitOperation } from "./types";
 import { GitChangesView } from "./views/git-changes-view";
 import { GitHistoryView } from "./views/git-history-view";
+import { RepositoryResources } from "./resources/repository-resources";
 import "./source-control.css";
 
 /**
@@ -40,6 +42,7 @@ import "./source-control.css";
  */
 export function SourceControlPane() {
   const confirm = useConfirm();
+  const queryClient = useQueryClient();
   const { locale, t } = useI18n();
   const [mode, setMode] = useState<GitWatchMode>("changes");
   const [initBranch, setInitBranch] = useState("main");
@@ -199,7 +202,7 @@ export function SourceControlPane() {
   const openWorkspace = async (path: string) => {
     const created = await api.workspaces.add(path);
     const switched = await switchWithTerminalConfirm(created.id, confirm, t);
-    if (switched) window.location.reload();
+    if (switched) await invalidateWorkspaceContext(queryClient);
   };
 
   /**
@@ -460,6 +463,12 @@ export function SourceControlPane() {
           onRefresh={() => void operations.refreshAll()}
           runOperation={runOperation}
         />
+      )}
+
+      {mode === "resources" && (
+        <section className="git-resources-panel">
+          <RepositoryResources repoRoot={selectedRoot} open busy={busy} runOperation={runOperation} />
+        </section>
       )}
 
       <GitOutputPanel entries={operations.outputEntries} />

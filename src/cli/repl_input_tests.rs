@@ -248,10 +248,9 @@ fn long_paste_visible_lines_are_collapsed() {
     let visible = repl_visible_input_lines("[YOLO] > ", &lines, 12, true);
 
     assert!(visible.collapsed);
-    assert_eq!(visible.lines.len(), 3);
-    assert_eq!(visible.lines[0], "line 0");
-    assert!(visible.lines[1].contains("18") || visible.lines[1].contains("已隐藏 18"));
-    assert_eq!(visible.lines[2], "line 19");
+    assert_eq!(visible.lines.len(), 12);
+    assert!(visible.lines[0].contains("9") || visible.lines[0].contains("已隐藏 9"));
+    assert_eq!(visible.lines.last().map(String::as_str), Some("line 19"));
     assert_eq!(lines.len(), 20);
 }
 
@@ -264,7 +263,9 @@ fn manual_multiline_input_collapses_when_over_visible_rows() {
     let visible = repl_visible_input_lines("", &lines, 12, false);
 
     assert!(visible.collapsed);
-    assert_eq!(visible.lines.len(), 3);
+    assert_eq!(visible.lines.len(), 12);
+    assert!(visible.lines[0].contains("9") || visible.lines[0].contains("已隐藏 9"));
+    assert_eq!(visible.lines.last().map(String::as_str), Some("line 19"));
 }
 
 #[test]
@@ -283,7 +284,8 @@ fn long_single_line_paste_visible_is_collapsed() {
     let visible = repl_visible_input_lines("", &lines, 12, true);
     assert!(visible.collapsed);
     assert_eq!(visible.lines.len(), 2);
-    assert!(visible.lines[0].ends_with('…'));
+    assert!(visible.lines[0].starts_with('…'));
+    assert!(visible.lines[0].ends_with(&"x".repeat(160)));
     assert!(visible.lines[1].contains("hidden") || visible.lines[1].contains("已隐藏"));
 }
 

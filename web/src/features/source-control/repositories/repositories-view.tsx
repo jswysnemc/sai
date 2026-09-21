@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, ExternalLink, FolderGit2, FolderOpen, GitBranch, RefreshCw, RotateCcw, Trash2, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "../../../api/client";
 import type { GitRepositoriesResponse, GitWorktree } from "../../../api/contracts";
@@ -6,6 +7,7 @@ import { Button } from "../../../shared/ui/button/button";
 import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import { useI18n } from "../../i18n/use-i18n";
 import { switchWithTerminalConfirm } from "../../workspaces/workspace-switcher";
+import { invalidateWorkspaceContext } from "../../workspaces/invalidate-workspace-context";
 import type { RunGitOperation } from "../types";
 import { WorktreeControls } from "./worktree-controls";
 import "./repositories.css";
@@ -33,6 +35,7 @@ type RepositoriesViewProps = {
 export function RepositoriesView(props: RepositoriesViewProps) {
   const { t } = useI18n();
   const confirm = useConfirm();
+  const queryClient = useQueryClient();
   const [openError, setOpenError] = useState("");
 
   /**
@@ -46,7 +49,7 @@ export function RepositoriesView(props: RepositoriesViewProps) {
       setOpenError("");
       const workspace = await api.workspaces.add(path);
       const switched = await switchWithTerminalConfirm(workspace.id, confirm, t);
-      if (switched) window.location.reload();
+      if (switched) await invalidateWorkspaceContext(queryClient);
     } catch (error) {
       setOpenError(error instanceof Error ? error.message : String(error));
     }

@@ -86,8 +86,12 @@ pub(super) fn repl_visible_input_lines(
     if lines.len() == 1 {
         let line = &lines[0];
         let chars = line.chars().count();
-        let head: String = line.chars().take(48).collect();
-        let omitted = chars.saturating_sub(head.chars().count());
+        let tail_chars = 160.min(chars);
+        let tail: String = line
+            .chars()
+            .skip(chars.saturating_sub(tail_chars))
+            .collect();
+        let omitted = chars.saturating_sub(tail_chars);
         let description = if is_zh() {
             format!("已隐藏 {omitted} 字符输入内容")
         } else {
@@ -95,24 +99,31 @@ pub(super) fn repl_visible_input_lines(
         };
         let note = crate::render::omitted_line::render_fold_hint(&description, None);
         return VisibleInputLines {
-            lines: vec![format!("{head}…"), note],
+            lines: vec![format!("…{tail}"), note],
             collapsed: true,
         };
     }
 
-    let omitted_lines = lines.len().saturating_sub(2);
+    // 从顶部开始折叠，保留光标所在的最新输入行，避免用户看不到刚输入的内容
+    let tail_count = usize::from(max_rows.max(2))
+        .saturating_sub(1)
+        .min(lines.len());
+    let omitted_lines = lines.len().saturating_sub(tail_count);
     let description = if is_zh() {
         format!("已隐藏 {omitted_lines} 行输入内容")
     } else {
         format!("{omitted_lines} input lines hidden")
     };
     let omitted = crate::render::omitted_line::render_fold_hint(&description, None);
+    let mut visible = Vec::with_capacity(tail_count + 1);
+    visible.push(omitted);
+    visible.extend(
+        lines[lines.len() - tail_count..]
+            .iter()
+            .map(|line| clip_collapsed_edge(line, COLLAPSED_EDGE_CHARS)),
+    );
     VisibleInputLines {
-        lines: vec![
-            clip_collapsed_edge(&lines[0], COLLAPSED_EDGE_CHARS),
-            omitted,
-            clip_collapsed_edge(&lines[lines.len() - 1], COLLAPSED_EDGE_CHARS),
-        ],
+        lines: visible,
         collapsed: true,
     }
 }

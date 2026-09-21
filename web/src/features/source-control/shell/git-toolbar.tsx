@@ -1,6 +1,7 @@
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
+  Archive,
   CloudDownload,
   FolderGit2,
   GitCompare,
@@ -42,6 +43,7 @@ const VIEW_TABS: { mode: GitWatchMode; icon: ComponentType<{ size?: number }>; e
   { mode: "changes", icon: GitCompare, en: "Changes", zh: "变更" },
   { mode: "history", icon: History, en: "Graph", zh: "提交图" },
   { mode: "repositories", icon: FolderGit2, en: "Repositories", zh: "仓库" },
+  { mode: "resources", icon: Archive, en: "Stashes", zh: "储藏" },
 ];
 
 /**

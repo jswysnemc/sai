@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../../i18n/use-i18n";
 import { GIT_EVENT_TYPES, gitEventsUrl, parseGitWatchEvent, type GitWatchEvent } from "../events/git-events";
 
-export type GitWatchMode = "changes" | "history" | "repositories";
+export type GitWatchMode = "changes" | "history" | "repositories" | "resources";
 
 /**
  * 订阅 Git 文件变化，并按当前视图失效相关查询。
@@ -25,7 +25,7 @@ export function useGitRepositoryEvents(
 
   useEffect(() => {
     modeRef.current = mode;
-    if (enabled && mode === "repositories") {
+    if (enabled && (mode === "repositories" || mode === "resources")) {
       void queryClient.invalidateQueries({ queryKey: ["git-repositories"] });
     }
   }, [enabled, mode, queryClient]);

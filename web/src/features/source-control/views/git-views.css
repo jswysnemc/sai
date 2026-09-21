@@ -98,3 +98,4 @@
   box-shadow: var(--ring-focus);
   outline: 0;
 }
+.git-resources-panel { display: grid; gap: var(--space-sm); padding: var(--space-md); overflow: auto; }
