@@ -143,7 +143,7 @@ export const ToolLifecycleCard = memo(function ToolLifecycleCard({
           <TodoToolView argumentsText={argumentsText} output={tool.output} />
         </ToolPanel>
       ) : (
-        <ToolResultView name={tool.name} argumentsText={argumentsText} output={tool.output} headerPath={headerPath} />
+        <ToolResultView name={tool.name} argumentsText={argumentsText} output={tool.output} headerPath={headerPath} workspacePath={workspacePath} />
       )}
     </ToolLayout>
   );

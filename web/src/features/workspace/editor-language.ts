@@ -15,6 +15,8 @@ const LANGUAGE_BY_EXTENSION: Record<string, string> = {
   toml: "ini",
   yaml: "yaml",
   yml: "yaml",
+  diff: "diff",
+  patch: "diff",
 };
 
 /**

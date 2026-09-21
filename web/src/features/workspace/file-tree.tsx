@@ -13,6 +13,7 @@ import { Button } from "../../shared/ui/button/button";
 import { TextInput } from "../../shared/ui/form/text-input";
 import { OpenFileDialog } from "./open-file-dialog";
 import { ChangeContextMenu } from "../source-control/changes/change-context-menu";
+import { FileTreeContextMenu } from "./file-tree-context-menu";
 import "../source-control/changes/change-file-list.css";
 import {
   directoryGitTones,
@@ -33,6 +34,7 @@ type FileTreeProps = {
 
 type FileAction = { kind: "file" | "directory" | "rename"; value: string } | null;
 type GitMenuState = { x: number; y: number; workspacePath: string; item: FileTreeGitEntry } | null;
+type TreeMenuState = { x: number; y: number; path: string; directory: boolean } | null;
 
 /**
  * 渲染支持创建、重命名和删除的工作区文件树。
@@ -52,6 +54,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
   const [search, setSearch] = useState("");
   const [error, setError] = useState<Error | null>(null);
   const [gitMenu, setGitMenu] = useState<GitMenuState>(null);
+  const [treeMenu, setTreeMenu] = useState<TreeMenuState>(null);
   const [comparisonBase, setComparisonBase] = useState<FileTreeGitEntry | null>(null);
   const focusedNode = findFileNode(tree.data ?? [], focusedPath);
   const visibleNodes = filterFileNodes(tree.data ?? [], search);
@@ -63,16 +66,18 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
   }, [selectedFile]);
 
   /** 打开新建文件或目录输入栏。 */
-  const beginCreate = (kind: "file" | "directory") => {
-    const parent = focusedNode?.kind === "directory" ? focusedNode.path : parentFilePath(focusedNode?.path ?? "");
+  const beginCreate = (kind: "file" | "directory", targetPath = focusedPath) => {
+    const target = findFileNode(tree.data ?? [], targetPath);
+    const parent = target?.kind === "directory" ? target.path : parentFilePath(target?.path ?? "");
     setAction({ kind, value: parent ? `${parent}/` : "" });
     setError(null);
   };
 
   /** 打开重命名输入栏。 */
-  const beginRename = () => {
-    if (!focusedPath) return;
-    setAction({ kind: "rename", value: focusedPath });
+  const beginRename = (targetPath = focusedPath) => {
+    if (!targetPath) return;
+    setFocusedPath(targetPath);
+    setAction({ kind: "rename", value: targetPath });
     setError(null);
   };
 
@@ -98,19 +103,20 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
   };
 
   /** 删除当前聚焦的文件或目录。 */
-  const deleteFocused = async () => {
-    if (!focusedPath) return;
+  const deleteFocused = async (targetPath = focusedPath) => {
+    if (!targetPath) return;
+    const targetNode = findFileNode(tree.data ?? [], targetPath);
     const confirmed = await confirm({
       title: t("Delete workspace item", "删除工作区条目"),
-      description: t(`Delete “${focusedPath}”${focusedNode?.kind === "directory" ? " and all contents in the directory" : ""}?`, `将删除“${focusedPath}”${focusedNode?.kind === "directory" ? "及目录中的全部内容" : ""}。`),
+      description: t(`Delete “${targetPath}”${targetNode?.kind === "directory" ? " and all contents in the directory" : ""}?`, `将删除“${targetPath}”${targetNode?.kind === "directory" ? "及目录中的全部内容" : ""}。`),
       confirmLabel: t("Delete", "删除"),
       danger: true
     });
     if (!confirmed) return;
     setError(null);
     try {
-      await api.workspace.remove(focusedPath);
-      if (selectedFile === focusedPath || selectedFile?.startsWith(`${focusedPath}/`)) onClearFile();
+      await api.workspace.remove(targetPath);
+      if (selectedFile === targetPath || selectedFile?.startsWith(`${targetPath}/`)) onClearFile();
       setFocusedPath(null);
       await refreshWorkspaceQueries(queryClient);
     } catch (reason) {
@@ -126,7 +132,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
           <Button variant="ghost" size="icon" onClick={() => setOpenFileDialog(true)} aria-label={t("Open file by path", "通过路径打开文件")} title={t("Open file", "打开文件")}><FileUp size={13} /></Button>
           <Button variant="ghost" size="icon" onClick={() => beginCreate("file")} aria-label={t("New file", "新建文件")}><FilePlus2 size={13} /></Button>
           <Button variant="ghost" size="icon" onClick={() => beginCreate("directory")} aria-label={t("New directory", "新建目录")}><FolderPlus size={13} /></Button>
-          <Button variant="ghost" size="icon" onClick={beginRename} disabled={!focusedNode} aria-label={t("Rename", "重命名")}><Pencil size={12} /></Button>
+          <Button variant="ghost" size="icon" onClick={() => beginRename()} disabled={!focusedNode} aria-label={t("Rename", "重命名")}><Pencil size={12} /></Button>
           <Button variant="ghost" size="icon" onClick={() => void deleteFocused()} disabled={!focusedNode} aria-label={t("Delete", "删除")}><Trash2 size={12} /></Button>
           <Button variant="ghost" size="icon" onClick={() => void tree.refetch()} aria-label={t("Refresh file tree", "刷新文件树")}><RefreshCw size={12} /></Button>
           {onClose && <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("Close file tree", "关闭文件树")}><PanelRightClose size={12} /></Button>}
@@ -157,6 +163,11 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
               setFocusedPath(workspacePath);
               setGitMenu({ x: event.clientX, y: event.clientY, workspacePath, item });
             }}
+            onTreeContextMenu={(event, path, directory) => {
+              event.preventDefault();
+              setFocusedPath(path);
+              setTreeMenu({ x: event.clientX, y: event.clientY, path, directory });
+            }}
             depth={0}
             forceOpen={Boolean(search.trim())}
           />
@@ -186,13 +197,27 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
           onClose={() => setGitMenu(null)}
         />
       )}
+      {treeMenu && (
+        <FileTreeContextMenu
+          x={treeMenu.x}
+          y={treeMenu.y}
+          path={treeMenu.path}
+          directory={treeMenu.directory}
+          onOpen={() => { if (!treeMenu.directory) onSelectFile(treeMenu.path); }}
+          onCreate={(kind) => beginCreate(kind, treeMenu.path)}
+          onRename={() => beginRename(treeMenu.path)}
+          onDelete={() => void deleteFocused(treeMenu.path)}
+          onCopyPath={() => void navigator.clipboard?.writeText(treeMenu.path)}
+          onClose={() => setTreeMenu(null)}
+        />
+      )}
       <OpenFileDialog open={openFileDialog} initialPath={selectedFile ?? ""} onSelectFile={onSelectFile} onClose={() => setOpenFileDialog(false)} />
     </aside>
   );
 }
 
 /** 渲染单个递归文件树节点。 */
-function TreeNode({ node, selectedFile, focusedPath, gitEntries, directoryTones, onFocus, onSelectFile, onGitContextMenu, depth, forceOpen }: { node: FileNode; selectedFile: string | null; focusedPath: string | null; gitEntries: ReadonlyMap<string, FileTreeGitEntry>; directoryTones: ReadonlyMap<string, FileTreeGitTone>; onFocus: (path: string) => void; onSelectFile: (path: string) => void; onGitContextMenu: (event: React.MouseEvent<HTMLButtonElement>, path: string, item: FileTreeGitEntry) => void; depth: number; forceOpen: boolean }) {
+function TreeNode({ node, selectedFile, focusedPath, gitEntries, directoryTones, onFocus, onSelectFile, onGitContextMenu, onTreeContextMenu, depth, forceOpen }: { node: FileNode; selectedFile: string | null; focusedPath: string | null; gitEntries: ReadonlyMap<string, FileTreeGitEntry>; directoryTones: ReadonlyMap<string, FileTreeGitTone>; onFocus: (path: string) => void; onSelectFile: (path: string) => void; onGitContextMenu: (event: React.MouseEvent<HTMLButtonElement>, path: string, item: FileTreeGitEntry) => void; onTreeContextMenu: (event: React.MouseEvent<HTMLButtonElement>, path: string, directory: boolean) => void; depth: number; forceOpen: boolean }) {
   const [open, setOpen] = useState(depth < 1);
   const directory = node.kind === "directory";
   const active = selectedFile === node.path || focusedPath === node.path;
@@ -214,6 +239,7 @@ function TreeNode({ node, selectedFile, focusedPath, gitEntries, directoryTones,
         }}
         onContextMenu={(event) => {
           if (gitEntry) onGitContextMenu(event, node.path, gitEntry);
+          else onTreeContextMenu(event, node.path, directory);
         }}
       >
         {directory ? <ChevronRight size={12} className={open ? "tree-chevron open" : "tree-chevron"} /> : <span className="tree-spacer" />}
@@ -227,7 +253,7 @@ function TreeNode({ node, selectedFile, focusedPath, gitEntries, directoryTones,
             : "tree-row-name"}>{node.name}</span>
         {gitEntry && <span className={`tree-row-git-status git-${fileTreeGitStatusTone(gitEntry.entry)}`}>{fileTreeGitStatusLabel(gitEntry.entry)}</span>}
       </button>
-      {directory && (open || forceOpen) && node.children.map((child) => <TreeNode key={child.path} node={child} selectedFile={selectedFile} focusedPath={focusedPath} gitEntries={gitEntries} directoryTones={directoryTones} onFocus={onFocus} onSelectFile={onSelectFile} onGitContextMenu={onGitContextMenu} depth={depth + 1} forceOpen={forceOpen} />)}
+      {directory && (open || forceOpen) && node.children.map((child) => <TreeNode key={child.path} node={child} selectedFile={selectedFile} focusedPath={focusedPath} gitEntries={gitEntries} directoryTones={directoryTones} onFocus={onFocus} onSelectFile={onSelectFile} onGitContextMenu={onGitContextMenu} onTreeContextMenu={onTreeContextMenu} depth={depth + 1} forceOpen={forceOpen} />)}
     </div>
   );
 }

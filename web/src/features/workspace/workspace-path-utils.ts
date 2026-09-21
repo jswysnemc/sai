@@ -8,10 +8,12 @@
 export function workspaceRelativePath(path: string, workspacePath: string): string {
   const normalizedPath = normalizePathSeparators(path);
   const workspace = normalizePathSeparators(workspacePath);
-  const normalizedWorkspace = workspace.length > 1 ? workspace.replace(/\/$/, "") : workspace;
+  const normalizedWorkspace = trimTrailingSeparator(workspace);
   if (!normalizedWorkspace) return normalizedPath.replace(/^\.\//, "");
-  if (normalizedPath === normalizedWorkspace) return "";
-  if (normalizedPath.startsWith(`${normalizedWorkspace}/`)) {
+  const pathKey = pathComparisonKey(normalizedPath);
+  const workspaceKey = pathComparisonKey(normalizedWorkspace);
+  if (pathKey === workspaceKey) return "";
+  if (pathKey.startsWith(`${workspaceKey}/`)) {
     return normalizedPath.slice(normalizedWorkspace.length + 1);
   }
   return normalizedPath.replace(/^\.\//, "");
@@ -24,7 +26,30 @@ export function workspaceRelativePath(path: string, workspacePath: string): stri
  * @returns 使用正斜线的路径
  */
 function normalizePathSeparators(path: string): string {
-  return path.trim().replace(/^\\\\\?\\/, "").replace(/^\/\/\?\//, "").replace(/\\/g, "/").replace(/\/{2,}/g, "/");
+  const value = path.trim().replace(/^\\\\\?\\/, "").replace(/^\/\/\?\//, "").replace(/\\/g, "/");
+  const prefix = value.startsWith("//") ? "//" : "";
+  return `${prefix}${value.slice(prefix.length).replace(/\/{2,}/g, "/")}`;
+}
+
+/**
+ * 去掉目录末尾分隔符，但保留 Unix 根目录和 Windows 盘符根目录。
+ *
+ * @param path 已归一化的路径
+ * @returns 可用于路径边界比较的路径
+ */
+function trimTrailingSeparator(path: string): string {
+  if (path === "/" || /^[a-z]:\/$/iu.test(path)) return path;
+  return path.replace(/\/+$/u, "");
+}
+
+/**
+ * 生成路径比较键；Windows 盘符和 UNC 路径按不区分大小写处理。
+ *
+ * @param path 已归一化的路径
+ * @returns 路径比较键
+ */
+function pathComparisonKey(path: string): string {
+  return /^(?:[a-z]:\/|\/\/)/iu.test(path) ? path.toLowerCase() : path;
 }
 
 /**

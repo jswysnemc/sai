@@ -45,9 +45,14 @@ const INLINE_ATOM_PATTERN = /^sai-atom-(\d+)$/u;
  * @returns 是否符合项目文件路径的形式
  */
 function looksLikeProjectFilePath(value: string): boolean {
-  const path = value.trim().replaceAll("\\", "/");
+  const path = value.trim()
+    .replace(/^\\\\\?\\/u, "")
+    .replace(/^\/\/\?\//u, "")
+    .replaceAll("\\", "/");
   if (!path || path.includes(" ") || path.includes("://") || path.startsWith("#")) return false;
-  if (!/^(?:\.?\.?\/)?[A-Za-z0-9_@.-]+(?:\/[A-Za-z0-9_@.-]+)+$|^[A-Za-z0-9_@.-]+\.[A-Za-z0-9]{1,12}$/u.test(path)) return false;
+  const relativePath = /^(?:\.?\.?\/)?[A-Za-z0-9_@.-]+(?:\/[A-Za-z0-9_@.-]+)+$|^[A-Za-z0-9_@.-]+\.[A-Za-z0-9]{1,12}$/u.test(path);
+  const windowsPath = /^(?:[A-Za-z]:\/|\/\/)[^\s]+$/u.test(path);
+  if (!relativePath && !windowsPath) return false;
   const basename = path.split("/").at(-1) ?? "";
   return /\.[A-Za-z0-9]{1,12}$/u.test(basename) && !/^\d+(?:\.\d+)+$/u.test(basename);
 }

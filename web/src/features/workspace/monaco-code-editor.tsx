@@ -1,7 +1,7 @@
 import Editor, { loader, type OnMount } from "@monaco-editor/react";
 import { useEffect, useRef, useState } from "react";
 import { isDarkTheme, useTheme } from "../theme/theme";
-import { configureMonacoEnvironment } from "./monaco-environment";
+import { configureDiffLanguage, configureMonacoEnvironment } from "./monaco-environment";
 import { configureStandaloneTypeScript } from "./monaco-typescript";
 import { languageForPath } from "./editor-language";
 import { FOCUS_COMPOSER_EVENT, INSERT_TERMINAL_SELECTION_EVENT } from "../chat/composer/composer-events";
@@ -50,6 +50,7 @@ export function MonacoCodeEditor({ path, value, onChange, loadingLabel, gitLines
     // 1. 先注册语言 Worker，再加载 Monaco 主模块
     configureMonacoEnvironment();
     import("monaco-editor").then((monaco) => {
+      configureDiffLanguage(monaco);
       configureStandaloneTypeScript(monaco);
       loader.config({ monaco });
       if (active) setReady(true);
@@ -160,7 +161,7 @@ export function MonacoCodeEditor({ path, value, onChange, loadingLabel, gitLines
           height="100%"
           onMount={handleMount}
           onChange={(next) => onChange(next ?? "")}
-          theme={isDarkTheme(theme) ? "vs-dark" : "light"}
+          theme={isDarkTheme(theme) ? "sai-dark" : "sai-light"}
           options={{
             minimap: { enabled: false },
             fontFamily: "Fira Code",

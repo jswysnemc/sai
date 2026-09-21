@@ -15,6 +15,14 @@ describe("workspace path utils", () => {
     expect(workspaceRelativePath("\\\\?\\C:\\Users\\xz\\demo\\src\\main.rs", "\\\\?\\C:\\Users\\xz\\demo")).toBe("src/main.rs");
   });
 
+  it("支持 Windows 盘符根路径和不区分大小写的工作区匹配", () => {
+    expect(workspaceRelativePath("c:\\Users\\XZ\\demo\\src\\main.rs", "C:\\Users\\xz\\demo\\")).toBe("src/main.rs");
+  });
+
+  it("没有工作区根目录时清理 Windows 扩展前缀", () => {
+    expect(workspaceRelativePath("\\\\?\\C:\\Users\\xz\\demo\\main.rs", "")).toBe("C:/Users/xz/demo/main.rs");
+  });
+
   it("外部文件保留绝对路径，不进入当前工作区面包屑", () => {
     expect(isAbsoluteFilePath(workspaceRelativePath("/home/user/notes.md", "/home/user/project"))).toBe(true);
     expect(isAbsoluteFilePath(workspaceRelativePath("/home/user/project/src/main.ts", "/home/user/project"))).toBe(false);

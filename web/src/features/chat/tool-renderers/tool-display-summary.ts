@@ -222,9 +222,7 @@ export function isEditToolName(name: string): boolean {
  * @returns 展示路径
  */
 export function displayPath(path: string, workspacePath = ""): string {
-  const relative = workspacePath
-    ? workspaceRelativePath(path, workspacePath) || path
-    : path;
+  const relative = workspaceRelativePath(path, workspacePath) || workspaceRelativePath(path, "");
   return shortPath(relative);
 }
 

@@ -38,6 +38,8 @@ const LANGUAGE_ALIASES: Record<string, string> = {
   js: "javascript",
   jsx: "javascript",
   md: "markdown",
+  diff: "diff",
+  patch: "diff",
   py: "python",
   rs: "rust",
   shell: "bash",
@@ -97,6 +99,19 @@ export function highlightSource(source: string, language?: string): { value: str
     ? hljs.highlight(source, { language: resolved, ignoreIllegals: true })
     : hljs.highlightAuto(source, AUTO_DETECT_LANGUAGES);
   return { value: result.value, language: resolved };
+}
+
+/**
+ * 从文件路径推断语法着色语言，并统一处理 Windows 分隔符和补丁扩展名。
+ *
+ * @param path 文件路径
+ * @returns Highlight.js 语言标识；无法推断时返回 undefined
+ */
+export function languageFromPath(path: string): string | undefined {
+  const name = path.split(/[\\/]/u).filter(Boolean).at(-1) ?? "";
+  if (!name.includes(".")) return undefined;
+  const extension = name.split(".").at(-1)?.toLowerCase();
+  return extension === "patch" || extension === "diff" ? "diff" : extension;
 }
 
 /**

@@ -9,6 +9,7 @@ type EditToolViewProps = {
   argumentsText: string;
   output: string;
   headerPath?: string;
+  workspacePath?: string;
 };
 
 type ChangedFile = {
@@ -24,7 +25,7 @@ type ChangedFile = {
  * @param props 编辑参数与结果
  * @returns 文件修改详情
  */
-export function EditToolView({ argumentsText, output, headerPath }: EditToolViewProps) {
+export function EditToolView({ argumentsText, output, headerPath, workspacePath = "" }: EditToolViewProps) {
   const { t } = useI18n();
   const args = parseJsonRecord(argumentsText);
   const result = parseJsonRecord(output);
@@ -47,7 +48,7 @@ export function EditToolView({ argumentsText, output, headerPath }: EditToolView
             <div className="changed-file" key={`${file.path}-${index}`}>
               <FileCheck2 size={14} />
               <span>
-                {file.path && file.path !== headerPath && <ToolFileReference path={file.path} icon={false} />}
+                {file.path && file.path !== headerPath && <ToolFileReference path={file.path} workspacePath={workspacePath} icon={false} />}
                 {!file.path && <strong>{t("Unknown file", "未知文件")}</strong>}
                 <small>{file.action || t("Edited", "已编辑")}</small>
               </span>
@@ -59,7 +60,7 @@ export function EditToolView({ argumentsText, output, headerPath }: EditToolView
       {chosen
         ? (
           <InlineDiffPreview>
-            <DiffView source={chosen} headerPath={headerPath || path} />
+            <DiffView source={chosen} headerPath={headerPath || path} workspacePath={workspacePath} />
           </InlineDiffPreview>
         )
         // 参数仍是未闭合 JSON 时不展示 `{...` 碎片；等 diff/完整参数就绪再渲染

@@ -1,4 +1,4 @@
-import { SyntaxHighlighter } from "../syntax-highlighter";
+import { languageFromPath, SyntaxHighlighter } from "../syntax-highlighter";
 import { ToolPanel } from "./layout/tool-panel";
 import { parseReadTextPages, type ReadTextPage } from "./read-result-parser";
 import { prettyJson } from "./tool-data";
@@ -9,6 +9,7 @@ type ReadToolViewProps = {
   argumentsText: string;
   output: string;
   headerPath?: string;
+  workspacePath?: string;
 };
 
 /**
@@ -17,7 +18,7 @@ type ReadToolViewProps = {
  * @param props argumentsText 为读取参数，output 为结果，headerPath 为卡片头部已展示路径
  * @returns 带行号和语法着色的文件读取详情
  */
-export function ReadToolView({ output, headerPath }: ReadToolViewProps) {
+export function ReadToolView({ output, headerPath, workspacePath = "" }: ReadToolViewProps) {
   const pages = parseReadTextPages(output);
   const hidePath = pages.length === 1 && pathsReferToSameFile(pages[0]?.path ?? "", headerPath ?? "");
   if (pages.length === 0) {
@@ -33,6 +34,7 @@ export function ReadToolView({ output, headerPath }: ReadToolViewProps) {
       {pages.map((page, index) => (
         <ReadTextPageView
           page={page}
+          workspacePath={workspacePath}
           hidePath={hidePath && pathsReferToSameFile(page.path, headerPath ?? "")}
           key={`${page.path}-${page.offset}-${index}`}
         />
@@ -47,7 +49,7 @@ export function ReadToolView({ output, headerPath }: ReadToolViewProps) {
  * @param props page 为文本分页，hidePath 表示路径已经在工具卡头部展示
  * @returns 单文件内容块
  */
-function ReadTextPageView({ page, hidePath }: { page: ReadTextPage; hidePath: boolean }) {
+function ReadTextPageView({ page, hidePath, workspacePath }: { page: ReadTextPage; hidePath: boolean; workspacePath: string }) {
   const { t } = useI18n();
   const source = page.lines.map((line) => line.text).join("\n");
   const range = formatReadRange(page, t);
@@ -55,7 +57,7 @@ function ReadTextPageView({ page, hidePath }: { page: ReadTextPage; hidePath: bo
     <section className="read-file-page">
       {(!hidePath || range !== null) && (
         <div className={`read-file-head${hidePath ? " path-hidden" : ""}`}>
-          {!hidePath && <ToolFileReference path={page.path} />}
+          {!hidePath && <ToolFileReference path={page.path} workspacePath={workspacePath} />}
           {range !== null && <small className="read-file-range">{range}</small>}
         </div>
       )}
@@ -63,7 +65,7 @@ function ReadTextPageView({ page, hidePath }: { page: ReadTextPage; hidePath: bo
         <div className="read-file-gutter" aria-hidden>
           {page.lines.map((line, index) => <span key={index}>{line.number ?? ""}</span>)}
         </div>
-        <pre className="read-file-code"><SyntaxHighlighter language={languageOfPath(page.path)} source={source} /></pre>
+        <pre className="read-file-code"><SyntaxHighlighter language={languageFromPath(page.path)} source={source} /></pre>
       </div>
     </section>
   );
@@ -124,15 +126,4 @@ function formatReadRange(page: ReadTextPage, t: (en: string, zh: string) => stri
     );
   }
   return parts.length > 0 ? parts.join(" · ") : null;
-}
-
-/**
- * 从文件路径推断语法着色语言。
- *
- * @param path 文件路径
- * @returns 文件扩展名，无扩展名时返回 undefined
- */
-function languageOfPath(path: string): string | undefined {
-  const name = path.split("/").pop() ?? "";
-  return name.includes(".") ? name.split(".").pop() : undefined;
 }

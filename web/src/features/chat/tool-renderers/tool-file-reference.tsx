@@ -1,11 +1,14 @@
 import { FileTypeIcon } from "../../../shared/ui/file-icon";
 import { type MouseEvent } from "react";
 import { useI18n } from "../../i18n/use-i18n";
+import { workspaceRelativePath } from "../../workspace/workspace-path-utils";
 
 type ToolFileReferenceProps = {
   path: string;
   /** 展示文案；缺省使用 path */
   label?: string;
+  /** 当前工作区根目录；提供后默认标签显示相对路径 */
+  workspacePath?: string;
   className?: string;
   icon?: boolean;
 };
@@ -16,8 +19,9 @@ type ToolFileReferenceProps = {
  * @param props path 为打开路径，label 为展示文案，className 为附加样式，icon 控制文件图标
  * @returns 文件路径按钮
  */
-export function ToolFileReference({ path, label, className = "", icon = true }: ToolFileReferenceProps) {
+export function ToolFileReference({ path, label, workspacePath = "", className = "", icon = true }: ToolFileReferenceProps) {
   const { t } = useI18n();
+  const displayLabel = label || workspaceRelativePath(path, workspacePath) || workspaceRelativePath(path, "");
 
   /**
    * 派发工作区统一文件打开事件。
@@ -36,7 +40,7 @@ export function ToolFileReference({ path, label, className = "", icon = true }: 
     <span className={`tool-file-reference ${className}`.trim()}>
       <button type="button" onClick={openFile} title={t("Open in editor", "在编辑器中打开")}>
         {icon && <FileTypeIcon name={path} size={13} />}
-        <span className="tool-file-reference-label">{label || path}</span>
+        <span className="tool-file-reference-label">{displayLabel || path}</span>
       </button>
     </span>
   );

@@ -34,6 +34,10 @@
 .tree-row-name.git-modified, .tree-row-git-status.git-modified { color: var(--warning); }
 .tree-row-name.git-deleted, .tree-row-git-status.git-deleted { color: var(--danger); }
 .tree-row-name.git-conflicted, .tree-row-git-status.git-conflicted { color: var(--danger); }
+.file-tree-context-menu { position: fixed; z-index: 120; display: grid; min-width: 10rem; padding: var(--space-2xs); border: 1px solid var(--line); border-radius: var(--radius-2); background: var(--paper-raised); box-shadow: var(--shadow); }
+.file-tree-context-menu button { display: flex; align-items: center; gap: var(--space-xs); width: 100%; padding: var(--space-xs) var(--space-sm); border: 0; border-radius: var(--radius-1); background: transparent; color: var(--ink); font-size: var(--text-xs); text-align: left; }
+.file-tree-context-menu button:hover { background: var(--paper-deep); }
+.file-tree-context-menu button.danger { color: var(--danger); }
 .tree-chevron { transition:transform var(--transition-fast); }
 .tree-chevron.open { transform: rotate(90deg); }
 .tree-spacer { width: 12px; }

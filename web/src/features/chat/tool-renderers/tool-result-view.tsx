@@ -10,6 +10,7 @@ type ToolResultViewProps = {
   argumentsText: string;
   output: string;
   headerPath?: string;
+  workspacePath?: string;
 };
 
 /**
@@ -18,7 +19,7 @@ type ToolResultViewProps = {
  * @param props 工具名称、参数和输出
  * @returns 工具结果视图
  */
-export function ToolResultView({ name, argumentsText, output, headerPath }: ToolResultViewProps) {
+export function ToolResultView({ name, argumentsText, output, headerPath, workspacePath }: ToolResultViewProps) {
   if (name === "generate_image") {
     return <ImageGenerationToolView output={output} />;
   }
@@ -30,10 +31,10 @@ export function ToolResultView({ name, argumentsText, output, headerPath }: Tool
     return <BackgroundTaskToolView argumentsText={argumentsText} output={output} />;
   }
   if (name === "read_file") {
-    return <ReadToolView argumentsText={argumentsText} output={output} headerPath={headerPath} />;
+    return <ReadToolView argumentsText={argumentsText} output={output} headerPath={headerPath} workspacePath={workspacePath} />;
   }
   if (name === "edit_file" || name === "write_file" || name === "str_replace") {
-    return <EditToolView argumentsText={argumentsText} output={output} headerPath={headerPath} />;
+    return <EditToolView argumentsText={argumentsText} output={output} headerPath={headerPath} workspacePath={workspacePath} />;
   }
   return <GenericToolView argumentsText={argumentsText} output={output} />;
 }

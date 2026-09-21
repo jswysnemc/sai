@@ -6,6 +6,8 @@ import { DiffIdeaView } from "./diff-idea-view";
 import { DiffUnifiedView } from "./diff-unified-view";
 import { DiffCodeView } from "./diff/diff-code-view";
 import { ToolFileReference } from "./tool-file-reference";
+import { languageFromPath } from "../syntax-highlighter";
+import { workspaceRelativePath } from "../../workspace/workspace-path-utils";
 import { useI18n } from "../../i18n/use-i18n";
 import "./diff-view.css";
 
@@ -23,6 +25,8 @@ type DiffViewProps = {
   /** 工作区审阅使用双行号、变更导航与完整语法着色。 */
   review?: boolean;
   wrap?: boolean;
+  /** 当前工作区根目录，用于文件头显示相对路径 */
+  workspacePath?: string;
 };
 
 /**
@@ -31,7 +35,7 @@ type DiffViewProps = {
  * @param props Diff 源文本与布局
  * @returns 按文件分块、带双行号列的 Diff 视图
  */
-export function DiffView({ source, headerPath, onlyPath, hideHeader = false, layout = "unified", review = false, wrap = true }: DiffViewProps) {
+export function DiffView({ source, headerPath, onlyPath, hideHeader = false, layout = "unified", review = false, wrap = true, workspacePath = "" }: DiffViewProps) {
   const { t } = useI18n();
   // 解析与字符级配对是纯计算，父组件重渲染时不应重跑
   const files = useMemo(() => selectDiffFiles(parseDiff(source), onlyPath), [onlyPath, source]);
@@ -50,6 +54,7 @@ export function DiffView({ source, headerPath, onlyPath, hideHeader = false, lay
           layout={layout}
           review={review}
           wrap={wrap}
+          workspacePath={workspacePath}
           key={`${file.path}-${index}`}
         />
       ))}
@@ -96,7 +101,8 @@ function DiffFileBlock({
   hidePath,
   layout,
   review,
-  wrap
+  wrap,
+  workspacePath
 }: {
   file: DiffFile;
   hideHeader: boolean;
@@ -104,6 +110,7 @@ function DiffFileBlock({
   layout: DiffLayout;
   review: boolean;
   wrap: boolean;
+  workspacePath: string;
 }) {
   const { t } = useI18n();
   const status = diffStatusLabel(file.status);
@@ -114,8 +121,8 @@ function DiffFileBlock({
         <header className="diff-file-head">
           {!hidePath && file.path && (
             <span className="diff-file-title">
-              <ToolFileReference path={file.path} label={fileName(file.path)} />
-              {fileDirectory(file.path) && <span className="diff-file-directory">{fileDirectory(file.path)}</span>}
+              <ToolFileReference path={file.path} label={fileName(file.path)} workspacePath={workspacePath} />
+              {fileDirectory(file.path, workspacePath) && <span className="diff-file-directory">{fileDirectory(file.path, workspacePath)}</span>}
             </span>
           )}
           {!file.path && <strong>{t("Change fragment", "变更片段")}</strong>}
@@ -136,25 +143,14 @@ function DiffFileBlock({
       )}
       {file.lines.length > 0 &&
         (review ? (
-          <DiffCodeView file={file} language={languageOfPath(file.path)} layout={layout} wrap={wrap} />
+          <DiffCodeView file={file} language={languageFromPath(file.path)} layout={layout} wrap={wrap} />
         ) : layout === "side" ? (
-          <DiffIdeaView file={file} language={languageOfPath(file.path)} />
+          <DiffIdeaView file={file} language={languageFromPath(file.path)} />
         ) : (
-          <DiffUnifiedView file={file} language={languageOfPath(file.path)} />
+          <DiffUnifiedView file={file} language={languageFromPath(file.path)} />
         ))}
     </section>
   );
-}
-
-/**
- * 从文件路径推断代码着色语言。
- *
- * @param path 文件路径
- * @returns 扩展名语言标识，无扩展名时为 undefined
- */
-function languageOfPath(path: string): string | undefined {
-  const name = path.split("/").pop() ?? "";
-  return name.includes(".") ? name.split(".").pop() : undefined;
 }
 
 /**
@@ -173,8 +169,8 @@ function fileName(path: string): string {
  * @param path 文件路径
  * @returns 目录路径；没有目录时返回空
  */
-function fileDirectory(path: string): string {
-  const normalized = path.replaceAll("\\", "/");
+function fileDirectory(path: string, workspacePath = ""): string {
+  const normalized = workspaceRelativePath(path, workspacePath);
   const slash = normalized.lastIndexOf("/");
   return slash > -1 ? normalized.slice(0, slash) : "";
 }

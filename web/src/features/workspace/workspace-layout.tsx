@@ -27,6 +27,7 @@ import {
   reduceMobileWorkbenchState
 } from "./mobile-workbench-state";
 import { OPEN_WORKSPACE_PANEL_EVENT } from "./workspace-panel-options";
+import { WorkspaceActivityRail } from "./workspace-activity-rail";
 import {
   OPEN_WORKSPACE_DIFF_EVENT,
   OPEN_WORKSPACE_SIDEBAR_EVENT,
@@ -67,6 +68,7 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
   const terminalManager = useTerminalManager();
   const sessionSidebar = useSessionSidebarLayout();
   const [paneTab, setPaneTab] = useState<PaneTab | null>(null);
+  const [selectedSessionByWorkspace, setSelectedSessionByWorkspace] = useState<Record<string, string>>({});
   const [passiveDiff, setPassiveDiff] = useState<WorkspacePassiveDiff | null>(null);
   const [fileTreeRequestId, setFileTreeRequestId] = useState(0);
   const [sideConversationRequest, setSideConversationRequest] = useState<SideConversationRequest | null>(null);
@@ -77,13 +79,16 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list });
   const sessions = useQuery({ queryKey: ["sessions"], queryFn: api.sessions.list });
   const git = useQuery({ queryKey: ["runtime-overview", "git-status"], queryFn: () => api.workspace.gitStatus(), refetchInterval: 2500, retry: false });
-  const activeSession = sessions.data?.find((session) => session.active);
+  const activeWorkspaceId = workspaces.data?.active_id;
+  const selectedSessionId = activeWorkspaceId ? selectedSessionByWorkspace[activeWorkspaceId] : undefined;
+  const activeSession = sessions.data?.find((session) => session.id === selectedSessionId)
+    ?? sessions.data?.find((session) => session.active);
   const activeTimeline = useQuery({
     queryKey: ["timeline", activeSession?.id],
     queryFn: () => api.sessions.timeline(activeSession!.id),
     enabled: Boolean(activeSession)
   });
-  const activeWorkspace = workspaces.data?.workspaces.find((workspace) => workspace.id === workspaces.data.active_id);
+  const activeWorkspace = workspaces.data?.workspaces.find((workspace) => workspace.id === activeWorkspaceId);
   // 1. 【Web 工作台】【响应式布局】全屏审阅缩到窄屏时继续显示工作区，避免两侧同时隐藏
   const mobilePane = !layout.workspaceOpen ? "chat"
     : layout.workspaceMaximized || !layout.chatOpen ? "workspace" : mobileLayout.pane;
@@ -274,6 +279,19 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
   };
 
   /**
+   * 从右侧活动栏打开指定工作区视图。
+   *
+   * @param tab 要激活的工作区面板
+   * @returns 无返回值
+   */
+  const selectActivityTab = (tab: PaneTab) => {
+    layout.openWorkspace();
+    setPaneTab(tab);
+    setPassiveDiff(null);
+    if (isMobile) dispatchMobileLayout({ type: "show-pane", pane: tab === "terminal" ? "terminal" : "workspace" });
+  };
+
+  /**
    * 从收起态直接打开空侧栏。
    *
    * 返回:
@@ -296,6 +314,8 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
           collapsed={sessionSidebar.collapsed}
           onToggleCollapsed={() => isMobile ? dispatchMobileLayout({ type: "close-sidebar" }) : sessionSidebar.toggleCollapsed()}
           onNavigate={() => dispatchMobileLayout({ type: "close-sidebar" })}
+          selectedSessionId={selectedSessionId}
+          onSessionSelected={(workspaceId, sessionId) => setSelectedSessionByWorkspace((current) => ({ ...current, [workspaceId]: sessionId }))}
           selectedFile={selectedFile}
           onSelectFile={(path) => {
             onSelectFile(path);
@@ -310,7 +330,7 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
       </aside>
       <div className="workbench-main" inert={isMobile && mobileLayout.sidebarOpen}>
         <div className="workbench-content">
-          {layout.chatOpen && !layout.workspaceMaximized && <section className="coding-chat"><ChatPage toolbar={(
+          {layout.chatOpen && !layout.workspaceMaximized && <section className="coding-chat"><ChatPage selectedSessionId={selectedSessionId} toolbar={(
             <WorkbenchToolbar
               workspaceOpen={layout.workspaceOpen}
               terminalOpen={layout.terminalOpen}
@@ -357,6 +377,18 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
         )}
         <WorkbenchStatusBar branch={git.data?.status === "ready" ? git.data.head : undefined} terminalOpen={layout.terminalOpen} />
       </div>
+      <WorkspaceActivityRail
+        tab={paneTab ?? "files"}
+        workspaceOpen={layout.workspaceOpen}
+        chatOpen={layout.chatOpen}
+        maximized={layout.workspaceMaximized}
+        onSelectTab={selectActivityTab}
+        onCollapse={closeWorkspace}
+        onExpand={openEmptyWorkspace}
+        onToggleChat={layout.toggleChat}
+        onToggleMaximized={layout.toggleWorkspaceMaximized}
+        onToggleSwapped={layout.toggleSwapped}
+      />
     </div>
   );
 }

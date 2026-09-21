@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { splitHighlightedLines, SyntaxHighlighter } from "./syntax-highlighter";
+import { highlightSource, languageFromPath, splitHighlightedLines, SyntaxHighlighter } from "./syntax-highlighter";
 
 describe("SyntaxHighlighter", () => {
   it("启用行号时按源码行生成连续编号", () => {
@@ -18,5 +18,10 @@ describe("SyntaxHighlighter", () => {
       '<span class="hljs-comment">first</span>',
       '<span class="hljs-comment">second</span>'
     ]);
+  });
+
+  it("把 patch 文件映射到 diff 高亮并兼容 Windows 路径", () => {
+    expect(languageFromPath("C:\\work\\changes.patch")).toBe("diff");
+    expect(highlightSource("+added\n-removed", "patch").language).toBe("diff");
   });
 });
