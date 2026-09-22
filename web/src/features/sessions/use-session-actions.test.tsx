@@ -35,6 +35,7 @@ function setup() {
   }];
   vi.spyOn(api.sessions, "list").mockImplementation(async () => sessions());
   vi.spyOn(api.sessions, "tree").mockImplementation(async () => tree());
+  vi.spyOn(api.sessionSidebar, "update").mockResolvedValue({ pinned: [], archived: [], unread: {}, groups: [] });
   client.setQueryData(["sessions"], sessions());
   client.setQueryData(["session-tree"], tree());
   for (const query of [

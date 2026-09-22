@@ -82,7 +82,7 @@ export function useSessionActions({ confirm, t, tree, onNavigate, onSessionSelec
         commitLocalSessionSelection(queryClient, workspaceId, sessionId);
         void api.sessionSidebar.update({ clear_unread: sessionId }).then(() => {
           void queryClient.invalidateQueries({ queryKey: ["session-sidebar"] });
-        });
+        }).catch(() => undefined);
         onNavigate?.();
         if (!active) {
           await invalidateWorkspaceContext(queryClient);
