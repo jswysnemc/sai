@@ -1,4 +1,4 @@
-import { EyeOff, Minus, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { ChevronDown, EyeOff, Minus, Plus, RotateCcw, Trash2 } from "lucide-react";
 import type { CSSProperties } from "react";
 import type { GitStatusEntry } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
@@ -35,6 +35,7 @@ export function ChangeFileRow(props: ChangeFileRowProps) {
   const canDiscard = props.section === "changes" || props.section === "untracked";
   // 已删除文件加删除线：状态字母之外再给一个不需要辨认字母的视觉线索
   const deleted = props.entry.worktree_status === "D" || props.entry.index_status === "D";
+  const directory = props.entry.path.includes("/") ? props.entry.path.slice(0, props.entry.path.lastIndexOf("/")) : "";
 
   return (
     <div
@@ -46,9 +47,13 @@ export function ChangeFileRow(props: ChangeFileRowProps) {
         <FileTypeIcon name={props.entry.path} size={13} />
         <span className="git-file-path">
           <strong>{props.displayName}</strong>
+          {directory && <small>{directory}</small>}
           {props.entry.old_path && <small>{props.entry.old_path} → {props.entry.path}</small>}
         </span>
-        <span className={`git-file-status tone-${statusTone(props.entry)}`}>{statusLabel(props.entry)}</span>
+        <span className="git-file-trailing">
+          <span className={`git-file-status tone-${statusTone(props.entry)}`}>{statusLabel(props.entry)}</span>
+          <ChevronDown size={14} className={props.active ? "is-open" : ""} aria-hidden="true" />
+        </span>
       </Button>
       <span className="git-file-actions">
         {props.section === "staged" && (

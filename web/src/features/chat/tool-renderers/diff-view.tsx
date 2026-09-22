@@ -7,7 +7,7 @@ import { DiffUnifiedView } from "./diff-unified-view";
 import { DiffCodeView } from "./diff/diff-code-view";
 import { ToolFileReference } from "./tool-file-reference";
 import { languageFromPath } from "../syntax-highlighter";
-import { workspaceRelativePath } from "../../workspace/workspace-path-utils";
+import { formatDisplayPath } from "../../workspace/workspace-path-utils";
 import { useI18n } from "../../i18n/use-i18n";
 import "./diff-view.css";
 
@@ -170,7 +170,7 @@ function fileName(path: string): string {
  * @returns 目录路径；没有目录时返回空
  */
 function fileDirectory(path: string, workspacePath = ""): string {
-  const normalized = workspaceRelativePath(path, workspacePath);
+  const normalized = formatDisplayPath(path, workspacePath);
   const slash = normalized.lastIndexOf("/");
   return slash > -1 ? normalized.slice(0, slash) : "";
 }

@@ -239,7 +239,7 @@
 /* 会话子列表：归属由顶部标示行表达，不再用缩进导轨叠一层层级 */
 .workspace-session-children {
   display: grid;
-  gap:var(--space-3xs);
+  gap: 0;
 }
 
 .session-list-empty {

@@ -30,6 +30,7 @@ pub(super) fn prepare_generation_request(
     prompt: &str,
     aspect_ratio: Option<&str>,
     resolution: Option<&str>,
+    images: &[String],
 ) -> Result<PreparedImageRequest> {
     let protocol = resolve_protocol(endpoint);
     match protocol {
@@ -45,7 +46,7 @@ pub(super) fn prepare_generation_request(
             }
             Ok(PreparedImageRequest {
                 url: gemini_generation_url(&endpoint.endpoint, model),
-                body: gemini_body(prompt, aspect_ratio, resolution),
+                body: gemini_body(prompt, aspect_ratio, resolution, images),
                 auth: ImageAuth::GeminiQueryKey,
             })
         }
@@ -117,7 +118,12 @@ fn openai_body(
     Value::Object(body)
 }
 
-fn gemini_body(prompt: &str, aspect_ratio: Option<&str>, resolution: Option<&str>) -> Value {
+fn gemini_body(
+    prompt: &str,
+    aspect_ratio: Option<&str>,
+    resolution: Option<&str>,
+    images: &[String],
+) -> Value {
     let mut image_config = serde_json::Map::new();
     if let Some(value) = aspect_ratio.filter(|value| !value.trim().is_empty()) {
         image_config.insert(
@@ -133,10 +139,34 @@ fn gemini_body(prompt: &str, aspect_ratio: Option<&str>, resolution: Option<&str
     if !image_config.is_empty() {
         generation_config.insert("imageConfig".into(), Value::Object(image_config));
     }
+    let mut parts = inline_image_parts(images);
+    parts.push(json!({ "text": prompt }));
     json!({
-        "contents": [{"parts": [{"text": prompt}]}],
+        "contents": [{"parts": parts}],
         "generationConfig": generation_config
     })
+}
+
+/// 把 data URL 收成 Gemini 能读的内联图片，最多四张。
+fn inline_image_parts(images: &[String]) -> Vec<Value> {
+    images
+        .iter()
+        .filter_map(|value| split_data_url(value))
+        .take(4)
+        .map(|(mime, data)| {
+            json!({ "inline_data": { "mime_type": format!("image/{mime}"), "data": data } })
+        })
+        .collect()
+}
+
+/// 拆开 `data:image/png;base64,...`。不是图片 data URL 时返回空。
+fn split_data_url(value: &str) -> Option<(&str, &str)> {
+    let rest = value.strip_prefix("data:image/")?;
+    let (mime, data) = rest.split_once(";base64,")?;
+    if mime.is_empty() || data.is_empty() {
+        return None;
+    }
+    Some((mime, data))
 }
 
 fn gemini_image_size(resolution: &str) -> String {
@@ -255,6 +285,7 @@ mod tests {
             "a red square",
             Some("1:1"),
             Some("1024x1024"),
+            &[],
         )
         .unwrap();
         assert_eq!(request.url, "https://image.example/v1/images/generations");
@@ -273,6 +304,7 @@ mod tests {
             "a red square",
             Some("16:9"),
             Some("2048x1152"),
+            &[],
         )
         .unwrap();
         assert_eq!(request.url, "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent");
@@ -292,5 +324,30 @@ mod tests {
         assert_eq!(gemini_image_size("1536x1152"), "2K");
         assert_eq!(gemini_image_size("1152x1536"), "2K");
         assert_eq!(gemini_image_size("864x1536"), "2K");
+    }
+
+    #[test]
+    fn gemini_request_includes_inline_reference_images() {
+        let request = prepare_generation_request(
+            &endpoint(
+                "https://generativelanguage.googleapis.com/v1beta",
+                "gemini",
+                "gemini-2.0-flash-exp",
+            ),
+            "make it night",
+            None,
+            None,
+            &["data:image/png;base64,aaaa".to_string()],
+        )
+        .unwrap();
+        assert_eq!(
+            request.body["contents"][0]["parts"][0]["inline_data"]["mime_type"],
+            "image/png"
+        );
+        assert_eq!(
+            request.body["contents"][0]["parts"][0]["inline_data"]["data"],
+            "aaaa"
+        );
+        assert_eq!(request.body["contents"][0]["parts"][1]["text"], "make it night");
     }
 }

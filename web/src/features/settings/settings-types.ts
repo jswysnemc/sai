@@ -22,8 +22,8 @@ export type SettingsSectionId =
   | "usage"
   | "advanced";
 
-/** 侧栏分组标识。 */
-export type SettingsGroupId = "general" | "integrations" | "workspace" | "operations" | "advanced";
+/** 侧栏分组标识，对齐 ZCode 的基础 / 智能体能力 / 数据与统计。 */
+export type SettingsGroupId = "basics" | "agentCapabilities" | "dataAndStats";
 
 /**
  * 分区对全局 AppConfig 的参与方式，顶栏保存、加载骨架与错误条均由此派生。

@@ -21,6 +21,10 @@ type WorkspaceListViewProps = {
   createPending: boolean;
   now: number;
   onCloseWorkspace: (workspaceId: string, name: string, active: boolean) => void;
+  /** 为真时保持传入顺序，不再按最后打开时间重排。 */
+  preserveOrder?: boolean;
+  /** 覆盖“列表多于一个才可关闭”。最近三条和历史要按全部工作区判断。 */
+  allowClose?: boolean;
 };
 
 /**
@@ -44,13 +48,16 @@ export function WorkspaceListView({
   onCreateSession,
   createPending,
   now,
-  onCloseWorkspace
+  onCloseWorkspace,
+  preserveOrder = false,
+  allowClose
 }: WorkspaceListViewProps) {
   const { locale, t } = useI18n();
-  const canClose = workspaces.length > 1;
+  const canClose = allowClose ?? workspaces.length > 1;
+  const ordered = preserveOrder ? workspaces : [...workspaces].sort((left, right) => right.last_opened_at.localeCompare(left.last_opened_at));
   return (
     <div className="session-list sidebar-workspaces-view">
-      {[...workspaces].sort((left, right) => right.last_opened_at.localeCompare(left.last_opened_at)).map((workspace) => {
+      {ordered.map((workspace) => {
         const name = localizeApiMessage(workspace.workspace_name, locale);
         const running = workspace.sessions.some((session) => runningSessions.has(sessionActivityKey(workspace.workspace_id, session.id)));
         return (

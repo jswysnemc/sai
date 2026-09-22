@@ -7,10 +7,12 @@
   align-items: center;
   gap: 0.75rem;
   min-height: var(--toolbar-height);
-  padding: 0.375rem 1.25rem;
+  padding: 0 1rem;
   border-bottom: 1px solid var(--line);
   background: var(--paper);
 }
+.chat-header-expand { display: none; }
+.sidebar-collapsed .chat-header-expand { display: inline-flex; }
 .chat-header-main { display: flex; flex: 1; align-items: center; min-width: 0; gap: 0.5rem; }
 .chat-header h1 {
   min-width: 0;
@@ -33,7 +35,7 @@
   .chat-header { gap: 0.375rem; padding-inline: 0.75rem; }
 }
 @media (max-width: 48rem) {
-  .chat-header { min-height: 3.25rem; padding: 0.375rem 0.625rem; }
+  .chat-header { min-height: var(--toolbar-height); padding: 0 0.625rem; }
   .chat-header-main { flex: 1; }
   .chat-header h1 { font-size: var(--text-base); }
 }

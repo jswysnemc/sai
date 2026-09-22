@@ -71,7 +71,9 @@ impl Agent {
                     }));
                 }
             }
-            if !can_poll_external {
+            // 工具未注册时不能等待后台任务，但活动目标仍要续轮。
+            // Web 每轮重建 Agent，漏掉这一步后界面就停在第一轮。
+            if !can_poll_external && !allow_goal_continuation {
                 return Ok(None);
             }
 

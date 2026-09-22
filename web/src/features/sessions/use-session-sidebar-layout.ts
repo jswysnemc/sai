@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 export const SESSION_SIDEBAR_MIN_WIDTH = 190;
 export const SESSION_SIDEBAR_MAX_WIDTH = 420;
-export const SESSION_SIDEBAR_DEFAULT_WIDTH = 232;
+export const SESSION_SIDEBAR_DEFAULT_WIDTH = 264;
 
 const COLLAPSED_STORAGE_KEY = "sai.session-sidebar-collapsed";
 const WIDTH_STORAGE_KEY = "sai.session-sidebar-width";

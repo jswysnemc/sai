@@ -1,7 +1,7 @@
 import { FileTypeIcon } from "../../../shared/ui/file-icon";
 import { type MouseEvent } from "react";
 import { useI18n } from "../../i18n/use-i18n";
-import { workspaceRelativePath } from "../../workspace/workspace-path-utils";
+import { formatDisplayPath } from "../../workspace/workspace-path-utils";
 
 type ToolFileReferenceProps = {
   path: string;
@@ -21,7 +21,7 @@ type ToolFileReferenceProps = {
  */
 export function ToolFileReference({ path, label, workspacePath = "", className = "", icon = true }: ToolFileReferenceProps) {
   const { t } = useI18n();
-  const displayLabel = label || workspaceRelativePath(path, workspacePath) || workspaceRelativePath(path, "");
+  const displayLabel = label || formatDisplayPath(path, workspacePath) || formatDisplayPath(path, "");
 
   /**
    * 派发工作区统一文件打开事件。

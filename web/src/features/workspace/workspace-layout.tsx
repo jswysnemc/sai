@@ -5,6 +5,7 @@ import { api } from "../../api/client";
 import { ChatPage } from "../chat/chat-page";
 import { SessionSidebar } from "../sessions/session-sidebar";
 import { SessionSidebarResizeHandle } from "../sessions/session-sidebar-resize-handle";
+import { useBackgroundWorkExitWarning } from "../sessions/use-background-work-exit";
 import { useSessionSidebarLayout } from "../sessions/use-session-sidebar-layout";
 import { WorkspaceResizeHandle } from "./workspace-resize-handle";
 import { useWorkspaceLayout } from "./use-workspace-layout";
@@ -27,7 +28,7 @@ import {
   reduceMobileWorkbenchState
 } from "./mobile-workbench-state";
 import { OPEN_WORKSPACE_PANEL_EVENT } from "./workspace-panel-options";
-import { WorkspaceActivityRail } from "./workspace-activity-rail";
+
 import {
   OPEN_WORKSPACE_DIFF_EVENT,
   OPEN_WORKSPACE_SIDEBAR_EVENT,
@@ -83,6 +84,7 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
   const selectedSessionId = activeWorkspaceId ? selectedSessionByWorkspace[activeWorkspaceId] : undefined;
   const activeSession = sessions.data?.find((session) => session.id === selectedSessionId)
     ?? sessions.data?.find((session) => session.active);
+  useBackgroundWorkExitWarning(activeSession?.id);
   const activeTimeline = useQuery({
     queryKey: ["timeline", activeSession?.id],
     queryFn: () => api.sessions.timeline(activeSession!.id),
@@ -279,19 +281,6 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
   };
 
   /**
-   * 从右侧活动栏打开指定工作区视图。
-   *
-   * @param tab 要激活的工作区面板
-   * @returns 无返回值
-   */
-  const selectActivityTab = (tab: PaneTab) => {
-    layout.openWorkspace();
-    setPaneTab(tab);
-    setPassiveDiff(null);
-    if (isMobile) dispatchMobileLayout({ type: "show-pane", pane: tab === "terminal" ? "terminal" : "workspace" });
-  };
-
-  /**
    * 从收起态直接打开空侧栏。
    *
    * 返回:
@@ -377,18 +366,6 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
         )}
         <WorkbenchStatusBar branch={git.data?.status === "ready" ? git.data.head : undefined} terminalOpen={layout.terminalOpen} />
       </div>
-      <WorkspaceActivityRail
-        tab={paneTab ?? "files"}
-        workspaceOpen={layout.workspaceOpen}
-        chatOpen={layout.chatOpen}
-        maximized={layout.workspaceMaximized}
-        onSelectTab={selectActivityTab}
-        onCollapse={closeWorkspace}
-        onExpand={openEmptyWorkspace}
-        onToggleChat={layout.toggleChat}
-        onToggleMaximized={layout.toggleWorkspaceMaximized}
-        onToggleSwapped={layout.toggleSwapped}
-      />
     </div>
   );
 }

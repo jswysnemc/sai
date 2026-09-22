@@ -25,6 +25,8 @@ struct GenerateRequest {
     aspect_ratio: String,
     #[serde(default)]
     resolution: String,
+    #[serde(default)]
+    images: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -139,7 +141,8 @@ async fn generate_image(
             "endpoint_id": endpoint.id,
             "prompt": request.prompt,
             "aspect_ratio": request.aspect_ratio,
-            "resolution": request.resolution
+            "resolution": request.resolution,
+            "images": request.images
         }),
         vec![endpoint],
         state.paths.cache_dir.join("generated-images"),

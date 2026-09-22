@@ -1,6 +1,7 @@
 mod agent_options;
 mod agents;
 mod background_tasks;
+mod background_work;
 mod config;
 mod cron_jobs;
 mod engine_connection;
@@ -22,6 +23,7 @@ mod runs;
 mod session_activity;
 mod session_data;
 mod session_runtime;
+mod session_sidebar;
 mod session_tree;
 mod sessions;
 mod skills;
@@ -64,6 +66,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         .merge(ssh_hosts::routes())
         .merge(ssh_secrets::routes())
         .merge(background_tasks::routes())
+        .merge(background_work::routes())
         .merge(todos::routes())
         .merge(memory::routes())
         .merge(subagents::routes())
@@ -77,6 +80,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         .merge(goals::routes())
         .merge(gateway_weixin_login::routes())
         .merge(session_tree::routes())
+        .merge(session_sidebar::routes())
         .merge(session_activity::routes())
         .merge(session_data::routes())
         .merge(sessions::routes())

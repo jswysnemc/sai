@@ -30,6 +30,7 @@ const CODE_AGENT_TOOLS: &[&str] = &[
     "run_command",
     "background_command",
     "subagent",
+    "todo",
     "write_file",
     "str_replace",
     "create_goal",
@@ -410,7 +411,7 @@ mod mesh_visibility_tests {
         for name in ["run_command", "read_file", "write_file", "subagent"] {
             assert!(visible.contains(name), "{name} 不应退回按需加载");
         }
-        assert!(!visible.contains("todo"));
+        assert!(visible.contains("todo"), "原生 todo 应出现在默认可见工具里");
         assert!(!visible.contains("lua__todo__todo"));
     }
 

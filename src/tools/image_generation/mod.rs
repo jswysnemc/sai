@@ -2,6 +2,8 @@ pub(crate) mod request;
 mod response;
 mod storage;
 
+pub(crate) use storage::content_type as image_content_type;
+
 use super::{ToolProgress, ToolRegistry, ToolSpec};
 use crate::config::{AppConfig, ModelEndpointConfig, ModelEndpointKind};
 use crate::i18n::text as t;
@@ -97,11 +99,13 @@ pub(crate) async fn generate(
         bail!("prompt exceeds {} characters", MAX_PROMPT_CHARS);
     }
     let endpoint = select_endpoint(&endpoints, args.get("endpoint_id").and_then(Value::as_str))?;
+    let images = reference_images(&args);
     let request = prepare_generation_request(
         endpoint,
         prompt,
         args.get("aspect_ratio").and_then(Value::as_str),
         args.get("resolution").and_then(Value::as_str),
+        &images,
     )?;
 
     progress.report(format!("请求图片模型：{}", endpoint.name));
@@ -147,6 +151,22 @@ pub(crate) async fn generate(
         "prompt": prompt,
         "images": stored,
     }))?)
+}
+
+/// 取出随请求附带的参考图，只保留图片 data URL。
+fn reference_images(args: &Value) -> Vec<String> {
+    args.get("images")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|value| value.starts_with("data:image/"))
+                .take(4)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// 选择请求指定的端点或默认第一个图片端点。

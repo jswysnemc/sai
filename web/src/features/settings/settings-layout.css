@@ -50,9 +50,13 @@
 
 .settings-topbar h1 {
   margin: 0;
-  font-size: var(--text-lg);
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-base);
   font-weight: 500;
   letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-topbar-actions {

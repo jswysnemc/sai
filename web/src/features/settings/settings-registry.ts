@@ -30,11 +30,9 @@ export const DEFAULT_SETTINGS_SECTION: SettingsSectionId = "providers";
  * 侧栏分组顺序与文案。
  */
 export const SETTINGS_GROUPS: SettingsGroupMeta[] = [
-  { id: "general", labelEn: "General", labelZh: "常用配置" },
-  { id: "integrations", labelEn: "Extensions", labelZh: "扩展与集成" },
-  { id: "workspace", labelEn: "Workspace", labelZh: "工作区" },
-  { id: "operations", labelEn: "Data and ops", labelZh: "数据与运维" },
-  { id: "advanced", labelEn: "Advanced", labelZh: "高级" }
+  { id: "basics", labelEn: "Basics", labelZh: "基础" },
+  { id: "agentCapabilities", labelEn: "Agent capabilities", labelZh: "智能体能力" },
+  { id: "dataAndStats", labelEn: "Data and stats", labelZh: "数据与统计" }
 ];
 
 /**
@@ -46,9 +44,9 @@ export const SETTINGS_GROUPS: SettingsGroupMeta[] = [
  * 3. 在 SettingsSectionBody 中挂载组件
  */
 export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
-  {
+{
     id: "providers",
-    group: "general",
+    group: "basics",
     appConfig: "required",
     labelEn: "LLM providers",
     labelZh: "LLM 供应商",
@@ -63,36 +61,38 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
       { id: "advanced", labelEn: "Advanced", labelZh: "高级" }
     ]
   },
-  {
-    id: "image-models", group: "general", appConfig: "required",
+{
+    id: "image-models", group: "basics", appConfig: "required",
     labelEn: "Image models", labelZh: "生图模型",
     descriptionEn: "Image model request endpoints and API keys",
     descriptionZh: "生图模型的独立请求地址和 API Key",
     icon: Palette,
     searchKeys: ["image", "generation", "model", "endpoint", "生图", "图片", "密钥"]
   },
-  {
-    id: "jev-models", group: "general", appConfig: "required",
+{
+    id: "jev-models", group: "basics", appConfig: "required",
     labelEn: "JEV models", labelZh: "JEV 模型",
     descriptionEn: "JEV model request endpoints and API keys",
     descriptionZh: "JEV 模型的独立请求地址和 API Key",
     icon: Braces,
     searchKeys: ["jev", "typesafe", "model", "endpoint", "决策", "密钥"]
   },
-  {
-    id: "agents",
-    group: "general",
-    appConfig: "required",
-    labelEn: "Agent profiles",
-    labelZh: "Agent 配置",
-    descriptionEn: "Prompts, tools, and skill exposure",
-    descriptionZh: "系统提示词、工具与技能暴露",
-    icon: Bot,
-    searchKeys: ["agent", "prompt", "tool", "skill", "权限"]
+{
+    id: "appearance",
+    group: "basics",
+    appConfig: "none",
+    saveHintEn: "Applies immediately",
+    saveHintZh: "即时生效",
+    labelEn: "Appearance",
+    labelZh: "外观",
+    descriptionEn: "Language, theme, colors, and Markdown rendering",
+    descriptionZh: "界面语言、主题、颜色与 Markdown 渲染",
+    icon: Palette,
+    searchKeys: ["theme", "language", "locale", "appearance", "markdown", "table", "code", "主题", "语言", "配色", "表格", "代码块"]
   },
-  {
+{
     id: "runtime",
-    group: "general",
+    group: "basics",
     appConfig: "required",
     labelEn: "Runtime",
     labelZh: "运行时",
@@ -108,22 +108,9 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
       { id: "tools", labelEn: "Tools and display", labelZh: "工具与显示" }
     ]
   },
-  {
-    id: "appearance",
-    group: "general",
-    appConfig: "none",
-    saveHintEn: "Applies immediately",
-    saveHintZh: "即时生效",
-    labelEn: "Appearance",
-    labelZh: "外观",
-    descriptionEn: "Language, theme, colors, and Markdown rendering",
-    descriptionZh: "界面语言、主题、颜色与 Markdown 渲染",
-    icon: Palette,
-    searchKeys: ["theme", "language", "locale", "appearance", "markdown", "table", "code", "主题", "语言", "配色", "表格", "代码块"]
-  },
-  {
+{
     id: "prompts",
-    group: "general",
+    group: "basics",
     appConfig: "required",
     labelEn: "Internal prompts",
     labelZh: "内部提示词",
@@ -132,68 +119,9 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     icon: FileText,
     searchKeys: ["prompt", "template", "commit", "title", "compaction", "variable", "提示词", "模板", "提交", "标题", "压缩", "变量"]
   },
-  {
-    id: "cli-tools",
-    group: "integrations",
-    appConfig: "required",
-    labelEn: "CLI assistant tools",
-    labelZh: "CLI 助手工具",
-    descriptionEn: "Optional tools exposed to CLI assistants",
-    descriptionZh: "配置 CLI 助手可使用的可选工具",
-    icon: Wrench,
-    searchKeys: ["cli", "assistant", "tool", "optional", "plugin", "助手", "工具", "可选工具", "插件"]
-  },
-  {
-    id: "skills",
-    group: "integrations",
-    appConfig: "optional",
-    saveHintEn: "Actions in section",
-    saveHintZh: "操作在本节内完成",
-    labelEn: "Skills",
-    labelZh: "Skills",
-    descriptionEn: "Scan, edit, create, and enable Skills",
-    descriptionZh: "扫描、编辑、新增与启停 Skills",
-    icon: Sparkles,
-    searchKeys: ["skill", "skills", "SKILL.md", "技能"]
-  },
-  {
-    id: "mcp",
-    group: "integrations",
-    appConfig: "none",
-    saveHintEn: "Saves in section",
-    saveHintZh: "在本节内保存",
-    labelEn: "MCP",
-    labelZh: "MCP",
-    descriptionEn: "External Model Context Protocol servers",
-    descriptionZh: "外部 MCP 工具服务",
-    icon: Server,
-    searchKeys: ["mcp", "stdio", "sse", "server", "工具服务"]
-  },
-  {
-    id: "hooks",
-    group: "integrations",
-    appConfig: "required",
-    labelEn: "Hooks",
-    labelZh: "Hooks",
-    descriptionEn: "Lifecycle shell and HTTP actions",
-    descriptionZh: "生命周期 shell 与 HTTP 动作",
-    icon: Webhook,
-    searchKeys: ["hook", "lifecycle", "webhook", "钩子"]
-  },
-  {
-    id: "gateways",
-    group: "integrations",
-    appConfig: "required",
-    labelEn: "Gateways",
-    labelZh: "消息网关",
-    descriptionEn: "QQ, Weixin credentials and listen addresses",
-    descriptionZh: "QQ、微信凭据与监听地址",
-    icon: Cable,
-    searchKeys: ["gateway", "qq", "weixin", "微信", "网关"]
-  },
-  {
+{
     id: "git",
-    group: "workspace",
+    group: "basics",
     appConfig: "required",
     labelEn: "Git",
     labelZh: "Git",
@@ -202,9 +130,9 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     icon: GitBranch,
     searchKeys: ["git", "scm", "commit", "remote", "仓库", "提交"]
   },
-  {
+{
     id: "ssh",
-    group: "workspace",
+    group: "basics",
     appConfig: "optional",
     saveHintEn: "Actions in section",
     saveHintZh: "操作在本节内完成",
@@ -215,9 +143,79 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     icon: Server,
     searchKeys: ["ssh", "remote", "host", "terminal", "远程", "主机", "终端"]
   },
-  {
+{
+    id: "agents",
+    group: "basics",
+    appConfig: "required",
+    labelEn: "Agent profiles",
+    labelZh: "Agent 配置",
+    descriptionEn: "Prompts, tools, and skill exposure",
+    descriptionZh: "系统提示词、工具与技能暴露",
+    icon: Bot,
+    searchKeys: ["agent", "prompt", "tool", "skill", "权限"]
+  },
+{
+    id: "cli-tools",
+    group: "agentCapabilities",
+    appConfig: "required",
+    labelEn: "CLI assistant tools",
+    labelZh: "CLI 助手工具",
+    descriptionEn: "Optional tools exposed to CLI assistants",
+    descriptionZh: "配置 CLI 助手可使用的可选工具",
+    icon: Wrench,
+    searchKeys: ["cli", "assistant", "tool", "optional", "plugin", "助手", "工具", "可选工具", "插件"]
+  },
+{
+    id: "skills",
+    group: "agentCapabilities",
+    appConfig: "optional",
+    saveHintEn: "Actions in section",
+    saveHintZh: "操作在本节内完成",
+    labelEn: "Skills",
+    labelZh: "Skills",
+    descriptionEn: "Scan, edit, create, and enable Skills",
+    descriptionZh: "扫描、编辑、新增与启停 Skills",
+    icon: Sparkles,
+    searchKeys: ["skill", "skills", "SKILL.md", "技能"]
+  },
+{
+    id: "mcp",
+    group: "agentCapabilities",
+    appConfig: "none",
+    saveHintEn: "Saves in section",
+    saveHintZh: "在本节内保存",
+    labelEn: "MCP",
+    labelZh: "MCP",
+    descriptionEn: "External Model Context Protocol servers",
+    descriptionZh: "外部 MCP 工具服务",
+    icon: Server,
+    searchKeys: ["mcp", "stdio", "sse", "server", "工具服务"]
+  },
+{
+    id: "hooks",
+    group: "agentCapabilities",
+    appConfig: "required",
+    labelEn: "Hooks",
+    labelZh: "Hooks",
+    descriptionEn: "Lifecycle shell and HTTP actions",
+    descriptionZh: "生命周期 shell 与 HTTP 动作",
+    icon: Webhook,
+    searchKeys: ["hook", "lifecycle", "webhook", "钩子"]
+  },
+{
+    id: "gateways",
+    group: "agentCapabilities",
+    appConfig: "required",
+    labelEn: "Gateways",
+    labelZh: "消息网关",
+    descriptionEn: "QQ, Weixin credentials and listen addresses",
+    descriptionZh: "QQ、微信凭据与监听地址",
+    icon: Cable,
+    searchKeys: ["gateway", "qq", "weixin", "微信", "网关"]
+  },
+{
     id: "memory",
-    group: "operations",
+    group: "agentCapabilities",
     appConfig: "optional",
     saveHintEn: "Actions in section",
     saveHintZh: "操作在本节内完成",
@@ -228,9 +226,9 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     icon: Brain,
     searchKeys: ["memory", "note", "fact", "记忆", "笔记"]
   },
-  {
+{
     id: "session-data",
-    group: "operations",
+    group: "dataAndStats",
     appConfig: "none",
     saveHintEn: "Actions in section",
     saveHintZh: "操作在本节内完成",
@@ -241,9 +239,9 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     icon: Database,
     searchKeys: ["session", "data", "storage", "clear", "delete", "会话", "数据", "清空", "删除"]
   },
-  {
+{
     id: "usage",
-    group: "operations",
+    group: "dataAndStats",
     appConfig: "none",
     saveHintEn: "Read only",
     saveHintZh: "只读",
@@ -261,9 +259,9 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
       { id: "logs", labelEn: "Request logs", labelZh: "请求日志" }
     ]
   },
-  {
+{
     id: "advanced",
-    group: "advanced",
+    group: "dataAndStats",
     appConfig: "required",
     labelEn: "Advanced JSON",
     labelZh: "高级 JSON",

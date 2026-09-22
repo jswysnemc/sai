@@ -1,6 +1,5 @@
-import { ArrowLeft } from "lucide-react";
 import { useEffect, useRef } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import { SettingsNav } from "./shell/settings-nav";
 import { SettingsSaveBar } from "./shell/settings-save-bar";
 import { SettingsSectionBody } from "./shell/settings-section-body";
@@ -46,11 +45,7 @@ export function SettingsPage() {
     <div className="settings-page">
       <header className="settings-topbar">
         <div className="settings-topbar-inner">
-          <Link to="/" className="settings-back" aria-label={t("Back to workspace", "返回主界面")}>
-            <ArrowLeft size={15} />
-            <span>{t("Back to workspace", "返回主界面")}</span>
-          </Link>
-          <h1>{t("Settings", "设置")}</h1>
+          <h1>{meta ? t(meta.labelEn, meta.labelZh) : t("Settings", "设置")}</h1>
           <div className="settings-topbar-actions">
             <SettingsSaveBar
               meta={meta}

@@ -83,7 +83,12 @@ export function BottomTerminalPanel({ manager, height, onResize, onClose }: Bott
               </Button>
               <Button
                 className="bottom-terminal-tab-close"
-                onClick={() => void manager.closeTerminal(terminal.id)}
+                onClick={() => {
+                  const closingLast = manager.terminals.length <= 1;
+                  void manager.closeTerminal(terminal.id).then(() => {
+                    if (closingLast) onClose();
+                  });
+                }}
                 aria-label={t(`Close ${terminal.title}`, `关闭 ${terminal.title}`)}
                 title={t("Close terminal", "关闭终端")}
               >

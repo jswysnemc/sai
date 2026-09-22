@@ -61,10 +61,10 @@ async fn import_plan(paths: &SaiPaths, store: &StateStore, work: &FilePath) -> P
         .join(format!("{}.json", blake3::hash(b"plan").to_hex()))
 }
 
-/// 【会话待办测试】【统计与错误】只有显式导入才产生待办数量，损坏公共记录保留局部错误
-/// @returns 无；禁用待办后仍可访问会话数据面板
+/// 【会话待办测试】【统计与错误】原生待办文件决定数量，损坏文件保留局部错误
+/// @returns 无
 #[tokio::test]
-async fn session_data_todo_counts_follow_lua_and_preserve_query_errors() {
+async fn session_data_todo_counts_follow_native_file_and_preserve_parse_errors() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
     let work = root.path().join("work");
@@ -73,30 +73,20 @@ async fn session_data_todo_counts_follow_lua_and_preserve_query_errors() {
     crate::runtime_cwd::scope(work.clone(), async {
         let session = crate::state::create_session(&paths, Some("todo")).unwrap();
         let store = StateStore::for_session(&paths, &session.id).unwrap();
-        std::fs::write(
-            store.state_dir().join("todos.json"),
-            json!([item()]).to_string(),
-        )
-        .unwrap();
         let mut absent = collect_session_data(&paths, &[info.clone()], &info.id).unwrap();
         todos::fill_counts(&paths, &mut absent).await.unwrap();
         assert!(absent.iter().all(|summary| summary.todo_count == Some(0)));
-        let record = import_plan(&paths, &store, &work).await;
+        std::fs::write(store.state_dir().join("todos.json"), json!([item()]).to_string()).unwrap();
         let mut summaries = collect_session_data(&paths, &[info.clone()], &info.id).unwrap();
         todos::fill_counts(&paths, &mut summaries).await.unwrap();
         let summary = summaries.iter().find(|item| item.id == session.id).unwrap();
         assert_eq!(summary.todo_count, Some(1));
         assert!(summary.items.iter().any(|item| item.name == "todos.json"));
-        assert!(!store.state_dir().join("todos.plugin.json").exists());
-        assert_eq!(
-            std::fs::read_to_string(store.state_dir().join("todos.json")).unwrap(),
-            json!([item()]).to_string()
-        );
         assert_eq!(
             summary.total_bytes,
             summary.items.iter().map(|item| item.bytes).sum::<u64>()
         );
-        std::fs::write(record, "{broken").unwrap();
+        std::fs::write(store.state_dir().join("todos.json"), "{broken").unwrap();
         let mut summaries = collect_session_data(&paths, &[info.clone()], &info.id).unwrap();
         todos::fill_counts(&paths, &mut summaries).await.unwrap();
         let summary = summaries.iter().find(|item| item.id == session.id).unwrap();
@@ -105,20 +95,7 @@ async fn session_data_todo_counts_follow_lua_and_preserve_query_errors() {
             .state_error
             .as_deref()
             .unwrap()
-            .contains("decode plugin storage record"));
-        crate::plugins::set_enabled(
-            &AppConfig::default(),
-            &paths,
-            "todo",
-            false,
-            GrantUpdate::Keep,
-        )
-        .unwrap();
-        let mut summaries = collect_session_data(&paths, &[info.clone()], &info.id).unwrap();
-        todos::fill_counts(&paths, &mut summaries).await.unwrap();
-        assert!(summaries
-            .iter()
-            .all(|summary| summary.todo_count == Some(0)));
+            .contains("failed to parse todo file"));
     })
     .await;
 }

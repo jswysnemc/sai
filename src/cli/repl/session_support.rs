@@ -375,7 +375,7 @@ mod tests {
         assert!(!registry
             .requires_permission("read_file", r#"{"path":"src/main.rs"}"#)
             .unwrap());
-        assert!(!registry.contains("todo"));
+        assert!(registry.contains("todo"));
         assert!(!registry.contains("lua__todo__todo"));
     }
 

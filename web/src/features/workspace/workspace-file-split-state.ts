@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 
-export const WORKSPACE_FILE_TREE_MIN_WIDTH = 220;
+export const WORKSPACE_FILE_TREE_MIN_WIDTH = 180;
 export const WORKSPACE_EDITOR_MIN_WIDTH = 320;
-export const WORKSPACE_FILE_TREE_DEFAULT_WIDTH = 320;
+export const WORKSPACE_FILE_TREE_DEFAULT_WIDTH = 200;
 export const WORKSPACE_FILE_TREE_MAX_WIDTH = 560;
 
 const STORAGE_KEY = "sai.workspace-file-tree-width";

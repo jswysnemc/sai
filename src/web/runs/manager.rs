@@ -22,6 +22,7 @@ use tokio::sync::{oneshot, Mutex, RwLock};
 use tokio::task::JoinHandle;
 
 mod execution;
+mod goal_continuation;
 mod history;
 mod model;
 mod shutdown;

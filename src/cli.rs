@@ -57,6 +57,7 @@ mod repl_commands;
 mod repl_completion;
 mod repl_editor;
 mod repl_editor_buffer;
+mod repl_exit_guard;
 mod repl_external_events;
 mod repl_input;
 mod repl_input_navigation;

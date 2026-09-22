@@ -35,15 +35,14 @@ pub(super) async fn image(
     if !metadata.is_file() || metadata.len() > MAX_IMAGE_BYTES {
         return Err(WebError::not_found("generated image is unavailable"));
     }
-    let mime = mime_guess::from_path(&path)
-        .first()
-        .filter(|mime| mime.type_() == mime_guess::mime::IMAGE)
-        .ok_or_else(|| WebError::bad_request("generated file is not an image"))?;
     let bytes = tokio::fs::read(&path)
         .await
         .map_err(anyhow::Error::from)
         .map_err(WebError::from)?;
-    let content_type = HeaderValue::from_str(mime.as_ref())
+    // 1. 以文件头决定媒体类型。旧缓存可能把带 SVG 字样的 PNG 存成 .svg
+    let mime = crate::tools::image_generation::image_content_type(&bytes)
+        .ok_or_else(|| WebError::bad_request("generated file is not an image"))?;
+    let content_type = HeaderValue::from_str(mime)
         .map_err(anyhow::Error::from)
         .map_err(WebError::from)?;
     let content_length = HeaderValue::from_str(&bytes.len().to_string())

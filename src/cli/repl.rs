@@ -120,6 +120,7 @@ pub(super) async fn run_repl(
     let mut presence: Option<crate::runner::SessionPresenceGuard> = None;
 
     let mut pending_undo = false;
+    let mut exit_armed = false;
     loop {
         // 【终端】【会话在线】切换后仅更新探测记录，输入始终在本终端执行
         runtime.bind_background_session(paths, state.session_id());
@@ -162,6 +163,9 @@ pub(super) async fn run_repl(
                 transcript_options.tool_call_mode,
             )
             .await?;
+            if exit && !confirm_repl_exit(paths, &state, &mut runtime, &mut exit_armed)? {
+                continue;
+            }
             if exit {
                 break;
             }
@@ -242,12 +246,20 @@ pub(super) async fn run_repl(
                         prefill = Some(draft);
                         prefill_clipboard = Some(clipboard);
                     }
+                    if exit && !confirm_repl_exit(paths, &state, &mut runtime, &mut exit_armed)? {
+                        continue;
+                    }
                     if exit {
                         break;
                     }
                     continue;
                 }
-                None => break,
+                None => {
+                    if !confirm_repl_exit(paths, &state, &mut runtime, &mut exit_armed)? {
+                        continue;
+                    }
+                    break;
+                }
             }
         };
         external_events.cancel();
@@ -259,8 +271,12 @@ pub(super) async fn run_repl(
         }
         let mut submitted_input = input.to_string();
         if super::repl_commands::is_repl_exit_command(input) {
+            if !confirm_repl_exit(paths, &state, &mut runtime, &mut exit_armed)? {
+                continue;
+            }
             break;
         }
+        exit_armed = false;
         if let Some(command) = input.strip_prefix('!') {
             // 用带实时状态刷新的版本：直接 await 会让界面静默卡住
             match execute_repl_shell_live(command, &mut runtime).await {
@@ -669,6 +685,9 @@ pub(super) async fn run_repl(
                 prefill = Some(draft);
                 prefill_clipboard = Some(clipboard);
             }
+            if exit && !confirm_repl_exit(paths, &state, &mut runtime, &mut exit_armed)? {
+                continue;
+            }
             if exit {
                 break;
             }
@@ -710,6 +729,9 @@ pub(super) async fn run_repl(
             prefill = Some(draft);
             prefill_clipboard = Some(clipboard);
         }
+        if exit && !confirm_repl_exit(paths, &state, &mut runtime, &mut exit_armed)? {
+            continue;
+        }
         if exit {
             break;
         }
@@ -718,4 +740,35 @@ pub(super) async fn run_repl(
     // 退出后给出恢复命令，便于下次接续同一会话（对齐 Claude `--resume`）
     print_repl_resume_hint(state.session_id());
     Ok(())
+}
+
+/// 有后台工作时先提示，第二次退出才真正离开。
+///
+/// 参数:
+/// - `paths`: Sai 路径
+/// - `state`: 当前会话状态
+/// - `runtime`: 终端运行期，用于写出提示
+/// - `exit_armed`: 是否已经提示过
+///
+/// 返回:
+/// - 可以退出时返回 true
+fn confirm_repl_exit(
+    paths: &SaiPaths,
+    state: &crate::state::StateStore,
+    runtime: &mut ReplRuntime,
+    exit_armed: &mut bool,
+) -> Result<bool> {
+    if *exit_armed {
+        return Ok(true);
+    }
+    let Some(notice) = super::repl_exit_guard::background_exit_notice(
+        paths,
+        state.session_id(),
+        state.state_dir(),
+    ) else {
+        return Ok(true);
+    };
+    runtime.record_meta(notice)?;
+    *exit_armed = true;
+    Ok(false)
 }

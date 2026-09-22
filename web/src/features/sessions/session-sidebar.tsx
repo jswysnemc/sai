@@ -1,11 +1,10 @@
-import { FolderPlus, PanelLeftClose } from "lucide-react";
+import { PanelLeftClose } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
-import { SkeletonList } from "../../shared/ui/skeleton/skeleton";
 import { SaiLogo } from "../../shared/ui/sai-logo";
 import { ServerDirectoryDialog } from "../workspaces/server-directory-dialog";
-import { FileTree } from "../workspace/file-tree";
+import { OPEN_SIDEBAR_FILE_TREE_EVENT } from "./sidebar-file-tree-cover";
 import { useSessionTree } from "./use-session-tree";
 import { useSessionActions } from "./use-session-actions";
 import { useSessionSelection } from "./use-session-selection";
@@ -13,19 +12,19 @@ import { LocaleSwitcher } from "../i18n/locale-switcher";
 import { useI18n } from "../i18n/use-i18n";
 import { SessionSidebarActions } from "./session-sidebar-actions";
 import { Button } from "../../shared/ui/button/button";
-import { SidebarProjectGroup } from "./sidebar-project-group";
 import { SESSION_SCOPE_KEY, type SessionScope } from "./session-scope-control";
-import { SidebarNavigation, type SidebarView } from "./sidebar-navigation";
 import { useRunningSessions } from "./session-running-state";
 import { WORKBENCH_COMMAND_EVENT, type WorkbenchCommand } from "../workspace/workbench-shortcuts";
-import { SessionListView } from "./session-list-view";
-import { WorkspaceListView } from "./workspace-list-view";
+import { FileTree } from "../workspace/file-tree";
+import { readBrowseMode, writeBrowseMode, type SidebarBrowseMode } from "./sidebar-browse";
+import { SidebarTaskBoard } from "./sidebar-task-board";
 import { SidebarAppMenu } from "./sidebar-app-menu";
 import { SidebarCollapsedRail } from "./sidebar-collapsed-rail";
 import { GlobalSearchDialog, type GlobalSearchAction } from "../search/global-search-dialog";
 import { OPEN_WORKSPACE_PANEL_EVENT } from "../workspace/workspace-panel-options";
 import "./session-sidebar.css";
 import "./session-sidebar-workspaces.css";
+import "./sidebar-purpose-section.css";
 
 type SessionSidebarProps = {
   collapsed: boolean;
@@ -39,10 +38,10 @@ type SessionSidebarProps = {
 };
 
 /**
- * 渲染会话侧栏：会话、工作区与文件树三个视图的壳。
+ * 渲染会话侧栏：项目、会话与文件树三个可折叠分区。
  *
  * 数据操作在 useSessionActions、多选在 useSessionSelection、
- * 各视图各自成组件，本组件只保管视图切换、菜单开合这类布局状态。
+ * 各分区各自成组件，本组件只保管分区展开、菜单开合这类布局状态。
  *
  * @param props 折叠状态和切换回调
  * @returns 会话侧栏
@@ -55,10 +54,11 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
   const [workspaceMenu, setWorkspaceMenu] = useState<string | null>(null);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [sidebarView, setSidebarView] = useState<SidebarView>("sessions");
-  const [sessionScope, setSessionScope] = useState<SessionScope>(() => localStorage.getItem(SESSION_SCOPE_KEY) === "recent" || localStorage.getItem(SESSION_SCOPE_KEY) === "all" ? "recent" : "current");
+  const [browse, setBrowse] = useState<SidebarBrowseMode>(readBrowseMode);
+  const [sessionScope] = useState<SessionScope>(() => localStorage.getItem(SESSION_SCOPE_KEY) === "recent" || localStorage.getItem(SESSION_SCOPE_KEY) === "all" ? "recent" : "current");
   const runningSessions = useRunningSessions();
   useEffect(() => { localStorage.setItem(SESSION_SCOPE_KEY, sessionScope); }, [sessionScope]);
+
   // 相对时间每分钟刷新一次
   const [nowTick, setNowTick] = useState(() => Date.now());
   useEffect(() => {
@@ -80,6 +80,15 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
     t,
     removeMany: (ids) => actions.removeMany.mutateAsync(ids)
   });
+
+  useEffect(() => {
+    const openFileTree = () => {
+      writeBrowseMode("files");
+      setBrowse("files");
+    };
+    window.addEventListener(OPEN_SIDEBAR_FILE_TREE_EVENT, openFileTree);
+    return () => window.removeEventListener(OPEN_SIDEBAR_FILE_TREE_EVENT, openFileTree);
+  }, []);
 
   useEffect(() => {
     /** 【会话导航】【快捷操作】处理命令菜单与新建会话请求。 */
@@ -124,7 +133,11 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
     else if (action === "open-tasks") window.dispatchEvent(new Event("sai:open-tasks"));
     else if (action === "open-subagents") window.dispatchEvent(new Event("sai:open-subagents"));
     else if (action === "open-git") window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_PANEL_EVENT, { detail: { tab: "diff" } }));
-    else if (action === "open-files") window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_PANEL_EVENT, { detail: { tab: "files", revealFileTree: true } }));
+    else if (action === "open-files") {
+      writeBrowseMode("files");
+      setBrowse("files");
+      window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_PANEL_EVENT, { detail: { tab: "files" } }));
+    }
     else if (action === "toggle-sidebar") onToggleCollapsed();
     onNavigate?.();
   };
@@ -167,6 +180,8 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
     );
   }
 
+  const workspaces = tree.data ?? [];
+
   return (
     <div className="session-sidebar">
       <div className="sidebar-heading">
@@ -186,85 +201,43 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
         onSkills={() => { navigate("/settings/skills"); onNavigate?.(); }}
         createPending={actions.create.isPending}
       />
-      <SidebarNavigation view={sidebarView} onViewChange={setSidebarView} scope={sessionScope} onScopeChange={(scope) => { setSessionScope(scope); selection.exitSelection(); }} />
-      {sidebarView === "files" && (
-        <div className="sidebar-file-tree-view">
+      <SidebarTaskBoard
+        workspaces={workspaces}
+        loading={tree.isLoading}
+        runningSessions={runningSessions}
+        now={nowTick}
+        sessionScope={sessionScope}
+        selection={selection}
+        menuRef={menuRef}
+        menu={menu}
+        workspaceMenu={workspaceMenu}
+        createPending={actions.create.isPending}
+        onToggleMenu={setMenu}
+        onToggleWorkspaceMenu={setWorkspaceMenu}
+        onOpenSession={(workspaceId, sessionId, workspaceActive, sessionActive) => void actions.openSession(workspaceId, sessionId, workspaceActive, sessionActive)}
+        onRename={async (id, title) => { await actions.rename.mutateAsync({ id, title }); }}
+        onDelete={(id, title) => void actions.removeWithConfirm(id, title)}
+        onOpenWorkspace={(workspaceId, active) => void actions.openWorkspace(workspaceId, active)}
+        onCreateSession={(workspaceId, active) => actions.create.mutate(active ? undefined : workspaceId)}
+        onCloseWorkspace={(workspaceId, name, active) => void actions.closeWorkspace(workspaceId, name, active)}
+        onAddWorkspace={() => setBrowserOpen(true)}
+        browse={browse}
+        onBrowse={(mode) => {
+          writeBrowseMode(mode);
+          setBrowse(mode);
+        }}
+        selectedSessionId={selectedSessionId}
+        files={
           <FileTree
             selectedFile={selectedFile}
             onSelectFile={onSelectFile}
             onClearFile={onClearFile}
-            onClose={() => setSidebarView("sessions")}
+            showHeading={false}
+            workspaceLabel={workspaces.find((workspace) => workspace.active)?.workspace_name}
+            searchPlaceholder={t("Search files...", "搜索文件...")}
           />
-        </div>
-      )}
-      {sidebarView !== "files" && tree.isLoading && (
-        <div className="sidebar-skeleton">
-          <SkeletonList items={6} label={t("Loading sessions", "读取会话")} />
-        </div>
-      )}
-      {sidebarView === "sessions" && !tree.isLoading && (
-        <div className={`sidebar-projects${sessionScope === "current" ? " is-current-workspace" : ""}`}>
-          {[...(tree.data ?? [])]
-            .filter((workspace) => sessionScope === "recent" || workspace.active)
-            .sort((left, right) => {
-              if (sessionScope !== "recent") return 0;
-              const leftDate = left.sessions.reduce((latest, session) => session.updated_at > latest ? session.updated_at : latest, "");
-              const rightDate = right.sessions.reduce((latest, session) => session.updated_at > latest ? session.updated_at : latest, "");
-              return rightDate.localeCompare(leftDate);
-            })
-            .map((workspace) => {
-            const sessions = <SessionListView
-              key={workspace.workspace_id}
-              workspace={workspace}
-              runningSessions={runningSessions}
-              showWorkspaceHeader={sessionScope === "current"}
-              selection={selection}
-              now={nowTick}
-              menuRef={menuRef}
-              menu={menu}
-              onToggleMenu={setMenu}
-              onOpenSession={(sessionId, sessionActive) => void actions.openSession(workspace.workspace_id, sessionId, workspace.active, sessionActive)}
-              onRename={async (id, title) => { await actions.rename.mutateAsync({ id, title }); }}
-              onDelete={(id, title) => void actions.removeWithConfirm(id, title)}
-            />;
-            return sessionScope === "current" ? sessions : <SidebarProjectGroup
-              key={workspace.workspace_id}
-              workspace={workspace}
-              pending={actions.create.isPending}
-              canClose={!workspace.active || (tree.data?.length ?? 0) > 1}
-              onCreate={() => actions.create.mutate(workspace.active ? undefined : workspace.workspace_id)}
-              onOpen={() => void actions.openWorkspace(workspace.workspace_id, workspace.active)}
-              onClose={() => void actions.closeWorkspace(workspace.workspace_id, workspace.workspace_name, workspace.active)}
-            >{sessions}</SidebarProjectGroup>;
-          })}
-          {!tree.data?.length && <div className="sidebar-state">{t("Add a project to get started.", "加入项目后即可开始。")}</div>}
-        </div>
-      )}
-      {sidebarView === "workspaces" && (
-        <div className="sidebar-session-actions" role="toolbar" aria-label={t("Workspace actions", "工作区操作")}>
-          <Button variant="ghost" onClick={() => setBrowserOpen(true)}>
-            <FolderPlus size={14} /><span>{t("Add workspace", "加入工作区")}</span>
-          </Button>
-        </div>
-      )}
-      {sidebarView === "workspaces" && !tree.isLoading && (
-        (tree.data?.length ?? 0) > 0 ? (
-          <WorkspaceListView
-            workspaces={tree.data ?? []}
-            runningSessions={runningSessions}
-            menuRef={menuRef}
-            menu={workspaceMenu}
-            onToggleMenu={setWorkspaceMenu}
-            onOpenWorkspace={(workspaceId, active) => void actions.openWorkspace(workspaceId, active)}
-            onCreateSession={(workspaceId, active) => actions.create.mutate(active ? undefined : workspaceId)}
-            createPending={actions.create.isPending}
-            now={nowTick}
-            onCloseWorkspace={(workspaceId, name, active) => void actions.closeWorkspace(workspaceId, name, active)}
-          />
-        ) : (
-          <div className="sidebar-state">{t("No workspaces yet — add one above", "还没有工作区，点击上方「加入工作区」开始")}</div>
-        )
-      )}
+        }
+      />
       {(actions.error ?? tree.error) && <p className="sidebar-error">{(actions.error ?? tree.error)?.message}</p>}
       <div className="sidebar-footer">
         <div className="sidebar-footer-actions">

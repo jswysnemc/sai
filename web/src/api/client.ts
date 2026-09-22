@@ -94,6 +94,16 @@ import type { McpToolInfo } from "./mcp-tool-contracts";
 import type { ManagedSkill, ManagedSkillDocument } from "./skill-contracts";
 
 
+export type SessionSidebarGroup = { id: string; name: string; color: string; session_ids: string[] };
+export type SessionSidebarIndex = {
+  pinned: string[];
+  archived: string[];
+  unread: Record<string, string>;
+  groups: SessionSidebarGroup[];
+};
+export type BackgroundWorkItem = { kind: "subagent" | "command" | string; id: string; label: string };
+export type BackgroundWorkResponse = { items: BackgroundWorkItem[] };
+
 export const api = {
   workspaces: {
     list: () => apiRequest<WorkspaceList>("/api/workspaces"),
@@ -122,6 +132,11 @@ export const api = {
       }),
     remove: (id: string) => apiRequest<{ removed: boolean }>(`/api/workspaces/${id}`, { method: "DELETE" })
   },
+  sessionSidebar: {
+    read: () => apiRequest<SessionSidebarIndex>("/api/session-sidebar"),
+    update: (patch: Partial<SessionSidebarIndex> & { clear_unread?: string; mark_unread?: string }) =>
+      apiRequest<SessionSidebarIndex>("/api/session-sidebar", { method: "PATCH", body: JSON.stringify(patch) })
+  },
   sessions: {
     list: () => apiRequest<Session[]>("/api/sessions"),
     tree: () => apiRequest<WorkspaceSessions[]>("/api/sessions/tree"),
@@ -131,6 +146,7 @@ export const api = {
     rename: (id: string, title: string) =>
       apiRequest<Session>(`/api/sessions/${id}`, { method: "PATCH", body: JSON.stringify({ title }) }),
     remove: (id: string) => apiRequest<{ deleted: boolean }>(`/api/sessions/${id}`, { method: "DELETE" }),
+    backgroundWork: (id: string) => apiRequest<BackgroundWorkResponse>(`/api/sessions/${encodeURIComponent(id)}/background-work`),
     removeMany: (ids: string[]) =>
       apiRequest<{ deleted_ids: string[] }>("/api/sessions/bulk-delete", {
         method: "POST",
@@ -541,7 +557,7 @@ export const api = {
         body: JSON.stringify({ endpoint })
       }),
     /** 根据聊天中的提示词直接请求图片模型。 */
-    generate: (request: { endpointId: string; model?: string; prompt: string; aspectRatio: string; resolution: string }) =>
+    generate: (request: { endpointId: string; model?: string; prompt: string; aspectRatio: string; resolution: string; images?: string[] }) =>
       apiRequest<Record<string, unknown>>("/api/image-models/generate", {
         method: "POST",
         body: JSON.stringify({
@@ -549,7 +565,8 @@ export const api = {
           model: request.model,
           prompt: request.prompt,
           aspect_ratio: request.aspectRatio,
-          resolution: request.resolution
+          resolution: request.resolution,
+          images: request.images ?? []
         })
       })
   },

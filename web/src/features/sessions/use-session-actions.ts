@@ -7,6 +7,7 @@ import type { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { switchWithTerminalConfirm } from "../workspaces/workspace-switcher";
 import { invalidateWorkspaceContext } from "../workspaces/invalidate-workspace-context";
 import { initializeNewSessionPreferences } from "./new-session-preferences";
+import { describeRunningBackgroundWork, loadRunningBackgroundWork } from "./session-close-guard";
 import { commitLocalSessionSelection, enqueueSessionNavigation } from "./session-navigation";
 
 type ConfirmFn = ReturnType<typeof useConfirm>;
@@ -79,6 +80,9 @@ export function useSessionActions({ confirm, t, tree, onNavigate, onSessionSelec
         // 1. 【会话导航】【标签页选择】会话选择保存在当前标签页，避免覆盖其他并行会话的服务端指针
         onSessionSelected?.(workspaceId, sessionId);
         commitLocalSessionSelection(queryClient, workspaceId, sessionId);
+        void api.sessionSidebar.update({ clear_unread: sessionId }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: ["session-sidebar"] });
+        });
         onNavigate?.();
         if (!active) {
           await invalidateWorkspaceContext(queryClient);
@@ -165,10 +169,15 @@ export function useSessionActions({ confirm, t, tree, onNavigate, onSessionSelec
    * @returns 无返回值
    */
   const removeWithConfirm = async (sessionId: string, title: string) => {
+    const running = await loadRunningBackgroundWork(sessionId);
     const accepted = await confirm({
-      title: t("Delete session", "删除会话"),
-      description: t(`Delete “${title}”? This cannot be undone.`, `删除“${title}”？此操作不可撤销。`),
-      confirmLabel: t("Delete", "删除"),
+      title: running.length ? t("Close session with background work?", "仍要关闭会话？") : t("Delete session", "删除会话"),
+      description: describeRunningBackgroundWork(
+        running,
+        t(`Delete “${title}”? This cannot be undone.`, `删除“${title}”？此操作不可撤销。`),
+        t
+      ),
+      confirmLabel: running.length ? t("Close anyway", "仍要关闭") : t("Delete", "删除"),
       cancelLabel: t("Cancel", "取消"),
       danger: true
     });
@@ -179,13 +188,19 @@ export function useSessionActions({ confirm, t, tree, onNavigate, onSessionSelec
   const closeWorkspace = async (workspaceId: string, workspaceName: string, workspaceActive: boolean) => {
     setNavigationError(null);
     try {
+      const sessions = tree()?.find((workspace) => workspace.workspace_id === workspaceId)?.sessions ?? [];
+      const running = (await Promise.all(sessions.map((session) => loadRunningBackgroundWork(session.id)))).flat();
       const accepted = await confirm({
-        title: t("Close workspace", "关闭工作区"),
-        description: t(
-          `Close “${workspaceName}” from the list? Workspace files will not be deleted.`,
-          `从列表中关闭“${workspaceName}”？工作区文件不会被删除。`
+        title: running.length ? t("Close workspace with background work?", "仍要关闭工作区？") : t("Close workspace", "关闭工作区"),
+        description: describeRunningBackgroundWork(
+          running,
+          t(
+            `Close “${workspaceName}” from the list? Workspace files will not be deleted.`,
+            `从列表中关闭“${workspaceName}”？工作区文件不会被删除。`
+          ),
+          t
         ),
-        confirmLabel: t("Close", "关闭")
+        confirmLabel: running.length ? t("Close anyway", "仍要关闭") : t("Close", "关闭")
       });
       if (!accepted) return;
       if (workspaceActive) {

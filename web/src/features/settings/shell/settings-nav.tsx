@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { NavLink } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Link, NavLink } from "react-router-dom";
+import { ArrowLeft, Search } from "lucide-react";
 import {
   filterSettingsSections,
   groupSettingsSections
@@ -52,6 +52,10 @@ export function SettingsNav({ activeSection }: SettingsNavProps) {
 
   return (
     <nav ref={navigationRef} className="settings-navigation" aria-label={t("Settings categories", "设置分类")}>
+      <Link to="/" className="settings-back" aria-label={t("Back to workspace", "返回主界面")}>
+        <ArrowLeft size={16} />
+        <span>{t("Back to workspace", "返回主界面")}</span>
+      </Link>
       <label className="settings-nav-search">
         <span className="sr-only">{t("Search settings", "搜索设置")}</span>
         <Search size={14} aria-hidden />

@@ -282,26 +282,79 @@ export function WorkspacePane({
     onActiveTypeChange(type);
   };
 
+  /**
+   * 释放被关闭页签占用的终端会话。
+   *
+   * @param closing 即将关闭的页签
+   */
+  const releaseClosedTab = (closing: WorkspacePanelTab | undefined) => {
+    if (closing?.type === "terminal" && closing.terminalId) {
+      void terminalManager.closeTerminal(closing.terminalId);
+    }
+  };
+
+  /**
+   * 关闭后同步当前页签和已打开文件。
+   *
+   * @param next 剩余页签
+   * @param preferredId 优先保持的页签
+   * @param closedSelectedFile 是否关掉了当前文件页签
+   */
+  const settleTabs = (next: WorkspacePanelTab[], preferredId: string | null, closedSelectedFile: boolean) => {
+    const preferred = next.find((tab) => tab.id === preferredId) ?? next[0] ?? null;
+    setActiveTabId(preferred?.id ?? null);
+    onActiveTypeChange(preferred?.type ?? null);
+    if (preferred?.type === "files" && preferred.path) onSelectFile(preferred.path);
+    else if (closedSelectedFile) onClearFile();
+  };
+
+  /**
+   * 关闭单个页签。
+   *
+   * @param id 页签标识
+   */
   const closeTab = (id: string) => {
     setTabs((current) => {
       const index = current.findIndex((tab) => tab.id === id);
       if (index < 0) return current;
       const closing = current[index];
-      if (closing?.type === "terminal" && closing.terminalId) {
-        void terminalManager.closeTerminal(closing.terminalId);
-      }
+      releaseClosedTab(closing);
       const next = current.filter((tab) => tab.id !== id);
       if (activeTabId === id) {
         const fallback = next[Math.max(0, index - 1)] ?? next[0] ?? null;
-        setActiveTabId(fallback?.id ?? null);
-        onActiveTypeChange(fallback?.type ?? null);
-      }
-      if (closing?.type === "files" && closing.path && closing.path === selectedFile) {
+        settleTabs(next, fallback?.id ?? null, closing?.type === "files" && closing.path === selectedFile);
+      } else if (closing?.type === "files" && closing.path === selectedFile) {
         const remainingFile = next.find((tab) => tab.type === "files" && tab.path);
         if (remainingFile?.path) onSelectFile(remainingFile.path);
         else onClearFile();
       }
       return next;
+    });
+  };
+
+  /**
+   * 关闭除指定页签外的全部可关闭页签。
+   *
+   * @param id 保留的页签标识
+   */
+  const closeOtherTabs = (id: string) => {
+    setTabs((current) => {
+      const kept = current.filter((tab) => tab.id === id || !tab.closable);
+      current.filter((tab) => !kept.includes(tab)).forEach(releaseClosedTab);
+      const closedSelectedFile = current.some((tab) => !kept.includes(tab) && tab.type === "files" && tab.path === selectedFile);
+      settleTabs(kept, id, closedSelectedFile);
+      return kept;
+    });
+  };
+
+  /** 关闭全部可关闭页签。 */
+  const closeAllTabs = () => {
+    setTabs((current) => {
+      const kept = current.filter((tab) => !tab.closable);
+      current.filter((tab) => tab.closable).forEach(releaseClosedTab);
+      const closedSelectedFile = current.some((tab) => tab.closable && tab.type === "files" && tab.path === selectedFile);
+      settleTabs(kept, kept[0]?.id ?? null, closedSelectedFile);
+      return kept;
     });
   };
 
@@ -324,6 +377,8 @@ export function WorkspacePane({
           if (tab.type === "terminal" && tab.terminalId) terminalManager.setActiveId(tab.terminalId);
         }}
         onClose={closeTab}
+        onCloseOthers={closeOtherTabs}
+        onCloseAll={closeAllTabs}
         onAdd={(type) => {
           void addTab(type);
         }}

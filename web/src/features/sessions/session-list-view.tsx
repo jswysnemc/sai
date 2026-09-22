@@ -1,5 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { useState } from "react";
+import { useState, type MouseEvent } from "react";
+import { api } from "../../api/client";
 import type { RefObject } from "react";
 import type { WorkspaceSessions } from "../../api/contracts";
 import { localizeApiMessage } from "../../api/api-error";
@@ -7,9 +9,9 @@ import { useI18n } from "../i18n/use-i18n";
 import { ActiveAgentIndicator } from "./active-agent-indicator";
 import { SessionWorkspaceIcon } from "./session-workspace-icon";
 import { SessionRow } from "./session-row";
-import { SessionSelectionBar } from "./session-selection-bar";
 import { Button } from "../../shared/ui/button/button";
 import type { useSessionSelection } from "./use-session-selection";
+import { SidebarSessionContextMenu } from "./sidebar-session-context-menu";
 import { SessionRenameDialog } from "./session-rename-dialog";
 import { sessionActivityKey } from "./session-running-state";
 
@@ -30,6 +32,8 @@ type SessionListViewProps = {
   onOpenSession: (sessionId: string, sessionActive: boolean) => void;
   onRename: (id: string, title: string) => Promise<void>;
   onDelete: (id: string, title: string) => void;
+  showArchived?: boolean;
+  hiddenIds?: ReadonlySet<string>;
 };
 
 /**
@@ -51,14 +55,18 @@ export function SessionListView({
   onOpenSession,
   onRename,
   onDelete,
-  showWorkspaceHeader = true
+  showWorkspaceHeader = true,
+  showArchived = false,
+  hiddenIds
 }: SessionListViewProps) {
   const { locale, t } = useI18n();
+  const sidebarIndex = useQuery({ queryKey: ["session-sidebar"], queryFn: () => api.sessionSidebar.read() });
   const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ id: string; title: string; x: number; y: number } | null>(null);
   const [showAll, setShowAll] = useState(false);
 
   const workspaceName = localizeApiMessage(workspace.workspace_name, locale);
-  const sessions = workspace.sessions;
+  const sessions = workspace.sessions.filter((session) => !hiddenIds?.has(session.id));
   const selecting = selection.selecting && workspace.active;
   const visibleSessions = showAll || selecting || showWorkspaceHeader ? sessions : sessions.filter((session, index) => index < 8 || (workspace.active && session.active));
   const workspaceRunning = sessions.some((session) => runningSessions.has(sessionActivityKey(workspace.workspace_id, session.id)));
@@ -93,16 +101,6 @@ export function SessionListView({
           </button>
         )}
       </div>}
-      {selecting && (
-        <SessionSelectionBar
-          sessionIds={sessions.map((session) => session.id)}
-          selectedCount={selection.selected.size}
-          confirming={selection.confirming}
-          busy={selection.busy}
-          onToggleAll={selection.toggleAll}
-          onDelete={() => void selection.requestBulkDelete()}
-        />
-      )}
       <div className="workspace-session-children">
         {sessions.length === 0 && (
           <p className="session-list-empty">{t("No sessions yet. Create a task to start.", "还没有会话。新建任务开始对话。")}</p>
@@ -114,6 +112,7 @@ export function SessionListView({
             loaded={Boolean(session.loaded)}
             running={runningSessions.has(sessionActivityKey(workspace.workspace_id, session.id))}
             holder={session.holder}
+            unread={Boolean(sidebarIndex.data?.unread[session.id])}
             now={now}
             selectable={selecting}
             checked={selection.selected.has(session.id)}
@@ -130,11 +129,32 @@ export function SessionListView({
               onToggleMenu(null);
               onDelete(session.id, session.title);
             }}
+            onContextMenu={(event: MouseEvent) => {
+              event.preventDefault();
+              setContextMenu({ id: session.id, title: session.title, x: event.clientX, y: event.clientY });
+            }}
           />
         ))}
         {sessions.length > 8 && !selecting && !showWorkspaceHeader && <Button variant="ghost" className="sidebar-show-more" onClick={() => setShowAll((value) => !value)}>{showAll ? t("Show less", "收起") : t(`Show all ${sessions.length} tasks`, `显示全部 ${sessions.length} 个任务`)}</Button>}
       </div>
       {renaming && <SessionRenameDialog key={renaming.id} session={renaming} onRename={onRename} onClose={() => setRenaming(null)} />}
+      {contextMenu && (
+        <SidebarSessionContextMenu
+          sessionId={contextMenu.id}
+          title={contextMenu.title}
+          workspacePath={workspace.workspace_path}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          archived={showArchived}
+          onClose={() => setContextMenu(null)}
+          onRename={() => startRename(contextMenu.id, contextMenu.title)}
+          onDelete={() => onDelete(contextMenu.id, contextMenu.title)}
+          onEnterSelection={workspace.active ? () => {
+            setContextMenu(null);
+            selection.enterSelection();
+          } : undefined}
+        />
+      )}
     </div>
   );
 }

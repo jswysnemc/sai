@@ -5,7 +5,7 @@
   --sidebar-surface: color-mix(in srgb, var(--paper) 35%, var(--paper-deep));
   --panel-surface: var(--paper);
   --composer-surface: var(--paper-raised);
-  --toolbar-height: 3rem;
+  --toolbar-height: 2.25rem;
   --statusbar-height: 1.75rem;
   --control-height: 1.875rem;
   --shadow-composer: 0 2px 10px rgb(var(--shadow-hue) / 4%);

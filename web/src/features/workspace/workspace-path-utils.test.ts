@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAbsoluteFilePath, workspaceRelativePath } from "./workspace-path-utils";
+import { formatDisplayPath, isAbsoluteFilePath, workspaceRelativePath } from "./workspace-path-utils";
 
 describe("workspace path utils", () => {
   it("把工作空间内绝对路径转换为相对路径", () => {
@@ -21,6 +21,12 @@ describe("workspace path utils", () => {
 
   it("没有工作区根目录时清理 Windows 扩展前缀", () => {
     expect(workspaceRelativePath("\\\\?\\C:\\Users\\xz\\demo\\main.rs", "")).toBe("C:/Users/xz/demo/main.rs");
+  });
+
+  it("工作区内展示相对路径，工作区外 Windows 路径保留反斜线", () => {
+    expect(formatDisplayPath("\\\\?\\D:\\work\\demo\\src\\main.rs", "D:\\work\\demo")).toBe("src/main.rs");
+    expect(formatDisplayPath("!?D:\\work\\other\\notes.txt", "D:\\work\\demo")).toBe("D:\\work\\other\\notes.txt");
+    expect(formatDisplayPath("\\?\\D:\\work\\other\\notes.txt", "")).toBe("D:\\work\\other\\notes.txt");
   });
 
   it("外部文件保留绝对路径，不进入当前工作区面包屑", () => {

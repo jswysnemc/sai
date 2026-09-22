@@ -105,6 +105,7 @@ impl RunManager {
             // 标志在 spawn 前创建：stop 需要在任务被 abort 之前置位
             let cancel_requested = Arc::new(std::sync::atomic::AtomicBool::new(false));
             let task_cancel = cancel_requested.clone();
+            let continuation = queued.clone();
             let handle = tokio::spawn(async move {
                 let _ = start_rx.await;
                 let terminal = crate::runtime_cwd::scope(
@@ -123,6 +124,10 @@ impl RunManager {
                     .checkpoints
                     .update_status(&task_info.run_id, terminal);
                 manager.clear_active_if(&task_key).await;
+                // 1. 用户队列优先；队列空且目标仍活动时再排续轮
+                manager
+                    .schedule_goal_continuation(&task_key, &continuation, terminal)
+                    .await;
                 manager.launch_next(&task_key).await;
             });
             self.active.lock().await.insert(

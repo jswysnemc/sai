@@ -5,7 +5,7 @@ import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { FileNode } from "../../api/contracts";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
-import { DirectoryIcon, FileTypeIcon } from "../../shared/ui/file-icon";
+import { FileTypeIcon } from "../../shared/ui/file-icon";
 import { filterFileNodes, findFileNode, parentFilePath } from "./file-tree-utils";
 import { WorkspaceFileSearch } from "./workspace-file-search";
 import { useI18n } from "../i18n/use-i18n";
@@ -30,6 +30,9 @@ type FileTreeProps = {
   onSelectFile: (path: string) => void;
   onClearFile: () => void;
   onClose?: () => void;
+  showHeading?: boolean;
+  workspaceLabel?: string;
+  searchPlaceholder?: string;
 };
 
 type FileAction = { kind: "file" | "directory" | "rename"; value: string } | null;
@@ -42,7 +45,7 @@ type TreeMenuState = { x: number; y: number; path: string; directory: boolean } 
  * @param props 当前文件选择、更新回调与关闭文件树回调
  * @returns 文件浏览器
  */
-export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: FileTreeProps) {
+export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, showHeading = true, workspaceLabel, searchPlaceholder }: FileTreeProps) {
   const { t } = useI18n();
   const confirm = useConfirm();
   const queryClient = useQueryClient();
@@ -127,7 +130,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
   return (
     <aside className="file-tree">
       <div className="file-tree-head">
-        <span>{t("Files", "文件")}</span>
+        {showHeading && <span>{t("Files", "文件")}</span>}
         <div className="file-tree-actions">
           <Button variant="ghost" size="icon" onClick={() => setOpenFileDialog(true)} aria-label={t("Open file by path", "通过路径打开文件")} title={t("Open file", "打开文件")}><FileUp size={13} /></Button>
           <Button variant="ghost" size="icon" onClick={() => beginCreate("file")} aria-label={t("New file", "新建文件")}><FilePlus2 size={13} /></Button>
@@ -138,7 +141,8 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
           {onClose && <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("Close file tree", "关闭文件树")}><PanelRightClose size={12} /></Button>}
         </div>
       </div>
-      <WorkspaceFileSearch value={search} onChange={setSearch} />
+      <WorkspaceFileSearch value={search} onChange={setSearch} placeholder={searchPlaceholder} />
+      {workspaceLabel && <div className="file-tree-workspace"><strong>{workspaceLabel}</strong></div>}
       <div className="file-tree-scroll">
         {action && (
           <div className="file-action-bar">
@@ -218,7 +222,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
 
 /** 渲染单个递归文件树节点。 */
 function TreeNode({ node, selectedFile, focusedPath, gitEntries, directoryTones, onFocus, onSelectFile, onGitContextMenu, onTreeContextMenu, depth, forceOpen }: { node: FileNode; selectedFile: string | null; focusedPath: string | null; gitEntries: ReadonlyMap<string, FileTreeGitEntry>; directoryTones: ReadonlyMap<string, FileTreeGitTone>; onFocus: (path: string) => void; onSelectFile: (path: string) => void; onGitContextMenu: (event: React.MouseEvent<HTMLButtonElement>, path: string, item: FileTreeGitEntry) => void; onTreeContextMenu: (event: React.MouseEvent<HTMLButtonElement>, path: string, directory: boolean) => void; depth: number; forceOpen: boolean }) {
-  const [open, setOpen] = useState(depth < 1);
+  const [open, setOpen] = useState(false);
   const directory = node.kind === "directory";
   const active = selectedFile === node.path || focusedPath === node.path;
   const gitEntry = directory ? undefined : gitEntries.get(node.path);
@@ -231,7 +235,7 @@ function TreeNode({ node, selectedFile, focusedPath, gitEntries, directoryTones,
       <button
         type="button"
         className={active ? "tree-row active" : "tree-row"}
-        style={{ paddingLeft: `${8 + depth * 13}px` }}
+        style={{ paddingLeft: `${8 + depth * 12}px` }}
         onClick={() => {
           onFocus(node.path);
           if (directory) setOpen((value) => !value);
@@ -242,10 +246,7 @@ function TreeNode({ node, selectedFile, focusedPath, gitEntries, directoryTones,
           else onTreeContextMenu(event, node.path, directory);
         }}
       >
-        {directory ? <ChevronRight size={12} className={open ? "tree-chevron open" : "tree-chevron"} /> : <span className="tree-spacer" />}
-        {directory
-          ? <DirectoryIcon name={node.name} expanded={open} size={15} />
-          : <FileTypeIcon name={node.name} size={15} />}
+        {directory ? <ChevronRight size={12} className={open ? "tree-chevron open" : "tree-chevron"} /> : <FileTypeIcon name={node.name} size={14} />}
         <span className={gitEntry
           ? `tree-row-name git-${fileTreeGitStatusTone(gitEntry.entry)}`
           : directoryTone

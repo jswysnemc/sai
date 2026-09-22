@@ -1,0 +1,50 @@
+.sidebar-file-tree-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--sidebar-surface, var(--paper));
+  transform: translateX(100%);
+  transition: transform 200ms ease-out;
+  pointer-events: none;
+}
+
+.sidebar-file-tree-cover.is-open {
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.sidebar-file-tree-cover-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: 2rem;
+  padding: 0 0.25rem;
+}
+
+.sidebar-file-tree-cover .file-tree {
+  flex: 1;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+}
+
+.sidebar-file-tree-cover .file-tree-head { display: none; }
+
+.sidebar-file-tree-cover .file-tree-workspace {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 2rem;
+  padding: 0 0.75rem;
+}
+
+.sidebar-file-tree-cover .file-tree-workspace strong {
+  overflow: hidden;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

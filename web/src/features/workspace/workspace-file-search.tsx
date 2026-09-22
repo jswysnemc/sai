@@ -5,6 +5,7 @@ import { useI18n } from "../i18n/use-i18n";
 type WorkspaceFileSearchProps = {
   value: string;
   onChange: (value: string) => void;
+  placeholder?: string;
 };
 
 /**
@@ -13,15 +14,16 @@ type WorkspaceFileSearchProps = {
  * @param props 当前关键词和更新回调
  * @returns 文件搜索控件
  */
-export function WorkspaceFileSearch({ value, onChange }: WorkspaceFileSearchProps) {
+export function WorkspaceFileSearch({ value, onChange, placeholder }: WorkspaceFileSearchProps) {
   const { t } = useI18n();
+  const label = placeholder ?? t("Filter files", "筛选文件");
   return (
     <label className="workspace-file-search">
       <Search size={13} aria-hidden="true" />
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder={t("Filter files", "筛选文件")}
+        placeholder={label}
         aria-label={t("Filter workspace files", "筛选工作区文件")}
         spellCheck={false}
       />

@@ -1,14 +1,14 @@
-import { Activity, Bot, Check, ChevronDown, ChevronLeft, FileCode2, GitCompareArrows, Maximize2, MessageSquarePlus, Minimize2, PanelRightClose, Plus, SquareTerminal, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { Activity, Bot, ChevronLeft, FileCode2, GitCompareArrows, Maximize2, MessageSquarePlus, Minimize2, PanelRightClose, Plus, SquareTerminal, X } from "lucide-react";
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { Button } from "../../shared/ui/button/button";
+import { ContextActionMenu } from "../../shared/ui/menu/context-action-menu";
 import { FileTypeIcon } from "../../shared/ui/file-icon";
 import { ActionMenu } from "../../shared/ui/menu/action-menu";
 import type { PaneTab, WorkspacePanelTab } from "./workspace-tab";
 import { ACTIVE_WORKSPACE_PANEL_OPTIONS, workspacePanelTitle, type WorkspacePanelAction } from "./workspace-panel-options";
-import { fileTreeGitStatusLabel, fileTreeGitStatusTone } from "./use-file-tree-git";
+import { WorkspaceTabSwitcher } from "./workspace-tab-switcher";
 import type { FileTreeGitEntry } from "./use-workspace-git-entries";
 import { useI18n } from "../i18n/use-i18n";
-import { workspaceTabDirectoryLabels } from "./workspace-tab-labels";
 
 type WorkspaceTabBarProps = {
   tabs: WorkspacePanelTab[];
@@ -17,6 +17,8 @@ type WorkspaceTabBarProps = {
   gitEntries?: ReadonlyMap<string, FileTreeGitEntry>;
   onActivate: (id: string) => void;
   onClose: (id: string) => void;
+  onCloseOthers: (id: string) => void;
+  onCloseAll: () => void;
   onAdd: (type: WorkspacePanelAction) => void;
   onToggleMaximized: () => void;
   onCollapse: () => void;
@@ -30,9 +32,7 @@ type WorkspaceTabBarProps = {
 export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
   const { t } = useI18n();
   const tabsRef = useRef<HTMLDivElement>(null);
-  const [overflowing, setOverflowing] = useState(false);
-  const directories = useMemo(() => workspaceTabDirectoryLabels(props.tabs), [props.tabs]);
-
+  const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   useEffect(() => {
     const scroller = tabsRef.current;
     if (!scroller) return;
@@ -41,14 +41,20 @@ export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
      * @returns 无返回值
      */
     const updateOverflow = () => {
-      setOverflowing(scroller.scrollWidth > scroller.clientWidth + 1);
+      const overflow = scroller.scrollWidth - scroller.clientWidth > 1;
+      scroller.dataset.overflowLeft = overflow && scroller.scrollLeft > 1 ? "true" : "false";
+      scroller.dataset.overflowRight = overflow && scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1 ? "true" : "false";
       scroller.querySelector<HTMLElement>('[aria-selected="true"]')
         ?.scrollIntoView({ block: "nearest", inline: "nearest" });
     };
     updateOverflow();
+    scroller.addEventListener("scroll", updateOverflow, { passive: true });
     const observer = new ResizeObserver(updateOverflow);
     observer.observe(scroller);
-    return () => observer.disconnect();
+    return () => {
+      scroller.removeEventListener("scroll", updateOverflow);
+      observer.disconnect();
+    };
   }, [props.activeTabId, props.tabs]);
 
   /**
@@ -81,14 +87,28 @@ export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
         <ChevronLeft size={16} /><span>{t("Chat", "聊天")}</span>
       </Button>
       <div className="workspace-tab-scroll-row">
+        <WorkspaceTabSwitcher
+          tabs={props.tabs}
+          activeTabId={props.activeTabId}
+          onActivate={props.onActivate}
+          onClose={props.onClose}
+          iconFor={(tab) => <TabIcon type={tab.type} path={tab.path} />}
+        />
         <div ref={tabsRef} className="workspace-tab-scroll" role="tablist" aria-label={t("Workspace tabs", "工作区标签")} onKeyDown={handleKeyDown}>
           {props.tabs.map((tab) => {
             const active = tab.id === props.activeTabId;
-            const gitEntry = tab.type === "files" && tab.path ? props.gitEntries?.get(tab.path) : undefined;
             const title = tab.title || workspacePanelTitle(tab.type, t);
-            const directory = directories.get(tab.id);
+            /**
+             * 打开页签右键菜单。
+             *
+             * @param event 页签指针事件
+             */
+            const openContextMenu = (event: MouseEvent) => {
+              event.preventDefault();
+              setContextMenu({ id: tab.id, x: event.clientX, y: event.clientY });
+            };
             return (
-              <div key={tab.id} className={active ? "workspace-tab active" : "workspace-tab"} role="presentation">
+              <div key={tab.id} className={active ? "workspace-tab active" : "workspace-tab"} role="presentation" onContextMenu={openContextMenu}>
                 <Button
                   variant="ghost"
                   role="tab"
@@ -98,17 +118,20 @@ export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
                   tabIndex={active ? 0 : -1}
                   className="workspace-tab-main"
                   onClick={() => props.onActivate(tab.id)}
+                onAuxClick={(event) => {
+                  if (event.button !== 1 || !tab.closable) return;
+                  event.preventDefault();
+                  props.onClose(tab.id);
+                }}
                   title={tab.path ?? title}
                 >
                   <TabIcon type={tab.type} path={tab.path} />
                   <span className="workspace-tab-label">
                     <span className="workspace-tab-title">{title}</span>
-                    {directory && <small className="workspace-tab-directory">{directory}</small>}
                   </span>
-                  {gitEntry && <em className={`workspace-tab-git git-${fileTreeGitStatusTone(gitEntry.entry)}`} aria-hidden>{fileTreeGitStatusLabel(gitEntry.entry)}</em>}
                 </Button>
                 {tab.closable && (
-                  <Button variant="ghost" size="icon" className="workspace-tab-close" tabIndex={active ? 0 : -1} aria-label={t(`Close ${title}`, `关闭 ${title}`)} onClick={() => props.onClose(tab.id)}>
+                  <Button variant="ghost" size="icon" className="workspace-tab-close" tabIndex={active ? 0 : -1} aria-label={t(`Close ${title}`, `关闭 ${title}`)} title={title} onClick={() => props.onClose(tab.id)}>
                     <X size={12} />
                   </Button>
                 )}
@@ -116,19 +139,6 @@ export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
             );
           })}
         </div>
-        {overflowing && (
-          <ActionMenu
-            className="workspace-tab-actions"
-            label={t(`Open tabs (${props.tabs.length})`, `已打开的标签（${props.tabs.length}）`)}
-            trigger={<ChevronDown size={15} />}
-            items={props.tabs.map((tab) => ({
-              id: tab.id,
-              label: tab.path ?? (tab.title || workspacePanelTitle(tab.type, t)),
-              icon: tab.id === props.activeTabId ? <Check size={14} /> : <TabIcon type={tab.type} path={tab.path} />,
-              onSelect: () => props.onActivate(tab.id),
-            }))}
-          />
-        )}
         <ActionMenu
           className="workspace-tab-actions"
           label={t("Add panel", "添加面板")}
@@ -147,6 +157,35 @@ export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
         </Button>
         <Button variant="ghost" size="icon" onClick={props.onCollapse} title={t("Collapse workspace", "收起工作区")} aria-label={t("Collapse workspace", "收起工作区")}><PanelRightClose size={14} /></Button>
       </div>
+      {contextMenu && (
+        <ContextActionMenu
+          label={t("Tab actions", "页签操作")}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          items={[
+            {
+              id: "close",
+              label: t("Close", "关闭"),
+              disabled: !props.tabs.find((tab) => tab.id === contextMenu.id)?.closable,
+              onSelect: () => props.onClose(contextMenu.id)
+            },
+            {
+              id: "close-others",
+              label: t("Close others", "关闭其他"),
+              disabled: props.tabs.filter((tab) => tab.closable && tab.id !== contextMenu.id).length === 0,
+              separator: true,
+              onSelect: () => props.onCloseOthers(contextMenu.id)
+            },
+            {
+              id: "close-all",
+              label: t("Close all", "关闭全部"),
+              disabled: props.tabs.every((tab) => !tab.closable),
+              onSelect: () => props.onCloseAll()
+            }
+          ]}
+        />
+      )}
     </div>
   );
 }

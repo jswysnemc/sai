@@ -449,6 +449,25 @@ pub(crate) fn delete_entry(root: &Path, relative: &str) -> Result<FileMutation> 
     })
 }
 
+/// 把目录项转成相对工作区的展示路径。
+///
+/// Windows 扩展前缀会导致 `strip_prefix` 失败，树节点就会带上 `\\?\`。
+///
+/// 参数:
+/// - `root`: 工作区根目录
+/// - `path`: 目录项绝对路径
+///
+/// 返回:
+/// - 相对路径；无法相对化时返回去掉扩展前缀的绝对路径
+fn relative_tree_path(root: &Path, path: &Path) -> String {
+    let root = crate::platform::windows_path::simplified(root);
+    let path = crate::platform::windows_path::simplified(path);
+    path.strip_prefix(&root)
+        .unwrap_or(path.as_path())
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
 /// 递归读取单个目录。
 fn read_directory(root: &Path, directory: &Path, depth: usize) -> Result<Vec<FileNode>> {
     let mut entries = std::fs::read_dir(directory)?
@@ -476,11 +495,7 @@ fn read_directory(root: &Path, directory: &Path, depth: usize) -> Result<Vec<Fil
         } else {
             "file"
         };
-        let relative = path
-            .strip_prefix(root)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .to_string();
+        let relative = relative_tree_path(root, &path);
         let children = if file_type.is_dir() && depth > 1 {
             read_directory(root, &path, depth - 1)?
         } else {

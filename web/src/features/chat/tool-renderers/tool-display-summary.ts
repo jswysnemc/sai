@@ -1,6 +1,6 @@
 import { lenientStringField, parseJsonRecord, stringField } from "./tool-data";
 import { text, type Locale } from "../../i18n/locale";
-import { workspaceRelativePath } from "../../workspace/workspace-path-utils";
+import { formatDisplayPath } from "../../workspace/workspace-path-utils";
 
 /** 单条摘要最大字符数 */
 const MAX_ITEM_CHARS = 36;
@@ -222,7 +222,7 @@ export function isEditToolName(name: string): boolean {
  * @returns 展示路径
  */
 export function displayPath(path: string, workspacePath = ""): string {
-  const relative = workspaceRelativePath(path, workspacePath) || workspaceRelativePath(path, "");
+  const relative = formatDisplayPath(path, workspacePath) || formatDisplayPath(path, "");
   return shortPath(relative);
 }
 

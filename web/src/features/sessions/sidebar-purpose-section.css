@@ -1,0 +1,97 @@
+.sidebar-purpose-section {
+  display: grid;
+  min-width: 0;
+}
+
+.sidebar-purpose-heading {
+  display: flex;
+  align-items: center;
+  min-height: 1.75rem;
+  min-width: 0;
+}
+
+.sidebar-purpose-toggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  height: 1.75rem;
+  padding: 0 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font: 500 var(--text-xs)/1.25rem var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-purpose-toggle:hover,
+.sidebar-purpose-toggle:focus-visible {
+  color: var(--ink);
+}
+
+.sidebar-purpose-toggle span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-purpose-toggle svg {
+  flex: none;
+  opacity: 0;
+  transition: transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+.sidebar-purpose-toggle svg.is-open {
+  transform: rotate(90deg);
+}
+
+.group\/purpose:hover .sidebar-purpose-toggle svg,
+.group\/purpose:focus-within .sidebar-purpose-toggle svg {
+  opacity: 1;
+}
+
+.sidebar-purpose-action {
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding-right: 0.25rem;
+  opacity: 0;
+}
+
+.group\/purpose:hover .sidebar-purpose-action,
+.group\/purpose:focus-within .sidebar-purpose-action {
+  opacity: 1;
+}
+
+.sidebar-purpose-action .ui-button {
+  width: 1.5rem;
+  height: 1.5rem;
+  min-height: 1.5rem;
+}
+
+.sidebar-purpose-body {
+  min-width: 0;
+}
+
+.sidebar-purpose-body .file-tree {
+  height: auto;
+  min-height: 8rem;
+  max-height: 18rem;
+  border: 0;
+  background: transparent;
+}
+
+.sidebar-purpose-body .session-list {
+  max-height: 16rem;
+  overflow: auto;
+}
+
+@media (hover: none) {
+  .sidebar-purpose-toggle svg,
+  .sidebar-purpose-action {
+    opacity: 1;
+  }
+}

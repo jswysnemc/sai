@@ -22,7 +22,7 @@ describe("workspace file split state", () => {
   });
 
   it("空间不足时切换为覆盖式文件树", () => {
-    expect(shouldOverlayWorkspaceFileTree(539)).toBe(true);
-    expect(shouldOverlayWorkspaceFileTree(540)).toBe(false);
+    expect(shouldOverlayWorkspaceFileTree(499)).toBe(true);
+    expect(shouldOverlayWorkspaceFileTree(500)).toBe(false);
   });
 });

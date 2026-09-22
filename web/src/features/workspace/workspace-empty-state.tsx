@@ -22,8 +22,8 @@ export function WorkspaceEmptyState({ onOpen }: WorkspaceEmptyStateProps) {
       <div className="workspace-pane-empty-heading">
         <PanelRightOpen size={18} aria-hidden />
         <div>
-          <strong>{t("Open a workspace view", "打开侧栏功能")}</strong>
-          <span>{t("Choose a view for this side panel", "选择要在此侧栏显示的功能")}</span>
+          <strong>{t("Open a tab", "打开标签")}</strong>
+          <span>{t("Choose a view for this side panel", "选择要在此侧栏打开的内容")}</span>
         </div>
       </div>
       <div className="workspace-pane-empty-actions">

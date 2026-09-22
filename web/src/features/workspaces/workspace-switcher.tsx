@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../../api/client";
 import { localizeApiMessage } from "../../api/api-error";
+import { stripExtendedPathPrefix } from "../workspace/workspace-path-utils";
 import { formatRelativeTime } from "../../shared/format-relative-time";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { useAnchoredPopover } from "../../shared/ui/popover/use-anchored-popover";
@@ -86,7 +87,7 @@ export function WorkspaceSwitcher() {
           <div className="workspace-items">
             {[...(workspaces.data?.workspaces ?? [])].sort((left, right) => right.last_opened_at.localeCompare(left.last_opened_at)).map((workspace) => (
               <button type="button" className="workspace-item" key={workspace.id} onClick={() => workspace.id !== workspaces.data?.active_id && switchWorkspace.mutate(workspace.id)}>
-                <span><strong>{localizeApiMessage(workspace.name, locale)}</strong><small title={workspace.path}>{workspace.path}</small><small>{formatRelativeTime(workspace.last_opened_at, locale, Date.now())}</small></span>{workspace.id === workspaces.data?.active_id && <Check size={14} />}
+                <span><strong>{localizeApiMessage(workspace.name, locale)}</strong><small title={stripExtendedPathPrefix(workspace.path)}>{stripExtendedPathPrefix(workspace.path)}</small><small>{formatRelativeTime(workspace.last_opened_at, locale, Date.now())}</small></span>{workspace.id === workspaces.data?.active_id && <Check size={14} />}
               </button>
             ))}
           </div>

@@ -43,7 +43,7 @@ describe("settings registry", () => {
   it("groups sections and skips empty groups when filtered", () => {
     const grouped = groupSettingsSections(filterSettingsSections("gateway"));
     expect(grouped.every((entry) => entry.sections.length > 0)).toBe(true);
-    expect(grouped.some((entry) => entry.group.id === "integrations")).toBe(true);
+    expect(grouped.some((entry) => entry.group.id === "agentCapabilities")).toBe(true);
   });
 
   it("derives topbar save from the appConfig participation model", () => {

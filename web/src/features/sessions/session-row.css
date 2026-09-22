@@ -2,8 +2,7 @@
  * 会话行
  *
  * 单行结构：标题吸收剩余宽度，加载指示与相对时间贴右。
- * 悬停时右内边距扩一档，元信息整体左移给更多按钮让位——
- * 时间是扫读时的主要线索，不允许在悬停瞬间消失。
+ * 悬停时时间让位，右侧出现文件树、置顶和归档。
  */
 
 .session-row {
@@ -13,18 +12,41 @@
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
   width: 100%;
+  background: transparent;
+}
+
+/* 背景比行本身更矮，间隙从行高里让出来，不把列表撑开 */
+.session-row::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 2px 0;
   border-radius: var(--radius-2);
+  background: transparent;
+  pointer-events: none;
 }
 
 .session-row:has(.session-check) {
   grid-template-columns: 28px minmax(0, 1fr);
 }
 
-.session-row.selected {
+.session-row.selected::before,
+.session-row.active::before {
+  background: var(--surface-selected);
+}
+
+.session-row:hover::before {
+  background: var(--surface-hover);
+}
+
+.session-row.active:hover::before,
+.session-row.selected:hover::before {
   background: var(--surface-selected);
 }
 
 .session-check {
+  position: relative;
+  z-index: 1;
   display: grid;
   width: 28px;
   height: 30px;
@@ -34,16 +56,9 @@
   color: var(--signal);
 }
 
-.session-row:hover {
-  background: var(--surface-hover);
-}
-
-/* 当前会话：主强调色浅底，不再用左侧竖条提示 */
-.session-row.active {
-  background: var(--surface-selected);
-}
-
 .session-main {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
@@ -61,7 +76,37 @@
 
 .session-row:hover .session-main,
 .session-row:focus-within .session-main {
-  padding-right: 2rem;
+  padding-right: 3.75rem;
+}
+
+.session-row:hover .session-summary > small,
+.session-row:focus-within .session-summary > small {
+  display: none;
+}
+
+.session-hover-actions {
+  position: absolute;
+  top: 50%;
+  right: 0.125rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.session-hover-actions .ui-button {
+  width: 1.5rem;
+  height: 1.5rem;
+  min-height: 1.5rem;
+  color: var(--ink-soft);
+}
+
+.session-row:hover .session-hover-actions,
+.session-row:focus-within .session-hover-actions {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .session-main .session-summary {
@@ -78,6 +123,14 @@
 .session-main .session-summary > strong {
   flex: 0 1 auto;
   min-width: 0;
+}
+
+.session-unread {
+  width: 0.375rem;
+  height: 0.375rem;
+  flex: none;
+  border-radius: 999px;
+  background: var(--signal, #3b82f6);
 }
 
 .session-main .session-summary > small {
@@ -245,11 +298,8 @@
 
 .session-main.ui-button { border: 0; border-radius: inherit; color: var(--ink); }
 .session-row .session-main.ui-button:hover { background: transparent; }
-.session-more-menu { position: absolute; right: 0.125rem; top: 0.1875rem; opacity: 0; pointer-events: none; }
-.session-more-menu .ui-button { height: 1.625rem; min-height: 1.625rem; width: 1.625rem; }
-.session-row:hover .session-more-menu, .session-row:focus-within .session-more-menu { opacity: 1; pointer-events: auto; }
 @media (pointer: coarse) {
-  .session-more-menu { opacity: 1; pointer-events: auto; }
-  .session-row .session-main { min-height: 2.5rem; padding-right: 2rem; }
-  .session-more-menu { top: 0.4375rem; }
+  .session-hover-actions { opacity: 1; pointer-events: auto; }
+  .session-row .session-main { min-height: 2.5rem; padding-right: 3.75rem; }
+  .session-row .session-summary > small { display: none; }
 }

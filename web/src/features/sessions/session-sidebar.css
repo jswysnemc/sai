@@ -6,10 +6,12 @@
  */
 
 .session-sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
   padding: 0.5rem 0.625rem;
 }
 
@@ -167,13 +169,20 @@
 .sidebar-session-actions .ui-button { justify-content: start; }
 .sidebar-heading .sidebar-brand { padding: 0 0.375rem; }
 
-.session-list {
-  display: grid;
+.sidebar-purpose-scroll {
+  display: flex;
   flex: 1;
-  align-content: start;
-  gap:var(--space-3xs);
+  flex-direction: column;
+  gap: 0.25rem;
   min-height: 0;
   overflow: auto;
+}
+
+.session-list {
+  display: grid;
+  align-content: start;
+  gap: 0.375rem;
+  min-height: 0;
 }
 
 /*
@@ -242,9 +251,14 @@
 
 .sidebar-footer {
   position: relative;
+  box-sizing: border-box;
+  display: flex;
   flex-shrink: 0;
-  margin-top: auto;
-  padding-top:var(--space-sm);
+  align-items: center;
+  height: var(--statusbar-height);
+  min-height: var(--statusbar-height);
+  margin: 0 -0.625rem -0.5rem;
+  padding: 0 0.5rem;
   border-top: 1px solid var(--line);
 }
 
@@ -255,12 +269,18 @@
   align-items: center;
 }
 
+.sidebar-footer .locale-switcher,
+.sidebar-footer .sidebar-settings-link {
+  height: 1.5rem;
+  min-height: 1.5rem;
+}
+
 .sidebar-settings-link {
   display: flex;
   align-items: center;
   gap:var(--space-sm);
   width: 100%;
-  min-height: 34px;
+  min-height: 1.5rem;
   padding:0 var(--space-md);
   border: 0;
   border-radius:var(--radius-3);

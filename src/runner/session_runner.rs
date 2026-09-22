@@ -527,6 +527,7 @@ mod tests {
             .unwrap();
             assert!(registry.contains("subagent"), "source: {source:?}");
             assert!(registry.contains("read_file"), "source: {source:?}");
+            assert!(registry.contains("todo"), "source: {source:?}");
             assert!(!registry.contains("lua__todo__todo"));
         }
 
@@ -544,7 +545,7 @@ mod tests {
             assert!(!registry.contains("subagent"), "source: {source:?}");
         }
 
-        // 3. 【请求执行测试】【可选业务】未安装待办时，各命令入口保留基础工具
+        // 3. 单次命令入口自带原生待办，不依赖 Lua 插件
         for source in [SubmissionSource::Command, SubmissionSource::ShellIntercept] {
             let registry = build_submission_tool_registry(
                 &config,
@@ -556,7 +557,7 @@ mod tests {
             )
             .unwrap();
             assert!(registry.contains("read_file"), "source: {source:?}");
-            assert!(!registry.contains("todo"));
+            assert!(registry.contains("todo"), "source: {source:?}");
             assert!(!registry.contains("lua__todo__todo"));
         }
         let gateway = build_submission_tool_registry(
@@ -652,7 +653,7 @@ mod tests {
                 .unwrap();
             assert!(registry.contains("subagent"));
             assert!(registry.contains("read_file"));
-            assert!(!registry.contains("todo"));
+            assert!(registry.contains("todo"));
             assert!(!registry.contains("lua__todo__todo"));
         }
         let gateway = runner
