@@ -176,7 +176,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
             forceOpen={Boolean(search.trim())}
           />
         ))}
-        {tree.data && visibleNodes.length === 0 && <p className="file-tree-empty">{t("No matching files", "没有匹配的文件")}</p>}
+        {tree.data && visibleNodes.length === 0 && <p className="file-tree-empty">{search.trim() ? t("No matching files", "没有匹配的文件") : t("This workspace has no files", "这个工作区没有文件")}</p>}
         {(tree.error || error || git.error) && <p className="pane-error">{error?.message || tree.error?.message || git.error?.message}</p>}
       </div>
       {gitMenu && (

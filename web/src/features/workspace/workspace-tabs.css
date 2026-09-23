@@ -1,11 +1,11 @@
-/* 【Web 工作台】【面板标签】对齐 ZCode 侧栏：48px 栏、28px 圆角页签、淡墨悬停与选中 */
+/* 【Web 工作台】【面板标签】与左侧会话标题栏同高，页签本身 28px */
 .workspace-tab-bar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
   box-sizing: border-box;
-  height: 3rem;
-  min-height: 3rem;
+  height: var(--toolbar-height);
+  min-height: var(--toolbar-height);
   border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
   background: var(--sidebar-surface);
 }
