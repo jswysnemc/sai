@@ -34,21 +34,45 @@ pub(crate) fn edit_agents(
 ) -> Result<()> {
     let mut selected = 0usize;
     let mut status = String::new();
+    let mut search = super::search::ListSearch::default();
     loop {
         let profiles = visible_profiles(config);
+        let shown = profiles
+            .iter()
+            .enumerate()
+            .filter(|(_, profile)| {
+                search.matches(&profile.name)
+                    || search.matches(&profile.id)
+                    || search.matches(&profile_overview(profile))
+            })
+            .map(|(index, _)| index)
+            .collect::<Vec<_>>();
         let mut options = vec![t("Surface defaults", "入口默认 Agent").to_string()];
-        options.extend(
-            profiles
-                .iter()
-                .map(|profile| format!("{} [{}]", profile.name, profile.id)),
-        );
+        if shown.is_empty() && !search.query.is_empty() {
+            options.push(format!("({})", t("no matches", "没有匹配")));
+        } else {
+            options.extend(
+                shown
+                    .iter()
+                    .map(|index| format!("{} [{}]", profiles[*index].name, profiles[*index].id)),
+            );
+        }
         options.push(t("Add Agent", "新增 Agent").to_string());
         let mut details = vec![t(
             "Choose which Agent profile each surface (Web / TUI / CLI) uses by default.",
             "为 Web / TUI / CLI 各入口选择默认 Agent 档案。",
         )
         .to_string()];
-        details.extend(profiles.iter().map(profile_overview));
+        if shown.is_empty() && !search.query.is_empty() {
+            details
+                .push(t("No Agent matches this filter.", "没有 Agent 命中当前过滤。").to_string());
+        } else {
+            details.extend(
+                shown
+                    .iter()
+                    .map(|index| profile_overview(&profiles[*index])),
+            );
+        }
         details.push(
             t(
                 "Create a new custom Agent profile and open its editor.",
@@ -56,31 +80,51 @@ pub(crate) fn edit_agents(
             )
             .to_string(),
         );
+        selected = selected.min(options.len().saturating_sub(1));
         draw_menu_with_details(
             stdout,
             t(" AGENTS ", " AGENT 配置 "),
             &options,
             &details,
             selected,
-            &if status.is_empty() {
-                super::theme::help_line(&[
-                    ("Enter", t("edit", "编辑")),
-                    ("d", t("delete custom Agent", "删除自定义 Agent")),
-                    ("q", t("back", "返回")),
-                ])
-            } else {
-                status.clone()
-            },
+            &search.help().unwrap_or_else(|| {
+                if status.is_empty() {
+                    super::theme::help_line(&[
+                        ("/", t("search", "搜索")),
+                        ("Enter", t("edit", "编辑")),
+                        ("d", t("delete custom Agent", "删除自定义 Agent")),
+                        ("q", t("back", "返回")),
+                    ])
+                } else {
+                    status.clone()
+                }
+            }),
             "",
         )?;
-        match read_key()? {
-            KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
+        let key = read_key()?;
+        match search.handle(key) {
+            super::search::SearchEffect::Updated => {
+                selected = 0;
+                continue;
+            }
+            super::search::SearchEffect::Closed => continue,
+            super::search::SearchEffect::Passthrough => {}
+        }
+        let profile_at = |row: usize| -> Option<usize> {
+            row.checked_sub(1)
+                .and_then(|index| shown.get(index).copied())
+        };
+        match key {
+            KeyCode::Esc | KeyCode::Char('q') if !search.editing => return Ok(()),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => {
                 selected = (selected + 1).min(options.len().saturating_sub(1))
             }
-            KeyCode::Char('d') if selected > 0 && selected <= profiles.len() => {
-                let id = profiles[selected - 1].id.clone();
+            KeyCode::Char('d') => {
+                let Some(index) = profile_at(selected) else {
+                    continue;
+                };
+                let id = profiles[index].id.clone();
                 if !is_builtin(&id) {
                     // 删除不可撤销，且 d 与 Enter 同区，默认必须停在「取消」
                     if super::ui::confirm_delete(
@@ -112,8 +156,10 @@ pub(crate) fn edit_agents(
                     .map(|index| index + 1)
                     .unwrap_or(0);
             }
-            KeyCode::Enter if selected > 0 && selected <= profiles.len() => {
-                edit_agent_profile(stdout, paths, config, profiles[selected - 1].clone())?;
+            KeyCode::Enter => {
+                if let Some(index) = profile_at(selected) {
+                    edit_agent_profile(stdout, paths, config, profiles[index].clone())?;
+                }
             }
             _ => {}
         }

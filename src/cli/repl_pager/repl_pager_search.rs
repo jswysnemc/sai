@@ -2,7 +2,7 @@ use super::search_index::{SearchIndex, SourceSpan};
 use crate::render::transcript::AnsiLine;
 
 /// Ctrl+O 阅读面板的搜索状态。
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(super) struct PagerSearch {
     /// 当前搜索词
     pub(super) query: String,
@@ -10,8 +10,23 @@ pub(super) struct PagerSearch {
     pub(super) matches: Vec<usize>,
     /// 当前高亮的命中序号
     pub(super) selected: usize,
+    /// `/` 为向前，`?` 为向后
+    forward: bool,
     index: SearchIndex,
     hits: Vec<Vec<SourceSpan>>,
+}
+
+impl Default for PagerSearch {
+    fn default() -> Self {
+        Self {
+            query: String::new(),
+            matches: Vec::new(),
+            selected: 0,
+            forward: true,
+            index: SearchIndex::default(),
+            hits: Vec::new(),
+        }
+    }
 }
 
 impl PagerSearch {
@@ -37,9 +52,27 @@ impl PagerSearch {
             return;
         }
         self.query = query.to_string();
-        self.selected = 0;
         self.hits = self.index.find(query);
         self.matches = self.hits.iter().map(|hit| hit[0].row).collect();
+        self.selected = if !self.forward && !self.matches.is_empty() {
+            self.matches.len() - 1
+        } else {
+            0
+        };
+    }
+
+    /// 设置下一次搜索的方向。`/` 向前，`?` 向后。
+    pub(super) fn set_forward(&mut self, forward: bool) {
+        self.forward = forward;
+    }
+
+    /// 按给定方向跳到下一处命中。
+    pub(super) fn step(&mut self, forward: bool) -> Option<usize> {
+        if forward {
+            self.next()
+        } else {
+            self.previous()
+        }
     }
 
     /// 追加一个字符到搜索词。
@@ -131,8 +164,9 @@ impl PagerSearch {
         if !self.active() {
             return String::new();
         }
+        let mark = if self.forward { '/' } else { '?' };
         format!(
-            "/{} [{}/{}]",
+            "{mark}{} [{}/{}]",
             self.query,
             if self.matches.is_empty() {
                 0

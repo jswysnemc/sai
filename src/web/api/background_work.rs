@@ -31,7 +31,10 @@ pub(super) fn routes() -> Router<WebAppState> {
 ///
 /// 返回:
 /// - 运行中的工作列表
-async fn session_work(State(state): State<WebAppState>, Path(id): Path<String>) -> WebResult<Json<Value>> {
+async fn session_work(
+    State(state): State<WebAppState>,
+    Path(id): Path<String>,
+) -> WebResult<Json<Value>> {
     let (_, state_dir) = crate::state::locate_session_dirs(&state.paths, &id)
         .map_err(|error| WebError::not_found(error.to_string()))?;
     let items = running_work(&state, &id, &state_dir.display().to_string());
@@ -97,7 +100,11 @@ fn running_commands(state: &WebAppState, session_id: &str) -> Vec<BackgroundComm
 /// - 展示名
 fn work_label(primary: &str, fallback: &str) -> String {
     let primary = primary.trim();
-    if primary.is_empty() { fallback.to_string() } else { primary.to_string() }
+    if primary.is_empty() {
+        fallback.to_string()
+    } else {
+        primary.to_string()
+    }
 }
 
 /// 取后台命令短标签。
@@ -108,5 +115,8 @@ fn work_label(primary: &str, fallback: &str) -> String {
 /// 返回:
 /// - 标签或命令前 48 个字符
 fn command_label(task: BackgroundCommandTask) -> String {
-    work_label(&task.label, &task.command.chars().take(48).collect::<String>())
+    work_label(
+        &task.label,
+        &task.command.chars().take(48).collect::<String>(),
+    )
 }

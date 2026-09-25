@@ -16,6 +16,10 @@ type MonacoCodeEditorProps = {
   loadingLabel: string;
   /** 相对 Git 基线的行级变更，渲染在行号右侧与概览标尺上 */
   gitLines?: EditorGitLine[];
+  /** 是否按编辑器宽度自动换行 */
+  wordWrap?: boolean;
+  /** 右键菜单里切换自动换行 */
+  onToggleWordWrap?: () => void;
 };
 
 /** 概览标尺上的变更标记色，与 gutter 装饰的主题色近似。 */
@@ -31,10 +35,10 @@ const OVERVIEW_RULER_COLORS: Record<EditorGitLineKind, string> = {
  * 负责 Monaco 主模块的按需加载与容器尺寸同步：Monaco 的 automaticLayout 在
  * 网格拖动场景下会沿用旧宽度，这里改由 ResizeObserver 主动通知实际尺寸。
  *
- * @param props 文件路径、内容、变更回调与加载文案
+ * @param props 文件路径、内容、变更回调、加载文案与换行状态
  * @returns 编辑器区域
  */
-export function MonacoCodeEditor({ path, value, onChange, loadingLabel, gitLines }: MonacoCodeEditorProps) {
+export function MonacoCodeEditor({ path, value, onChange, loadingLabel, gitLines, wordWrap = false, onToggleWordWrap }: MonacoCodeEditorProps) {
   const { t } = useI18n();
   const { theme } = useTheme();
   const [ready, setReady] = useState(false);
@@ -43,6 +47,10 @@ export function MonacoCodeEditor({ path, value, onChange, loadingLabel, gitLines
   const areaRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
+  const pathRef = useRef(path);
+  const toggleWrapRef = useRef(onToggleWordWrap);
+  pathRef.current = path;
+  toggleWrapRef.current = onToggleWordWrap;
   const gitDecorationsRef = useRef<ReturnType<Parameters<OnMount>[0]["createDecorationsCollection"]> | null>(null);
 
   useEffect(() => {
@@ -129,6 +137,7 @@ export function MonacoCodeEditor({ path, value, onChange, loadingLabel, gitLines
     setMountVersion((version) => version + 1);
     const area = areaRef.current;
     if (area) editor.layout({ width: area.clientWidth, height: area.clientHeight });
+    editor.updateOptions({ wordWrap: wordWrap ? "on" : "off" });
     // 3. 把选区作为带来源的上下文原子发送到当前聊天输入区
     editor.addAction({
       id: "sai.send-selection-to-composer",
@@ -148,6 +157,32 @@ export function MonacoCodeEditor({ path, value, onChange, loadingLabel, gitLines
       }
     });
   };
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!editor || !monaco) return;
+    editor.updateOptions({ wordWrap: wordWrap ? "on" : "off" });
+    const wrapAction = editor.addAction({
+      id: "sai.toggle-word-wrap",
+      label: wordWrap ? t("Disable word wrap", "关闭自动换行") : t("Enable word wrap", "开启自动换行"),
+      contextMenuGroupId: "0_sai",
+      contextMenuOrder: 1,
+      keybindings: [monaco.KeyMod.Alt | monaco.KeyCode.KeyZ],
+      run: () => toggleWrapRef.current?.()
+    });
+    const copyAction = editor.addAction({
+      id: "sai.copy-path",
+      label: t("Copy path", "复制路径"),
+      contextMenuGroupId: "0_sai",
+      contextMenuOrder: 2,
+      run: () => { void navigator.clipboard.writeText(pathRef.current); }
+    });
+    return () => {
+      wrapAction.dispose();
+      copyAction.dispose();
+    };
+  }, [mountVersion, t, wordWrap]);
 
   return (
     <div className="monaco-code-editor" ref={areaRef}>
@@ -170,6 +205,7 @@ export function MonacoCodeEditor({ path, value, onChange, loadingLabel, gitLines
             padding: { top: 12 },
             automaticLayout: false,
             scrollBeyondLastLine: false,
+            wordWrap: wordWrap ? "on" : "off",
           }}
         />
       ) : (

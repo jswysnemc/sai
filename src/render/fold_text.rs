@@ -100,7 +100,7 @@ pub(crate) fn fold_display_lines_tracked(
     tail: usize,
     expanded: bool,
 ) -> Vec<FoldedDisplayLine> {
-    let expanded = expanded || crate::render::render_expand::expand_override();
+    let expanded = crate::render::render_expand::resolve_expanded(expanded);
     let keep = head.saturating_add(tail);
     if expanded || keep == 0 || lines.len() <= keep {
         return lines.iter().cloned().map(FoldedDisplayLine::Line).collect();

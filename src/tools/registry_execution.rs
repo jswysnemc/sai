@@ -10,7 +10,7 @@ use tokio::sync::mpsc;
 impl ToolRegistry {
     /// 【工具】【文本执行】解析参数并经过统一授权入口调用工具。
     /// @param name 为工具名或兼容别名；arguments 为 JSON 对象文本
-    /// @returns 工具文本结果，不交付模型附件
+    /// @returns 工具文本结果；图片附件只在 Agent 路径交给模型，这里丢弃
     pub async fn call(&self, name: &str, arguments: &str) -> Result<String> {
         let requested_name = name;
         let name = local_tool_name(name);
@@ -24,7 +24,6 @@ impl ToolRegistry {
                 name,
                 &mut args,
                 ToolProgress::default(),
-                false,
                 requested_name == DSH_BASH_EXECUTION_ALIAS,
             )
             .await?
@@ -51,7 +50,6 @@ impl ToolRegistry {
             name,
             &mut args,
             ToolProgress::new(sender),
-            true,
             requested_name == DSH_BASH_EXECUTION_ALIAS,
         )
         .await
@@ -64,7 +62,7 @@ impl ToolRegistry {
     /// - `name`: 本地工具名称
     /// - `args`: 已解析工具参数
     /// - `progress`: 工具进度通道
-    /// - `accept_model_attachments`: 调用方是否会把临时附件提交给模型
+    /// - `use_dsh_bash`: 是否以 DeepSeek bash 别名执行
     ///
     /// 返回:
     /// - 工具执行结果
@@ -74,7 +72,6 @@ impl ToolRegistry {
         name: &str,
         args: &mut Value,
         progress: ToolProgress,
-        accept_model_attachments: bool,
         use_dsh_bash: bool,
     ) -> Result<ToolOutput> {
         let original_args = args.clone();
@@ -92,11 +89,6 @@ impl ToolRegistry {
                     .context("tool arguments must be a JSON object")?
                     .insert("_sai_sandbox".to_string(), Value::Bool(true));
             }
-        }
-        if accept_model_attachments && name == "read_file" {
-            args.as_object_mut()
-                .context("tool arguments must be a JSON object")?
-                .insert("_sai_model_attachments".to_string(), Value::Bool(true));
         }
         if use_dsh_bash {
             args.as_object_mut()

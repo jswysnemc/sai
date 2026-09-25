@@ -23,12 +23,11 @@ import { wysiwygDecorations } from "./wysiwyg-decorations";
  */
 export function baseExtensions(onChange: (value: string) => void): Extension[] {
   return [
-    // 1. 基础编辑能力：历史、选区绘制、输入缩进、软换行
+    // 1. 基础编辑能力：历史、选区绘制、输入缩进；软换行随展示状态热替换
     history(),
     drawSelection(),
     rectangularSelection(),
     indentOnInput(),
-    EditorView.lineWrapping,
     keymap.of([...defaultKeymap, ...historyKeymap]),
     // 2. Markdown 语法解析，GFM 扩展随 markdownLanguage 一并启用；
     //    codeLanguages 让围栏代码块按语言标识做嵌套解析，语言包按需异步加载
@@ -48,6 +47,8 @@ type PresentationOptions = {
   dark: boolean;
   /** 是否只读 */
   readOnly: boolean;
+  /** 是否自动换行；缺省保持换行，避免未接入偏好的调用方改变排版 */
+  wrap?: boolean;
 };
 
 /**
@@ -57,11 +58,12 @@ type PresentationOptions = {
  * 前者显示行号与全部语法标记，后者隐藏标记并直接呈现排版。
  * 共用实例使切换模式时光标位置与撤销栈都不丢失。
  *
- * @param options 模式、主题深浅与只读状态
+ * @param options 模式、主题深浅、只读状态与换行
  * @returns CodeMirror 扩展数组
  */
-export function presentationExtensions({ live, dark, readOnly }: PresentationOptions): Extension[] {
+export function presentationExtensions({ live, dark, readOnly, wrap = true }: PresentationOptions): Extension[] {
   return [
+    ...(wrap ? [EditorView.lineWrapping] : []),
     editorTheme(dark, live),
     live
       ? [wysiwygDecorations, wysiwygBlockDecorations]

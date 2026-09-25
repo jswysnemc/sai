@@ -9,6 +9,8 @@ type MarkdownEditorProps = {
   mode: MarkdownEditorMode;
   dark: boolean;
   readOnly?: boolean;
+  /** 是否自动换行，缺省为换行 */
+  wrap?: boolean;
   /** 预览模式的渲染结果，由调用方注入以复用各自的 Markdown 渲染器 */
   renderPreview: (source: string) => ReactNode;
 };
@@ -20,7 +22,7 @@ type MarkdownEditorProps = {
  * 预览模式下编辑器只隐藏不卸载，因此三态之间来回切换时
  * 光标位置、滚动位置和撤销栈都保留。预览渲染交给调用方注入的渲染器。
  *
- * @param props 内容、变更回调、模式、主题深浅、只读状态与预览渲染函数
+ * @param props 内容、变更回调、模式、主题深浅、只读状态、换行与预览渲染函数
  * @returns 编辑区容器
  */
 export function MarkdownEditor({
@@ -29,6 +31,7 @@ export function MarkdownEditor({
   mode,
   dark,
   readOnly = false,
+  wrap = true,
   renderPreview,
 }: MarkdownEditorProps) {
   const preview = mode === "preview";
@@ -42,6 +45,7 @@ export function MarkdownEditor({
           live={mode !== "source"}
           dark={dark}
           readOnly={readOnly || !isEditableMode(mode)}
+          wrap={wrap}
         />
       </div>
     </div>

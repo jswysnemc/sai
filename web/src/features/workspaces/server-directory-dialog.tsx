@@ -1,4 +1,4 @@
-import { ArrowLeft, Folder, FolderPlus, GitBranch, HardDrive, Loader2, Plus, Search } from "lucide-react";
+import { ArrowLeft, Folder, FolderInput, FolderPlus, GitBranch, HardDrive, Loader2, Plus, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
@@ -13,6 +13,9 @@ import {
   stripTrailingSlash
 } from "./directory-path-input";
 import { sortDirectoryEntries } from "./directory-sorting";
+import { parseDroppedDirectory } from "./dropped-directory";
+import { resolveDirectoryCandidates } from "./picked-directory";
+import "./workspace-switcher.css";
 
 type ServerDirectoryDialogProps = {
   open: boolean;
@@ -58,6 +61,8 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
   const pendingSelectionRef = useRef<string | null>(null);
   // 仅键盘驱动的高亮变化才滚动列表；鼠标悬停滚动会把列表拖得到处跑
   const keyboardNavRef = useRef(false);
+  // 拖拽经过子元素时 enter/leave 成对出现，用深度避免高亮闪烁
+  const dragDepth = useRef(0);
 
   const listing = useQuery({
     queryKey: ["workspace-directories", browseDir],
@@ -160,6 +165,7 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
     setSubmitError(null);
     try {
       await props.onSelect(target);
+      props.onClose();
     } catch (error) {
       setSubmitError(toDisplayError(error, "Directory action failed", "目录操作失败"));
     } finally {
@@ -167,29 +173,74 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
     }
   };
 
-  /** 从浏览器拖放数据中提取本地文件管理器提供的目录路径。 */
-  const droppedDirectoryPath = (event: React.DragEvent<HTMLDivElement>): string | null => {
-    const uri = event.dataTransfer.getData("text/uri-list").split("\n").find((item) => item && !item.startsWith("#"));
-    if (uri?.startsWith("file://")) {
-      try { return normalizeDroppedPath(decodeURIComponent(new URL(uri).pathname)); } catch { return normalizeDroppedPath(uri.slice("file://".length)); }
-    }
-    const text = event.dataTransfer.getData("text/plain").trim();
-    if (text.startsWith("/") || /^[A-Za-z]:[\\/]/u.test(text)) return normalizeDroppedPath(text);
-    const file = event.dataTransfer.files[0] as (File & { path?: string; webkitRelativePath?: string }) | undefined;
-    return normalizeDroppedPath(file?.path || file?.webkitRelativePath?.split(/[\\/]/u)[0] || "");
+  /** 拖入项是目录时返回目录名；明确是文件时返回空串。 */
+  const droppedFolderName = (event: React.DragEvent<HTMLDivElement>): string => {
+    const item = event.dataTransfer.items?.[0] as (DataTransferItem & { webkitGetAsEntry?: () => { isDirectory: boolean; name: string } | null }) | undefined;
+    const entry = item?.webkitGetAsEntry?.();
+    if (entry && !entry.isDirectory) return "";
+    const file = event.dataTransfer.files[0] as (File & { path?: string }) | undefined;
+    return entry?.name || file?.path?.split(/[\\/]/u).filter(Boolean).at(-1) || file?.name || "";
   };
 
-  /** 处理从文件管理器拖入目录的导航。 */
+  /**
+   * 把拖入的文件夹解析成服务端目录。
+   *
+   * 文件管理器给出绝对路径时直接使用。浏览器只给目录名时，
+   * 先看当前目录，再在允许的根下找第一个真实存在的同名目录。
+   */
+  const resolveDroppedDirectory = async (event: React.DragEvent<HTMLDivElement>): Promise<string | null> => {
+    const parsed = parseDroppedDirectory(
+      event.dataTransfer.getData("text/uri-list"),
+      event.dataTransfer.getData("text/plain"),
+      droppedFolderName(event)
+    );
+    if (parsed.path) return stripTrailingSlash(parsed.path);
+    if (!parsed.name) return null;
+    const here = currentPath ? `${stripTrailingSlash(ensureTrailingSlash(currentPath))}/${parsed.name}` : "";
+    const roots = (listing.data?.roots ?? []).map((root) => root.path);
+    const candidates = [...(here ? [here] : []), ...resolveDirectoryCandidates(parsed.name, roots)];
+    for (const candidate of candidates) {
+      try {
+        await api.workspaces.browse(stripTrailingSlash(candidate));
+        return stripTrailingSlash(candidate);
+      } catch {
+        // 这个候选不存在，继续看下一个根
+      }
+    }
+    return null;
+  };
+
+  /** 拖入文件夹后直接选定；解析不到路径时留在框里说明原因。 */
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
+    dragDepth.current = 0;
     setDropActive(false);
-    const path = droppedDirectoryPath(event);
-    if (!path) {
-      setDropError(t("The browser did not expose the dropped folder path. Type the server path above instead.", "浏览器没有提供拖入文件夹的路径，请在上方输入服务端路径。"));
-      return;
-    }
-    setDropError(null);
-    enterDirectory(path);
+    void (async () => {
+      const path = await resolveDroppedDirectory(event);
+      if (!path) {
+        setDropError(t("Could not locate that folder on the server. Type its path above.", "没能在服务器上定位这个文件夹，请在上方输入路径。"));
+        return;
+      }
+      setDropError(null);
+      await submit(path);
+    })();
+  };
+
+  /** 拖过窗口时保持可放置，并记住嵌套深度。 */
+  const handleDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    dragDepth.current += 1;
+    setDropActive(true);
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  };
+
+  const handleDragLeave = () => {
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setDropActive(false);
   };
 
   /** 在当前浏览目录下创建子目录，成功后刷新并进入。 */
@@ -327,18 +378,24 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
     <Modal
       open={props.open}
       title={props.title ?? t("Open server workspace", "打开服务端工作区")}
-      description={props.description ?? t("Browse any directory on the server running Sai Web. The shortcuts below jump to your home folder, the server's start directory, filesystem roots, and paths added via SAI_WEB_WORKSPACE_ROOTS.", "可浏览运行 Sai Web 的服务器上的任意目录。下方为快捷入口：用户主目录、服务端启动目录、文件系统根目录，以及环境变量 SAI_WEB_WORKSPACE_ROOTS 添加的路径。")}
-      size="large"
+      description={props.description ?? t("Choose a directory on the server, or drop a folder into this window.", "选择服务器上的目录，或把文件夹拖进这个窗口。")}
+      size="medium"
+      className="directory-picker"
       onClose={props.onClose}
     >
       <div
         className={`server-directory-dialog${dropActive ? " is-drop-target" : ""}`}
-        onDragEnter={(event) => { event.preventDefault(); setDropActive(true); }}
-        onDragOver={(event) => event.preventDefault()}
-        onDragLeave={(event) => { if (event.currentTarget === event.target) setDropActive(false); }}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {dropActive && <div className="directory-drop-hint">{t("Drop a folder to browse it", "拖入文件夹即可浏览")}</div>}
+        {dropActive && (
+          <div className="directory-drop-hint">
+            <FolderInput size={22} aria-hidden />
+            <strong>{t("Drop to open this folder", "松开以打开这个文件夹")}</strong>
+          </div>
+        )}
         {dropError && <div className="directory-error">{dropError}</div>}
         <div className="directory-input-shell">
           <button
@@ -372,23 +429,23 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
           />
           {listing.isFetching && <Loader2 size={14} className="spin" aria-hidden />}
         </div>
-        <div className="directory-toolbar">
-          {roots.length > 0 && (
-            <div className="directory-roots-row">
-              {roots.map((root) => (
-                <button
-                  type="button"
-                  key={root.path}
-                  className={ensureTrailingSlash(root.path) === activeRootPath ? "active" : ""}
-                  onClick={() => enterDirectory(root.path)}
-                  title={root.path}
-                >
-                  <HardDrive size={12} aria-hidden />
-                  {root.name}
-                </button>
-              ))}
-            </div>
-          )}
+        {roots.length > 0 && (
+          <div className="directory-roots-row">
+            {roots.map((root) => (
+              <button
+                type="button"
+                key={root.path}
+                className={ensureTrailingSlash(root.path) === activeRootPath ? "active" : ""}
+                onClick={() => enterDirectory(root.path)}
+                title={root.path}
+              >
+                <HardDrive size={12} aria-hidden />
+                {root.name}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="directory-panel">
           <div className="directory-search-shell">
             <Search size={13} aria-hidden />
             <input
@@ -404,8 +461,7 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
               onKeyDown={handleSearchKeyDown}
             />
           </div>
-        </div>
-        <div className="directory-list" ref={listRef}>
+          <div className="directory-list" ref={listRef}>
           {browseErrorMessage && <div className="directory-error">{browseErrorMessage}</div>}
           {submitError && <div className="directory-error">{submitError.message}</div>}
           {parent && (
@@ -444,6 +500,7 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
               data-row-index={index}
               className={highlight === index ? "directory-row highlighted" : "directory-row"}
               onClick={() => enterDirectory(entry.path)}
+              onDoubleClick={() => void submit(entry.path)}
               onMouseEnter={() => setHighlight(index)}
             >
               <Folder size={14} aria-hidden />
@@ -473,6 +530,7 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
             </div>
           )}
         </div>
+        </div>
         <footer className="directory-footer">
           <button
             type="button"
@@ -483,6 +541,7 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
             title={t("New folder", "新建文件夹")}
           >
             <FolderPlus size={14} aria-hidden />
+            <span>{t("New folder", "新建文件夹")}</span>
           </button>
           <Button
             variant="primary"
@@ -498,15 +557,4 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
       </div>
     </Modal>
   );
-}
-
-/**
- * 兼容 Windows 文件 URI 以斜杠包裹盘符的格式。
- *
- * @param path 拖放数据中的原始路径
- * @returns 可提交给服务端目录接口的标准路径
- */
-function normalizeDroppedPath(path: string): string {
-  const normalized = normalizeSlashes(path.trim());
-  return normalized.replace(/^\/(?:([A-Za-z]):\/)/u, "$1:/");
 }

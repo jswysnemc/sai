@@ -1,6 +1,6 @@
 import { languageFromPath, SyntaxHighlighter } from "../syntax-highlighter";
 import { ToolPanel } from "./layout/tool-panel";
-import { parseReadTextPages, type ReadTextPage } from "./read-result-parser";
+import { parseImageReadNote, parseReadTextPages, type ReadTextPage } from "./read-result-parser";
 import { prettyJson } from "./tool-data";
 import { ToolFileReference } from "./tool-file-reference";
 import { useI18n } from "../../i18n/use-i18n";
@@ -19,7 +19,17 @@ type ReadToolViewProps = {
  * @returns 带行号和语法着色的文件读取详情
  */
 export function ReadToolView({ output, headerPath, workspacePath = "" }: ReadToolViewProps) {
-  const pages = parseReadTextPages(output);
+  const image = parseImageReadNote(output);
+  if (image) {
+    return (
+      <ToolPanel className="read-tool-view">
+        <p className="read-image-note">{image.summary}</p>
+      </ToolPanel>
+    );
+  }
+  const pages = parseReadTextPages(output).map((page) =>
+    page.path ? page : { ...page, path: headerPath ?? "" }
+  );
   const hidePath = pages.length === 1 && pathsReferToSameFile(pages[0]?.path ?? "", headerPath ?? "");
   if (pages.length === 0) {
     return output ? (

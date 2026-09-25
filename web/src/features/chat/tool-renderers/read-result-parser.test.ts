@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseReadLines, parseReadTextPages } from "./read-result-parser";
+import { parseImageReadNote, parseReadLines, parseReadTextPages } from "./read-result-parser";
 
 describe("read result parser", () => {
   it("解析单文件文本分页", () => {
@@ -58,5 +58,24 @@ describe("read result parser", () => {
     const pages = parseReadTextPages(JSON.stringify({ type: "text-page", path: "/tmp/a.rs", offset: 1, content: "1: a" }));
     expect(pages[0].truncated).toBe(false);
     expect(pages[0].next).toBeNull();
+  });
+
+  it("解析制表符行号文本", () => {
+    const pages = parseReadTextPages("7\tconst a = 1;\n8\tvalue: ok");
+    expect(pages).toHaveLength(1);
+    expect(pages[0].offset).toBe(7);
+    expect(pages[0].lineCount).toBe(2);
+    expect(pages[0].lines).toEqual([
+      { number: 7, text: "const a = 1;" },
+      { number: 8, text: "value: ok" }
+    ]);
+  });
+
+  it("目录列表和图片说明不当成源码行", () => {
+    expect(parseReadTextPages("Directory: /tmp\nEntries 1-1 of 1:\na.txt")).toEqual([]);
+    expect(parseImageReadNote("[Image: source: /tmp/shot.png, image/png, 1KB, 8x4]")).toEqual({
+      source: "/tmp/shot.png",
+      summary: "source: /tmp/shot.png, image/png, 1KB, 8x4"
+    });
   });
 });

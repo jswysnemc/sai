@@ -8,7 +8,7 @@ use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::queue;
 use crossterm::style::Print;
 use crossterm::terminal::{self, Clear, ClearType};
-use std::io::{self, Write};
+use std::io;
 
 /// 【配置表单】【终端绘制】按窗口尺寸和当前编辑状态显示字段及操作按钮
 /// @param stdout 终端输出；title 为标题；fields 为字段；selected 为选中位置；editing 为编辑状态；cursors 为光标；revealed_secrets 为显示偏好
@@ -29,6 +29,7 @@ pub(super) fn draw_form(
     let width = frame.width;
     let height = frame.height;
 
+    super::super::ui::begin_synced_frame(stdout)?;
     queue!(stdout, Clear(ClearType::All))?;
     draw_box(stdout, x, y, width, height, title)?;
     let inner_x = x.saturating_add(2);
@@ -189,12 +190,13 @@ pub(super) fn draw_form(
         ])
     };
     super::super::ui::draw_status_bar(stdout, &frame, &help)?;
+    // 光标显隐放在同步帧内，避免先闪出空屏再出现光标
     if let Some((cx, cy)) = cursor {
         queue!(stdout, Show, MoveTo(cx, cy))?;
     } else {
         queue!(stdout, Hide)?;
     }
-    stdout.flush()?;
+    super::super::ui::end_synced_frame(stdout)?;
     Ok(())
 }
 

@@ -1,8 +1,10 @@
-import { ArrowLeft, ArrowRight, FileUp, FolderTree, RefreshCw, Save } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileUp, FolderTree, RefreshCw, Save, WrapText } from "lucide-react";
+import { useState } from "react";
 import { Button } from "../../shared/ui/button/button";
 import { MarkdownModeToggle } from "../../shared/ui/markdown-editor/markdown-mode-toggle";
 import type { MarkdownEditorMode } from "../../shared/ui/markdown-editor/markdown-editor-mode";
 import { EditorBreadcrumbs } from "./editor-breadcrumbs";
+import { EditorContextMenu } from "./editor-context-menu";
 import { useI18n } from "../i18n/use-i18n";
 
 /** 文件访问历史导航状态与动作。 */
@@ -31,6 +33,9 @@ type EditorHeaderProps = {
   savable: boolean;
   fileTreeOpen: boolean;
   onToggleFileTree: () => void;
+  /** 为 null 时不提供换行按钮（如图片） */
+  wordWrap: boolean | null;
+  onToggleWordWrap: () => void;
 };
 
 /**
@@ -53,10 +58,19 @@ export function EditorHeader({
   savable,
   fileTreeOpen,
   onToggleFileTree,
+  wordWrap,
+  onToggleWordWrap,
 }: EditorHeaderProps) {
   const { t } = useI18n();
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   return (
-    <header className="editor-head">
+    <header
+      className="editor-head"
+      onContextMenu={(event) => {
+        event.preventDefault();
+        setMenu({ x: event.clientX, y: event.clientY });
+      }}
+    >
       {navigation && (
         <span className="editor-nav" role="group" aria-label={t("File navigation history", "文件访问历史")}>
           <button
@@ -98,6 +112,18 @@ export function EditorHeader({
       {markdownMode && (
         <MarkdownModeToggle mode={markdownMode} onChange={onMarkdownModeChange} t={t} />
       )}
+      {wordWrap !== null && (
+        <button
+          type="button"
+          className="editor-wrap"
+          onClick={onToggleWordWrap}
+          aria-pressed={wordWrap}
+          aria-label={wordWrap ? t("Disable word wrap", "关闭自动换行") : t("Enable word wrap", "开启自动换行")}
+          title={wordWrap ? t("Disable word wrap", "关闭自动换行") : t("Enable word wrap", "开启自动换行")}
+        >
+          <WrapText size={15} />
+        </button>
+      )}
       {savable && (
         <button type="button" className="editor-save" onClick={onSave} disabled={!canSave}>
           <Save size={14} /> {t("Save", "保存")}
@@ -113,6 +139,19 @@ export function EditorHeader({
         >
           <FolderTree size={15} />
         </button>
+      )}
+      {menu && (
+        <EditorContextMenu
+          x={menu.x}
+          y={menu.y}
+          path={path}
+          wordWrap={wordWrap}
+          savable={savable}
+          canSave={canSave}
+          onToggleWordWrap={onToggleWordWrap}
+          onSave={onSave}
+          onClose={() => setMenu(null)}
+        />
       )}
     </header>
   );

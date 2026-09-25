@@ -89,7 +89,7 @@ pub(crate) fn render_todo_output(
     let pending = total.saturating_sub(completed + in_progress + cancelled);
 
     // 摘要行走统一 gutter：x/x 计数（与沉底面板同一视觉语言，不画进度条）
-    let mut stats = format!("Plan {completed}/{total}");
+    let mut stats = format!("Todo {completed}/{total}");
     if in_progress > 0 {
         stats.push_str(&format!(" · {in_progress} active"));
     }
@@ -102,8 +102,8 @@ pub(crate) fn render_todo_output(
     // 1. 读取清单直接展示计划进度，修改操作保留动作和条目，不重复成功徽标
     let mut output = if ok && matches!(display_label.as_str(), "Listed" | "Todo") {
         tool_status_line(
-            "Plan",
-            &format!("\x1b[2m{}\x1b[0m", stats.trim_start_matches("Plan ")),
+            "Todo",
+            &format!("\x1b[2m{}\x1b[0m", stats.trim_start_matches("Todo ")),
             ToolHealth::Ok,
         )
     } else {

@@ -4,7 +4,10 @@ use crate::state::tool_history::project_legacy_tool_report_messages;
 use crate::state::turn_messages::{load_turn_messages_for_turn, TurnMessageRecord};
 use crate::state::turns::{Turn, TurnStatus};
 use crate::state::ConversationDb;
+use crate::tools::model_attachment::attachment_message;
+use crate::tools::ToolModelAttachment;
 use anyhow::Result;
+use std::collections::HashMap;
 
 impl crate::state::StateStore {
     /// 重建当前运行轮次已经完成的工具调用与结果消息。
@@ -131,7 +134,9 @@ fn append_turn_messages(
         append_interrupted_turn_marker(turn, messages);
         return Ok(());
     }
-    append_tool_exchange_messages(exchanges, &inter_messages, messages);
+    let images =
+        super::attachments::load_tool_result_images_for_turn(db, session_id, &turn.turn_id)?;
+    append_tool_exchange_messages(exchanges, &inter_messages, &images, messages);
     append_assistant_context_messages(turn, messages);
     append_interrupted_turn_marker(turn, messages);
     Ok(())
@@ -175,10 +180,12 @@ fn skip_compacted_exchanges(
     }
 }
 
-/// 按原始模型子轮重建 assistant 工具调用与 tool 结果消息。
+/// 按原始模型子轮重建 assistant 工具调用、tool 结果与工具图片附件消息。
 ///
 /// 参数:
 /// - `exchanges`: 当前对话轮次的工具交换记录
+/// - `inter_messages`: 轮次内插入的用户或系统消息
+/// - `images`: 按 provider 工具调用标识分组的图片附件
 /// - `messages`: 输出消息列表
 ///
 /// 返回:
@@ -186,6 +193,7 @@ fn skip_compacted_exchanges(
 fn append_tool_exchange_messages(
     exchanges: &[super::model::ToolExchangeRecord],
     inter_messages: &[TurnMessageRecord],
+    images: &HashMap<String, Vec<ToolModelAttachment>>,
     messages: &mut Vec<ChatMessage>,
 ) {
     let mut message_index = 0usize;
@@ -219,6 +227,16 @@ fn append_tool_exchange_messages(
                 exchange.call.provider_call_id.clone(),
                 tool_result_content(exchange),
             ));
+        }
+        // 3. 子轮工具返回的图片紧随其结果，与运行时的附件消息位置一致
+        let round_images = round
+            .iter()
+            .filter_map(|exchange| images.get(&exchange.call.provider_call_id))
+            .flatten()
+            .cloned()
+            .collect::<Vec<_>>();
+        if let Some(message) = attachment_message(&round_images) {
+            messages.push(message);
         }
         let boundary = round
             .last()
@@ -579,5 +597,66 @@ mod tests {
         assert_eq!(messages.len(), 2);
         assert_eq!(messages[0].role, "assistant");
         assert_eq!(messages[1].role, "tool");
+    }
+
+    /// 【会话历史】【工具图片】验证图片附件在所属子轮的工具结果之后重建。
+    #[test]
+    fn projects_tool_images_after_round_results() {
+        let (temp, db) = db();
+        insert_tool_call(
+            &db,
+            NewToolCallRecord {
+                session_id: "default".to_string(),
+                turn_id: "turn_1".to_string(),
+                seq: 1,
+                provider_call_id: "call_1".to_string(),
+                tool_name: "read_file".to_string(),
+                arguments: "{\"path\":\"a.png\"}".to_string(),
+            },
+        )
+        .unwrap();
+        insert_tool_result(
+            &db,
+            NewToolResultRecord {
+                session_id: "default".to_string(),
+                turn_id: "turn_1".to_string(),
+                provider_call_id: "call_1".to_string(),
+                ok: true,
+                result_preview: "[Image: source: a.png]".to_string(),
+                result_ref: None,
+                error: None,
+                original_chars: 22,
+            },
+        )
+        .unwrap();
+        let store = crate::state::StateStore {
+            plugin_state_root: None,
+            base_state_dir: temp.path().to_path_buf(),
+            session_id: "default".to_string(),
+            state_dir: temp.path().to_path_buf(),
+            conv_db: std::sync::Arc::new(db),
+        };
+        store
+            .record_tool_result_images(
+                "turn_1",
+                "call_1",
+                &[ToolModelAttachment::new(
+                    "data:image/png;base64,AA",
+                    "a.png",
+                    "[Image: source: a.png]",
+                )],
+            )
+            .unwrap();
+
+        let messages =
+            project_turn_messages_with_tool_history(&store.conv_db, "default", &[turn()]).unwrap();
+
+        assert_eq!(messages.len(), 5);
+        assert_eq!(messages[2].role, "tool");
+        assert_eq!(messages[3].role, "user");
+        assert!(crate::tools::model_attachment::is_attachment_message(
+            &messages[3]
+        ));
+        assert_eq!(messages[4].role, "assistant");
     }
 }

@@ -69,10 +69,13 @@ impl ReplRuntime {
         }
         // 2. 交互终端：备用屏 pager 展示全部折叠块，左右切换
         if std::io::stdout().is_terminal() && std::io::stdin().is_terminal() {
-            let blocks = self.transcript.expandable_blocks();
-            let start = blocks.len().saturating_sub(1);
-            super::super::repl_pager::open_blocks_pager(&blocks, start, |width| {
-                self.expanded_transcript_lines(width)
+            if !self.pager_has_content() {
+                return Ok(false);
+            }
+            let paragraphs = self.transcript.expandable_blocks().len();
+            let start = paragraphs.saturating_sub(1);
+            super::super::repl_pager::open_blocks_pager(start, paragraphs, |focus, width| {
+                self.pager_view(focus, width)
             })?;
             // 备用屏返回后强制重同步 viewport 与 composer，避免输入框错位
             self.resync_after_overlay()?;
@@ -87,18 +90,36 @@ impl ReplRuntime {
         Ok(true)
     }
 
-    /// 切换当前实时思考块的展开状态并立即重绘。
-    ///
-    /// 返回:
-    /// - 找到实时思考块时返回 true
-    pub(in crate::cli) fn toggle_live_reasoning(&mut self) -> Result<bool> {
-        // 流式期间只切 live 思考；定稿思考 / diff 走空闲时的备用屏 pager
-        if !self.transcript.toggle_live_reasoning() {
-            return Ok(false);
-        }
-        self.sync_transcript(true)?;
-        self.redraw_stream_composer()?;
-        Ok(true)
+    /// 当前可以在副屏里展开的段落。
+    pub(in crate::cli) fn expandable_blocks(
+        &self,
+    ) -> Vec<crate::render::transcript::ExpandableBlock> {
+        self.transcript.expandable_blocks()
+    }
+
+    /// 按前台同一套渲染画出副屏的一帧。
+    pub(in crate::cli) fn pager_view(
+        &mut self,
+        focus: usize,
+        width: usize,
+    ) -> crate::render::transcript::PagerView {
+        self.transcript
+            .render_pager_view(width, &self.options, focus)
+    }
+
+    /// 副屏有没有可显示的会话内容。
+    pub(in crate::cli) fn pager_has_content(&self) -> bool {
+        self.transcript.has_pager_content()
+    }
+
+    /// 标记副屏已打开，主缓冲暂停绘制。
+    pub(in crate::cli) fn begin_overlay(&mut self) {
+        self.overlay_open = true;
+    }
+
+    /// 副屏是否还占着备用屏。
+    pub(in crate::cli) fn overlay_open(&self) -> bool {
+        self.overlay_open
     }
 }
 
@@ -185,6 +206,17 @@ pub(crate) fn process_stream_input(
                     runtime.pending_clear_queue = false;
                     return Ok(StreamInputAction::Interrupt);
                 }
+                if key.code == KeyCode::Char('o') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                    // #region agent log
+                    super::super::repl_pager::debug_agent_log(
+                        "A",
+                        "event_loop.rs:ctrl_o",
+                        "open pager during run",
+                        "{\"cancel\":false}",
+                    );
+                    // #endregion
+                    return Ok(StreamInputAction::OpenPager);
+                }
                 if runtime.handle_queue_panel_key(key.code, key.modifiers)? {
                     continue;
                 }
@@ -213,15 +245,10 @@ pub(crate) fn process_stream_input(
                     runtime.jump_to_output_bottom(true)?;
                     continue;
                 }
-                let ctrl_o = matches!(key.code, KeyCode::Char('o'))
-                    && key.modifiers.contains(KeyModifiers::CONTROL);
                 if !(matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y'))
                     && key.modifiers.contains(KeyModifiers::CONTROL))
                 {
                     runtime.pending_clear_queue = false;
-                }
-                if ctrl_o && runtime.toggle_live_reasoning()? {
-                    continue;
                 }
                 if matches!(key.code, KeyCode::Char('t'))
                     && key.modifiers.contains(KeyModifiers::CONTROL)
@@ -271,19 +298,6 @@ pub(crate) fn process_stream_input(
                             format!("cleared {cleared} queued items")
                         })?;
                     }
-                    continue;
-                }
-                if ctrl_o {
-                    // 轮次内没有可折叠的思考块时给 Ctrl+O 自己的提示。
-                    // 不能复用下面 PageUp 的 pager 文案：用户按的是 Ctrl+O，
-                    // 看到一条关于会话浏览面板的说明只会以为这个键坏了
-                    runtime.record_meta(
-                        crate::i18n::text(
-                            "Ctrl+O: no collapsible reasoning block in this turn",
-                            "Ctrl+O：本轮没有可折叠的思考块",
-                        )
-                        .to_string(),
-                    )?;
                     continue;
                 }
                 if matches!(key.code, KeyCode::PageUp) {

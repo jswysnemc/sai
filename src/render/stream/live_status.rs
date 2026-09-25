@@ -22,13 +22,57 @@ impl StreamRenderer {
         status: &str,
         final_line: bool,
     ) -> Result<()> {
-        self.stop_waiting()?;
-        if !self.live_tool_status.is_active() {
-            self.end_active_stream_line()?;
-            self.finalize_reasoning_summary()?;
+        let label = self.summary.display_tool_name(name).to_string();
+        if !final_line {
+            if !self.live_tool_status.is_active() {
+                self.end_active_stream_line()?;
+                self.finalize_reasoning_summary()?;
+            }
+            self.live_tool_status.arm();
+            // 终端里用底行扫光画出进行中的工具；非终端退回单行静态状态
+            if crate::render::wait_spinner::WaitSpinner::supported() && !self.plain {
+                return self.show_tool_shimmer(&label);
+            }
+            return self.live_tool_status.write(&label, status, false);
         }
-        self.live_tool_status
-            .write(self.summary.display_tool_name(name), status, final_line)
+        let finished = crate::render::tool_event_line::tool_event_text(&label, status);
+        if let Some(spinner) = self.wait_spinner.as_ref() {
+            spinner.commit_and_shift(&finished)?;
+            self.live_tool_status.disarm();
+            if let Some(work) = self.work_status {
+                spinner.set_phase(work.localized_label());
+            }
+            return Ok(());
+        }
+        self.live_tool_status.write(&label, status, true)
+    }
+
+    /// 用底行扫光显示进行中的工具名。
+    ///
+    /// 参数:
+    /// - `label`: 工具展示标签
+    ///
+    /// 返回:
+    /// - 是否成功接上动效
+    fn show_tool_shimmer(&mut self, label: &str) -> Result<()> {
+        if self.command_preview.is_active() {
+            return self.live_tool_status.write(label, "run", false);
+        }
+        let started_at = *self
+            .work_started
+            .get_or_insert_with(crate::render::activity_animation::activity_started_at);
+        if let Some(spinner) = self.wait_spinner.as_ref() {
+            spinner.set_phase(label);
+            spinner.set_sub_phase(None);
+            return Ok(());
+        }
+        self.hide_cursor()?;
+        self.wait_spinner = Some(crate::render::wait_spinner::WaitSpinner::start_with_clock(
+            label.to_string(),
+            None,
+            started_at,
+        ));
+        Ok(())
     }
 
     /// 结束当前单行工具状态。

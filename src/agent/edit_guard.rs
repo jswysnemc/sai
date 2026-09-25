@@ -42,7 +42,7 @@ pub(super) fn ensure_edit_target_was_read(agent: &Agent, call: &ToolCall) -> Res
     }
 }
 
-/// 记录成功 read_file 调用中的全部文件目标。
+/// 记录成功 read_file 调用读取的文件。
 ///
 /// 参数:
 /// - `agent`: 当前 Agent
@@ -65,15 +65,8 @@ pub(super) fn record_successful_reads(agent: &Agent, call: &ToolCall, output: &s
     Ok(())
 }
 
-/// 提取 read_file 的单文件或批量文件路径。
+/// 提取 read_file 读取的文件路径。
 fn read_targets(args: &Value) -> Vec<PathBuf> {
-    if let Some(files) = args.get("files").and_then(Value::as_array) {
-        return files
-            .iter()
-            .filter_map(|item| item.get("path").and_then(Value::as_str))
-            .map(expand_path)
-            .collect();
-    }
     args.get("path")
         .and_then(Value::as_str)
         .map(expand_path)
@@ -86,11 +79,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn extracts_single_and_batch_targets() {
+    fn extracts_read_target() {
         let single = serde_json::json!({"path":"one.txt"});
         assert_eq!(read_targets(&single).len(), 1);
-        let batch = serde_json::json!({"files":[{"path":"a"},{"path":"b"}]});
-        assert_eq!(read_targets(&batch).len(), 2);
+        assert!(read_targets(&serde_json::json!({})).is_empty());
     }
 
     /// 门禁放行后这里会二次解析参数，必须用与门禁相同的规则，否则带残片的调用

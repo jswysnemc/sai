@@ -1,9 +1,7 @@
 use super::fs_path::expand_path;
 use super::search_process::{run_search_command, SearchRun, SEARCH_TIMEOUT_SECONDS};
 use super::{ToolRegistry, ToolSpec};
-use crate::config::AppConfig;
 use crate::i18n::text as t;
-use crate::paths::SaiPaths;
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -13,20 +11,20 @@ use tokio::process::Command;
 
 const MAX_COMMAND_OUTPUT_CHARS: usize = 20_000;
 
-pub fn register(registry: &mut ToolRegistry, config: &AppConfig, paths: &SaiPaths) {
-    register_readonly(registry, config, paths);
+pub fn register(registry: &mut ToolRegistry) {
+    register_readonly(registry);
     super::write_file::register(registry);
     super::str_replace::register(registry);
 }
 
-pub fn register_readonly(registry: &mut ToolRegistry, config: &AppConfig, paths: &SaiPaths) {
+pub fn register_readonly(registry: &mut ToolRegistry) {
     registry.register(ToolSpec::new(
         "check_os_info",
         t("Check basic read-only OS, shell, desktop session, kernel, host, and package-manager context. For concrete Linux input method issues, prefer linux_input_method_diagnose.", "查看只读基础系统信息，包括 OS、shell、桌面会话、内核、主机和包管理器上下文。排查具体 Linux 输入法问题时优先使用 linux_input_method_diagnose。"),
         json!({"type":"object","properties":{},"additionalProperties":false}),
         |_| async move { check_os_info() },
     ));
-    super::file_read::register(registry, config.clone(), paths.clone());
+    super::file_read::register(registry);
     registry.register(ToolSpec::new(
         "glob",
         t("Find files by case-insensitive glob pattern under a directory. Defaults to workspace; use ~ or /home for user files, or / for protected global search.", "在目录下按大小写不敏感 glob 模式查找文件。默认工作区；查用户文件用 ~ 或 /home，受保护的全局搜索可用 /。"),

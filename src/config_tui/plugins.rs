@@ -6,7 +6,7 @@ use crossterm::event::KeyCode;
 use crossterm::queue;
 use crossterm::style::Print;
 use crossterm::terminal::{self, Clear, ClearType};
-use std::io::{self, Write};
+use std::io;
 
 use super::form::run_form;
 use super::input::read_key;
@@ -55,6 +55,7 @@ fn draw_cli_tool_menu(stdout: &mut io::Stdout, config: &AppConfig, selected: usi
     let height = frame.height;
     let x = frame.x;
     let y = frame.y;
+    super::ui::begin_synced_frame(stdout)?;
     queue!(stdout, Clear(ClearType::All))?;
     draw_box(stdout, x, y, width, height, t("TOOLS", "助手工具"))?;
     // 表头与数据行相同缩进（数据行有两列选中条前缀）
@@ -131,7 +132,7 @@ fn draw_cli_tool_menu(stdout: &mut io::Stdout, config: &AppConfig, selected: usi
             ("q", t("back", "返回")),
         ]),
     )?;
-    stdout.flush()?;
+    super::ui::end_synced_frame(stdout)?;
     Ok(())
 }
 

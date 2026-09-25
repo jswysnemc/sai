@@ -16,6 +16,7 @@ type SidebarPinnedSectionProps = {
   onRename: (id: string, title: string) => Promise<void>;
   onDelete: (id: string, title: string) => void;
   selection: SelectionState;
+  sessionIdCounts?: ReadonlyMap<string, number>;
 };
 
 /**
@@ -24,7 +25,7 @@ type SidebarPinnedSectionProps = {
  * @param props 置顶会话和行操作
  * @returns 置顶分区
  */
-export function SidebarPinnedSection({ items, runningSessions, now, onOpenSession, onRename, onDelete, selection }: SidebarPinnedSectionProps) {
+export function SidebarPinnedSection({ items, runningSessions, now, onOpenSession, onRename, onDelete, selection, sessionIdCounts }: SidebarPinnedSectionProps) {
   const { t } = useI18n();
   const [limit, setLimit] = useState(PAGE_SIZE);
   if (!items.length) return null;
@@ -41,6 +42,7 @@ export function SidebarPinnedSection({ items, runningSessions, now, onOpenSessio
         onRename={onRename}
         onDelete={onDelete}
         selection={selection}
+        sessionIdCounts={sessionIdCounts}
       />
       {items.length > PAGE_SIZE && (
         <button type="button" className="sidebar-show-more" onClick={() => setLimit((current) => current === PAGE_SIZE ? items.length : PAGE_SIZE)}>

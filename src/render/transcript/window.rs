@@ -89,7 +89,7 @@ impl TranscriptStore {
         let frame = self.live_animation_frame();
         // 1. 【终端】【长表格】保留全部已完成行，超过预算只固定布局，不删除前缀
         let mut live = self.render_live_tail(width, options, live_cap);
-        // 1. 统计每个 cell 的行数（缓存命中时只读长度，不重新渲染）
+        // 1. 统计每个 cell 的行数。工具调用始终占自己的行，避免连续读取时整段被收起后又弹出
         let mut counts = Vec::with_capacity(self.cells.len());
         let mut gap_before = vec![false; self.cells.len()];
         let mut cell_rows = 0usize;
@@ -202,7 +202,7 @@ impl TranscriptStore {
     /// 【终端】【流式正文】渲染全部流式内容并记住长表格列宽
     /// 参数: width 为正文净宽，options 为展示选项，live_cap 为列宽可变预算
     /// 返回: 包含前置正文、表格和状态行的完整显示行
-    fn render_live_tail(
+    pub(super) fn render_live_tail(
         &mut self,
         width: usize,
         options: &TranscriptRenderOptions,
@@ -272,13 +272,9 @@ impl TranscriptStore {
                     &tool_call.arguments_preview,
                     options.tool_call_mode,
                     tool_call.edit_diff_counts,
+                    frame,
                 )
             });
-            let rendered = if frame > 0 {
-                crate::render::content_indent::animate_guide_marker(&rendered, frame)
-            } else {
-                rendered
-            };
             if !rendered.is_empty() {
                 let mut tool_lines = AnsiLine::wrap_block(&rendered, width);
                 spacing::trim_trailing_visual_blanks(&mut tool_lines);

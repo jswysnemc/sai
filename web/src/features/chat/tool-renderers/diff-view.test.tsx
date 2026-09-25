@@ -47,6 +47,8 @@ describe("DiffView unified", () => {
     const html = renderToStaticMarkup(<DiffView source={source} layout="unified" />);
     expect(html).toContain("8 行未修改内容");
     expect(html).toContain("diff-unified-hunk-fold");
+    expect(html).toContain("<button");
+    expect(html).toContain('aria-expanded="false"');
   });
 
   it("标签页只保留用户选中的文件", () => {

@@ -35,6 +35,22 @@ my-plugin/
 
 `require("format")` 加载 `format.lua`；`require("feature.format")` 加载 `feature/format.lua`。源码在加载时形成快照，之后 `require` 不会读取磁盘上修改过的文件。禁止原生库和包外模块。
 
+## 宿主功能查询
+
+`sai.host.info()` 和 `sai.host.has(name)` 在初始化和回调中都可调用，不需要额外授权。它们只回答「这个 sai 构建有没有该接口」，不回答「当前插件有没有被授权使用」。未知或空名字返回 `false`，不会因此报错；超过 64 字节的名字会失败。
+
+```lua
+local info = sai.host.info()
+-- info.api_version == 1
+-- info.features 是排序后的功能名数组，例如 "http"、"sqlite"、"scheduler"
+
+if not sai.host.has("sqlite") then
+    error("this sai build has no sqlite plugin API")
+end
+```
+
+功能名是稳定标识，不是权限字段。例如 `has("http")` 为 true 只表示可以编写 HTTP 调用；实际请求仍要清单声明来源并得到用户授权。尚未实现的能力，如主会话历史查询，会返回 false。
+
 ## 注册工具
 
 ```lua

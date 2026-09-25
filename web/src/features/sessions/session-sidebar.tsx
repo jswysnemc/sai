@@ -217,7 +217,6 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
         onOpenSession={(workspaceId, sessionId, workspaceActive, sessionActive) => void actions.openSession(workspaceId, sessionId, workspaceActive, sessionActive)}
         onRename={async (id, title) => { await actions.rename.mutateAsync({ id, title }); }}
         onDelete={(id, title) => void actions.removeWithConfirm(id, title)}
-        onOpenWorkspace={(workspaceId, active) => void actions.openWorkspace(workspaceId, active)}
         onCreateSession={(workspaceId, active) => actions.create.mutate(active ? undefined : workspaceId)}
         onCloseWorkspace={(workspaceId, name, active) => void actions.closeWorkspace(workspaceId, name, active)}
         onAddWorkspace={() => setBrowserOpen(true)}
@@ -233,6 +232,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
             onSelectFile={onSelectFile}
             onClearFile={onClearFile}
             showHeading={false}
+            workspaceKey={workspaces.find((workspace) => workspace.active)?.workspace_id}
             workspaceLabel={workspaces.find((workspace) => workspace.active)?.workspace_name}
             searchPlaceholder={t("Search files...", "搜索文件...")}
           />

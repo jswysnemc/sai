@@ -5,6 +5,8 @@ import { SessionRow } from "./session-row";
 import { SessionRenameDialog } from "./session-rename-dialog";
 import { SidebarSessionContextMenu } from "./sidebar-session-context-menu";
 import { sessionActivityKey } from "./session-running-state";
+import { SessionWorkspaceHovercard } from "./session-workspace-hovercard";
+import { countSessionIds, matchesStoredSessionId, sidebarSessionKey } from "./sidebar-session-key";
 import type { SidebarSessionRef } from "./sidebar-session-model";
 import type { useSessionSelection } from "./use-session-selection";
 
@@ -20,6 +22,8 @@ type SidebarFlatSessionsProps = {
   onRename: (id: string, title: string) => Promise<void>;
   onDelete: (id: string, title: string) => void;
   selection: SelectionState;
+  /** 会话 ID 在全部工作区中的出现次数，用来识别会重叠的裸 ID */
+  sessionIdCounts?: ReadonlyMap<string, number>;
 };
 
 /**
@@ -28,26 +32,36 @@ type SidebarFlatSessionsProps = {
  * @param props 会话、运行状态和操作回调
  * @returns 会话行列表
  */
-export function SidebarFlatSessions({ items, runningSessions, now, archived = false, empty, onOpenSession, onRename, onDelete, selection }: SidebarFlatSessionsProps) {
+export function SidebarFlatSessions({ items, runningSessions, now, archived = false, empty, onOpenSession, onRename, onDelete, selection, sessionIdCounts }: SidebarFlatSessionsProps) {
+  const counts = sessionIdCounts ?? countSessionIds(items.map((item) => item.session.id));
   const index = useQuery({ queryKey: ["session-sidebar"], queryFn: () => api.sessionSidebar.read() });
   const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null);
   const [menu, setMenu] = useState<{ item: SidebarSessionRef; x: number; y: number } | null>(null);
   if (!items.length) return <p className="session-list-empty">{empty}</p>;
   return (
     <div className="sidebar-flat-sessions">
-      {items.map((item) => (
+      {items.map((item) => {
+        const sameIdCount = counts.get(item.session.id) ?? 1;
+        const indexKey = sidebarSessionKey(item.workspaceId, item.session.id);
+        const unread = Object.keys(index.data?.unread ?? {}).some((id) =>
+          matchesStoredSessionId(id, item.workspaceId, item.session.id, sameIdCount)
+        );
+        return (
+        <SessionWorkspaceHovercard key={indexKey} name={item.workspaceName} path={item.workspacePath}>
         <SessionRow
-          key={item.session.id}
           session={{ ...item.session, active: item.workspaceActive && item.session.active }}
           loaded={Boolean(item.session.loaded)}
           running={runningSessions.has(sessionActivityKey(item.workspaceId, item.session.id))}
           holder={item.session.holder}
-          unread={Boolean(index.data?.unread[item.session.id])}
+          unread={unread}
           now={now}
           selectable={selection.selecting && item.workspaceActive}
           checked={selection.selected.has(item.session.id)}
           canSelect={item.workspaceActive}
           canManage={true}
+          indexKey={indexKey}
+          workspaceId={item.workspaceId}
+          sameIdCount={sameIdCount}
           onOpen={() => onOpenSession(item.workspaceId, item.session.id, item.workspaceActive, item.session.active)}
           onToggleChecked={() => selection.toggleSelected(item.session.id)}
           onStartRename={() => setRenaming({ id: item.session.id, title: item.session.title })}
@@ -58,11 +72,15 @@ export function SidebarFlatSessions({ items, runningSessions, now, archived = fa
             setMenu({ item, x: event.clientX, y: event.clientY });
           }}
         />
-      ))}
+        </SessionWorkspaceHovercard>
+        );
+      })}
       {renaming && <SessionRenameDialog key={renaming.id} session={renaming} onRename={onRename} onClose={() => setRenaming(null)} />}
       {menu && (
         <SidebarSessionContextMenu
           sessionId={menu.item.session.id}
+          workspaceId={menu.item.workspaceId}
+          sameIdCount={counts.get(menu.item.session.id) ?? 1}
           title={menu.item.session.title}
           workspacePath={menu.item.workspacePath}
           x={menu.x}

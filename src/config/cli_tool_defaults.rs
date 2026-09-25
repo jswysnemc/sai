@@ -20,17 +20,16 @@ impl Default for PluginsConfig {
 }
 
 impl Default for VisionPluginConfig {
-    /// 构造视觉理解工具默认配置。
+    /// 构造插件视觉服务默认配置。
     ///
     /// 参数:
     /// - 无
     ///
     /// 返回:
-    /// - 当前模型优先的默认视觉配置
+    /// - 默认沿用当前供应商模型的视觉配置
     fn default() -> Self {
         Self {
             enabled: default_true(),
-            prefer_current_multimodal_model: default_true(),
             vision_provider_id: String::new(),
             vision_model: String::new(),
             preview_with_chafa: default_true(),

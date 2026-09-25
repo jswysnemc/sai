@@ -27,6 +27,7 @@ pub(crate) fn edit_knowledge_base(
 ) -> Result<()> {
     let mut selected = 0usize;
     let mut status = String::new();
+    let mut search = super::search::ListSearch::default();
     // 1. 【知识库界面】【按需刷新】仅在进入或修改时查询插件，光标移动不重新加载数据
     let mut files = Vec::new();
     let mut stats = None;
@@ -62,31 +63,55 @@ pub(crate) fn edit_knowledge_base(
             "! {}",
             t("Clear all knowledge base files", "清空全部知识库文件")
         ));
+        let shown = files
+            .iter()
+            .enumerate()
+            .filter(|(_, file)| search.matches(&file.name))
+            .map(|(index, _)| index)
+            .collect::<Vec<_>>();
         if files.is_empty() {
             options.push(format!("  ({})", t("no files yet", "暂无文件")));
+        } else if shown.is_empty() {
+            options.push(format!("  ({})", t("no matches", "没有匹配")));
         } else {
-            for file in &files {
+            for index in &shown {
+                let file = &files[*index];
                 options.push(format!("  {}  ({} B)", file.name, file.size_bytes));
             }
         }
         selected = selected.min(options.len().saturating_sub(1));
-        let help = if status.is_empty() {
-            // Enter 只作用于上方两个操作项，文件行上不做事，避免「回车即删除」
-            super::theme::help_line(&[
-                ("Enter", t("run highlighted action", "执行高亮操作")),
-                ("a", t("add", "添加")),
-                ("d", t("delete file", "删除文件")),
-                ("r", t("refresh", "刷新")),
-                ("q", t("back", "返回")),
-            ])
-        } else {
-            status.clone()
-        };
+        let help = search.help().unwrap_or_else(|| {
+            if status.is_empty() {
+                // Enter 只作用于上方两个操作项，文件行上不做事，避免「回车即删除」
+                super::theme::help_line(&[
+                    ("/", t("search", "搜索")),
+                    ("a", t("add", "添加")),
+                    ("d", t("delete file", "删除文件")),
+                    ("r", t("refresh", "刷新")),
+                    ("q", t("back", "返回")),
+                ])
+            } else {
+                status.clone()
+            }
+        });
         let title = format!("{} · {}", t(" KNOWLEDGE BASE ", " 知识库管理 "), summary);
         draw_menu(stdout, &title, &options, selected, &help)?;
 
-        match read_key()? {
-            KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
+        let key = read_key()?;
+        match search.handle(key) {
+            super::search::SearchEffect::Updated => {
+                selected = 0;
+                continue;
+            }
+            super::search::SearchEffect::Closed => continue,
+            super::search::SearchEffect::Passthrough => {}
+        }
+        let file_at = selected
+            .checked_sub(2)
+            .filter(|_| !shown.is_empty() || files.is_empty())
+            .and_then(|index| shown.get(index).copied());
+        match key {
+            KeyCode::Esc | KeyCode::Char('q') if !search.editing => return Ok(()),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
             KeyCode::Char('r') => {
@@ -116,8 +141,10 @@ pub(crate) fn edit_knowledge_base(
             }
             // 文件行上只认 d：Enter 在这里删除文件与其余界面「Enter 打开/执行」的
             // 语义冲突，且删除同时丢弃已索引向量，无法恢复
-            KeyCode::Char('d') if selected >= 2 && !files.is_empty() => {
-                let index = selected - 2;
+            KeyCode::Char('d') if !files.is_empty() => {
+                let Some(index) = file_at else {
+                    continue;
+                };
                 if let Some(file) = files.get(index) {
                     let name = file.name.clone();
                     match super::ui::confirm_delete(

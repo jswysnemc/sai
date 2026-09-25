@@ -26,6 +26,7 @@ pub fn run(paths: &SaiPaths) -> Result<()> {
 
 struct TerminalSession {
     stdout: io::Stdout,
+    _ime: super::ime::ImeGuard,
 }
 
 impl TerminalSession {
@@ -45,7 +46,11 @@ impl TerminalSession {
             let _ = terminal::disable_raw_mode();
             return Err(err.into());
         }
-        Ok(Self { stdout })
+        // 输入法开着时 `/` 和方向键到不了界面。导航期间关掉，文本框里再打开。
+        Ok(Self {
+            stdout,
+            _ime: super::ime::ImeGuard::suspend(),
+        })
     }
 
     fn run(mut self, paths: &SaiPaths, mut config: AppConfig) -> Result<()> {
@@ -63,7 +68,12 @@ impl TerminalSession {
 
 impl Drop for TerminalSession {
     fn drop(&mut self) {
-        let _ = execute!(self.stdout, Show, LeaveAlternateScreen);
+        let _ = execute!(
+            self.stdout,
+            Show,
+            LeaveAlternateScreen,
+            crossterm::style::Print("\u{1b}[?2026l")
+        );
         let _ = terminal::disable_raw_mode();
     }
 }

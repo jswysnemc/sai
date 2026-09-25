@@ -17,38 +17,9 @@ enum ToolBackend {
     LuaCommand { plugin_id: String, name: String },
 }
 
-/// 工具希望在下一次模型请求中附加的图片。
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ToolModelAttachment {
-    pub(crate) image_url: String,
-    pub(crate) source: String,
-    pub(crate) prompt: String,
-}
+pub use super::model_attachment::ToolModelAttachment;
 
-impl ToolModelAttachment {
-    /// 创建模型图片附件。
-    ///
-    /// 参数:
-    /// - `image_url`: 图片 data URL 或远程 URL
-    /// - `source`: 图片来源路径或标识
-    /// - `prompt`: 当前模型分析图片时使用的提示
-    ///
-    /// 返回:
-    /// - 模型图片附件
-    pub(crate) fn new(
-        image_url: impl Into<String>,
-        source: impl Into<String>,
-        prompt: impl Into<String>,
-    ) -> Self {
-        Self {
-            image_url: image_url.into(),
-            source: source.into(),
-            prompt: prompt.into(),
-        }
-    }
-}
-
-/// 工具文本结果和仅供下一次模型请求使用的附件。
+/// 工具文本结果和需要以图片形式交给模型的附件。
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ToolOutput {
     pub(crate) content: String,
@@ -70,7 +41,7 @@ impl ToolOutput {
         }
     }
 
-    /// 为工具结果附加下一次模型请求使用的图片。
+    /// 为工具结果附加需要交给模型查看的图片。
     ///
     /// 参数:
     /// - `attachments`: 图片附件列表

@@ -15,6 +15,19 @@ use super::theme::{
     CORNER_TOP_LEFT, CORNER_TOP_RIGHT, DIM, LINE_HORIZONTAL, LINE_VERTICAL, MUTED, RESET,
 };
 
+/// 开始一帧同步更新。支持的终端会等整帧画完再提交，清屏不再闪一下。
+pub(crate) fn begin_synced_frame(stdout: &mut impl Write) -> Result<()> {
+    queue!(stdout, Print("\u{1b}[?2026h"))?;
+    Ok(())
+}
+
+/// 结束同步更新并一次性刷出本帧。
+pub(crate) fn end_synced_frame(stdout: &mut impl Write) -> Result<()> {
+    queue!(stdout, Print("\u{1b}[?2026l"))?;
+    stdout.flush()?;
+    Ok(())
+}
+
 /// 绘制近全屏菜单（可选右侧说明栏）。
 ///
 /// 参数:
@@ -61,6 +74,7 @@ pub(crate) fn draw_menu_with_details(
     let (cols, rows) = terminal::size()?;
     let frame = full_frame(cols, rows);
 
+    begin_synced_frame(stdout)?;
     queue!(stdout, Clear(ClearType::All))?;
     draw_box(stdout, frame.x, frame.y, frame.width, frame.height, title)?;
 
@@ -122,8 +136,7 @@ pub(crate) fn draw_menu_with_details(
     }
 
     draw_status_bar(stdout, &frame, &menu_help(status))?;
-    stdout.flush()?;
-    Ok(())
+    end_synced_frame(stdout)
 }
 
 /// 组装菜单底部帮助条。
@@ -217,19 +230,24 @@ fn fit_status_bar(content: &str, max: usize) -> String {
     if segments.len() < 3 {
         return truncate_ansi(content, max);
     }
-    let last = segments[segments.len() - 1];
-    let first = segments[0];
-    // 末段优先：先只留首段 + 末段，仍放不下就只留末段
-    for candidate in [
-        format!("{first}{separator}{last}"),
-        format!("{separator}{last}"),
-        last.to_string(),
-    ] {
+    let last = segments.len() - 1;
+    // 从末尾往前逐段丢掉中间键，尽量留下靠前的键（搜索、移动），末段返回键始终保留
+    for keep in (1..last).rev() {
+        let mut candidate = segments[..keep].join(&separator);
+        candidate.push_str(&separator);
+        candidate.push_str(segments[last]);
         if ansi_width(&candidate) <= max {
             return candidate;
         }
     }
-    truncate_ansi(last, max)
+    let first_and_last = format!("{}{separator}{}", segments[0], segments[last]);
+    if ansi_width(&first_and_last) <= max {
+        return first_and_last;
+    }
+    if ansi_width(segments[last]) <= max {
+        return segments[last].to_string();
+    }
+    truncate_ansi(segments[last], max)
 }
 
 /// 在框内绘制一条弱化横向分隔线（两端与边框相接）。
@@ -575,6 +593,7 @@ pub(crate) fn message(stdout: &mut io::Stdout, text: &str) -> Result<()> {
     let max_offset = lines.len().saturating_sub(page);
     let mut offset = 0usize;
     loop {
+        begin_synced_frame(stdout)?;
         queue!(stdout, Clear(ClearType::All))?;
         draw_box(
             stdout,
@@ -609,7 +628,7 @@ pub(crate) fn message(stdout: &mut io::Stdout, text: &str) -> Result<()> {
             )
         };
         draw_status_bar(stdout, &frame, &status)?;
-        stdout.flush()?;
+        end_synced_frame(stdout)?;
         let key = read_key()?;
         let next = match key {
             KeyCode::Up | KeyCode::Char('k') => offset.saturating_sub(1),

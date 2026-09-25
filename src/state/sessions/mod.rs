@@ -21,7 +21,10 @@ pub use repository::{
     rename_session, session_scope_dir, state_dir_for_session, switch_session,
     switch_session_located, title_from_message_public, touch_session_with_message,
 };
-pub use sidebar_index::{load_sidebar_index, patch_sidebar_index, SidebarGroup, SidebarIndex, SidebarIndexPatch};
+pub use sidebar_index::{
+    load_sidebar_index, patch_sidebar_index, sidebar_session_key, SidebarGroup, SidebarIndex,
+    SidebarIndexPatch,
+};
 pub use workspace::{current_workspace_id, workspace_id_for_path};
 pub use workspace_repository::{
     active_session_id_for_workspace, delete_sessions_for_workspace, ensure_workspace_session,

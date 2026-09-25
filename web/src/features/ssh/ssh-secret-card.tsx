@@ -55,6 +55,9 @@ export function SshSecretCard({ request, resolved = false, active = true }: SshS
   };
 
   const interactive = !done && active;
+  // #region agent log
+  fetch("http://127.0.0.1:7368/ingest/77461c80-9be3-44e4-ac14-3725f6920049",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"ff618c"},body:JSON.stringify({sessionId:"ff618c",hypothesisId:"D",location:"ssh-secret-card.tsx:render",message:"ssh secret card render",data:{kind:request.kind,host:request.host_label,active,resolved,done,interactive,requestId:request.id},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 
   return (
     <div className={`ssh-secret-card${done ? " is-done" : ""}`}>

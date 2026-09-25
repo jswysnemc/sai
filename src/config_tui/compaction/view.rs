@@ -10,7 +10,7 @@ use crossterm::{
     style::Print,
     terminal::{self, Clear, ClearType},
 };
-use std::io::{self, Write};
+use std::io;
 
 /// 【上下文】【策略预览】展示当前窗口与配置作用范围
 pub(super) struct PreviewContext {
@@ -246,6 +246,7 @@ fn progress_bar(used: usize, trigger: usize, window: usize, width: usize) -> Str
 pub(super) fn draw(stdout: &mut io::Stdout, draft: &Draft, context: &PreviewContext) -> Result<()> {
     let (cols, rows) = terminal::size()?;
     if cols < 16 || rows < 6 {
+        ui::begin_synced_frame(stdout)?;
         queue!(
             stdout,
             Clear(ClearType::All),
@@ -255,7 +256,7 @@ pub(super) fn draw(stdout: &mut io::Stdout, draft: &Draft, context: &PreviewCont
                 cols.saturating_sub(1) as usize
             ))
         )?;
-        stdout.flush()?;
+        ui::end_synced_frame(stdout)?;
         return Ok(());
     }
     let width = cols.saturating_sub(2).clamp(1, 86);
@@ -268,6 +269,7 @@ pub(super) fn draw(stdout: &mut io::Stdout, draft: &Draft, context: &PreviewCont
         width,
         height,
     };
+    ui::begin_synced_frame(stdout)?;
     queue!(stdout, Clear(ClearType::All))?;
     ui::draw_box(
         stdout,
@@ -326,6 +328,6 @@ pub(super) fn draw(stdout: &mut io::Stdout, draft: &Draft, context: &PreviewCont
         ])
     };
     ui::draw_status_bar(stdout, &frame, &help)?;
-    stdout.flush()?;
+    ui::end_synced_frame(stdout)?;
     Ok(())
 }

@@ -101,16 +101,22 @@ export function parseDiff(source: string): DiffFile[] {
           hunkNewStart = newNumber ?? 1;
         }
       }
-      const skippedOld = hunkOldStart === null
-        ? 0
-        : Math.max(hunkOldStart - (oldNumber ?? 1), 0);
-      const skippedNew = hunkNewStart === null
-        ? 0
-        : Math.max(hunkNewStart - (newNumber ?? 1), 0);
+      const nextOld = oldNumber ?? 1;
+      const nextNew = newNumber ?? 1;
+      const skippedOld = hunkOldStart === null ? 0 : Math.max(hunkOldStart - nextOld, 0);
+      const skippedNew = hunkNewStart === null ? 0 : Math.max(hunkNewStart - nextNew, 0);
       const foldedCount = Math.max(skippedOld, skippedNew);
-      // 保留 hunk 边界；如果前后区段之间有省略行，把数量传给统一视图渲染折叠条
+      // 保留 hunk 边界；省略行记下新文件中的行号，折叠条点开后按这个区间回填
       if (file.lines.length > 0 || foldedCount > 0) {
-        file.lines.push({ kind: "hunk", text: line, foldedCount: foldedCount || undefined });
+        file.lines.push({
+          kind: "hunk",
+          text: line,
+          foldedCount: foldedCount || undefined,
+          foldStart: skippedNew > 0 ? nextNew : undefined,
+          foldEnd: skippedNew > 0 && hunkNewStart !== null ? hunkNewStart - 1 : undefined,
+          foldOldStart: skippedOld > 0 ? nextOld : undefined,
+          foldOldEnd: skippedOld > 0 && hunkOldStart !== null ? hunkOldStart - 1 : undefined
+        });
       }
       oldNumber = hunkOldStart ?? oldNumber ?? 1;
       newNumber = hunkNewStart ?? newNumber ?? 1;

@@ -15,7 +15,7 @@ const COMMAND_PREVIEW_LINES: usize = 5;
 /// 返回:
 /// - 折叠时的行数上限；展开或处于展开渲染上下文时为 None
 fn preview_line_limit(expanded: bool) -> Option<usize> {
-    if expanded || crate::render::render_expand::expand_override() {
+    if crate::render::render_expand::resolve_expanded(expanded) {
         None
     } else {
         Some(COMMAND_PREVIEW_LINES)

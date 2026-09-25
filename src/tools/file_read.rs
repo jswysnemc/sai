@@ -1,587 +1,149 @@
-use super::fs_path::{expand_path, fs_error};
-use super::{ToolModelAttachment, ToolOutput, ToolRegistry, ToolSpec};
-use crate::config::AppConfig;
+//! read_file 工具。
+//!
+//! 读取语义参考 CometixCode 的 Read：文本按 `行号<TAB>正文` 返回，整文件读取受
+//! 256KB 与 token 上限约束；图片经缩放压缩后直接交给当前多模态模型；
+//! 另支持 Jupyter notebook 与 PDF 分页。目录分页是 sai 额外保留的能力。
+
+use super::{ToolOutput, ToolRegistry, ToolSpec};
 use crate::i18n::text as t;
-use crate::paths::SaiPaths;
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
-use std::io::{BufRead, BufReader, Read};
-use std::path::{Path, PathBuf};
 
+mod directory;
+mod guard;
 mod image;
+mod image_resize;
+mod limits;
+mod notebook;
+mod pdf;
+mod request;
+mod text;
 
-const MAX_READ_BYTES: usize = 50 * 1024;
-const MAX_BATCH_BYTES: usize = 100 * 1024;
-const MAX_BATCH_FILES: usize = 10;
-const MAX_READ_LINES: usize = 2_000;
-const MAX_LINE_CHARS: usize = 2_000;
+use request::ReadRequest;
 
-pub fn register(registry: &mut ToolRegistry, config: AppConfig, paths: SaiPaths) {
+/// 注册 read_file 工具。
+///
+/// 参数:
+/// - `registry`: 工具注册表
+///
+/// 返回:
+/// - 无
+pub fn register(registry: &mut ToolRegistry) {
     registry.register(ToolSpec::new_with_output(
         "read_file",
         t(
-            "Read one or more UTF-8 text files by 1-based line offset, list directory pages, or load a local image. When the current model is multimodal the image is attached for it to see directly; otherwise a configured vision model describes it. Use path for one target or files for batch reads.",
-            "按 1 起始行号读取一个或多个 UTF-8 文本文件、分页列出目录，或加载本地图片。当前模型支持多模态时图片会直接交给该模型查看，否则才用备用视觉模型生成描述。单个目标使用 path，批量读取使用 files。",
+            "Read a file from the local filesystem. Text is returned with line numbers (line number, tab, content); images are shown directly to you; PDF pages are rendered as images; Jupyter notebooks return every cell with outputs; a directory returns a listing. Without offset/limit the whole file is read (text files over 256KB must be read in ranges).",
+            "读取本地文件。文本按“行号、制表符、正文”返回；图片直接交给你查看；PDF 页面渲染为图片；Jupyter notebook 返回全部单元格及输出；目录返回列表。未指定 offset/limit 时读取整个文件（超过 256KB 的文本需分段读取）。",
         ),
         json!({
             "type": "object",
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": t("Single file or directory path.", "单个文件或目录路径。")
+                    "description": t("Absolute path, or a path relative to the workspace, of the file to read.", "要读取的文件的绝对路径或相对工作区路径。")
                 },
                 "offset": {
                     "type": "integer",
-                    "description": t("Starting line or directory entry, 1-based. Defaults to 1.", "起始行或目录项，1 起始。默认 1。")
+                    "description": t("The line number to start reading from (1-based). Only provide if the file is too large to read at once.", "开始读取的行号（从 1 开始）。仅在文件过大无法一次读完时提供。")
                 },
                 "limit": {
                     "type": "integer",
-                    "description": t("Maximum lines or directory entries. Defaults to 2000.", "最多读取行数或目录项数量。默认 2000。")
+                    "description": t("The number of lines to read. Only provide if the file is too large to read at once.", "要读取的行数。仅在文件过大无法一次读完时提供。")
                 },
-                "image_prompt": {
+                "pages": {
                     "type": "string",
-                    "description": t("Optional prompt used when path points to a local image.", "当 path 指向本地图片时使用的可选读图提示。")
-                },
-                "files": {
-                    "type": "array",
-                    "description": t("Batch file or directory pages. Each item supports path, offset, and limit.", "批量文件或目录分页。每一项支持 path、offset、limit。"),
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "path": {"type": "string", "description": t("File or directory path.", "文件或目录路径。")},
-                            "offset": {"type": "integer", "description": t("Starting line or directory entry, 1-based.", "起始行或目录项，1 起始。")},
-                            "limit": {"type": "integer", "description": t("Maximum lines or directory entries.", "最多读取行数或目录项数量。")},
-                            "image_prompt": {"type": "string", "description": t("Optional prompt used when path points to a local image.", "当 path 指向本地图片时使用的可选读图提示。")}
-                        },
-                        "required": ["path"],
-                        "additionalProperties": false
-                    },
-                    "maxItems": MAX_BATCH_FILES
+                    "description": t("Page range for PDF files (e.g., \"1-5\", \"3\", \"10-20\"). Only applicable to PDF files. Maximum 20 pages per request.", "PDF 页码范围（如 \"1-5\"、\"3\"、\"10-20\"）。仅适用于 PDF，每次最多 20 页。")
                 }
             },
+            "required": ["path"],
             "additionalProperties": false
         }),
-        move |args| {
-            let config = config.clone();
-            let paths = paths.clone();
-            async move { read_file(args, config, paths).await }
-        },
+        |args| async move { read_file(args).await },
     ));
 }
 
-/// 读取单个或批量文件内容。
+/// 按文件类型分派读取。
+///
+/// 1. 校验 pages、设备文件与二进制扩展名
+/// 2. 目录返回列表，缺失文件尝试截图备选路径并给出建议
+/// 3. notebook、图片、PDF 与文本分别走各自的读取器
 ///
 /// 参数:
-/// - `args`: 工具参数，支持 path 或 files
-/// - `config`: 应用配置
-/// - `paths`: Sai 路径
+/// - `args`: 工具参数
 ///
 /// 返回:
-/// - JSON 格式读取结果
-async fn read_file(args: Value, config: AppConfig, paths: SaiPaths) -> Result<ToolOutput> {
-    let accept_model_attachments = args
-        .get("_sai_model_attachments")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    if let Some(files) = args.get("files") {
-        return read_files(files, &config, &paths, accept_model_attachments).await;
+/// - 模型可见文本与可选图片附件
+async fn read_file(args: Value) -> Result<ToolOutput> {
+    let mut request = ReadRequest::from_value(&args)?;
+    if let Some(pages) = request.pages.as_deref() {
+        pdf::validate_pages(pages)?;
     }
-    let request = ReadRequest::from_value(&args, accept_model_attachments)?;
-    let page = read_page(&request, MAX_READ_BYTES, &config, &paths).await?;
-    Ok(ToolOutput::text(serde_json::to_string_pretty(&page.value)?)
-        .with_model_attachments(page.model_attachments))
-}
-
-/// 批量读取多个文件或目录分页。
-///
-/// 参数:
-/// - `files`: 批量读取项
-/// - `config`: 应用配置
-/// - `paths`: Sai 路径
-///
-/// 返回:
-/// - JSON 格式批量读取结果
-async fn read_files(
-    files: &Value,
-    config: &AppConfig,
-    paths: &SaiPaths,
-    accept_model_attachments: bool,
-) -> Result<ToolOutput> {
-    let Some(items) = files.as_array() else {
-        bail!("files must be an array")
+    if guard::is_blocked_device_path(&request.path) {
+        bail!(
+            "Cannot read '{}': this device file would block or produce infinite output.",
+            request.raw_path
+        )
+    }
+    let extension = request.extension();
+    if guard::has_binary_extension(&extension)
+        && extension != "pdf"
+        && !image::is_image_extension(&extension)
+    {
+        bail!(
+            "This tool cannot read binary files. The file appears to be a binary .{extension} file. Please use appropriate tools for binary file analysis."
+        )
+    }
+    // 2. 路径不存在时先试 macOS 截图文件名的空格变体，再给出定位建议
+    let metadata = match std::fs::metadata(&request.path) {
+        Ok(metadata) => metadata,
+        Err(error) => match guard::alternate_screenshot_path(&request.path).and_then(|alternate| {
+            std::fs::metadata(&alternate)
+                .ok()
+                .map(|meta| (alternate, meta))
+        }) {
+            Some((alternate, metadata)) => {
+                request.path = alternate;
+                metadata
+            }
+            None => return Err(guard::missing_file_error(&request.path, &error)),
+        },
     };
-    if items.is_empty() {
-        bail!("files must not be empty")
+    if metadata.is_dir() {
+        return directory::read_directory(&request.path, request.offset, request.limit)
+            .map(ToolOutput::text);
     }
-    if items.len() > MAX_BATCH_FILES {
-        bail!("files contains too many items: max {MAX_BATCH_FILES}")
-    }
-    let mut used_bytes = 0usize;
-    let mut results = Vec::new();
-    let mut model_attachments = Vec::new();
-    for item in items {
-        if used_bytes >= MAX_BATCH_BYTES {
-            results.push(json!({
-                "ok": false,
-                "type": "error",
-                "path": item.get("path").and_then(Value::as_str).unwrap_or_default(),
-                "error": "batch output byte limit reached before reading this item",
-            }));
-            continue;
-        }
-        let remaining = MAX_BATCH_BYTES
-            .saturating_sub(used_bytes)
-            .min(MAX_READ_BYTES);
-        let result = match ReadRequest::from_value(item, accept_model_attachments) {
-            Ok(request) => match read_page(&request, remaining, config, paths).await {
-                Ok(page) => {
-                    used_bytes += page.value.to_string().len();
-                    model_attachments.extend(page.model_attachments);
-                    page.value
-                }
-                Err(err) => json!({
-                    "ok": false,
-                    "type": "error",
-                    "path": item.get("path").and_then(Value::as_str).unwrap_or_default(),
-                    "error": err.to_string(),
-                }),
-            },
-            Err(err) => json!({
-                "ok": false,
-                "type": "error",
-                "path": item.get("path").and_then(Value::as_str).unwrap_or_default(),
-                "error": err.to_string(),
-            }),
-        };
-        results.push(result);
-    }
-    Ok(ToolOutput::text(serde_json::to_string_pretty(&json!({
-        "type": "multi-text-page",
-        "count": results.len(),
-        "max_batch_bytes": MAX_BATCH_BYTES,
-        "results": results,
-    }))?)
-    .with_model_attachments(model_attachments))
-}
-
-pub(super) struct ReadRequest {
-    pub(super) path: PathBuf,
-    pub(super) offset: usize,
-    pub(super) limit: usize,
-    pub(super) image_prompt: Option<String>,
-    pub(super) accept_model_attachment: bool,
-}
-
-/// 单个读取页面及其下一次模型请求附件。
-pub(super) struct ReadPage {
-    pub(super) value: Value,
-    pub(super) model_attachments: Vec<ToolModelAttachment>,
-}
-
-impl ReadPage {
-    /// 创建不包含模型附件的普通读取页面。
-    ///
-    /// 参数:
-    /// - `value`: 工具可见 JSON 值
-    ///
-    /// 返回:
-    /// - 普通读取页面
-    pub(super) fn text(value: Value) -> Self {
-        Self {
-            value,
-            model_attachments: Vec::new(),
-        }
-    }
-}
-
-impl ReadRequest {
-    /// 从 JSON 参数解析读取请求。
-    ///
-    /// 参数:
-    /// - `args`: 单个读取请求参数
-    ///
-    /// 返回:
-    /// - 读取请求
-    fn from_value(args: &Value, accept_model_attachment: bool) -> Result<Self> {
-        Ok(Self {
-            path: path_arg(args, "path")?,
-            offset: args
-                .get("offset")
-                .and_then(Value::as_u64)
-                .unwrap_or(1)
-                .max(1) as usize,
-            limit: args
-                .get("limit")
-                .and_then(Value::as_u64)
-                .unwrap_or(MAX_READ_LINES as u64)
-                .clamp(1, MAX_READ_LINES as u64) as usize,
-            image_prompt: args
-                .get("image_prompt")
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(ToString::to_string),
-            accept_model_attachment,
-        })
-    }
-}
-
-/// 读取一个路径的分页内容。
-///
-/// 参数:
-/// - `request`: 读取请求
-/// - `byte_budget`: 本次读取最大字节预算
-/// - `config`: 应用配置
-/// - `paths`: Sai 路径
-///
-/// 返回:
-/// - JSON 值形式的分页内容
-async fn read_page(
-    request: &ReadRequest,
-    byte_budget: usize,
-    config: &AppConfig,
-    paths: &SaiPaths,
-) -> Result<ReadPage> {
-    if request.path.is_dir() {
-        return read_directory_page(request).map(ReadPage::text);
-    }
-    // 路径不存在时补上展开后的绝对路径，模型才能判断相对路径拼到了哪里
-    let metadata = std::fs::metadata(&request.path)
-        .map_err(|error| fs_error("read file", &request.path, &error))?;
     if !metadata.is_file() {
         bail!(
             "not a regular file or directory: {}",
             request.path.display()
         )
     }
-    if is_image_file(&request.path) {
-        return image::read_image_page(request, config, paths).await;
+    // 3. 按扩展名分派
+    match extension.as_str() {
+        "ipynb" => notebook::read_notebook(&request.path),
+        "pdf" => pdf::read_pdf(&request.path, request.pages.as_deref()).await,
+        ext if image::is_image_extension(ext) => image::read_image(&request.path),
+        _ => read_text(&request, &extension),
     }
-    ensure_not_binary_file(&request.path)?;
-    read_text_page(request, byte_budget).map(ReadPage::text)
 }
 
-/// 判断路径是否为常见图片文件。
-///
-/// 参数:
-/// - `path`: 文件路径
-///
-/// 返回:
-/// - 是否为图片文件
-fn is_image_file(path: &Path) -> bool {
-    // 与 vision::mime_from_path 保持同一扩展名集合：bmp 等多模态管线不支持的
-    // 格式一旦走进图片分支，每次读取都会报 unsupported extension，模型反复重试
-    matches!(
-        path.extension()
-            .and_then(|value| value.to_str())
-            .map(str::to_ascii_lowercase)
-            .as_deref(),
-        Some("png" | "jpg" | "jpeg" | "webp" | "gif")
-    )
-}
-
-/// 读取目录分页。
+/// 读取文本文件并加上行号。
 ///
 /// 参数:
 /// - `request`: 读取请求
+/// - `extension`: 小写扩展名
 ///
 /// 返回:
-/// - 目录分页 JSON
-fn read_directory_page(request: &ReadRequest) -> Result<Value> {
-    let mut entries = Vec::new();
-    let dir = std::fs::read_dir(&request.path)
-        .map_err(|error| fs_error("list directory", &request.path, &error))?;
-    for entry in dir {
-        let entry = entry.map_err(|error| fs_error("list directory", &request.path, &error))?;
-        let suffix = if entry.file_type()?.is_dir() { "/" } else { "" };
-        entries.push(format!("{}{}", entry.file_name().to_string_lossy(), suffix));
-    }
-    entries.sort();
-    let start = request.offset.saturating_sub(1);
-    let selected = entries
-        .iter()
-        .skip(start)
-        .take(request.limit)
-        .cloned()
-        .collect::<Vec<_>>();
-    let next = (start + selected.len() < entries.len()).then_some(request.offset + selected.len());
-    Ok(json!({
-        "type": "directory-page",
-        "path": request.path.display().to_string(),
-        "offset": request.offset,
-        "limit": request.limit,
-        "entries": selected,
-        "truncated": next.is_some(),
-        "next": next,
-    }))
-}
-
-/// 读取文本文件分页。
-///
-/// 参数:
-/// - `request`: 读取请求
-/// - `byte_budget`: 本次读取最大字节预算
-///
-/// 返回:
-/// - 文本分页 JSON
-fn read_text_page(request: &ReadRequest, byte_budget: usize) -> Result<Value> {
-    let file = std::fs::File::open(&request.path)
-        .map_err(|error| fs_error("read file", &request.path, &error))?;
-    let reader = BufReader::new(file);
-    let mut lines = Vec::new();
-    let mut bytes = 0usize;
-    let mut next = None;
-    for (index, line) in reader.lines().enumerate() {
-        let line_number = index + 1;
-        if line_number < request.offset {
-            continue;
-        }
-        if lines.len() >= request.limit || bytes >= byte_budget {
-            next = Some(line_number);
-            break;
-        }
-        let mut line = line?;
-        if line.chars().count() > MAX_LINE_CHARS {
-            line = format!(
-                "{}... (line truncated to {MAX_LINE_CHARS} chars)",
-                line.chars().take(MAX_LINE_CHARS).collect::<String>()
-            );
-        }
-        let rendered = format!("{line_number}: {line}");
-        bytes += rendered.len() + 1;
-        if bytes > byte_budget {
-            next = Some(line_number);
-            break;
-        }
-        lines.push(rendered);
-    }
-    if lines.is_empty() && request.offset != 1 {
-        bail!("offset {} is out of range", request.offset)
-    }
-    Ok(json!({
-        "type": "text-page",
-        "path": request.path.display().to_string(),
-        "offset": request.offset,
-        "limit": request.limit,
-        "content": lines.join("\n"),
-        "truncated": next.is_some(),
-        "next": next,
-    }))
-}
-
-/// 检查文件是否看起来是二进制文件。
-///
-/// 参数:
-/// - `path`: 文件路径
-///
-/// 返回:
-/// - 文件是否可作为文本读取
-fn ensure_not_binary_file(path: &Path) -> Result<()> {
-    let mut file =
-        std::fs::File::open(path).map_err(|error| fs_error("read file", path, &error))?;
-    let mut buffer = [0u8; 8192];
-    let read = file
-        .read(&mut buffer)
-        .map_err(|error| fs_error("read file", path, &error))?;
-    let sample = &buffer[..read];
-    if sample.contains(&0) {
-        bail!("cannot read binary file: {}", path.display())
-    }
-    let non_printable = sample
-        .iter()
-        .filter(|byte| **byte < 9 || (**byte > 13 && **byte < 32))
-        .count();
-    if !sample.is_empty() && non_printable * 10 > sample.len() * 3 {
-        bail!("cannot read binary file: {}", path.display())
-    }
-    Ok(())
-}
-
-/// 读取必填路径参数。
-///
-/// 参数:
-/// - `args`: JSON 参数
-/// - `key`: 字段名
-///
-/// 返回:
-/// - 展开后的路径
-fn path_arg(args: &Value, key: &str) -> Result<PathBuf> {
-    let value = args
-        .get(key)
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .trim();
-    if value.is_empty() {
-        bail!("{}: {key}", t("required argument missing", "缺少必需参数"))
-    }
-    Ok(expand_path(value))
+/// - 带行号的正文或空文件、越界提醒
+fn read_text(request: &ReadRequest, extension: &str) -> Result<ToolOutput> {
+    guard::ensure_text_content(&request.path)?;
+    let range = text::read_text_range(&request.path, request.offset - 1, request.limit)?;
+    text::validate_content_tokens(&range.lines.join("\n"), extension)?;
+    Ok(ToolOutput::text(text::render_text_result(
+        &range,
+        request.offset,
+    )))
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::AppConfig;
-    use crate::paths::SaiPaths;
-
-    fn test_paths(root: &Path) -> SaiPaths {
-        SaiPaths {
-            config_dir: root.join("config"),
-            config_file: root.join("config/config.jsonc"),
-            secrets_file: root.join("config/secrets.jsonc"),
-            skills_dir: root.join("config/skills"),
-            data_dir: root.join("data"),
-            cache_dir: root.join("cache"),
-            state_dir: root.join("state"),
-            pictures_dir: root.join("pictures"),
-            fish_hook_file: root.join("fish/sai.fish"),
-            bash_hook_file: root.join("shell/bash-hook.sh"),
-            zsh_hook_file: root.join("shell/zsh-hook.zsh"),
-            powershell_hook_file: root.join("shell/powershell-hook.ps1"),
-        }
-    }
-
-    #[tokio::test]
-    async fn read_file_paginates_text() {
-        let cwd = crate::runtime_cwd::current_dir().unwrap();
-        let temp = tempfile::tempdir_in(cwd).unwrap();
-        let paths = test_paths(temp.path());
-        let path = temp.path().join("sample.txt");
-        std::fs::write(&path, "one\ntwo\nthree\n").unwrap();
-        let result = read_file(
-            json!({
-                "path": path.display().to_string(),
-                "offset": 2,
-                "limit": 1,
-            }),
-            AppConfig::default(),
-            paths,
-        )
-        .await
-        .unwrap();
-        let data: Value = serde_json::from_str(&result.content).unwrap();
-        assert_eq!(data["type"], "text-page");
-        assert_eq!(data["content"], "2: two");
-        assert_eq!(data["truncated"], true);
-        assert_eq!(data["next"], 3);
-    }
-
-    #[tokio::test]
-    async fn read_file_reads_multiple_files() {
-        let cwd = crate::runtime_cwd::current_dir().unwrap();
-        let temp = tempfile::tempdir_in(cwd).unwrap();
-        let paths = test_paths(temp.path());
-        let first = temp.path().join("first.txt");
-        let second = temp.path().join("second.txt");
-        std::fs::write(&first, "a1\na2\n").unwrap();
-        std::fs::write(&second, "b1\nb2\n").unwrap();
-        let result = read_file(
-            json!({
-                "files": [
-                    {"path": first.display().to_string(), "offset": 2, "limit": 1},
-                    {"path": second.display().to_string(), "limit": 1}
-                ]
-            }),
-            AppConfig::default(),
-            paths,
-        )
-        .await
-        .unwrap();
-        let data: Value = serde_json::from_str(&result.content).unwrap();
-        assert_eq!(data["type"], "multi-text-page");
-        assert_eq!(data["count"], 2);
-        assert_eq!(data["results"][0]["content"], "2: a2");
-        assert_eq!(data["results"][1]["content"], "1: b1");
-        assert_eq!(data["results"][1]["next"], 2);
-    }
-
-    #[tokio::test]
-    async fn read_file_batch_keeps_item_errors_local() {
-        let cwd = crate::runtime_cwd::current_dir().unwrap();
-        let temp = tempfile::tempdir_in(cwd).unwrap();
-        let paths = test_paths(temp.path());
-        let text = temp.path().join("sample.txt");
-        let bin = temp.path().join("sample.bin");
-        std::fs::write(&text, "ok\n").unwrap();
-        std::fs::write(&bin, [0, 1, 2, 3]).unwrap();
-        let result = read_file(
-            json!({
-                "files": [
-                    {"path": text.display().to_string()},
-                    {"path": bin.display().to_string()}
-                ]
-            }),
-            AppConfig::default(),
-            paths,
-        )
-        .await
-        .unwrap();
-        let data: Value = serde_json::from_str(&result.content).unwrap();
-        assert_eq!(data["results"][0]["type"], "text-page");
-        assert_eq!(data["results"][1]["ok"], false);
-        assert!(data["results"][1]["error"]
-            .as_str()
-            .unwrap()
-            .contains("cannot read binary file"));
-    }
-
-    /// 单文件读取缺失路径时错误必须带上展开后的绝对路径。
-    #[tokio::test]
-    async fn read_file_missing_path_error_includes_expanded_path() {
-        let cwd = crate::runtime_cwd::current_dir().unwrap();
-        let temp = tempfile::tempdir_in(cwd).unwrap();
-        let paths = test_paths(temp.path());
-        let missing = temp.path().join("nowhere.txt");
-
-        let error = read_file(
-            json!({"path": missing.display().to_string()}),
-            AppConfig::default(),
-            paths,
-        )
-        .await
-        .unwrap_err()
-        .to_string();
-
-        assert!(error.contains(&missing.display().to_string()));
-        assert!(error.contains("does not exist"));
-        assert!(!error.contains("os error"));
-    }
-
-    /// 相对路径读取失败时错误展示的是拼接后的绝对路径。
-    #[tokio::test]
-    async fn read_file_relative_path_error_reports_joined_path() {
-        let cwd = crate::runtime_cwd::current_dir().unwrap();
-        let temp = tempfile::tempdir_in(cwd).unwrap();
-        let paths = test_paths(temp.path());
-        let workspace = temp.path().to_path_buf();
-
-        let error = crate::runtime_cwd::scope(workspace.clone(), async {
-            read_file(
-                json!({"path": "src/nowhere.rs"}),
-                AppConfig::default(),
-                paths,
-            )
-            .await
-            .unwrap_err()
-            .to_string()
-        })
-        .await;
-
-        assert!(error.contains(&workspace.join("src/nowhere.rs").display().to_string()));
-    }
-
-    #[tokio::test]
-    async fn read_file_rejects_binary() {
-        let cwd = crate::runtime_cwd::current_dir().unwrap();
-        let temp = tempfile::tempdir_in(cwd).unwrap();
-        let paths = test_paths(temp.path());
-        let path = temp.path().join("sample.bin");
-        std::fs::write(&path, [0, 1, 2, 3]).unwrap();
-        assert!(read_file(
-            json!({"path": path.display().to_string()}),
-            AppConfig::default(),
-            paths
-        )
-        .await
-        .is_err());
-    }
-}
+mod tests;

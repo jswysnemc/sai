@@ -138,6 +138,25 @@ impl TranscriptStore {
         blocks
     }
 
+    /// 这个历史单元在副屏里算一段可切换的段落。
+    ///
+    /// 条件和 `expandable_blocks` 一致：思考、长回显、命令、diff 和有正文的工具。
+    pub(crate) fn is_expandable_cell(cell: &HistoryCell) -> bool {
+        match cell {
+            HistoryCell::Reasoning(cell) => !cell.source.trim().is_empty(),
+            HistoryCell::UserEcho(cell) => super::user_echo_cell::would_fold(cell),
+            HistoryCell::Shell(cell) => {
+                !cell.command.trim().is_empty() || !cell.output.trim().is_empty()
+            }
+            HistoryCell::Diff(cell) => !cell.pager_body().trim().is_empty(),
+            HistoryCell::Tool(ToolCell::Invocation(view)) if view.has_command_output() => {
+                !command_full_body(view).trim().is_empty()
+            }
+            HistoryCell::Tool(ToolCell::Invocation(view)) => !tool_full_body(view).is_empty(),
+            _ => false,
+        }
+    }
+
     /// 查找最近一个可展开块。
     ///
     /// 返回:

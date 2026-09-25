@@ -80,10 +80,15 @@ pub fn patch_sidebar_index(paths: &SaiPaths, patch: SidebarIndexPatch) -> Result
         index.groups = groups;
     }
     if let Some(session_id) = patch.clear_unread {
-        index.unread.remove(&session_id);
+        clear_unread_key(&mut index.unread, &session_id);
     }
-    if let Some(session_id) = patch.mark_unread.filter(|id| !index.unread.contains_key(id)) {
-        index.unread.insert(session_id, chrono::Utc::now().to_rfc3339());
+    if let Some(session_id) = patch
+        .mark_unread
+        .filter(|id| !index.unread.contains_key(id))
+    {
+        index
+            .unread
+            .insert(session_id, chrono::Utc::now().to_rfc3339());
     }
     save_sidebar_index(paths, &index)?;
     Ok(index)
@@ -105,6 +110,35 @@ fn save_sidebar_index(paths: &SaiPaths, index: &SidebarIndex) -> Result<()> {
     let text = serde_json::to_string_pretty(index)?;
     fs::write(path, text)?;
     Ok(())
+}
+
+/// 生成跨工作区不会冲突的会话键。
+///
+/// 参数:
+/// - `workspace_id`: 工作区 ID
+/// - `session_id`: 会话 ID
+///
+/// 返回:
+/// - 复合键
+pub fn sidebar_session_key(workspace_id: &str, session_id: &str) -> String {
+    format!("{workspace_id}\u{001f}{session_id}")
+}
+
+/// 清除一条未读，同时清掉同一会话的裸 ID 记录。
+///
+/// 参数:
+/// - `unread`: 未读表
+/// - `key`: 复合键或旧的裸会话 ID
+fn clear_unread_key(unread: &mut std::collections::BTreeMap<String, String>, key: &str) {
+    unread.remove(key);
+    // 1. 复合键还要清掉升级前写下的裸 ID
+    if let Some((_, session_id)) = key.rsplit_once('\u{001f}') {
+        unread.remove(session_id);
+        return;
+    }
+    // 2. 旧客户端只传裸 ID 时，清掉所有工作区里这条会话的未读
+    let suffix = format!("\u{001f}{key}");
+    unread.retain(|stored, _| !stored.ends_with(&suffix));
 }
 
 /// 返回侧栏索引文件路径。

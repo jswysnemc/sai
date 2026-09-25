@@ -31,6 +31,8 @@ pub(crate) fn tool_output_for_context(tool_name: &str, output: &str) -> String {
 /// - 字符上限
 fn tool_context_char_limit(tool_name: &str) -> usize {
     match tool_name {
+        // read_file 自身按 256KB 与 token 上限拒绝过大的读取，结果不再二次截断
+        "read_file" => usize::MAX,
         "run_command" | "background_command" => COMMAND_TOOL_CONTEXT_MAX_CHARS,
         "web_search"
         | "web_fetch"
@@ -40,8 +42,8 @@ fn tool_context_char_limit(tool_name: &str) -> usize {
         | "grep"
         | "search_text" // 历史别名，仍按搜索类截断
         | "glob"
-        | "find_files" // 历史别名，仍按搜索类截断
-        | "read_file" => SEARCH_TOOL_CONTEXT_MAX_CHARS,
+        // find_files 为历史别名，仍按搜索类截断
+        | "find_files" => SEARCH_TOOL_CONTEXT_MAX_CHARS,
         _ => DEFAULT_TOOL_CONTEXT_MAX_CHARS,
     }
 }
@@ -59,6 +61,13 @@ mod tests {
         assert!(clipped.contains("tool output clipped"));
         assert!(clipped.starts_with(&retained_output));
         assert!(!clipped.starts_with(&output));
+    }
+
+    /// read_file 已按自身上限约束结果，上下文投影不再截断。
+    #[test]
+    fn read_file_output_is_not_clipped() {
+        let output = "x".repeat(DEFAULT_TOOL_CONTEXT_MAX_CHARS * 3);
+        assert_eq!(tool_output_for_context("read_file", &output), output);
     }
 
     #[test]

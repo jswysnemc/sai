@@ -212,7 +212,6 @@ function fieldLabel(name: string, t: (en: string, zh: string) => string): string
     tool_call_timeout_seconds: t("Tool call timeout", "工具调用超时"),
     max_tool_steps: t("Maximum tool steps", "最大工具步数"),
     show_progress: t("Show progress", "显示进度"),
-    prefer_current_multimodal_model: t("Prefer current multimodal model", "优先使用当前多模态模型"),
     vision_provider_id: t("Vision provider", "视觉模型供应商"),
     vision_model: t("Vision model", "视觉模型"),
     preview_with_chafa: t("Preview with chafa", "使用 chafa 预览"),

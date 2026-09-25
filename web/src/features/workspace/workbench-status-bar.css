@@ -29,7 +29,8 @@
 .workbench-status-bar .ui-button svg { display: block; }
 .workbench-workspace-path { display: flex; align-items: center; gap: 0.375rem; height: 1.5rem; min-height: 0; line-height: 1; font: 400 var(--text-xs)/1 var(--font-code); }
 .workbench-workspace-path > svg { display: block; flex: none; }
-.workbench-workspace-path > span { display: block; min-width: 0; overflow: hidden; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
+/* 等宽字体的字形重心偏上，下移 1px 才和旁边的图标对齐 */
+.workbench-workspace-path > span { display: block; min-width: 0; overflow: hidden; line-height: 1; text-overflow: ellipsis; white-space: nowrap; transform: translateY(1px); }
 .workbench-status-branch { flex: none; min-width: 0; }
 .workbench-status-branch span { max-width: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workbench-status-bar .ui-button:hover { background: var(--surface-hover); color: var(--ink); }

@@ -26,5 +26,5 @@ fn memory_fields_round_trip_effective_settings() {
 fn recent_plugin_fields_keep_complete_layouts() {
     let config = AppConfig::default();
 
-    assert_eq!(plugin_fields(&config, "vision").len(), 4);
+    assert_eq!(plugin_fields(&config, "vision").len(), 3);
 }

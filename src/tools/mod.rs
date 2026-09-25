@@ -15,6 +15,7 @@ pub(crate) mod groups;
 pub(crate) mod image_generation;
 mod memory;
 pub(crate) mod mesh;
+pub(crate) mod model_attachment;
 mod native_search;
 pub(crate) mod progressive;
 mod registry;
@@ -40,7 +41,6 @@ mod subagent_worktree;
 pub(crate) mod todo;
 mod tool_spec;
 mod trash_path;
-mod vision;
 mod write_file;
 
 use crate::config::AppConfig;
@@ -208,7 +208,7 @@ pub(crate) fn builtin_registry_with_cached_mcp(
 pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     let mut registry = ToolRegistry::new();
     command::register(&mut registry, config, paths, true);
-    default_tools::register(&mut registry, config, paths);
+    default_tools::register(&mut registry);
     image_generation::register(&mut registry, config, paths);
     trash_path::register(&mut registry);
     configurable_cli_tools::register(&mut registry, config);
@@ -281,7 +281,10 @@ pub(crate) fn register_interactive_tools(
         session_id,
         config.mesh.cross_session,
     );
-    todo::register(registry, std::path::PathBuf::from(owner_key).join("todos.json"));
+    todo::register(
+        registry,
+        std::path::PathBuf::from(owner_key).join("todos.json"),
+    );
     register_ask_question(registry);
 }
 
@@ -319,7 +322,7 @@ pub(crate) fn register_ask_question(registry: &mut ToolRegistry) {
 pub fn readonly_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     let mut registry = ToolRegistry::new();
     command::register_readonly(&mut registry, config, paths);
-    default_tools::register_readonly(&mut registry, config, paths);
+    default_tools::register_readonly(&mut registry);
     crate::plugins::register_plugins(&mut registry, config, paths, true);
     if config.memory_config().enabled {
         memory::register_readonly(&mut registry, config.clone(), paths.clone());

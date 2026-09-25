@@ -1,4 +1,5 @@
 mod draft;
+mod inline;
 #[cfg(test)]
 mod tests;
 mod view;
@@ -8,11 +9,7 @@ use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use crate::state::{CompactionBudgetPolicy, StateStore};
 use anyhow::Result;
-use crossterm::{
-    cursor::{Hide, Show},
-    execute,
-    terminal::{self, EnterAlternateScreen, LeaveAlternateScreen},
-};
+use crossterm::terminal;
 use draft::{Draft, Outcome};
 use std::{io, time::Duration};
 use view::PreviewContext;
@@ -82,10 +79,8 @@ pub(crate) fn run_session(paths: &SaiPaths) -> Result<String> {
         .to_string(),
         session: true,
     };
-    // 1. 【上下文】【面板交互】进入独立备用屏，通过析构保证出错时也恢复终端
-    let terminal = PanelTerminal::start()?;
-    let outcome = edit(&mut io::stdout(), &context, current.policy, defaults);
-    drop(terminal);
+    // 1. 【上下文】【面板交互】在当前画面底部打开内联面板，不切换备用屏
+    let outcome = inline::run(&context, current.policy, defaults);
     // 2. 【上下文】【面板交互】用户确认后才写入会话配置，取消与中断均不写入
     match outcome {
         Ok(Outcome::Save(policy)) => {
@@ -138,36 +133,6 @@ fn edit(
         if next_size != size {
             size = next_size;
             redraw = true;
-        }
-    }
-}
-
-/// 【上下文】【终端恢复】保存进入面板前的原始输入模式
-struct PanelTerminal {
-    was_raw: bool,
-}
-
-impl PanelTerminal {
-    /// 【上下文】【终端恢复】进入备用屏，返回用于恢复终端的守卫
-    fn start() -> Result<Self> {
-        let was_raw = terminal::is_raw_mode_enabled()?;
-        terminal::enable_raw_mode()?;
-        if let Err(error) = execute!(io::stdout(), EnterAlternateScreen, Hide) {
-            if !was_raw {
-                let _ = terminal::disable_raw_mode();
-            }
-            return Err(error.into());
-        }
-        Ok(Self { was_raw })
-    }
-}
-
-impl Drop for PanelTerminal {
-    /// 【上下文】【终端恢复】退出时恢复主屏与原始输入模式；返回: 无
-    fn drop(&mut self) {
-        let _ = execute!(io::stdout(), Show, LeaveAlternateScreen);
-        if !self.was_raw {
-            let _ = terminal::disable_raw_mode();
         }
     }
 }

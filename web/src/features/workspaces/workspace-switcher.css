@@ -261,18 +261,23 @@
   padding:var(--space-sm);
 }
 
-/* 服务端目录对话框：导航栏 + 工具行（根目录 · 搜索）+ 列表 + 底栏 */
+/* 服务端目录对话框：路径、根目录、目录面板（搜索+列表）、底栏 */
 .server-directory-dialog {
   position: relative;
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap:var(--space-sm);
-  height: min(460px, 64vh);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  height: min(28rem, 62vh);
   min-height: 0;
 }
 
-.server-directory-dialog.is-drop-target { outline: 2px solid color-mix(in srgb, var(--signal) 58%, transparent); outline-offset: -3px; }
-.directory-drop-hint { position: absolute; inset: var(--space-md); z-index: 2; display: grid; place-items: center; border: 1px dashed var(--signal); border-radius: var(--radius-3); background: color-mix(in srgb, var(--signal) 10%, var(--paper-raised)); color: var(--signal); font-size: var(--text-sm); pointer-events: none; }
+.ui-modal.medium.directory-picker {
+  width: min(34rem, calc(100vw - 2rem));
+}
+
+.server-directory-dialog.is-drop-target { outline: 2px solid color-mix(in srgb, var(--ink) 18%, transparent); outline-offset: -3px; }
+.directory-drop-hint { position: absolute; inset: 0; z-index: 2; display: grid; align-content: center; justify-items: center; gap: 0.5rem; border: 1.5px dashed var(--line-strong); border-radius: var(--radius-3); background: color-mix(in srgb, var(--paper) 92%, var(--ink)); color: var(--ink); font-size: var(--text-sm); pointer-events: none; }
+.directory-drop-hint strong { font-weight: 500; }
 
 .directory-input-shell {
   display: flex;
@@ -350,30 +355,31 @@
 
 .directory-search-input::placeholder { color: var(--technical-muted); }
 
-/* 工具行：根目录快捷入口与搜索并为一行；根目录超出时横向滚动，不挤压搜索 */
-.directory-toolbar {
+.directory-panel {
   display: flex;
-  align-items: center;
-  gap:var(--space-sm);
-  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--paper);
 }
 
-.directory-toolbar .directory-search-shell {
-  flex: 1 1 10rem;
-  min-width: 9rem;
+.directory-panel .directory-search-shell {
+  flex: none;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
 }
 
 .directory-roots-row {
   display: flex;
-  flex: 0 1 auto;
-  flex-wrap: nowrap;
-  gap:var(--space-2xs);
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
-
-.directory-roots-row::-webkit-scrollbar { display: none; }
 
 .directory-roots-row button {
   display: inline-flex;
@@ -399,9 +405,13 @@
 }
 
 .directory-list {
+  flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding:var(--space-3xs);
+  padding: var(--space-3xs);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .directory-row {
@@ -418,7 +428,7 @@
   text-align: left;
 }
 
-.directory-row.highlighted { background: var(--paper-deep); color: var(--ink); }
+.directory-row.highlighted { background: var(--surface-hover); color: var(--ink); }
 .directory-row.highlighted > svg { color: var(--signal); }
 
 .directory-row-name {
@@ -505,15 +515,17 @@
 }
 
 .directory-new-folder {
-  display: grid;
+  display: inline-flex;
   flex-shrink: 0;
-  width: 28px;
+  align-items: center;
+  gap: var(--space-2xs);
   height: 28px;
-  place-items: center;
+  padding: 0 var(--space-sm);
   border: 1px solid var(--line);
   border-radius:var(--radius-2);
   background: transparent;
   color: var(--ink-soft);
+  font: 500 var(--text-xs)/1 var(--font-ui);
 }
 
 .directory-new-folder:hover:not(:disabled) { border-color: var(--line-strong); color: var(--ink); }

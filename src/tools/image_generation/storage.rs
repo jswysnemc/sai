@@ -155,7 +155,10 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let mut bytes = Vec::new();
         image::DynamicImage::new_rgb8(1, 1)
-            .write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Png,
+            )
             .unwrap();
         bytes.extend(br#"<svg width="1" height="1"></svg>"#);
         let stored = store(

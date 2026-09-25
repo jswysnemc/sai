@@ -165,6 +165,7 @@ pub(super) async fn execute_repl_turn(
     tokio::pin!(chat);
     let mut interrupted = false;
     let mut exit_requested = false;
+    let mut pager: Option<crate::cli::repl_pager::PagerScreen> = None;
     let mut resize_tick = tokio::time::interval(Duration::from_millis(25));
     resize_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     // 流式阶段同样保持 bracketed paste 与键盘增强：否则粘贴多行会被
@@ -177,14 +178,62 @@ pub(super) async fn execute_repl_turn(
                 result = &mut chat => {
                     let outcome = result.map(|_| ());
                     // 轮次结束后排空剩余事件：Completed / Failed / FinalSummary
-                    // 是 sink 最后发出的，不排空就会丢掉收尾渲染
-                    drain_runner_events(&event_rx, runtime)?;
+                    // 是 sink 最后发出的，不排空就会丢掉收尾渲染。
+                    // 先排空再关副屏，这样离开时的整屏重放已经包含收尾内容
+                    drain_runner_events(&event_rx, runtime, &mut pager)?;
+                    close_pager(&mut pager, runtime)?;
                     break outcome;
                 }
                 _ = resize_tick.tick() => {
-                    drain_runner_events(&event_rx, runtime)?;
+                    drain_runner_events(&event_rx, runtime, &mut pager)?;
+                    if pager.is_some() {
+                        let closed = match pager.as_mut() {
+                            Some(screen) => screen.poll(Some(Duration::from_millis(0)), |focus, width| {
+                                runtime.pager_view(focus, width)
+                            })?,
+                            None => false,
+                        };
+                        if closed {
+                            close_pager(&mut pager, runtime)?;
+                        }
+                        // 副屏打开时不重绘主界面，也不读输入框按键
+                        continue;
+                    }
                     process_stream_tick(runtime)?;
                     let action = process_stream_input(runtime, &stream_ctx)?;
+                    if action == StreamInputAction::OpenPager {
+                        if !runtime.pager_has_content() {
+                            runtime.record_meta(
+                                crate::i18n::text(
+                                    "Ctrl+O: nothing to expand yet",
+                                    "Ctrl+O：当前还没有可展开的段落",
+                                )
+                                .to_string(),
+                            )?;
+                        } else {
+                            runtime.begin_overlay();
+                            let paragraphs = runtime.expandable_blocks().len();
+                            let start = paragraphs.saturating_sub(1);
+                            let mut screen =
+                                crate::cli::repl_pager::PagerScreen::enter(start, paragraphs)?;
+                            let _ = screen.poll(Some(Duration::from_millis(0)), |focus, width| {
+                                runtime.pager_view(focus, width)
+                            })?;
+                            pager = Some(screen);
+                        }
+                        // #region agent log
+                        crate::cli::repl_pager::debug_agent_log(
+                            "A",
+                            "repl_turn.rs:open_pager",
+                            "pager requested without interrupting the turn",
+                            &format!(
+                                "{{\"blocks\":{},\"interrupted\":false}}",
+                                runtime.expandable_blocks().len()
+                            ),
+                        );
+                        // #endregion
+                        continue;
+                    }
                     if action != StreamInputAction::Continue {
                         // 先置位再跳出：跳出会丢弃 chat future，
                         // 守卫在析构时读取此标志才能把本轮记成中断而非失败。
@@ -194,7 +243,8 @@ pub(super) async fn execute_repl_turn(
                         interrupted = true;
                         exit_requested = action == StreamInputAction::Exit;
                         // 中断前也排空：已经产出但还没渲染的输出应当保留
-                        drain_runner_events(&event_rx, runtime)?;
+                        drain_runner_events(&event_rx, runtime, &mut pager)?;
+                        close_pager(&mut pager, runtime)?;
                         break Ok(());
                     }
                 }
@@ -202,6 +252,12 @@ pub(super) async fn execute_repl_turn(
         }
     }
     .await;
+    if pager.is_some() || runtime.overlay_open() {
+        if let Some(mut screen) = pager.take() {
+            let _ = screen.leave();
+        }
+        let _ = runtime.resume_after_pager();
+    }
     // 终端模式恢复失败也不能跳过流状态清理，先记录结果最后上报
     let guard_result = stream_terminal_guard.finish(&mut io::stdout());
     let leftover_draft = {
@@ -239,9 +295,38 @@ pub(super) async fn execute_repl_turn(
 fn drain_runner_events(
     rx: &std::sync::mpsc::Receiver<crate::runner::RunnerEvent>,
     runtime: &mut ReplRuntime,
+    pager: &mut Option<crate::cli::repl_pager::PagerScreen>,
 ) -> Result<()> {
     while let Ok(event) = rx.try_recv() {
+        if turn_event_needs_foreground(&event) {
+            close_pager(pager, runtime)?;
+        }
         handle_turn_event(event, runtime)?;
+    }
+    Ok(())
+}
+
+/// 权限、提问和 SSH 口令必须画在主屏上，否则会盖在副屏里且用户看不到。
+fn turn_event_needs_foreground(event: &crate::runner::RunnerEvent) -> bool {
+    match event {
+        crate::runner::RunnerEvent::Agent(AgentEvent::PermissionRequested(_))
+        | crate::runner::RunnerEvent::Agent(AgentEvent::QuestionRequested(_)) => true,
+        crate::runner::RunnerEvent::Agent(
+            AgentEvent::ToolProgress { message, .. }
+            | AgentEvent::ToolProgressIdentified { message, .. },
+        ) => crate::ssh::is_secret_marker(message),
+        _ => false,
+    }
+}
+
+/// 离开副屏并补绘主界面。不设置取消标志。
+fn close_pager(
+    pager: &mut Option<crate::cli::repl_pager::PagerScreen>,
+    runtime: &mut ReplRuntime,
+) -> Result<()> {
+    if let Some(mut screen) = pager.take() {
+        screen.leave()?;
+        runtime.resume_after_pager()?;
     }
     Ok(())
 }

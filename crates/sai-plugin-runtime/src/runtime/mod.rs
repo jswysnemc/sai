@@ -5,6 +5,7 @@ mod control;
 mod crypto;
 mod encoding;
 mod execution;
+mod host_info;
 mod http;
 mod json_input;
 mod modules;

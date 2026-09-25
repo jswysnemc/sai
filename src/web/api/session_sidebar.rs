@@ -17,7 +17,9 @@ pub(super) fn routes() -> Router<WebAppState> {
 ///
 /// 返回:
 /// - 侧栏索引
-async fn read(State(state): State<WebAppState>) -> Result<Json<crate::state::SidebarIndex>, WebError> {
+async fn read(
+    State(state): State<WebAppState>,
+) -> Result<Json<crate::state::SidebarIndex>, WebError> {
     load_sidebar_index(&state.paths)
         .map(Json)
         .map_err(WebError::from)

@@ -90,7 +90,7 @@ pub(crate) fn render(cell: &UserEchoCell) -> String {
         TranscriptMode::Plan => "\x1b[36m●\x1b[0m ",
         TranscriptMode::Automatic => "\x1b[38;5;39m●\x1b[0m ",
     };
-    let expanded = cell.expanded || crate::render::render_expand::expand_override();
+    let expanded = crate::render::render_expand::resolve_expanded(cell.expanded);
     let styled = render_input_atoms(&cell.text, &cell.atoms, expanded);
     let body = styled.trim_end();
     if body.is_empty() {

@@ -104,7 +104,7 @@ fn live_tool_argument_preview_is_visible_until_the_call_is_finalized() {
     assert!(store
         .display_live_tail(80, &options())
         .iter()
-        .any(|line| line.as_str().contains("Read")));
+        .any(|line| { strip_ansi(line.as_str()).contains("Read") }));
 
     store.push_tool_call(
         "read_file".to_string(),
@@ -114,7 +114,7 @@ fn live_tool_argument_preview_is_visible_until_the_call_is_finalized() {
     assert!(store
         .display_tail(80, &options())
         .iter()
-        .any(|line| line.as_str().contains("README.md")));
+        .any(|line| { strip_ansi(line.as_str()).contains("README.md") }));
 }
 
 #[test]
@@ -304,6 +304,7 @@ fn concurrent_same_name_tools_update_in_place_fifo() {
     assert!(mid.contains("Read a.rs:1–20"), "{mid}");
     assert!(mid.contains("Reading b.rs:10–49"), "{mid}");
     assert!(mid.contains("Reading c.rs"), "{mid}");
+    assert!(!mid.contains("Explored"), "{mid}");
     assert_eq!(mid.matches("Read ok").count(), 0, "{mid}");
 
     store.push_tool_result("read_file".to_string(), true, "b".to_string());
@@ -383,7 +384,9 @@ fn summary_mode_keeps_compact_tool_call_block_visible() {
     let lines = store.display_tail(80, &options());
 
     assert!(!lines.is_empty());
-    assert!(lines.iter().any(|line| line.as_str().contains("Read")));
+    assert!(lines
+        .iter()
+        .any(|line| strip_ansi(line.as_str()).contains("Read")));
 }
 
 #[test]

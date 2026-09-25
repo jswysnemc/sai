@@ -140,7 +140,6 @@ impl Agent {
                 usage: result.usage.clone(),
                 context_window_tokens: self.context_char_budget,
             }))?;
-            tool_attachments::remove_pending_model_attachments(messages);
             if result.tool_calls.is_empty() || !self.tools_enabled {
                 if let Some(candidate) = self
                     .next_gap_message(inter_message_source, wait_for_external, true, on_event)

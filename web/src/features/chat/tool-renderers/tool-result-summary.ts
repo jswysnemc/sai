@@ -1,4 +1,4 @@
-import { parseReadTextPages } from "./read-result-parser";
+import { parseImageReadNote, parseReadTextPages } from "./read-result-parser";
 import { parseJsonRecord } from "./tool-data";
 import { text, type Locale } from "../../i18n/locale";
 
@@ -76,6 +76,16 @@ export function toolDiffStat(name: string, output: string): ToolDiffStat | null 
  * @returns 行数摘要
  */
 function readSummary(output: string, locale: Locale): ToolResultSummary | null {
+  const image = parseImageReadNote(output);
+  if (image) {
+    const dimensions = /(\d+x\d+)/u.exec(image.summary)?.[1];
+    return {
+      label: dimensions
+        ? text(locale, `image ${dimensions}`, `图片 ${dimensions}`)
+        : text(locale, "image", "图片"),
+      tone: "neutral"
+    };
+  }
   const pages = parseReadTextPages(output);
   if (pages.length === 0) return null;
   const lines = pages.reduce((total, page) => total + page.lineCount, 0);

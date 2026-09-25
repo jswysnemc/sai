@@ -23,6 +23,13 @@ export function projectConversationDisplay(
   const sessionRuns = runs.filter((run) => {
     if (sessionId && run.sessionId !== sessionId) return false;
     const history = run.runId ? historyById.get(run.runId) : undefined;
+    const secretCount = run.parts.filter((part) => part.type === "ssh_secret" && !part.resolved).length;
+    const kept = !(history && history.status !== "running") && (!run.replayed || history?.status === "running");
+    // #region agent log
+    if (secretCount > 0 || run.status === "waiting_ssh_secret") {
+      fetch("http://127.0.0.1:7368/ingest/77461c80-9be3-44e4-ac14-3725f6920049",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"ff618c"},body:JSON.stringify({sessionId:"ff618c",hypothesisId:"C",location:"conversation-display.ts:filter",message:"ssh wait run projection",data:{kept,replayed:run.replayed,completed:run.completed,status:run.status,historyStatus:history?.status??null,secretCount,runId:run.runId??null},timestamp:Date.now()})}).catch(()=>{});
+    }
+    // #endregion
     if (history && history.status !== "running") return false;
     return !run.replayed || history?.status === "running";
   });

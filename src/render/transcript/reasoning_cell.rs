@@ -258,7 +258,7 @@ fn render_thinking_body_with_title(
 /// - `duration`: 可选耗时
 ///
 /// 返回:
-/// - 如 `Thinking (12s)`；无耗时则仅 `Thinking`
+/// - 如 `Thinking for 12s`；无耗时则仅 `Thinking`
 pub(crate) fn thinking_label(duration: Option<Duration>) -> String {
     format!("{THINKING_LABEL}{}", duration_suffix(duration))
 }
@@ -269,7 +269,7 @@ pub(crate) fn thinking_label(duration: Option<Duration>) -> String {
 /// - `duration`: 可选耗时
 ///
 /// 返回:
-/// - 如 `Thought (12s)`；无耗时则仅 `Thought`
+/// - 如 `Thought for 12s`；无耗时则仅 `Thought`
 pub(crate) fn thought_label(duration: Option<Duration>) -> String {
     format!("{THOUGHT_LABEL}{}", duration_suffix(duration))
 }
@@ -284,7 +284,7 @@ pub(crate) fn thought_label(duration: Option<Duration>) -> String {
 fn duration_suffix(duration: Option<Duration>) -> String {
     match duration {
         // 固定英文格式，避免中文时间单位与英文状态文案混排
-        Some(elapsed) => format!(" ({})", format_elapsed(elapsed)),
+        Some(elapsed) => format!(" for {}", format_elapsed(elapsed)),
         None => String::new(),
     }
 }
@@ -320,7 +320,7 @@ mod tests {
         );
         let plain = strip_ansi_for_test(&rendered);
         assert!(plain.contains("tokens"));
-        assert!(plain.contains("Thinking (12s)"));
+        assert!(plain.contains("Thinking for 12s"));
     }
 
     /// 【终端】【思考统计】token 后缀超过千位用 k 单位，与底栏风格一致。
@@ -334,10 +334,13 @@ mod tests {
     /// 【终端】【思考时态】定稿标题用过去式，流式标题保持进行时。
     #[test]
     fn finalized_reasoning_title_uses_past_tense() {
-        assert_eq!(thought_label(Some(Duration::from_secs(3))), "Thought (3s)");
+        assert_eq!(
+            thought_label(Some(Duration::from_secs(3))),
+            "Thought for 3s"
+        );
         assert_eq!(
             thinking_label(Some(Duration::from_secs(3))),
-            "Thinking (3s)"
+            "Thinking for 3s"
         );
         let rendered = render(
             &ReasoningCell {
@@ -348,7 +351,7 @@ mod tests {
             ReasoningDisplayMode::Summary,
         );
         let plain = strip_ansi_for_test(&rendered);
-        assert!(plain.contains("Thought (3s)"), "{plain}");
+        assert!(plain.contains("Thought for 3s"), "{plain}");
         assert!(!plain.contains("Thinking"));
     }
 

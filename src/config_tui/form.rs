@@ -13,81 +13,32 @@ use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
 use std::io::{self, Write};
-use std::process::Command;
 
 use super::input::{read_key, read_key_event};
 use super::ui::draw_menu;
 
-struct FcitxState {
-    // 进入表单前输入法是否处于激活状态，退出时按此恢复
-    was_active: bool,
-    last_state: Option<char>,
-}
+struct FcitxState;
 
 impl FcitxState {
-    /// 记录输入法当前状态并在导航期间临时关闭输入法。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 携带初始状态的输入法管理器
-    pub(crate) fn new() -> Self {
-        // 1. 查询进入表单前的输入法状态，输出 2 表示激活
-        let initial = fcitx5_state();
-        let was_active = initial == Some('2');
-        // 2. 仅在激活时关闭，避免导航按键被输入法拦截
-        if was_active {
-            run_fcitx5_remote("-c");
-        }
-        Self {
-            was_active,
-            last_state: initial,
-        }
+    /// 表单导航使用会话级输入法状态：列表里保持关闭，进入文本框再打开。
+    fn new() -> Self {
+        super::ime::disable_for_nav();
+        Self
     }
 
     fn enter_editing(&mut self) {
-        if self.last_state == Some('2') {
-            run_fcitx5_remote("-o");
-        }
+        super::ime::enable_for_edit();
     }
 
     fn leave_editing(&mut self) {
-        self.last_state = fcitx5_state();
-        run_fcitx5_remote("-c");
+        super::ime::disable_for_nav();
     }
 }
 
 impl Drop for FcitxState {
     fn drop(&mut self) {
-        // 退出表单时恢复进入前的输入法激活状态
-        if self.was_active {
-            run_fcitx5_remote("-o");
-        }
+        super::ime::disable_for_nav();
     }
-}
-
-/// 查询 fcitx5 输入法当前状态。
-///
-/// 参数:
-/// - 无
-///
-/// 返回:
-/// - 状态字符，2 表示激活；命令不可用时返回空
-fn fcitx5_state() -> Option<char> {
-    let output = Command::new("fcitx5-remote").output().ok()?;
-    output.stdout.first().copied().map(char::from)
-}
-
-/// 同步执行 fcitx5-remote 子命令。
-///
-/// 参数:
-/// - `arg`: fcitx5-remote 参数
-///
-/// 返回:
-/// - 无；同步等待命令结束，避免遗留僵尸进程
-fn run_fcitx5_remote(arg: &str) {
-    let _ = Command::new("fcitx5-remote").arg(arg).output();
 }
 
 pub(crate) fn run_form(stdout: &mut io::Stdout, title: &str, fields: &mut [Field]) -> Result<bool> {
@@ -372,7 +323,9 @@ pub(super) fn edit_textarea(stdout: &mut io::Stdout, value: &mut String) -> Resu
     )?;
     stdout.flush()?;
     terminal::disable_raw_mode()?;
+    super::ime::enable_for_edit();
     let result = edit_textarea_with_editor(value);
+    super::ime::disable_for_nav();
     // 无论成败都要先回到备用屏：错误提示得画在界面里才看得见，
     // 之前 eprintln 写 stderr，而备用屏占着显示，用户只会看到「什么都没发生」
     terminal::enable_raw_mode()?;

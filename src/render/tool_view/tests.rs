@@ -46,7 +46,7 @@ fn todo_result_renders_items_instead_of_raw_json() {
     assert!(output.contains("检查测试"));
     assert!(output.contains("构建项目"));
     assert!(output.lines().next().unwrap_or_default().contains("1/2"));
-    assert_eq!(output.matches("Plan").count(), 1);
+    assert_eq!(output.matches("Todo").count(), 1);
     assert!(output.contains('✓') && output.contains('◐'));
     // 1. 进度合并到标题，条目自带状态符，不再重复统计行
     assert!(!output.contains('├') && !output.contains("└─"));
@@ -144,7 +144,9 @@ fn non_edit_tools_keep_a_plain_status_line() {
     let view = ToolView::running("grep".to_string(), r#"{"pattern":"a\nb"}"#.to_string());
 
     let output = super::render(&view, ToolCallDisplayMode::Summary);
+    let plain = crate::render::activity_animation::strip_ansi_for_test(&output);
 
-    assert!(output.contains("run"));
+    assert!(plain.contains("Searching"), "{plain}");
+    assert!(!plain.contains("preparing"), "{plain}");
     assert!(!output.contains("\x1b[32m+"));
 }

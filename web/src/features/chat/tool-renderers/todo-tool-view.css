@@ -1,8 +1,29 @@
+.todo-tool-panel {
+  display: grid;
+  gap: var(--space-2xs);
+  padding: var(--space-sm) var(--space-md) var(--space-sm);
+}
+
+.todo-tool-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs);
+  margin: 0;
+  color: var(--ink-soft);
+  font: 400 var(--text-2xs)/1.4 var(--font-ui);
+}
+
+.todo-tool-summary strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
 .todo-tool-list {
   display: grid;
   gap: var(--space-2xs);
   margin: 0;
-  padding: var(--space-sm) var(--space-md);
+  padding: 0;
   list-style: none;
 }
 
@@ -20,15 +41,22 @@
   color: var(--ink-soft);
 }
 
+.todo-tool-item.is-in_progress span {
+  font-weight: 500;
+}
+
 .todo-tool-item.is-in_progress svg {
   color: var(--blue);
+}
+
+.todo-tool-item.is-completed {
+  color: var(--ink-soft);
 }
 
 .todo-tool-item.is-completed svg {
   color: var(--signal);
 }
 
-.todo-tool-item.is-completed span,
 .todo-tool-item.is-cancelled span {
   color: var(--ink-soft);
   text-decoration: line-through;

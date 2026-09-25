@@ -33,8 +33,10 @@ pub(crate) fn edit_skills(
 ) -> Result<()> {
     let mut selected = 0usize;
     let mut status = String::new();
+    let mut search = super::search::ListSearch::default();
+    // 目录扫描只在进入和启停后做。每次按键都扫一遍，长列表会一顿一顿的。
+    let mut skills = list_managed_skills(config, paths).unwrap_or_default();
     loop {
-        let skills = list_managed_skills(config, paths).unwrap_or_default();
         let enabled_count = skills.iter().filter(|skill| skill.enabled).count();
 
         let mut options = vec![
@@ -61,6 +63,16 @@ pub(crate) fn edit_skills(
             )
             .to_string(),
         ];
+        let shown = skills
+            .iter()
+            .enumerate()
+            .filter(|(_, skill)| {
+                search.matches(&skill.name)
+                    || search.matches(&skill.description)
+                    || search.matches(&skill.scope)
+            })
+            .map(|(index, _)| index)
+            .collect::<Vec<_>>();
         if skills.is_empty() {
             options.push(format!(
                 "  ({})",
@@ -73,8 +85,13 @@ pub(crate) fn edit_skills(
                 )
                 .to_string(),
             );
+        } else if shown.is_empty() {
+            options.push(format!("  ({})", t("no matches", "没有匹配")));
+            details
+                .push(t("No skill matches this filter.", "没有 Skill 命中当前过滤。").to_string());
         } else {
-            for skill in &skills {
+            for index in &shown {
+                let skill = &skills[*index];
                 options.push(format!(
                     "{} {}  [{}]",
                     state_dot(skill.enabled),
@@ -103,22 +120,36 @@ pub(crate) fn edit_skills(
                 t("skills off", "Skills 关闭")
             }
         );
-        let help = if status.is_empty() {
-            super::theme::help_line(&[
-                ("Space", t("toggle", "启停")),
-                ("Enter", t("view / toggle", "查看/切换")),
-                ("q", t("back", "返回")),
-            ])
-        } else {
-            status.clone()
-        };
+        let help = search.help().unwrap_or_else(|| {
+            if status.is_empty() {
+                super::theme::help_line(&[
+                    ("/", t("search", "搜索")),
+                    ("Space", t("toggle", "启停")),
+                    ("Enter", t("view", "查看")),
+                    ("q", t("back", "返回")),
+                ])
+            } else {
+                status.clone()
+            }
+        });
         draw_menu_with_details(
             stdout, " SKILLS ", &options, &details, selected, &help, &subtitle,
         )?;
 
-        let skill_index = selected.checked_sub(TOGGLE_ROWS);
-        match read_key()? {
-            KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
+        let skill_index = selected
+            .checked_sub(TOGGLE_ROWS)
+            .and_then(|index| shown.get(index).copied());
+        let key = read_key()?;
+        match search.handle(key) {
+            super::search::SearchEffect::Updated => {
+                selected = 0;
+                continue;
+            }
+            super::search::SearchEffect::Closed => continue,
+            super::search::SearchEffect::Passthrough => {}
+        }
+        match key {
+            KeyCode::Esc | KeyCode::Char('q') if !search.editing => return Ok(()),
             KeyCode::Up | KeyCode::Char('k') => {
                 selected = selected.saturating_sub(1);
                 status.clear();
@@ -135,19 +166,23 @@ pub(crate) fn edit_skills(
             }
             KeyCode::Char(' ') => {
                 if let Some(skill) = skill_index.and_then(|index| skills.get(index)) {
-                    status =
-                        match set_managed_skill_enabled(&skill.id, !skill.enabled, config, paths) {
-                            Ok(()) => format!(
-                                "{}: {}",
-                                if skill.enabled {
+                    let id = skill.id.clone();
+                    let name = skill.name.clone();
+                    let enabled = skill.enabled;
+                    status = match set_managed_skill_enabled(&id, !enabled, config, paths) {
+                        Ok(()) => {
+                            skills = list_managed_skills(config, paths).unwrap_or_default();
+                            format!(
+                                "{}: {name}",
+                                if enabled {
                                     t("disabled", "已禁用")
                                 } else {
                                     t("enabled", "已启用")
-                                },
-                                skill.name
-                            ),
-                            Err(err) => err.to_string(),
-                        };
+                                }
+                            )
+                        }
+                        Err(err) => err.to_string(),
+                    };
                 }
             }
             KeyCode::Enter => {

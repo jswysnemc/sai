@@ -6,6 +6,7 @@ mod line;
 mod markdown_cell;
 mod markdown_stream_cache;
 mod meta_cell;
+mod pager_view;
 pub(crate) mod reasoning_cell;
 mod render_cache;
 mod result_diff;
@@ -38,6 +39,7 @@ mod work_status_tests;
 pub(crate) use cell::TranscriptMode;
 pub(crate) use command_output::{ExpandableBlock, ExpandableBlockKind};
 pub(crate) use line::AnsiLine;
+pub(crate) use pager_view::PagerView;
 pub(crate) use store::{
     SubagentOverviewEntry, TodoSnapshotItem, TranscriptRenderOptions, TranscriptStore,
 };

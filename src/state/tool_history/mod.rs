@@ -1,5 +1,6 @@
 pub(crate) mod schema;
 
+mod attachments;
 mod budget;
 mod legacy_reports;
 mod maintenance;

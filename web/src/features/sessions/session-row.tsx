@@ -7,6 +7,7 @@ import { formatRelativeTime } from "../../shared/format-relative-time";
 import type { Session } from "../../api/contracts";
 import { ActiveAgentIndicator } from "./active-agent-indicator";
 import { OPEN_SIDEBAR_FILE_TREE_EVENT } from "./sidebar-file-tree-cover";
+import { matchesStoredSessionId, nextPinnedIds } from "./sidebar-session-key";
 import { useI18n } from "../i18n/use-i18n";
 import "./session-row.css";
 
@@ -25,6 +26,11 @@ type SessionRowProps = {
   canSelect: boolean;
   /** 活动工作区才显示悬停动作 */
   canManage?: boolean;
+  /** 跨工作区复合键；缺省时退回会话 ID */
+  indexKey?: string;
+  workspaceId?: string;
+  /** 同一会话 ID 在全部工作区中的数量 */
+  sameIdCount?: number;
   onOpen: () => void;
   onToggleChecked: () => void;
   onStartRename: () => void;
@@ -51,6 +57,9 @@ export function SessionRow({
   selectable,
   checked,
   canManage = true,
+  indexKey,
+  workspaceId = "",
+  sameIdCount = 1,
   onOpen,
   onToggleChecked,
   onContextMenu
@@ -58,7 +67,10 @@ export function SessionRow({
   const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const index = useQuery({ queryKey: ["session-sidebar"], queryFn: () => api.sessionSidebar.read(), enabled: canManage });
-  const pinned = index.data?.pinned.includes(session.id) ?? false;
+  const storedKey = indexKey ?? session.id;
+  const pinned = (index.data?.pinned ?? []).some((id) =>
+    workspaceId ? matchesStoredSessionId(id, workspaceId, session.id, sameIdCount) : id === storedKey
+  );
 
   /**
    * 写回置顶或归档，并刷新侧栏索引。
@@ -114,7 +126,13 @@ export function SessionRow({
             onClick={(event) => {
               event.stopPropagation();
               const current = index.data?.pinned ?? [];
-              saveIndex({ pinned: pinned ? current.filter((id) => id !== session.id) : [session.id, ...current] });
+              saveIndex({
+                pinned: workspaceId
+                  ? nextPinnedIds(current, workspaceId, session.id, pinned)
+                  : pinned
+                    ? current.filter((id) => id !== storedKey)
+                    : [storedKey, ...current]
+              });
             }}
           >
             {pinned ? <PinOff size={14} /> : <Pin size={14} />}

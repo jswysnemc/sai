@@ -18,6 +18,7 @@ import { ChatEmptyState } from "./chat-empty-state";
 import { ChatComposer } from "./chat-composer";
 import { ChatSessionHeader } from "./chat-session-header";
 import { projectConversationDisplay } from "./conversation-display";
+import type { LiveRunState } from "./run-event-reducer";
 import { MessageOverviewRail } from "./message-overview-rail";
 import { createLiveOverviewItem, createTimelineOverviewItems } from "./message-overview-utils";
 import { clearToolExpandState } from "./message/tool-expand-state";
@@ -573,6 +574,12 @@ export function ChatPage({ toolbar, selectedSessionId }: { toolbar?: ReactNode; 
         : Promise.resolve()}
     />
   );
+  const pendingSecrets = pendingSshSecretRequests(activeLiveRuns);
+  // #region agent log
+  if (pendingSecrets.length > 0 || activeLiveRuns.some((state) => state.status === "waiting_ssh_secret" || state.parts.some((part) => part.type === "ssh_secret"))) {
+    fetch("http://127.0.0.1:7368/ingest/77461c80-9be3-44e4-ac14-3725f6920049",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"ff618c"},body:JSON.stringify({sessionId:"ff618c",runId:"post-fix",hypothesisId:"E",location:"chat-page.tsx:pendingSecrets",message:"composer dock no longer renders secret cards",data:{dockRendered:false,pending:pendingSecrets.length,live:activeLiveRuns.map((state)=>({status:state.status,completed:state.completed,secrets:state.parts.filter((part)=>part.type==="ssh_secret").length}))},timestamp:Date.now()})}).catch(()=>{});
+  }
+  // #endregion
   const composerDock = (
     <div className="composer-dock">
       {uniqueErrorNotices.length > 0 && (
@@ -716,4 +723,27 @@ export function ChatPage({ toolbar, selectedSessionId }: { toolbar?: ReactNode; 
       <Toast notice={notice} onDismiss={dismissToast} />
     </div>
   );
+}
+
+/**
+ * 取出仍在等待的 SSH 安全输入。
+ *
+ * 这些请求会先出现在处理过程里；输入区贴在视口底部，用户不一定能滚到那张卡片。
+ * 同一请求只保留一张，避免密码提交两次。
+ *
+ * @param runs 当前会话的实时运行
+ * @returns 未完成的 SSH 输入请求
+ */
+function pendingSshSecretRequests(runs: LiveRunState[]): Array<Extract<LiveRunState["parts"][number], { type: "ssh_secret" }>> {
+  const seen = new Set<string>();
+  const pending = [];
+  for (const run of runs) {
+    if (run.completed) continue;
+    for (const part of run.parts) {
+      if (part.type !== "ssh_secret" || part.resolved || seen.has(part.request.id)) continue;
+      seen.add(part.request.id);
+      pending.push(part);
+    }
+  }
+  return pending;
 }

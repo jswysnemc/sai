@@ -20,10 +20,6 @@ pub(super) fn plugin_fields(config: &AppConfig, id: &str) -> Vec<Field> {
     match id {
         "vision" => vec![
             Field::boolean(t("Enabled", "启用"), config.plugins.vision.enabled),
-            Field::boolean(
-                t("Prefer current multimodal model", "优先当前多模态模型"),
-                config.plugins.vision.prefer_current_multimodal_model,
-            ),
             Field::new(
                 t("Vision Provider/model", "识图 Provider/模型"),
                 vision_provider_value(config),
@@ -73,12 +69,10 @@ pub(super) fn apply_plugin_fields(
     match id {
         "vision" => {
             config.plugins.vision.enabled = parse_bool_field(&fields[0].value)?;
-            config.plugins.vision.prefer_current_multimodal_model =
-                parse_bool_field(&fields[1].value)?;
-            let (provider_id, model) = parse_provider_model_choice(&fields[2].value);
+            let (provider_id, model) = parse_provider_model_choice(&fields[1].value);
             config.plugins.vision.vision_provider_id = provider_id;
             config.plugins.vision.vision_model = model;
-            config.plugins.vision.preview_with_chafa = parse_bool_field(&fields[3].value)?;
+            config.plugins.vision.preview_with_chafa = parse_bool_field(&fields[2].value)?;
         }
         "memory" => {
             config.plugins.memory.enabled = parse_bool_field(&fields[0].value)?;

@@ -13,6 +13,35 @@
   background: var(--paper-raised);
 }
 
+.turn-file-context-menu {
+  position: fixed;
+  z-index: 120;
+  display: grid;
+  min-width: 10rem;
+  padding: var(--space-2xs);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--paper-raised);
+  box-shadow: var(--shadow);
+}
+
+.turn-file-context-menu button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 0;
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--text-xs);
+  text-align: left;
+}
+
+.turn-file-context-menu button:hover { background: var(--paper-deep); }
+.turn-file-context-menu button.danger { color: var(--danger); }
+
 .turn-file-changes-head {
   display: flex;
   align-items: center;

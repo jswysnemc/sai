@@ -20,8 +20,6 @@ pub struct PluginsConfig {
 pub struct VisionPluginConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
-    #[serde(default = "default_true")]
-    pub prefer_current_multimodal_model: bool,
     #[serde(default)]
     pub vision_provider_id: String,
     #[serde(default)]

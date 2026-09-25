@@ -76,7 +76,11 @@ async fn session_data_todo_counts_follow_native_file_and_preserve_parse_errors()
         let mut absent = collect_session_data(&paths, &[info.clone()], &info.id).unwrap();
         todos::fill_counts(&paths, &mut absent).await.unwrap();
         assert!(absent.iter().all(|summary| summary.todo_count == Some(0)));
-        std::fs::write(store.state_dir().join("todos.json"), json!([item()]).to_string()).unwrap();
+        std::fs::write(
+            store.state_dir().join("todos.json"),
+            json!([item()]).to_string(),
+        )
+        .unwrap();
         let mut summaries = collect_session_data(&paths, &[info.clone()], &info.id).unwrap();
         todos::fill_counts(&paths, &mut summaries).await.unwrap();
         let summary = summaries.iter().find(|item| item.id == session.id).unwrap();

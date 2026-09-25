@@ -154,10 +154,15 @@
 }
 
 .runtime-overview-item.is-completed {
-  opacity: 0.68;
+  opacity: 0.72;
 }
 
-.runtime-overview-item.is-completed span {
+.runtime-overview-item.is-in_progress span {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.runtime-overview-item.is-cancelled span {
   text-decoration: line-through;
 }
 

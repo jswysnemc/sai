@@ -19,6 +19,8 @@ pub(in crate::cli) enum StreamInputAction {
     Interrupt,
     /// 中断当前轮次并退出 REPL
     Exit,
+    /// 打开副屏。不中断当前轮次，前台继续跑
+    OpenPager,
 }
 
 /// 运行期间立即执行命令所需的上下文。

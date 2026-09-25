@@ -20,6 +20,7 @@ import {
 } from "./editor-document-state";
 import { useEditorGitDiff } from "./use-editor-git-diff";
 import { registerUnsavedEditor } from "./unsaved-editor-changes";
+import { readEditorWordWrap, writeEditorWordWrap } from "./editor-word-wrap";
 import { OpenFileDialog } from "./open-file-dialog";
 import { Button } from "../../shared/ui/button/button";
 import type { EditorNavigation } from "./editor-header";
@@ -56,6 +57,16 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree,
   const [document, setDocument] = useState(() => createEditorDocumentState(path));
   const [markdownMode, setMarkdownMode] = useState<MarkdownEditorMode>("wysiwyg");
   const [openFileDialog, setOpenFileDialog] = useState(false);
+  const [wordWrap, setWordWrap] = useState(() => readEditorWordWrap(Boolean(path && isMarkdownFile(path))));
+  useEffect(() => {
+    setWordWrap(readEditorWordWrap(Boolean(path && isMarkdownFile(path))));
+  }, [path]);
+  const toggleWordWrap = () => {
+    setWordWrap((current) => {
+      writeEditorWordWrap(!current);
+      return !current;
+    });
+  };
   const fileDialog = <OpenFileDialog open={openFileDialog} initialPath={path ?? ""} onSelectFile={onSelectFile} onClose={() => setOpenFileDialog(false)} />;
   const gitLines = useEditorGitDiff(path, gitEntries ?? EMPTY_GIT_ENTRIES);
   const hasUnsavedChanges = Boolean(document.baseline && document.content !== document.baseline.content);
@@ -142,6 +153,8 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree,
         fileTreeOpen={fileTreeOpen}
         onToggleFileTree={onToggleFileTree}
         onOpenFile={() => setOpenFileDialog(true)}
+        wordWrap={imageFile ? null : wordWrap}
+        onToggleWordWrap={toggleWordWrap}
       />
       <div className="editor-area">
         {imageFile && <ImageFilePreview path={path} />}
@@ -152,6 +165,7 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree,
             mode={markdownMode}
             dark={isDarkTheme(theme)}
             renderPreview={(source) => <MarkdownFilePreview source={source} />}
+            wrap={wordWrap}
           />
         )}
         {!imageFile && file.data && !markdownFile && (
@@ -161,6 +175,8 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree,
             onChange={(next) => setDocument((current) => updateDocumentContent(current, next))}
             loadingLabel={t("Loading editor", "加载编辑器")}
             gitLines={gitLines}
+            wordWrap={wordWrap}
+            onToggleWordWrap={toggleWordWrap}
           />
         )}
         {!imageFile && file.isLoading && <div className="editor-state">{t("Loading editor", "加载编辑器")}</div>}

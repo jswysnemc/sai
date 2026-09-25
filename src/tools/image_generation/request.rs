@@ -348,6 +348,9 @@ mod tests {
             request.body["contents"][0]["parts"][0]["inline_data"]["data"],
             "aaaa"
         );
-        assert_eq!(request.body["contents"][0]["parts"][1]["text"], "make it night");
+        assert_eq!(
+            request.body["contents"][0]["parts"][1]["text"],
+            "make it night"
+        );
     }
 }

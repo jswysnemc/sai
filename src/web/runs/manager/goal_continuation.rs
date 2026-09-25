@@ -72,7 +72,11 @@ impl RunManager {
             .await
             .get(key)
             .is_none_or(|queue| queue.is_empty());
-        let goal_active = goal_is_active(&self.paths, &completed.workspace.path, &completed.request.session_id);
+        let goal_active = goal_is_active(
+            &self.paths,
+            &completed.workspace.path,
+            &completed.request.session_id,
+        );
         let running_work = session_has_running_work(
             &self.paths,
             &completed.workspace.path,
@@ -80,11 +84,17 @@ impl RunManager {
         )
         .await;
         if status == RunCheckpointStatus::Completed {
-            mark_unread_if_unfocused(&self.paths, &completed.workspace.path, &completed.request.session_id);
+            mark_unread_if_unfocused(
+                &self.paths,
+                &completed.workspace.path,
+                &completed.request.session_id,
+            );
         }
         match decide_continuation(status, goal_active, queue_empty, running_work) {
             ContinuationDecision::Stop => {}
-            ContinuationDecision::Wait => self.spawn_goal_waiter(key.to_string(), completed.clone()),
+            ContinuationDecision::Wait => {
+                self.spawn_goal_waiter(key.to_string(), completed.clone())
+            }
             ContinuationDecision::Continue => {
                 self.enqueue_goal_continuation(completed).await;
             }
@@ -138,11 +148,16 @@ impl RunManager {
         {
             return;
         }
-        self.queued.lock().await.entry(key).or_default().push_back(QueuedRun {
-            info,
-            workspace: completed.workspace.clone(),
-            request,
-        });
+        self.queued
+            .lock()
+            .await
+            .entry(key)
+            .or_default()
+            .push_back(QueuedRun {
+                info,
+                workspace: completed.workspace.clone(),
+                request,
+            });
     }
 
     /// 后台工作结束后再判断一次是否续轮。
@@ -162,7 +177,10 @@ impl RunManager {
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(WAIT_INTERVAL).await;
-                if manager.shutting_down.load(std::sync::atomic::Ordering::SeqCst) {
+                if manager
+                    .shutting_down
+                    .load(std::sync::atomic::Ordering::SeqCst)
+                {
                     break;
                 }
                 let busy = manager.active.lock().await.contains_key(&key)
@@ -175,7 +193,11 @@ impl RunManager {
                 if busy {
                     break;
                 }
-                if !goal_is_active(&manager.paths, &completed.workspace.path, &completed.request.session_id) {
+                if !goal_is_active(
+                    &manager.paths,
+                    &completed.workspace.path,
+                    &completed.request.session_id,
+                ) {
                     break;
                 }
                 if session_has_running_work(
@@ -221,16 +243,19 @@ fn goal_waiters() -> &'static std::sync::Mutex<HashSet<String>> {
 /// 返回:
 /// - 无；写入失败不影响续轮
 fn mark_unread_if_unfocused(paths: &SaiPaths, workspace_path: &str, session_id: &str) {
-    let Ok(current) = crate::state::active_session_id_for_workspace(paths, std::path::Path::new(workspace_path)) else {
+    let Ok(current) =
+        crate::state::active_session_id_for_workspace(paths, std::path::Path::new(workspace_path))
+    else {
         return;
     };
     if current == session_id {
         return;
     }
+    let workspace_id = crate::state::workspace_id_for_path(std::path::Path::new(workspace_path));
     let _ = crate::state::patch_sidebar_index(
         paths,
         crate::state::SidebarIndexPatch {
-            mark_unread: Some(session_id.to_string()),
+            mark_unread: Some(crate::state::sidebar_session_key(&workspace_id, session_id)),
             ..crate::state::SidebarIndexPatch::default()
         },
     );
@@ -252,8 +277,14 @@ fn goal_is_active(paths: &SaiPaths, workspace_path: &str, session_id: &str) -> b
 ///
 /// 返回:
 /// - 有运行中的子智能体或后台命令时返回 true
-async fn session_has_running_work(paths: &SaiPaths, workspace_path: &str, session_id: &str) -> bool {
-    let Ok(state) = StateStore::for_workspace_session(paths, std::path::Path::new(workspace_path), session_id) else {
+async fn session_has_running_work(
+    paths: &SaiPaths,
+    workspace_path: &str,
+    session_id: &str,
+) -> bool {
+    let Ok(state) =
+        StateStore::for_workspace_session(paths, std::path::Path::new(workspace_path), session_id)
+    else {
         return false;
     };
     let owner_key = state.state_dir().display().to_string();

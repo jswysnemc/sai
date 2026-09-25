@@ -2,6 +2,20 @@ import { describe, expect, it } from "vitest";
 import { toolDiffStat, toolResultSummary } from "./tool-result-summary";
 
 describe("toolResultSummary", () => {
+  it("读取制表符行号文本时给出行数", () => {
+    expect(toolResultSummary("read_file", "1\tfn main() {\n2\t}")).toEqual({
+      label: "2 行",
+      tone: "neutral"
+    });
+  });
+
+  it("图片读取给出尺寸", () => {
+    expect(toolResultSummary("read_file", "[Image: source: /tmp/a.png, image/png, 1KB, 8x4]")).toEqual({
+      label: "图片 8x4",
+      tone: "neutral"
+    });
+  });
+
   it("读取单文件时给出行数", () => {
     const output = JSON.stringify({
       type: "text-page",

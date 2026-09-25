@@ -110,6 +110,7 @@ pub(crate) fn render_live_call(
     arguments_preview: &str,
     mode: ToolCallDisplayMode,
     edit_diff_counts: Option<(usize, usize)>,
+    frame: usize,
 ) -> String {
     if mode == ToolCallDisplayMode::Hidden {
         return String::new();
@@ -125,13 +126,20 @@ pub(crate) fn render_live_call(
                 crate::render::status_style::ToolHealth::Pending,
             );
         }
-        return tool_view::render(
+        let rendered = tool_view::render(
             &ToolView::preparing(name.to_string(), arguments_preview.to_string()),
             ToolCallDisplayMode::Summary,
         );
+        return if frame > 0 {
+            crate::render::content_indent::animate_guide_marker(&rendered, frame)
+        } else {
+            rendered
+        };
     }
-    tool_view::render(
+    // 参数还在流入时也走和定稿工具卡相同的流光标题
+    tool_view::render_framed(
         &ToolView::preparing(name.to_string(), arguments_preview.to_string()),
         mode,
+        frame,
     )
 }

@@ -48,10 +48,12 @@ impl TranscriptStore {
             .as_ref()
             .is_some_and(|tail| tail.kind == ChatStreamKind::Reasoning && !tail.source.is_empty());
         let has_work_status = self.work_status.is_some();
+        let has_live_tool = self.live_tool_call.is_some();
         // 子智能体视图在主 agent 空闲时仍需刷新，否则 Working 扫光会冻结成静态图；
         // 主视图下有后台子智能体运行时同样推进帧，驱动底部面板的流光与实时统计
         if !has_reasoning
             && !has_work_status
+            && !has_live_tool
             && !self.has_pending_tool_cells()
             && !self.viewing_running_subagent()
             && !self.has_running_subagents()

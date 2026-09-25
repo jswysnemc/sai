@@ -21,15 +21,32 @@ pub(crate) struct ReadPageView {
 /// 行号列前景色：与 diff 行号一致的 244 号中性灰。
 const LINE_NUMBER_COLOR: u8 = 244;
 
-/// 解析 read_file 的 text-page 结果 JSON。
+/// 解析 read_file 的文本结果。
+///
+/// 新结果是 `行号<TAB>正文`。历史记录仍可能是 text-page JSON，两种都要能渲染。
 ///
 /// 参数:
 /// - `output`: 工具原始输出
 ///
 /// 返回:
-/// - 文本分页视图；不是 text-page 时返回空
+/// - 文本分页视图；既不是带行号文本也不是 text-page 时返回空
 pub(crate) fn parse_read_page(output: &str) -> Option<ReadPageView> {
-    let value = serde_json::from_str::<Value>(output.trim()).ok()?;
+    let trimmed = output.trim();
+    if let Some(page) = parse_legacy_text_page(trimmed) {
+        return Some(page);
+    }
+    parse_numbered_text(trimmed)
+}
+
+/// 解析历史 text-page JSON。
+///
+/// 参数:
+/// - `output`: 去掉首尾空白的工具输出
+///
+/// 返回:
+/// - 旧格式分页；类型不是 text-page 时返回空
+fn parse_legacy_text_page(output: &str) -> Option<ReadPageView> {
+    let value = serde_json::from_str::<Value>(output).ok()?;
     if value.get("type")?.as_str()? != "text-page" {
         return None;
     }
@@ -54,6 +71,39 @@ pub(crate) fn parse_read_page(output: &str) -> Option<ReadPageView> {
             .get("next")
             .and_then(Value::as_u64)
             .map(|item| item as usize),
+        content,
+    })
+}
+
+/// 解析 `行号<TAB>正文`。
+///
+/// 参数:
+/// - `output`: 去掉首尾空白的工具输出
+///
+/// 返回:
+/// - 行号连续文本；存在非行号行时返回空，交给通用视图展示提醒或目录列表
+fn parse_numbered_text(output: &str) -> Option<ReadPageView> {
+    let content = output
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    if content.is_empty() {
+        return None;
+    }
+    let mut offset = None;
+    for line in &content {
+        let (number, _) = split_numbered_line(line)?;
+        let number = number.parse::<usize>().ok()?;
+        if offset.is_none() {
+            offset = Some(number);
+        }
+    }
+    Some(ReadPageView {
+        path: String::new(),
+        offset: offset.unwrap_or(1),
+        truncated: false,
+        next: None,
         content,
     })
 }
@@ -143,7 +193,24 @@ fn read_page_badge(page: &ReadPageView) -> String {
     format!("\x1b[2m{range}\x1b[0m")
 }
 
-/// 渲染单条 `N: text` 内容行：行号列灰色，正文默认色。
+/// 拆出内容行的行号和正文。
+///
+/// 新格式用制表符分隔，旧 JSON 内容用 `N: ` 分隔。
+///
+/// 参数:
+/// - `line`: 单行工具输出
+///
+/// 返回:
+/// - 行号文本与正文；没有行号前缀时返回空
+fn split_numbered_line(line: &str) -> Option<(&str, &str)> {
+    let (number, rest) = line.split_once('\t').or_else(|| line.split_once(": "))?;
+    if number.is_empty() || !number.chars().all(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+    Some((number, rest))
+}
+
+/// 渲染单条带行号的内容行：行号列灰色，正文默认色。
 ///
 /// 参数:
 /// - `line`: 已带行号前缀的内容行
@@ -152,12 +219,9 @@ fn read_page_badge(page: &ReadPageView) -> String {
 /// 返回:
 /// - 着色后的内容行
 fn render_content_line(line: &str, number_width: usize) -> String {
-    let Some((number, rest)) = line.split_once(": ") else {
+    let Some((number, rest)) = split_numbered_line(line) else {
         return format!("\x1b[2m    {line}\x1b[0m");
     };
-    if !number.chars().all(|ch| ch.is_ascii_digit()) || number.is_empty() {
-        return format!("\x1b[2m    {line}\x1b[0m");
-    }
     format!("\x1b[2m\x1b[38;5;{LINE_NUMBER_COLOR}m{number:>number_width$}\x1b[0m  {rest}")
 }
 
@@ -223,5 +287,27 @@ mod tests {
         assert_eq!(page.next, Some(7));
         assert!(page.truncated);
         assert_eq!(page.content, vec!["5: x".to_string(), "6: y".to_string()]);
+    }
+
+    /// 新的制表符行号文本按首行号作为起点。
+    #[test]
+    fn parses_tab_numbered_text() {
+        let page = parse_read_page("5\tx\n6\ty").unwrap();
+        assert_eq!(page.offset, 5);
+        assert!(!page.truncated);
+        assert_eq!(page.path, "");
+        let rendered = render_content_line("5\tx", 1);
+        let plain = strip_ansi_for_test(&rendered);
+        assert!(plain.contains('x'), "{plain}");
+    }
+
+    /// 目录列表和系统提醒不按源码行渲染。
+    #[test]
+    fn non_numbered_output_is_not_a_page() {
+        assert!(parse_read_page("Directory: /tmp\nEntries 1-1 of 1:\na.txt").is_none());
+        assert!(parse_read_page(
+            "<system-reminder>Warning: the file exists but the contents are empty.</system-reminder>"
+        )
+        .is_none());
     }
 }

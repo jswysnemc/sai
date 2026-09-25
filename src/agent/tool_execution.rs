@@ -10,7 +10,7 @@ use tokio::sync::mpsc;
 pub(super) struct RealToolExecution {
     /// 返回给模型和界面的文本
     pub(super) output: String,
-    /// 下一次模型请求需要携带的图片
+    /// 需要随工具结果交给模型查看的图片
     pub(super) model_attachments: Vec<ToolModelAttachment>,
     /// 工具处理函数是否返回错误
     pub(super) failed: bool,
@@ -178,6 +178,12 @@ impl Agent {
                 self.state
                     .append_tool_report_context(turn_id, &call.function.name, &report)?;
             }
+            // 工具图片与结果一起持久化，历史投影和轮次内压缩据此重建附件消息
+            self.state.record_tool_result_images(
+                turn_id,
+                &call.id,
+                &execution.model_attachments,
+            )?;
         }
         Ok(execution)
     }

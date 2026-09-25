@@ -64,7 +64,8 @@ pub(crate) fn render_framed(view: &ToolView, mode: ToolCallDisplayMode, frame: u
         .unwrap_or_else(|| tool_event_label_tense(&view.name, Some(&view.arguments), tense));
     let denied = permission_denied(view.permission.as_ref());
     let is_edit = crate::render::stream_text::is_file_edit_tool(&view.name);
-    if view.outcome.is_none() && frame > 0 && !is_edit {
+    // 进行中的普通工具用流光标题，不再在行尾挂 preparing/running 静态徽标
+    if view.outcome.is_none() && !is_edit {
         let mut output = render_activity_line(&label, "", frame);
         if let Some(progress) = visible_progress(view.progress.as_deref()) {
             output.push_str(&render_progress_note(progress));

@@ -107,6 +107,38 @@ impl WaitSpinner {
         }
     }
 
+    /// 把一行定稿内容留在当前扫光位置，扫光下移一行继续。
+    ///
+    /// 参数:
+    /// - `line`: 已经带样式的单行文本
+    ///
+    /// 返回:
+    /// - 终端写入是否成功
+    pub(crate) fn commit_and_shift(&self, line: &str) -> Result<()> {
+        let _paint = paint_lock();
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| io::Error::other("wait spinner lock poisoned"))?;
+        let mut stdout = io::stdout();
+        let (_, rows) = terminal::size().unwrap_or((0, 0));
+        queue!(
+            stdout,
+            MoveTo(0, state.anchor_row),
+            Clear(ClearType::CurrentLine)
+        )?;
+        write!(stdout, "{line}\r\n")?;
+        let next = state.anchor_row.saturating_add(1);
+        state.anchor_row = if rows > 0 && next >= rows {
+            rows.saturating_sub(1)
+        } else {
+            next
+        };
+        state.lines_rendered = 0;
+        stdout.flush()?;
+        Ok(())
+    }
+
     /// 【终端】【等待状态】停止动画并清理已经渲染的终端行。
     ///
     /// 参数:

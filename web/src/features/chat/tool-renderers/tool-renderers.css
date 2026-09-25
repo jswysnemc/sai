@@ -258,6 +258,15 @@
   padding-top: var(--space-sm);
 }
 
+.read-image-note {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  color: var(--technical-muted);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .read-file-page + .read-file-page {
   border-top: 1px solid var(--technical-border);
 }

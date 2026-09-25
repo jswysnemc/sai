@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { ChevronDown, FileDiff, PanelRightOpen, RotateCcw } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, Copy, FileDiff, FileText, FolderSearch, PanelRightOpen, RotateCcw } from "lucide-react";
 import { api } from "../../../api/client";
 import { toDisplayError } from "../../../api/api-error";
 import { DiffView } from "../tool-renderers/diff-view";
@@ -46,6 +46,7 @@ export function TurnFileChanges({
   const [filesCollapsed, setFilesCollapsed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; path: string } | null>(null);
   const canDiscard = Boolean(sessionId && turnId && changes.length > 0);
   const patchSource = useMemo(
     () => (activePath ? buildTurnDiffSource(tools, activePath) : ""),
@@ -107,6 +108,48 @@ export function TurnFileChanges({
     });
     if (!accepted) return;
     await restorePaths([]);
+  };
+
+  /**
+   * 打开文件变更行的右键菜单。
+   *
+   * @param event 右键事件
+   * @param path 目标文件路径
+   */
+  const openMenu = (event: { preventDefault: () => void; stopPropagation: () => void; clientX: number; clientY: number }, path: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setMenu({ x: event.clientX, y: event.clientY, path });
+  };
+
+  /**
+   * 在编辑器中打开文件，并可展开文件树。
+   *
+   * @param path 目标文件路径
+   * @param reveal 是否同时展开文件树
+   */
+  const openFile = (path: string, reveal: boolean) => {
+    window.dispatchEvent(new CustomEvent("sai:open-file", { detail: { path, reveal } }));
+  };
+
+  /**
+   * 舍弃单个文件在本轮的改动。
+   *
+   * @param path 目标文件路径
+   */
+  const discardOne = async (path: string) => {
+    if (!sessionId || !turnId) return;
+    const accepted = await confirm({
+      title: t("Discard this file's changes?", "撤销这个文件的改动？"),
+      description: t(
+        "This restores the file to the pre-turn worktree snapshot. This cannot be undone.",
+        "将把该文件恢复到本轮开始前的工作树快照，操作不可撤销。"
+      ),
+      confirmLabel: t("Undo", "撤销"),
+      danger: true
+    });
+    if (!accepted) return;
+    await restorePaths([path]);
   };
 
   /**
@@ -186,11 +229,15 @@ export function TurnFileChanges({
             const expanded = activePath === change.path;
             return (
               <li key={`${change.tool}:${change.path}`} className={expanded ? "is-expanded" : ""}>
-                <div className={`turn-file-change-row${expanded ? " active" : ""}`}>
+                <div
+                  className={`turn-file-change-row${expanded ? " active" : ""}`}
+                  onContextMenu={(event) => openMenu(event, change.path)}
+                >
                   <button
                     type="button"
                     className="turn-file-change-main"
                     onClick={() => toggleDiff(change.path)}
+                    onContextMenu={(event) => openMenu(event, change.path)}
                     aria-expanded={expanded}
                   >
                     <span className="turn-file-path" title={change.path}>
@@ -227,7 +274,67 @@ export function TurnFileChanges({
           })}
         </ul>
       )}
+      {menu && (
+        <TurnFileContextMenu
+          x={menu.x}
+          y={menu.y}
+          path={menu.path}
+          canDiscard={canDiscard && !busy}
+          onOpen={() => openFile(menu.path, false)}
+          onReveal={() => openFile(menu.path, true)}
+          onReview={() => openDiffInSidebar(menu.path)}
+          onDiscard={() => void discardOne(menu.path)}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </section>
+  );
+}
+
+type TurnFileContextMenuProps = {
+  x: number;
+  y: number;
+  path: string;
+  canDiscard: boolean;
+  onOpen: () => void;
+  onReveal: () => void;
+  onReview: () => void;
+  onDiscard: () => void;
+  onClose: () => void;
+};
+
+/**
+ * 文件变更行的右键菜单：打开、审阅、定位和复制路径。
+ *
+ * @param props 菜单位置与该文件的操作
+ * @returns 固定定位菜单
+ */
+function TurnFileContextMenu(props: TurnFileContextMenuProps) {
+  const { t } = useI18n();
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const close = (event: PointerEvent) => { if (!ref.current?.contains(event.target as Node)) props.onClose(); };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") props.onClose(); };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", escape);
+    return () => { document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", escape); };
+  }, [props]);
+
+  const choose = (action: () => void) => {
+    props.onClose();
+    action();
+  };
+
+  return (
+    <div ref={ref} className="turn-file-context-menu" style={{ left: props.x, top: props.y }} role="menu">
+      <button type="button" role="menuitem" onClick={() => choose(props.onOpen)}><FileText size={13} />{t("Open file", "打开文件")}</button>
+      <button type="button" role="menuitem" onClick={() => choose(props.onReview)}><FileDiff size={13} />{t("Review changes", "审阅改动")}</button>
+      <button type="button" role="menuitem" onClick={() => choose(props.onReveal)}><FolderSearch size={13} />{t("Reveal in file tree", "在文件树中显示")}</button>
+      <button type="button" role="menuitem" onClick={() => choose(() => { void navigator.clipboard.writeText(props.path); })}><Copy size={13} />{t("Copy path", "复制路径")}</button>
+      {props.canDiscard && (
+        <button type="button" role="menuitem" className="danger" onClick={() => choose(props.onDiscard)}><RotateCcw size={13} />{t("Undo this file", "撤销此文件")}</button>
+      )}
+    </div>
   );
 }
 

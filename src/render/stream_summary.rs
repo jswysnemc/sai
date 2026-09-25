@@ -140,7 +140,7 @@ impl StreamSummary {
     /// 生成定稿推理摘要文本（过去式标题）。
     ///
     /// 返回:
-    /// - 如 `› Thought (12s) · 12 tokens`
+    /// - 如 `› Thought for 12s · 12 tokens`
     fn finalized_reasoning_text(&self) -> String {
         self.reasoning_title(true)
     }
@@ -539,7 +539,7 @@ mod tests {
 
     #[test]
     fn reasoning_summary_label_matches_transcript_cell_format() {
-        // 1. CLI live/固化行必须与 TUI 固化标题使用同一 label 格式：Thinking (12s)
+        // 1. CLI live/固化行必须与 TUI 固化标题使用同一 label 格式：Thinking for 12s
         let mut summary = StreamSummary::new(false);
         summary
             .add_reasoning_text_with_elapsed("hello world", Duration::from_secs(12))
@@ -547,10 +547,12 @@ mod tests {
 
         let output = summary.reasoning_text();
 
-        assert!(output.contains("Thinking (12s)"), "output={output:?}");
+        assert!(output.contains("Thinking for 12s"), "output={output:?}");
         assert!(!output.contains("Thinking(12s)"));
         assert_eq!(
-            summary.finalized_reasoning_text().contains("Thought (12s)"),
+            summary
+                .finalized_reasoning_text()
+                .contains("Thought for 12s"),
             true,
             "finalize must switch to past tense: {}",
             summary.finalized_reasoning_text()

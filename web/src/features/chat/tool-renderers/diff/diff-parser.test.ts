@@ -112,7 +112,10 @@ describe("diff parser", () => {
     );
 
     expect(files[0].lines.filter((line) => line.kind === "hunk")).toHaveLength(1);
-    expect(files[0].lines.find((line) => line.kind === "hunk")?.foldedCount).toBe(48);
+    const fold = files[0].lines.find((line) => line.kind === "hunk");
+    expect(fold?.foldedCount).toBe(48);
+    expect(fold?.foldStart).toBe(2);
+    expect(fold?.foldEnd).toBe(49);
     const second = files[0].lines.find((line) => line.kind === "removed" && line.text === "fifty");
     expect(second?.oldLine).toBe(50);
   });

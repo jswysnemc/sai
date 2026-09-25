@@ -60,7 +60,10 @@ fn running_work(paths: &SaiPaths, session_id: &str, state_dir: &Path) -> Running
         .filter(|task| task.owned_by_session(session_id) && task.status == "running")
         .map(command_label)
         .collect();
-    RunningWork { subagents, commands }
+    RunningWork {
+        subagents,
+        commands,
+    }
 }
 
 /// 取后台命令的短标签。
@@ -140,4 +143,3 @@ mod tests {
         finish_subagent(&subagent.id, "completed", None, None, None);
     }
 }
-

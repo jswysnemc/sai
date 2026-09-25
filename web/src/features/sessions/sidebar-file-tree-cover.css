@@ -31,8 +31,6 @@
   background: transparent;
 }
 
-.sidebar-file-tree-cover .file-tree-head { display: none; }
-
 .sidebar-file-tree-cover .file-tree-workspace {
   display: flex;
   align-items: center;

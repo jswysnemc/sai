@@ -23,6 +23,14 @@ export type DiffLine = {
   newLine?: number;
   /** hunk 之间被省略的连续未修改行数 */
   foldedCount?: number;
+  /** 省略区间在新文件中的起始行，从 1 开始 */
+  foldStart?: number;
+  /** 省略区间在新文件中的结束行，含本行 */
+  foldEnd?: number;
+  /** 省略区间在旧文件中的起始行，从 1 开始 */
+  foldOldStart?: number;
+  /** 省略区间在旧文件中的结束行，含本行 */
+  foldOldEnd?: number;
   /** 与相邻行配对后得出的字符级差异；未配对时为空 */
   segments?: DiffSegment[];
 };

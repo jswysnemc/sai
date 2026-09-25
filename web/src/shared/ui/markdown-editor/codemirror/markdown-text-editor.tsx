@@ -12,6 +12,8 @@ type MarkdownTextEditorProps = {
   live: boolean;
   dark: boolean;
   readOnly?: boolean;
+  /** 是否自动换行，缺省为换行 */
+  wrap?: boolean;
 };
 
 /**
@@ -20,7 +22,7 @@ type MarkdownTextEditorProps = {
  * 文档本身始终是 Markdown 源码，所见即所得靠装饰层隐藏语法标记实现，
  * 因此模式之间往返不会改写用户的原始写法——这是与富文本方案的关键差别。
  *
- * @param props 文档内容、变更回调、模式、主题深浅与只读状态
+ * @param props 文档内容、变更回调、模式、主题深浅、只读状态与换行
  * @returns 编辑器容器
  */
 export function MarkdownTextEditor({
@@ -29,6 +31,7 @@ export function MarkdownTextEditor({
   live,
   dark,
   readOnly = false,
+  wrap = true,
 }: MarkdownTextEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -50,7 +53,7 @@ export function MarkdownTextEditor({
             recordEmittedValue(emittedRef.current, next);
             onChangeRef.current(next);
           }),
-          presentationRef.current.of(presentationExtensions({ live, dark, readOnly })),
+          presentationRef.current.of(presentationExtensions({ live, dark, readOnly, wrap })),
         ],
       }),
       parent: host,
@@ -69,9 +72,9 @@ export function MarkdownTextEditor({
     if (!view) return;
     // 2. 模式、主题、只读状态变化时热替换，保留光标与撤销栈
     view.dispatch({
-      effects: presentationRef.current.reconfigure(presentationExtensions({ live, dark, readOnly })),
+      effects: presentationRef.current.reconfigure(presentationExtensions({ live, dark, readOnly, wrap })),
     });
-  }, [live, dark, readOnly]);
+  }, [live, dark, readOnly, wrap]);
 
   useEffect(() => {
     const view = viewRef.current;

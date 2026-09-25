@@ -61,6 +61,7 @@ pub(in crate::state) fn create_tool_history_tables(conn: &Connection) -> Result<
         CREATE INDEX IF NOT EXISTS idx_tool_replacements_session
             ON tool_output_replacements(session_id);",
     )?;
+    super::attachments::create_tool_image_table(conn)?;
     ensure_tool_call_metadata_columns(conn)?;
     Ok(())
 }

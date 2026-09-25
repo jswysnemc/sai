@@ -120,6 +120,12 @@ pub(super) struct ReplRuntime {
     frame: TerminalFrame,
     /// 流式阶段 Ctrl+Y 清空队列需按第二次确认
     pending_clear_queue: bool,
+    /// 副屏打开时不能往主缓冲绘制，否则会写进备用屏
+    overlay_open: bool,
+    /// 副屏期间历史有更新，离开后要整屏重放
+    overlay_dirty: bool,
+    /// 下一次重放强制按当前光标整屏重锚
+    force_reanchor: bool,
 }
 
 /// 运行期间底部输入框草稿。
@@ -234,6 +240,9 @@ impl ReplRuntime {
             live_usage: live_usage::LiveTurnUsage::default(),
             frame: TerminalFrame::new(),
             pending_clear_queue: false,
+            overlay_open: false,
+            overlay_dirty: false,
+            force_reanchor: false,
         }
     }
 
@@ -420,6 +429,9 @@ impl ReplRuntime {
         self.next_live_refresh = None;
         self.live_sync_pending = false;
         self.desynced = false;
+        self.overlay_open = false;
+        self.overlay_dirty = false;
+        self.force_reanchor = false;
         self.pending_input_events.clear();
         self.stream_draft = StreamComposerDraft::default();
         self.lock_queue().clear();
@@ -453,6 +465,34 @@ impl ReplRuntime {
         Ok(())
     }
 
+    /// 关闭副屏后把主缓冲补到最新。副屏期间没有往主屏画过，历史增长时整屏重放。
+    ///
+    /// 返回: 是否成功
+    pub(in crate::cli) fn resume_after_pager(&mut self) -> Result<()> {
+        let dirty = self.overlay_dirty;
+        self.overlay_open = false;
+        self.overlay_dirty = false;
+        self.desynced = false;
+        // #region agent log
+        crate::cli::repl_pager::debug_agent_log(
+            "C",
+            "repl_runtime/mod.rs:resume_after_pager",
+            "leave pager without cancelling the turn",
+            &format!("{{\"dirty\":{dirty},\"cancel\":false}}"),
+        );
+        // #endregion
+        if !crossterm::terminal::is_raw_mode_enabled().unwrap_or(false) {
+            crossterm::terminal::enable_raw_mode()?;
+        }
+        let size_changed = TerminalSize::current() != self.viewport.size();
+        if dirty || size_changed {
+            self.force_reanchor = true;
+            self.replay(self.stream_active)?;
+        }
+        self.redraw_stream_composer()?;
+        Ok(())
+    }
+
     /// 立即按当前 viewport 从 source 重绘 REPL 终端。
     ///
     /// 参数:
@@ -477,6 +517,22 @@ impl ReplRuntime {
     /// 稳定前缀不触碰；变化行按行修补；新增行走真实滚动进入原生
     /// scrollback；行数收缩时清理尾部。resize 未收敛期间冻结增量。
     fn sync_transcript(&mut self, streaming: bool) -> Result<()> {
+        if self.overlay_open {
+            let first = !self.overlay_dirty;
+            self.overlay_dirty = true;
+            self.live_sync_pending = true;
+            if first {
+                // #region agent log
+                crate::cli::repl_pager::debug_agent_log(
+                    "B",
+                    "repl_runtime/mod.rs:sync_transcript",
+                    "skip main paint while pager is open",
+                    "{\"painted\":false}",
+                );
+                // #endregion
+            }
+            return Ok(());
+        }
         if self.desynced {
             self.restart_after_external()?;
         }
@@ -565,9 +621,11 @@ impl ReplRuntime {
         let size = TerminalSize::current();
         let previous = self.viewport.size();
         let previewed = self.resize_preview.take().is_some();
+        let forced = std::mem::take(&mut self.force_reanchor);
         // 1. 【终端】【尺寸重排】临时预览已改变可见区域，稳定后重新锚定；
         //    未预览的纯高度变化仍按光标位移修正，原生滚动历史始终保留
-        let full_reanchor = previewed
+        let full_reanchor = forced
+            || previewed
             || size != previous
                 && !(size.cols == previous.cols && self.reanchor_for_height_change(size));
         if full_reanchor {

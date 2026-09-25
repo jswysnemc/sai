@@ -60,9 +60,10 @@ pub use sessions::{
     delete_sessions_for_workspace, ensure_active_session as active_session,
     ensure_workspace_session, list_all_sessions, list_located_sessions,
     list_located_sessions_for_workspace, list_sessions, list_sessions_for_workspace,
-    locate_session_dirs, rename_session, state_dir_for_workspace_session, switch_session,
-    switch_session_located, title_from_message_public, workspace_id_for_path, load_sidebar_index,
-    patch_sidebar_index, LocatedSession, SessionInfo, SidebarGroup, SidebarIndex, SidebarIndexPatch,
+    load_sidebar_index, locate_session_dirs, patch_sidebar_index, rename_session,
+    sidebar_session_key, state_dir_for_workspace_session, switch_session, switch_session_located,
+    title_from_message_public, workspace_id_for_path, LocatedSession, SessionInfo, SidebarGroup,
+    SidebarIndex, SidebarIndexPatch,
 };
 #[allow(unused_imports)]
 pub use tool_history::{

@@ -13,6 +13,7 @@ import {
   clampChangeOrdinal
 } from "./diff/diff-change-blocks";
 import { DiffConnector } from "./diff/diff-connectors";
+import { DiffHunkFold } from "./diff/diff-hunk-fold";
 import { SyntaxHighlighter } from "../syntax-highlighter";
 import { useI18n } from "../../i18n/use-i18n";
 import "./diff-view.css";
@@ -160,6 +161,7 @@ export function DiffIdeaView({ file, language }: { file: DiffFile; language?: st
             ordinal={changeOrdinals.get(index)}
             changeCount={changeCount}
             language={language}
+            path={file.path}
             onToggleFold={() => toggleFold(index)}
             onActivate={() => {
               const ordinal = changeOrdinals.get(index);
@@ -184,6 +186,7 @@ type SegmentBlockProps = {
   ordinal?: number;
   changeCount: number;
   language?: string;
+  path: string;
   onToggleFold: () => void;
   onActivate: () => void;
   refCallback: (element: HTMLDivElement | null) => void;
@@ -204,6 +207,7 @@ function SegmentBlock({
   ordinal,
   changeCount,
   language,
+  path,
   onToggleFold,
   onActivate,
   refCallback,
@@ -218,7 +222,7 @@ function SegmentBlock({
     return (
       <div className="diff-idea-context">
         {head.map((row, rowIndex) => (
-          <IdeaRow row={row} language={language} key={`h${rowIndex}`} />
+          <IdeaRow row={row} language={language} path={path} key={`h${rowIndex}`} />
         ))}
         {!showAll && (
           <button type="button" className="diff-idea-fold" onClick={onToggleFold}>
@@ -231,7 +235,7 @@ function SegmentBlock({
           </button>
         )}
         {tail.map((row, rowIndex) => (
-          <IdeaRow row={row} language={language} key={`t${rowIndex}`} />
+          <IdeaRow row={row} language={language} path={path} key={`t${rowIndex}`} />
         ))}
       </div>
     );
@@ -269,8 +273,17 @@ function SegmentBlock({
  * @param props 对齐行与着色语言
  * @returns 行元素
  */
-function IdeaRow({ row, language }: { row: SideBySideRow; language?: string }) {
-  // hunk 标记整行横跨
+function IdeaRow({ row, language, path = "" }: { row: SideBySideRow; language?: string; path?: string }) {
+  // hunk 之间的省略行可以点开，从工作区文件回填
+  if (row.left?.kind === "hunk" && row.left.foldedCount && row.left.foldStart && row.left.foldEnd) {
+    return (
+      <DiffHunkFold path={path} line={row.left} className="diff-idea-fold">
+        {(lines) => lines.map((line, index) => (
+          <IdeaRow row={{ left: line, right: line }} language={language} key={`folded-${index}`} />
+        ))}
+      </DiffHunkFold>
+    );
+  }
   if (row.left && (row.left.kind === "hunk" || row.left.kind === "no-newline")) {
     return <div className="diff-row hunk diff-span">{row.left.text}</div>;
   }

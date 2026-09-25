@@ -109,7 +109,7 @@ fn render_todo_section(
         .find(|item| item.status == "in_progress")
         .or_else(|| todos.iter().find(|item| item.status == "pending"));
     // 左侧引导点与队列、智能体同一套沉底装饰，避免「计划」顶格成一块标签
-    let mut header = format!("\x1b[2m● {} {done}/{total}\x1b[0m", t("Plan", "计划"));
+    let mut header = format!("\x1b[2m● Todo {done}/{total}\x1b[0m");
     // 单行时才把当前项挂在标题旁；展开后条目与其它待办对齐，不再升成标题
     if compact {
         if let Some(item) = active {

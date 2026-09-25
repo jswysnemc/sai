@@ -106,9 +106,9 @@ impl ProviderBrowser<'_> {
         if self.orgs.is_empty() {
             self.orgs.push("All".to_string());
         }
-        self.org_idx = self.org_idx.min(self.orgs.len().saturating_sub(1));
+        self.org_idx = super::super::search::clamp_index(self.org_idx, self.orgs.len());
         self.models = grouped.remove(&self.orgs[self.org_idx]).unwrap_or_default();
-        self.model_idx = self.model_idx.min(self.models.len().saturating_sub(1));
+        self.model_idx = super::super::search::clamp_index(self.model_idx, self.models.len());
     }
 
     /// 返回本地已激活模型优先的合并列表。

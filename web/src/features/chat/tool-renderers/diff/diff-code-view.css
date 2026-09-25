@@ -95,6 +95,8 @@
 }
 .review-diff-gap > svg, .review-diff-gap > span { flex: none; }
 .review-diff-gap > code { overflow: hidden; min-width: 0; margin-left: 0.5rem; text-overflow: ellipsis; white-space: nowrap; font: inherit; }
+button.review-diff-gap { cursor: pointer; text-align: left; }
+button.review-diff-gap:hover,
 .review-diff .review-diff-fold:hover { color: var(--ink); background: var(--surface-hover); }
 .review-diff.is-wrapped .review-diff-table { width: 100%; }
 .review-diff.is-wrapped .review-diff-code { white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -10,7 +10,7 @@ use crossterm::queue;
 use crossterm::style::Print;
 use crossterm::terminal::{self, Clear, ClearType};
 use std::collections::BTreeMap;
-use std::io::{self, Write};
+use std::io;
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
@@ -150,8 +150,15 @@ impl<'a> ProviderBrowser<'a> {
             }
             KeyCode::Backspace => {
                 self.filter.pop();
+                if self.filter.is_empty() {
+                    self.filter_mode = false;
+                }
+                self.model_idx = 0;
             }
-            KeyCode::Char(ch) => self.filter.push(ch),
+            KeyCode::Char(ch) => {
+                self.filter.push(ch);
+                self.model_idx = 0;
+            }
             _ => {}
         }
         self.rebuild_models();
@@ -184,14 +191,14 @@ impl<'a> ProviderBrowser<'a> {
         match self.active_col {
             0 => {
                 self.provider_idx =
-                    (self.provider_idx + 1).min(self.config.providers.len().saturating_sub(1));
+                    super::search::clamp_index(self.provider_idx + 1, self.config.providers.len());
                 self.refresh_models();
             }
             1 => {
-                self.org_idx = (self.org_idx + 1).min(self.orgs.len().saturating_sub(1));
+                self.org_idx = super::search::clamp_index(self.org_idx + 1, self.orgs.len());
                 self.rebuild_models();
             }
-            2 => self.model_idx = (self.model_idx + 1).min(self.models.len().saturating_sub(1)),
+            2 => self.model_idx = super::search::clamp_index(self.model_idx + 1, self.models.len()),
             _ => {}
         }
     }
@@ -487,17 +494,16 @@ pub(crate) fn select_active_provider(
         )?;
         return Ok(());
     }
-    let mut selected = choices
-        .iter()
-        .position(|choice| {
-            config
-                .provider(None)
-                .map(|provider| {
-                    provider.id == choice.provider_id && provider.default_model == choice.model
-                })
-                .unwrap_or(false)
-        })
-        .unwrap_or(0);
+    let current = choices.iter().position(|choice| {
+        config
+            .provider(None)
+            .map(|provider| {
+                provider.id == choice.provider_id && provider.default_model == choice.model
+            })
+            .unwrap_or(false)
+    });
+    let mut selected = current.unwrap_or(0);
+    let mut search = super::search::ListSearch::default();
     let mut status = String::new();
     loop {
         if choices.is_empty() {
@@ -510,20 +516,34 @@ pub(crate) fn select_active_provider(
             )?;
             return Ok(());
         }
-        selected = selected.min(choices.len().saturating_sub(1));
-        let options = choices
+        let visible = choices
             .iter()
-            .map(|choice| choice.label())
+            .enumerate()
+            .filter(|(_, choice)| search.matches(&choice.label()))
+            .map(|(index, _)| index)
             .collect::<Vec<_>>();
-        let help = if status.is_empty() {
-            t(
-                "[Enter] select [d] remove [q] back",
-                "[Enter]选择 [d]移除 [q]返回",
-            )
-            .to_string()
+        selected = super::search::clamp_index(selected, visible.len());
+        let options = if visible.is_empty() {
+            vec![format!("({})", t("no matches", "没有匹配"))]
         } else {
-            status.clone()
+            visible
+                .iter()
+                .map(|index| choices[*index].label())
+                .collect::<Vec<_>>()
         };
+        let help = search.help().unwrap_or_else(|| {
+            if status.is_empty() {
+                super::theme::help_line(&[
+                    ("/", t("search", "搜索")),
+                    ("↑↓", t("move", "移动")),
+                    ("Enter", t("select", "选择")),
+                    ("d", t("remove", "移除")),
+                    ("q", t("back", "返回")),
+                ])
+            } else {
+                status.clone()
+            }
+        });
         draw_menu(
             stdout,
             t(" SELECT PROVIDER/MODEL ", " 选择供应商/模型 "),
@@ -531,13 +551,31 @@ pub(crate) fn select_active_provider(
             selected,
             &help,
         )?;
-        match read_key()? {
+        let key = read_key()?;
+        match search.handle(key) {
+            super::search::SearchEffect::Updated => {
+                selected = 0;
+                status.clear();
+                continue;
+            }
+            super::search::SearchEffect::Closed => continue,
+            super::search::SearchEffect::Passthrough => {}
+        }
+        match key {
             KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
-            KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
-            KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
-            KeyCode::Char('d') => {
+            KeyCode::Up | KeyCode::Char('k') if !search.editing => {
+                selected = selected.saturating_sub(1)
+            }
+            KeyCode::Down | KeyCode::Char('j') if !search.editing => {
+                selected = super::search::clamp_index(selected + 1, visible.len())
+            }
+            KeyCode::Up if search.editing => selected = selected.saturating_sub(1),
+            KeyCode::Down if search.editing => {
+                selected = super::search::clamp_index(selected + 1, visible.len())
+            }
+            KeyCode::Char('d') if !visible.is_empty() => {
                 // 移除当前高亮模型（含元数据），失败时在菜单内提示而不终止 TUI
-                let choice = &choices[selected];
+                let choice = &choices[visible[selected]];
                 let provider_id = choice.provider_id.clone();
                 let model = choice.model.clone();
                 match config.remove_active_provider_model(&provider_id, &model) {
@@ -548,11 +586,9 @@ pub(crate) fn select_active_provider(
                     Err(err) => status = err.to_string(),
                 }
             }
-            KeyCode::Enter => {
-                config.set_active_provider_model(
-                    &choices[selected].provider_id,
-                    &choices[selected].model,
-                )?;
+            KeyCode::Enter if !visible.is_empty() => {
+                let choice = &choices[visible[selected]];
+                config.set_active_provider_model(&choice.provider_id, &choice.model)?;
                 return Ok(());
             }
             _ => {}

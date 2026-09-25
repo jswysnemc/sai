@@ -31,6 +31,8 @@ const EVENT_TYPES = [
   "permission.resolved",
   "question.requested",
   "question.resolved",
+  "ssh.secret.requested",
+  "ssh.secret.resolved",
   "workspace.changed",
   "content.flushed",
   "engine.ready",

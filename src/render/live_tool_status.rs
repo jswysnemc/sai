@@ -7,6 +7,8 @@ use std::io::{self, Write};
 
 pub(crate) struct LiveToolStatus {
     active: bool,
+    /// 是否已经把静态状态写进终端。只挂了底行扫光时不算。
+    painted: bool,
 }
 
 impl LiveToolStatus {
@@ -15,7 +17,30 @@ impl LiveToolStatus {
     /// 返回:
     /// - 新的单行工具状态管理器
     pub(crate) fn new() -> Self {
-        Self { active: false }
+        Self {
+            active: false,
+            painted: false,
+        }
+    }
+
+    /// 标记有一条进行中的工具状态，先不写终端。
+    ///
+    /// 终端里的流光由等待动画画出；这里只占住底行所有权。
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn arm(&mut self) {
+        self.active = true;
+        self.painted = false;
+    }
+
+    /// 结束底行占用，不额外换行。
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn disarm(&mut self) {
+        self.active = false;
+        self.painted = false;
     }
 
     /// 判断当前是否存在活动状态行。
@@ -50,6 +75,7 @@ impl LiveToolStatus {
         }
         stdout.flush()?;
         self.active = !final_line;
+        self.painted = !final_line;
         Ok(())
     }
 
@@ -58,13 +84,14 @@ impl LiveToolStatus {
     /// 返回:
     /// - 写入是否成功
     pub(crate) fn finish(&mut self) -> Result<()> {
-        if self.active {
+        if self.active && self.painted {
             let _paint = paint_lock();
             let mut stdout = io::stdout();
             writeln!(stdout)?;
             stdout.flush()?;
-            self.active = false;
         }
+        self.active = false;
+        self.painted = false;
         Ok(())
     }
 
@@ -81,6 +108,7 @@ impl LiveToolStatus {
             stdout.flush()?;
             self.active = false;
         }
+        self.painted = false;
         Ok(())
     }
 }

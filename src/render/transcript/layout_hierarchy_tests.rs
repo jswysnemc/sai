@@ -46,7 +46,7 @@ fn mixed_cells_use_distinct_markers_and_section_gaps() {
 
     // tool: 自身无前空行，紧跟思考标题/正文
     assert!(
-        snapshot[2][0].starts_with('•'),
+        snapshot[2][0].starts_with('●') || snapshot[2][0].starts_with('•'),
         "tool marker: {:?}",
         snapshot[2][0]
     );
@@ -86,14 +86,9 @@ fn assembled_window_separates_body_from_following_tool() {
         .map(|line| strip_ansi_for_test(line.as_str()))
         .collect();
     let think = plain.iter().position(|line| line.starts_with('›'));
-    let first_tool = plain.iter().position(|line| line.starts_with('•'));
+    let first_tool = plain.iter().position(|line| line.contains("Reading a.rs"));
     let body = plain.iter().position(|line| line.contains("Here is"));
-    let second_tool = plain
-        .iter()
-        .enumerate()
-        .rev()
-        .find(|(_, line)| line.starts_with('•'))
-        .map(|(index, _)| index);
+    let second_tool = plain.iter().position(|line| line.contains("Reading b.rs"));
 
     assert!(think < first_tool, "{plain:?}");
     assert!(

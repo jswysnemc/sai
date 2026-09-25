@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { WorkspaceSessions } from "../../api/contracts";
@@ -71,6 +71,9 @@ export function useSessionActions({ confirm, t, tree, onNavigate, onSessionSelec
     await enqueueSessionNavigation(queryClient, async (navigation) => {
       try {
         const active = navigation.workspaceActive(workspaceId, workspaceActive);
+        // #region agent log
+        fetch('http://127.0.0.1:7368/ingest/77461c80-9be3-44e4-ac14-3725f6920049',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff618c'},body:JSON.stringify({sessionId:'ff618c',hypothesisId:'S',location:'use-session-actions.ts:openSession',message:'session click activates workspace',data:{workspaceId,sessionId,workspaceWasActive:active,willSwitch:!active},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         if (!active) {
           const switched = await switchWithTerminalConfirm(workspaceId, confirm, t);
           if (!switched) return;
@@ -80,7 +83,7 @@ export function useSessionActions({ confirm, t, tree, onNavigate, onSessionSelec
         // 1. 【会话导航】【标签页选择】会话选择保存在当前标签页，避免覆盖其他并行会话的服务端指针
         onSessionSelected?.(workspaceId, sessionId);
         commitLocalSessionSelection(queryClient, workspaceId, sessionId);
-        void api.sessionSidebar.update({ clear_unread: sessionId }).then(() => {
+        void api.sessionSidebar.update({ clear_unread: `${workspaceId}\u001f${sessionId}` }).then(() => {
           void queryClient.invalidateQueries({ queryKey: ["session-sidebar"] });
         }).catch(() => undefined);
         onNavigate?.();
@@ -93,20 +96,6 @@ export function useSessionActions({ confirm, t, tree, onNavigate, onSessionSelec
     });
   };
 
-  /** 切换到指定工作区；工作区视图不强制打开某个会话。 */
-  const openWorkspace = async (workspaceId: string, workspaceActive: boolean) => {
-    if (workspaceActive) return;
-    setNavigationError(null);
-    try {
-      const switched = await switchWithTerminalConfirm(workspaceId, confirm, t);
-      if (switched) {
-        await invalidateWorkspaceContext(queryClient);
-      }
-    } catch (cause) {
-      setNavigationError(toDisplayError(cause, "Failed to open workspace", "打开工作区失败"));
-    }
-  };
-
   /**
    * 【会话】【新会话默认值】创建会话并在列表刷新前写入专属模型与思考偏好。
    *
@@ -114,11 +103,18 @@ export function useSessionActions({ confirm, t, tree, onNavigate, onSessionSelec
    * @returns 新建会话
    */
   const createSession = async (workspaceId?: string) => {
+    const started = Date.now();
+    // #region agent log
+    fetch('http://127.0.0.1:7368/ingest/77461c80-9be3-44e4-ac14-3725f6920049',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff618c'},body:JSON.stringify({sessionId:'ff618c',hypothesisId:'B',location:'use-session-actions.ts:createSession',message:'create started',data:{workspaceId:workspaceId??null},timestamp:started})}).catch(()=>{});
+    // #endregion
     const response = await queryClient.ensureQueryData({
       queryKey: ["config"],
       queryFn: api.config.load
     });
     const engine = response.config.agent?.engine ?? "native";
+    // #region agent log
+    fetch('http://127.0.0.1:7368/ingest/77461c80-9be3-44e4-ac14-3725f6920049',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff618c'},body:JSON.stringify({sessionId:'ff618c',hypothesisId:'B',location:'use-session-actions.ts:config',message:'config ready',data:{engine,elapsed:Date.now()-started},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     // 1. 【会话】【新会话默认值】外部内核先读取当前能力，失败时按内核默认值创建
     const status = engine === "native"
       ? undefined
@@ -128,6 +124,9 @@ export function useSessionActions({ confirm, t, tree, onNavigate, onSessionSelec
         }).catch(() => undefined);
     // 2. 【会话】【新会话默认值】服务端创建成功后立即建立会话专属偏好
     const session = await api.sessions.create(undefined, workspaceId);
+    // #region agent log
+    fetch('http://127.0.0.1:7368/ingest/77461c80-9be3-44e4-ac14-3725f6920049',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff618c'},body:JSON.stringify({sessionId:'ff618c',hypothesisId:'A',location:'use-session-actions.ts:created',message:'server created session',data:{sessionId:session.id,elapsed:Date.now()-started},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     initializeNewSessionPreferences(session.id, response.config, status);
     return session;
   };
@@ -135,15 +134,41 @@ export function useSessionActions({ confirm, t, tree, onNavigate, onSessionSelec
   const create = useMutation({
     mutationFn: createSession,
     onSuccess: async (session, workspaceId) => {
+      const started = Date.now();
       // 1. 先刷新会话树，使新会话立即出现在目标工作区
       await refresh();
+      // #region agent log
+      fetch('http://127.0.0.1:7368/ingest/77461c80-9be3-44e4-ac14-3725f6920049',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff618c'},body:JSON.stringify({sessionId:'ff618c',hypothesisId:'C',location:'use-session-actions.ts:refresh',message:'cache refresh finished',data:{sessionId:session.id,elapsed:Date.now()-started},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       const activeWorkspaceId = tree()?.find((workspace) => workspace.active)?.workspace_id;
       const targetWorkspaceId = workspaceId ?? activeWorkspaceId;
-      if (!targetWorkspaceId) return;
+      if (!targetWorkspaceId) {
+        // #region agent log
+        fetch('http://127.0.0.1:7368/ingest/77461c80-9be3-44e4-ac14-3725f6920049',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff618c'},body:JSON.stringify({sessionId:'ff618c',hypothesisId:'D',location:'use-session-actions.ts:no-target',message:'create finished without opening a workspace',data:{sessionId:session.id},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        return;
+      }
       // 2. 非活动工作区先切换工作区，再激活刚创建的会话
       await openSession(targetWorkspaceId, session.id, workspaceId === undefined, session.active);
+      // #region agent log
+      fetch('http://127.0.0.1:7368/ingest/77461c80-9be3-44e4-ac14-3725f6920049',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff618c'},body:JSON.stringify({sessionId:'ff618c',hypothesisId:'D',location:'use-session-actions.ts:opened',message:'open session finished',data:{sessionId:session.id,targetWorkspaceId,elapsed:Date.now()-started},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+    },
+    onError: (error) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7368/ingest/77461c80-9be3-44e4-ac14-3725f6920049',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff618c'},body:JSON.stringify({sessionId:'ff618c',hypothesisId:'E',location:'use-session-actions.ts:error',message:'create failed',data:{error:error instanceof Error?error.message:String(error)},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
     }
   });
+  useEffect(() => {
+    if (!create.isPending) return;
+    const timer = window.setTimeout(() => {
+      // #region agent log
+      fetch('http://127.0.0.1:7368/ingest/77461c80-9be3-44e4-ac14-3725f6920049',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff618c'},body:JSON.stringify({sessionId:'ff618c',hypothesisId:'E',location:'use-session-actions.ts:pending',message:'create still pending after 3s',data:{pending:true},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [create.isPending]);
   const remove = useMutation({ mutationFn: api.sessions.remove, onSuccess: refresh });
   const rename = useMutation({
     mutationFn: ({ id, title }: { id: string; title: string }) => api.sessions.rename(id, title),
@@ -245,7 +270,6 @@ export function useSessionActions({ confirm, t, tree, onNavigate, onSessionSelec
     rename,
     removeMany,
     openSession,
-    openWorkspace,
     closeWorkspace,
     openDirectory,
     removeWithConfirm,

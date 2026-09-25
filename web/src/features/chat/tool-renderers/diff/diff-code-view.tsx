@@ -5,6 +5,7 @@ import { useI18n } from "../../../i18n/use-i18n";
 import type { DiffLayout } from "../diff-view";
 import { buildDiffCodeBlocks } from "./diff-code-blocks";
 import { DiffCodeRows } from "./diff-code-rows";
+import { DiffHunkFold } from "./diff-hunk-fold";
 import { highlightDiffLines } from "./diff-highlight";
 import type { DiffFile } from "./diff-model";
 import "./diff-code-view.css";
@@ -113,12 +114,20 @@ export function DiffCodeView({ file, language, layout, wrap = true }: DiffCodeVi
           {blocks.map((block, index) => {
             if (block.kind === "marker") {
               const line = block.lines[0];
+              const detail = line.kind === "hunk" ? line.text.replace(/^@@.*?@@\s*/u, "") : "";
+              if (line.kind === "hunk" && line.foldedCount && line.foldStart && line.foldEnd) {
+                return (
+                  <DiffHunkFold key={index} path={file.path} line={line} className="review-diff-gap" detail={detail || undefined}>
+                    {(lines) => <DiffCodeRows lines={lines} layout={layout} highlights={highlights} />}
+                  </DiffHunkFold>
+                );
+              }
               return <div className="review-diff-gap" key={index}>
                 <Ellipsis size={13} aria-hidden />
                 <span>{line.kind === "no-newline" ? t("No newline at end of file", "文件末尾没有换行")
                   : line.foldedCount ? t(`${line.foldedCount} lines omitted`, `未显示 ${line.foldedCount} 行`)
                     : t("Next section", "下一处区段")}</span>
-                {line.kind === "hunk" && <code>{line.text.replace(/^@@.*?@@\s*/u, "")}</code>}
+                {detail && <code>{detail}</code>}
               </div>;
             }
             const hiddenCount = block.kind === "context" ? Math.max(0, block.lines.length - CONTEXT_LINES * 2) : 0;

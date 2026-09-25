@@ -61,6 +61,7 @@ impl ProviderBrowser<'_> {
             .collect::<Vec<_>>();
 
         let models_title = t(" MODELS ", " 模型 ").to_string();
+        crate::config_tui::ui::begin_synced_frame(stdout)?;
         queue!(stdout, Clear(ClearType::All))?;
         crate::config_tui::ui::draw_box(
             stdout,
@@ -134,11 +135,11 @@ impl ProviderBrowser<'_> {
         } else {
             // 删除是破坏性操作，键名用警示色与其它键区分
             let base = help_line(&[
-                ("h/l", t("columns", "切栏")),
-                ("j/k", t("move", "移动")),
-                ("Tab", t("activate", "激活模型")),
-                ("Enter", t("settings", "模型设置")),
                 ("/", t("search", "搜索")),
+                ("j/k", t("move", "移动")),
+                ("h/l", t("columns", "切栏")),
+                ("Enter", t("settings", "模型设置")),
+                ("Tab", t("activate", "激活模型")),
                 ("r", t("refresh", "刷新")),
                 ("a", t("add", "添加")),
             ]);
@@ -169,7 +170,7 @@ impl ProviderBrowser<'_> {
             queue!(stdout, Hide)?;
             self.cursor_visible = false;
         }
-        stdout.flush()?;
+        crate::config_tui::ui::end_synced_frame(stdout)?;
         Ok(())
     }
 

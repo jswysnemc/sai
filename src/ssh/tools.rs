@@ -558,7 +558,7 @@ async fn request_interactive(
         Err(_) => {
             // 超时后主动清理等待表，避免残留请求
             let _ = secret::submit_secret(&id, SecretResponse::Cancelled);
-            bail!("未在限定时间内收到用户输入；当前会话可能不支持交互式秘密输入。")
+            bail!("未在限定时间内收到用户输入。密码框在输入区上方，超时后需要重新发起连接。")
         }
     }
 }

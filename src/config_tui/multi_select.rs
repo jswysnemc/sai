@@ -10,7 +10,7 @@ use crossterm::event::KeyCode;
 use crossterm::queue;
 use crossterm::style::Print;
 use crossterm::terminal::{self, Clear, ClearType};
-use std::io::{self, Write};
+use std::io;
 
 use super::input::read_key;
 use super::layout::{full_frame, master_detail_widths, scroll_start};
@@ -97,20 +97,51 @@ pub(super) fn run_multi_select(
         )?;
         let key = read_key()?;
         if filter_mode {
-            match key {
+            let query_changed = match key {
                 KeyCode::Esc => {
                     filter_mode = false;
                     filter.clear();
+                    true
                 }
-                KeyCode::Enter => filter_mode = false,
+                KeyCode::Enter => {
+                    filter_mode = false;
+                    false
+                }
                 KeyCode::Backspace => {
                     filter.pop();
+                    if filter.is_empty() {
+                        filter_mode = false;
+                    }
+                    true
                 }
-                KeyCode::Char(ch) => filter.push(ch),
-                _ => {}
+                KeyCode::Up | KeyCode::Down | KeyCode::Home | KeyCode::End => false,
+                KeyCode::Char(ch) => {
+                    filter.push(ch);
+                    true
+                }
+                _ => false,
+            };
+            if matches!(
+                key,
+                KeyCode::Up | KeyCode::Down | KeyCode::Home | KeyCode::End
+            ) {
+                rows = build_rows(toggles, entries, &filter);
+                selected = match key {
+                    KeyCode::Up => previous_selectable(&rows, selected),
+                    KeyCode::Down => next_selectable(&rows, selected),
+                    KeyCode::Home => first_selectable(&rows),
+                    KeyCode::End => last_selectable(&rows),
+                    _ => selected,
+                };
+                continue;
             }
             rows = build_rows(toggles, entries, &filter);
-            selected = clamp_selection(&rows, selected);
+            // 过滤词一变就落到第一条命中，而不是停在已经滚出视野的旧下标
+            selected = if query_changed {
+                first_selectable(&rows)
+            } else {
+                clamp_selection(&rows, selected)
+            };
             continue;
         }
         match key {
@@ -278,6 +309,7 @@ fn draw(
 ) -> Result<()> {
     let (cols, terminal_rows) = terminal::size()?;
     let frame = full_frame(cols, terminal_rows);
+    super::ui::begin_synced_frame(stdout)?;
     queue!(stdout, Clear(ClearType::All))?;
     draw_box(stdout, frame.x, frame.y, frame.width, frame.height, title)?;
 
@@ -370,7 +402,7 @@ fn draw(
         ])
     };
     draw_status_bar(stdout, &frame, &help)?;
-    stdout.flush()?;
+    super::ui::end_synced_frame(stdout)?;
     Ok(())
 }
 

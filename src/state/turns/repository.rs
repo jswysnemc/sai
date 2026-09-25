@@ -434,7 +434,8 @@ impl ConversationDb {
              DELETE FROM session_memory;
              DELETE FROM tool_calls;
              DELETE FROM tool_results;
-             DELETE FROM tool_output_replacements;",
+             DELETE FROM tool_output_replacements;
+             DELETE FROM tool_result_images;",
         )?;
         Ok(())
     }
@@ -613,6 +614,10 @@ fn delete_turn_locked(conn: &Connection, turn_id: &str) -> Result<usize> {
     )?;
     conn.execute(
         "DELETE FROM tool_results WHERE turn_id = ?1",
+        params![turn_id],
+    )?;
+    conn.execute(
+        "DELETE FROM tool_result_images WHERE turn_id = ?1",
         params![turn_id],
     )?;
     conn.execute(

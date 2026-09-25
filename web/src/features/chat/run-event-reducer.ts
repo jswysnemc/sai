@@ -265,11 +265,16 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
         String(payload.request_id),
         payload.response as unknown as QuestionResponse
       );
-    case "ssh.secret.requested":
+    case "ssh.secret.requested": {
+      // #region agent log
+      const secretPayload = payload as unknown as SshSecretRequest;
+      fetch("http://127.0.0.1:7368/ingest/77461c80-9be3-44e4-ac14-3725f6920049",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"ff618c"},body:JSON.stringify({sessionId:"ff618c",hypothesisId:"A",location:"run-event-reducer.ts:ssh.secret.requested",message:"ssh secret event reached reducer",data:{kind:secretPayload?.kind??null,host:secretPayload?.host_label??null,requestId:secretPayload?.id??null,runCompleted:state.completed,status:state.status},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       return upsertSshSecretPart({
         ...closeActiveReasoning(state, event.timestamp),
         status: "waiting_ssh_secret"
-      }, payload as unknown as SshSecretRequest);
+      }, secretPayload);
+    }
     case "ssh.secret.resolved":
       return resolveSshSecretPart(
         { ...state, status: "working" },

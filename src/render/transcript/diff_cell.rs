@@ -327,7 +327,7 @@ const DIFF_FOLD_TAIL_LINES: usize = 8;
 /// 返回:
 /// - 折叠后的正文；未超长或已展开时原样返回
 fn fold_diff_body(body: &str, expanded: bool) -> String {
-    if expanded || crate::render::render_expand::expand_override() {
+    if crate::render::render_expand::resolve_expanded(expanded) {
         return body.to_string();
     }
     let lines: Vec<&str> = body.lines().collect();

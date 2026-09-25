@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { SyntaxHighlighter } from "../syntax-highlighter";
 import type { DiffFile, DiffLine } from "./diff/diff-model";
 import { CONTEXT_MARGIN } from "./diff/diff-blocks";
+import { DiffHunkFold } from "./diff/diff-hunk-fold";
 import { useI18n } from "../../i18n/use-i18n";
 
 type UnifiedSegment =
@@ -25,7 +26,7 @@ export function DiffUnifiedView({ file, language }: { file: DiffFile; language?:
     <div className="diff-file-lines diff-unified-lines">
       {segments.map((segment, index) => {
         if (segment.kind === "marker") {
-          return <UnifiedMarker line={segment.line} key={`marker-${index}`} t={t} />;
+          return <UnifiedMarker line={segment.line} path={file.path} language={language} key={`marker-${index}`} t={t} />;
         }
         if (segment.kind === "change") {
           return (
@@ -132,13 +133,26 @@ function segmentLines(lines: DiffLine[]): UnifiedSegment[] {
  */
 function UnifiedMarker({
   line,
+  path,
+  language,
   t
 }: {
   line: DiffLine;
+  path: string;
+  language?: string;
   t: (english: string, chinese: string) => string;
 }) {
   if (line.kind === "no-newline") {
     return <div className="diff-unified-marker">{line.text}</div>;
+  }
+  if (line.foldedCount && line.foldStart && line.foldEnd) {
+    return (
+      <DiffHunkFold path={path} line={line} className="diff-unified-fold diff-unified-hunk-fold">
+        {(lines) => lines.map((item, index) => (
+          <UnifiedLine line={item} language={language} key={`folded-${index}`} />
+        ))}
+      </DiffHunkFold>
+    );
   }
   if (line.foldedCount) {
     return (

@@ -141,11 +141,18 @@
   color: var(--blue);
 }
 
+.todo-markdown-item.is-in_progress span {
+  font-weight: 500;
+}
+
+.todo-markdown-item.is-completed {
+  color: var(--ink-soft);
+}
+
 .todo-markdown-item.is-completed svg {
   color: var(--signal);
 }
 
-.todo-markdown-item.is-completed span,
 .todo-markdown-item.is-cancelled span {
   color: var(--ink-soft);
   text-decoration: line-through;
@@ -294,7 +301,8 @@
 
 
 /* 工具条内紧凑芯片：不占满宽度，清单走 Portal 弹层 */
-.composer-context-strip > .todo-markdown-view.compact {
+.composer-context-strip > .todo-markdown-view.compact,
+.composer-context-options > .todo-markdown-view.compact {
   flex: 0 1 auto;
   max-width: min(280px, 42vw);
   margin: 0;
@@ -304,10 +312,12 @@
   padding: 0;
 }
 
-.composer-context-strip > .todo-markdown-view.compact .todo-markdown-bar {
+.composer-context-strip > .todo-markdown-view.compact .todo-markdown-bar,
+.composer-context-options > .todo-markdown-view.compact .todo-markdown-bar {
   max-width: 100%;
 }
 
-.composer-context-strip > .todo-markdown-view.compact.is-done .todo-trigger-count {
+.composer-context-strip > .todo-markdown-view.compact.is-done .todo-trigger-count,
+.composer-context-options > .todo-markdown-view.compact.is-done .todo-trigger-count {
   color: var(--signal);
 }
