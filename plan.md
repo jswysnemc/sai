@@ -27,12 +27,16 @@ for (provider_call, execution_call) in prepared_calls.calls {
 3. **失败隔离**。一个调用失败不应中断同批其它调用，但要保证 tool_call_id 与结果一一对应地回填
 4. **写操作不并发**。同时写同一个文件会互相覆盖。判据可以复用 `ToolSpec::writes()` 标记：全部只读才并发，含写操作则退回串行
 
+
+
 ## 建议实现顺序
 
 1. 先给 `prepared_calls` 加分组：连续的只读调用归一组，写操作各自成组
 2. 组内 `join_all`，组间保持顺序
 3. seq 在分组时预分配
 4. 权限请求出现时，该组降级为串行
+
+
 
 ## 为什么值得做
 
@@ -44,7 +48,13 @@ for (provider_call, execution_call) in prepared_calls.calls {
 
 ---
 
+
+
 # 待办：编辑工具的先读约束
+
+
+
+
 
 ## 现状
 

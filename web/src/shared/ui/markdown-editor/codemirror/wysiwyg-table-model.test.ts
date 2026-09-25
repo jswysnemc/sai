@@ -47,6 +47,20 @@ describe("buildTableModel", () => {
     expect(model?.header.cells).toHaveLength(3);
     expect(model?.rows[0].cells.length).toBeLessThanOrEqual(3);
   });
+
+  it("空单元格也占一列，区间覆盖两条竖线之间的全部空白", () => {
+    const doc = "| a |  | c |\n| --- | --- | --- |\n|  | y |  |";
+    const model = tableOf(doc);
+    expect(model?.header.cells.map((cell) => cell.text)).toEqual(["a", "", "c"]);
+    expect(model?.rows[0].cells.map((cell) => cell.text)).toEqual(["", "y", ""]);
+    const empty = model?.header.cells[1];
+    expect(doc.slice(empty?.regionFrom, empty?.regionTo)).toBe("  ");
+  });
+
+  it("兼容省略首尾竖线的写法", () => {
+    const doc = "a | b\n--- | ---\n1 | 2";
+    expect(tableOf(doc)?.rows[0].cells.map((cell) => cell.text)).toEqual(["1", "2"]);
+  });
 });
 
 describe("parseAligns", () => {

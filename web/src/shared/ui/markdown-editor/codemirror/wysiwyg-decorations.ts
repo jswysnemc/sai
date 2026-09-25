@@ -1,39 +1,73 @@
 import { syntaxTree } from "@codemirror/language";
 import type { EditorState, Range } from "@codemirror/state";
-import {
-  Decoration,
-  ViewPlugin,
-  type DecorationSet,
-  type EditorView,
-  type ViewUpdate,
-} from "@codemirror/view";
-import type { SyntaxNodeRef } from "@lezer/common";
+import { Decoration, ViewPlugin, type DecorationSet, type EditorView, type ViewUpdate } from "@codemirror/view";
+import type { SyntaxNodeRef, Tree } from "@lezer/common";
+import { imageUrlResolver } from "./editor-facets";
+import { appendLinePrefix, prefixEndOf, type PrefixCache } from "./wysiwyg-line-decorations";
+import { InlineMathWidget } from "./wysiwyg-math-widgets";
+import { rangeKey, revealedInlineNodes } from "./wysiwyg-reveal";
 import { isSyntaxMark, styleClassFor } from "./wysiwyg-syntax-nodes";
-import { ImageWidget, isRenderableImageUrl, RuleWidget, TaskWidget } from "./wysiwyg-widgets";
+import { ImageWidget, RuleWidget } from "./wysiwyg-widgets";
+
+/** 构建结果：可见装饰与需要整体跳过的原子区间。 */
+export type MarkdownDecorations = {
+  decorations: DecorationSet;
+  atomic: DecorationSet;
+};
+
+/** 构建选项。 */
+export type MarkdownDecorationOptions = {
+  /** 是否按光标位置显露行内标记；编辑器失焦时关闭，读起来与成稿一致 */
+  reveal?: boolean;
+};
+
+/** 单次遍历共享的上下文。 */
+type CollectContext = {
+  state: EditorState;
+  tree: Tree;
+  revealed: Set<string>;
+  prefixes: PrefixCache;
+  ranges: Range<Decoration>[];
+  atomic: Range<Decoration>[];
+};
+
+/** 显露时的淡色语法标记。 */
+const syntaxMark = Decoration.mark({ class: "cm-md-syntax" });
+
+/** 隐藏原文的替换装饰。 */
+const hidden = Decoration.replace({});
 
 /**
- * 构建所见即所得装饰的视图插件。
+ * 构建所见即所得行内装饰的视图插件。
  *
- * 光标所在行也保持格式化视图，语法标记始终隐藏，避免聚焦时整行切回源码造成跳动。
- * 标记的增删交给右键菜单，正文仍可直接输入。
+ * 行首的 `#`、`>`、列表符号始终隐藏并由行样式呈现；
+ * 行内标记只在光标触及所属元素时淡色显露（对齐 Typora），其余时候隐藏。
  */
 export const wysiwygDecorations = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
+    atomic: DecorationSet;
 
     constructor(view: EditorView) {
-      this.decorations = buildMarkdownDecorations(view.state, view.visibleRanges);
+      const built = buildMarkdownDecorations(view.state, view.visibleRanges, { reveal: view.hasFocus });
+      this.decorations = built.decorations;
+      this.atomic = built.atomic;
     }
 
     /**
-     * 在文档、选区或视口变化时重建装饰。
+     * 在文档、选区、视口或焦点变化时重建装饰。
      *
      * @param update 视图更新
      * @returns 无
      */
     update(update: ViewUpdate) {
-      if (update.docChanged || update.selectionSet || update.viewportChanged) {
-        this.decorations = buildMarkdownDecorations(update.view.state, update.view.visibleRanges);
+      const treeChanged = syntaxTree(update.state) !== syntaxTree(update.startState);
+      if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged || treeChanged) {
+        const built = buildMarkdownDecorations(update.state, update.view.visibleRanges, {
+          reveal: update.view.hasFocus,
+        });
+        this.decorations = built.decorations;
+        this.atomic = built.atomic;
       }
     }
   },
@@ -47,174 +81,205 @@ export const wysiwygDecorations = ViewPlugin.fromClass(
  *
  * @param state 编辑器状态
  * @param visibleRanges 需要处理的区间，通常是视口可见范围
- * @returns 排序后的装饰集合
+ * @param options 构建选项
+ * @returns 排序后的装饰集合与原子区间
  */
 export function buildMarkdownDecorations(
   state: EditorState,
-  visibleRanges: readonly { from: number; to: number }[]
-): DecorationSet {
-  const ranges: Range<Decoration>[] = [];
+  visibleRanges: readonly { from: number; to: number }[],
+  options: MarkdownDecorationOptions = {}
+): MarkdownDecorations {
+  const tree = syntaxTree(state);
+  const context: CollectContext = {
+    state,
+    tree,
+    revealed: options.reveal === false ? new Set() : revealedInlineNodes(state, tree),
+    prefixes: new Map(),
+    ranges: [],
+    atomic: [],
+  };
   for (const visible of visibleRanges) {
-    syntaxTree(state).iterate({
-      from: visible.from,
-      to: visible.to,
-      enter: (node) => collectNode(state, node, ranges),
-    });
+    // 1. 行级：前缀替换、引用竖线与列表悬挂缩进
+    for (let position = visible.from; position <= visible.to; ) {
+      const line = state.doc.lineAt(position);
+      appendLinePrefix(state, line, tree, context.prefixes, context.ranges, context.atomic);
+      position = line.to + 1;
+    }
+    // 2. 行内：标记隐藏、排版样式与部件
+    tree.iterate({ from: visible.from, to: visible.to, enter: (node) => collectNode(context, node) });
   }
   // 第二个参数交给 CodeMirror 排序，父子节点的装饰是按遍历序而非位置序产生的
-  return Decoration.set(ranges, true);
+  return { decorations: Decoration.set(context.ranges, true), atomic: Decoration.set(context.atomic, true) };
 }
 
 /**
  * 处理单个语法节点。
  *
- * @param state 编辑器状态
+ * @param context 遍历上下文
  * @param node 语法树节点
- * @param ranges 装饰收集容器
  * @returns 是否继续遍历子节点
  */
-function collectNode(
-  state: EditorState,
-  node: SyntaxNodeRef,
-  ranges: Range<Decoration>[]
-): boolean {
+function collectNode(context: CollectContext, node: SyntaxNodeRef): boolean {
+  const { state, ranges } = context;
   const name = node.name;
-  // 1. 可整体替换为部件的节点优先处理，处理后不再深入子节点
-  if (appendWidget(state, node, name, ranges)) {
-    return false;
-  }
-  // 2. 链接只保留可读文字，隐藏 [ 与 ](url)
-  if (name === "Link" && appendInlineLink(state, node, ranges)) {
-    return false;
-  }
-  // 3. 内容节点附加排版样式
+  // 1. 围栏代码、公式块与表格由块级装饰负责
+  if (name === "FencedCode" || name === "BlockMath" || name === "Table") return false;
+  // 2. 可整体替换为部件或需要特殊呈现的节点
+  if (appendSpecialNode(context, node)) return false;
+  // 3. 标题所在行放大字号，空标题也保持标题行高
+  appendHeadingLine(context, node);
+  // 4. 内容节点附加排版样式
   const styleClass = styleClassFor(name);
   if (styleClass && node.to > node.from) {
     ranges.push(Decoration.mark({ class: styleClass }).range(node.from, node.to));
   }
-  // 4. 纯语法标记始终隐藏，块级标记连同其后的分隔空格一起吞掉
-  if (isSyntaxMark(name) && node.to > node.from && !isFenceMark(node)) {
-    const to = BLOCK_MARKS.has(name) ? consumeTrailingSpaces(state, node.to) : node.to;
-    ranges.push(Decoration.replace({}).range(node.from, to));
+  // 5. 已完成的任务项淡化并加删除线
+  if (name === "Task") appendDoneTask(state, node, ranges);
+  // 6. 语法标记：行首标记交给行前缀，其余按所属元素是否显露决定隐藏或淡显
+  if (isSyntaxMark(name) && node.to > node.from) {
+    if (isLinePrefixMark(context, node)) return false;
+    const parent = node.node.parent;
+    const revealed = parent ? context.revealed.has(rangeKey(parent.from, parent.to)) : false;
+    ranges.push((revealed ? syntaxMark : hidden).range(node.from, node.to));
     return false;
   }
   return true;
 }
 
-/** 块级标记：隐藏时需连同后随空格一起吞掉，否则正文会多出前导空白。 */
-const BLOCK_MARKS = new Set(["HeaderMark", "QuoteMark"]);
-
 /**
- * 从给定位置起跳过同一行内的空格。
+ * 处理图片、链接、公式与分隔线等需要特殊呈现的节点。
  *
- * @param state 编辑器状态
- * @param from 起始偏移
- * @returns 跳过空格后的偏移
- */
-function consumeTrailingSpaces(state: EditorState, from: number): number {
-  const lineEnd = state.doc.lineAt(from).to;
-  let cursor = from;
-  while (cursor < lineEnd && state.doc.sliceString(cursor, cursor + 1) === " ") {
-    cursor += 1;
-  }
-  return cursor;
-}
-
-/**
- * 为可整体替换的节点追加部件装饰。
- *
- * @param state 编辑器状态
+ * @param context 遍历上下文
  * @param node 语法树节点
- * @param name 节点名
- * @param ranges 装饰收集容器
- * @returns 已追加部件时为 true
+ * @returns 已处理且不需深入子节点时为 true
  */
-function appendWidget(
-  state: EditorState,
-  node: SyntaxNodeRef,
-  name: string,
-  ranges: Range<Decoration>[]
-): boolean {
-  if (name === "Image") {
-    const url = extractLinkUrl(state, node);
-    if (!url || !isRenderableImageUrl(url)) return false;
-    const widget = new ImageWidget(url, extractImageAlt(state, node));
-    ranges.push(Decoration.replace({ widget }).range(node.from, node.to));
-    return true;
+function appendSpecialNode(context: CollectContext, node: SyntaxNodeRef): boolean {
+  const { state, ranges } = context;
+  const revealed = context.revealed.has(rangeKey(node.from, node.to));
+  switch (node.name) {
+    case "Image":
+      return appendImage(context, node, revealed);
+    case "Link":
+      return appendLink(context, node, revealed);
+    case "InlineMath": {
+      if (revealed) return false;
+      const tex = state.doc.sliceString(node.from + 1, node.to - 1);
+      ranges.push(Decoration.replace({ widget: new InlineMathWidget(tex, node.from + 1) }).range(node.from, node.to));
+      return true;
+    }
+    case "HorizontalRule": {
+      ranges.push(Decoration.replace({ widget: new RuleWidget() }).range(node.from, node.to));
+      context.atomic.push(hidden.range(node.from, node.to));
+      return true;
+    }
+    case "TaskMarker":
+    case "ListMark":
+      // 行首列表符号与任务框由行前缀替换为部件；不成立的前缀（如只有 `-`）保持原文
+      return true;
+    default:
+      return false;
   }
-  if (name === "HorizontalRule") {
-    ranges.push(Decoration.replace({ widget: new RuleWidget() }).range(node.from, node.to));
-    return true;
-  }
-  if (name === "TaskMarker") {
-    const checked = /x/i.test(state.doc.sliceString(node.from, node.to));
-    const widget = new TaskWidget(checked, node.from, node.to);
-    ranges.push(Decoration.replace({ widget }).range(node.from, node.to));
-    return true;
-  }
-  return false;
 }
 
 /**
- * 为行内链接追加"只显示文字"的装饰。
+ * 处理图片：光标在外时替换为图片，光标触及时显露源码并把图片挂在其后。
  *
- * @param state 编辑器状态
- * @param node 链接节点
- * @param ranges 装饰收集容器
- * @returns 命中 `[文字](地址)` 形式时为 true
+ * @param context 遍历上下文
+ * @param node 图片节点
+ * @param revealed 是否显露源码
+ * @returns 已处理时为 true
  */
-function appendInlineLink(
-  state: EditorState,
-  node: SyntaxNodeRef,
-  ranges: Range<Decoration>[]
-): boolean {
+function appendImage(context: CollectContext, node: SyntaxNodeRef, revealed: boolean): boolean {
+  const { state, ranges } = context;
   const text = state.doc.sliceString(node.from, node.to);
-  const tail = text.lastIndexOf("](");
-  // 自动链接与引用式链接不符合该形式，交给默认的标记隐藏逻辑处理
-  if (!text.startsWith("[") || tail <= 0) return false;
-  const labelFrom = node.from + 1;
-  const labelTo = node.from + tail;
-  ranges.push(Decoration.replace({}).range(node.from, labelFrom));
-  if (labelTo > labelFrom) {
-    ranges.push(Decoration.mark({ class: "cm-md-link" }).range(labelFrom, labelTo));
+  const src = /\]\(\s*<?([^\s)>]+)>?/.exec(text)?.[1];
+  const url = src ? state.facet(imageUrlResolver)(src) : null;
+  if (!url) return false;
+  const widget = new ImageWidget(url, /!\[([^\]]*)\]/.exec(text)?.[1] ?? "");
+  if (revealed) {
+    ranges.push(Decoration.mark({ class: "cm-md-image-src" }).range(node.from, node.to));
+    ranges.push(Decoration.widget({ widget, side: 1 }).range(node.to));
+    return true;
   }
-  ranges.push(Decoration.replace({}).range(labelTo, node.to));
+  ranges.push(Decoration.replace({ widget }).range(node.from, node.to));
   return true;
 }
 
 /**
- * 判断标记是否属于围栏代码块。
+ * 处理 `[文字](地址)` 形式的链接。
  *
- * 围栏代码块的 ``` 不隐藏：隐藏后首尾会各留一个空行，反而比保留标记更难读。
+ * @param context 遍历上下文
+ * @param node 链接节点
+ * @param revealed 是否显露源码
+ * @returns 命中该形式时为 true；自动链接与引用式链接交给通用逻辑
+ */
+function appendLink(context: CollectContext, node: SyntaxNodeRef, revealed: boolean): boolean {
+  const { state, ranges } = context;
+  const text = state.doc.sliceString(node.from, node.to);
+  const tail = text.lastIndexOf("](");
+  if (!text.startsWith("[") || tail <= 0) return false;
+  const labelFrom = node.from + 1;
+  const labelTo = node.from + tail;
+  // 1. 文字部分始终按链接样式呈现，内部的加粗等继续由遍历处理
+  if (labelTo > labelFrom) ranges.push(Decoration.mark({ class: "cm-md-link" }).range(labelFrom, labelTo));
+  // 2. 显露时方括号与地址淡色可见，否则隐藏
+  ranges.push((revealed ? syntaxMark : hidden).range(node.from, labelFrom));
+  ranges.push((revealed ? Decoration.mark({ class: "cm-md-syntax cm-md-url" }) : hidden).range(labelTo, node.to));
+  // 3. 文字内部可能还有加粗、行内代码，单独遍历这一段
+  context.tree.iterate({
+    from: labelFrom,
+    to: labelTo,
+    enter: (child) => (child.from >= labelFrom && child.to <= labelTo ? collectNode(context, child) : true),
+  });
+  return true;
+}
+
+/**
+ * 为标题所在行附加行级字号样式。
  *
+ * 只有 `#` 而没有后随空白时视为正在输入，不放大，避免输入过程中行高跳动。
+ *
+ * @param context 遍历上下文
  * @param node 语法树节点
- * @returns 属于围栏代码块时为 true
+ * @returns 无
  */
-function isFenceMark(node: SyntaxNodeRef): boolean {
-  return node.name === "CodeMark" && node.node.parent?.name === "FencedCode";
+function appendHeadingLine(context: CollectContext, node: SyntaxNodeRef): void {
+  const match = /^(?:ATX|Setext)Heading(\d)$/.exec(node.name);
+  if (!match) return;
+  const line = context.state.doc.lineAt(node.from);
+  if (/^\s{0,3}#{1,6}$/.test(line.text)) return;
+  context.ranges.push(Decoration.line({ class: `cm-md-hline cm-md-h${match[1]}-line` }).range(line.from));
 }
 
 /**
- * 从链接或图片节点中取出地址。
+ * 为已勾选的任务项正文附加完成样式。
  *
  * @param state 编辑器状态
- * @param node 链接或图片节点
- * @returns 地址文本；解析不出时为 undefined
+ * @param node Task 节点
+ * @param ranges 装饰收集容器
+ * @returns 无
  */
-function extractLinkUrl(state: EditorState, node: SyntaxNodeRef): string | undefined {
-  const text = state.doc.sliceString(node.from, node.to);
-  const match = /\]\(\s*<?([^\s)>]+)>?/.exec(text);
-  return match?.[1];
+function appendDoneTask(state: EditorState, node: SyntaxNodeRef, ranges: Range<Decoration>[]): void {
+  const marker = node.node.getChild("TaskMarker");
+  if (!marker || !/x/i.test(state.doc.sliceString(marker.from, marker.to))) return;
+  const from = Math.min(marker.to + 1, node.to);
+  if (node.to > from) ranges.push(Decoration.mark({ class: "cm-md-task-done" }).range(from, node.to));
 }
 
 /**
- * 从图片节点中取出替代文本。
+ * 判断标记是否落在行前缀内（已由行级装饰隐藏）。
  *
- * @param state 编辑器状态
- * @param node 图片节点
- * @returns 替代文本，缺省为空串
+ * @param context 遍历上下文
+ * @param node 标记节点
+ * @returns 位于行前缀内时为 true
  */
-function extractImageAlt(state: EditorState, node: SyntaxNodeRef): string {
-  const text = state.doc.sliceString(node.from, node.to);
-  return /!\[([^\]]*)\]/.exec(text)?.[1] ?? "";
+function isLinePrefixMark(context: CollectContext, node: SyntaxNodeRef): boolean {
+  if (node.name !== "HeaderMark" && node.name !== "QuoteMark") return false;
+  const line = context.state.doc.lineAt(node.from);
+  const prefixEnd = prefixEndOf(context.state, line, context.tree, context.prefixes);
+  // 行首的 # 不成立前缀时（正在输入）保持原文，其余位置的 # 是闭合标记，照常隐藏
+  if (node.name === "HeaderMark" && prefixEnd === null && node.node.prevSibling === null && node.node.parent?.name.startsWith("ATX")) {
+    return true;
+  }
+  return prefixEnd !== null && node.from < prefixEnd;
 }

@@ -2,12 +2,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { MarkdownEditor } from "../../shared/ui/markdown-editor/markdown-editor";
-import type { MarkdownEditorMode } from "../../shared/ui/markdown-editor/markdown-editor-mode";
+import { useMarkdownMode } from "../../shared/ui/markdown-editor/use-markdown-mode";
 import { isDarkTheme, useTheme } from "../theme/theme";
 import { useI18n } from "../i18n/use-i18n";
 import { EditorHeader } from "./editor-header";
 import { ImageFilePreview, isImageFile } from "./image-file-preview";
-import { isMarkdownFile, MarkdownFilePreview } from "./markdown-file-preview";
+import { isMarkdownFile } from "./markdown-file-preview";
+import { resolveWorkspaceImage } from "./markdown-image-url";
 import { MonacoCodeEditor } from "./monaco-code-editor";
 import {
   acceptSavedFile,
@@ -18,6 +19,8 @@ import {
   updateDocumentContent
 } from "./editor-document-state";
 import { useEditorGitDiff } from "./use-editor-git-diff";
+import { untrackedFilePatch } from "./editor-git-decorations";
+import { EditorDiffView } from "./editor-diff-view";
 import { registerUnsavedEditor } from "./unsaved-editor-changes";
 import { readEditorWordWrap, writeEditorWordWrap } from "./editor-word-wrap";
 import { readRecentFiles, rememberRecentFile } from "./editor-recent-files";
@@ -42,7 +45,7 @@ type EditorPaneProps = {
 /**
  * 渲染文件编辑器、路径导航和保存操作。
  *
- * Markdown 文件走三态编辑器（源码 / 所见即所得 / 预览），其余文件走 Monaco。
+ * Markdown 文件走两态编辑器（源码 / 可编辑预览），其余文件走 Monaco。
  *
  * @param props 当前文件、打开文件回调和文件树控制状态
  * @returns 编辑器面板
@@ -55,9 +58,10 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree,
   const queryClient = useQueryClient();
   const file = useQuery({ queryKey: ["file", path], queryFn: () => api.workspace.file(path!), enabled: Boolean(path) && !imageFile });
   const [document, setDocument] = useState(() => createEditorDocumentState(path));
-  const [markdownMode, setMarkdownMode] = useState<MarkdownEditorMode>("wysiwyg");
+  const [markdownMode, setMarkdownMode] = useMarkdownMode();
   const [openFileDialog, setOpenFileDialog] = useState(false);
   const [wordWrap, setWordWrap] = useState(() => readEditorWordWrap(Boolean(path && isMarkdownFile(path))));
+  const [diffView, setDiffView] = useState(false);
   const [recentFiles, setRecentFiles] = useState(readRecentFiles);
   useEffect(() => {
     if (!path) return;
@@ -73,7 +77,11 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree,
     });
   };
   const fileDialog = <OpenFileDialog open={openFileDialog} initialPath={path ?? ""} onSelectFile={onSelectFile} onClose={() => setOpenFileDialog(false)} />;
-  const gitLines = useEditorGitDiff(path, gitEntries ?? EMPTY_GIT_ENTRIES);
+  const gitDiff = useEditorGitDiff(path, gitEntries ?? EMPTY_GIT_ENTRIES);
+  const gitEntry = path ? (gitEntries ?? EMPTY_GIT_ENTRIES).get(path) : undefined;
+  const diffPatch = gitEntry?.entry.untracked
+    ? untrackedFilePatch(path ?? "", document.content)
+    : gitDiff.patch;
   const hasUnsavedChanges = Boolean(document.baseline && document.content !== document.baseline.content);
 
   useEffect(() => {
@@ -151,31 +159,46 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree,
         onOpenFile={() => setOpenFileDialog(true)}
         wordWrap={imageFile ? null : wordWrap}
         onToggleWordWrap={toggleWordWrap}
+        diffView={imageFile ? null : diffView}
+        onToggleDiffView={() => setDiffView((current) => !current)}
       />
       <div className="editor-area">
+        {!imageFile && diffView && (
+          <EditorDiffView
+            path={path}
+            gitPath={gitEntry?.entry.path ?? path}
+            patch={diffPatch}
+            loading={!gitEntry?.entry.untracked && gitDiff.loading}
+            repoRoot={gitEntry?.repoRoot ?? ""}
+            untracked={Boolean(gitEntry?.entry.untracked)}
+            stagedClean={Boolean(gitEntry?.entry.staged && gitEntry.entry.worktree_status === "." && !gitEntry.entry.untracked)}
+            worktreeDirty={Boolean(gitEntry && gitEntry.entry.worktree_status !== "." && !gitEntry.entry.untracked)}
+          />
+        )}
         {imageFile && <ImageFilePreview path={path} />}
-        {!imageFile && file.data && markdownFile && (
+        {!imageFile && !diffView && file.data && markdownFile && (
           <MarkdownEditor
             value={document.content}
             onChange={(next) => setDocument((current) => updateDocumentContent(current, next))}
             mode={markdownMode}
+            onModeChange={setMarkdownMode}
             dark={isDarkTheme(theme)}
-            renderPreview={(source) => <MarkdownFilePreview source={source} />}
             wrap={wordWrap}
+            resolveImageUrl={(src) => resolveWorkspaceImage(path, src)}
           />
         )}
-        {!imageFile && file.data && !markdownFile && (
+        {!imageFile && !diffView && file.data && !markdownFile && (
           <MonacoCodeEditor
             path={path}
             value={document.content}
             onChange={(next) => setDocument((current) => updateDocumentContent(current, next))}
             loadingLabel={t("Loading editor", "加载编辑器")}
-            gitLines={gitLines}
+            gitLines={gitDiff.lines}
             wordWrap={wordWrap}
             onToggleWordWrap={toggleWordWrap}
           />
         )}
-        {!imageFile && file.isLoading && <div className="editor-state">{t("Loading editor", "加载编辑器")}</div>}
+        {!imageFile && !diffView && file.isLoading && <div className="editor-state">{t("Loading editor", "加载编辑器")}</div>}
         {file.error && <div className="pane-error">{file.error.message}</div>}
         {save.error && <div className="pane-error">{save.error.message}</div>}
       </div>

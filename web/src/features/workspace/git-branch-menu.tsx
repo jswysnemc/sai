@@ -229,7 +229,7 @@ function BranchGroup(props: {
       <span>{props.title}</span>
       {props.branches.map((branch) => (
         <div className={`git-branch-row${branch.current ? " active" : ""}`} key={`${branch.kind}:${branch.full_name}`}>
-          <Button className="git-branch-row-main" disabled={props.busy || branch.current} onClick={() => props.onSelect(branch)}>
+          <Button className="git-branch-row-main" disabled={props.busy || branch.current} title={branch.upstream ? `${branch.full_name} · ${branch.upstream}` : branch.full_name} onClick={() => props.onSelect(branch)}>
             {branch.current && <Check size={12} />}
             <span><strong>{branch.name}</strong>{branch.upstream && <small>{branch.upstream}</small>}</span>
           </Button>

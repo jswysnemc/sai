@@ -1,6 +1,5 @@
 import { ArrowUp, Loader2, Plus } from "lucide-react";
-import { useRef, type ChangeEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import type { ModelEndpointConfig } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
 import { Select } from "../../shared/ui/select/select";
@@ -9,9 +8,7 @@ import type { ComposerAttachment } from "../chat/composer/use-composer-attachmen
 import {
   IMAGE_ASPECT_RATIOS,
   imageResolutionsForAspectRatio,
-  type ImageAspectRatio,
-  type ImageGenerationSettings,
-  type ImageResolution
+  type ImageGenerationSettings
 } from "../chat/image-generation/image-generation-options";
 import { useI18n } from "../i18n/use-i18n";
 import "../chat/chat-composer.css";
@@ -22,7 +19,6 @@ type ImageWorkbenchComposerProps = {
   value: string;
   history: string[];
   endpoint: ModelEndpointConfig | null;
-  endpoints: ModelEndpointConfig[];
   model: string;
   settings: ImageGenerationSettings;
   loading: boolean;
@@ -31,11 +27,12 @@ type ImageWorkbenchComposerProps = {
   onChange: (value: string) => void;
   onPasteImages: (files: File[], selectionStart: number, selectionEnd: number) => Promise<number | undefined>;
   onRemoveAttachment: (id: number) => void;
-  onEndpointChange: (id: string) => void;
   onModelChange: (value: string) => void;
   onSettingsChange: (settings: ImageGenerationSettings) => void;
   onSubmit: () => void;
 };
+
+type ImageMenu = "ratio" | "size";
 
 /**
  * 渲染与代码对话相同的输入框，并在底栏调整生图参数。
@@ -45,17 +42,30 @@ type ImageWorkbenchComposerProps = {
  */
 export function ImageWorkbenchComposer(props: ImageWorkbenchComposerProps) {
   const { t } = useI18n();
-  const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menu, setMenu] = useState<ImageMenu | null>(null);
   const resolutions = imageResolutionsForAspectRatio(props.settings.aspectRatio);
   const hasDraft = Boolean(props.value.trim() || props.attachments.length);
-  const endpointOptions = props.endpoints.map((item) => ({
-    value: item.id,
-    label: item.name || item.id,
-    description: item.model || t("Model not set", "未填写模型")
-  }));
   const modelOptions = (props.endpoint?.models ?? []).map((item) => ({ value: item, label: item }));
   const disabled = props.submitting || props.loading || !props.endpoint;
+
+  useEffect(() => {
+    if (!menu) return;
+    const close = (event: PointerEvent) => {
+      if (event.target instanceof Node && menuRef.current?.contains(event.target)) return;
+      setMenu(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenu(null);
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menu]);
 
   /**
    * 把文件选择器里的图片交给输入区。
@@ -89,62 +99,73 @@ export function ImageWorkbenchComposer(props: ImageWorkbenchComposerProps) {
           <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={addUploadedFiles} />
           <Button variant="ghost" size="icon" className="composer-attach" disabled={props.submitting} title={t("Attach images", "添加图片")} aria-label={t("Add images", "添加图片")} onClick={() => fileInputRef.current?.click()}><Plus size={18} /></Button>
           <div className="composer-model-controls">
-            <div className="composer-mode">
-              <Select
-                value="image"
-                options={[
-                  { value: "image", label: t("Image", "生图"), description: t("Keep this image conversation", "留在生图对话") },
-                  { value: "chat", label: t("Normal mode", "正常模式"), description: t("Return to the coding session", "回到代码会话") }
-                ]}
-                disabled={props.submitting}
-                onChange={(value) => { if (value === "chat") navigate("/"); }}
-                ariaLabel={t("Composer mode", "输入模式")}
-                {...MENU_WIDTH}
-              />
-            </div>
-            <div className="composer-mode">
-              <Select
-                value={props.endpoint?.id ?? ""}
-                options={endpointOptions.length > 0 ? endpointOptions : [{ value: "", label: t("No image model", "未配置") }]}
-                disabled={props.loading || props.submitting || endpointOptions.length === 0}
-                onChange={props.onEndpointChange}
-                ariaLabel={t("Image endpoint", "生图端点")}
-                {...MENU_WIDTH}
-              />
-            </div>
             {modelOptions.length > 0 && (
               <div className="composer-mode">
                 <Select value={props.model} options={modelOptions} disabled={props.submitting} onChange={props.onModelChange} ariaLabel={t("Model", "模型")} {...MENU_WIDTH} />
               </div>
             )}
-            <div className="image-ratio-control" role="group" aria-label={t("Aspect ratio", "画面比例")}>
-              {IMAGE_ASPECT_RATIOS.map((item) => (
-                <button
-                  key={item.value}
-                  type="button"
-                  className={item.value === props.settings.aspectRatio ? "is-active" : undefined}
-                  disabled={props.submitting}
-                  onClick={() => {
-                    const aspectRatio = item.value;
-                    const resolution = imageResolutionsForAspectRatio(aspectRatio)[0]?.value ?? props.settings.resolution;
-                    props.onSettingsChange({ aspectRatio, resolution });
-                  }}
-                >
-                  {item.label}
+            <div className="image-param-menus" ref={menuRef}>
+              <div className="image-option">
+                <button type="button" aria-expanded={menu === "ratio"} aria-label={t("Aspect ratio", "画面比例")} disabled={props.submitting} onClick={() => setMenu((current) => current === "ratio" ? null : "ratio")}>
+                  {props.settings.aspectRatio}
                 </button>
-              ))}
+                {menu === "ratio" && (
+                  <div className="image-option-menu" role="listbox" aria-label={t("Aspect ratio", "画面比例")}>
+                    {IMAGE_ASPECT_RATIOS.map((item) => (
+                      <button
+                        key={item.value}
+                        type="button"
+                        role="option"
+                        aria-selected={item.value === props.settings.aspectRatio}
+                        className={item.value === props.settings.aspectRatio ? "is-active" : undefined}
+                        onClick={() => {
+                          const aspectRatio = item.value;
+                          const resolution = imageResolutionsForAspectRatio(aspectRatio)[0]?.value ?? props.settings.resolution;
+                          props.onSettingsChange({ aspectRatio, resolution });
+                          setMenu(null);
+                        }}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="image-option">
+                {resolutions.length < 2 ? (
+                  <span className="image-option-value">{props.settings.resolution.replace("x", "×")}</span>
+                ) : (
+                <button
+                  type="button"
+                  aria-expanded={menu === "size"}
+                  aria-label={t("Resolution", "分辨率")}
+                  disabled={props.submitting}
+                  onClick={() => setMenu((current) => current === "size" ? null : "size")}
+                >
+                  {props.settings.resolution.replace("x", "×")}
+                </button>
+                )}
+                {menu === "size" && (
+                  <div className="image-option-menu" role="listbox" aria-label={t("Resolution", "分辨率")}>
+                    {resolutions.map((item) => (
+                      <button
+                        key={item.value}
+                        type="button"
+                        role="option"
+                        aria-selected={item.value === props.settings.resolution}
+                        className={item.value === props.settings.resolution ? "is-active" : undefined}
+                        onClick={() => {
+                          props.onSettingsChange({ ...props.settings, resolution: item.value });
+                          setMenu(null);
+                        }}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            <details className="image-param-drawer">
-              <summary>{t("Size", "尺寸")}</summary>
-              <Select
-                value={props.settings.resolution}
-                options={resolutions.map((item) => ({ value: item.value, label: item.label }))}
-                disabled={props.submitting}
-                onChange={(value) => props.onSettingsChange({ ...props.settings, resolution: value as ImageResolution })}
-                ariaLabel={t("Resolution", "分辨率")}
-                {...MENU_WIDTH}
-              />
-            </details>
           </div>
           <div className="composer-actions">
             <Button variant="primary" size="icon" type="submit" className="composer-send" disabled={disabled || !hasDraft} aria-label={t("Generate image", "生成图片")} title={t("Generate image", "生成图片")}>

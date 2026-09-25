@@ -1,6 +1,7 @@
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
+import { markdownMath } from "./markdown-math-syntax";
 import { buildBlockDecorations } from "./wysiwyg-block-decorations";
 
 /**
@@ -14,7 +15,7 @@ function stateOf(doc: string, cursor = doc.length) {
   return EditorState.create({
     doc,
     selection: { anchor: cursor },
-    extensions: [markdown({ base: markdownLanguage })],
+    extensions: [markdown({ base: markdownLanguage, extensions: [markdownMath] })],
   });
 }
 
@@ -79,11 +80,25 @@ describe("buildBlockDecorations", () => {
     expect(first?.lang).toBe("ts");
   });
 
-  it("光标进入代码块时仍隐藏围栏行", () => {
+  it("光标进入代码块内容时仍隐藏围栏行", () => {
     const all = digests(CODE_DOC, 8);
     const hidden = all.filter((item) => !item.widget && !item.line && item.className === "");
     expect(hidden.map((item) => item.slice)).toEqual(["```ts", "```"]);
     expect(all.filter((item) => item.className.includes("cm-md-codeline"))).toHaveLength(1);
+  });
+
+  it("未闭合的代码块保留围栏，正在输入的开栏行不会消失", () => {
+    const doc = "```ts\nconst a = 1;";
+    const all = digests(doc, doc.length);
+    expect(all.some((item) => !item.widget && !item.line && item.className === "")).toBe(false);
+  });
+
+  it("公式块在光标外渲染为部件，光标进入后显示源码并在下方预览", () => {
+    const doc = "$$\nx^2\n$$\n\n正文";
+    expect(digests(doc, doc.length).find((item) => item.widget)?.slice).toBe("$$\nx^2\n$$");
+    const editing = digests(doc, 3);
+    expect(editing.filter((item) => item.className === "cm-md-math-line")).toHaveLength(3);
+    expect(editing.some((item) => item.widget && item.slice === "")).toBe(true);
   });
 
   it("空代码块不隐藏围栏，否则无法再定位", () => {

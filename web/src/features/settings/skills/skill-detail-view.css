@@ -151,41 +151,6 @@
   background: var(--paper);
 }
 
-.skill-markdown-preview {
-  height: 100%;
-  overflow: auto;
-  padding: var(--space-xl) var(--space-2xl);
-  background: var(--paper);
-}
-
-.skill-preview-meta {
-  display: grid;
-  gap: var(--space-xs);
-  margin-bottom: var(--space-xl);
-  padding-bottom: var(--space-lg);
-  border-bottom: 1px solid var(--line);
-}
-
-.skill-preview-meta strong {
-  font-size: var(--text-2xl);
-  font-weight: 600;
-}
-
-.skill-preview-meta p {
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: var(--text-base);
-  line-height: 1.45;
-  white-space: pre-wrap;
-}
-
-.skill-preview-empty {
-  padding: var(--space-5xl) var(--space-2xl);
-  color: var(--ink-soft);
-  font-size: var(--text-base);
-  text-align: center;
-}
-
 @keyframes skill-detail-loading-pulse {
   50% { opacity: 0.45; }
 }
@@ -233,10 +198,6 @@
 
   .skill-doc-toolbar .markdown-mode-toggle {
     align-self: flex-start;
-  }
-
-  .skill-markdown-preview {
-    padding: var(--space-lg);
   }
 }
 

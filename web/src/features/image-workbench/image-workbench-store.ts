@@ -101,9 +101,22 @@ export function selectImageSession(store: ImageWorkbenchStore, sessionId: string
  * @returns 新存储
  */
 export function removeImageSession(store: ImageWorkbenchStore, sessionId: string): ImageWorkbenchStore {
-  const sessions = store.sessions.filter((session) => session.id !== sessionId);
+  return removeImageSessions(store, [sessionId]);
+}
+
+/**
+ * 一次删除多条会话。全部删掉后补一个空会话。
+ *
+ * @param store 当前存储
+ * @param sessionIds 要删除的会话
+ * @returns 新存储
+ */
+export function removeImageSessions(store: ImageWorkbenchStore, sessionIds: readonly string[]): ImageWorkbenchStore {
+  const drop = new Set(sessionIds);
+  const sessions = store.sessions.filter((session) => !drop.has(session.id));
   if (sessions.length === 0) return createStore();
-  return { activeId: store.activeId === sessionId ? sessions[0].id : store.activeId, sessions };
+  const activeId = sessions.some((session) => session.id === store.activeId) ? store.activeId : sessions[0].id;
+  return { activeId, sessions };
 }
 
 /**

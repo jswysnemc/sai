@@ -1,4 +1,6 @@
+import { ArrowLeft } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import { useComposerAttachments } from "../chat/composer/use-composer-attachments";
@@ -15,6 +17,7 @@ import {
   imageFollowUpPrompt,
   loadImageWorkbenchStore,
   removeImageSession,
+  removeImageSessions,
   saveImageWorkbenchStore,
   selectImageSession,
   updateImageTurn,
@@ -30,6 +33,7 @@ import "./image-workbench-page.css";
  */
 export function ImageWorkbenchPage() {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const [store, setStore] = useState<ImageWorkbenchStore>(loadImageWorkbenchStore);
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState("");
@@ -108,8 +112,13 @@ export function ImageWorkbenchPage() {
         onSelect={(id) => { setPrompt(""); setStore((current) => selectImageSession(current, id)); }}
         onCreate={() => { setPrompt(""); setStore((current) => createImageSession(current)); }}
         onRemove={(id) => setStore((current) => removeImageSession(current, id))}
+        onRemoveMany={(ids) => setStore((current) => removeImageSessions(current, ids))}
       />
       <section className={`image-workbench-main${session.turns.length === 0 ? " is-empty" : ""}`}>
+        <button type="button" className="image-mode-back" onClick={() => navigate("/")}>
+          <ArrowLeft size={14} />
+          {t("Normal mode", "普通模式")}
+        </button>
         <div className="image-thread-scroll" ref={scroller}>
           {session.turns.length === 0 ? (
             <div className="image-empty">
@@ -123,7 +132,6 @@ export function ImageWorkbenchPage() {
           value={prompt}
           history={session.turns.map((item) => item.prompt)}
           endpoint={imageModel.selection}
-          endpoints={imageModel.endpoints}
           model={model}
           settings={settings}
           loading={imageModel.isLoading}
@@ -132,7 +140,6 @@ export function ImageWorkbenchPage() {
           onChange={setPrompt}
           onPasteImages={addImages}
           onRemoveAttachment={attachments.removeAttachment}
-          onEndpointChange={imageModel.selectEndpoint}
           onModelChange={setModel}
           onSettingsChange={setSettings}
           onSubmit={() => void submit()}

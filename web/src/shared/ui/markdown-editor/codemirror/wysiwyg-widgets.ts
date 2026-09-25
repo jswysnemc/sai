@@ -1,10 +1,10 @@
-import { EditorView, WidgetType } from "@codemirror/view";
+import { WidgetType } from "@codemirror/view";
 
 /**
  * 内联图片部件。
  *
- * 仅对可直接加载的绝对地址生效：工作区里的相对路径没有可靠的基准目录，
- * 渲染出来只会是碎图，那种情况保留源码文本更有用。
+ * 地址由调用方经 imageUrlResolver 解析好再传入，部件本身不关心来源。
+ * 加载失败时退化为带替代文本的灰色占位，避免留下破图标。
  */
 export class ImageWidget extends WidgetType {
   constructor(
@@ -36,19 +36,24 @@ export class ImageWidget extends WidgetType {
     image.src = this.url;
     image.alt = this.alt;
     image.loading = "lazy";
+    image.decoding = "async";
+    image.draggable = false;
+    image.addEventListener("error", () => {
+      wrap.classList.add("is-broken");
+      wrap.textContent = this.alt || this.url;
+    });
     wrap.appendChild(image);
     return wrap;
   }
-}
 
-/**
- * 判断图片地址是否可以直接渲染。
- *
- * @param url 图片地址
- * @returns 绝对地址或内联数据时为 true
- */
-export function isRenderableImageUrl(url: string): boolean {
-  return /^(https?:\/\/|data:image\/|\/)/i.test(url);
+  /**
+   * 图片高度未知，交给浏览器测量后再同步给编辑器。
+   *
+   * @returns 估算高度（像素）
+   */
+  get estimatedHeight() {
+    return 160;
+  }
 }
 
 /** 水平分隔线部件。 */
@@ -73,57 +78,5 @@ export class RuleWidget extends WidgetType {
     wrap.className = "cm-md-rule";
     wrap.appendChild(document.createElement("hr"));
     return wrap;
-  }
-}
-
-/** 任务列表勾选框部件，点击直接改写源码中的标记。 */
-export class TaskWidget extends WidgetType {
-  constructor(
-    private readonly checked: boolean,
-    private readonly from: number,
-    private readonly to: number
-  ) {
-    super();
-  }
-
-  /**
-   * 判断两个部件是否等价。
-   *
-   * @param other 另一个部件
-   * @returns 勾选状态与位置都相同时为 true
-   */
-  eq(other: TaskWidget) {
-    return other.checked === this.checked && other.from === this.from && other.to === this.to;
-  }
-
-  /**
-   * 构建勾选框并绑定切换行为。
-   *
-   * @param view 所属编辑器视图
-   * @returns 勾选框元素
-   */
-  toDOM(view: EditorView) {
-    const box = document.createElement("input");
-    box.type = "checkbox";
-    box.className = "cm-md-task";
-    box.checked = this.checked;
-    box.addEventListener("mousedown", (event) => {
-      // 1. 阻止默认行为，避免点击时编辑器抢走焦点并移动光标
-      event.preventDefault();
-      // 2. 直接改写标记字符，源码与视图保持单一数据源
-      view.dispatch({
-        changes: { from: this.from, to: this.to, insert: this.checked ? "[ ]" : "[x]" },
-      });
-    });
-    return box;
-  }
-
-  /**
-   * 声明该部件自行处理事件。
-   *
-   * @returns 恒为 true，交互由部件内部完成
-   */
-  ignoreEvent() {
-    return true;
   }
 }

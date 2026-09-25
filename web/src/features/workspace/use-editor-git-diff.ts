@@ -13,12 +13,12 @@ import type { FileTreeGitEntry } from "./use-workspace-git-entries";
  *
  * @param path 工作区相对文件路径
  * @param entries 按工作区路径索引的 Git 状态
- * @returns 行装饰列表；无改动或不可用时为空数组
+ * @returns 行装饰、原始补丁和加载状态；无改动时补丁为空
  */
 export function useEditorGitDiff(
   path: string | null,
   entries: ReadonlyMap<string, FileTreeGitEntry>
-): EditorGitLine[] {
+): { lines: EditorGitLine[]; patch: string; loading: boolean } {
   const item = path ? entries.get(path) : undefined;
   const enabled = Boolean(item && !item.entry.untracked);
   const diff = useQuery({
@@ -32,5 +32,5 @@ export function useEditorGitDiff(
   const patch = enabled ? diff.data?.patch ?? "" : "";
   const gitLines = useMemo(() => (patch ? buildEditorGitLines(patch) : []), [patch]);
 
-  return gitLines;
+  return { lines: gitLines, patch, loading: enabled && diff.isLoading };
 }

@@ -1,0 +1,157 @@
+/*
+ * 预览模式的块级元素：代码块、表格、公式与 Mermaid 图表。
+ */
+
+/* 代码块：围栏隐藏后由行级底色拼成整块，首末行补圆角 */
+.markdown-cm.live .cm-line.cm-md-codeline {
+  padding: 0 var(--space-sm);
+  border-right: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+  background: var(--code-surface);
+  font-family: var(--font-code);
+  font-size: 0.86em;
+  line-height: 1.6;
+}
+
+.markdown-cm.live .cm-line.cm-md-codeline-first {
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--line);
+  border-top-left-radius: var(--radius-2);
+  border-top-right-radius: var(--radius-2);
+}
+
+.markdown-cm.live .cm-line.cm-md-codeline-last {
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--line);
+  border-bottom-left-radius: var(--radius-2);
+  border-bottom-right-radius: var(--radius-2);
+}
+
+.markdown-cm.live .cm-md-fenced-code,
+.markdown-cm.live .cm-md-code-text {
+  font-family: var(--font-code);
+}
+
+/* 语言角标：围栏隐藏后挂在首行右侧 */
+.markdown-cm.live .cm-line.cm-md-codeline-first[data-md-lang]::before {
+  float: right;
+  margin-left: var(--space-sm);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: lowercase;
+  content: attr(data-md-lang);
+  user-select: none;
+}
+
+/* 表格部件：单元格就地编辑，聚焦格以同色系细边标示 */
+.markdown-cm .cm-md-table {
+  padding: var(--space-2xs) 0;
+  overflow-x: auto;
+}
+
+.markdown-cm .cm-md-table table {
+  border-collapse: collapse;
+  font-size: 0.93em;
+  line-height: 1.5;
+}
+
+.markdown-cm .cm-md-table th,
+.markdown-cm .cm-md-table td {
+  min-width: 4rem;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  cursor: text;
+  outline: none;
+}
+
+.markdown-cm .cm-md-table th {
+  background: var(--paper-deep);
+  font-weight: var(--weight-semibold);
+}
+
+.markdown-cm .cm-md-table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--paper-deep) 40%, transparent);
+}
+
+.markdown-cm .cm-md-table th:focus,
+.markdown-cm .cm-md-table td:focus {
+  box-shadow: inset 0 0 0 1px var(--signal);
+  background: var(--paper);
+}
+
+.markdown-cm .cm-md-table .cm-md-inline-code {
+  padding: 0.05em 0.3em;
+  border-radius: var(--radius-1);
+  background: var(--code-head);
+  font-family: var(--font-code);
+  font-size: 0.88em;
+}
+
+/* 公式 */
+.markdown-cm .cm-md-math-inline {
+  padding: 0 0.1em;
+  border-radius: var(--radius-1);
+  cursor: text;
+}
+
+.markdown-cm .cm-md-math-inline:hover,
+.markdown-cm .cm-md-math-block:not(.is-preview):hover,
+.markdown-cm .cm-md-mermaid:not(.is-preview):hover {
+  background: color-mix(in srgb, var(--paper-deep) 60%, transparent);
+}
+
+.markdown-cm .cm-md-math-block {
+  padding: var(--space-xs) 0;
+  overflow-x: auto;
+  border-radius: var(--radius-2);
+  cursor: text;
+}
+
+.markdown-cm .cm-md-math-block .katex-display {
+  margin: 0;
+}
+
+.markdown-cm .is-pending,
+.markdown-cm .is-error {
+  color: var(--ink-soft);
+  font-family: var(--font-code);
+  font-size: 0.86em;
+  white-space: pre-wrap;
+}
+
+.markdown-cm .is-error {
+  color: var(--danger);
+}
+
+.markdown-cm.live .cm-line.cm-md-math-line {
+  background: var(--code-surface);
+  font-family: var(--font-code);
+  font-size: 0.86em;
+}
+
+/* 编辑中的公式与图表：预览挂在源码下方，以细边与源码区分 */
+.markdown-cm .is-preview {
+  margin: var(--space-2xs) 0 var(--space-xs);
+  border: 1px dashed var(--line);
+  cursor: default;
+}
+
+/* Mermaid 图表 */
+.markdown-cm .cm-md-mermaid {
+  display: flex;
+  justify-content: center;
+  min-height: 3rem;
+  padding: var(--space-sm);
+  overflow-x: auto;
+  border-radius: var(--radius-2);
+  cursor: text;
+}
+
+.markdown-cm .cm-md-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}

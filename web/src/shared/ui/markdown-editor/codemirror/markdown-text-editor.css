@@ -1,8 +1,9 @@
 /*
- * 所见即所得模式的排版。
+ * 预览（所见即所得）模式的正文排版。
  *
- * 目标是让编辑区读起来接近成稿：标题分级、引用缩进、代码块有底色。
+ * 目标是让编辑区读起来接近成稿：标题分级、列表悬挂缩进、引用竖线。
  * 选择器统一挂在 .markdown-cm 下，特异性高于 CodeMirror 注入的单类样式。
+ * 块级元素（代码、表格、公式、图表）的样式见 wysiwyg-blocks.css。
  */
 
 .markdown-cm {
@@ -19,34 +20,50 @@
   overflow: auto;
 }
 
-/* 标题：逐级递减，末两级回到正文字号只保留字重 */
+.markdown-cm .cm-placeholder {
+  color: color-mix(in srgb, var(--ink-soft) 70%, transparent);
+}
+
+/* 标题：字号挂在行上，空标题行也保持标题行高；段前留白随级别递减 */
 .markdown-cm.live .cm-md-heading {
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
+}
+
+.markdown-cm.live .cm-md-hline {
   line-height: 1.35;
 }
 
-.markdown-cm.live .cm-md-h1 {
-  font-size: var(--text-3xl);
+.markdown-cm.live .cm-md-h1-line {
+  padding-top: 0.7em;
+  font-size: 1.6em;
 }
 
-.markdown-cm.live .cm-md-h2 {
-  font-size: var(--text-2xl);
+.markdown-cm.live .cm-md-h2-line {
+  padding-top: 0.6em;
+  font-size: 1.35em;
 }
 
-.markdown-cm.live .cm-md-h3 {
-  font-size: var(--text-xl);
+.markdown-cm.live .cm-md-h3-line {
+  padding-top: 0.5em;
+  font-size: 1.15em;
 }
 
-.markdown-cm.live .cm-md-h4 {
-  font-size: var(--text-lg);
+.markdown-cm.live .cm-md-h4-line {
+  padding-top: 0.4em;
+  font-size: 1em;
 }
 
-.markdown-cm.live .cm-md-h5,
-.markdown-cm.live .cm-md-h6 {
-  font-size: var(--text-base);
+.markdown-cm.live .cm-md-h5-line,
+.markdown-cm.live .cm-md-h6-line {
+  padding-top: 0.3em;
   color: var(--ink-soft);
 }
 
+.markdown-cm.live .cm-line:first-child.cm-md-hline {
+  padding-top: 0;
+}
+
+/* 行内格式 */
 .markdown-cm.live .cm-md-strong {
   font-weight: 700;
 }
@@ -61,88 +78,146 @@
 }
 
 .markdown-cm.live .cm-md-inline-code {
-  padding: 0.1em 0.35em;
+  padding: 0.1em 0.3em;
   border-radius: var(--radius-1);
   background: var(--code-head);
   color: var(--code-text);
   font-family: var(--font-code);
-  font-size: 0.9em;
-}
-
-.markdown-cm.live .cm-md-fenced-code,
-.markdown-cm.live .cm-md-code-text {
-  font-family: var(--font-code);
-  font-size: 0.9em;
-}
-
-.markdown-cm.live .cm-md-blockquote {
-  display: inline-block;
-  width: 100%;
-  padding-left: var(--space-sm);
-  border-left: 2px solid var(--line-strong);
-  color: var(--ink-soft);
+  font-size: 0.88em;
 }
 
 .markdown-cm.live .cm-md-link {
   color: var(--blue);
   text-decoration: underline;
-  text-underline-offset: 0.15em;
+  text-decoration-color: color-mix(in srgb, var(--blue) 40%, transparent);
+  text-underline-offset: 0.18em;
 }
 
 .markdown-cm.live .cm-md-url {
   color: var(--blue);
 }
 
-.markdown-cm.live .cm-md-table-header {
-  font-weight: 600;
+/* 光标触及时显露的语法标记：淡色、不抢正文 */
+.markdown-cm.live .cm-md-syntax {
+  color: color-mix(in srgb, var(--ink-soft) 75%, transparent);
+  font-weight: var(--weight-regular);
+  font-style: normal;
+  text-decoration: none;
 }
 
-.markdown-cm.live .cm-md-table-delimiter,
-.markdown-cm.live .cm-md-code-info {
+.markdown-cm.live .cm-md-image-src {
   color: var(--ink-soft);
-}
-
-/* 代码块：围栏隐藏后由行级底色拼成整块，首末行补圆角 */
-.markdown-cm.live .cm-line.cm-md-codeline {
-  padding: 0 var(--space-sm);
-  background: var(--code-surface);
-  border-right: 1px solid var(--line);
-  border-left: 1px solid var(--line);
   font-family: var(--font-code);
-  font-size: 0.875em;
+  font-size: 0.88em;
 }
 
-.markdown-cm.live .cm-line.cm-md-codeline-first {
-  padding-top: var(--space-2xs);
-  border-top: 1px solid var(--line);
-  border-top-left-radius: var(--radius-2);
-  border-top-right-radius: var(--radius-2);
+.markdown-cm.live .cm-md-math-src {
+  font-family: var(--font-code);
+  font-size: 0.9em;
 }
 
-.markdown-cm.live .cm-line.cm-md-codeline-last {
-  padding-bottom: var(--space-2xs);
-  border-bottom: 1px solid var(--line);
-  border-bottom-left-radius: var(--radius-2);
-  border-bottom-right-radius: var(--radius-2);
-}
-
-/* 语言角标：围栏隐藏后挂在首行右侧 */
-.markdown-cm.live .cm-line.cm-md-codeline-first[data-md-lang]::before {
-  content: attr(data-md-lang);
-  float: right;
-  margin-left: var(--space-sm);
+.markdown-cm.live .cm-md-comment {
   color: var(--ink-soft);
-  font-family: var(--font-ui);
-  font-size: var(--text-xs);
+  font-family: var(--font-code);
+  font-size: 0.88em;
+}
+
+/* 引用与列表：缩进由行级 CSS 变量统一计算，折行文字与首行正文对齐 */
+.markdown-cm.live .cm-line.cm-md-block-line {
+  --md-indent: calc(var(--md-quote, 0) * 1rem + var(--md-list, 0) * 1.5em);
+  padding-left: calc(6px + var(--md-indent));
+}
+
+.markdown-cm.live .cm-line.cm-md-li {
+  text-indent: -1.5em;
+}
+
+.markdown-cm.live .cm-line.cm-md-li > * {
+  text-indent: 0;
+}
+
+.markdown-cm.live .cm-line.cm-md-quote-line {
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--line-strong) 0 2px,
+    transparent 2px 1rem
+  );
+  background-position: 6px 0;
+  background-size: calc(var(--md-quote) * 1rem) 100%;
+  background-repeat: no-repeat;
+  color: var(--ink-soft);
+}
+
+.markdown-cm .cm-md-list-marker {
+  display: inline-block;
+  width: 1.5em;
+  text-indent: 0;
+  vertical-align: top;
   user-select: none;
+}
+
+.markdown-cm .cm-md-bullet::before {
+  display: block;
+  width: 0.34em;
+  height: 0.34em;
+  margin: 0.62em 0 0 0.45em;
+  border-radius: var(--radius-circle);
+  background: var(--ink-soft);
+  content: "";
+}
+
+.markdown-cm .cm-md-bullet.is-circle::before {
+  border: 1px solid var(--ink-soft);
+  background: transparent;
+}
+
+.markdown-cm .cm-md-bullet.is-square::before {
+  border-radius: 1px;
+}
+
+.markdown-cm .cm-md-ordered {
+  padding-right: 0.4em;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.markdown-cm .cm-md-task-marker {
+  display: inline-flex;
+  align-items: center;
+  height: 1.7em;
+}
+
+.markdown-cm .cm-md-task {
+  width: 0.95em;
+  height: 0.95em;
+  margin: 0 0 0 0.1em;
+  accent-color: var(--signal);
+  cursor: pointer;
+}
+
+.markdown-cm.live .cm-md-task-done {
+  color: var(--ink-soft);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--ink-soft) 60%, transparent);
 }
 
 /* 内联部件 */
 .markdown-cm .cm-md-image img {
   display: block;
   max-width: 100%;
+  max-height: 32rem;
   margin: var(--space-xs) 0;
   border-radius: var(--radius-2);
+}
+
+.markdown-cm .cm-md-image.is-broken {
+  display: inline-block;
+  padding: 0 var(--space-xs);
+  border-radius: var(--radius-1);
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+  font-size: 0.88em;
 }
 
 .markdown-cm .cm-md-rule {
@@ -157,38 +232,24 @@
   border-top: 1px solid var(--line);
 }
 
-/* 表格部件：始终以真实表格呈现，单元格内直接编辑 */
-.markdown-cm .cm-md-table {
-  padding: var(--space-2xs) 0;
-  overflow-x: auto;
+/* 大纲跳转后短暂高亮目标行 */
+.markdown-cm .cm-line.cm-md-flash {
+  animation: md-flash 900ms var(--ease-out);
 }
 
-.markdown-cm .cm-md-table table {
-  min-width: 50%;
-  border-collapse: collapse;
-  font-size: var(--text-sm);
+@keyframes md-flash {
+  0%,
+  30% {
+    background-color: var(--signal-soft);
+  }
+
+  100% {
+    background-color: transparent;
+  }
 }
 
-.markdown-cm .cm-md-table th,
-.markdown-cm .cm-md-table td {
-  padding: var(--space-2xs) var(--space-sm);
-  border: 1px solid var(--line);
-  text-align: left;
-  cursor: text;
-}
-
-.markdown-cm .cm-md-table th {
-  background: var(--paper-deep);
-  font-weight: 600;
-}
-
-.markdown-cm .cm-md-table tbody tr:nth-child(even) {
-  background: color-mix(in srgb, var(--paper-deep) 45%, transparent);
-}
-
-.markdown-cm .cm-md-task {
-  margin-right: var(--space-2xs);
-  vertical-align: middle;
-  accent-color: var(--signal);
-  cursor: pointer;
+@media (prefers-reduced-motion: reduce) {
+  .markdown-cm .cm-line.cm-md-flash {
+    animation: none;
+  }
 }

@@ -1,0 +1,191 @@
+/*
+ * 编辑区浮层：右键菜单、子菜单与选区格式气泡。
+ *
+ * 尺寸对齐桌面编辑器的紧凑密度：菜单项 1.75rem 高，图标按钮 1.625rem 见方。
+ */
+
+.md-menu-panel {
+  z-index: 120;
+  padding: var(--space-2xs);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--paper-raised);
+  box-shadow: var(--elevation-3);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+}
+
+.md-context-menu {
+  width: 14.5rem;
+  animation: md-menu-in var(--duration-fast) var(--ease-out);
+}
+
+.md-submenu {
+  width: 12.5rem;
+  max-height: min(24rem, calc(100vh - 1rem));
+  overflow-y: auto;
+}
+
+@keyframes md-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+
+/* 格式图标条 */
+.md-format-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2xs);
+}
+
+.md-context-menu .md-format-toolbar {
+  padding-bottom: var(--space-2xs);
+  margin-bottom: var(--space-2xs);
+  border-bottom: 1px solid var(--line);
+}
+
+.md-format-group {
+  display: flex;
+  gap: 1px;
+}
+
+.md-format-group + .md-format-group {
+  padding-left: var(--space-2xs);
+  border-left: 1px solid var(--line);
+}
+
+.md-format-toolbar button {
+  display: grid;
+  width: 1.625rem;
+  height: 1.625rem;
+  place-items: center;
+  border: none;
+  border-radius: var(--radius-1);
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.md-format-toolbar button:hover {
+  background: var(--control-surface);
+  color: var(--ink);
+}
+
+.md-format-toolbar button.is-active {
+  background: var(--signal-soft);
+  color: var(--signal);
+}
+
+.md-format-toolbar button:focus-visible,
+.md-menu-item:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--signal) 42%, transparent);
+  outline-offset: -2px;
+}
+
+/* 菜单列表 */
+.md-menu-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.md-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  min-height: 1.75rem;
+  padding: 0 var(--space-xs);
+  border: none;
+  border-radius: var(--radius-1);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.md-menu-item.has-separator {
+  position: relative;
+  margin-top: calc(var(--space-2xs) * 2 + 1px);
+}
+
+.md-menu-item.has-separator::before {
+  position: absolute;
+  top: calc(-1 * var(--space-2xs) - 1px);
+  right: calc(-1 * var(--space-2xs));
+  left: calc(-1 * var(--space-2xs));
+  height: 1px;
+  background: var(--line);
+  content: "";
+}
+
+.md-menu-item:hover:not(:disabled),
+.md-menu-item:focus-visible,
+.md-menu-item.is-open {
+  background: var(--control-surface);
+}
+
+.md-menu-item:disabled {
+  color: var(--ink-soft);
+  opacity: 0.5;
+  cursor: default;
+}
+
+.md-menu-item.is-danger:not(:disabled) {
+  color: var(--danger);
+}
+
+.md-menu-icon {
+  display: grid;
+  flex: none;
+  width: 0.875rem;
+  place-items: center;
+  color: var(--ink-soft);
+}
+
+.md-menu-item.is-danger .md-menu-icon {
+  color: inherit;
+}
+
+.md-menu-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.md-menu-item kbd {
+  color: var(--ink-soft);
+  font: var(--weight-regular) var(--text-xs) var(--font-ui);
+  white-space: nowrap;
+}
+
+.md-menu-chevron {
+  flex: none;
+  color: var(--ink-soft);
+}
+
+/* 选区气泡 */
+.md-selection-bubble {
+  padding: 0.1875rem;
+  animation: md-menu-in var(--duration-fast) var(--ease-out);
+}
+
+@media (pointer: coarse) {
+  .md-menu-item {
+    min-height: 2.25rem;
+  }
+
+  .md-format-toolbar button {
+    width: 2rem;
+    height: 2rem;
+  }
+}

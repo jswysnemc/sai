@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEditorGitLines } from "./editor-git-decorations";
+import { buildEditorGitLines, untrackedFilePatch } from "./editor-git-decorations";
 
 /**
  * 组装单文件 unified diff 文本。
@@ -17,6 +17,16 @@ function patch(...body: string[]): string {
     ""
   ].join("\n");
 }
+
+describe("untrackedFilePatch", () => {
+  it("把全文标成新文件的新增行", () => {
+    const lines = buildEditorGitLines(untrackedFilePatch("notes/plan.md", "第一行\n第二行"));
+    expect(lines).toEqual([
+      { line: 1, kind: "added" },
+      { line: 2, kind: "added" }
+    ]);
+  });
+});
 
 describe("buildEditorGitLines", () => {
   it("纯新增行标记为 added", () => {

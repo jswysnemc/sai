@@ -38,14 +38,14 @@ const baseTheme = EditorView.theme({
   },
 });
 
-/** 所见即所得模式：正文字体、居中版心，读起来接近成稿。 */
+/** 预览模式：正文字体、居中版心，读起来接近成稿；底部留白让末行可以滚到视口中部。 */
 const liveTheme = EditorView.theme({
-  "&": { fontSize: "var(--text-base)" },
-  ".cm-scroller": { fontFamily: "var(--font-ui)" },
+  "&": { fontSize: "var(--text-lg)" },
+  ".cm-scroller": { fontFamily: "var(--font-ui)", paddingBottom: "30vh" },
   ".cm-content": {
-    maxWidth: "48rem",
+    maxWidth: "46rem",
     margin: "0 auto",
-    padding: "0 var(--space-lg)",
+    padding: "var(--space-sm) var(--space-4xl)",
   },
 });
 

@@ -19,6 +19,26 @@ export type EditorGitLine = {
  * @param patch 该文件 HEAD 到工作树的 unified diff
  * @returns 升序且去重的行装饰
  */
+/**
+ * 把未跟踪文件的全文收成一份“新文件”补丁，供差异模式展示。
+ *
+ * @param path 工作区相对路径
+ * @param content 当前文件内容
+ * @returns unified diff
+ */
+export function untrackedFilePatch(path: string, content: string): string {
+  const lines = content.replaceAll("\r\n", "\n").split("\n");
+  const body = lines.map((line) => `+${line}`).join("\n");
+  return [
+    `diff --git a/${path} b/${path}`,
+    "new file mode 100644",
+    "--- /dev/null",
+    `+++ b/${path}`,
+    `@@ -0,0 +1,${lines.length} @@`,
+    body
+  ].join("\n");
+}
+
 export function buildEditorGitLines(patch: string): EditorGitLine[] {
   // 补丁末尾换行会被解析成多余的空上下文行，剥掉以免文件尾删除锚点偏移
   const file = parseDiff(patch.replace(/\r?\n$/u, ""))[0];

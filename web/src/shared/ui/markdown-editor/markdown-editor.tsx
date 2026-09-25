@@ -1,53 +1,75 @@
-import type { ReactNode } from "react";
-import { MarkdownTextEditor } from "./codemirror/markdown-text-editor";
-import { isEditableMode, type MarkdownEditorMode } from "./markdown-editor-mode";
+import { useCallback, useRef, useState } from "react";
+import { MarkdownTextEditor, type MarkdownTextEditorHandle } from "./codemirror/markdown-text-editor";
+import { nextMarkdownMode, type MarkdownEditorMode } from "./markdown-editor-mode";
+import { MarkdownOutline } from "./outline/markdown-outline";
+import type { OutlineHeading } from "./outline/outline-model";
 import "./markdown-editor.css";
 
 type MarkdownEditorProps = {
   value: string;
   onChange: (value: string) => void;
   mode: MarkdownEditorMode;
+  /** 快捷键 Ctrl+/ 切换模式时回调；缺省时快捷键不生效 */
+  onModeChange?: (mode: MarkdownEditorMode) => void;
   dark: boolean;
   readOnly?: boolean;
   /** 是否自动换行，缺省为换行 */
   wrap?: boolean;
-  /** 预览模式的渲染结果，由调用方注入以复用各自的 Markdown 渲染器 */
-  renderPreview: (source: string) => ReactNode;
+  /** 是否展示大纲，缺省展示；文档没有标题时自动隐藏 */
+  outline?: boolean;
+  /** 把文档里的相对图片地址解析为可加载地址；缺省只渲染绝对地址 */
+  resolveImageUrl?: (src: string) => string | null;
 };
 
 /**
- * 三态 Markdown 编辑器。
+ * 两态 Markdown 编辑器：源码与所见即所得预览。
  *
- * 源码与所见即所得共用一个 CodeMirror 实例，切换只热替换装饰与主题；
- * 预览模式下编辑器只隐藏不卸载，因此三态之间来回切换时
- * 光标位置、滚动位置和撤销栈都保留。预览渲染交给调用方注入的渲染器。
+ * 两态共用一个 CodeMirror 实例，切换只热替换装饰与主题，
+ * 光标位置、滚动位置和撤销栈都保留。预览态可就地编辑，行为对齐 Typora。
  *
- * @param props 内容、变更回调、模式、主题深浅、只读状态、换行与预览渲染函数
+ * @param props 内容、变更回调、模式、主题深浅、只读状态、换行、大纲与图片解析
  * @returns 编辑区容器
  */
 export function MarkdownEditor({
   value,
   onChange,
   mode,
+  onModeChange,
   dark,
   readOnly = false,
   wrap = true,
-  renderPreview,
+  outline = true,
+  resolveImageUrl,
 }: MarkdownEditorProps) {
-  const preview = mode === "preview";
+  const handleRef = useRef<MarkdownTextEditorHandle>(null);
+  const [headings, setHeadings] = useState<OutlineHeading[]>([]);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const toggleMode = useCallback(() => onModeChange?.(nextMarkdownMode(mode)), [mode, onModeChange]);
+
   return (
     <div className="markdown-editor-root">
-      {preview && <div className="markdown-editor-preview">{renderPreview(value)}</div>}
-      <div className="markdown-editor-surface" hidden={preview}>
+      <div className="markdown-editor-surface">
         <MarkdownTextEditor
+          ref={handleRef}
           value={value}
           onChange={onChange}
-          live={mode !== "source"}
+          live={mode === "preview"}
           dark={dark}
-          readOnly={readOnly || !isEditableMode(mode)}
+          readOnly={readOnly}
           wrap={wrap}
+          resolveImageUrl={resolveImageUrl}
+          onToggleMode={onModeChange ? toggleMode : undefined}
+          onOutline={setHeadings}
+          onActiveHeading={setActiveIndex}
         />
       </div>
+      {outline && (
+        <MarkdownOutline
+          headings={headings}
+          activeIndex={activeIndex}
+          onSelect={(from) => handleRef.current?.jumpTo(from)}
+        />
+      )}
     </div>
   );
 }

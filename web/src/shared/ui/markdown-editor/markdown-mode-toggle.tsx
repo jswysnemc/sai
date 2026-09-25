@@ -1,4 +1,4 @@
-import { Code2, Eye, Type } from "lucide-react";
+import { Code2, Eye } from "lucide-react";
 import type { ComponentType } from "react";
 import { MARKDOWN_EDITOR_MODES, type MarkdownEditorMode } from "./markdown-editor-mode";
 
@@ -11,13 +11,12 @@ type MarkdownModeToggleProps = {
 
 /** 各模式的图标与文案。 */
 const MODE_META: Record<MarkdownEditorMode, { icon: ComponentType<{ size?: number }>; en: string; zh: string }> = {
-  source: { icon: Code2, en: "Source", zh: "源码" },
-  wysiwyg: { icon: Type, en: "Live", zh: "所见即所得" },
   preview: { icon: Eye, en: "Preview", zh: "预览" },
+  source: { icon: Code2, en: "Source", zh: "源码" },
 };
 
 /**
- * 渲染 Markdown 三态切换控件。
+ * 渲染 Markdown 源码与预览的两段切换控件。
  *
  * @param props 当前模式、变更回调与双语取值函数
  * @returns 分段切换控件
@@ -36,7 +35,7 @@ export function MarkdownModeToggle({ mode, onChange, t }: MarkdownModeToggleProp
             className={mode === item ? "active" : ""}
             onClick={() => onChange(item)}
             aria-pressed={mode === item}
-            title={label}
+            title={`${label} (Ctrl+/)`}
           >
             <Icon size={13} />
             <span>{label}</span>

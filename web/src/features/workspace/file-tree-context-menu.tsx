@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useI18n } from "../i18n/use-i18n";
+import { useClampedMenuPosition } from "./menu-position";
 
 type FileTreeContextMenuProps = {
   x: number;
@@ -23,6 +24,7 @@ type FileTreeContextMenuProps = {
 export function FileTreeContextMenu(props: FileTreeContextMenuProps) {
   const { t } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
+  const position = useClampedMenuPosition(props.x, props.y, ref);
   const rooted = props.path !== "";
   const pasteDirectory = props.directory || !rooted;
   useEffect(() => {
@@ -33,7 +35,7 @@ export function FileTreeContextMenu(props: FileTreeContextMenuProps) {
     return () => { document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", escape); };
   }, [props]);
   return (
-    <div ref={ref} className="file-tree-context-menu" style={{ left: props.x, top: props.y }} role="menu">
+    <div ref={ref} className="file-tree-context-menu" style={position} role="menu">
       {rooted && <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onOpenContaining(); }}>{t("Open Containing Folder", "打开所在文件夹")}</button>}
       <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onCreate("file"); }}>{t("New File", "新建文件")}</button>
       <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onCreate("directory"); }}>{t("New Folder", "新建文件夹")}</button>

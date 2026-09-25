@@ -13,14 +13,17 @@
 .git-branch-create button { min-height: 1.75rem; padding:0 var(--space-sm); border: 0; border-radius:var(--radius-2); background: var(--graphite); color: var(--paper); font-size:var(--text-xs); }
 .git-branch-group { display: grid; gap:var(--space-3xs); }
 .git-branch-group > span { padding:var(--space-2xs) var(--space-xs); color: var(--ink-soft); font-size:var(--text-2xs); }
-.git-branch-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border-radius:var(--radius-2); }
+.git-branch-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; min-width: 0; border-radius:var(--radius-2); }
 .git-branch-row:hover { background: var(--surface-hover); }
 .git-branch-row.active { background: var(--surface-selected); }
-.git-branch-row-main { display: flex; align-items: center; gap:var(--space-2xs); min-width: 0; min-height: 1.75rem; padding:0 var(--space-sm); border: 0; background: transparent; color: var(--ink); text-align: left; }
-.git-branch-row-main > span { display: flex; align-items: baseline; min-width: 0; gap:var(--space-xs); }
+.git-branch-row-main.ui-button { display: flex; justify-content: flex-start; align-items: center; gap:var(--space-2xs); width: 100%; min-width: 0; height: 1.75rem; min-height: 1.75rem; padding:0 var(--space-sm); overflow: hidden; border: 0; background: transparent; color: var(--ink); text-align: left; }
+.git-branch-row-main > span { display: flex; flex: 1; align-items: baseline; min-width: 0; overflow: hidden; gap:var(--space-xs); }
+.git-branch-row-main strong,
+.git-branch-row-main small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.git-branch-row-main small { flex: 0 1 42%; }
 .git-branch-row-main:disabled { opacity: 0.72; }
-.git-branch-row-actions { display: inline-flex; gap: 1px; padding-right:var(--space-2xs); }
-.git-branch-row-actions button { display: grid; width: 26px; height: 26px; place-items: center; padding: 0; border: 0; border-radius:var(--radius-1); background: transparent; color: var(--ink-soft); }
+.git-branch-row-actions { display: inline-flex; flex: none; align-items: center; gap: 1px; padding-right:var(--space-2xs); }
+.git-branch-row-actions button { display: grid; width: 22px; height: 22px; place-items: center; padding: 0; border: 0; border-radius:var(--radius-1); background: transparent; color: var(--ink-soft); }
 .git-branch-row-actions button:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
 .git-branch-group strong { font-size:var(--text-sm); font-weight: 500; }
 .git-branch-group small { color: var(--ink-soft); font:400 var(--text-2xs) var(--font-code); }

@@ -1,0 +1,195 @@
+/*
+ * 文档大纲。
+ *
+ * 缺省形态为右缘刻度轨道，悬停或聚焦时浮出完整列表；
+ * 编辑器容器足够宽且已固定时，改为右侧常驻栏。两种形态共用同一份 DOM。
+ */
+
+.markdown-outline {
+  position: absolute;
+  top: var(--space-2xl);
+  right: var(--space-lg);
+  z-index: 4;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* 刻度轨道：每个标题一条短线，长度随级别递减 */
+.markdown-outline-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3125rem;
+  max-height: 40vh;
+  padding: var(--space-xs) var(--space-3xs);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.markdown-outline-rail span {
+  flex-shrink: 0;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--ink-soft) 45%, transparent);
+  transition: background var(--transition-fast);
+}
+
+.markdown-outline-rail span.is-active {
+  background: var(--signal);
+}
+
+/* 浮出面板：悬停轨道或键盘聚焦时出现，离开时稍作停留便于移入 */
+.markdown-outline-panel {
+  position: absolute;
+  top: calc(-1 * var(--space-2xs));
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  width: 15rem;
+  max-width: calc(100cqi - 2 * var(--space-lg));
+  max-height: min(28rem, 70vh);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--paper-raised);
+  box-shadow: var(--elevation-3);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(0.25rem);
+  transition:
+    opacity var(--transition-fast) 160ms,
+    transform var(--transition-fast) 160ms,
+    visibility 0s linear 280ms;
+}
+
+.markdown-outline:hover .markdown-outline-panel,
+.markdown-outline:focus-within .markdown-outline-panel {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    opacity var(--transition-fast) 60ms,
+    transform var(--transition-fast) 60ms,
+    visibility 0s linear 60ms;
+}
+
+.markdown-outline-panel header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  flex-shrink: 0;
+  height: 1.875rem;
+  padding: 0 var(--space-2xs) 0 var(--space-sm);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+.markdown-outline-panel header span {
+  flex: 1;
+}
+
+.markdown-outline-pin {
+  display: grid;
+  width: 1.375rem;
+  height: 1.375rem;
+  place-items: center;
+  border: none;
+  border-radius: var(--radius-1);
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.markdown-outline-pin:hover {
+  background: var(--control-surface);
+  color: var(--ink);
+}
+
+.markdown-outline-panel ol {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0 var(--space-2xs) var(--space-2xs);
+  overflow-y: auto;
+  list-style: none;
+  overscroll-behavior: contain;
+}
+
+.markdown-outline-panel li button {
+  display: block;
+  width: 100%;
+  padding-top: 0.1875rem;
+  padding-right: var(--space-xs);
+  padding-bottom: 0.1875rem;
+  overflow: hidden;
+  border: none;
+  border-radius: var(--radius-1);
+  background: none;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.markdown-outline-panel li button:hover {
+  background: var(--control-surface);
+  color: var(--ink);
+}
+
+.markdown-outline-panel li button[aria-current="location"] {
+  color: var(--signal);
+  font-weight: var(--weight-medium);
+}
+
+.markdown-outline-panel li button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--signal) 42%, transparent);
+  outline-offset: -2px;
+}
+
+/* 窄容器里固定无效，隐藏固定按钮避免误导 */
+@container md-editor (max-width: 55.999rem) {
+  .markdown-outline-pin {
+    display: none;
+  }
+}
+
+/* 宽容器且已固定：改为右侧常驻栏，占据正文居中后剩余的右侧空白 */
+@container md-editor (min-width: 56rem) {
+  .markdown-outline.is-pinned {
+    position: static;
+    flex-shrink: 0;
+    width: 14rem;
+    border-left: 1px solid var(--line);
+  }
+
+  .markdown-outline.is-pinned .markdown-outline-rail {
+    display: none;
+  }
+
+  .markdown-outline.is-pinned .markdown-outline-panel {
+    position: static;
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    height: 100%;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition: none;
+  }
+
+  .markdown-outline.is-pinned .markdown-outline-panel header {
+    padding-top: var(--space-2xs);
+  }
+}

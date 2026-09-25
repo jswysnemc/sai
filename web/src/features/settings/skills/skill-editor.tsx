@@ -1,17 +1,15 @@
 import { BookOpen, Save } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { ManagedSkill } from "../../../api/skill-contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { MarkdownEditor } from "../../../shared/ui/markdown-editor/markdown-editor";
-import type { MarkdownEditorMode } from "../../../shared/ui/markdown-editor/markdown-editor-mode";
 import { MarkdownModeToggle } from "../../../shared/ui/markdown-editor/markdown-mode-toggle";
-import { MarkdownRenderer } from "../../chat/markdown-renderer";
+import { useMarkdownMode } from "../../../shared/ui/markdown-editor/use-markdown-mode";
 import { isDarkTheme, useTheme } from "../../theme/theme";
 import { EditorHeader, SettingsGroup } from "../editor-layout";
 import { useI18n } from "../../i18n/use-i18n";
 import { composeSkillDocument, parseSkillDocument } from "./skill-document";
 import { skillScopeLabel } from "./skill-list-filter";
-import "../../chat/markdown-renderer.css";
 
 type SkillEditorProps = {
   skill: ManagedSkill | null;
@@ -30,8 +28,8 @@ type SkillEditorProps = {
 /**
  * 编辑新建或已安装 Skill 的完整 SKILL.md。
  *
- * 名称与描述独立字段展示，正文区复用三态 Markdown 编辑器，
- * 可在源码、所见即所得与预览之间切换。
+ * 名称与描述独立字段展示，正文区复用两态 Markdown 编辑器，
+ * 可在源码与可编辑预览之间切换。
  *
  * @param props 当前条目、文档内容、保存状态与更新回调
  * @returns Skill 文档编辑区
@@ -40,7 +38,7 @@ export function SkillEditor(props: SkillEditorProps) {
   const { t } = useI18n();
   const { theme } = useTheme();
   const { skill, content, directoryName, creating, dirty, saving, error } = props;
-  const [mode, setMode] = useState<MarkdownEditorMode>("wysiwyg");
+  const [mode, setMode] = useMarkdownMode();
   const parsed = useMemo(() => parseSkillDocument(content), [content]);
 
   /**
@@ -145,17 +143,7 @@ export function SkillEditor(props: SkillEditorProps) {
                 onChange={(body) => updateDocument({ body })}
                 mode={mode}
                 dark={isDarkTheme(theme)}
-                renderPreview={(source) => (
-                  <div className="skill-markdown-preview">
-                    <header className="skill-preview-meta">
-                      <strong>{parsed.name || t("Unnamed skill", "未命名 Skill")}</strong>
-                      <p>{parsed.description || t("No description", "暂无描述")}</p>
-                    </header>
-                    {source.trim()
-                      ? <MarkdownRenderer source={source} />
-                      : <div className="skill-preview-empty">{t("Nothing to preview yet", "暂无预览内容")}</div>}
-                  </div>
-                )}
+                onModeChange={setMode}
               />
             </div>
           </section>

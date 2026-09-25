@@ -24,7 +24,7 @@ export function DiffCodeRows({ lines, layout, highlights }: DiffCodeRowsProps) {
     ));
   }
   return lines.map((line, index) => (
-    <div className={`review-diff-row ${line.kind}`} key={index}>
+    <div className={`review-diff-row ${line.kind}`} data-diff-index={index} key={index}>
       <span className="review-diff-number" aria-hidden>{line.oldLine}</span>
       <span className="review-diff-number" aria-hidden>{line.newLine}</span>
       <span className="review-diff-sign" aria-hidden>{line.kind === "added" ? "+" : line.kind === "removed" ? "-" : " "}</span>

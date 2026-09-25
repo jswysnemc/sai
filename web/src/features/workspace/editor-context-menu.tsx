@@ -1,6 +1,7 @@
 import { Copy, Save, WrapText } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useI18n } from "../i18n/use-i18n";
+import { useClampedMenuPosition } from "./menu-position";
 
 type EditorContextMenuProps = {
   x: number;
@@ -19,6 +20,7 @@ type EditorContextMenuProps = {
 export function EditorContextMenu(props: EditorContextMenuProps) {
   const { t } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
+  const position = useClampedMenuPosition(props.x, props.y, ref);
   useEffect(() => {
     const close = (event: PointerEvent) => { if (!ref.current?.contains(event.target as Node)) props.onClose(); };
     const escape = (event: KeyboardEvent) => { if (event.key === "Escape") props.onClose(); };
@@ -33,7 +35,7 @@ export function EditorContextMenu(props: EditorContextMenuProps) {
   };
 
   return (
-    <div ref={ref} className="editor-context-menu" style={{ left: props.x, top: props.y }} role="menu">
+    <div ref={ref} className="editor-context-menu" style={position} role="menu">
       <button type="button" role="menuitem" onClick={copyPath}><Copy size={13} />{t("Copy path", "复制路径")}</button>
       {props.wordWrap !== null && (
         <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onToggleWordWrap(); }}>

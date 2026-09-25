@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendImageTurn, createImageSession, imageFollowUpPrompt, removeImageSession, titleFromPrompt, type ImageWorkbenchStore, type ImageWorkbenchTurn } from "./image-workbench-store";
+import { appendImageTurn, createImageSession, imageFollowUpPrompt, removeImageSession, removeImageSessions, titleFromPrompt, type ImageWorkbenchStore, type ImageWorkbenchTurn } from "./image-workbench-store";
 
 const turn: ImageWorkbenchTurn = {
   id: "turn-1",
@@ -36,6 +36,14 @@ describe("image workbench sessions", () => {
     expect(next.sessions).toHaveLength(1);
     expect(next.sessions[0].id).not.toBe("image-a");
     expect(next.activeId).toBe(next.sessions[0].id);
+  });
+
+  it("一次删除多条会话，并在当前会话被删掉后改选剩下的", () => {
+    const next = createImageSession(store(), "2026-09-23T01:00:00.000Z");
+    const kept = next.sessions[1].id;
+    const removed = removeImageSessions(next, [next.sessions[0].id]);
+    expect(removed.sessions.map((session) => session.id)).toEqual([kept]);
+    expect(removed.activeId).toBe(kept);
   });
 
   it("新建会话后成为当前会话", () => {

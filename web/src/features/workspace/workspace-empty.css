@@ -2,51 +2,88 @@
 .workspace-pane-empty {
   display: flex;
   flex-direction: column;
+  gap: 1rem;
   height: 100%;
-  justify-content: flex-start;
-  gap: var(--space-sm);
-  width: 100%;
+  width: min(100%, 34rem);
   margin: 0;
-  padding: var(--space-sm) 0;
+  padding: 1.125rem 0.875rem 1.5rem;
+  overflow: auto;
   color: var(--ink-soft);
-  font-size:var(--text-sm);
+  font-size: var(--text-sm);
 }
 
 .workspace-pane-empty-heading {
   display: grid;
-  grid-template-columns: 1.5rem minmax(0, 1fr);
-  align-items: start;
-  gap: var(--space-sm);
+  gap: 0.25rem;
+  padding: 0 0.375rem;
 }
 
-.workspace-pane-empty-heading > svg { color: var(--signal); }
-.workspace-pane-empty-heading > div { display: grid; gap: var(--space-3xs); }
-.workspace-pane-empty-heading strong { color: var(--ink); font-size: var(--text-base); font-weight: 500; }
-.workspace-pane-empty-heading span { color: var(--ink-soft); font-size: var(--text-xs); }
+.workspace-pane-empty-heading strong {
+  color: var(--ink);
+  font: 500 var(--text-sm)/1.35 var(--font-ui);
+}
+
+.workspace-pane-empty-heading span {
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+.workspace-pane-empty-group {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.workspace-pane-empty-group h3 {
+  margin: 0;
+  padding: 0 0.375rem;
+  color: var(--ink-soft);
+  font: 500 var(--text-2xs)/1.5rem var(--font-ui);
+}
 
 .workspace-pane-empty-actions {
   display: grid;
-  border-top: 1px solid var(--line);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem;
 }
 
 .workspace-pane-empty-actions button {
-  display: grid;
-  grid-template-columns: 1.25rem minmax(0, 1fr) 0.875rem;
-  min-height: 1.75rem;
+  display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  padding: 0 var(--space-xs);
+  gap: 0.5rem;
+  min-width: 0;
+  min-height: 2.125rem;
+  padding: 0 0.5rem;
   border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink-soft);
+  border-radius: var(--radius-2);
+  background: color-mix(in srgb, var(--ink) 3.5%, transparent);
+  color: var(--ink);
   font-size: var(--text-sm);
   text-align: left;
 }
 
-.workspace-pane-empty-actions button:hover { background: var(--surface-hover); color: var(--ink); }
-.workspace-pane-empty-actions button > svg:last-child { justify-self: end; }
+.workspace-pane-empty-actions button svg {
+  flex: none;
+  color: var(--ink-soft);
+}
+
+.workspace-pane-empty-actions button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-pane-empty-actions button:hover {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+.workspace-pane-empty-actions button:hover svg {
+  color: var(--ink);
+}
+
+.workspace-pane-empty-actions button:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+}
 
 .workspace-targeted-diff {
   display: grid;

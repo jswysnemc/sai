@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, ChevronsDownUp, FilePlus2, FolderPlus, PanelRightClose, RefreshCw, Search } from "lucide-react";
+import { ChevronRight, FilePlus2, FolderPlus, MoreHorizontal, Search } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type UIEvent } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
@@ -21,6 +21,7 @@ import {
 import { WorkspaceFileSearch } from "./workspace-file-search";
 import { useI18n } from "../i18n/use-i18n";
 import { Button } from "../../shared/ui/button/button";
+import { ActionMenu } from "../../shared/ui/menu/action-menu";
 import { TextInput } from "../../shared/ui/form/text-input";
 import { absoluteWorkspacePath, pasteTargetPath, uniqueCopyPath, type TreeClipboard } from "./file-tree-clipboard";
 import { REVEAL_FILE_TREE_PATH_EVENT } from "./files-home";
@@ -83,7 +84,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
   const [clipboard, setClipboard] = useState<TreeClipboard | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewport, setViewport] = useState(0);
-  const [rowHeight, setRowHeight] = useState(28);
+  const [rowHeight, setRowHeight] = useState(22);
   const scrollRef = useRef<HTMLDivElement>(null);
   const probeRef = useRef<HTMLDivElement>(null);
   const scrollFrame = useRef(0);
@@ -369,12 +370,19 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
       <div className="file-tree-head">
         {showHeading && <span>{t("Files", "文件")}</span>}
         {embedded && <span className="file-tree-title" title={workspaceLabel}>{workspaceLabel || t("Files", "文件")}</span>}
-        <Button className="file-tree-search-toggle" variant="ghost" size="icon" aria-pressed={searchOpen || Boolean(search)} onClick={() => setSearchOpen((open) => !open || Boolean(search))} aria-label={t("Filter files", "筛选文件")} title={t("Filter files", "筛选文件")}><Search size={13} /></Button>
         <div className="file-tree-actions">
-          <Button variant="ghost" size="icon" onClick={() => void reloadTree()} aria-label={t("Refresh Explorer", "刷新资源管理器")} title={t("Refresh Explorer", "刷新资源管理器")}><RefreshCw size={13} /></Button>
-          <Button variant="ghost" size="icon" onClick={collapseAll} aria-label={t("Collapse All", "全部折叠")} title={t("Collapse All", "全部折叠")}><ChevronsDownUp size={13} /></Button>
-          <Button variant="ghost" size="icon" onClick={() => beginCreate("file")} aria-label={t("New File", "新建文件")} title={t("New File", "新建文件")}><FilePlus2 size={13} /></Button>
-          {onClose && <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("Close file tree", "关闭文件树")}><PanelRightClose size={12} /></Button>}
+          <Button className="file-tree-search-toggle" variant="ghost" size="icon" aria-pressed={searchOpen || Boolean(search)} onClick={() => setSearchOpen((open) => !open || Boolean(search))} aria-label={t("Filter files", "筛选文件")} title={t("Filter files", "筛选文件")}><Search size={13} /></Button>
+          <ActionMenu
+            label={t("File tree actions", "文件树操作")}
+            trigger={<MoreHorizontal size={14} />}
+            triggerClassName="file-tree-more"
+            items={[
+              { id: "refresh", label: t("Refresh Explorer", "刷新资源管理器"), onSelect: () => void reloadTree() },
+              { id: "collapse", label: t("Collapse All", "全部折叠"), onSelect: collapseAll },
+              { id: "new-file", label: t("New File", "新建文件"), onSelect: () => beginCreate("file") },
+              ...(onClose ? [{ id: "close", label: t("Close file tree", "关闭文件树"), separator: true, onSelect: onClose }] : [])
+            ]}
+          />
         </div>
       </div>
       {(searchOpen || search) && (

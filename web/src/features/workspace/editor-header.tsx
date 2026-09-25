@@ -1,6 +1,6 @@
-import { ArrowLeft, ArrowRight, FileUp, FolderTree, RefreshCw, Save, WrapText } from "lucide-react";
+import { ArrowLeft, ArrowRight, MoreHorizontal, RefreshCw } from "lucide-react";
 import { useState } from "react";
-import { Button } from "../../shared/ui/button/button";
+import { ActionMenu } from "../../shared/ui/menu/action-menu";
 import { MarkdownModeToggle } from "../../shared/ui/markdown-editor/markdown-mode-toggle";
 import type { MarkdownEditorMode } from "../../shared/ui/markdown-editor/markdown-editor-mode";
 import { EditorBreadcrumbs } from "./editor-breadcrumbs";
@@ -36,6 +36,9 @@ type EditorHeaderProps = {
   /** 为 null 时不提供换行按钮（如图片） */
   wordWrap: boolean | null;
   onToggleWordWrap: () => void;
+  /** 为 null 时不提供差异模式（如图片） */
+  diffView: boolean | null;
+  onToggleDiffView: () => void;
 };
 
 /**
@@ -60,6 +63,8 @@ export function EditorHeader({
   onToggleFileTree,
   wordWrap,
   onToggleWordWrap,
+  diffView,
+  onToggleDiffView,
 }: EditorHeaderProps) {
   const { t } = useI18n();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -94,7 +99,6 @@ export function EditorHeader({
         </span>
       )}
       <EditorBreadcrumbs path={path} onSelectFile={onSelectFile} />
-      {onOpenFile && <Button variant="ghost" size="icon" className="editor-open-file" onClick={onOpenFile} aria-label={t("Open file by path", "通过路径打开文件")} title={t("Open file", "打开文件")}><FileUp size={14} /></Button>}
       {externalChange && (
         <span className="editor-external-change">{t("File changed on disk", "磁盘内容已变化")}</span>
       )}
@@ -112,34 +116,19 @@ export function EditorHeader({
       {markdownMode && (
         <MarkdownModeToggle mode={markdownMode} onChange={onMarkdownModeChange} t={t} />
       )}
-      {wordWrap !== null && (
-        <button
-          type="button"
-          className="editor-wrap"
-          onClick={onToggleWordWrap}
-          aria-pressed={wordWrap}
-          aria-label={wordWrap ? t("Disable word wrap", "关闭自动换行") : t("Enable word wrap", "开启自动换行")}
-          title={wordWrap ? t("Disable word wrap", "关闭自动换行") : t("Enable word wrap", "开启自动换行")}
-        >
-          <WrapText size={15} />
-        </button>
-      )}
-      {savable && (
-        <button type="button" className="editor-save" onClick={onSave} disabled={!canSave}>
-          <Save size={14} /> {t("Save", "保存")}
-        </button>
-      )}
-      {!fileTreeOpen && (
-        <button
-          type="button"
-          className="editor-tree-toggle"
-          onClick={onToggleFileTree}
-          aria-label={t("Open file tree", "打开文件树")}
-          aria-pressed={false}
-        >
-          <FolderTree size={15} />
-        </button>
-      )}
+      <ActionMenu
+        className="editor-more"
+        label={t("Editor actions", "编辑器操作")}
+        trigger={<MoreHorizontal size={15} />}
+        triggerClassName="editor-more-trigger"
+        items={[
+          ...(savable ? [{ id: "save", label: t("Save", "保存"), shortcut: "Ctrl+S", disabled: !canSave, onSelect: onSave }] : []),
+          ...(onOpenFile ? [{ id: "open", label: t("Open file", "打开文件"), onSelect: onOpenFile }] : []),
+          ...(diffView !== null ? [{ id: "diff", label: diffView ? t("Exit diff view", "退出差异") : t("Diff view", "差异视图"), separator: true, onSelect: onToggleDiffView }] : []),
+          ...(wordWrap !== null ? [{ id: "wrap", label: wordWrap ? t("Disable word wrap", "关闭自动换行") : t("Enable word wrap", "开启自动换行"), onSelect: onToggleWordWrap }] : []),
+          { id: "tree", label: fileTreeOpen ? t("Close file tree", "关闭文件树") : t("Open file tree", "打开文件树"), onSelect: onToggleFileTree }
+        ]}
+      />
       {menu && (
         <EditorContextMenu
           x={menu.x}
