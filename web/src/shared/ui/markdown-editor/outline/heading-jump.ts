@@ -13,6 +13,14 @@ const TOP_MARGIN_PX = 12;
 /** 设置或清除跳转高亮的效果；null 表示清除。 */
 const flashEffect = StateEffect.define<number | null>();
 
+/**
+ * 经大纲跳转到某个标题的效果，值为标题起点。
+ *
+ * 文档末尾的标题无法滚到视口顶部，按滚动位置推算会高亮成别的标题；
+ * 大纲跟踪收到该效果后直接锁定目标标题，直到用户再次手动滚动。
+ */
+export const headingJumpEffect = StateEffect.define<number>();
+
 /** 跳转高亮的行装饰。 */
 const flashLine = Decoration.line({ class: "cm-md-flash" });
 
@@ -47,7 +55,7 @@ export function jumpToHeading(view: EditorView, from: number): void {
   const line = view.state.doc.lineAt(position);
   const scroller = view.scrollDOM;
   // 1. 光标放到标题末尾并高亮，焦点交还编辑器便于继续输入
-  view.dispatch({ selection: { anchor: line.to }, effects: flashEffect.of(line.from) });
+  view.dispatch({ selection: { anchor: line.to }, effects: [flashEffect.of(line.from), headingJumpEffect.of(from)] });
   view.focus();
   // 2. 按估算位置平滑滚动
   const documentOffset = view.documentTop - scroller.getBoundingClientRect().top + scroller.scrollTop;
