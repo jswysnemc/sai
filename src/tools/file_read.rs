@@ -78,7 +78,9 @@ async fn read_file(args: Value) -> Result<ToolOutput> {
     if let Some(pages) = request.pages.as_deref() {
         pdf::validate_pages(pages)?;
     }
-    if guard::is_blocked_device_path(&request.path) {
+    if guard::is_blocked_device_path(std::path::Path::new(&request.raw_path))
+        || guard::is_blocked_device_path(&request.path)
+    {
         bail!(
             "Cannot read '{}': this device file would block or produce infinite output.",
             request.raw_path

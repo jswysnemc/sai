@@ -42,8 +42,13 @@ const FILE_NOT_FOUND_CWD_NOTE: &str = "Note: your current working directory is";
 /// 返回:
 /// - 命中黑名单时为 true
 pub(super) fn is_blocked_device_path(path: &Path) -> bool {
-    let text = path.to_string_lossy();
-    if BLOCKED_DEVICE_PATHS.contains(&text.as_ref()) {
+    let normalized = path.to_string_lossy().replace('\\', "/");
+    // Windows 会把 /dev/zero 拼到盘符上，变成 D:/dev/zero
+    let text = match normalized.as_bytes() {
+        [drive, b':', b'/', ..] if drive.is_ascii_alphabetic() => &normalized[2..],
+        _ => normalized.as_str(),
+    };
+    if BLOCKED_DEVICE_PATHS.contains(&text) {
         return true;
     }
     text.starts_with("/proc/")
@@ -195,6 +200,8 @@ mod tests {
     #[test]
     fn blocks_devices_that_never_finish() {
         assert!(is_blocked_device_path(Path::new("/dev/zero")));
+        assert!(is_blocked_device_path(Path::new("D:/dev/zero")));
+        assert!(is_blocked_device_path(Path::new(r"D:\dev\zero")));
         assert!(is_blocked_device_path(Path::new("/proc/self/fd/0")));
         assert!(!is_blocked_device_path(Path::new("/dev/null")));
         assert!(!is_blocked_device_path(Path::new("/proc/cpuinfo")));

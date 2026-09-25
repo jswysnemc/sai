@@ -5,6 +5,12 @@ from mock_model import MockModel
 from terminal import TerminalSession
 
 
+def compaction_panel_open(terminal):
+    """terminal 为当前会话；压缩策略面板打开时为真。"""
+    text = terminal.text()
+    return any(marker in text for marker in ("Usage ratio", "占用比例", "AUTO-COMPACT", "自动压缩"))
+
+
 class InteractionTests(unittest.TestCase):
     """覆盖面板生命周期及输入框恢复。"""
 
@@ -41,9 +47,10 @@ class InteractionTests(unittest.TestCase):
             terminal.wait_for(lambda: "/context " in terminal.screen.display[terminal.screen.cursor.y])
             terminal.send(b"\r")
             terminal.wait_for(lambda: "/context edit" in terminal.screen.display[terminal.screen.cursor.y])
-            self.assertNotIn("AUTO-COMPACT", terminal.text())
+            self.assertNotIn("Usage ratio", terminal.text())
+            self.assertNotIn("占用比例", terminal.text())
             terminal.send(b"\r")
-            terminal.wait_for(lambda: "AUTO-COMPACT" in terminal.text() or "自动压缩" in terminal.text())
+            terminal.wait_for(lambda: compaction_panel_open(terminal))
             terminal.send(b"q")
             terminal.wait_for(lambda: "cancelled" in terminal.text() or "已取消" in terminal.text())
 
@@ -80,7 +87,7 @@ class InteractionTests(unittest.TestCase):
         """打开并取消配置面板后可执行命令，返回无。"""
         with TerminalSession() as terminal:
             terminal.send(b"/context edit\r")
-            terminal.wait_for(lambda: "AUTO-COMPACT" in terminal.text() or "自动压缩" in terminal.text())
+            terminal.wait_for(lambda: compaction_panel_open(terminal))
             terminal.send(b"q")
             terminal.wait_for(lambda: "cancelled" in terminal.text() or "已取消" in terminal.text())
             terminal.send(b"!echo INPUT-RESTORED\r")
