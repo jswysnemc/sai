@@ -1,8 +1,12 @@
-import { memo, useCallback } from "react";
-import type { GitConfig, GitRepositoryState, ScmConfig } from "../../../api/contracts";
+import { useQueryClient } from "@tanstack/react-query";
+import { memo, useCallback, useMemo, useState } from "react";
+import type { GitConfig, GitDiffResponse, GitRepositoryState, ScmConfig } from "../../../api/contracts";
+import { parseDiff } from "../../chat/tool-renderers/diff/diff-parser";
 import type { GitOperationOptions } from "../../../api/git-contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
+import { ChangeFileStatsContext, ChangeListExpandContext, ChangeListQueryContext } from "../changes/change-file-stats";
+import { ChangesReviewBar, type ChangeListScope } from "../changes/changes-review-bar";
 import { CommitControl } from "../changes/commit-control";
 import type { ChangeSectionKind } from "../changes/change-section";
 import { RepositoryChangeGroup } from "../changes/repository-change-group";
@@ -58,7 +62,18 @@ type GitChangesViewProps = {
  */
 export function GitChangesView(props: GitChangesViewProps) {
   const { t } = useI18n();
+  const queryClient = useQueryClient();
   const { fileComparison, scmState, state } = props;
+  const [scope, setScope] = useState<ChangeListScope>("uncommitted");
+  const [query, setQuery] = useState("");
+  const [finding, setFinding] = useState(false);
+  const [expandToken, setExpandToken] = useState(0);
+  const fileStats = useMemo(() => {
+    const patch = (props.reviewDiff.data as GitDiffResponse | undefined)?.patch ?? "";
+    return new Map(parseDiff(patch).map((file) => [file.path, { added: file.added, removed: file.removed }]));
+  }, [props.reviewDiff.data]);
+  const added = [...fileStats.values()].reduce((sum, item) => sum + item.added, 0);
+  const removed = [...fileStats.values()].reduce((sum, item) => sum + item.removed, 0);
 
   const handleSelectRepository = useCallback(
     (root: string) => {
@@ -115,6 +130,28 @@ export function GitChangesView(props: GitChangesViewProps) {
           onSuggestMessage={props.onSuggestMessage}
         />
 
+        <ChangeFileStatsContext.Provider value={fileStats}>
+        <ChangeListQueryContext.Provider value={query}>
+        <ChangeListExpandContext.Provider value={expandToken}>
+        <ChangesReviewBar
+          scope={scope}
+          added={added}
+          removed={removed}
+          branch={state.head}
+          busy={props.busy}
+          query={query}
+          finding={finding}
+          runOperation={props.runOperation}
+          onScopeChange={setScope}
+          onQueryChange={setQuery}
+          onFindingChange={setFinding}
+          onExpandAll={() => setExpandToken((value) => value + 1)}
+          onRefresh={() => {
+            void queryClient.invalidateQueries({ queryKey: ["git-status"] });
+            void queryClient.invalidateQueries({ queryKey: ["git-statuses"] });
+            void queryClient.invalidateQueries({ queryKey: ["git-review-diff"] });
+          }}
+        />
         <div className="git-change-scroll">
           {props.allStates.map((repository) => (
             <RepositoryChangeGroupMemo
@@ -127,6 +164,7 @@ export function GitChangesView(props: GitChangesViewProps) {
               untrackedMode={props.git.untracked_changes}
               busy={props.busy}
               runOperation={props.runOperation}
+              listScope={scope}
               comparisonBasePath={fileComparison.bases[repository.repo_root] ?? null}
               onSelectRepository={() => handleSelectRepository(repository.repo_root)}
               onSelectChange={(path, section) => handleSelectChange(repository.repo_root, path, section)}
@@ -138,6 +176,9 @@ export function GitChangesView(props: GitChangesViewProps) {
             />
           ))}
         </div>
+        </ChangeListExpandContext.Provider>
+        </ChangeListQueryContext.Provider>
+        </ChangeFileStatsContext.Provider>
 
         <footer className="git-change-footer">
           <div className="git-diff-mode" role="group" aria-label={t("Diff baseline", "差异基准")}>

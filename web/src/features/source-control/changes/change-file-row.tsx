@@ -5,6 +5,7 @@ import { Button } from "../../../shared/ui/button/button";
 import { FileTypeIcon } from "../../../shared/ui/file-icon";
 import { useI18n } from "../../i18n/use-i18n";
 import type { ChangeSectionKind } from "./change-section";
+import { useChangeFileStat } from "./change-file-stats";
 
 type ChangeFileRowProps = {
   entry: GitStatusEntry;
@@ -30,6 +31,8 @@ type ChangeFileRowProps = {
  */
 export function ChangeFileRow(props: ChangeFileRowProps) {
   const { t } = useI18n();
+  const stat = useChangeFileStat(props.entry.path);
+  const isNew = props.entry.untracked || props.entry.index_status === "A" || props.entry.index_status === "?";
   const style = { "--git-tree-indent": `${props.depth * 0.875}rem` } as CSSProperties;
   const canStage = props.section === "changes" || props.section === "untracked" || props.section === "merge";
   const canDiscard = props.section === "changes" || props.section === "untracked";
@@ -51,7 +54,16 @@ export function ChangeFileRow(props: ChangeFileRowProps) {
           {props.entry.old_path && <small>{props.entry.old_path} → {props.entry.path}</small>}
         </span>
         <span className="git-file-trailing">
-          <span className={`git-file-status tone-${statusTone(props.entry)}`}>{statusLabel(props.entry)}</span>
+          {stat && (stat.added > 0 || stat.removed > 0) ? (
+            <span className="git-file-diffstat">
+              {stat.added > 0 && <b>+{stat.added}</b>}
+              {stat.removed > 0 && <i>-{stat.removed}</i>}
+            </span>
+          ) : isNew ? (
+            <span className="git-file-diffstat"><em>{t("New", "新建")}</em></span>
+          ) : (
+            <span className={`git-file-status tone-${statusTone(props.entry)}`}>{statusLabel(props.entry)}</span>
+          )}
           <ChevronDown size={14} className={props.active ? "is-open" : ""} aria-hidden="true" />
         </span>
       </Button>

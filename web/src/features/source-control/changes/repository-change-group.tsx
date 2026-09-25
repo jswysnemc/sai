@@ -5,6 +5,7 @@ import type { GitOperationAction } from "../../../api/git-contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
 import type { GitOperationUiOptions, RunGitOperation } from "../types";
+import type { ChangeListScope } from "./changes-review-bar";
 import { ChangeSection, type ChangeSectionKind } from "./change-section";
 import { countVisibleGitChanges, groupGitChanges, type GitUntrackedChangesMode } from "./change-groups";
 import { ChangeContextMenu } from "./change-context-menu";
@@ -20,6 +21,7 @@ type RepositoryChangeGroupProps = {
   untrackedMode: GitUntrackedChangesMode;
   busy: boolean;
   runOperation: RunGitOperation;
+  listScope: ChangeListScope;
   comparisonBasePath: string | null;
   onSelectRepository: () => void;
   onSelectChange: (path: string, section: ChangeSectionKind) => void;
@@ -171,7 +173,7 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
       </header>
       {open && (
         <div className="git-repository-change-sections">
-          {groups.conflicts.length > 0 && (
+          {props.listScope !== "staged" && groups.conflicts.length > 0 && (
             <ChangeSection
               title={t(`Merge Changes ${groups.conflicts.length}`, `合并变更 ${groups.conflicts.length}`)}
               entries={groups.conflicts}
@@ -190,7 +192,7 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
               section="merge"
             />
           )}
-          {groups.staged.length > 0 && (
+          {props.listScope !== "unstaged" && groups.staged.length > 0 && (
             <ChangeSection
               title={t(`Staged Changes ${groups.staged.length}`, `已暂存变更 ${groups.staged.length}`)}
               entries={groups.staged}
@@ -209,7 +211,7 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
               section="staged"
             />
           )}
-          {groups.changes.length > 0 && (
+          {props.listScope !== "staged" && groups.changes.length > 0 && (
             <ChangeSection
               title={t(`Changes ${groups.changes.length}`, `更改 ${groups.changes.length}`)}
               entries={groups.changes}
@@ -228,7 +230,7 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
               section="changes"
             />
           )}
-          {groups.untracked.length > 0 && (
+          {props.listScope !== "staged" && groups.untracked.length > 0 && (
             <ChangeSection
               title={t(`Untracked ${groups.untracked.length}`, `未跟踪 ${groups.untracked.length}`)}
               entries={groups.untracked}

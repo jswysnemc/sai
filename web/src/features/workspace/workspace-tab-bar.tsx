@@ -138,18 +138,18 @@ export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
               </div>
             );
           })}
+          <ActionMenu
+            className="workspace-tab-actions"
+            label={t("Add panel", "添加面板")}
+            trigger={<Plus size={14} />}
+            items={ACTIVE_WORKSPACE_PANEL_OPTIONS.map((item) => ({
+              id: item.type,
+              label: t(item.labelEn, item.labelZh),
+              icon: <item.icon size={15} />,
+              onSelect: () => props.onAdd(item.type)
+            }))}
+          />
         </div>
-        <ActionMenu
-          className="workspace-tab-actions"
-          label={t("Add panel", "添加面板")}
-          trigger={<Plus size={15} />}
-          items={ACTIVE_WORKSPACE_PANEL_OPTIONS.map((item) => ({
-            id: item.type,
-            label: t(item.labelEn, item.labelZh),
-            icon: <item.icon size={15} />,
-            onSelect: () => props.onAdd(item.type)
-          }))}
-        />
       </div>
       <div className="workspace-tab-layout hidden md:flex">
         <Button variant="ghost" size="icon" onClick={props.onToggleMaximized} title={props.maximized ? t("Exit full screen", "退出全屏") : t("Full screen", "全屏")} aria-label={props.maximized ? t("Exit full screen", "退出全屏") : t("Full screen", "全屏")} aria-pressed={props.maximized}>

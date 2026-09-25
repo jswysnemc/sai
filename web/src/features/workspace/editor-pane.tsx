@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileCode2, FileUp, FolderTree } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { MarkdownEditor } from "../../shared/ui/markdown-editor/markdown-editor";
@@ -21,8 +20,9 @@ import {
 import { useEditorGitDiff } from "./use-editor-git-diff";
 import { registerUnsavedEditor } from "./unsaved-editor-changes";
 import { readEditorWordWrap, writeEditorWordWrap } from "./editor-word-wrap";
+import { readRecentFiles, rememberRecentFile } from "./editor-recent-files";
+import { FilesHome } from "./files-home";
 import { OpenFileDialog } from "./open-file-dialog";
-import { Button } from "../../shared/ui/button/button";
 import type { EditorNavigation } from "./editor-header";
 import type { FileTreeGitEntry } from "./use-workspace-git-entries";
 
@@ -58,6 +58,11 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree,
   const [markdownMode, setMarkdownMode] = useState<MarkdownEditorMode>("wysiwyg");
   const [openFileDialog, setOpenFileDialog] = useState(false);
   const [wordWrap, setWordWrap] = useState(() => readEditorWordWrap(Boolean(path && isMarkdownFile(path))));
+  const [recentFiles, setRecentFiles] = useState(readRecentFiles);
+  useEffect(() => {
+    if (!path) return;
+    setRecentFiles(rememberRecentFile(path));
+  }, [path]);
   useEffect(() => {
     setWordWrap(readEditorWordWrap(Boolean(path && isMarkdownFile(path))));
   }, [path]);
@@ -121,17 +126,8 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree,
 
   if (!path) {
     return (
-      <section className="editor-pane">
-        <header className="editor-head editor-head-empty">
-          <span>{t("No file open", "未打开文件")}</span>
-          <Button variant="ghost" size="icon" className="editor-open-file" onClick={() => setOpenFileDialog(true)} aria-label={t("Open file by path", "通过路径打开文件")}><FileUp size={15} /></Button>
-          {!fileTreeOpen && (
-            <button type="button" className="editor-tree-toggle" onClick={onToggleFileTree} aria-label={t("Open file tree", "打开文件树")} aria-pressed={false}>
-              <FolderTree size={15} />
-            </button>
-          )}
-        </header>
-        <div className="editor-empty"><FileCode2 size={26} /><p>{t("Select a file or open one by path", "从文件树选择文件，或通过路径打开")}</p><Button size="small" onClick={() => setOpenFileDialog(true)}><FileUp size={14} />{t("Open file", "打开文件")}</Button></div>
+      <section className="editor-pane editor-pane-home">
+        <FilesHome recentFiles={recentFiles} onSelectFile={onSelectFile} onBrowseFiles={() => { if (!fileTreeOpen) onToggleFileTree(); }} />
         {fileDialog}
       </section>
     );

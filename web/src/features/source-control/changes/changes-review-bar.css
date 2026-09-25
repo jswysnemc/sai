@@ -1,0 +1,95 @@
+.git-changes-review-bar {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.25rem;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.git-changes-review-scope { position: relative; min-width: 0; }
+.git-changes-review-scope-trigger,
+.git-changes-review-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 500 var(--text-xs) var(--font-ui);
+}
+.git-changes-review-scope-trigger { min-height: 1.75rem; padding: 0 0.25rem; border-radius: var(--radius-2); }
+.git-changes-review-scope-trigger:hover,
+.git-changes-review-icon:hover { background: var(--paper-deep); }
+.git-changes-review-stats { display: inline-flex; gap: 0.35rem; font: 500 var(--text-2xs) var(--font-code); }
+.git-changes-review-stats b,
+.git-file-diffstat b { color: var(--signal); font-weight: 600; }
+.git-changes-review-stats i,
+.git-file-diffstat i { color: var(--danger); font-style: normal; font-weight: 600; }
+.git-file-diffstat em { color: var(--signal); font-style: normal; font-weight: 600; }
+.git-file-diffstat { display: inline-flex; gap: 0.35rem; font: 600 var(--text-2xs) var(--font-code); }
+.git-changes-review-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  color: var(--ink-soft);
+  font: 500 var(--text-2xs) var(--font-ui);
+}
+.git-changes-review-branch span,
+.git-changes-review-branch { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.git-changes-review-tools { display: flex; align-items: center; gap: 0.25rem; margin-left: auto; }
+.git-changes-review-icon { width: 1.75rem; height: 1.75rem; justify-content: center; border-radius: var(--radius-2); color: var(--ink-soft); }
+.git-changes-push.ui-button {
+  min-height: 1.625rem;
+  padding: 0 0.7rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: var(--text-xs);
+}
+.git-changes-push.ui-button:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 86%, white); color: var(--paper); }
+.git-changes-review-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  display: grid;
+  min-width: 11rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.625rem;
+  background: var(--paper-raised);
+  box-shadow: var(--shadow);
+}
+.git-changes-review-menu-end { right: 0; left: auto; }
+.git-changes-review-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 1.85rem;
+  padding: 0 0.5rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--text-xs);
+  text-align: left;
+}
+.git-changes-review-menu button:hover { background: var(--paper-deep); }
+.git-changes-review-find {
+  display: flex;
+  flex: 1 0 100%;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-soft);
+}
+.git-changes-review-find input { min-width: 0; min-height: 1.5rem; border: 0; outline: 0; background: transparent; }

@@ -1,4 +1,3 @@
-import { Copy, FilePlus2, FolderOpen, FolderPlus, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useI18n } from "../i18n/use-i18n";
 
@@ -7,19 +6,25 @@ type FileTreeContextMenuProps = {
   y: number;
   path: string;
   directory: boolean;
-  onOpen: () => void;
+  canPaste: boolean;
+  onOpenContaining: () => void;
   onCreate: (kind: "file" | "directory") => void;
+  onCopyPath: () => void;
+  onCopyRelativePath: () => void;
+  onCut: () => void;
+  onCopy: () => void;
+  onPaste: () => void;
   onRename: () => void;
   onDelete: () => void;
-  onCopyPath: () => void;
   onClose: () => void;
 };
 
-/** 渲染工作区文件树的通用右键菜单。 */
+/** 渲染与资源管理器一致的文件树右键菜单。 */
 export function FileTreeContextMenu(props: FileTreeContextMenuProps) {
   const { t } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
   const rooted = props.path !== "";
+  const pasteDirectory = props.directory || !rooted;
   useEffect(() => {
     const close = (event: PointerEvent) => { if (!ref.current?.contains(event.target as Node)) props.onClose(); };
     const escape = (event: KeyboardEvent) => { if (event.key === "Escape") props.onClose(); };
@@ -29,14 +34,19 @@ export function FileTreeContextMenu(props: FileTreeContextMenuProps) {
   }, [props]);
   return (
     <div ref={ref} className="file-tree-context-menu" style={{ left: props.x, top: props.y }} role="menu">
-      {rooted && !props.directory && <button type="button" onClick={() => { props.onClose(); props.onOpen(); }}><FolderOpen size={13} />{t("Open", "打开")}</button>}
-      {rooted && <button type="button" onClick={() => { props.onClose(); props.onCopyPath(); }}><Copy size={13} />{t("Copy path", "复制路径")}</button>}
-      {props.directory && <>
-        <button type="button" onClick={() => { props.onClose(); props.onCreate("file"); }}><FilePlus2 size={13} />{t("New file", "新建文件")}</button>
-        <button type="button" onClick={() => { props.onClose(); props.onCreate("directory"); }}><FolderPlus size={13} />{t("New folder", "新建文件夹")}</button>
-      </>}
-      {rooted && <button type="button" onClick={() => { props.onClose(); props.onRename(); }}><Pencil size={13} />{t("Rename", "重命名")}</button>}
-      {rooted && <button type="button" className="danger" onClick={() => { props.onClose(); props.onDelete(); }}><Trash2 size={13} />{t("Delete", "删除")}</button>}
+      {rooted && <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onOpenContaining(); }}>{t("Open Containing Folder", "打开所在文件夹")}</button>}
+      <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onCreate("file"); }}>{t("New File", "新建文件")}</button>
+      <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onCreate("directory"); }}>{t("New Folder", "新建文件夹")}</button>
+      {rooted && <div className="file-tree-context-separator" role="separator" />}
+      {rooted && <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onCopyPath(); }}>{t("Copy Path", "复制路径")}</button>}
+      {rooted && <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onCopyRelativePath(); }}>{t("Copy Relative Path", "复制相对路径")}</button>}
+      {rooted && <div className="file-tree-context-separator" role="separator" />}
+      {rooted && <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onCut(); }}>{t("Cut", "剪切")}</button>}
+      {rooted && <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onCopy(); }}>{t("Copy", "复制")}</button>}
+      <button type="button" role="menuitem" disabled={!props.canPaste || !pasteDirectory} onClick={() => { props.onClose(); props.onPaste(); }}>{t("Paste", "粘贴")}</button>
+      {rooted && <div className="file-tree-context-separator" role="separator" />}
+      {rooted && <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onRename(); }}>{t("Rename", "重命名")}</button>}
+      {rooted && <button type="button" role="menuitem" className="danger" onClick={() => { props.onClose(); props.onDelete(); }}>{t("Delete", "删除")}</button>}
     </div>
   );
 }

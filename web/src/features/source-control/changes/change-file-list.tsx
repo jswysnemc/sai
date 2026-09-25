@@ -1,5 +1,6 @@
 import { ChevronRight, Folder, FolderOpen } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
+import { ChangeListExpandContext, ChangeListQueryContext } from "./change-file-stats";
 import type { GitStatusEntry, ScmConfig } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
@@ -40,11 +41,22 @@ type ChangeFileListProps = {
  */
 export function ChangeFileList(props: ChangeFileListProps) {
   const { t } = useI18n();
+  const query = useContext(ChangeListQueryContext).trim().toLocaleLowerCase();
+  const expandToken = useContext(ChangeListExpandContext);
   const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(() => new Set());
   const [showAll, setShowAll] = useState(false);
+  const entries = useMemo(
+    () => query ? props.entries.filter((entry) => entry.path.toLocaleLowerCase().includes(query)) : props.entries,
+    [props.entries, query]
+  );
+  useEffect(() => {
+    if (expandToken === 0) return;
+    setCollapsedPaths(new Set());
+    setShowAll(true);
+  }, [expandToken]);
   const treeRows = useMemo(
-    () => buildGitChangeTreeRows(props.entries, collapsedPaths),
-    [collapsedPaths, props.entries]
+    () => buildGitChangeTreeRows(entries, collapsedPaths),
+    [collapsedPaths, entries]
   );
 
   /**
@@ -62,12 +74,12 @@ export function ChangeFileList(props: ChangeFileListProps) {
     });
   };
 
-  if (props.entries.length === 0) {
+  if (entries.length === 0) {
     return <div className="git-clean">{t("No files", "无文件")}</div>;
   }
 
   const tree = props.viewMode === "tree";
-  const totalRows = tree ? treeRows.length : props.entries.length;
+  const totalRows = tree ? treeRows.length : entries.length;
   const limit = showAll ? totalRows : DEFAULT_ROW_LIMIT;
   const hiddenRows = Math.max(0, totalRows - limit);
 
@@ -94,7 +106,7 @@ export function ChangeFileList(props: ChangeFileListProps) {
             }
             return renderFileRow(props, row.entry, row.name, row.depth);
           })
-        : props.entries.slice(0, limit).map((entry) => renderFileRow(props, entry, entry.path, 0))}
+        : entries.slice(0, limit).map((entry) => renderFileRow(props, entry, entry.path, 0))}
       {hiddenRows > 0 && (
         <Button className="git-file-list-more" onClick={() => setShowAll(true)}>
           {t(`Show ${hiddenRows} more`, `展开其余 ${hiddenRows} 项`)}

@@ -29,6 +29,12 @@ export function useDiffViewOptions(defaultLayout: DiffLayout = "unified") {
     }
   }, [preferences]);
 
+  useEffect(() => {
+    const sync = () => setPreferences(readPreferences(defaultLayout));
+    window.addEventListener("sai:diff-view-options", sync);
+    return () => window.removeEventListener("sai:diff-view-options", sync);
+  }, [defaultLayout]);
+
   /**
    * 更新用户选择的布局，窄栏临时回退时仍保留此偏好。
    * @param layout 用户选择的布局
@@ -59,6 +65,22 @@ export function useDiffViewOptions(defaultLayout: DiffLayout = "unified") {
  * @param defaultLayout 默认差异布局
  * @returns 布局与自动换行设置
  */
+/**
+ * 从变更列表面板更新差异显示偏好，并通知已经打开的审阅视图。
+ *
+ * @param patch 要覆盖的布局或换行
+ * @returns 无返回值
+ */
+export function updateDiffViewPreferences(patch: Partial<{ layout: DiffLayout; wrap: boolean }>): void {
+  const next = { ...readPreferences("unified"), ...patch };
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // 1. 浏览器限制存储时只通知当前页面
+  }
+  window.dispatchEvent(new Event("sai:diff-view-options"));
+}
+
 function readPreferences(defaultLayout: DiffLayout): { layout: DiffLayout; wrap: boolean } {
   try {
     const value = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "null");

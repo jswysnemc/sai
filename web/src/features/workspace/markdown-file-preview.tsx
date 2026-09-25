@@ -1,4 +1,5 @@
 import { MarkdownRenderer } from "../chat/markdown-renderer";
+import { DEFAULT_MARKDOWN_STYLE_PREFERENCES } from "../markdown/markdown-style-preferences";
 
 type MarkdownFilePreviewProps = {
   source: string;
@@ -13,7 +14,7 @@ type MarkdownFilePreviewProps = {
 export function MarkdownFilePreview({ source }: MarkdownFilePreviewProps) {
   return (
     <div className="editor-markdown-preview">
-      <MarkdownRenderer source={source} />
+      <MarkdownRenderer source={source} stylePreferences={FILE_PREVIEW_STYLE} />
     </div>
   );
 }
@@ -24,6 +25,18 @@ export function MarkdownFilePreview({ source }: MarkdownFilePreviewProps) {
  * @param path 文件路径
  * @returns 是否为 Markdown 文件
  */
+const FILE_PREVIEW_STYLE = {
+  ...DEFAULT_MARKDOWN_STYLE_PREFERENCES,
+  preset: "document" as const,
+  codeBlock: {
+    ...DEFAULT_MARKDOWN_STYLE_PREFERENCES.codeBlock,
+    showLanguageLabel: false,
+    showCopyButton: false,
+    lineNumbers: false,
+    fontSize: "small" as const
+  }
+};
+
 export function isMarkdownFile(path: string): boolean {
   return /\.(md|markdown)$/i.test(path);
 }
