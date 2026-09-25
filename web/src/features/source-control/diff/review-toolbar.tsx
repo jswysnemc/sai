@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronUp, ChevronsDownUp, ChevronsUpDown, GitBranch, Search, X } from "lucide-react";
+import { useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { TextInput } from "../../../shared/ui/form/text-input";
 import { useI18n } from "../../i18n/use-i18n";
@@ -30,6 +31,8 @@ type ReviewToolbarProps = {
  */
 export function ReviewToolbar(props: ReviewToolbarProps) {
   const { t } = useI18n();
+  const [filtering, setFiltering] = useState(false);
+  const showFilter = filtering || Boolean(props.query);
   return <header className="git-review-summary">
     <div className="git-review-overview">
       <strong className="git-review-summary-title">{props.title}</strong>
@@ -39,13 +42,15 @@ export function ReviewToolbar(props: ReviewToolbarProps) {
       <DiffViewControls options={props.display} />
     </div>
     <div className="git-review-navigation">
-      <label className="git-review-filter">
-        <Search size={13} aria-hidden />
-        <TextInput value={props.query} onChange={(event) => props.onQueryChange(event.target.value)}
+      <Button variant="ghost" size="icon" aria-pressed={showFilter} aria-label={t("Filter changed files", "筛选变更文件")} title={t("Filter changed files", "筛选变更文件")} onClick={() => setFiltering((open) => !open || Boolean(props.query))}>
+        <Search size={14} />
+      </Button>
+      {showFilter && <label className="git-review-filter">
+        <TextInput autoFocus value={props.query} onChange={(event) => props.onQueryChange(event.target.value)}
           placeholder={t(`Filter ${props.fileCount} files`, `筛选 ${props.fileCount} 个文件`)} aria-label={t("Filter changed files", "筛选变更文件")} />
         {props.query && <Button variant="ghost" size="icon" onClick={() => props.onQueryChange("")}
           aria-label={t("Clear file filter", "清除文件筛选")}><X size={12} /></Button>}
-      </label>
+      </label>}
       <div className="git-review-file-navigation" role="group" aria-label={t("Navigate files", "文件导航")}>
         <Button variant="ghost" size="icon" onClick={() => props.onNavigate(-1)} disabled={props.currentIndex <= 0}
           aria-label={t("Previous file", "上一个文件")} title={t("Previous file", "上一个文件")}><ChevronUp size={14} /></Button>

@@ -4,7 +4,7 @@
   gap:var(--space-sm);
   width: 100%;
   min-width: 0;
-  min-height: 30px;
+  min-height: 1.75rem;
 }
 
 .composer-toolrail {
@@ -140,7 +140,7 @@
 
 .model-thinking-sections > button:hover,
 .model-thinking-sections > button.active {
-  background: var(--paper-deep);
+  background: var(--surface-hover);
   color: var(--ink);
 }
 
@@ -220,8 +220,8 @@
   align-items: center;
   gap:var(--space-sm);
   width: 100%;
-  min-height: 40px;
-  padding:var(--space-xs) var(--space-sm);
+  min-height: 1.75rem;
+  padding: 0 var(--space-sm);
   border: 0;
   border-radius:var(--radius-2);
   background: transparent;
@@ -235,7 +235,7 @@
 
 .model-thinking-option-list > button:hover,
 .model-thinking-option-list > button:focus-visible {
-  background: var(--paper-deep);
+  background: var(--surface-hover);
   color: var(--ink);
 }
 

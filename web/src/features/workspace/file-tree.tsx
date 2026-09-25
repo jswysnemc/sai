@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, ChevronsDownUp, FilePlus2, FolderPlus, PanelRightClose, RefreshCw } from "lucide-react";
+import { ChevronRight, ChevronsDownUp, FilePlus2, FolderPlus, PanelRightClose, RefreshCw, Search } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type UIEvent } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
@@ -77,6 +77,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
   const [focusedPath, setFocusedPath] = useState<string | null>(selectedFile);
   const [action, setAction] = useState<FileAction>(null);
   const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [treeMenu, setTreeMenu] = useState<TreeMenuState>(null);
   const [clipboard, setClipboard] = useState<TreeClipboard | null>(null);
@@ -368,6 +369,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
       <div className="file-tree-head">
         {showHeading && <span>{t("Files", "文件")}</span>}
         {embedded && <span className="file-tree-title" title={workspaceLabel}>{workspaceLabel || t("Files", "文件")}</span>}
+        <Button className="file-tree-search-toggle" variant="ghost" size="icon" aria-pressed={searchOpen || Boolean(search)} onClick={() => setSearchOpen((open) => !open || Boolean(search))} aria-label={t("Filter files", "筛选文件")} title={t("Filter files", "筛选文件")}><Search size={13} /></Button>
         <div className="file-tree-actions">
           <Button variant="ghost" size="icon" onClick={() => void reloadTree()} aria-label={t("Refresh Explorer", "刷新资源管理器")} title={t("Refresh Explorer", "刷新资源管理器")}><RefreshCw size={13} /></Button>
           <Button variant="ghost" size="icon" onClick={collapseAll} aria-label={t("Collapse All", "全部折叠")} title={t("Collapse All", "全部折叠")}><ChevronsDownUp size={13} /></Button>
@@ -375,7 +377,9 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
           {onClose && <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("Close file tree", "关闭文件树")}><PanelRightClose size={12} /></Button>}
         </div>
       </div>
-      <WorkspaceFileSearch value={search} onChange={setSearch} placeholder={searchPlaceholder} />
+      {(searchOpen || search) && (
+        <WorkspaceFileSearch value={search} onChange={setSearch} placeholder={searchPlaceholder} autoFocus />
+      )}
       {showHeading && workspaceLabel && <div className="file-tree-workspace"><strong>{workspaceLabel}</strong></div>}
       <div className="file-tree-scroll">
         {action && (

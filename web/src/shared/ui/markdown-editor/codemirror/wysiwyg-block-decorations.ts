@@ -51,18 +51,6 @@ export function buildBlockDecorations(state: EditorState): DecorationSet {
 }
 
 /**
- * 判断选区是否触及给定范围。
- *
- * @param state 编辑器状态
- * @param from 范围起点
- * @param to 范围终点
- * @returns 任一选区与范围相交时为 true
- */
-function selectionTouches(state: EditorState, from: number, to: number): boolean {
-  return state.selection.ranges.some((range) => range.from <= to && range.to >= from);
-}
-
-/**
  * 处理表格节点。
  *
  * @param state 编辑器状态
@@ -75,8 +63,7 @@ function collectTable(
   node: SyntaxNodeRef,
   ranges: Range<Decoration>[]
 ): boolean {
-  // 1. 光标在表格内时不替换，交给行内装饰呈现源码编辑态
-  if (selectionTouches(state, node.from, node.to)) return true;
+  // 1. 光标进入表格时仍保持表格视图，单元格在部件内直接编辑
   // 2. 去掉节点末尾可能带上的空白，块级替换必须精确落在行边界
   let end = node.to;
   while (end > node.from && /\s/.test(state.doc.sliceString(end - 1, end))) end -= 1;
@@ -106,9 +93,9 @@ function collectFencedCode(
   ranges: Range<Decoration>[]
 ): boolean {
   const block = analyzeFencedCode(state, node);
-  const inside = selectionTouches(state, node.from, node.to);
-  // 空代码块的围栏不隐藏，全部隐藏后用户将无法再定位到它
-  const hideFences = !inside && block.contentLines.length > 0;
+  // 空代码块的围栏不隐藏，全部隐藏后用户将无法再定位到它。
+  // 有内容时无论光标是否在块内都隐藏围栏，避免进入编辑态时高度跳动。
+  const hideFences = block.contentLines.length > 0;
   if (hideFences) {
     appendHiddenLine(block.openLine, ranges);
     if (block.closeLine) appendHiddenLine(block.closeLine, ranges);

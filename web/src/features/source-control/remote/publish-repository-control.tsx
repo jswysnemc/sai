@@ -1,4 +1,5 @@
 import { CloudUpload } from "lucide-react";
+import { useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
 
@@ -21,16 +22,27 @@ type PublishRepositoryControlProps = {
 export function PublishRepositoryControl(props: PublishRepositoryControlProps) {
   const { t } = useI18n();
   const action = props.canPublish ? props.onPublish : props.onSave;
+  const [open, setOpen] = useState(false);
+  const label = props.remoteConfigured
+    ? t("Remote origin", "远端 origin")
+    : props.canPublish
+      ? t("Publish to GitHub or another remote", "发布到 GitHub 或其他远端")
+      : t("Set origin remote", "设置 origin 远端");
+
+  if (!open) {
+    return (
+      <div className="git-remote-box is-collapsed">
+        <Button className="git-remote-reveal" onClick={() => setOpen(true)} title={props.remoteUrl || label}>
+          <CloudUpload size={13} />
+          <span>{label}</span>
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="git-remote-box">
-      <span>
-        {props.remoteConfigured
-          ? t("Remote origin", "远端 origin")
-          : props.canPublish
-            ? t("Publish to GitHub or another remote", "发布到 GitHub 或其他远端")
-            : t("Set origin remote", "设置 origin 远端")}
-      </span>
+      <span>{label}</span>
       <input
         value={props.remoteUrl}
         onChange={(event) => props.onRemoteUrlChange(event.target.value)}

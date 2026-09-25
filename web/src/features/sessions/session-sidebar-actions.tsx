@@ -21,10 +21,10 @@ export function SessionSidebarActions({ onNewSession, onSearch, onScheduledTasks
   const modifier = modKeyLabel();
   return (
     <div className="sidebar-session-actions" role="toolbar" aria-label={t("Session actions", "会话操作")}>
-      <Button variant="ghost" onClick={onNewSession} disabled={createPending} title={`${modifier}+Shift+O`}><MessageCirclePlus size={16} /><span>{createPending ? t("Creating", "正在创建") : t("New task", "新建任务")}</span><kbd>{modifier}+Shift+O</kbd></Button>
-      <Button variant="ghost" onClick={onSearch}><Search size={15} /><span>{t("Search", "搜索")}</span><kbd>{modifier}+K</kbd></Button>
-      <Button variant="ghost" onClick={onScheduledTasks}><CalendarClock size={15} /><span>{t("Scheduled tasks", "定时任务")}</span></Button>
-      <Button variant="ghost" onClick={onSkills}><Blocks size={15} /><span>{t("Skills", "技能")}</span></Button>
+      <Button variant="ghost" size="icon" onClick={onNewSession} disabled={createPending} title={createPending ? t("Creating", "正在创建") : `${t("New task", "新建任务")} ${modifier}+Shift+O`} aria-label={t("New task", "新建任务")}><MessageCirclePlus size={15} /></Button>
+      <Button variant="ghost" size="icon" onClick={onSearch} title={`${t("Search", "搜索")} ${modifier}+K`} aria-label={t("Search", "搜索")}><Search size={15} /></Button>
+      <Button variant="ghost" size="icon" onClick={onScheduledTasks} title={t("Scheduled tasks", "定时任务")} aria-label={t("Scheduled tasks", "定时任务")}><CalendarClock size={15} /></Button>
+      <Button variant="ghost" size="icon" onClick={onSkills} title={t("Skills", "技能")} aria-label={t("Skills", "技能")}><Blocks size={15} /></Button>
     </div>
   );
 }

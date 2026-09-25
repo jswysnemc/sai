@@ -5,12 +5,12 @@
   --sidebar-surface: color-mix(in srgb, var(--paper) 35%, var(--paper-deep));
   --panel-surface: var(--paper);
   --composer-surface: var(--paper-raised);
-  --toolbar-height: 2.25rem;
-  --statusbar-height: 1.75rem;
-  --control-height: 1.875rem;
+  --toolbar-height: 2rem;
+  --statusbar-height: 1.625rem;
+  --control-height: 1.625rem;
   --shadow-composer: 0 2px 10px rgb(var(--shadow-hue) / 4%);
   --chat-column-width: 52rem;
-  --chat-column-gutter: 2rem;
+  --chat-column-gutter: 1.25rem;
   --chat-content-width: calc(var(--chat-column-width) - var(--chat-column-gutter) * 2);
   --chat-header-height: var(--toolbar-height);
 }

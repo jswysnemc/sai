@@ -9,8 +9,9 @@
   display: flex;
   align-items: center;
   gap: var(--space-xs);
-  padding: var(--space-2xs) var(--space-xs);
-  border: 1px solid transparent;
+  min-height: 1.75rem;
+  padding: 0 var(--space-xs);
+  border: 0;
   border-radius: var(--radius-2);
   background: transparent;
   color: var(--ink);
@@ -21,8 +22,7 @@
 }
 
 .ssh-host-picker-item:hover {
-  border-color: var(--line);
-  background: var(--paper-deep);
+  background: var(--surface-hover);
 }
 
 .ssh-host-picker-item:focus-visible {

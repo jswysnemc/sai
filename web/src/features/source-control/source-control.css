@@ -66,7 +66,7 @@
 
 .git-toolbar-icon.ui-button:hover,
 .git-toolbar-icon.ui-button[aria-expanded="true"] {
-  background: var(--paper-deep);
+  background: var(--surface-hover);
   color: var(--ink);
 }
 
@@ -95,7 +95,7 @@
 
 .git-more-actions-menu .ui-button {
   justify-content: flex-start;
-  min-height: 1.875rem;
+  min-height: 1.75rem;
   padding:0 var(--space-sm);
   border: 0;
   font-size:var(--text-xs);
@@ -209,6 +209,14 @@
   gap: var(--space-sm);
 }
 
+.git-commit-box.is-collapsed { gap: 0; }
+.git-commit-reveal.ui-button {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: var(--control-height);
+  color: var(--ink-soft);
+}
+
 .git-commit-message.ui-text-area {
   min-height: 5.75rem;
 }
@@ -279,7 +287,7 @@
 }
 
 .git-commit-box .git-commit-menu-item:hover:not(:disabled) {
-  background: var(--paper-deep);
+  background: var(--surface-hover);
 }
 
 .git-commit-blocked {
@@ -294,7 +302,7 @@
 
 .git-section-toggle.ui-button {
   justify-content: flex-start;
-  min-height: 2rem;
+  min-height: 1.75rem;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -303,7 +311,7 @@
 .git-section-toggle.ui-button:hover:not(:disabled),
 .git-icon-action.ui-button:hover:not(:disabled),
 .git-output-toggle.ui-button:hover:not(:disabled) {
-  background: var(--paper-deep);
+  background: var(--surface-hover);
   color: var(--ink);
 }
 
@@ -321,7 +329,7 @@
   display: grid;
   grid-template-columns: 1rem minmax(0, 1fr) auto;
   gap:var(--space-xs);
-  min-height: 2.0625rem;
+  min-height: 1.75rem;
   padding:0 var(--space-2xs);
   border: 0;
   border-radius:var(--radius-1);
@@ -404,7 +412,7 @@
 }
 
 .git-output-panel {
-  min-height: 2rem;
+  min-height: 1.75rem;
   border-top: 1px solid var(--line);
   background: var(--paper);
 }
@@ -412,8 +420,8 @@
 .git-output-toggle.ui-button {
   justify-content: flex-start;
   width: 100%;
-  min-height: 2rem;
-  padding:0 var(--space-md);
+  min-height: 1.75rem;
+  padding:0 var(--space-sm);
   border: 0;
   border-radius: 0;
   color: var(--ink-soft);
@@ -521,7 +529,7 @@
 .git-commit-box .git-commit-menu .ui-button:hover:not(:disabled),
 .git-change-context-menu .ui-button:hover:not(:disabled),
 .git-commit-context-menu .ui-button:hover:not(:disabled) {
-  background: var(--paper-deep);
+  background: var(--surface-hover);
   color: var(--ink);
 }
 

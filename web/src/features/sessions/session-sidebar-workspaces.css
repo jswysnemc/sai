@@ -217,14 +217,14 @@
 
 .workspace-tree-row:hover .workspace-tree-actions,
 .workspace-tree-row:focus-within .workspace-tree-actions {
-  background: linear-gradient(90deg, transparent, var(--paper-raised) 0.65rem);
+  background: linear-gradient(90deg, transparent, var(--paper-raised) 0.7rem);
   opacity: 1;
   pointer-events: auto;
 }
 
 .workspace-tree-row.active:hover .workspace-tree-actions,
 .workspace-tree-row.active:focus-within .workspace-tree-actions {
-  background: linear-gradient(90deg, transparent, var(--paper-deep) 0.65rem);
+  background: linear-gradient(90deg, transparent, var(--paper-deep) 0.7rem);
 }
 
 .workspace-tree-actions button {
@@ -244,7 +244,7 @@
 }
 
 .workspace-tree-actions button:hover {
-  background: var(--paper-raised);
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
   color: var(--ink);
 }
 

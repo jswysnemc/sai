@@ -15,11 +15,12 @@
 .context-prompt-banner-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 1.75rem;
-  align-items: start;
-  gap: var(--space-xs) var(--space-sm);
+  align-items: center;
+  gap: 0.25rem;
   width: 100%;
   margin: 0;
-  padding: var(--space-md) var(--space-md) var(--space-md) var(--space-lg);
+  min-height: 1.75rem;
+  padding: 0 0.25rem 0 0.4rem;
 }
 
 .context-prompt-banner .context-prompt-banner-toggle {
@@ -27,7 +28,9 @@
   grid-row: 1;
   display: flex;
   min-width: 0;
-  align-items: flex-start;
+  min-height: 1.75rem;
+  height: 1.75rem;
+  align-items: center;
   gap: var(--space-md);
   padding: 0;
   border: 0;
@@ -61,7 +64,7 @@
   display: inline-flex;
   align-items: baseline;
   gap: var(--space-sm);
-  font-size: var(--text-base);
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--ink);
   letter-spacing: -0.01em;
@@ -74,10 +77,11 @@
 }
 
 .context-prompt-banner-subtitle {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--ink-soft);
   line-height: 1.35;
 }
+.context-prompt-banner-subtitle { display: none; }
 
 .context-prompt-banner-tags {
   grid-column: 1;
@@ -130,7 +134,7 @@
 
 .context-prompt-banner-close:hover,
 .context-prompt-banner-close:focus-visible {
-  background: var(--paper-deep);
+  background: var(--surface-hover);
   color: var(--ink);
 }
 
@@ -147,10 +151,10 @@
 
 .context-prompt-banner-markdown {
   min-width: 0;
-  padding: 0.75rem 1rem 1.25rem;
+  padding: 0.5rem 0.75rem 0.75rem;
   color: var(--ink-soft);
-  font-size: var(--text-lg);
-  line-height: 1.65;
+  font-size: var(--text-sm);
+  line-height: 1.5;
 }
 
 .context-prompt-banner-markdown .markdown-body {
@@ -162,25 +166,25 @@
 .context-prompt-banner-markdown .markdown-body h1,
 .context-prompt-banner-markdown .markdown-body h2,
 .context-prompt-banner-markdown .markdown-body h3 {
-  margin-top: 1.1em;
-  margin-bottom: 0.45em;
+  margin-top: 0.75em;
+  margin-bottom: 0.3em;
   line-height: 1.35;
 }
 
 .context-prompt-banner-markdown .markdown-body h2 {
   padding-bottom: 0.35em;
   border-bottom: 1px solid var(--line);
-  font-size: var(--text-2xl);
+  font-size: var(--text-base);
 }
 
 .context-prompt-banner-markdown .markdown-body h3 {
-  font-size: var(--text-xl);
+  font-size: var(--text-sm);
   color: var(--ink);
 }
 
 .context-prompt-banner-markdown .markdown-body p,
 .context-prompt-banner-markdown .markdown-body li {
-  line-height: 1.7;
+  line-height: 1.5;
 }
 
 .context-prompt-banner-markdown .markdown-body ul,

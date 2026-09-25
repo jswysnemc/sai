@@ -4,7 +4,7 @@
   top: 0;
   z-index: 4;
   display: grid;
-  grid-template-rows: repeat(2, 2.5rem);
+  grid-template-rows: repeat(2, 1.75rem);
   height: var(--git-review-summary-height);
   border-bottom: 1px solid var(--line);
   background: var(--paper);

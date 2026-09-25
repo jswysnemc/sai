@@ -74,7 +74,7 @@
 
 .settings-group {
   min-width: 0;
-  padding-bottom:var(--space-xl);
+  padding-bottom:var(--space-md);
 }
 
 .settings-group + .settings-group {
@@ -229,8 +229,8 @@
 
 .settings-form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(18.75rem, 100%), 1fr));
-  gap:var(--space-2xl);
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+  gap:var(--space-md) var(--space-lg);
 }
 
 .settings-field {
@@ -257,8 +257,8 @@
 }
 
 .settings-field input:not(.switch-control) {
-  height: 2.125rem;
-  padding:0 var(--space-md);
+  height: var(--control-height);
+  padding:0 var(--space-sm);
 }
 
 .settings-field textarea {
@@ -277,7 +277,7 @@
 
 .settings-field .ui-select > button,
 .settings-field .ui-password-field input {
-  min-height: 2.125rem;
+  min-height: var(--control-height);
   font-size:var(--text-base);
 }
 
@@ -288,8 +288,8 @@
   align-items: center;
   justify-content: space-between;
   gap:var(--space-2xl);
-  min-height: 3.5rem;
-  padding:var(--space-sm) var(--space-md);
+  min-height: 2.25rem;
+  padding:var(--space-2xs) var(--space-sm);
   border: 1px solid var(--line);
   border-radius:var(--radius-3);
 }

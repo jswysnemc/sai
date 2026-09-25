@@ -1,4 +1,4 @@
-import { ArrowUpToLine, Check, GripVertical, Loader2, Pencil, Trash2, X } from "lucide-react";
+import { ArrowUpToLine, Check, GripVertical, Hourglass, Loader2, Pencil, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { TextArea } from "../../../shared/ui/form/text-area";
@@ -213,7 +213,7 @@ export function QueuedMessageRow(props: QueuedMessageRowProps) {
                 ? t("Next request", "下次请求")
                 : t("After this turn", "本轮之后")}
             >
-              {busy === "insert" ? <Loader2 size={14} className="queued-busy-spin" /> : null}
+              {busy === "insert" ? <Loader2 size={14} className="queued-busy-spin" /> : <Hourglass size={14} />}
               <span>{props.run.insertAt === "request" ? t("Request", "请求") : t("Turn", "轮次")}</span>
             </Button>
             <Button

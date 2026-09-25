@@ -1,6 +1,6 @@
 .image-workbench-page {
   display: grid;
-  grid-template-columns: 16rem minmax(0, 1fr);
+  grid-template-columns: 12.5rem minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   background: var(--paper);
@@ -83,9 +83,52 @@
 
 .image-thread,
 .image-empty {
-  width: min(100%, var(--chat-column-width, 52rem));
+  width: min(100%, 64rem);
   margin: 0 auto;
-  padding: 1.5rem var(--chat-column-gutter, 1.5rem) 0;
+  padding: 0.75rem 1rem 0;
+}
+
+.image-ratio-control {
+  display: inline-flex;
+  align-items: center;
+  height: 1.5rem;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+}
+
+.image-ratio-control button {
+  height: 1.5rem;
+  padding: 0 0.4rem;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-soft);
+  font: 500 var(--text-xs) var(--font-ui);
+}
+
+.image-ratio-control button:last-child { border-right: 0; }
+.image-ratio-control button.is-active { background: var(--surface-selected); color: var(--ink); }
+
+.image-param-drawer { position: relative; }
+.image-param-drawer summary {
+  height: 1.5rem;
+  padding: 0 0.45rem;
+  border-radius: var(--radius-2);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  line-height: 1.5rem;
+  list-style: none;
+  cursor: pointer;
+}
+.image-param-drawer summary::-webkit-details-marker { display: none; }
+.image-param-drawer[open] summary { background: var(--surface-hover); color: var(--ink); }
+.image-param-drawer .ui-select {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.25rem);
+  z-index: 5;
+  min-width: 10rem;
 }
 
 .image-empty { display: grid; gap: 0.375rem; }

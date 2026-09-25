@@ -3,10 +3,7 @@ import { appendInlineMarkdown } from "./wysiwyg-inline-format";
 import type { TableModel, TableRowModel } from "./wysiwyg-table-model";
 
 /**
- * 表格部件：光标不在表格内时以真实表格呈现源码。
- *
- * 点击任意单元格会把光标送回该单元格的源码位置，
- * 装饰层随即因选区进入表格范围而还原源码，进入编辑态。
+ * 表格部件：始终以真实表格呈现，单元格内直接改写对应源码，不切回整表源码。
  */
 export class TableWidget extends WidgetType {
   constructor(
@@ -67,14 +64,21 @@ export class TableWidget extends WidgetType {
       const align = this.model.aligns[index];
       if (align) element.style.textAlign = align;
       if (cell) appendInlineMarkdown(element, cell.text.trim());
-      const anchor = cell ? cell.from : row.from;
-      element.addEventListener("mousedown", (event) => {
-        // 1. 阻止默认行为，避免编辑器把点击映射到部件外的位置
-        event.preventDefault();
-        // 2. 光标落到单元格源码处，装饰层随之切回源码编辑态
-        view.dispatch({ selection: { anchor } });
-        view.focus();
-      });
+      if (cell) {
+        element.contentEditable = "true";
+        element.spellcheck = false;
+        const cellFrom = cell.from;
+        const cellTo = cell.to;
+        const original = cell.text.trim();
+        element.addEventListener("mousedown", (event) => {
+          event.stopPropagation();
+        });
+        element.addEventListener("blur", () => {
+          const next = (element.textContent ?? "").replace(/\|/g, "").trim();
+          if (next === original) return;
+          view.dispatch({ changes: { from: cellFrom, to: cellTo, insert: ` ${next} ` } });
+        });
+      }
       tr.appendChild(element);
     }
     return tr;

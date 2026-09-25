@@ -2,7 +2,7 @@
 
 /* 【差异审阅】【内容布局】代码区独立约束宽度，文件头吸附位置与工具栏一致 */
 .git-diff-shell { display: flex; flex-direction: column; min-width: 0; min-height: 100%; }
-.git-review-stream { container-type: inline-size; container-name: diff-review; --git-review-summary-height: 5rem; }
+.git-review-stream { container-type: inline-size; container-name: diff-review; --git-review-summary-height: 3.5rem; }
 .git-diff-shell > .structured-diff { flex: 1 1 auto; max-height: none; border-radius: 0; }
 
 /* ---------- 空态与布局切换 ---------- */
@@ -60,7 +60,7 @@
 }
 
 .git-diff-layout-toggle button.is-active {
-  background: var(--paper-deep);
+  background: var(--surface-selected);
   border-color: var(--line-strong);
   color: var(--ink);
 }

@@ -6,10 +6,10 @@
 .git-diff-stat-toggle.ui-button {
   display: flex;
   width: 100%;
-  min-height: 2rem;
+  min-height: 1.75rem;
   justify-content: flex-start;
   gap: var(--space-xs);
-  padding: var(--space-2xs) var(--space-md);
+  padding: 0 var(--space-sm);
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -18,7 +18,7 @@
 }
 
 .git-diff-stat-toggle.ui-button:hover:not(:disabled) {
-  background: var(--paper-deep);
+  background: var(--surface-hover);
   color: var(--ink);
 }
 

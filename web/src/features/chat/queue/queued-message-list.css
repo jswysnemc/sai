@@ -34,8 +34,8 @@
   align-items: center;
   gap: var(--space-2xs);
   min-width: 0;
-  min-height: 2.25rem;
-  padding: var(--space-3xs) var(--space-2xs);
+  min-height: 1.75rem;
+  padding: 0 var(--space-2xs);
   transition: background var(--transition-fast), opacity var(--transition-fast);
 }
 
@@ -46,7 +46,7 @@
 
 .queued-message-row:hover,
 .queued-message-row:focus-within {
-  background: var(--control-surface);
+  background: var(--surface-hover);
 }
 
 .queued-message-row.is-dragging {
@@ -176,7 +176,7 @@
 }
 
 .queued-message-editor.ui-text-area {
-  min-height: 3.25rem;
+  min-height: 1.75rem;
   max-height: 12rem;
   padding: var(--space-xs) var(--space-sm);
   resize: vertical;
@@ -195,10 +195,11 @@
 
 .queued-message-promote.ui-button,
 .queued-message-insert.ui-button {
+  width: 1.75rem;
   height: 1.75rem;
   min-height: 1.75rem;
-  gap: var(--space-3xs);
-  padding: 0 var(--space-xs);
+  gap: 0;
+  padding: 0;
   border-color: transparent;
   background: transparent;
   box-shadow: none;
@@ -209,6 +210,15 @@
 
 .queued-message-insert.is-request.ui-button {
   color: var(--signal);
+}
+
+.queued-message-promote span,
+.queued-message-insert span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
 }
 
 .queued-busy-spin {

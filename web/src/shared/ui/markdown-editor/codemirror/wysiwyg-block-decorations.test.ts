@@ -67,8 +67,8 @@ describe("buildBlockDecorations", () => {
     expect(widget?.slice).toBe("| a | b |\n| --- | --- |\n| 1 | 2 |");
   });
 
-  it("光标进入表格时还原源码", () => {
-    expect(digests(TABLE_DOC, 2).some((item) => item.widget)).toBe(false);
+  it("光标进入表格时仍保持表格部件", () => {
+    expect(digests(TABLE_DOC, 2).some((item) => item.widget)).toBe(true);
   });
 
   it("光标在代码块外时隐藏围栏行并标注语言", () => {
@@ -79,11 +79,11 @@ describe("buildBlockDecorations", () => {
     expect(first?.lang).toBe("ts");
   });
 
-  it("光标进入代码块时保留围栏行", () => {
+  it("光标进入代码块时仍隐藏围栏行", () => {
     const all = digests(CODE_DOC, 8);
-    expect(all.some((item) => item.slice === "```ts" && item.className === "")).toBe(false);
-    // 围栏行此时也应参与块级底色
-    expect(all.filter((item) => item.className.includes("cm-md-codeline"))).toHaveLength(3);
+    const hidden = all.filter((item) => !item.widget && !item.line && item.className === "");
+    expect(hidden.map((item) => item.slice)).toEqual(["```ts", "```"]);
+    expect(all.filter((item) => item.className.includes("cm-md-codeline"))).toHaveLength(1);
   });
 
   it("空代码块不隐藏围栏，否则无法再定位", () => {

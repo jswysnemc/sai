@@ -6,6 +6,7 @@ type WorkspaceFileSearchProps = {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  autoFocus?: boolean;
 };
 
 /**
@@ -14,7 +15,7 @@ type WorkspaceFileSearchProps = {
  * @param props 当前关键词和更新回调
  * @returns 文件搜索控件
  */
-export function WorkspaceFileSearch({ value, onChange, placeholder }: WorkspaceFileSearchProps) {
+export function WorkspaceFileSearch({ value, onChange, placeholder, autoFocus = false }: WorkspaceFileSearchProps) {
   const { t } = useI18n();
   const label = placeholder ?? t("Filter files", "筛选文件");
   return (
@@ -26,6 +27,7 @@ export function WorkspaceFileSearch({ value, onChange, placeholder }: WorkspaceF
         placeholder={label}
         aria-label={t("Filter workspace files", "筛选工作区文件")}
         spellCheck={false}
+        autoFocus={autoFocus}
       />
       {value && (
         <button type="button" onClick={() => onChange("")} aria-label={t("Clear file filter", "清除文件筛选")}>

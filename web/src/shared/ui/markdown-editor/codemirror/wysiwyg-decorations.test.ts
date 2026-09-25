@@ -67,9 +67,10 @@ describe("buildMarkdownDecorations", () => {
     expect(hiddenSlices(doc, doc.length)).toContain("# ");
   });
 
-  it("光标进入该行时还原标题标记", () => {
+  it("光标所在行仍隐藏标题标记", () => {
     const doc = "# 标题\n\n正文";
-    expect(hiddenSlices(doc, 2)).not.toContain("# ");
+    expect(hiddenSlices(doc, 2)).toContain("# ");
+    expect(styleClasses(doc, 2)).toContain("cm-md-heading cm-md-h1");
   });
 
   it("非光标行隐藏加粗标记并保留加粗样式", () => {

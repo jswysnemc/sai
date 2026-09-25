@@ -8,6 +8,7 @@ export type TableAlign = "left" | "center" | "right" | null;
 export type TableCellModel = {
   text: string;
   from: number;
+  to: number;
 };
 
 /** 一行表格：单元格列表与行起始偏移。 */
@@ -63,6 +64,7 @@ function rowModel(state: EditorState, row: SyntaxNode): TableRowModel {
   const cells = row.getChildren("TableCell").map((cell) => ({
     text: state.doc.sliceString(cell.from, cell.to),
     from: cell.from,
+    to: cell.to,
   }));
   return { cells, from: row.from };
 }

@@ -64,8 +64,8 @@
   align-items: center;
   width: 100%;
   min-width: 0;
-  min-height: 2rem;
-  padding: var(--space-2xs) var(--space-sm);
+  min-height: 1.75rem;
+  padding: 0 var(--space-sm);
   border: 0;
   background: transparent;
   text-align: left;
@@ -268,13 +268,13 @@
 }
 
 .session-more:hover {
-  background: var(--paper-deep);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
   color: var(--ink);
 }
 
 .session-menu {
   position: absolute;
-  top: 32px;
+  top: 1.75rem;
   right: 4px;
   padding: var(--space-2xs);
   border: 1px solid var(--line);
@@ -288,8 +288,8 @@
   display: flex;
   align-items: center;
   gap: var(--space-xs);
-  min-width: 90px;
-  padding: var(--space-xs) var(--space-sm);
+  min-height: 1.75rem;
+  padding: 0 var(--space-sm);
   border: 0;
   border-radius: var(--radius-1);
   background: transparent;
@@ -301,7 +301,7 @@
 }
 
 .session-menu button:hover {
-  background: var(--paper-deep);
+  background: var(--surface-hover);
 }
 
 .session-menu button:disabled {

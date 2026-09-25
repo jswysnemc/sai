@@ -117,21 +117,25 @@ export function ImageWorkbenchComposer(props: ImageWorkbenchComposerProps) {
                 <Select value={props.model} options={modelOptions} disabled={props.submitting} onChange={props.onModelChange} ariaLabel={t("Model", "模型")} {...MENU_WIDTH} />
               </div>
             )}
-            <div className="composer-mode">
-              <Select
-                value={props.settings.aspectRatio}
-                options={IMAGE_ASPECT_RATIOS.map((item) => ({ value: item.value, label: item.label }))}
-                disabled={props.submitting}
-                onChange={(value) => {
-                  const aspectRatio = value as ImageAspectRatio;
-                  const resolution = imageResolutionsForAspectRatio(aspectRatio)[0]?.value ?? props.settings.resolution;
-                  props.onSettingsChange({ aspectRatio, resolution });
-                }}
-                ariaLabel={t("Aspect ratio", "画面比例")}
-                {...MENU_WIDTH}
-              />
+            <div className="image-ratio-control" role="group" aria-label={t("Aspect ratio", "画面比例")}>
+              {IMAGE_ASPECT_RATIOS.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  className={item.value === props.settings.aspectRatio ? "is-active" : undefined}
+                  disabled={props.submitting}
+                  onClick={() => {
+                    const aspectRatio = item.value;
+                    const resolution = imageResolutionsForAspectRatio(aspectRatio)[0]?.value ?? props.settings.resolution;
+                    props.onSettingsChange({ aspectRatio, resolution });
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
             </div>
-            <div className="composer-mode">
+            <details className="image-param-drawer">
+              <summary>{t("Size", "尺寸")}</summary>
               <Select
                 value={props.settings.resolution}
                 options={resolutions.map((item) => ({ value: item.value, label: item.label }))}
@@ -140,7 +144,7 @@ export function ImageWorkbenchComposer(props: ImageWorkbenchComposerProps) {
                 ariaLabel={t("Resolution", "分辨率")}
                 {...MENU_WIDTH}
               />
-            </div>
+            </details>
           </div>
           <div className="composer-actions">
             <Button variant="primary" size="icon" type="submit" className="composer-send" disabled={disabled || !hasDraft} aria-label={t("Generate image", "生成图片")} title={t("Generate image", "生成图片")}>

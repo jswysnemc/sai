@@ -14,8 +14,8 @@ import { ImageWidget, isRenderableImageUrl, RuleWidget, TaskWidget } from "./wys
 /**
  * 构建所见即所得装饰的视图插件。
  *
- * 行为对齐 Typora：光标所在行还原为源码，其余行隐藏语法标记并直接呈现排版。
- * 判定粒度取"行"而非"节点"，因为按节点判定会让同一行的多处标记忽隐忽现。
+ * 光标所在行也保持格式化视图，语法标记始终隐藏，避免聚焦时整行切回源码造成跳动。
+ * 标记的增删交给右键菜单，正文仍可直接输入。
  */
 export const wysiwygDecorations = ViewPlugin.fromClass(
   class {
@@ -54,12 +54,11 @@ export function buildMarkdownDecorations(
   visibleRanges: readonly { from: number; to: number }[]
 ): DecorationSet {
   const ranges: Range<Decoration>[] = [];
-  const activeLines = activeLineNumbers(state);
   for (const visible of visibleRanges) {
     syntaxTree(state).iterate({
       from: visible.from,
       to: visible.to,
-      enter: (node) => collectNode(state, node, activeLines, ranges),
+      enter: (node) => collectNode(state, node, ranges),
     });
   }
   // 第二个参数交给 CodeMirror 排序，父子节点的装饰是按遍历序而非位置序产生的
@@ -67,46 +66,25 @@ export function buildMarkdownDecorations(
 }
 
 /**
- * 收集选区覆盖到的行号。
- *
- * @param state 编辑器状态
- * @returns 需要还原源码的行号集合
- */
-function activeLineNumbers(state: EditorState): Set<number> {
-  const lines = new Set<number>();
-  for (const range of state.selection.ranges) {
-    const first = state.doc.lineAt(range.from).number;
-    const last = state.doc.lineAt(range.to).number;
-    for (let line = first; line <= last; line += 1) {
-      lines.add(line);
-    }
-  }
-  return lines;
-}
-
-/**
  * 处理单个语法节点。
  *
  * @param state 编辑器状态
  * @param node 语法树节点
- * @param activeLines 需要还原源码的行号
  * @param ranges 装饰收集容器
  * @returns 是否继续遍历子节点
  */
 function collectNode(
   state: EditorState,
   node: SyntaxNodeRef,
-  activeLines: Set<number>,
   ranges: Range<Decoration>[]
 ): boolean {
   const name = node.name;
-  const onActiveLine = activeLines.has(state.doc.lineAt(node.from).number);
   // 1. 可整体替换为部件的节点优先处理，处理后不再深入子节点
-  if (!onActiveLine && appendWidget(state, node, name, ranges)) {
+  if (appendWidget(state, node, name, ranges)) {
     return false;
   }
-  // 2. 链接在非光标行只保留可读文字，隐藏 [ 与 ](url)
-  if (name === "Link" && !onActiveLine && appendInlineLink(state, node, ranges)) {
+  // 2. 链接只保留可读文字，隐藏 [ 与 ](url)
+  if (name === "Link" && appendInlineLink(state, node, ranges)) {
     return false;
   }
   // 3. 内容节点附加排版样式
@@ -114,8 +92,8 @@ function collectNode(
   if (styleClass && node.to > node.from) {
     ranges.push(Decoration.mark({ class: styleClass }).range(node.from, node.to));
   }
-  // 4. 纯语法标记在非光标行隐藏，块级标记连同其后的分隔空格一起吞掉
-  if (isSyntaxMark(name) && !onActiveLine && node.to > node.from && !isFenceMark(node)) {
+  // 4. 纯语法标记始终隐藏，块级标记连同其后的分隔空格一起吞掉
+  if (isSyntaxMark(name) && node.to > node.from && !isFenceMark(node)) {
     const to = BLOCK_MARKS.has(name) ? consumeTrailingSpaces(state, node.to) : node.to;
     ranges.push(Decoration.replace({}).range(node.from, to));
     return false;

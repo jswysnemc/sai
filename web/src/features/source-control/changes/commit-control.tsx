@@ -51,6 +51,7 @@ export function CommitControl(props: CommitControlProps) {
   const confirm = useConfirm();
   const rootRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
   const hasMessage = Boolean(props.message.trim());
   const hasConflicts = props.conflictedCount > 0;
   const mainKind = resolveMainCommitKind(
@@ -146,11 +147,23 @@ export function CommitControl(props: CommitControlProps) {
     void commit(mainChoice);
   };
 
+  if (!composerOpen && !hasMessage) {
+    return (
+      <div className="git-commit-box is-collapsed" ref={rootRef}>
+        <Button className="git-commit-reveal" onClick={() => setComposerOpen(true)}>
+          <Check size={13} />
+          {t("Commit", "提交")}
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="git-commit-box" ref={rootRef}>
       <TextArea
         className="git-commit-message"
         rows={3}
+        autoFocus={composerOpen}
         value={props.message}
         onChange={(event) => props.onMessageChange(event.target.value)}
         onKeyDown={handleKeyDown}

@@ -283,7 +283,6 @@ export function ContextPromptBanner({
             </span>
             <span className="context-prompt-banner-subtitle">{subtitle}</span>
           </span>
-          {!open && <ChevronDown size={13} aria-hidden />}
         </Button>
         <Button
           className="context-prompt-banner-close"

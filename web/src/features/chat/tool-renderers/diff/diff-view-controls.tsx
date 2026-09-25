@@ -12,14 +12,14 @@ import "./diff-view-controls.css";
 export function DiffViewControls({ options }: { options: ReturnType<typeof useDiffViewOptions> }) {
   const { t } = useI18n();
   return <div className="diff-view-controls" role="group" aria-label={t("Diff display", "差异显示")}>
-    <Button variant="ghost" size="small" aria-pressed={options.layout === "unified"} onClick={() => options.setLayout("unified")}
+    <Button variant="ghost" size="icon" aria-pressed={options.layout === "unified"} onClick={() => options.setLayout("unified")}
       aria-label={t("Unified view", "统一视图")} title={t("Unified view", "统一视图")}>
-      <Rows3 size={14} /><span className="diff-view-control-label hidden sm:inline">{t("Unified", "统一")}</span>
+      <Rows3 size={14} />
     </Button>
-    <Button variant="ghost" size="small" aria-pressed={options.layout === "side"} disabled={!options.sideAvailable} onClick={() => options.setLayout("side")}
+    <Button variant="ghost" size="icon" aria-pressed={options.layout === "side"} disabled={!options.sideAvailable} onClick={() => options.setLayout("side")}
       aria-label={t("Side by side view", "并排对比")}
       title={options.sideAvailable ? t("Side by side view", "并排对比") : t("Widen the panel to compare side by side", "加宽面板后可并排对比")}>
-      <Columns2 size={14} /><span className="diff-view-control-label hidden sm:inline">{t("Split", "并排")}</span>
+      <Columns2 size={14} />
     </Button>
     <Button variant="ghost" size="icon" aria-pressed={options.wrap} onClick={() => options.setWrap(!options.wrap)}
       aria-label={t("Wrap lines", "自动换行")} title={t("Wrap lines", "自动换行")}>

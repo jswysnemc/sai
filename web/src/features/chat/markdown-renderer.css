@@ -29,11 +29,11 @@
   line-height: 1.28;
 }
 
-.markdown-body h1 { margin:var(--space-2xl) 0 var(--space-sm); padding-bottom:var(--space-xs); border-bottom: 1px solid var(--line); font-size: 1.5em; }
+.markdown-body h1 { margin:var(--space-lg) 0 var(--space-2xs); padding-bottom:0; border-bottom: 0; font-size: 1.2em; }
 /* h2 不再画下划线：聊天回复里每个小节都画一条会与代码块、表格的线连成栅格，
    层级由字号、字重与上方留白表达已经足够 */
-.markdown-body h2 { margin:var(--space-2xl) 0 var(--space-xs); font-size: 1.32em; }
-.markdown-body h3 { margin:var(--space-xl) 0 var(--space-xs); font-size: 1.16em; }
+.markdown-body h2 { margin:var(--space-lg) 0 var(--space-2xs); font-size: 1.1em; }
+.markdown-body h3 { margin:var(--space-md) 0 var(--space-3xs); font-size: 1.02em; }
 .markdown-body h4 { margin:var(--space-lg) 0 var(--space-2xs); font-size: 1.08em; }
 .markdown-body h5 { margin:var(--space-md) 0 var(--space-2xs); font-size: 1em; }
 .markdown-body h6 { margin:var(--space-md) 0 var(--space-2xs); color: var(--ink-soft); font-size: 0.92em; }
@@ -254,7 +254,7 @@
 
 .markdown-body th,
 .markdown-body td {
-  padding:var(--space-sm) var(--space-lg) var(--space-sm) 0;
+  padding:var(--space-2xs) var(--space-md) var(--space-2xs) 0;
   text-align: left;
 }
 
@@ -332,27 +332,43 @@
 .markdown-code-block,
 .mermaid-wrapper,
 .markdown-svg-block {
+  position: relative;
   min-width: 0;
   width: 100%;
   max-width: 100%;
-  margin:var(--space-lg) 0;
+  margin:var(--space-sm) 0;
   overflow: hidden;
-  border-radius:var(--radius-3);
+  border-radius:var(--radius-2);
   background: var(--paper-deep);
 }
 
 .markdown-code-head,
 .mermaid-toolbar,
 .markdown-svg-toolbar {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.35rem;
+  z-index: 2;
   display: flex;
   align-items: center;
-  gap:var(--space-sm);
-  min-height: 32px;
-  padding:var(--space-2xs) var(--space-sm) 0 var(--space-xl);
-  background: transparent;
+  gap:var(--space-2xs);
+  min-height: 0;
+  padding: 0 0.15rem;
+  border-radius: var(--radius-2);
+  background: color-mix(in srgb, var(--paper-deep) 88%, transparent);
   color: var(--ink-soft);
   font:500 var(--text-xs) var(--font-code);
+  opacity: 0;
   user-select: none;
+}
+
+.markdown-code-block:hover .markdown-code-head,
+.markdown-code-block:focus-within .markdown-code-head,
+.mermaid-wrapper:hover .mermaid-toolbar,
+.mermaid-wrapper:focus-within .mermaid-toolbar,
+.markdown-svg-block:hover .markdown-svg-toolbar,
+.markdown-svg-block:focus-within .markdown-svg-toolbar {
+  opacity: 1;
 }
 
 .markdown-code-head > span,
@@ -399,7 +415,7 @@
   max-width: 100%;
   margin: 0;
   overflow: auto;
-  padding:var(--space-sm) var(--space-xl) var(--space-xl);
+  padding:var(--space-sm) var(--space-md);
   border: 0;
   border-radius: 0;
   background: transparent;

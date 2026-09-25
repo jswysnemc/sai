@@ -95,7 +95,7 @@
   grid-template-columns: 0.75rem minmax(0, 1fr);
   gap:var(--space-sm);
   /* ToolPanel 不再带内边距，命令行自己留左右呼吸 */
-  padding: var(--space-sm) var(--space-md) var(--space-xs);
+  padding: var(--space-2xs) var(--space-sm) var(--space-3xs);
   border-bottom: 0;
   background: transparent;
   color: var(--technical-text);
@@ -202,7 +202,7 @@
   overflow: auto;
   overscroll-behavior: contain;
   margin: 0;
-  padding: 0 var(--space-md) var(--space-sm);
+  padding: 0 var(--space-sm) var(--space-2xs);
   border: 0;
   background: transparent;
   color: color-mix(in srgb, var(--technical-text) 78%, transparent);
@@ -276,7 +276,8 @@
   align-items: center;
   gap:var(--space-sm);
   min-width: 0;
-  padding: var(--space-2xs) var(--space-md);
+  min-height: 1.75rem;
+  padding: 0 var(--space-sm);
   border-bottom: 1px solid color-mix(in srgb, var(--technical-border) 70%, transparent);
   background: transparent;
 }
@@ -405,7 +406,8 @@
   grid-template-columns: 22px minmax(0, 1fr) auto;
   align-items: center;
   gap:var(--space-sm);
-  padding:var(--space-sm) var(--space-lg);
+  min-height: 1.75rem;
+  padding: 0 var(--space-sm);
   background: var(--technical-surface-muted);
 }
 
@@ -456,7 +458,8 @@
   display: flex;
   align-items: center;
   gap:var(--space-sm);
-  padding:var(--space-md) var(--space-lg);
+  min-height: 1.75rem;
+  padding: 0 var(--space-sm);
   border-bottom: 1px solid var(--technical-border);
   color: var(--technical-muted);
   font-size:var(--text-2xs);
@@ -475,7 +478,7 @@
 }
 
 .generic-tool-view section > span {
-  padding:var(--space-sm) var(--space-lg) 0;
+  padding:var(--space-2xs) var(--space-sm) 0;
   color: var(--technical-muted);
   font:500 var(--text-2xs)/1.2 var(--font-code);
   letter-spacing: 0.08em;
@@ -503,7 +506,7 @@
   grid-template-columns: minmax(4rem, 0.22fr) minmax(0, 1fr);
   gap:var(--space-sm);
   min-width: 0;
-  padding:var(--space-2xs) var(--space-lg);
+  padding:var(--space-2xs) var(--space-sm);
 }
 
 .tool-field.is-block {

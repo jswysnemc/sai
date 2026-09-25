@@ -30,9 +30,10 @@ function transformUrl(url: string): string {
 /** 模块级插件常量，避免每次渲染创建新数组导致 ReactMarkdown 重新解析 */
 const remarkPlugins = [remarkGfm, remarkMath, remarkSvgBlocks];
 const rehypePlugins = [rehypeKatex];
-/** 流式阶段跳过数学/SVG 插件，显著降低每个 delta 的解析成本 */
-const streamingRemarkPlugins = [remarkGfm];
-const streamingRehypePlugins: typeof rehypePlugins = [];
+/**
+ * 流式阶段沿用与完成后相同的插件集。
+ * 中途换插件会让已闭合的公式、代码块和表格在结束时整段重排。
+ */
 export const EMPTY_INLINE_ATOMS: readonly ReactNode[] = [];
 const inlineAtomContext = createContext<readonly ReactNode[]>(EMPTY_INLINE_ATOMS);
 const collapseJsonContext = createContext(false);
@@ -140,10 +141,11 @@ export const MarkdownContent = memo(function MarkdownContent({
             data-code-font-size={style.codeBlock.fontSize}
             data-code-tab-size={style.codeBlock.tabSize}
             data-code-max-height={style.codeBlock.maxHeight}
+            data-streaming={streaming ? "true" : "false"}
           >
             <ReactMarkdown
-              remarkPlugins={streaming ? streamingRemarkPlugins : remarkPlugins}
-              rehypePlugins={streaming ? streamingRehypePlugins : rehypePlugins}
+              remarkPlugins={remarkPlugins}
+              rehypePlugins={rehypePlugins}
               urlTransform={transformUrl}
               components={markdownComponents}
             >

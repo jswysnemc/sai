@@ -10,8 +10,8 @@
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--space-md);
-  min-height: 2.875rem;
-  padding: var(--space-xs) var(--space-md);
+  min-height: 1.75rem;
+  padding: 0 var(--space-sm);
   border-bottom: 1px solid var(--line);
 }
 
@@ -26,18 +26,19 @@
   gap: 2px;
   min-width: 0;
   margin-inline: 0;
-  padding: 2px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  background: var(--control-surface);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .git-toolbar-view {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: var(--space-2xs);
-  min-height: 1.625rem;
-  padding: 0 var(--space-sm);
+  min-height: 1.5rem;
+  padding: 0 0.35rem;
   border: none;
   border-radius: var(--radius-pill);
   background: none;
@@ -55,10 +56,18 @@
 }
 
 .git-toolbar-view.active {
-  background: var(--paper-raised);
+  background: var(--surface-selected);
   color: var(--ink);
   font-weight: 500;
-  box-shadow: var(--elevation-1);
+  box-shadow: none;
+}
+
+.git-toolbar-view > span:not(.git-view-count-badge) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
 }
 
 .git-toolbar-actions {
@@ -72,7 +81,7 @@
 @container git-panel (width < 42rem) {
   .git-toolbar {
     gap: var(--space-sm);
-    padding: var(--space-xs) var(--space-sm);
+    padding: 0 var(--space-sm);
   }
 
   .git-toolbar-view span:not(.git-view-count-badge),

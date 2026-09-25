@@ -39,7 +39,7 @@
   text-align: left;
 }
 
-.turn-file-context-menu button:hover { background: var(--paper-deep); }
+.turn-file-context-menu button:hover { background: var(--surface-hover); }
 .turn-file-context-menu button.danger { color: var(--danger); }
 
 .turn-file-changes-head {
@@ -47,8 +47,8 @@
   align-items: center;
   justify-content: space-between;
   gap:var(--space-md);
-  min-height: 2rem;
-  padding:var(--space-3xs) var(--space-sm) var(--space-3xs) var(--space-2xs);
+  min-height: 1.75rem;
+  padding: 0 var(--space-sm) 0 var(--space-2xs);
   border-bottom: 1px solid var(--line-soft);
   color: var(--ink-soft);
 }
@@ -122,7 +122,7 @@
 }
 
 .turn-file-discard-all:hover:not(:disabled) {
-  background: var(--paper-deep);
+  background: var(--surface-hover);
   color: var(--ink);
 }
 
@@ -147,7 +147,7 @@
 
 .turn-file-review:hover {
   border-color: var(--line-strong);
-  background: var(--paper-deep);
+  background: var(--surface-hover);
 }
 
 .turn-file-changes-error {

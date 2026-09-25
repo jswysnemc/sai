@@ -80,7 +80,7 @@
 
 .git-change-context-menu .ui-button {
   justify-content: flex-start;
-  min-height: 1.875rem;
+  min-height: 1.75rem;
   padding:0 var(--space-sm);
   border: 0;
   font-size:var(--text-xs);
@@ -106,6 +106,6 @@
 
 .git-file-list-more.ui-button:hover:not(:disabled) {
   border-color: var(--line-strong);
-  background: var(--paper-deep);
+  background: var(--surface-hover);
   color: var(--ink);
 }

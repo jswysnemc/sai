@@ -3,11 +3,11 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  justify-content: center;
-  gap: var(--space-lg);
-  width: min(100%, 24rem);
-  margin: 0 auto;
-  padding: var(--space-xl);
+  justify-content: flex-start;
+  gap: var(--space-sm);
+  width: 100%;
+  margin: 0;
+  padding: var(--space-sm) 0;
   color: var(--ink-soft);
   font-size:var(--text-sm);
 }
@@ -32,7 +32,7 @@
 .workspace-pane-empty-actions button {
   display: grid;
   grid-template-columns: 1.25rem minmax(0, 1fr) 0.875rem;
-  min-height: 2.25rem;
+  min-height: 1.75rem;
   align-items: center;
   gap: var(--space-sm);
   padding: 0 var(--space-xs);
@@ -45,7 +45,7 @@
   text-align: left;
 }
 
-.workspace-pane-empty-actions button:hover { background: var(--paper-deep); color: var(--ink); }
+.workspace-pane-empty-actions button:hover { background: var(--surface-hover); color: var(--ink); }
 .workspace-pane-empty-actions button > svg:last-child { justify-self: end; }
 
 .workspace-targeted-diff {
