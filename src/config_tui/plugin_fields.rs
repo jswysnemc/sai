@@ -18,6 +18,7 @@ use super::plugins::{plugin_enabled, toggle_plugin};
 /// - 工具配置表单字段
 pub(super) fn plugin_fields(config: &AppConfig, id: &str) -> Vec<Field> {
     match id {
+        "web" => super::web_search_fields::web_search_fields(config),
         "vision" => vec![
             Field::boolean(t("Enabled", "启用"), config.plugins.vision.enabled),
             Field::new(
@@ -67,6 +68,7 @@ pub(super) fn apply_plugin_fields(
     fields: &[Field],
 ) -> Result<()> {
     match id {
+        "web" => super::web_search_fields::apply_web_search_fields(config, fields)?,
         "vision" => {
             config.plugins.vision.enabled = parse_bool_field(&fields[0].value)?;
             let (provider_id, model) = parse_provider_model_choice(&fields[1].value);

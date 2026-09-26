@@ -181,7 +181,7 @@ fn explore_and_plan_are_readonly_scoped() {
     assert!(!tools.iter().any(|t| t == "edit_file"));
     let plan = apply_agent_override(config, Some(PLAN_AGENT_ID), AgentSurface::Web).unwrap();
     let tools = plan.agent_runtime.unwrap().enabled_tools;
-    assert!(!tools.iter().any(|t| t == "web_search"));
+    assert!(tools.iter().any(|t| t == "web_search"));
     assert!(!tools.iter().any(|t| t == "online_man_search"));
     assert!(!tools.iter().any(|t| t == "run_command"));
     assert!(!tools.iter().any(|t| t == "fetch_url"));

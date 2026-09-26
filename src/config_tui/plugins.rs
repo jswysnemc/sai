@@ -156,8 +156,16 @@ fn cli_tool_row(state: &str, name: &str, description: &str, width: usize) -> Str
 ///
 /// 返回:
 /// - 历史配置标识、显示名称和说明组成的固定目录
-fn cli_tool_names() -> [(&'static str, &'static str, &'static str); 3] {
+fn cli_tool_names() -> [(&'static str, &'static str, &'static str); 4] {
     [
+        (
+            "web",
+            t("Web search", "网页搜索"),
+            t(
+                "Built-in search providers and fallback",
+                "内置搜索供应商与自动回退",
+            ),
+        ),
         (
             "vision",
             t("Vision", "识图"),
@@ -189,6 +197,7 @@ fn cli_tool_names() -> [(&'static str, &'static str, &'static str); 3] {
 /// - 工具启用时返回 true
 pub(super) fn plugin_enabled(config: &AppConfig, id: &str) -> bool {
     match id {
+        "web" => config.plugins.web.enabled,
         "vision" => config.plugins.vision.enabled,
         "memory" => config.plugins.memory.enabled,
         "calculator" => config.plugins.calculator.enabled,
@@ -207,6 +216,7 @@ pub(super) fn plugin_enabled(config: &AppConfig, id: &str) -> bool {
 pub(super) fn toggle_plugin(config: &mut AppConfig, id: &str) {
     let value = !plugin_enabled(config, id);
     match id {
+        "web" => config.plugins.web.enabled = value,
         "vision" => config.plugins.vision.enabled = value,
         "memory" => config.plugins.memory.enabled = value,
         "calculator" => config.plugins.calculator.enabled = value,

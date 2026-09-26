@@ -1,13 +1,8 @@
-use super::{ToolRegistry, ToolSpec};
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
 use anyhow::{bail, Result};
-use serde_json::{json, Value};
 use std::collections::BTreeSet;
-use std::io::ErrorKind;
 use std::path::PathBuf;
-use std::process::Stdio;
-use tokio::process::Command;
 
 /// 生成 skill 目录提示。
 ///
@@ -91,43 +86,6 @@ pub fn skills_catalog_prompt(config: &AppConfig, paths: &SaiPaths) -> Result<Str
     build_skills_prompt(config, paths, true)
 }
 
-pub fn register_skills(
-    registry: &mut ToolRegistry,
-    config: &AppConfig,
-    paths: &SaiPaths,
-    allow_command_execution: bool,
-) -> Result<()> {
-    let mut seen = BTreeSet::new();
-    for skills_dir in skill_search_dirs(config, paths) {
-        if !skills_dir.exists() {
-            continue;
-        }
-        for entry in std::fs::read_dir(&skills_dir)? {
-            let entry = entry?;
-            if !is_skill_directory_entry(&entry) {
-                continue;
-            }
-            let skill_dir = entry.path();
-            if skill_dir.join(".disabled").exists() {
-                continue;
-            }
-            let skill_file = skill_dir.join("SKILL.md");
-            if !skill_file.is_file() {
-                continue;
-            }
-            let raw = std::fs::read_to_string(&skill_file)?;
-            let name = skill_name(&raw, &entry.file_name().to_string_lossy());
-            if !seen.insert(name.clone()) {
-                continue;
-            }
-            if name == "web-search" {
-                register_web_search(registry, skill_dir, allow_command_execution);
-            }
-        }
-    }
-    Ok(())
-}
-
 /// 返回 skills 扫描根目录，顺序即优先级（先匹配先采用）。
 ///
 /// 参数:
@@ -144,14 +102,6 @@ pub(crate) fn skill_source_roots(
     let mut roots = vec![("global", paths.skills_dir.clone())];
     roots.extend(third_party_skill_roots());
     roots
-}
-
-/// 仅返回目录路径，供运行时发现使用。
-fn skill_search_dirs(config: &AppConfig, paths: &SaiPaths) -> Vec<PathBuf> {
-    skill_source_roots(config, paths)
-        .into_iter()
-        .map(|(_, root)| root)
-        .collect()
 }
 
 /// 收集工作区与用户目录下常见三方 Agent Skills 路径。
@@ -411,133 +361,6 @@ fn load_skill_document(
         }
     }
     bail!("skill not found: {name}");
-}
-
-fn register_web_search(
-    registry: &mut ToolRegistry,
-    skill_dir: PathBuf,
-    allow_command_execution: bool,
-) {
-    let script = skill_dir.join("scripts/web-search.py");
-    registry.register(ToolSpec::new(
-        "web_search",
-        "Search the web for current or real-time information. Use this when the answer needs online lookup, recent facts, news, or verification. Return search results with URLs for verification when needed.",
-        json!({
-            "type": "object",
-            "properties": {
-                "query": { "type": "string", "description": "Search query." },
-                "max_results": { "type": "integer", "description": "Maximum results to return.", "minimum": 1, "maximum": 10 },
-                "provider": { "type": "string", "enum": ["auto", "tavily", "firecrawl", "anysearch", "searxng"], "description": "Search provider." }
-            },
-            "required": ["query"],
-            "additionalProperties": false
-        }),
-        move |args| {
-            let script = script.clone();
-            async move { run_web_search(script, allow_command_execution, args).await }
-        },
-    ));
-}
-
-async fn run_web_search(
-    script: PathBuf,
-    allow_command_execution: bool,
-    args: Value,
-) -> Result<String> {
-    if !allow_command_execution {
-        bail!("skill command execution is disabled; set skills.allow_command_execution=true in config.jsonc to enable this tool");
-    }
-    if !script.is_file() {
-        bail!("web-search skill script not found: {}", script.display());
-    }
-    let query = args
-        .get("query")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .trim();
-    if query.is_empty() {
-        bail!("web_search requires a non-empty query");
-    }
-    let max_results = args
-        .get("max_results")
-        .and_then(Value::as_u64)
-        .unwrap_or(5)
-        .clamp(1, 10)
-        .to_string();
-    let provider = args
-        .get("provider")
-        .and_then(Value::as_str)
-        .unwrap_or("auto");
-    let output = run_python_script(&script, &[query, "-n", &max_results, "-p", provider]).await?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!("web_search failed: {}", stderr.trim());
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
-async fn run_python_script(script: &PathBuf, args: &[&str]) -> Result<std::process::Output> {
-    let mut missing = Vec::new();
-    for launcher in python_launchers() {
-        let mut command = Command::new(launcher.program);
-        command.args(launcher.prefix_args).arg(script).args(args);
-        match command.stdin(Stdio::null()).output().await {
-            Ok(output) => return Ok(output),
-            Err(err) if err.kind() == ErrorKind::NotFound => {
-                missing.push(launcher.label());
-            }
-            Err(err) => return Err(err.into()),
-        }
-    }
-    bail!("Python launcher not found; tried {}", missing.join(", "))
-}
-
-#[derive(Clone, Copy)]
-struct PythonLauncher {
-    program: &'static str,
-    prefix_args: &'static [&'static str],
-}
-
-impl PythonLauncher {
-    fn label(self) -> String {
-        if self.prefix_args.is_empty() {
-            self.program.to_string()
-        } else {
-            format!("{} {}", self.program, self.prefix_args.join(" "))
-        }
-    }
-}
-
-#[cfg(windows)]
-fn python_launchers() -> Vec<PythonLauncher> {
-    vec![
-        PythonLauncher {
-            program: "py",
-            prefix_args: &["-3"],
-        },
-        PythonLauncher {
-            program: "python",
-            prefix_args: &[],
-        },
-        PythonLauncher {
-            program: "python3",
-            prefix_args: &[],
-        },
-    ]
-}
-
-#[cfg(not(windows))]
-fn python_launchers() -> Vec<PythonLauncher> {
-    vec![
-        PythonLauncher {
-            program: "python3",
-            prefix_args: &[],
-        },
-        PythonLauncher {
-            program: "python",
-            prefix_args: &[],
-        },
-    ]
 }
 
 fn frontmatter_value(raw: &str, key: &str) -> Option<String> {

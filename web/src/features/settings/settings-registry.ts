@@ -7,6 +7,7 @@ import {
   Database,
   FileText,
   GitBranch,
+  Globe,
   KeyRound,
   Palette,
   Server,
@@ -164,6 +165,17 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     descriptionZh: "配置 CLI 助手可使用的可选工具",
     icon: Wrench,
     searchKeys: ["cli", "assistant", "tool", "optional", "plugin", "助手", "工具", "可选工具", "插件"]
+  },
+{
+    id: "web-search",
+    group: "agentCapabilities",
+    appConfig: "required",
+    labelEn: "Web search",
+    labelZh: "网页搜索",
+    descriptionEn: "Built-in search routing, endpoints, and credentials",
+    descriptionZh: "内置搜索路由、供应商地址与凭据",
+    icon: Globe,
+    searchKeys: ["web-search", "search", "tinyfish", "tavily", "firecrawl", "anysearch", "searxng", "duckduckgo", "网页", "搜索", "联网"]
   },
 {
     id: "skills",

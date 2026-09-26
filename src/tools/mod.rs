@@ -41,6 +41,7 @@ mod subagent_worktree;
 pub(crate) mod todo;
 mod tool_spec;
 mod trash_path;
+mod web_search;
 mod write_file;
 
 use crate::config::AppConfig;
@@ -62,8 +63,7 @@ pub(crate) use skill_management::{
 };
 pub(crate) use skills::load_installed_skill;
 pub use skills::{
-    load_installed_skill_document, register_skills, skill_catalog, skills_catalog_prompt,
-    skills_prompt,
+    load_installed_skill_document, skill_catalog, skills_catalog_prompt, skills_prompt,
 };
 
 pub fn readable_tool_name(name: &str) -> &str {
@@ -209,6 +209,7 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     let mut registry = ToolRegistry::new();
     command::register(&mut registry, config, paths, true);
     default_tools::register(&mut registry);
+    web_search::register(&mut registry, &config.plugins.web);
     image_generation::register(&mut registry, config, paths);
     trash_path::register(&mut registry);
     configurable_cli_tools::register(&mut registry, config);
@@ -323,6 +324,7 @@ pub fn readonly_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     let mut registry = ToolRegistry::new();
     command::register_readonly(&mut registry, config, paths);
     default_tools::register_readonly(&mut registry);
+    web_search::register(&mut registry, &config.plugins.web);
     crate::plugins::register_plugins(&mut registry, config, paths, true);
     if config.memory_config().enabled {
         memory::register_readonly(&mut registry, config.clone(), paths.clone());

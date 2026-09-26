@@ -12,6 +12,7 @@ export const APP_CONFIG_SECTION_IDS = [
   "jev-models",
   "agents",
   "cli-tools",
+  "web-search",
   "runtime",
   "prompts",
   "git",

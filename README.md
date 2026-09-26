@@ -82,7 +82,7 @@ Weather, exchange-rate, and image tools require the corresponding [Lua example p
 
 - **Three permission modes** - `Yolo` free tool use, `Audited` (sandbox + audit log + per-call confirm), `Plan` read-only
 - **Progressive tool loading** - Only `load` and base tools are exposed at start; the model calls `load` to pull in tool groups or skills on demand. Tool groups persist to `loaded-tools.json`. Each skill is loaded once per session: later `load` calls return `already_loaded` without the body, and the name list lives in a suffix `<context-resource>` so the system-prompt prefix stays cacheable. Compaction clears `loaded-skills.json` so the next load can return the full document.
-- **Core tools and optional features** - The host provides file, command, session, permission, and extension services. All 25 Lua business packages, including search, investigations, images, todo, knowledge base, memes, and alarms, are standalone examples with explicit installation and grants.
+- **Core tools and optional features** - The host provides file, command, web search, session, permission, and extension services. All 25 Lua business packages, including search, investigations, images, todo, knowledge base, memes, and alarms, are standalone examples with explicit installation and grants.
 - **Subagents** - The `subagent` tool starts an independent LLM loop with a `max_steps` budget and timeout; writable tasks auto-create a `.sai-subagents` git worktree for isolation, then apply back and clean up on success. Persistent agents can idle and take follow-ups (REPL `/subagents`, `/msg`)
 - **Skills** - Reusable `SKILL.md` skill packs with three visibility tiers (hidden / name-only / full); enable / disable / list / stats / prune from the TUI or CLI. Session loads are cached as described above.
 - **MCP bridging** - Native stdio / http MCP servers; tools registered with `mcp_` prefix; dedicated `mcp.jsonc` config
@@ -163,6 +163,8 @@ Run `sai config` for the terminal configurator. The 7-item main menu is layered 
 5. **Skills** - List installed skills, Space to enable/disable; global switches live on the same page
 6. **Advanced settings** - Knowledge base, gateway channels, and global parameters (permissions / terminal & context / tools & background commands / display)
 7. **Save and exit** - Persist in-memory changes to disk
+
+The native read-only `web_search` tool works without Lua plugins or Python. Terminal configuration under Tools → Web search and Web Settings → Web search share `plugins.web` in `config.jsonc`. Auto mode tries enabled providers in this order: TinyFish, Tavily, Firecrawl, AnySearch, SearXNG, DuckDuckGo. Defaults are 5 results and a 20-second timeout per request; DuckDuckGo requires no API key. Credentials support `<provider>_api_keys` arrays, `$env:VARIABLE` references, and provider-specific `*_API_KEY` environment variables. Existing `plugins.web` settings remain supported. The optional Lua example retains its independent `plugins.jsonc` settings and `lua__web-search__web_search` tool name.
 
 ### Conversation branches
 

@@ -14,6 +14,7 @@ const GATEWAY_AGENT_TOOLS: &[&str] = &[
     "read_file",
     "glob",
     "grep",
+    "web_search",
     "run_command",
     "write_memory",
     "read_memory",
@@ -42,6 +43,7 @@ const CODE_AGENT_TOOLS: &[&str] = &[
     "glob",
     "grep",
     "ask_question",
+    "web_search",
     "generate_image",
     "write_memory",
     "read_memory",
@@ -68,12 +70,16 @@ const PLAN_AGENT_TOOLS: &[&str] = &[
     "glob",
     "grep",
     "ask_question",
+    "web_search",
     "read_memory",
     "list_memory",
     "search_evicted_context",
 ];
 
-const EXPLORE_AGENT_TOOLS: &[&str] = &["check_os_info", "read_file", "glob", "grep"];
+const EXPLORE_AGENT_TOOLS: &[&str] = &["check_os_info", "read_file", "glob", "grep", "web_search"];
+
+/// 探索和规划过程中保持网页搜索直接可见，避免每次检索都先加载工具定义。
+const SEARCH_KEEP_VISIBLE: &[&str] = &["web_search"];
 
 /// 网关 Agent 需要保持初始可见的工具。
 ///
@@ -109,7 +115,7 @@ pub(super) fn resolve_enabled_tools(profile: &AgentProfile) -> Vec<String> {
     if profile.tools_exclusive {
         return expand_enabled_tool_conveniences(profile.enabled_tools.clone(), false);
     }
-    let tools = if !profile.enabled_tools.is_empty() {
+    let mut tools = if !profile.enabled_tools.is_empty() {
         profile.enabled_tools.clone()
     } else {
         match profile.id.as_str() {
@@ -120,6 +126,22 @@ pub(super) fn resolve_enabled_tools(profile: &AgentProfile) -> Vec<String> {
             _ => Vec::new(),
         }
     };
+    // 1. 【网页搜索】【预设升级】只补齐旧版原样预设，用户定制或独占白名单保持原义
+    let preset = match profile.id.as_str() {
+        GENERAL_AGENT_ID => CODE_AGENT_TOOLS,
+        EXPLORE_AGENT_ID => EXPLORE_AGENT_TOOLS,
+        PLAN_AGENT_ID => PLAN_AGENT_TOOLS,
+        GATEWAY_AGENT_ID => GATEWAY_AGENT_TOOLS,
+        _ => &[],
+    };
+    let legacy: Vec<_> = preset
+        .iter()
+        .copied()
+        .filter(|name| *name != "web_search")
+        .collect();
+    if !legacy.is_empty() && tools.iter().map(String::as_str).eq(legacy) {
+        tools.push("web_search".to_string());
+    }
     expand_enabled_tool_conveniences(tools, true)
 }
 
@@ -244,7 +266,7 @@ fn builtin_general_agent() -> AgentProfile {
         description: "适合实现、测试、文档和常规工程任务；工具面向长程编程".to_string(),
         system_prompt: GENERAL_AGENT_PROMPT.to_string(),
         enabled_tools: tools_to_owned(CODE_AGENT_TOOLS),
-        deferred_tools: deferred_from_whitelist(CODE_AGENT_TOOLS, &[]),
+        deferred_tools: deferred_from_whitelist(CODE_AGENT_TOOLS, SEARCH_KEEP_VISIBLE),
         thinking_level: "auto".to_string(),
         register_to_main: true,
         load_instruction_files: true,
@@ -266,7 +288,7 @@ fn builtin_explore_agent() -> AgentProfile {
         description: "适合只读检索、代码定位和资料探索；返回证据与路径".to_string(),
         system_prompt: EXPLORE_AGENT_PROMPT.to_string(),
         enabled_tools: tools_to_owned(EXPLORE_AGENT_TOOLS),
-        deferred_tools: deferred_from_whitelist(EXPLORE_AGENT_TOOLS, &[]),
+        deferred_tools: deferred_from_whitelist(EXPLORE_AGENT_TOOLS, SEARCH_KEEP_VISIBLE),
         thinking_level: "auto".to_string(),
         register_to_main: true,
         load_instruction_files: true,
@@ -288,7 +310,7 @@ fn builtin_plan_agent() -> AgentProfile {
         description: "只读调研与方案规划，不改系统状态".to_string(),
         system_prompt: PLAN_AGENT_PROMPT.to_string(),
         enabled_tools: tools_to_owned(PLAN_AGENT_TOOLS),
-        deferred_tools: deferred_from_whitelist(PLAN_AGENT_TOOLS, &[]),
+        deferred_tools: deferred_from_whitelist(PLAN_AGENT_TOOLS, SEARCH_KEEP_VISIBLE),
         thinking_level: "auto".to_string(),
         register_to_main: true,
         load_instruction_files: true,

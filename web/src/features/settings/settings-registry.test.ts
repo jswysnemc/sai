@@ -36,8 +36,8 @@ describe("settings registry", () => {
     const bySessionData = filterSettingsSections("会话数据");
     expect(bySessionData.some((item) => item.id === "session-data")).toBe(true);
     const bySearchProvider = filterSettingsSections("tavily");
-    expect(bySearchProvider).toEqual([]);
-    expect(resolveSettingsSectionId("web-search")).toBe(DEFAULT_SETTINGS_SECTION);
+    expect(bySearchProvider.map((item) => item.id)).toEqual(["web-search"]);
+    expect(resolveSettingsSectionId("web-search")).toBe("web-search");
   });
 
   it("groups sections and skips empty groups when filtered", () => {

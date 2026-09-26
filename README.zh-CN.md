@@ -84,7 +84,7 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 
 - **三种权限模式** - `Yolo` 自由调用工具、`Audited` 审计模式(沙盒 + 审计日志 + 逐次确认)、`Plan` 只读模式(仅允许只读工具)
 - **渐进式工具加载** - 启动仅暴露 `load` 与基础工具,模型按需调用 `load` 加载工具组或 skill。工具组持久化到 `loaded-tools.json`。每个 skill 在本会话只完整加载一次：再次 `load` 只返回 `already_loaded`，名称列表写在后缀 `<context-resource>`，系统提示前缀可走缓存。压缩后会清空 `loaded-skills.json`，之后可以重新拉取正文。
-- **核心工具与可选业务** - 宿主提供文件、命令、会话、权限及公共扩展机制；查询、调查、图片、待办、知识库、图库与闹钟等 25 个 Lua 业务包作为独立示例，按需安装、显式授权和卸载。
+- **核心工具与可选业务** - 宿主提供文件、命令、网页搜索、会话、权限及公共扩展机制；查询、调查、图片、待办、知识库、图库与闹钟等 25 个 Lua 业务包作为独立示例，按需安装、显式授权和卸载。
 - **子代理** - `subagent` 工具启动独立 LLM 循环,带 `max_steps` 预算与超时;可写任务在 git 仓库内自动创建 `.sai-subagents` worktree 隔离,完成后自动 apply 回父工作区并清理。支持 persistent 待命复用与留言通道(REPL `/subagents`、`/msg`)
 - **Skills 技能包** - `SKILL.md` 格式的可复用技能,三级暴露(不暴露 / 仅名称 / 完整);TUI 与 CLI 均可启用 / 禁用 / 列出 / 统计 / 清理。会话内 load 缓存见上。
 - **MCP 协议桥接** - 原生支持 stdio / http 两种 MCP Server,工具名以 `mcp_` 前缀注入注册表,独立 `mcp.jsonc` 配置文件
@@ -165,6 +165,8 @@ Web 工作台内置源代码管理面板，底层调用系统 `git`。支持变�
 5. **Skills** - 列出已安装技能,Space 启停;全局开关收在同一页
 6. **高级设置** - 知识库、渠道接入、全局参数(权限 / 终端与上下文 / 工具与后台命令 / 显示偏好)
 7. **保存并退出** - 将内存中的更改写入磁盘
+
+网页搜索通过原生只读工具 `web_search` 提供，无需安装 Lua 插件或 Python。终端配置中的「工具 → 网页搜索」与 Web 设置中的「网页搜索」共用 `config.jsonc` 的 `plugins.web` 配置。自动模式按 TinyFish、Tavily、Firecrawl、AnySearch、SearXNG、DuckDuckGo 顺序尝试已启用服务，默认返回 5 条结果、每次请求超时 20 秒；DuckDuckGo 无需密钥。密钥支持 `<provider>_api_keys` 数组、`$env:VARIABLE` 引用及对应供应商的 `*_API_KEY` 环境变量。旧版 `plugins.web` 配置可继续使用；Lua `web-search` 示例仍使用独立的 `plugins.jsonc` 配置与 `lua__web-search__web_search` 名称。
 
 ### 会话分支
 

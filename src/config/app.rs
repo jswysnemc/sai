@@ -123,6 +123,7 @@ impl AppConfig {
         }
         self.ensure_usable_active_provider();
         // 旧配置可能存有不带协议前缀的搜索地址，补齐后再进入校验
+        self.plugins.web.normalize_endpoints();
     }
 
     /// 保证 `active_provider` 指向一个已启用的供应商。
@@ -159,6 +160,7 @@ impl AppConfig {
     }
 
     pub fn validate(&self) -> Result<()> {
+        self.plugins.web.validate()?;
         super::model_endpoints::validate(&self.model_endpoints)?;
         if self.active_provider.trim().is_empty() {
             bail!("active_provider cannot be empty");

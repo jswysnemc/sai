@@ -179,7 +179,7 @@ pub(crate) fn group_meta(group: &str) -> ToolGroupMeta {
             hint_en: "",
             hint_zh: "",
             model_description: "Web search, page fetch, weather, and online status",
-            settings_path: None,
+            settings_path: Some("/settings/web-search"),
         },
         "media" => ToolGroupMeta {
             rank: 3,

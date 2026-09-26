@@ -8,6 +8,7 @@ export type SettingsSectionId =
   | "jev-models"
   | "agents"
   | "cli-tools"
+  | "web-search"
   | "runtime"
   | "prompts"
   | "skills"

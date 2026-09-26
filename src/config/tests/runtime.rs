@@ -316,15 +316,10 @@ fn gateway_validation_rejects_invalid_qq_token() {
 #[test]
 fn removable_business_settings_are_absent_from_main_config() {
     let value = serde_json::to_value(AppConfig::default()).unwrap();
-    for name in [
-        "memes",
-        "knowledge_base",
-        "web_search",
-        "web_images",
-        "image_generation",
-    ] {
+    for name in ["memes", "knowledge_base", "web_images", "image_generation"] {
         assert!(value["plugins"].get(name).is_none(), "{name}");
     }
+    assert!(value["plugins"].get("web").is_some());
     assert!(value.get("notification").is_none());
 }
 

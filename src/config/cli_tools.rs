@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginsConfig {
     #[serde(default)]
+    pub web: super::WebSearchConfig,
+    #[serde(default)]
     pub vision: VisionPluginConfig,
     #[serde(default)]
     pub calculator: CalculatorPluginConfig,
@@ -50,6 +52,7 @@ impl PluginsConfig {
     /// - 全部插件开关置为 true 的副本
     pub fn all_enabled(&self) -> Self {
         let mut plugins = self.clone();
+        plugins.web.enabled = true;
         plugins.vision.enabled = true;
         plugins.calculator.enabled = true;
         plugins.memory.enabled = true;
@@ -70,6 +73,7 @@ mod all_enabled_tests {
     fn every_plugin_switch_is_turned_on() {
         // 先关掉一批，确保通过不是因为默认值本来就是 true
         let mut plugins = PluginsConfig::default();
+        plugins.web.enabled = false;
         plugins.calculator.enabled = false;
 
         let enabled = serde_json::to_value(plugins.all_enabled()).unwrap();

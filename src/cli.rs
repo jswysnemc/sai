@@ -490,7 +490,7 @@ pub(crate) fn build_tool_registry_with_cached_mcp(
     paths: &SaiPaths,
     mode: AgentMode,
 ) -> Result<tools::ToolRegistry> {
-    let mut registry = if config.tools.enabled {
+    let registry = if config.tools.enabled {
         match mode {
             AgentMode::Yolo | AgentMode::Audited | AgentMode::AutoAudit => {
                 tools::builtin_registry_with_cached_mcp(config, paths)
@@ -500,9 +500,6 @@ pub(crate) fn build_tool_registry_with_cached_mcp(
     } else {
         tools::ToolRegistry::new()
     };
-    if mode != AgentMode::Plan && config.tools.enabled && config.skills.enabled {
-        tools::register_skills(&mut registry, config, paths, true)?;
-    }
     Ok(registry)
 }
 
@@ -523,7 +520,7 @@ fn build_tool_registry_with_mcp_notices(
     mode: AgentMode,
     discover_mcp: bool,
 ) -> Result<(tools::ToolRegistry, Vec<String>)> {
-    let (mut registry, notices) = if config.tools.enabled {
+    let (registry, notices) = if config.tools.enabled {
         match mode {
             AgentMode::Yolo | AgentMode::Audited | AgentMode::AutoAudit if discover_mcp => {
                 tools::builtin_registry_with_mcp_notices(config, paths)
@@ -537,9 +534,6 @@ fn build_tool_registry_with_mcp_notices(
     } else {
         (tools::ToolRegistry::new(), Vec::new())
     };
-    if mode != AgentMode::Plan && config.tools.enabled && config.skills.enabled {
-        tools::register_skills(&mut registry, config, paths, true)?;
-    }
     Ok((registry, notices))
 }
 

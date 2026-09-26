@@ -193,3 +193,16 @@
     padding-top: var(--space-2xs);
   }
 }
+
+/* 轨道形态浮在正文右侧，给正文右边留出轨道宽度，避免文字被刻度压住 */
+@container md-editor (max-width: 55.999rem) {
+  .markdown-editor-root:has(.markdown-outline) .markdown-cm.live .cm-content {
+    padding-right: 2.5rem;
+  }
+}
+
+@container md-editor (min-width: 56rem) {
+  .markdown-editor-root:has(.markdown-outline:not(.is-pinned)) .markdown-cm.live .cm-content {
+    padding-right: 2.5rem;
+  }
+}

@@ -146,6 +146,11 @@ export function outlineTracker(listener: () => OutlineListener | null) {
         listener()?.onActive(next);
       }
 
+      /**
+       * 销毁时清理计时器与事件监听。
+       *
+       * @returns 无
+       */
       destroy() {
         clearTimeout(this.timer);
         cancelAnimationFrame(this.frame);

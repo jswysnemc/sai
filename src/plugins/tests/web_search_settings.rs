@@ -22,7 +22,7 @@ fn fixture() -> (tempfile::TempDir, SaiPaths, AppConfig) {
 }
 
 /// 【搜索测试】【入口一致】普通与只读入口遵守外部包启用状态和命名空间
-/// @returns 无；不再注册短名称或在禁用时留下内置目录项
+/// @returns 无；外部包与原生搜索独立启停，不共享工具归属
 #[test]
 fn both_registries_use_the_installed_search_plugin() {
     let (_root, paths, config) = fixture();
@@ -32,7 +32,8 @@ fn both_registries_use_the_installed_search_plugin() {
             crate::tools::builtin_registry_without_mcp(&config, &paths),
             crate::tools::readonly_registry(&config, &paths),
         ] {
-            assert!(!registry.contains(TOOL));
+            assert!(registry.contains(TOOL));
+            assert_eq!(registry.plugin_owner(TOOL), None);
             assert_eq!(registry.contains(PUBLIC), enabled);
             assert!(registry.plugin_diagnostics().is_empty());
             assert!(registry.contains("read_file"));

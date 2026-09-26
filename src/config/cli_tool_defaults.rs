@@ -12,6 +12,7 @@ impl Default for PluginsConfig {
     /// - 历史 `plugins` 键对应的完整默认配置
     fn default() -> Self {
         Self {
+            web: super::WebSearchConfig::default(),
             vision: VisionPluginConfig::default(),
             calculator: CalculatorPluginConfig::default(),
             memory: MemoryConfig::default(),
