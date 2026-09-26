@@ -26,48 +26,61 @@
 
 .editor-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap:var(--space-lg);
-  padding-bottom:var(--space-lg);
-  margin-bottom:var(--space-lg);
+  gap: 0.75rem;
+  min-height: 2.5rem;
+  padding-bottom: 0.85rem;
+  margin-bottom: 1rem;
   border-bottom: 1px solid var(--line);
 }
 
 .editor-header-copy {
   display: grid;
-  gap:var(--space-3xs);
+  grid-template-columns: auto minmax(0, 1fr);
+  flex: 1 1 auto;
+  column-gap: 0.65rem;
+  row-gap: 0.05rem;
+  align-items: baseline;
   min-width: 0;
 }
 
 .settings-kicker {
+  grid-column: 1 / -1;
   color: var(--ink-soft);
   font: 500 var(--text-xs) var(--font-ui);
+  white-space: nowrap;
 }
 
 .editor-header h2 {
+  flex: 0 0 auto;
+  min-width: max-content;
   margin: 0;
-  font-size: 1.125rem;
-  font-weight: 500;
+  font-size: 1rem;
+  font-weight: 600;
   letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 
 .editor-header p {
+  grid-column: 2;
+  min-width: 0;
   margin: 0;
   color: var(--ink-soft);
-  font-size:var(--text-sm);
-  line-height: 1.4;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: normal;
 }
 
 .editor-header-actions {
   display: flex;
   align-items: center;
-  flex-shrink: 0;
-  gap:var(--space-sm);
+  flex: none;
+  gap: 0.4rem;
 }
 
 .editor-header-actions .settings-danger {
-  margin-left:var(--space-2xl);
+  margin-left: 0.25rem;
 }
 
 /* ---------- 分组标题与分隔线 ---------- */
@@ -255,6 +268,11 @@
   color: var(--ink);
   font:400 var(--text-base) var(--font-code);
   transition: border-color var(--transition-fast);
+}
+
+.settings-field input:not(.switch-control),
+.settings-field .ui-select > button {
+  border-radius: 0.625rem;
 }
 
 .settings-field input:not(.switch-control) {
@@ -494,7 +512,7 @@
   align-items: center;
   margin: 0;
   min-height: 0;
-  padding: 0.3rem 0.75rem;
+  padding: 0.45rem 1rem;
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;

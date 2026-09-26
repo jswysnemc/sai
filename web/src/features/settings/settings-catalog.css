@@ -375,7 +375,6 @@
 .provider-advanced-layout {
   display: grid;
   gap:var(--space-xl);
-  max-width: 960px;
 }
 
 .provider-advanced-top {

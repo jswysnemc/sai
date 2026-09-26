@@ -1,5 +1,24 @@
+.settings-main:has(.skill-detail-view) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.settings-main:has(.skill-detail-view) > .settings-main-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .skill-detail-view {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .skill-detail-navigation {
@@ -64,10 +83,9 @@
 }
 
 .skill-editor .editor-header {
-  position: sticky;
-  top: 3.5rem;
-  z-index: 12;
-  padding-top: var(--space-sm);
+  position: static;
+  flex: none;
+  padding-top: 0;
   background: var(--paper);
 }
 
@@ -87,10 +105,35 @@
   min-width: 5.25rem;
 }
 
+.skill-directory-field {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 16rem);
+  align-items: center;
+  flex: none;
+  gap: 0.5rem;
+  margin: 0 0 0.65rem;
+}
+
+.skill-directory-field span {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.skill-directory-field input {
+  height: 2rem;
+  padding: 0 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 0.625rem;
+  background: var(--paper);
+  color: var(--ink);
+}
+
 .skill-editor {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  min-height: calc(100dvh - 8rem);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .skill-meta-bar {
@@ -148,7 +191,8 @@
   flex: 1;
   flex-direction: column;
   min-width: 0;
-  min-height: 35rem;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .skill-doc-toolbar {
@@ -177,8 +221,8 @@
 
 .skill-content-editor {
   flex: 1;
-  height: calc(100vh - 16rem);
-  min-height: 35rem;
+  height: auto;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius-3);
@@ -206,10 +250,6 @@
     max-width: 90vw;
   }
 
-  .skill-content-editor {
-    height: min(30rem, 58dvh);
-    min-height: 20rem;
-  }
 }
 
 @media (max-width: 36rem) {

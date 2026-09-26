@@ -3,6 +3,15 @@
   min-width: 0;
 }
 
+.settings-main:has(.skill-detail-view) .skills-settings-page,
+.settings-main:has(.skill-detail-view) #skills-library-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .skills-settings-toolbar {
   display: flex;
   min-height: 2.75rem;
@@ -70,10 +79,6 @@
   color: var(--ink-soft);
   font: 500 var(--text-xs) var(--font-code);
   white-space: nowrap;
-}
-
-.skills-behavior-panel {
-  max-width: 62rem;
 }
 
 .skills-behavior-panel .settings-group {

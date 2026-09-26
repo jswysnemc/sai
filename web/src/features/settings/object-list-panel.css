@@ -7,7 +7,7 @@
   min-height: 0;
   height: 100%;
   border-right: 1px solid var(--line);
-  padding-right: 0;
+  padding: 0.75rem 0.5rem 0.85rem 0.65rem;
   background: var(--paper-deep);
 }
 

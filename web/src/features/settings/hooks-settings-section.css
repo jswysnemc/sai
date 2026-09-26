@@ -3,8 +3,8 @@
 .settings-hint-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(13.75rem, 100%), 1fr));
-  gap:var(--space-sm);
-  margin-top:var(--space-lg);
+  gap: 0.5rem;
+  margin: 0 1rem 0.85rem;
 }
 
 .settings-hint-chip {

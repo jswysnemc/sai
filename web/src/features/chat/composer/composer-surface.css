@@ -6,14 +6,15 @@
     box-shadow var(--transition-base);
 }
 
-.composer-surface-compact:focus-within {
-  border-color: var(--line-strong);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 4%, transparent);
-}
-
 .composer-surface-compact {
   display: block;
-  border: 1px solid transparent;
-  background: var(--control-surface);
-  box-shadow: none;
+  border: 1px solid var(--line);
+  border-radius: 0.625rem;
+  background: var(--composer-surface);
+  box-shadow: var(--shadow-composer);
+}
+
+.composer-surface-compact:focus-within {
+  border-color: color-mix(in srgb, var(--ink) 40%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 4%, transparent);
 }

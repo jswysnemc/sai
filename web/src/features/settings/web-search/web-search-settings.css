@@ -18,9 +18,23 @@
 
 .web-search-provider-layout {
   grid-template-columns: minmax(16rem, 18.5rem) minmax(0, 1fr);
-  padding-top: var(--space-xl);
-  border-top: 1px solid var(--line);
   transition: opacity var(--transition-base);
+}
+
+/* 供应商区跟内容走，不再撑满视口；列表不再单独滚动，只留设置主区域一条滚动条 */
+.settings-objects-layout.web-search-provider-layout {
+  min-height: 0;
+  height: auto;
+  overflow: visible;
+}
+
+.settings-objects-layout.web-search-provider-layout .object-list {
+  height: auto;
+  max-height: none;
+}
+
+.settings-objects-layout.web-search-provider-layout .object-list-scroll {
+  overflow: visible;
 }
 
 .web-search-settings.is-disabled .web-search-global-grid,

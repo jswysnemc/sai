@@ -1,13 +1,12 @@
 /* 消息网关分区：凭据表单与运行控制 */
 
-.gateway-settings { max-width: 68.75rem; }
-
 .gateway-weixin-login-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap:var(--space-lg);
-  margin-top:var(--space-xl);
+  margin: 0;
+  padding: 0.65rem 1rem 0.35rem;
 }
 
 .gateway-weixin-login-button {
@@ -39,10 +38,10 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap:var(--space-lg);
-  margin-top:var(--space-2xl);
-  padding:var(--space-lg) var(--space-lg);
-  border: 1px solid var(--line);
-  border-radius:var(--radius-4);
+  margin: 0;
+  padding: 0.55rem 1rem;
+  border: 0;
+  border-radius: 0;
   background: color-mix(in srgb, var(--paper-deep) 62%, transparent);
 }
 

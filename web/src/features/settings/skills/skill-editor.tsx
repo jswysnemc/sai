@@ -28,8 +28,8 @@ type SkillEditorProps = {
 /**
  * 编辑新建或已安装 Skill 的完整 SKILL.md。
  *
- * 名称与描述独立字段展示，正文区复用两态 Markdown 编辑器，
- * 可在源码与可编辑预览之间切换。
+ * 编辑区展示完整 SKILL.md，包括开头的名称与描述前言。
+ * 正文区复用两态 Markdown 编辑器，可在源码与可编辑预览之间切换。
  *
  * @param props 当前条目、文档内容、保存状态与更新回调
  * @returns Skill 文档编辑区
@@ -87,52 +87,34 @@ export function SkillEditor(props: SkillEditorProps) {
         </div>
       ) : (
         <>
-          <div className="skill-meta-bar">
-            {creating && (
-              <label className="skill-directory-field">
-                <span>{t("Directory name", "目录名称")}</span>
-                <input
-                  value={directoryName}
-                  onChange={(event) => props.onDirectoryNameChange(event.target.value)}
-                  placeholder="code-review"
-                  spellCheck={false}
-                  aria-label={t("Directory name", "目录名称")}
-                />
-              </label>
-            )}
-            <label className="skill-name-field">
-              <span>{t("Name", "名称")}</span>
+          {creating && (
+            <label className="skill-directory-field">
+              <span>{t("Directory name", "目录名称")}</span>
               <input
-                value={parsed.name}
-                onChange={(event) => updateDocument({ name: event.target.value })}
+                value={directoryName}
+                onChange={(event) => {
+                  props.onDirectoryNameChange(event.target.value);
+                  updateDocument({ name: event.target.value });
+                }}
                 placeholder="code-review"
                 spellCheck={false}
-                aria-label={t("Skill name", "Skill 名称")}
+                aria-label={t("Directory name", "目录名称")}
               />
             </label>
-            <label className="skill-description-field">
-              <span>{t("Description", "描述")}</span>
-              <input
-                value={parsed.description}
-                onChange={(event) => updateDocument({ description: event.target.value })}
-                placeholder={t("When should this Skill be used?", "何时应使用该 Skill？")}
-                aria-label={t("Skill description", "Skill 描述")}
-              />
-            </label>
-          </div>
+          )}
           <section className="skill-document-workspace">
             <div className="skill-doc-toolbar">
               <div>
                 <h3>SKILL.md</h3>
-                <span>{t("Instruction body", "指令正文")}</span>
+                <span>{t("Full document, including the name and description frontmatter", "完整文档，含名称与描述前言")}</span>
               </div>
               <MarkdownModeToggle mode={mode} onChange={setMode} t={t} />
             </div>
 
-            <div className="skill-content-editor" aria-label={t("Skill Markdown body", "Skill Markdown 正文")}>
+            <div className="skill-content-editor" aria-label={t("Skill document", "Skill 文档")}>
               <MarkdownEditor
-                value={parsed.body}
-                onChange={(body) => updateDocument({ body })}
+                value={content}
+                onChange={props.onContentChange}
                 mode={mode}
                 dark={isDarkTheme(theme)}
                 onModeChange={setMode}

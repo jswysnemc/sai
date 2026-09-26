@@ -176,6 +176,23 @@
 
 /* 内置提示词分段开关 */
 
+/* 分段面板占满卡片，不再被字段的「标签 | 25rem 控件」栅格挤到右侧 */
+.settings-group-card .settings-field:has(.agent-prompt-sections) {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  padding: 0.75rem 1rem 0.85rem;
+}
+
+.settings-group-card .settings-field:has(.agent-prompt-sections) > span,
+.settings-group-card .settings-field:has(.agent-prompt-sections) > small,
+.settings-group-card .settings-field:has(.agent-prompt-sections) > .agent-prompt-sections {
+  grid-column: 1;
+  grid-row: auto;
+  justify-self: stretch;
+  width: 100%;
+  max-width: none;
+}
+
 .agent-prompt-sections {
   border: 1px solid var(--technical-border);
   border-radius: var(--radius-4);

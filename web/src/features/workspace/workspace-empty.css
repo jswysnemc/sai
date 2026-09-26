@@ -1,68 +1,36 @@
 /* 【Web 工作台】【面板空状态】空面板与定向差异视图 */
 .workspace-pane-empty {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  display: grid;
   height: 100%;
-  width: min(100%, 34rem);
-  margin: 0;
-  padding: 1.125rem 0.875rem 1.5rem;
+  min-height: 0;
+  place-items: center;
+  padding: 1.5rem;
   overflow: auto;
   color: var(--ink-soft);
-  font-size: var(--text-sm);
-}
-
-.workspace-pane-empty-heading {
-  display: grid;
-  gap: 0.25rem;
-  padding: 0 0.375rem;
-}
-
-.workspace-pane-empty-heading strong {
-  color: var(--ink);
-  font: 500 var(--text-sm)/1.35 var(--font-ui);
-}
-
-.workspace-pane-empty-heading span {
-  color: var(--ink-soft);
-  font-size: var(--text-xs);
-}
-
-.workspace-pane-empty-group {
-  display: grid;
-  gap: 0.25rem;
-}
-
-.workspace-pane-empty-group h3 {
-  margin: 0;
-  padding: 0 0.375rem;
-  color: var(--ink-soft);
-  font: 500 var(--text-2xs)/1.5rem var(--font-ui);
 }
 
 .workspace-pane-empty-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.25rem;
+  width: min(100%, 22rem);
+  gap: 0.125rem;
 }
 
 .workspace-pane-empty-actions button {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
-  min-height: 2.125rem;
-  padding: 0 0.5rem;
+  column-gap: 0.7rem;
+  min-height: 2rem;
+  padding: 0.2rem 0.45rem;
   border: 0;
   border-radius: var(--radius-2);
-  background: color-mix(in srgb, var(--ink) 3.5%, transparent);
-  color: var(--ink);
+  background: transparent;
+  color: var(--ink-soft);
   font-size: var(--text-sm);
   text-align: left;
 }
 
 .workspace-pane-empty-actions button svg {
-  flex: none;
   color: var(--ink-soft);
 }
 
@@ -72,8 +40,25 @@
   white-space: nowrap;
 }
 
+.workspace-pane-empty-actions kbd {
+  min-width: 4.5rem;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+  color: var(--ink-soft);
+  font: 400 0.6875rem/1.45 var(--font-code);
+  text-align: center;
+}
+
+.workspace-pane-empty-actions kbd:empty {
+  border-color: transparent;
+  background: transparent;
+}
+
 .workspace-pane-empty-actions button:hover {
-  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--ink);
 }
 
 .workspace-pane-empty-actions button:hover svg {

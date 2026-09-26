@@ -104,7 +104,7 @@
   padding: 1.25rem clamp(1rem, 2vw, 2rem) 2.5rem;
 }
 
-.settings-main-content { width: 100%; max-width: 52rem; margin: 0 auto; }
+.settings-main-content { width: 100%; max-width: 76rem; margin: 0 auto; }
 
 /* ---------- 对象列表中列 ---------- */
 
@@ -118,6 +118,11 @@
   border: 1px solid var(--line);
   border-radius: 0.75rem;
   background: var(--paper);
+}
+
+.settings-objects-layout > :not(.object-list) {
+  min-width: 0;
+  padding: 1rem 1.25rem 1.5rem;
 }
 
 /* ---------- 状态与消息 ---------- */
