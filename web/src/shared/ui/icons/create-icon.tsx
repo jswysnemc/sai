@@ -20,13 +20,15 @@ export type LucideIcon = ForwardRefExoticComponent<IconProps & RefAttributes<SVG
 export function createIcon(name: IconName): LucideIcon {
   const datum = iconData[name];
   const [tx, ty, scale] = datum.fit;
+  // 1. 沿用 lucide 的 kebab 规则，测试和样式仍按 lucide-folder-git2 这类类名识别
+  const lucideClass = `lucide lucide-${name.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase()}`;
   const Icon = forwardRef<SVGSVGElement, IconProps>(function Icon(
-    { size = 24, strokeWidth = 2, absoluteStrokeWidth, color = "currentColor", children, ...rest },
+    { size = 24, strokeWidth = 2, absoluteStrokeWidth, color = "currentColor", children, className, ...rest },
     ref,
   ) {
     const numericSize = Number(size);
     const numericStroke = Number(strokeWidth);
-    // 1. 绝对描边按 24 视口换算，避免图标缩小时线条变细
+    // 2. 绝对描边按 24 视口换算，避免图标缩小时线条变细
     const sw = absoluteStrokeWidth && Number.isFinite(numericSize) && numericSize > 0 && Number.isFinite(numericStroke)
       ? (numericStroke * 24) / numericSize
       : strokeWidth;
@@ -43,6 +45,7 @@ export function createIcon(name: IconName): LucideIcon {
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden="true"
+        className={className ? `${lucideClass} ${className}` : lucideClass}
         {...rest}
       >
         <g transform={`translate(${tx} ${ty}) scale(${scale})`} vectorEffect="non-scaling-stroke">
