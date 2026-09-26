@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Server } from "lucide-react";
+import { Plus, Server } from "../../shared/ui/icons";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import { Button } from "../../shared/ui/button/button";

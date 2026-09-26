@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CalendarClock, RefreshCw } from "lucide-react";
+import { ArrowLeft, CalendarClock, RefreshCw } from "../../shared/ui/icons";
 import { Link } from "react-router-dom";
 import { api } from "../../api/client";
 import type { CreateCronJobRequest, CronJob } from "../../api/contracts";

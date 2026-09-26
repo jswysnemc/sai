@@ -1,4 +1,4 @@
-import { BookOpen, FileText, SquareTerminal, Target, X, type LucideIcon } from "lucide-react";
+import { BookOpen, FileText, SquareTerminal, Target, X, type LucideIcon } from "../../../shared/ui/icons";
 import { createRoot, type Root } from "react-dom/client";
 import { parseComposerAtoms, type ComposerAtomSegment } from "./composer-atom-token";
 import { fileMentionLabel } from "./file-mention-label";

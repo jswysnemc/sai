@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronLeft, ChevronRight, Info, MessageSquareText, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Info, MessageSquareText, X } from "../../shared/ui/icons";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { LocalizedError, toDisplayError } from "../../api/api-error";

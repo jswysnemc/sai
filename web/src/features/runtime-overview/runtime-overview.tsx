@@ -10,7 +10,7 @@ import {
   Minimize2,
   Target,
   Terminal
-} from "lucide-react";
+} from "../../shared/ui/icons";
 import { useEffect, useId, useRef, useState } from "react";
 import { useOutsidePointerDown } from "../../shared/hooks/use-outside-pointer-down";
 import type { TodoStatus } from "../../api/contracts";

@@ -1,4 +1,4 @@
-import { ChevronDown, EyeOff, Minus, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { ChevronDown, EyeOff, Minus, Plus, RotateCcw, Trash2 } from "../../../shared/ui/icons";
 import type { CSSProperties } from "react";
 import type { GitStatusEntry } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";

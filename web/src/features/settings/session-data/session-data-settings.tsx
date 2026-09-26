@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { CheckSquare, ChevronDown, ChevronRight, Database, Eraser, RefreshCw, Square, Trash2 } from "lucide-react";
+import { CheckSquare, ChevronDown, ChevronRight, Database, Eraser, RefreshCw, Square, Trash2 } from "../../../shared/ui/icons";
 import { api } from "../../../api/client";
 import type { SessionDataSelection, SessionDataSummary } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";

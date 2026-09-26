@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pencil, Trash2, Wrench, Sparkles, Settings2 } from "lucide-react";
+import { Pencil, Trash2, Wrench, Sparkles, Settings2 } from "../../../shared/ui/icons";
 import type { AppConfig } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { AgentPromptEditorDialog } from "./agent-prompt-editor-dialog";

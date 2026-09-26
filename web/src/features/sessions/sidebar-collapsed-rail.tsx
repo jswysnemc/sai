@@ -1,4 +1,4 @@
-import { CalendarClock, FolderOpen, PanelLeftOpen, Search, Settings2, SquarePen } from "lucide-react";
+import { CalendarClock, FolderOpen, PanelLeftOpen, Search, Settings2, SquarePen } from "../../shared/ui/icons";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../shared/ui/button/button";
 import { LocaleSwitcher } from "../i18n/locale-switcher";

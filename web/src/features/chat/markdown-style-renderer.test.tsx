@@ -12,6 +12,13 @@ describe("MarkdownRenderer style preferences", () => {
     expect(html).toMatch(/<button[^>]*>[\s\S]*material-icons[\s\S]*tool-file-reference-label[\s\S]*login-page\/index\.html/);
   });
 
+  it("用量缩写不渲染成文件引用", () => {
+    const html = renderToStaticMarkup(<MarkdownRenderer source="上下文占用 `29.7k`（约 3%），输出 `1.4k`。" />);
+    expect(html).not.toContain("inline-file-reference");
+    expect(html).toContain("inline-code");
+    expect(html).toContain("29.7k");
+  });
+
   it("密文件 pill 与中文说明同段渲染，保留说明文本节点", () => {
     const source =
       "`docs/00-a.md` `docs/01-b.md` —— 研究文档集 / 工具调研 / `docs/02-c.md` 综合与路线图";

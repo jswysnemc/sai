@@ -1,4 +1,4 @@
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft } from "../../shared/ui/icons";
 
 /** 会话行悬停「显示文件树」时打开左栏滑盖。 */
 export const OPEN_SIDEBAR_FILE_TREE_EVENT = "sai:open-sidebar-file-tree";

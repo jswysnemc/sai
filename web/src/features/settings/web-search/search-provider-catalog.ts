@@ -5,8 +5,8 @@ import {
   Network,
   Radar,
   Search
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+} from "../../../shared/ui/icons";
+import type { LucideIcon } from "../../../shared/ui/icons";
 import type { Locale } from "../../i18n/locale";
 import type { WebSearchProviderId } from "./web-search-config";
 

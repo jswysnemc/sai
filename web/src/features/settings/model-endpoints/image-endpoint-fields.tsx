@@ -1,4 +1,4 @@
-import { CheckCircle2, Loader2, PlugZap, RefreshCw, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, PlugZap, RefreshCw, XCircle } from "../../../shared/ui/icons";
 import type { ImageEndpointProbeReport, ModelEndpointApiKey, ModelEndpointConfig } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { Select } from "../../../shared/ui/select/select";

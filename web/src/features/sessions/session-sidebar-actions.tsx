@@ -1,4 +1,4 @@
-import { Blocks, CalendarClock, MessageCirclePlus, Search } from "lucide-react";
+import { Blocks, CalendarClock, MessageCirclePlus, Search } from "../../shared/ui/icons";
 import { Button } from "../../shared/ui/button/button";
 import { modKeyLabel } from "../../shared/mod-key";
 import { useI18n } from "../i18n/use-i18n";

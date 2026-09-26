@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, RefreshCw, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw, Trash2 } from "../../../shared/ui/icons";
 import { api } from "../../../api/client";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";

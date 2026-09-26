@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus } from "../../shared/ui/icons";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";

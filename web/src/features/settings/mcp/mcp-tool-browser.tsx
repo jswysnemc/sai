@@ -1,4 +1,4 @@
-import { Braces, RefreshCw, Wrench } from "lucide-react";
+import { Braces, RefreshCw, Wrench } from "../../../shared/ui/icons";
 import { useEffect, useState } from "react";
 import type { McpToolInfo } from "../../../api/mcp-tool-contracts";
 import { Button } from "../../../shared/ui/button/button";

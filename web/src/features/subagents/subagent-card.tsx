@@ -1,4 +1,4 @@
-import { Ban } from "lucide-react";
+import { Ban } from "../../shared/ui/icons";
 import type { KeyboardEvent, MouseEvent } from "react";
 import type { Subagent } from "../../api/contracts";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";

@@ -1,4 +1,4 @@
-import { Download, LoaderCircle } from "lucide-react";
+import { Download, LoaderCircle } from "../../../shared/ui/icons";
 import { useMemo } from "react";
 import { useI18n } from "../../i18n/use-i18n";
 import { LightboxImage } from "../../../shared/ui/image-lightbox";

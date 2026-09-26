@@ -1,4 +1,4 @@
-import { Download, FolderOpen, GitBranch, Plus } from "lucide-react";
+import { Download, FolderOpen, GitBranch, Plus } from "../../../shared/ui/icons";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
 import "./source-control-empty-state.css";

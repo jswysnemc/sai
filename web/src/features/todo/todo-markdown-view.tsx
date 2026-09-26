@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Ban, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleDot, ListChecks } from "lucide-react";
+import { Ban, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleDot, ListChecks } from "../../shared/ui/icons";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../../api/client";

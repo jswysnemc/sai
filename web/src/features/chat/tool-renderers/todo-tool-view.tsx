@@ -1,4 +1,4 @@
-import { Ban, CheckCircle2, Circle, CircleDot } from "lucide-react";
+import { Ban, CheckCircle2, Circle, CircleDot } from "../../../shared/ui/icons";
 import type { TodoStatus } from "../../../api/contracts";
 import { useI18n } from "../../i18n/use-i18n";
 import { parseTodoTool } from "./todo-tool-data";

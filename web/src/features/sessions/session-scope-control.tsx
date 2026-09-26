@@ -1,4 +1,4 @@
-import { Folder, Folders } from "lucide-react";
+import { Folder, Folders } from "../../shared/ui/icons";
 import { Select } from "../../shared/ui/select/select";
 import { useI18n } from "../i18n/use-i18n";
 import "./session-scope-control.css";

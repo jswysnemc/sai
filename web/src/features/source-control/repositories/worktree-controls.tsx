@@ -1,4 +1,4 @@
-import { GitBranchPlus, Plus } from "lucide-react";
+import { GitBranchPlus, Plus } from "../../../shared/ui/icons";
 import { useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";

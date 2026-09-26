@@ -1,4 +1,4 @@
-import { CircleAlert, RotateCcw } from "lucide-react";
+import { CircleAlert, RotateCcw } from "../../../shared/ui/icons";
 import { useState, type ReactNode } from "react";
 import { ApiError } from "../../../api/api-error";
 import { Button } from "../../../shared/ui/button/button";

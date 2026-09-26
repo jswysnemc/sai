@@ -1,4 +1,4 @@
-import { Plus, Terminal, Trash2, Webhook } from "lucide-react";
+import { Plus, Terminal, Trash2, Webhook } from "../../shared/ui/icons";
 import { useMemo, useState } from "react";
 import { useSelectedFallback } from "./controls/use-selected-fallback";
 import type { AppConfig, HookHttpRequest, HookItem } from "../../api/contracts";

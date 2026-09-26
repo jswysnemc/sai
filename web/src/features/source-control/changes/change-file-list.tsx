@@ -1,4 +1,4 @@
-import { ChevronRight, Folder, FolderOpen } from "lucide-react";
+import { ChevronRight, Folder, FolderOpen } from "../../../shared/ui/icons";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { ChangeListExpandContext, ChangeListQueryContext } from "./change-file-stats";
 import type { GitStatusEntry, ScmConfig } from "../../../api/contracts";

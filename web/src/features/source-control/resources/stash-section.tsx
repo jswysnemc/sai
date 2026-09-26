@@ -1,4 +1,4 @@
-import { ArchiveRestore, Eye, Play, Trash2 } from "lucide-react";
+import { ArchiveRestore, Eye, Play, Trash2 } from "../../../shared/ui/icons";
 import { useState } from "react";
 import type { GitStashEntry } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";

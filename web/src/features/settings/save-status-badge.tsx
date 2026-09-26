@@ -1,4 +1,4 @@
-import { AlertCircle, CircleCheck, CircleDot } from "lucide-react";
+import { AlertCircle, CircleCheck, CircleDot } from "../../shared/ui/icons";
 import { useI18n } from "../i18n/use-i18n";
 
 type SaveStatusBadgeProps = {

@@ -1,4 +1,4 @@
-import { ArrowUp, Loader2, Plus, Square } from "lucide-react";
+import { ArrowUp, Loader2, Plus, Square } from "../../shared/ui/icons";
 import { useRef, type ChangeEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";

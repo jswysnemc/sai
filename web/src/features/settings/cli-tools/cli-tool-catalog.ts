@@ -14,8 +14,8 @@ import {
   Sparkles,
   TerminalSquare,
   WandSparkles
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+} from "../../../shared/ui/icons";
+import type { LucideIcon } from "../../../shared/ui/icons";
 import type { Locale } from "../../i18n/locale";
 
 export type CliToolCategoryId = "research" | "media" | "knowledge" | "utility" | "system";

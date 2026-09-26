@@ -1,4 +1,4 @@
-import { CalendarClock, LoaderCircle, Pause, Play, Trash2 } from "lucide-react";
+import { CalendarClock, LoaderCircle, Pause, Play, Trash2 } from "../../shared/ui/icons";
 import type { CronJob } from "../../api/contracts";
 import { formatCronDate, formatCronInterval, getCronJobStatus } from "./cron-job-utils";
 import { useI18n } from "../i18n/use-i18n";

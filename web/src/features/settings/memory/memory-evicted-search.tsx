@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { History, Search } from "lucide-react";
+import { History, Search } from "../../../shared/ui/icons";
 import { useDeferredValue, useState } from "react";
 import { api } from "../../../api/client";
 import { useI18n } from "../../i18n/use-i18n";

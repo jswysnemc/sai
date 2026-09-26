@@ -1,4 +1,4 @@
-import { ArrowDownToLine, ArrowUpToLine, X } from "lucide-react";
+import { ArrowDownToLine, ArrowUpToLine, X } from "../../../shared/ui/icons";
 import { useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { Select } from "../../../shared/ui/select/select";

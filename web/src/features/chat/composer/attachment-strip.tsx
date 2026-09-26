@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { X } from "../../../shared/ui/icons";
 import { useState } from "react";
 import type { ComposerAttachment } from "./use-composer-attachments";
 import { ImageLightbox } from "../../../shared/ui/image-lightbox";

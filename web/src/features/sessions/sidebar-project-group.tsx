@@ -1,4 +1,4 @@
-import { ChevronDown, FolderOpen, MoreHorizontal, Plus, X } from "lucide-react";
+import { ChevronDown, FolderOpen, MoreHorizontal, Plus, X } from "../../shared/ui/icons";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import type { WorkspaceSessions } from "../../api/contracts";
 import { localizeApiMessage } from "../../api/api-error";

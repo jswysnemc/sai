@@ -1,4 +1,4 @@
-import { CircleStop, LoaderCircle, Play } from "lucide-react";
+import { CircleStop, LoaderCircle, Play } from "../../shared/ui/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api/client";
 import { useI18n } from "../i18n/use-i18n";

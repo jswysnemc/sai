@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, GitBranch } from "lucide-react";
+import { ChevronLeft, ChevronRight, GitBranch } from "../../../shared/ui/icons";
 import type { SessionTurnTree } from "../../../api/turn-tree-contracts";
 import { useI18n } from "../../i18n/use-i18n";
 import { findSiblingBranches, preferredBranchLeafId } from "./turn-tree-rows";

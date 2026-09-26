@@ -1,4 +1,4 @@
-import { GitCommitHorizontal } from "lucide-react";
+import { GitCommitHorizontal } from "../../../shared/ui/icons";
 import type { GitCommitSummary } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";

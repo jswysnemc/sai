@@ -1,4 +1,4 @@
-import { Clipboard, ClipboardPaste, MessageSquareText, ScanText } from "lucide-react";
+import { Clipboard, ClipboardPaste, MessageSquareText, ScanText } from "../../shared/ui/icons";
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../i18n/use-i18n";

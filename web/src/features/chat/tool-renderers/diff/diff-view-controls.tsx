@@ -1,4 +1,4 @@
-import { Columns2, Rows3, WrapText } from "lucide-react";
+import { Columns2, Rows3, WrapText } from "../../../../shared/ui/icons";
 import { Button } from "../../../../shared/ui/button/button";
 import { useI18n } from "../../../i18n/use-i18n";
 import type { useDiffViewOptions } from "./use-diff-view-options";

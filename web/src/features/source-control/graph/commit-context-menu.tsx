@@ -1,4 +1,4 @@
-import { CheckCircle2, Cherry, Copy, GitBranch, LogOut, RotateCcw } from "lucide-react";
+import { CheckCircle2, Cherry, Copy, GitBranch, LogOut, RotateCcw } from "../../../shared/ui/icons";
 import { useEffect, useRef } from "react";
 import type { GitCommitSummary } from "../../../api/contracts";
 import type { GitOperationAction } from "../../../api/git-contracts";

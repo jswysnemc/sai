@@ -1,4 +1,4 @@
-import { Folder, FolderGit2 } from "lucide-react";
+import { Folder, FolderGit2 } from "../../shared/ui/icons";
 
 type SessionWorkspaceIconProps = {
   isGitRepository: boolean;

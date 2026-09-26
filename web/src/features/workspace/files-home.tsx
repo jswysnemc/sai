@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FilePlus2, FolderSearch } from "lucide-react";
+import { FilePlus2, FolderSearch } from "../../shared/ui/icons";
 import { useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";

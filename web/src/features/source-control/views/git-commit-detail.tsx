@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { ExternalLink } from "../../../shared/ui/icons";
 import type { GitCommitDetailsResponse, GitDiffResponse } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { DiffView } from "../../chat/tool-renderers/diff-view";

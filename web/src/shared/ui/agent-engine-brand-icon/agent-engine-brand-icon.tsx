@@ -1,6 +1,6 @@
 import claudeCodeIconUrl from "@lobehub/icons-static-svg/icons/claudecode-color.svg";
 import codexIconUrl from "@lobehub/icons-static-svg/icons/codex-color.svg";
-import { Cpu } from "lucide-react";
+import { Cpu } from "../icons";
 import "./agent-engine-brand-icon.css";
 
 type AgentEngineBrandIconProps = {

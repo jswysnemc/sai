@@ -1,4 +1,4 @@
-import { CheckCircle2, Loader2, PlugZap, Wrench, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, PlugZap, Wrench, XCircle } from "../../../shared/ui/icons";
 import { useState } from "react";
 import { api } from "../../../api/client";
 import { toDisplayError } from "../../../api/api-error";

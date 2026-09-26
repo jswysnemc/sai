@@ -1,4 +1,4 @@
-import { Copy, EyeOff, FileDiff, FileText, FolderSearch, GitCompareArrows, GitMerge, Minus, Pin, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Copy, EyeOff, FileDiff, FileText, FolderSearch, GitCompareArrows, GitMerge, Minus, Pin, Plus, RotateCcw, Trash2 } from "../../../shared/ui/icons";
 import { useEffect, useRef } from "react";
 import type { GitStatusEntry } from "../../../api/contracts";
 import type { GitOperationAction } from "../../../api/git-contracts";

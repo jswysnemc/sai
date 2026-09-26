@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronDown } from "../../../shared/ui/icons";
 import type { KeyboardEvent, ReactNode } from "react";
 import "./tool-card-shell.css";
 

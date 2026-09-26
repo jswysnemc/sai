@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp } from "../../../../shared/ui/icons";
 import { useState, type ReactNode } from "react";
 import { api } from "../../../../api/client";
 import { useI18n } from "../../../i18n/use-i18n";

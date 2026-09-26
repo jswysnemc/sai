@@ -1,5 +1,5 @@
 import type { AppConfig, ProviderConfig } from "../../api/contracts";
-import type { LucideIcon } from "lucide-react";
+import type { LucideIcon } from "../../shared/ui/icons";
 
 /** 设置页 section 标识。 */
 export type SettingsSectionId =

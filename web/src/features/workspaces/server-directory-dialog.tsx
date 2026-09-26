@@ -1,4 +1,4 @@
-import { ArrowLeft, Folder, FolderInput, FolderPlus, GitBranch, HardDrive, Loader2, Plus, Search } from "lucide-react";
+import { ArrowLeft, Folder, FolderInput, FolderPlus, GitBranch, HardDrive, Loader2, Plus, Search } from "../../shared/ui/icons";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";

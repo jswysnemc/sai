@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { ChevronDown, ChevronUp, UnfoldVertical } from "lucide-react";
+import { ChevronDown, ChevronUp, UnfoldVertical } from "../../../shared/ui/icons";
 import type { DiffFile } from "./diff/diff-model";
 import { buildSideBySide, type SideBySideRow } from "./diff/side-by-side";
 import {

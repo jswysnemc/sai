@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "../../shared/ui/icons";
 import { api } from "../../api/client";
 import type { ProviderApiKey } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";

@@ -1,4 +1,4 @@
-import { Languages } from "lucide-react";
+import { Languages } from "../../shared/ui/icons";
 import type { Locale } from "./locale";
 import { useI18n } from "./use-i18n";
 import "./locale-switcher.css";

@@ -1,4 +1,4 @@
-import { RefreshCw, Upload } from "lucide-react";
+import { RefreshCw, Upload } from "../../../shared/ui/icons";
 import { useRef } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { Modal } from "../../../shared/ui/dialog/modal";

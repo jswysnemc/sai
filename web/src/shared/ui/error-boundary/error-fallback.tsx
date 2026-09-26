@@ -1,4 +1,4 @@
-import { RotateCcw } from "lucide-react";
+import { RotateCcw } from "../icons";
 import { useI18n } from "../../../features/i18n/use-i18n";
 
 type ErrorFallbackProps = {

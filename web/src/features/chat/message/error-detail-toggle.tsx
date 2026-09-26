@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp } from "../../../shared/ui/icons";
 import { useState } from "react";
 import { useI18n } from "../../i18n/use-i18n";
 import "./run-error-notice.css";

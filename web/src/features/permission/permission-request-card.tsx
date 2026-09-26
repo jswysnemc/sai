@@ -1,4 +1,4 @@
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert } from "../../shared/ui/icons";
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";

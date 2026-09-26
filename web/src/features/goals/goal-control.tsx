@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Pencil, Play, Pause, Target, Trash2, X } from "lucide-react";
+import { ChevronDown, Pencil, Play, Pause, Target, Trash2, X } from "../../shared/ui/icons";
 import { useMemo, useState } from "react";
 import { api } from "../../api/client";
 import type { Goal, GoalStatus, GoalUpdateEntry } from "../../api/goal-contracts";

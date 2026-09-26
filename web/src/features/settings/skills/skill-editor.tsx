@@ -1,4 +1,4 @@
-import { BookOpen, Save } from "lucide-react";
+import { BookOpen, Save } from "../../../shared/ui/icons";
 import { useMemo } from "react";
 import type { ManagedSkill } from "../../../api/skill-contracts";
 import { Button } from "../../../shared/ui/button/button";

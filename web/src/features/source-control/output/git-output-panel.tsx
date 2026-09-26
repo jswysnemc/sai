@@ -1,4 +1,4 @@
-import { ChevronDown, TerminalSquare } from "lucide-react";
+import { ChevronDown, TerminalSquare } from "../../../shared/ui/icons";
 import { useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";

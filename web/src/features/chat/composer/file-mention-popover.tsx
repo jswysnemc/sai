@@ -1,4 +1,4 @@
-import { FileText } from "lucide-react";
+import { FileText } from "../../../shared/ui/icons";
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, RefObject } from "react";
 import { api } from "../../../api/client";

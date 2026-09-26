@@ -1,4 +1,4 @@
-import { CheckSquare2, Trash2 } from "lucide-react";
+import { CheckSquare2, Trash2 } from "../../shared/ui/icons";
 import { useI18n } from "../i18n/use-i18n";
 
 type SessionSelectionBarProps = {

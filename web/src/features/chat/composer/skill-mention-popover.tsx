@@ -1,4 +1,4 @@
-import { BookOpen, Target } from "lucide-react";
+import { BookOpen, Target } from "../../../shared/ui/icons";
 import { forwardRef, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { api } from "../../../api/client";
 import { useI18n } from "../../i18n/use-i18n";

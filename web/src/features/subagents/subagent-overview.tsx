@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bot, RefreshCw } from "lucide-react";
+import { Bot, RefreshCw } from "../../shared/ui/icons";
 import { api } from "../../api/client";
 import type { Subagent } from "../../api/contracts";
 import { SubagentCard } from "./subagent-card";

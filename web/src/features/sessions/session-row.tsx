@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckSquare2, ListTree, Pin, PinOff, Square } from "lucide-react";
+import { CheckSquare2, ListTree, Pin, PinOff, Square } from "../../shared/ui/icons";
 import type { MouseEvent } from "react";
 import { api } from "../../api/client";
 import { Button } from "../../shared/ui/button/button";

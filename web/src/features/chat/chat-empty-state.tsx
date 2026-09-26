@@ -1,4 +1,4 @@
-import { FileSearch, GitPullRequest, ListChecks } from "lucide-react";
+import { FileSearch, GitPullRequest, ListChecks } from "../../shared/ui/icons";
 import type { ReactNode } from "react";
 import { Button } from "../../shared/ui/button/button";
 import { useI18n } from "../i18n/use-i18n";

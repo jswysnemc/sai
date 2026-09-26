@@ -1,4 +1,4 @@
-import { Info } from "lucide-react";
+import { Info } from "../../../shared/ui/icons";
 import type { UsageSummary } from "../../../api/contracts";
 import { formatCount, formatDuration, formatPercent, formatRatio, formatTokens } from "./usage-format";
 import type { Translate } from "./usage-labels";

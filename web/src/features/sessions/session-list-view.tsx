@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { X } from "lucide-react";
+import { X } from "../../shared/ui/icons";
 import { useState, type MouseEvent } from "react";
 import { api } from "../../api/client";
 import type { RefObject } from "react";

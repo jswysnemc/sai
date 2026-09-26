@@ -1,4 +1,4 @@
-import { CheckCircle2, X, XCircle } from "lucide-react";
+import { CheckCircle2, X, XCircle } from "../../../shared/ui/icons";
 import { useEffect, useRef } from "react";
 import { useI18n } from "../../i18n/use-i18n";
 import type { OperationNotice } from "./operation-notice";

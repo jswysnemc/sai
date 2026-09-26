@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { QrCode } from "lucide-react";
+import { QrCode } from "../../shared/ui/icons";
 import type { AppConfig, WeixinLoginAccount } from "../../api/contracts";
 import { GatewayRuntimeControl } from "../gateways/gateway-runtime-control";
 import { GatewayBrandIcon } from "../gateways/gateway-brand-icon";

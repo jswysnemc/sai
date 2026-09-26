@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Cable, CircleStop, ExternalLink, Play, RefreshCw } from "lucide-react";
+import { ArrowLeft, Cable, CircleStop, ExternalLink, Play, RefreshCw } from "../../shared/ui/icons";
 import { Link } from "react-router-dom";
 import { api } from "../../api/client";
 import type { GatewayStatus } from "../../api/contracts";

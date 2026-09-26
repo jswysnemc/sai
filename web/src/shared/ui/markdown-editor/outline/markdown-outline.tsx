@@ -1,4 +1,4 @@
-import { ListTree, Pin, PinOff } from "lucide-react";
+import { ListTree, Pin, PinOff } from "../../icons";
 import { useEffect, useMemo, useRef } from "react";
 import { useI18n } from "../../../../features/i18n/use-i18n";
 import type { OutlineHeading } from "./outline-model";

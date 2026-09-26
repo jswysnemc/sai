@@ -1,4 +1,4 @@
-import { ChevronDown, FolderGit2, GitBranch } from "lucide-react";
+import { ChevronDown, FolderGit2, GitBranch } from "../../../shared/ui/icons";
 import { useMemo, useState } from "react";
 import type { GitRepositoryState, GitStatusEntry, ScmConfig } from "../../../api/contracts";
 import type { GitOperationAction } from "../../../api/git-contracts";

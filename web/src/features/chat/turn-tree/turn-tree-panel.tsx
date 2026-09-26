@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { GitBranch, X } from "lucide-react";
+import { GitBranch, X } from "../../../shared/ui/icons";
 import type { SessionTurnTree } from "../../../api/turn-tree-contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";

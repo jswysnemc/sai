@@ -1,4 +1,4 @@
-import { Copy, Save, WrapText } from "lucide-react";
+import { Copy, Save, WrapText } from "../../shared/ui/icons";
 import { useEffect, useRef } from "react";
 import { useI18n } from "../i18n/use-i18n";
 import { useClampedMenuPosition } from "./menu-position";

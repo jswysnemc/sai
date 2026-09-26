@@ -1,4 +1,4 @@
-import { Plus, Tag, Trash2 } from "lucide-react";
+import { Plus, Tag, Trash2 } from "../../../shared/ui/icons";
 import { useState } from "react";
 import type { GitTag } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";

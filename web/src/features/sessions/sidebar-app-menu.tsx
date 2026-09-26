@@ -1,4 +1,4 @@
-import { Cable, CalendarClock, FolderOpen, ImagePlus, Settings, Sparkles } from "lucide-react";
+import { Cable, CalendarClock, FolderOpen, ImagePlus, Settings, Sparkles } from "../../shared/ui/icons";
 import { useNavigate } from "react-router-dom";
 import { ActionMenu } from "../../shared/ui/menu/action-menu";
 import { useI18n } from "../i18n/use-i18n";

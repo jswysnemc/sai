@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { FolderGit2 } from "lucide-react";
+import { FolderGit2 } from "../../shared/ui/icons";
 import { api } from "../../api/client";
 import { useI18n } from "../i18n/use-i18n";
 

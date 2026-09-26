@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, FilePlus2, FolderPlus, MoreHorizontal, Search } from "lucide-react";
+import { ChevronRight, FilePlus2, FolderPlus, MoreHorizontal, Search } from "../../shared/ui/icons";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type UIEvent } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";

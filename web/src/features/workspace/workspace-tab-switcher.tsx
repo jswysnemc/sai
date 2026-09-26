@@ -1,4 +1,4 @@
-import { ChevronDown, Search, X } from "lucide-react";
+import { ChevronDown, Search, X } from "../../shared/ui/icons";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { formatRelativeTime } from "../../shared/format-relative-time";

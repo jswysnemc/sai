@@ -1,4 +1,4 @@
-import { Bot } from "lucide-react";
+import { Bot } from "../../../shared/ui/icons";
 import type { ToolLifecycle } from "../run-event-reducer";
 import type { Translate } from "../../i18n/i18n-context";
 import { useI18n } from "../../i18n/use-i18n";

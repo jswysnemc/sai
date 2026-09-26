@@ -1,4 +1,4 @@
-import { ArrowUp, Loader2, Plus } from "lucide-react";
+import { ArrowUp, Loader2, Plus } from "../../shared/ui/icons";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import type { ModelEndpointConfig } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";

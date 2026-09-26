@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight } from "../../../../shared/ui/icons";
 import { type KeyboardEvent, type ReactNode } from "react";
 import { ToolDiffBadge } from "./tool-diff-badge";
 import { ToolSummaryText } from "./tool-summary-text";

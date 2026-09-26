@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ListChecks, Loader2, Minus, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { ChevronDown, ListChecks, Loader2, Minus, Plus, RotateCcw, Trash2 } from "../../../shared/ui/icons";
 import { memo, useId, useState } from "react";
 import { api } from "../../../api/client";
 import type { GitStatusEntry } from "../../../api/contracts";

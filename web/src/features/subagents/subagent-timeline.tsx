@@ -1,4 +1,4 @@
-import { Brain, CircleCheck, CircleX, Loader2, Wrench } from "lucide-react";
+import { Brain, CircleCheck, CircleX, Loader2, Wrench } from "../../shared/ui/icons";
 import { useState } from "react";
 import type { SubagentTimelineEntry } from "../../api/contracts";
 import { MarkdownRenderer } from "../chat/markdown-renderer";

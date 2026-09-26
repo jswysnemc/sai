@@ -1,4 +1,4 @@
-import { Bot, Settings2 } from "lucide-react";
+import { Bot, Settings2 } from "../../shared/ui/icons";
 import { useState } from "react";
 import type { AgentChoice } from "../agents/agent-types";
 import { SubagentModelDialog } from "../agents/subagent-model-config/subagent-model-dialog";

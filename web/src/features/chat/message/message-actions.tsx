@@ -1,4 +1,4 @@
-import { Check, Copy, GitBranch, MessageSquarePlus, Pencil, RotateCcw } from "lucide-react";
+import { Check, Copy, GitBranch, MessageSquarePlus, Pencil, RotateCcw } from "../../../shared/ui/icons";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { Toast, useToast } from "../../../shared/ui/notify/notify";

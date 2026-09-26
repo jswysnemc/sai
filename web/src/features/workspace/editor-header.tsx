@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, MoreHorizontal, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, MoreHorizontal, RefreshCw } from "../../shared/ui/icons";
 import { useState } from "react";
 import { ActionMenu } from "../../shared/ui/menu/action-menu";
 import { MarkdownModeToggle } from "../../shared/ui/markdown-editor/markdown-mode-toggle";

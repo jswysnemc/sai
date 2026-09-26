@@ -1,4 +1,4 @@
-import { GitBranch, ShieldCheck } from "lucide-react";
+import { GitBranch, ShieldCheck } from "../../../shared/ui/icons";
 import type { AppConfig, GitConfig, ScmConfig } from "../../../api/contracts";
 import { Select } from "../../../shared/ui/select/select";
 import { buildChatModelChoices } from "../../chat/chat-model-options";

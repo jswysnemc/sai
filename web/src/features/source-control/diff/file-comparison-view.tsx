@@ -1,4 +1,4 @@
-import { GitCompare, GitCompareArrows, Loader2, X } from "lucide-react";
+import { GitCompare, GitCompareArrows, Loader2, X } from "../../../shared/ui/icons";
 import type { GitDiffResponse } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { DiffView } from "../../chat/tool-renderers/diff-view";

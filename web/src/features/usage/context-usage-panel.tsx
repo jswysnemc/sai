@@ -1,4 +1,4 @@
-import { Archive, SlidersHorizontal } from "lucide-react";
+import { Archive, SlidersHorizontal } from "../../shared/ui/icons";
 import { localizeApiMessage } from "../../api/api-error";
 import type { SystemUsage } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";

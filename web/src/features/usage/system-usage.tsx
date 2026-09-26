@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Cpu, Gauge, X } from "lucide-react";
+import { Cpu, Gauge, X } from "../../shared/ui/icons";
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../../api/client";

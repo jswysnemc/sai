@@ -1,4 +1,4 @@
-import { CheckCheck, Search, Timer, X } from "lucide-react";
+import { CheckCheck, Search, Timer, X } from "../../../shared/ui/icons";
 import { useMemo, useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";

@@ -1,4 +1,4 @@
-import { Activity, Bot, ChevronLeft, FileCode2, GitCompareArrows, Maximize2, MessageSquarePlus, Minimize2, PanelRightClose, Plus, SquareTerminal, X } from "lucide-react";
+import { Activity, Bot, ChevronLeft, FileCode2, GitCompareArrows, Maximize2, MessageSquarePlus, Minimize2, PanelRightClose, Plus, SquareTerminal, X } from "../../shared/ui/icons";
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { Button } from "../../shared/ui/button/button";
 import { ContextActionMenu } from "../../shared/ui/menu/context-action-menu";

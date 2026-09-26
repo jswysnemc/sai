@@ -1,4 +1,4 @@
-import { Check, Code2, Copy, Eye, Maximize2 } from "lucide-react";
+import { Check, Code2, Copy, Eye, Maximize2 } from "../../shared/ui/icons";
 import { memo, useEffect, useId, useState } from "react";
 import { toDisplayError } from "../../api/api-error";
 import { ImageLightbox } from "../../shared/ui/image-lightbox";

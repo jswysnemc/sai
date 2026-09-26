@@ -1,4 +1,4 @@
-import { Check, RefreshCw, Trash2 } from "lucide-react";
+import { Check, RefreshCw, Trash2 } from "../../../shared/ui/icons";
 import type { AppConfig, ProviderConfig } from "../../../api/contracts";
 import { useI18n } from "../../i18n/use-i18n";
 

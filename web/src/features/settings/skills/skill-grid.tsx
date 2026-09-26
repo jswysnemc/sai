@@ -1,4 +1,4 @@
-import { Plus, RefreshCw, Search } from "lucide-react";
+import { Plus, RefreshCw, Search } from "../../../shared/ui/icons";
 import { useMemo } from "react";
 import type { ManagedSkill } from "../../../api/skill-contracts";
 import { Button } from "../../../shared/ui/button/button";

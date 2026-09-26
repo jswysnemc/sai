@@ -1,4 +1,4 @@
-import { CircleStop, Play, SkipForward } from "lucide-react";
+import { CircleStop, Play, SkipForward } from "../../../shared/ui/icons";
 import type { GitInProgressOperation } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";

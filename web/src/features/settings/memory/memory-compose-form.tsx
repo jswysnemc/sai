@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, X } from "../../../shared/ui/icons";
 import type { MemoryType, MemoryWriteRequest, MemoryWriteResult } from "../../../api/contracts";
 import { Select } from "../../../shared/ui/select/select";
 import { useI18n } from "../../i18n/use-i18n";

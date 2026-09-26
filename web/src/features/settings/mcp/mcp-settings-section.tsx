@@ -1,4 +1,4 @@
-import { Braces, FormInput, Globe2, Save, Terminal, Trash2 } from "lucide-react";
+import { Braces, FormInput, Globe2, Save, Terminal, Trash2 } from "../../../shared/ui/icons";
 import { toDisplayError } from "../../../api/api-error";
 import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import { JsonCodeEditor } from "../../../shared/ui/code-editor/json-code-editor";

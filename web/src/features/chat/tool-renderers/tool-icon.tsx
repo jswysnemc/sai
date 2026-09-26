@@ -15,7 +15,7 @@ import {
   Trash2,
   Wrench,
   X
-} from "lucide-react";
+} from "../../../shared/ui/icons";
 import type { ToolCardTone } from "./tool-card-shell";
 
 /**

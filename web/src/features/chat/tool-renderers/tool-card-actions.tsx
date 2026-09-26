@@ -1,4 +1,4 @@
-import { Check, ClipboardList, Copy } from "lucide-react";
+import { Check, ClipboardList, Copy } from "../../../shared/ui/icons";
 import type { MouseEvent } from "react";
 import { useCopyAction } from "./use-copy-action";
 import { useI18n } from "../../i18n/use-i18n";

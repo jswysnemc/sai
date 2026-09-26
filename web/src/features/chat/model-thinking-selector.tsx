@@ -1,4 +1,4 @@
-import { BrainCircuit, Check, ChevronDown, ChevronRight, Clock3, Search } from "lucide-react";
+import { BrainCircuit, Check, ChevronDown, ChevronRight, Clock3, Search } from "../../shared/ui/icons";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { RunModelSelection, ThinkingLevel } from "../../api/contracts";

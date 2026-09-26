@@ -1,4 +1,4 @@
-import { Activity, Bot, GitBranch, Keyboard, SquareTerminal } from "lucide-react";
+import { Activity, Bot, GitBranch, Keyboard, SquareTerminal } from "../../shared/ui/icons";
 import { Button } from "../../shared/ui/button/button";
 import { useI18n } from "../i18n/use-i18n";
 import { WorkbenchWorkspacePath } from "./workbench-workspace-path";

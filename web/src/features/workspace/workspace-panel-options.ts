@@ -1,4 +1,4 @@
-import { Activity, Bot, FileCode2, GitCompareArrows, MessageSquarePlus, Server, SquareTerminal } from "lucide-react";
+import { Activity, Bot, FileCode2, GitCompareArrows, MessageSquarePlus, Server, SquareTerminal } from "../../shared/ui/icons";
 import type { PaneTab } from "./workspace-tab";
 
 /**

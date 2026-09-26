@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { X } from "../icons";
 import { useEffect, useId, useRef, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../../../features/i18n/use-i18n";

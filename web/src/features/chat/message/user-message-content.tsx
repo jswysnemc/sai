@@ -1,4 +1,4 @@
-import { BookOpen, Target, X } from "lucide-react";
+import { BookOpen, Target, X } from "../../../shared/ui/icons";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { parseComposerAtoms, type ComposerAtomSegment } from "../composer/composer-atom-token";

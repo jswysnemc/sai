@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Eye } from "lucide-react";
+import { Eye } from "../../../shared/ui/icons";
 import { useState } from "react";
 import { api } from "../../../api/client";
 import type { MemoryQuery } from "../../../api/contracts";

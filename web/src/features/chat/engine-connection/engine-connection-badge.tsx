@@ -1,4 +1,4 @@
-import { Loader2, Plug, TriangleAlert } from "lucide-react";
+import { Loader2, Plug, TriangleAlert } from "../../../shared/ui/icons";
 import type { EngineStatusResponse } from "../../../api/contracts";
 import { AgentEngineBrandIcon } from "../../../shared/ui/agent-engine-brand-icon/agent-engine-brand-icon";
 import { useI18n } from "../../i18n/use-i18n";

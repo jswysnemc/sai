@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp } from "../../../shared/ui/icons";
 import type { GitCommitDetailsResponse, GitDiffResponse, GitLogResponse } from "../../../api/contracts";
 import { useI18n } from "../../i18n/use-i18n";
 import { CommitGraph } from "../graph/commit-graph";

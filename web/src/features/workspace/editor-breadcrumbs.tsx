@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, FolderOpen } from "../../shared/ui/icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { localizeApiMessage } from "../../api/api-error";

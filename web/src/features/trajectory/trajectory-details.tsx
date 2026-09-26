@@ -1,4 +1,4 @@
-import { Check, Copy, X } from "lucide-react";
+import { Check, Copy, X } from "../../shared/ui/icons";
 import type { ReactNode } from "react";
 import { useCopyAction } from "../chat/tool-renderers/use-copy-action";
 import { useI18n } from "../i18n/use-i18n";

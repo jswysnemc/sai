@@ -1,4 +1,4 @@
-import { Download, Folder } from "lucide-react";
+import { Download, Folder } from "../../../shared/ui/icons";
 import { useEffect, useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { Modal } from "../../../shared/ui/dialog/modal";

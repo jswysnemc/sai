@@ -1,4 +1,4 @@
-import { Brain, ChevronRight } from "lucide-react";
+import { Brain, ChevronRight } from "../../shared/ui/icons";
 import { useEffect, useRef, useState } from "react";
 import { useNestedFollowOutputScroll } from "./use-follow-output-scroll";
 import "./reasoning-block.css";

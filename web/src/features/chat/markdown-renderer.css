@@ -8,6 +8,9 @@
   /* anywhere 会在中文说明与文件 pill 交界处过度拆字，造成「悬空半行」观感 */
   overflow-wrap: break-word;
   word-wrap: break-word;
+  /* 中文按标点断行，避免「空文件」被文件 pill 挤成行首的半个词 */
+  word-break: keep-all;
+  text-wrap: pretty;
   /* 列表首行垂直居中用这条行高算圆点位置，各预设只改变量 */
   --md-list-leading: 1.68;
   /* 禁止浏览器用假粗体补齐缺失字重，Edge / Chrome 合成加粗粗细不同 */
@@ -210,6 +213,9 @@
   color: var(--code-text);
   font: 500 0.88em/1.15 var(--font-code);
   vertical-align: middle;
+  white-space: nowrap;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 /*

@@ -41,20 +41,18 @@
 .git-review-sync i { color: var(--ink-soft); font-style: normal; }
 .git-change-panel,
 .git-history-panel { background: var(--paper); }
-.git-commit-box { display: grid; gap:var(--space-xs); padding:var(--space-sm); border-bottom: 1px solid var(--line); }
-.git-commit-box textarea { width: 100%; resize: none; padding:var(--space-xs); border: 1px solid var(--line); border-radius:var(--radius-2); outline: 0; background: transparent; font-size:var(--text-xs); }
-.git-commit-box textarea:focus { border-color: var(--line-strong); }
-/* 仅主提交动作使用实心主色；次要/危险/菜单按钮走统一 ui-button 语义 */
+.git-commit-box { display: flex; align-items: center; gap: 0.15rem; }
+.git-commit-box textarea { width: auto; min-width: 0; resize: none; border: 0; border-radius: 0; outline: 0; background: transparent; font-size:var(--text-xs); }
+.git-commit-box textarea:focus { border-color: transparent; }
+/* 主提交动作贴在输入条右侧，圆角由 source-control.css 的分段按钮负责 */
 .git-commit-box .ui-button.primary.git-commit-primary,
 .git-commit-box .ui-button.primary.git-commit-menu-trigger {
   display: flex;
   align-items: center;
   justify-content: center;
   gap:var(--space-xs);
-  min-height: 30px;
   border: 0;
-  border-radius:var(--radius-2);
-  background: var(--graphite);
+  background: var(--ink);
   color: var(--paper);
   font-size:var(--text-xs);
 }

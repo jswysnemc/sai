@@ -1,4 +1,4 @@
-import { ChevronUp, X } from "lucide-react";
+import { ChevronUp, X } from "../../shared/ui/icons";
 import { useMemo, useState, type CSSProperties } from "react";
 import { api } from "../../api/client";
 import { highlightSource, splitHighlightedLines } from "../chat/syntax-highlighter";

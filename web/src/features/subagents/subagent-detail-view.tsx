@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Ban } from "lucide-react";
+import { ArrowLeft, ArrowRight, Ban } from "../../shared/ui/icons";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
 import type { Subagent } from "../../api/contracts";

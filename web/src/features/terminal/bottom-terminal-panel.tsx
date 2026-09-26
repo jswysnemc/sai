@@ -1,4 +1,4 @@
-import { SquareTerminal, X } from "lucide-react";
+import { SquareTerminal, X } from "../../shared/ui/icons";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { TerminalManager } from "./use-terminal-manager";
 import { TerminalPane } from "./terminal-pane";

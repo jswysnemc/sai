@@ -1,4 +1,4 @@
-import { Undo2 } from "lucide-react";
+import { Undo2 } from "../../../shared/ui/icons";
 import { Button } from "../../../shared/ui/button/button";
 import { Select } from "../../../shared/ui/select/select";
 import { GoalControl } from "../../goals/goal-control";

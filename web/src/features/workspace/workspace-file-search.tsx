@@ -1,4 +1,4 @@
-import { Search, X } from "lucide-react";
+import { Search, X } from "../../shared/ui/icons";
 import "./workspace-file-search.css";
 import { useI18n } from "../i18n/use-i18n";
 

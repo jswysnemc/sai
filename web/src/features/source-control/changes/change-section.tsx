@@ -1,4 +1,4 @@
-import { ChevronRight, Minus, Plus } from "lucide-react";
+import { ChevronRight, Minus, Plus } from "../../../shared/ui/icons";
 import { useState } from "react";
 import type { GitStatusEntry, ScmConfig } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";

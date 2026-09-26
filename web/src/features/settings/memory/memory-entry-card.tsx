@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronRight, Link2, Pencil, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Link2, Pencil, Trash2, X } from "../../../shared/ui/icons";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import type { MemoryQuery, MemoryScope, MemorySummary, MemoryType, MemoryWriteResult } from "../../../api/contracts";

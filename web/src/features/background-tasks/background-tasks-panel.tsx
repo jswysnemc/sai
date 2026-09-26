@@ -1,4 +1,4 @@
-import { RefreshCw, Trash2 } from "lucide-react";
+import { RefreshCw, Trash2 } from "../../shared/ui/icons";
 import { useEffect, useMemo, useState } from "react";
 import { BackgroundTaskCard } from "./background-task-card";
 import { combineBackgroundTaskOutput, backgroundTaskStatusLabel, isBackgroundTaskRunning } from "./background-task-utils";

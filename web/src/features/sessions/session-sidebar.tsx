@@ -1,4 +1,4 @@
-import { PanelLeftClose } from "lucide-react";
+import { PanelLeftClose } from "../../shared/ui/icons";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";

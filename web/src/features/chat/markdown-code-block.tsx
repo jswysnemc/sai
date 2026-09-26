@@ -1,4 +1,4 @@
-import { Check, Copy, FileCode2, WrapText } from "lucide-react";
+import { Check, Copy, FileCode2, WrapText } from "../../shared/ui/icons";
 import { memo, useEffect, useState } from "react";
 import { SyntaxHighlighter } from "./syntax-highlighter";
 import { useI18n } from "../i18n/use-i18n";

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronsLeftRight, FolderGit2, FolderOpen, X } from "lucide-react";
+import { Check, ChevronDown, ChevronsLeftRight, FolderGit2, FolderOpen, X } from "../../shared/ui/icons";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../../api/client";

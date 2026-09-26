@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Activity, Bot, ChevronsLeft, ChevronsRight, FileCode2, GitCompareArrows, LayoutPanelLeft, Maximize2, MessageSquare, SlidersHorizontal, SquareTerminal } from "lucide-react";
+import { ArrowLeftRight, Activity, Bot, ChevronsLeft, ChevronsRight, FileCode2, GitCompareArrows, LayoutPanelLeft, Maximize2, MessageSquare, SlidersHorizontal, SquareTerminal } from "../../shared/ui/icons";
 import { useRef, useState } from "react";
 import { useOutsidePointerDown } from "../../shared/hooks/use-outside-pointer-down";
 import type { PaneTab } from "./workspace-tab";

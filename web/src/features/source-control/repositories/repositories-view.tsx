@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ExternalLink, FolderGit2, FolderOpen, GitBranch, RefreshCw, RotateCcw, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ExternalLink, FolderGit2, FolderOpen, GitBranch, RefreshCw, RotateCcw, Trash2, X } from "../../../shared/ui/icons";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "../../../api/client";

@@ -1,4 +1,4 @@
-import { Code2, Eye } from "lucide-react";
+import { Code2, Eye } from "../icons";
 import type { ComponentType } from "react";
 import { MARKDOWN_EDITOR_MODES, type MarkdownEditorMode } from "./markdown-editor-mode";
 

@@ -1,4 +1,4 @@
-import { ChevronRight, MoreHorizontal, Plus } from "lucide-react";
+import { ChevronRight, MoreHorizontal, Plus } from "../../shared/ui/icons";
 import { useState, type RefObject } from "react";
 import type { WorkspaceSessions } from "../../api/contracts";
 import { localizeApiMessage } from "../../api/api-error";

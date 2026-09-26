@@ -1,4 +1,4 @@
-import { BookMarked, ChevronDown, Loader2, X } from "lucide-react";
+import { BookMarked, ChevronDown, Loader2, X } from "../../../shared/ui/icons";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button } from "../../../shared/ui/button/button";

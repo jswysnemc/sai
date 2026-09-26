@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight } from "../../shared/ui/icons";
 import { useId, type ReactNode } from "react";
 
 type SidebarPurposeSectionProps = {

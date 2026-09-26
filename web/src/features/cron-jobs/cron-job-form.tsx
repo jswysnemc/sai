@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { CalendarPlus, LoaderCircle } from "lucide-react";
+import { CalendarPlus, LoaderCircle } from "../../shared/ui/icons";
 import type { CreateCronJobRequest, Session } from "../../api/contracts";
 import { Select } from "../../shared/ui/select/select";
 import { useI18n } from "../i18n/use-i18n";

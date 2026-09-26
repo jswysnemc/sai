@@ -1,4 +1,4 @@
-import { AlertCircle } from "lucide-react";
+import { AlertCircle } from "../../shared/ui/icons";
 import { useI18n } from "../i18n/use-i18n";
 import { formatDuration } from "./trajectory-format";
 import { RECORD_KIND_LABELS, type TrajectoryRecord } from "./trajectory-record";

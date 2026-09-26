@@ -1,4 +1,4 @@
-import { ChevronsDownUp, ChevronsUpDown, Clock, Download, ListOrdered, Search, X } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown, Clock, Download, ListOrdered, Search, X } from "../../shared/ui/icons";
 import { useState } from "react";
 import { api } from "../../api/client";
 import { Button } from "../../shared/ui/button/button";

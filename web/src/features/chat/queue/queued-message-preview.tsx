@@ -1,4 +1,4 @@
-import { Image as ImageIcon, X } from "lucide-react";
+import { Image as ImageIcon, X } from "../../../shared/ui/icons";
 import { useI18n } from "../../i18n/use-i18n";
 
 /**

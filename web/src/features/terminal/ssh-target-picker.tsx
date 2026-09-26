@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Server, Settings2, SquareTerminal } from "lucide-react";
+import { Plus, Server, Settings2, SquareTerminal } from "../../shared/ui/icons";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";

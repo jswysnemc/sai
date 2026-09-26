@@ -1,4 +1,4 @@
-import { ChevronDown, Sparkles } from "lucide-react";
+import { ChevronDown, Sparkles } from "../../../shared/ui/icons";
 import { useEffect, useRef, useState } from "react";
 import type { GitOperationOptions } from "../../../api/git-contracts";
 import { Button } from "../../../shared/ui/button/button";
@@ -161,6 +161,7 @@ export function CommitControl(props: CommitControlProps) {
       {(props.showActionButton || (props.allowSuggestMessage && props.onSuggestMessage)) && <div className="git-commit-actions">
         {props.allowSuggestMessage && props.onSuggestMessage && (
           <Button
+            variant="ghost"
             className="git-commit-suggest"
             onClick={props.onSuggestMessage}
             disabled={props.busy || props.suggestingMessage || hasConflicts}

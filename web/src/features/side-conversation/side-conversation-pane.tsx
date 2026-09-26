@@ -1,4 +1,4 @@
-import { ArrowRight, MessageSquareText, Paperclip, Square } from "lucide-react";
+import { ArrowRight, MessageSquareText, Paperclip, Square } from "../../shared/ui/icons";
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { api } from "../../api/client";

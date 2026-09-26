@@ -7,7 +7,7 @@ import {
   GitCompare,
   History,
   RefreshCw,
-} from "lucide-react";
+} from "../../../shared/ui/icons";
 import type { ComponentType } from "react";
 import type { GitBranch, GitRepositoryState } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";

@@ -1,4 +1,4 @@
-import { KeyRound, Loader2 } from "lucide-react";
+import { KeyRound, Loader2 } from "../../shared/ui/icons";
 import { useState, type FormEvent } from "react";
 import { loginWithPassword } from "../../api/client";
 import { SaiLogo } from "../../shared/ui/sai-logo";

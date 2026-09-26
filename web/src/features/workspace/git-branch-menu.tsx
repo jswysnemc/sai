@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Check, ChevronDown, GitBranch, GitMerge, GitPullRequest, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, GitBranch, GitMerge, GitPullRequest, Pencil, Plus, Trash2 } from "../../shared/ui/icons";
 import { useEffect, useRef, useState } from "react";
 import type { GitOperationAction, GitOperationOptions } from "../../api/git-contracts";
 import type { GitBranch as GitBranchInfo, GitOperationResponse, GitRepositoryState } from "../../api/contracts";

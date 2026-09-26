@@ -1,4 +1,4 @@
-import { FileCheck2 } from "lucide-react";
+import { FileCheck2 } from "../../../shared/ui/icons";
 import { DiffView } from "./diff-view";
 import { InlineDiffPreview } from "./layout/inline-diff-preview";
 import { parseJsonRecord, prettyJson, stringField } from "./tool-data";

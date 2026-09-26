@@ -1,4 +1,4 @@
-import { CheckSquare2, Minus, Plus, RotateCcw, Square, SquareCheckBig, SquareX } from "lucide-react";
+import { CheckSquare2, Minus, Plus, RotateCcw, Square, SquareCheckBig, SquareX } from "../../../shared/ui/icons";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";

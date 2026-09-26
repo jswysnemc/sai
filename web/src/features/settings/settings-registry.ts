@@ -15,7 +15,7 @@ import {
   Sparkles,
   Wrench,
   Webhook
-} from "lucide-react";
+} from "../../shared/ui/icons";
 import type {
   SettingsAppConfigUse,
   SettingsGroupId,

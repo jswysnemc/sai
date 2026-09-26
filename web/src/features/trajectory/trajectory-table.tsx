@@ -1,5 +1,5 @@
 import { Fragment, useMemo } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight } from "../../shared/ui/icons";
 import { useI18n } from "../i18n/use-i18n";
 import { formatDuration } from "./trajectory-format";
 import type { TrajectoryTurnHeader } from "./trajectory-build";

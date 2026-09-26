@@ -1,4 +1,4 @@
-import { Database } from "lucide-react";
+import { Database } from "../../../shared/ui/icons";
 import type { TurnUsage } from "../../../api/contracts";
 import { useI18n } from "../../i18n/use-i18n";
 import { formatTurnElapsed } from "../live-run-indicator";

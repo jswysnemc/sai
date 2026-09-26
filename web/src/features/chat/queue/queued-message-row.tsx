@@ -1,4 +1,4 @@
-import { ArrowUpToLine, Check, GripVertical, Hourglass, Loader2, Pencil, Trash2, X } from "lucide-react";
+import { ArrowUpToLine, Check, GripVertical, Hourglass, Loader2, Pencil, Trash2, X } from "../../../shared/ui/icons";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { TextArea } from "../../../shared/ui/form/text-area";

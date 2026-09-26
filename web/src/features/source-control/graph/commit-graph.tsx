@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus } from "../../../shared/ui/icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GitCommitSummary } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";

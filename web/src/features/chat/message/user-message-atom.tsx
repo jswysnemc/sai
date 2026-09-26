@@ -1,4 +1,4 @@
-import { BookOpen, FileText, SquareTerminal, Target, type LucideIcon } from "lucide-react";
+import { BookOpen, FileText, SquareTerminal, Target, type LucideIcon } from "../../../shared/ui/icons";
 import type { ComposerAtomSegment } from "../composer/composer-atom-token";
 import { fileMentionLabel } from "../composer/file-mention-label";
 import { Button } from "../../../shared/ui/button/button";

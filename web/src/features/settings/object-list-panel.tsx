@@ -1,4 +1,4 @@
-import { Plus, Search } from "lucide-react";
+import { Plus, Search } from "../../shared/ui/icons";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useI18n } from "../i18n/use-i18n";

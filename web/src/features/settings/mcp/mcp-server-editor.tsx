@@ -1,5 +1,5 @@
 import type { UseMutationResult } from "@tanstack/react-query";
-import { Cable, Plus } from "lucide-react";
+import { Cable, Plus } from "../../../shared/ui/icons";
 import type { McpServerConfig } from "../../../api/contracts";
 import type { McpToolInfo } from "../../../api/mcp-tool-contracts";
 import { toDisplayError } from "../../../api/api-error";

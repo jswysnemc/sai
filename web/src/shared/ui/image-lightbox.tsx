@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { X } from "./icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./image-lightbox.css";
 import { useI18n } from "../../features/i18n/use-i18n";

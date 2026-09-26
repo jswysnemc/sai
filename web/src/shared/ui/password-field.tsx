@@ -1,4 +1,4 @@
-import { Check, Copy, Eye, EyeOff, Loader2, X } from "lucide-react";
+import { Check, Copy, Eye, EyeOff, Loader2, X } from "./icons";
 import { useCallback, useEffect, useState } from "react";
 import "./password-field.css";
 import { useI18n } from "../../features/i18n/use-i18n";

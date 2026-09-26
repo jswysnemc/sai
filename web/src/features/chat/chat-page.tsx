@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown } from "lucide-react";
+import { ArrowDown } from "../../shared/ui/icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";

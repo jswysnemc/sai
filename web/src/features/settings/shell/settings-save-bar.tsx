@@ -1,4 +1,4 @@
-import { Save } from "lucide-react";
+import { Save } from "../../../shared/ui/icons";
 import { Button } from "../../../shared/ui/button/button";
 import { SaveStatusBadge } from "../save-status-badge";
 import { showsAppConfigSave } from "../settings-registry";

@@ -1,4 +1,4 @@
-import { Archive, Loader2 } from "lucide-react";
+import { Archive, Loader2 } from "../../../shared/ui/icons";
 import { useRef } from "react";
 import type { LiveMessagePart } from "../run-event-reducer";
 import { MarkdownRenderer } from "../markdown-renderer";

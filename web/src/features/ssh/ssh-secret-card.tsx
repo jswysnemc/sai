@@ -1,4 +1,4 @@
-import { KeyRound, ShieldAlert } from "lucide-react";
+import { KeyRound, ShieldAlert } from "../../shared/ui/icons";
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";

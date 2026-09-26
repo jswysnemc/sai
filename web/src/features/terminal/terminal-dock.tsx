@@ -1,4 +1,4 @@
-import { TerminalSquare } from "lucide-react";
+import { TerminalSquare } from "../../shared/ui/icons";
 import { TerminalPane } from "./terminal-pane";
 import { useI18n } from "../i18n/use-i18n";
 

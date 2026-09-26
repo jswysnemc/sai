@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "../../../shared/ui/icons";
 import { Children, useEffect, useRef, type ReactNode } from "react";
 import { useI18n } from "../../i18n/use-i18n";
 import { Button } from "../../../shared/ui/button/button";

@@ -1,4 +1,4 @@
-import { FolderGit2, PanelLeft } from "lucide-react";
+import { FolderGit2, PanelLeft } from "../../shared/ui/icons";
 import { WORKBENCH_COMMAND_EVENT } from "../workspace/workbench-shortcuts";
 import type { ReactNode } from "react";
 import type { Workspace } from "../../api/contracts";

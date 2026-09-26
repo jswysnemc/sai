@@ -1,4 +1,4 @@
-import { Check, Search } from "lucide-react";
+import { Check, Search } from "../../shared/ui/icons";
 import { useDeferredValue, useEffect, useState } from "react";
 import { Modal } from "../../shared/ui/dialog/modal";
 import { ModelIcon } from "../../shared/ui/model-icon";

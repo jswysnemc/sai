@@ -1,4 +1,4 @@
-import { Bot } from "lucide-react";
+import { Bot } from "../../../shared/ui/icons";
 import { useEffect, useMemo, useState } from "react";
 import type { AgentProfileConfig, AppConfig } from "../../../api/contracts";
 import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";

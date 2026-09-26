@@ -1,4 +1,4 @@
-import { Download, Loader2 } from "lucide-react";
+import { Download, Loader2 } from "../../../shared/ui/icons";
 import { useEffect, useState } from "react";
 import { api } from "../../../api/client";
 import type { SshImportCandidate } from "../../../api/contracts";

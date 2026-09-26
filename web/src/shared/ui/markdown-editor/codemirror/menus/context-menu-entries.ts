@@ -23,7 +23,7 @@ import {
   Table,
   Trash2,
   type LucideIcon,
-} from "lucide-react";
+} from "../../../icons";
 import { modKeyLabel } from "../../../../mod-key";
 import { codeLanguageAt, fencedCodeAt, insertCodeBlock, insertMathBlock, insertRule, setCodeLanguage, toggleList, toggleQuote } from "../commands/block-commands";
 import type { Translate } from "../editor-format-actions";

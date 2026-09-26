@@ -1,4 +1,4 @@
-import { CircleAlert, LoaderCircle } from "lucide-react";
+import { CircleAlert, LoaderCircle } from "../../../shared/ui/icons";
 import { ImageGenerationToolView } from "../tool-renderers/image-generation-tool-view";
 import { useI18n } from "../../i18n/use-i18n";
 import "./image-generation-panel.css";

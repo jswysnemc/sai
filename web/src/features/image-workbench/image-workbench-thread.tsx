@@ -1,4 +1,4 @@
-import { CircleAlert } from "lucide-react";
+import { CircleAlert } from "../../shared/ui/icons";
 import { ImageGenerationToolView } from "../chat/tool-renderers/image-generation-tool-view";
 import { ImageWorkbenchWaiting } from "./image-workbench-waiting";
 import type { ImageWorkbenchTurn } from "./image-workbench-store";

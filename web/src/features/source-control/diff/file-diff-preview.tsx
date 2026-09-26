@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "../../../shared/ui/icons";
 import { useEffect, useMemo } from "react";
 import { api } from "../../../api/client";
 import { Button } from "../../../shared/ui/button/button";

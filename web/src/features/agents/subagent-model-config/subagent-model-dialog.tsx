@@ -1,4 +1,4 @@
-import { Box, Gauge, Layers2 } from "lucide-react";
+import { Box, Gauge, Layers2 } from "../../../shared/ui/icons";
 import { useEffect, useState } from "react";
 import { AGENT_THINKING_OPTIONS, buildAgentModelChoices } from "../agent-runtime-options";
 import { Button } from "../../../shared/ui/button/button";

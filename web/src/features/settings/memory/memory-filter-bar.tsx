@@ -1,4 +1,4 @@
-import { Search, X } from "lucide-react";
+import { Search, X } from "../../../shared/ui/icons";
 import type { MemoryScope, MemorySummary, MemoryType } from "../../../api/contracts";
 import { useI18n } from "../../i18n/use-i18n";
 import {

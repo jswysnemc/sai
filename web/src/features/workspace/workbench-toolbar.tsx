@@ -1,4 +1,4 @@
-import { Activity, ArrowLeftRight, Bot, FileDiff, FolderTree, Maximize2, MoreHorizontal, PanelRight, SquareTerminal } from "lucide-react";
+import { Activity, ArrowLeftRight, Bot, Maximize2, MoreHorizontal, PanelRight, SquareTerminal } from "../../shared/ui/icons";
 import type { ReactNode } from "react";
 import { Button } from "../../shared/ui/button/button";
 import { ActionMenu } from "../../shared/ui/menu/action-menu";
@@ -8,6 +8,8 @@ import { OPEN_WORKSPACE_PANEL_EVENT } from "./workspace-panel-options";
 import type { PaneTab } from "./workspace-tab";
 import { requestWorkbenchCommand } from "./workbench-shortcuts";
 import "./workbench-toolbar.css";
+
+import { IconFiles, IconReview } from "./workbench-icons";
 
 type WorkbenchToolbarProps = {
   workspaceOpen: boolean;
@@ -32,10 +34,10 @@ export function WorkbenchToolbar({ workspaceOpen, terminalOpen, activePanel, ove
   return (
     <div className="workbench-toolbar" role="toolbar" aria-label={t("Workbench actions", "工作台操作")}>
       <Button variant="ghost" size="small" className="workbench-tool" aria-label={t("Browse files", "浏览文件")} title={t(`Browse files (${modifier}+Shift+E)`, `浏览文件 (${modifier}+Shift+E)`)} aria-pressed={workspaceOpen && activePanel === "files"} onClick={() => openPanel("files")}>
-        <FolderTree size={15} /><span className="workbench-tool-label hidden xl:inline">{t("Files", "文件")}</span>
+        <IconFiles size={15} /><span className="workbench-tool-label hidden xl:inline">{t("Files", "文件")}</span>
       </Button>
-      <Button variant="ghost" size="small" className="workbench-tool workbench-review" aria-label={t("Review changes", "审阅变更")} title={t(`Review changes (${modifier}+Shift+G)`, `审阅变更 (${modifier}+Shift+G)`)} aria-pressed={workspaceOpen && activePanel === "diff"} onClick={() => openPanel("diff")}>
-        <FileDiff size={15} /><span className="workbench-tool-label">{t("Review", "审阅")}</span>
+      <Button variant="ghost" size="small" className="workbench-tool" aria-label={t("Review changes", "审阅变更")} title={t(`Review changes (${modifier}+Shift+G)`, `审阅变更 (${modifier}+Shift+G)`)} aria-pressed={workspaceOpen && activePanel === "diff"} onClick={() => openPanel("diff")}>
+        <IconReview size={15} /><span className="workbench-tool-label">{t("Review", "审阅")}</span>
       </Button>
       <Button variant="ghost" size="icon" className="workbench-terminal-tool hidden md:inline-flex" aria-label={t("Toggle bottom terminal", "切换底部终端")} title={t(`Terminal (${modifier}+J)`, `终端 (${modifier}+J)`)} aria-pressed={terminalOpen} onClick={() => requestWorkbenchCommand("toggle-terminal")}><SquareTerminal size={15} /></Button>
       {overview}

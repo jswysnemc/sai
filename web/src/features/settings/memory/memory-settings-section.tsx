@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Brain, Plus } from "lucide-react";
+import { Brain, Plus } from "../../../shared/ui/icons";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../../api/client";
 import type { AppConfig, MemoryWriteRequest, MemoryWriteResult } from "../../../api/contracts";

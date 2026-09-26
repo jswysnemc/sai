@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { ArrowDown, ArrowUp, Bot, CalendarClock, FileCode2, FolderOpen, GitCompareArrows, MessageSquare, PanelLeft, Search, Settings, SquarePen, SquareTerminal, Wrench } from "lucide-react";
+import { ArrowDown, ArrowUp, Bot, CalendarClock, FileCode2, FolderOpen, GitCompareArrows, MessageSquare, PanelLeft, Search, Settings, SquarePen, SquareTerminal, Wrench } from "../../shared/ui/icons";
 import { api } from "../../api/client";
 import type { WorkspaceSessions } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";

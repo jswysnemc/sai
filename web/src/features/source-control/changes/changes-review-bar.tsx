@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Ellipsis, GitBranch, Search } from "lucide-react";
+import { Check, ChevronDown, Ellipsis, GitBranch, Search } from "../../../shared/ui/icons";
 import { useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { TextInput } from "../../../shared/ui/form/text-input";

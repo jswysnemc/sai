@@ -1,4 +1,4 @@
-import { SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal } from "../../../shared/ui/icons";
 import { useState } from "react";
 import type { EngineStatusResponse } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";

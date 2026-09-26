@@ -1,4 +1,4 @@
-import { Hand, NotepadText, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Hand, NotepadText, ShieldAlert, ShieldCheck } from "../../shared/ui/icons";
 import type { RunMode } from "../../api/contracts";
 import type { SelectOption } from "../../shared/ui/select/select";
 import type { Translate } from "../i18n/i18n-context";

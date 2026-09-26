@@ -2,7 +2,7 @@ import { syntaxTree } from "@codemirror/language";
 import type { EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
-import { Bold, Code, Heading1, Heading2, Heading3, Italic, Link, Pilcrow, Quote, Strikethrough, type LucideIcon } from "lucide-react";
+import { Bold, Code, Heading1, Heading2, Heading3, Italic, Link, Pilcrow, Quote, Strikethrough, type LucideIcon } from "../../icons";
 import { modKeyLabel } from "../../../mod-key";
 import { setHeading, toggleQuote } from "./commands/block-commands";
 import { BOLD, INLINE_CODE, insertLink, ITALIC, STRIKE, toggleInline, type InlineFormat } from "./commands/inline-commands";

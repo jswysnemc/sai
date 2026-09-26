@@ -1,4 +1,4 @@
-import { ShieldAlert, ShieldQuestion } from "lucide-react";
+import { ShieldAlert, ShieldQuestion } from "../../../shared/ui/icons";
 import type { SshHostKeyPrompt } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { Modal } from "../../../shared/ui/dialog/modal";

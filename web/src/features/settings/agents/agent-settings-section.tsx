@@ -1,4 +1,4 @@
-import { RefreshCw } from "lucide-react";
+import { RefreshCw } from "../../../shared/ui/icons";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { AppConfig } from "../../../api/contracts";

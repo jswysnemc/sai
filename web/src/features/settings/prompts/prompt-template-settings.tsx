@@ -1,4 +1,4 @@
-import { RotateCcw } from "lucide-react";
+import { RotateCcw } from "../../../shared/ui/icons";
 import type { PromptTemplateConfig, PromptTemplatesConfig } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";

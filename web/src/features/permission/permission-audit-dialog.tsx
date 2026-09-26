@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "../../shared/ui/icons";
 import { useState } from "react";
 import { api } from "../../api/client";
 import { Button } from "../../shared/ui/button/button";

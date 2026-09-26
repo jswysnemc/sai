@@ -1,4 +1,4 @@
-import { Square } from "lucide-react";
+import { Square } from "../../shared/ui/icons";
 import type { BackgroundTask } from "../../api/contracts";
 import { formatBackgroundTaskDuration, isBackgroundTaskRunning } from "./background-task-utils";
 import { useI18n } from "../i18n/use-i18n";

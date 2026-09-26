@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "../../shared/ui/icons";
 import { useEffect, useState } from "react";
 import type { ModelMetadata, ProviderConfig } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";

@@ -1,4 +1,4 @@
-import { CheckCheck, Search, X } from "lucide-react";
+import { CheckCheck, Search, X } from "../../../shared/ui/icons";
 import { useMemo, useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { Select } from "../../../shared/ui/select/select";

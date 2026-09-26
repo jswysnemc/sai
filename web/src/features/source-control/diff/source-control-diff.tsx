@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GitCompare, Loader2 } from "lucide-react";
+import { GitCompare, Loader2 } from "../../../shared/ui/icons";
 import type { GitDiffResponse, GitRepositoryState, GitStatusEntry } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";

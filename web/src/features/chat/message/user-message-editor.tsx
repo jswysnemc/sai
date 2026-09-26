@@ -1,4 +1,4 @@
-import { ArrowRight, Paperclip, X } from "lucide-react";
+import { ArrowRight, Paperclip, X } from "../../../shared/ui/icons";
 import { useRef } from "react";
 import type { ChangeEvent } from "react";
 import { useI18n } from "../../i18n/use-i18n";

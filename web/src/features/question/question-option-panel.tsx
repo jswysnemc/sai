@@ -1,4 +1,4 @@
-import { Check, Circle, CircleDot } from "lucide-react";
+import { Check, Circle, CircleDot } from "../../shared/ui/icons";
 import type { KeyboardEvent, ReactNode } from "react";
 import type { QuestionPrompt } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";

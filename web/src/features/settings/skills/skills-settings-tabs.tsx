@@ -1,4 +1,4 @@
-import { BookOpen, SlidersHorizontal } from "lucide-react";
+import { BookOpen, SlidersHorizontal } from "../../../shared/ui/icons";
 import { useRef, type KeyboardEvent } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";

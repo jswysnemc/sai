@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Copy, FileDiff, FileText, FolderSearch, PanelRightOpen, RotateCcw } from "lucide-react";
+import { ChevronDown, Copy, FileDiff, FileText, FolderSearch, PanelRightOpen, RotateCcw } from "../../../shared/ui/icons";
 import { api } from "../../../api/client";
 import { toDisplayError } from "../../../api/api-error";
 import { DiffView } from "../tool-renderers/diff-view";

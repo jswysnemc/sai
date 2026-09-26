@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle } from "../../shared/ui/icons";
 import { Modal } from "../../shared/ui/dialog/modal";
 import { api } from "../../api/client";
 import { localizeApiMessage, toDisplayError } from "../../api/api-error";

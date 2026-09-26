@@ -1,5 +1,5 @@
 import Editor, { loader } from "@monaco-editor/react";
-import { Braces, WandSparkles } from "lucide-react";
+import { Braces, WandSparkles } from "../icons";
 import { useEffect, useState } from "react";
 import { isDarkTheme, useTheme } from "../../../features/theme/theme";
 import { configureMonacoEnvironment } from "../../../features/workspace/monaco-environment";

@@ -1,4 +1,4 @@
-import { Check, Code2, LayoutTemplate, RotateCcw, Table2 } from "lucide-react";
+import { Check, Code2, LayoutTemplate, RotateCcw, Table2 } from "../../shared/ui/icons";
 import type {
   MarkdownCodeBlockStylePreferences,
   MarkdownStylePreferences,

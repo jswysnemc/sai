@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp } from "../../../shared/ui/icons";
 import { SyntaxHighlighter } from "../syntax-highlighter";
 import type { DiffFile, DiffLine } from "./diff/diff-model";
 import { CONTEXT_MARGIN } from "./diff/diff-blocks";

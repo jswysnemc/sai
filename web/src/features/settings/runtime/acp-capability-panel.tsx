@@ -4,7 +4,7 @@ import {
   Loader2,
   TerminalSquare,
   X
-} from "lucide-react";
+} from "../../../shared/ui/icons";
 import type { ReactNode } from "react";
 import type { AgentEngineKind, EngineStatusResponse } from "../../../api/contracts";
 import { AgentEngineBrandIcon } from "../../../shared/ui/agent-engine-brand-icon/agent-engine-brand-icon";

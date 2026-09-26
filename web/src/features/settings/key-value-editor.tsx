@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "../../shared/ui/icons";
 import { useI18n } from "../i18n/use-i18n";
 import "./key-value-editor.css";
 

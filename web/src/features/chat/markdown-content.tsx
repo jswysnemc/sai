@@ -56,6 +56,8 @@ function looksLikeProjectFilePath(value: string): boolean {
   const windowsPath = /^(?:[A-Za-z]:\/|\/\/)[^\s]+$/u.test(path);
   if (!relativePath && !windowsPath) return false;
   const basename = path.split("/").at(-1) ?? "";
+  // 1. 29.7k、1.4k 这类用量缩写带点号，不能当成文件名
+  if (/^\d+(?:\.\d+)?[A-Za-z]{0,3}$/u.test(basename)) return false;
   return /\.[A-Za-z0-9]{1,12}$/u.test(basename) && !/^\d+(?:\.\d+)+$/u.test(basename);
 }
 
@@ -66,7 +68,7 @@ const markdownComponents: Components = {
    * @param props Markdown 解析得到的类别、文本和属性
    * @returns 对应内容组件
    */
-  code({ className, children, ...props }) {
+  code({ className, children, node: _node, ...props }) {
     const language = /language-(\w+)/.exec(className ?? "")?.[1]?.toLowerCase();
     const text = String(children).replace(/\n$/, "");
     const inlineAtoms = useContext(inlineAtomContext);
@@ -90,7 +92,7 @@ const markdownComponents: Components = {
     return <code className="inline-code" {...props}>{children}</code>;
   },
   /** 渲染新窗口链接；参数为链接属性和子节点，返回链接元素。 */
-  a({ children, ...props }) {
+  a({ children, node: _node, ...props }) {
     return <a {...props} target="_blank" rel="noreferrer">{children}</a>;
   },
   /** 包装可滚动表格；参数为表格子节点，返回表格容器。 */
@@ -143,6 +145,7 @@ export const MarkdownContent = memo(function MarkdownContent({
             data-code-tab-size={style.codeBlock.tabSize}
             data-code-max-height={style.codeBlock.maxHeight}
             data-streaming={streaming ? "true" : "false"}
+            spellCheck={false}
           >
             <ReactMarkdown
               remarkPlugins={remarkPlugins}

@@ -1,5 +1,5 @@
 import type { EditorView } from "@codemirror/view";
-import { Check, ChevronRight } from "lucide-react";
+import { Check, ChevronRight } from "../../../icons";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import type { FormatAction } from "../editor-format-actions";

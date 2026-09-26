@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check } from "../../shared/ui/icons";
 import { Button } from "../../shared/ui/button/button";
 import { EditorHeader } from "./editor-layout";
 import { SettingsGroup } from "./editor-layout";

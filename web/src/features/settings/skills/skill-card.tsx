@@ -1,4 +1,4 @@
-import { BookOpen, ChevronRight, FolderCode, Globe2 } from "lucide-react";
+import { BookOpen, ChevronRight, FolderCode, Globe2 } from "../../../shared/ui/icons";
 import type { ManagedSkill } from "../../../api/skill-contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";

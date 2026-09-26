@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Check, Columns3, RotateCcw } from "lucide-react";
+import { Check, Columns3, RotateCcw } from "../../../shared/ui/icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import { Button } from "../../../shared/ui/button/button";

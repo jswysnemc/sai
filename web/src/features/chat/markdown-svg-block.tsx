@@ -1,4 +1,4 @@
-import { Check, Code2, Copy, Eye, Maximize2 } from "lucide-react";
+import { Check, Code2, Copy, Eye, Maximize2 } from "../../shared/ui/icons";
 import { memo, useEffect, useState } from "react";
 import { ImageLightbox } from "../../shared/ui/image-lightbox";
 import { SegmentedControl, type SegmentedControlOption } from "../../shared/ui/segmented-control";

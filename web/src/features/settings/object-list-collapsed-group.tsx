@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight } from "../../shared/ui/icons";
 import { useState } from "react";
 import { ObjectListRow, type ObjectListItem } from "./object-list-row";
 

@@ -1,4 +1,4 @@
-import { ChevronRight, Layers } from "lucide-react";
+import { ChevronRight, Layers } from "../../../shared/ui/icons";
 import { useEffect, useState } from "react";
 import { ReasoningBlock } from "../reasoning-block";
 import { PermissionRequestCard } from "../../permission/permission-request-card";

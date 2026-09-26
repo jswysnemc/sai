@@ -1,4 +1,4 @@
-import { MessagesSquare, Route } from "lucide-react";
+import { MessagesSquare, Route } from "../../shared/ui/icons";
 import { SegmentedControl } from "../../shared/ui/segmented-control";
 import { useI18n } from "../i18n/use-i18n";
 

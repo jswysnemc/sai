@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Ellipsis, FoldVertical, UnfoldVertical } from "lucide-react";
+import { ChevronDown, ChevronUp, Ellipsis, FoldVertical, UnfoldVertical } from "../../../../shared/ui/icons";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { Button } from "../../../../shared/ui/button/button";
 import { useI18n } from "../../../i18n/use-i18n";
