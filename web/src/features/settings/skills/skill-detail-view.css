@@ -87,35 +87,68 @@
   min-width: 5.25rem;
 }
 
-.skill-editor .settings-group {
-  padding-bottom: var(--space-xl);
+.skill-editor {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - 8rem);
 }
 
-.skill-directory-field {
-  max-width: 28rem;
-  margin-bottom: var(--space-lg);
-}
-
-.skill-meta-grid {
+.skill-meta-bar {
   display: grid;
-  grid-template-columns: minmax(12rem, 0.65fr) minmax(18rem, 1.35fr);
-  align-items: start;
-  gap: var(--space-xl);
+  grid-template-columns: minmax(10rem, 16rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  max-height: 4.25rem;
+  margin: 0 0 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--paper);
+}
+
+.skill-meta-bar:has(.skill-directory-field) {
+  grid-template-columns: minmax(8rem, 12rem) minmax(8rem, 14rem) minmax(0, 1fr);
+}
+
+.skill-meta-bar label {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.skill-meta-bar label > span {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.skill-meta-bar input {
+  width: 100%;
+  height: 2rem;
+  min-height: 2rem;
+  min-width: 0;
+  padding: 0 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 0.8125rem/2rem var(--font-ui);
 }
 
 .skill-name-field input {
-  font: 500 var(--text-base) var(--font-code);
-}
-
-.skill-description-field textarea {
-  min-height: 4.5rem;
-  resize: vertical;
-  font-size: var(--text-sm);
-  line-height: 1.45;
+  font-family: var(--font-code);
 }
 
 .skill-document-workspace {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   min-width: 0;
+  min-height: 35rem;
 }
 
 .skill-doc-toolbar {
@@ -143,8 +176,9 @@
 }
 
 .skill-content-editor {
-  height: clamp(22rem, 56dvh, 42rem);
-  min-height: 22rem;
+  flex: 1;
+  height: calc(100vh - 16rem);
+  min-height: 35rem;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius-3);
@@ -156,9 +190,10 @@
 }
 
 @media (max-width: 64rem) {
-  .skill-meta-grid {
-    grid-template-columns: 1fr;
-    gap: var(--space-lg);
+  .skill-meta-bar,
+  .skill-meta-bar:has(.skill-directory-field) {
+    grid-template-columns: minmax(0, 1fr);
+    max-height: none;
   }
 }
 

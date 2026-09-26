@@ -99,8 +99,8 @@
 }
 
 .session-data-row-main {
-  min-height: 3.75rem;
-  padding: var(--space-sm) var(--space-md);
+  min-height: 2.25rem;
+  padding: 0.25rem 0.5rem;
 }
 
 .session-data-select {
@@ -191,6 +191,17 @@
 .session-data-actions {
   display: flex;
   gap: var(--space-xs);
+  opacity: 0;
+}
+
+.session-data-row:hover .session-data-actions,
+.session-data-row:focus-within .session-data-actions,
+.session-data-row.active .session-data-actions {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .session-data-actions { opacity: 0.9; }
 }
 
 .session-data-actions .ui-button,

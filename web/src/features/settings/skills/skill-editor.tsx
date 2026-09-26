@@ -6,7 +6,7 @@ import { MarkdownEditor } from "../../../shared/ui/markdown-editor/markdown-edit
 import { MarkdownModeToggle } from "../../../shared/ui/markdown-editor/markdown-mode-toggle";
 import { useMarkdownMode } from "../../../shared/ui/markdown-editor/use-markdown-mode";
 import { isDarkTheme, useTheme } from "../../theme/theme";
-import { EditorHeader, SettingsGroup } from "../editor-layout";
+import { EditorHeader } from "../editor-layout";
 import { useI18n } from "../../i18n/use-i18n";
 import { composeSkillDocument, parseSkillDocument } from "./skill-document";
 import { skillScopeLabel } from "./skill-list-filter";
@@ -87,47 +87,39 @@ export function SkillEditor(props: SkillEditorProps) {
         </div>
       ) : (
         <>
-          <SettingsGroup
-            title={t("Metadata", "元数据")}
-            description={t("Name and description are stored in the YAML frontmatter.", "名称与说明保存在 YAML frontmatter 中。")}
-          >
+          <div className="skill-meta-bar">
             {creating && (
-              <label className="settings-field skill-directory-field">
+              <label className="skill-directory-field">
                 <span>{t("Directory name", "目录名称")}</span>
                 <input
                   value={directoryName}
                   onChange={(event) => props.onDirectoryNameChange(event.target.value)}
                   placeholder="code-review"
                   spellCheck={false}
+                  aria-label={t("Directory name", "目录名称")}
                 />
-                <small>{t("Letters, numbers, hyphens, and underscores only", "仅支持字母、数字、连字符和下划线")}</small>
               </label>
             )}
-
-            <div className="skill-meta-grid">
-              <label className="settings-field skill-name-field">
-                <span>{t("Name", "名称")}</span>
-                <input
-                  value={parsed.name}
-                  onChange={(event) => updateDocument({ name: event.target.value })}
-                  placeholder="code-review"
-                  spellCheck={false}
-                  aria-label={t("Skill name", "Skill 名称")}
-                />
-              </label>
-              <label className="settings-field skill-description-field">
-                <span>{t("Description", "描述")}</span>
-                <textarea
-                  value={parsed.description}
-                  onChange={(event) => updateDocument({ description: event.target.value })}
-                  placeholder={t("When should this Skill be used?", "何时应使用该 Skill？")}
-                  rows={3}
-                  aria-label={t("Skill description", "Skill 描述")}
-                />
-              </label>
-            </div>
-
-          </SettingsGroup>
+            <label className="skill-name-field">
+              <span>{t("Name", "名称")}</span>
+              <input
+                value={parsed.name}
+                onChange={(event) => updateDocument({ name: event.target.value })}
+                placeholder="code-review"
+                spellCheck={false}
+                aria-label={t("Skill name", "Skill 名称")}
+              />
+            </label>
+            <label className="skill-description-field">
+              <span>{t("Description", "描述")}</span>
+              <input
+                value={parsed.description}
+                onChange={(event) => updateDocument({ description: event.target.value })}
+                placeholder={t("When should this Skill be used?", "何时应使用该 Skill？")}
+                aria-label={t("Skill description", "Skill 描述")}
+              />
+            </label>
+          </div>
           <section className="skill-document-workspace">
             <div className="skill-doc-toolbar">
               <div>

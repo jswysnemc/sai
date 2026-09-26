@@ -1,28 +1,59 @@
-.markdown-style-grid {
+/* Markdown 外观配置不使用 .settings-field，避免被设置卡片的双列栅格拉开或叠字 */
+
+.markdown-config-root {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
-  gap: var(--space-lg);
+  gap: 0.75rem;
+  min-width: 0;
+  margin-top: 1.25rem;
+}
+
+.markdown-config-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.markdown-config-head h3 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.markdown-config-head p {
+  margin: 0.2rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.markdown-config-head .ui-button {
+  flex: none;
+  height: 2rem;
+  min-height: 2rem;
+  padding: 0 0.7rem;
+  font-size: 0.8125rem;
 }
 
 .markdown-style-panel {
   min-width: 0;
   margin: 0;
-  padding: var(--space-lg);
+  padding: 0.65rem 0.75rem 0.35rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-3);
+  background: var(--paper);
 }
 
 .markdown-style-panel legend {
-  padding: 0 var(--space-xs);
+  padding: 0 0.25rem;
 }
 
 .markdown-style-panel legend > span {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-xs);
+  gap: 0.35rem;
   color: var(--ink);
-  font-size: var(--text-sm);
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 
@@ -30,37 +61,23 @@
   color: var(--ink-soft);
 }
 
-.markdown-style-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-sm);
-}
-
-.markdown-style-fields .settings-field,
-.markdown-style-fields .settings-toggle-field {
-  min-width: 0;
-}
-
-.markdown-preset-panel {
-  margin-bottom: var(--space-lg);
-}
-
 .markdown-preset-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-sm);
+  gap: 0.5rem;
 }
 
 .markdown-preset.ui-button {
+  position: relative;
   display: grid;
-  gap: var(--space-3xs);
-  padding: var(--space-sm) var(--space-md);
+  gap: 0.15rem;
+  min-height: 0;
+  padding: 0.5rem 1.4rem 0.5rem 0.6rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-2);
   background: transparent;
   cursor: pointer;
   text-align: left;
-  transition: border-color var(--transition-fast), background var(--transition-fast);
 }
 
 .markdown-preset.ui-button:hover {
@@ -69,36 +86,123 @@
 }
 
 .markdown-preset.ui-button.active {
-  border-color: var(--ink-soft);
-  background: var(--surface-selected);
+  border-color: var(--signal);
+  background: color-mix(in srgb, var(--signal) 8%, var(--paper));
+}
+
+.markdown-preset-check {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  color: transparent;
+}
+
+.markdown-preset.ui-button.active .markdown-preset-check {
+  color: var(--signal);
 }
 
 .markdown-preset strong {
   color: var(--ink);
-  font-size: var(--text-sm);
+  font-size: 0.8125rem;
+  font-weight: 600;
 }
 
 .markdown-preset small {
   color: var(--ink-soft);
-  font-size: var(--text-xs);
-  line-height: 1.4;
+  font-size: 0.6875rem;
+  line-height: 1.35;
 }
 
-@media (max-width: 72rem) {
+.markdown-config-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.markdown-config-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.markdown-config-row,
+.markdown-config-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+  min-height: 2rem;
+  margin: 0;
+  padding: 0.35rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.markdown-config-stack > :last-child {
+  border-bottom: 0;
+}
+
+.markdown-config-row > span,
+.markdown-config-toggle > span {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.markdown-config-row > span,
+.markdown-config-toggle strong {
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.markdown-config-toggle small {
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+  font-family: var(--font-ui);
+  line-height: 1.35;
+}
+
+.markdown-config-row .ui-select {
+  flex: 0 0 9rem;
+  width: 9rem;
+  min-width: 0;
+}
+
+.markdown-config-row .ui-select > button {
+  width: 100%;
+  height: 1.75rem;
+  min-height: 1.75rem;
+  padding: 0 0.45rem;
+  font-size: 0.75rem;
+}
+
+.markdown-config-toggle .switch-control {
+  flex: none;
+}
+
+@media (max-width: 64rem) {
   .markdown-preset-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 72rem) {
-  .markdown-style-grid,
-  .markdown-style-fields {
+@media (max-width: 48rem) {
+  .markdown-config-columns {
     grid-template-columns: minmax(0, 1fr);
   }
-}
 
-@media (max-width: 48rem) {
+  .markdown-config-head {
+    flex-direction: column;
+  }
+
   .markdown-style-panel {
-    padding: var(--space-md);
+    padding: 0.55rem 0.6rem 0.25rem;
   }
 }

@@ -203,53 +203,89 @@
   background: var(--code-surface);
 }
 
-/* 提交区纵向排布：输入框与操作行之间留出统一间距，不再相互重叠 */
+/* 提交区收成一行：说明占剩余宽度，生成和提交贴在右侧 */
 .git-commit-box {
-  display: grid;
-  gap: var(--space-sm);
-}
-
-.git-commit-box.is-collapsed { gap: 0; }
-.git-commit-reveal.ui-button {
-  justify-content: flex-start;
-  width: 100%;
-  min-height: var(--control-height);
-  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2rem;
+  padding: 0.2rem 0.35rem;
 }
 
 .git-commit-message.ui-text-area {
-  min-height: 5.75rem;
+  flex: 1;
+  min-width: 0;
+  min-height: 1.75rem;
+  max-height: 4.5rem;
+  padding: 0.2rem 0.55rem;
+  resize: none;
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  line-height: 1.4;
 }
 
-/* 操作行：生成说明靠左，提交分体靠右；两者都按内容宽度，中间不拉出空洞 */
+.git-commit-message.ui-text-area:focus {
+  min-height: 3.25rem;
+  border-radius: var(--radius-2);
+}
+
 .git-commit-actions {
   display: flex;
-  align-items: stretch;
-  gap: var(--space-sm);
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.25rem;
 }
 
-/* 主提交与菜单触发是两个独立按钮，必须留出间距；
- * 拼成零 gap 分体时，完整圆角会让两颗胶囊贴死在一起。 */
+.git-commit-suggest.ui-button {
+  width: 1.75rem;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  min-height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.git-commit-suggest.ui-button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
 .git-commit-split {
   position: relative;
-  display: grid;
+  display: inline-flex;
   flex: 0 0 auto;
-  margin-left: auto;
+  align-items: stretch;
   min-width: 0;
-  grid-template-columns: auto 2rem;
-  gap: var(--space-xs);
+  overflow: visible;
+  border-radius: 999px;
 }
 
-.git-commit-box .git-commit-primary {
+.git-commit-box .ui-button.git-commit-primary {
   min-width: 0;
-  border-radius: var(--radius-2);
+  height: 1.625rem;
+  min-height: 1.625rem;
+  padding: 0 0.7rem;
+  border: 0;
+  border-radius: 999px 0 0 999px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: var(--text-xs);
 }
 
-.git-commit-box .git-commit-menu-trigger {
-  width: 2rem;
-  min-width: 2rem;
+.git-commit-box .ui-button.git-commit-menu-trigger {
+  width: 1.5rem;
+  min-width: 1.5rem;
+  height: 1.625rem;
+  min-height: 1.625rem;
   padding: 0;
-  border-radius: var(--radius-2);
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--paper) 24%, transparent);
+  border-radius: 0 999px 999px 0;
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .git-commit-box .ui-button.primary.git-commit-primary:hover:not(:disabled),

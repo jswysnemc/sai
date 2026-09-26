@@ -12,6 +12,22 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.settings-group-card .git-settings-grid > .settings-toggle-field {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 3.25rem;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.git-settings-grid > .settings-toggle-field small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* 同一设置组内的开关、下拉和数字字段使用同一张紧凑卡片，避免网格行被某一种控件撑高。 */
 .git-settings-grid > .settings-field {
   display: grid;

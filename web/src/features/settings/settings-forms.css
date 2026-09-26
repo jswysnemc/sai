@@ -94,7 +94,8 @@
 
 .settings-group-head h3 {
   margin: 0;
-  font-size:var(--text-lg);
+  font-size: 0.875rem;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 
@@ -108,8 +109,8 @@
 .settings-group-head p {
   margin: 0;
   color: var(--ink-soft);
-  font-size:var(--text-sm);
-  line-height: 1.5;
+  font-size: 0.75rem;
+  line-height: 1.45;
 }
 
 /* ---------- 按钮 ---------- */
@@ -126,10 +127,10 @@
   align-items: center;
   justify-content: center;
   gap:var(--space-xs);
-  height: 2.125rem;
-  padding:0 var(--space-lg);
+  height: 2rem;
+  padding: 0 0.75rem;
   border-radius:var(--radius-3);
-  font-size:var(--text-sm);
+  font-size: 0.8125rem;
   font-weight: 500;
   white-space: nowrap;
   transition:
@@ -439,16 +440,19 @@
 /* 编辑区空状态：原 layout 消息条与 sections 占位块两份定义的合并版 */
 .settings-empty {
   display: grid;
-  justify-items: start;
+  justify-items: center;
   align-content: center;
-  gap:var(--space-xl);
-  min-height: 280px;
-  margin-top:var(--space-2xl);
-  padding:var(--space-md) var(--space-lg);
-  border-radius:var(--radius-3);
+  gap: 0.75rem;
+  min-height: 0;
+  margin-top: 0.75rem;
+  padding: 1.5rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: color-mix(in srgb, var(--ink) 2%, var(--paper));
   color: var(--ink-soft);
-  font-size:var(--text-base);
-  line-height: 1.55;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .settings-empty-copy { display: grid; gap:var(--space-xs); }
@@ -484,16 +488,37 @@
 .settings-group-card .settings-field,
 .settings-group-card .settings-toggle-field {
   display: grid;
-  grid-template-columns: minmax(8rem, 1fr) minmax(8rem, 14rem);
-  column-gap: 1.5rem;
+  grid-template-columns: 11.25rem minmax(8rem, 25rem);
+  justify-content: start;
+  column-gap: 0.75rem;
   align-items: center;
   margin: 0;
-  min-height: 3.25rem;
-  padding: 0.8rem 1rem;
+  min-height: 0;
+  padding: 0.3rem 0.75rem;
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
   background: transparent;
+}
+
+/* 没有单行标签的字段是一整块编辑器，占满卡片，不再挤进右侧窄列 */
+.settings-group-card .settings-field:not(:has(> span)) {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  padding: 0.5rem 0.75rem;
+}
+
+.settings-group-card .settings-field:not(:has(> span)) > :not(span):not(small) {
+  grid-column: 1;
+  grid-row: auto;
+  justify-self: stretch;
+  width: 100%;
+  max-width: none;
+}
+
+.settings-group-card .settings-field:not(:has(> span)) > small {
+  grid-column: 1;
+  grid-row: auto;
 }
 
 .settings-group-card .settings-field:last-child,
@@ -502,10 +527,13 @@
 }
 
 .settings-group-card .settings-field > span,
-.settings-group-card .settings-toggle-field > span {
+.settings-group-card .settings-toggle-field > span,
+.settings-group-card .settings-toggle-field strong {
   grid-column: 1;
   grid-row: 1;
   min-width: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
 }
 
 .settings-group-card .settings-field > small,
@@ -513,16 +541,26 @@
   grid-column: 1;
   grid-row: 2;
   font-family: var(--font-ui);
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 
 .settings-group-card .settings-field > :not(span):not(small),
 .settings-group-card .settings-toggle-field > input {
   grid-column: 2;
   grid-row: 1 / span 2;
-  justify-self: end;
+  justify-self: stretch;
   width: 100%;
-  max-width: 100%;
+  max-width: 25rem;
   min-width: 0;
+}
+
+.settings-group-card .settings-field input:not(.switch-control):not([type="checkbox"]),
+.settings-group-card .settings-field .ui-select > button,
+.settings-group-card .ui-password-field input {
+  height: 2rem;
+  min-height: 2rem;
+  font-size: 0.8125rem;
 }
 
 @container (max-width: 34rem) {
@@ -536,8 +574,8 @@
     grid-column: 1;
     grid-row: auto;
     justify-self: stretch;
-    width: auto;
-    max-width: 14rem;
+    width: 100%;
+    max-width: none;
   }
 }
 
@@ -552,9 +590,18 @@
   text-overflow: ellipsis;
 }
 
-.settings-group-card .settings-toggle-field > input {
-  width: auto;
-  max-width: none;
+.settings-group-card .settings-toggle-field > input,
+.settings-group-card .switch-control {
+  justify-self: end;
+  width: var(--switch-track-width);
+  min-width: var(--switch-track-width);
+  max-width: var(--switch-track-width);
+}
+
+.settings-group-card .settings-toggle-field small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-group-card .settings-field:has(textarea) {

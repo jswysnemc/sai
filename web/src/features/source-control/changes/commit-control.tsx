@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Sparkles } from "lucide-react";
+import { ChevronDown, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { GitOperationOptions } from "../../../api/git-contracts";
 import { Button } from "../../../shared/ui/button/button";
@@ -51,7 +51,6 @@ export function CommitControl(props: CommitControlProps) {
   const confirm = useConfirm();
   const rootRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [composerOpen, setComposerOpen] = useState(false);
   const hasMessage = Boolean(props.message.trim());
   const hasConflicts = props.conflictedCount > 0;
   const mainKind = resolveMainCommitKind(
@@ -147,23 +146,13 @@ export function CommitControl(props: CommitControlProps) {
     void commit(mainChoice);
   };
 
-  if (!composerOpen && !hasMessage) {
-    return (
-      <div className="git-commit-box is-collapsed" ref={rootRef}>
-        <Button className="git-commit-reveal" onClick={() => setComposerOpen(true)}>
-          <Check size={13} />
-          {t("Commit", "提交")}
-        </Button>
-      </div>
-    );
-  }
+  const mainLabel = commitActionLabel(mainChoice, props.postCommitCommand, t);
 
   return (
     <div className="git-commit-box" ref={rootRef}>
       <TextArea
         className="git-commit-message"
-        rows={3}
-        autoFocus={composerOpen}
+        rows={1}
         value={props.message}
         onChange={(event) => props.onMessageChange(event.target.value)}
         onKeyDown={handleKeyDown}
@@ -175,28 +164,20 @@ export function CommitControl(props: CommitControlProps) {
             className="git-commit-suggest"
             onClick={props.onSuggestMessage}
             disabled={props.busy || props.suggestingMessage || hasConflicts}
-            aria-label={t("Generate commit message", "生成提交说明")}
-            title={t("Generate commit message", "生成提交说明")}
+            aria-label={props.suggestingMessage ? t("Generating…", "生成中…") : t("Generate commit message", "生成提交说明")}
+            title={props.suggestingMessage ? t("Generating…", "生成中…") : t("Generate commit message", "生成提交说明")}
           >
-            <Sparkles size={12} />
-            {props.suggestingMessage
-              ? t("Generating…", "生成中…")
-              : t("Generate", "生成说明")}
+            <Sparkles size={13} />
           </Button>
         )}
-        {props.showActionButton && <div
-          className="git-commit-split"
-          ref={(node) => {
-          }}
-        >
+        {props.showActionButton && <div className="git-commit-split">
           <Button
             variant="primary"
             className="git-commit-primary"
             onClick={() => void commit(mainChoice)}
             disabled={!canRunChoice(mainChoice, props, hasMessage)}
           >
-            <Check size={13} />
-            {mainChoice.label}
+            {mainLabel}
           </Button>
           <Button
             variant="primary"
@@ -227,6 +208,24 @@ export function CommitControl(props: CommitControlProps) {
       {hasConflicts && <small className="git-commit-blocked">{t("Resolve all conflicts before committing.", "解决全部冲突后才能提交。")}</small>}
     </div>
   );
+}
+
+/**
+ * 主按钮文案带上设置里的提交后动作，菜单项仍用各自的完整名称。
+ *
+ * @param choice 主提交动作
+ * @param post 提交后动作
+ * @param t 文案函数
+ * @returns 主按钮文案
+ */
+function commitActionLabel(
+  choice: CommitChoice,
+  post: CommitControlProps["postCommitCommand"],
+  t: (en: string, zh: string) => string
+): string {
+  if (choice.options.post_action || post === "none") return choice.label;
+  if (post === "push") return t("Commit & Push", "提交并推送");
+  return t("Commit & Sync", "提交并同步");
 }
 
 /**

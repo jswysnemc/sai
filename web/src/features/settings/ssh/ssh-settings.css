@@ -24,7 +24,8 @@
   display: flex;
   align-items: center;
   gap:var(--space-sm);
-  padding:var(--space-xs) var(--space-sm);
+  min-height: 2.25rem;
+  padding: 0.2rem 0.5rem;
   border: 1px solid var(--line);
   border-radius:var(--radius-3);
   background: var(--paper-raised);
@@ -61,6 +62,7 @@
   place-items: center;
   width: 1.75rem;
   height: 1.75rem;
+  opacity: 0;
   padding: 0;
   border: 1px solid transparent;
   border-radius:var(--radius-2);
@@ -68,6 +70,16 @@
   color: var(--ink-soft);
   cursor: pointer;
   transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+}
+
+.ssh-host-list li:hover button,
+.ssh-host-list li:focus-within button,
+.ssh-host-list button:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .ssh-host-list button { opacity: 1; }
 }
 
 .ssh-host-list button:hover {

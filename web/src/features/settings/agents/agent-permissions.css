@@ -177,50 +177,49 @@
 .agent-tool-permission-item {
   display: flex;
   align-items: center;
-  gap:var(--space-sm);
+  gap: 0.5rem;
   min-width: 0;
+  height: 2.25rem;
   min-height: 2.25rem;
-  padding:var(--space-xs) var(--space-sm);
-  border: 1px solid transparent;
+  padding: 0 0.5rem;
+  border: 0;
   border-radius: var(--radius-2);
   color: var(--ink);
-  font-size:var(--text-sm);
+  font-size: 0.75rem;
 }
 
 .agent-tool-permission-item:hover {
   background: var(--control-surface);
 }
 
-/* 三段状态各自的底色：启用用主色、按需用警示色、关闭保持中性 */
-.agent-tool-permission-item[data-mode="on"] {
-  border-color: color-mix(in srgb, var(--signal) 28%, var(--line));
-  background: color-mix(in srgb, var(--signal) 8%, var(--paper));
-}
-
+/* 行本身保持中性，状态只落在右侧胶囊上 */
+.agent-tool-permission-item[data-mode="on"],
 .agent-tool-permission-item[data-mode="load"] {
-  border-color: color-mix(in srgb, var(--warning) 28%, var(--line));
-  background: color-mix(in srgb, var(--warning) 8%, var(--paper));
+  background: transparent;
 }
 
-/* 三段切换控件：分段按钮，三个档位同时可见 */
+/* 三段切换控件：微型胶囊，三个档位同时可见 */
 .agent-tool-mode-switch {
   display: inline-flex;
   flex: 0 0 auto;
+  height: 1.5rem;
   margin-left: auto;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: var(--radius-2);
-  background: var(--paper);
+  border-radius: 999px;
+  background: var(--paper-deep);
 }
 
 .agent-tool-mode-switch button {
   min-height: 1.5rem;
-  padding:0 var(--space-sm);
+  height: 1.5rem;
+  padding: 0 0.45rem;
   border: 0;
   background: transparent;
   color: var(--ink-soft);
   font: inherit;
-  font-size:var(--text-2xs);
+  font-size: 0.6875rem;
+  line-height: 1.5rem;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -296,9 +295,11 @@
 }
 
 .agent-tool-permission-copy {
-  display: grid;
-  gap:var(--space-3xs);
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
   min-width: 0;
+  overflow: hidden;
 }
 
 .agent-tool-permission-copy strong {
@@ -472,7 +473,7 @@
   }
 
   .agent-tool-mode-switch {
-    width: 100%;
+    width: auto;
     margin-left: 0;
   }
 

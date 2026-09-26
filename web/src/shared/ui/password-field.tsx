@@ -1,10 +1,7 @@
 import { Check, Copy, Eye, EyeOff, Loader2, X } from "lucide-react";
-import { useCallback, useEffect, useState, type FocusEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 import "./password-field.css";
 import { useI18n } from "../../features/i18n/use-i18n";
-
-/** 明文最长驻留秒数：到点自动收回，密钥不长期留在页面里 */
-const REVEAL_SECONDS = 30;
 
 /** 复制成功标记的驻留时长 */
 const COPIED_HINT_DELAY = 1600;
@@ -64,8 +61,8 @@ export function isExternalValueChange(
 /**
  * 渲染可切换明文显示的密码输入框。
  *
- * 明文只按需读取、按秒回收：输入框失焦、外部取值被改写或倒计时结束时
- * 立即回到掩码态并丢弃已读取的真实值，避免密钥长期留在 DOM 里。
+ * 明文由眼睛按钮切换。外部取值被改写时回到掩码态并丢弃已读取的真实值，
+ * 避免切到下一条记录时仍显示上一条密钥。
  *
  * @param props 密码值、状态和更新回调
  * @returns 密码输入组件
@@ -84,8 +81,6 @@ export function PasswordField({
   const { t } = useI18n();
   const [state, setState] = useState<PasswordSecretState>(MASKED_SECRET_STATE);
   const [revealing, setRevealing] = useState(false);
-  /** 明文剩余显示秒数；0 表示当前没有明文 */
-  const [remaining, setRemaining] = useState(0);
   const [copied, setCopied] = useState(false);
   const [sync, setSync] = useState<PasswordValueSync>({ value, emitted: null });
 
@@ -100,23 +95,7 @@ export function PasswordField({
   /** 收起明文并丢弃已读取的真实值。 */
   const mask = useCallback(() => {
     setState(MASKED_SECRET_STATE);
-    setRemaining(0);
   }, []);
-
-  useEffect(() => {
-    if (!state.visible) return;
-    setRemaining(REVEAL_SECONDS);
-    const startedAt = Date.now();
-    const timer = window.setInterval(() => {
-      const left = REVEAL_SECONDS - Math.floor((Date.now() - startedAt) / 1000);
-      if (left > 0) {
-        setRemaining(left);
-        return;
-      }
-      mask();
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [state.visible, mask]);
 
   useEffect(() => {
     if (!copied) return;
@@ -181,19 +160,6 @@ export function PasswordField({
     void navigator.clipboard.writeText(copyable).then(() => setCopied(true));
   };
 
-  /**
-   * 焦点离开整个字段时收回明文。
-   *
-   * @param event 失焦事件
-   * @returns 无返回值
-   */
-  const maskOnBlur = (event: FocusEvent<HTMLInputElement>): void => {
-    // 焦点移到框内的复制按钮时保留明文，否则复制到的会是空值
-    const next = event.relatedTarget;
-    if (next instanceof HTMLElement && next.closest(".ui-password-field")) return;
-    mask();
-  };
-
   return (
     <div className="ui-password-field">
       <input
@@ -204,8 +170,6 @@ export function PasswordField({
         placeholder={placeholder}
         disabled={disabled || revealing}
         onChange={(event) => updateValue(event.target.value)}
-        // 失焦立即收回：明文不该留在屏幕上等人来关
-        onBlur={maskOnBlur}
         autoComplete="off"
         spellCheck={false}
       />
@@ -222,11 +186,6 @@ export function PasswordField({
               <X size={11} />
             </button>
           )}
-        </span>
-      )}
-      {state.visible && remaining > 0 && (
-        <span className="ui-password-field-timer">
-          {t(`Visible ${remaining}s`, `已显示 ${remaining}s`)}
         </span>
       )}
       {copyable.length > 0 && (

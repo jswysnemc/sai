@@ -1,6 +1,7 @@
 .provider-api-keys-field {
   display: grid;
-  gap:var(--space-sm);
+  gap: var(--space-2xs);
+  min-width: 0;
 }
 
 .provider-api-keys-head {
@@ -72,10 +73,10 @@
 
 .provider-api-keys-controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(13rem, 1fr);
-  align-items: center;
-  gap:var(--space-md);
-  padding-top:var(--space-2xs);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-sm);
+  padding-top: var(--space-2xs);
   border-top: 1px solid var(--line);
 }
 

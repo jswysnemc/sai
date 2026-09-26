@@ -1,6 +1,5 @@
 import type { ProviderConfig } from "../../../api/contracts";
 import { useI18n } from "../../i18n/use-i18n";
-import { SettingsGroup } from "../editor-layout";
 import { ModelMetadataEditor } from "../model-metadata-editor";
 
 type ProviderModelsTabProps = {
@@ -21,12 +20,13 @@ export function ProviderModelsTab({ provider, onChange }: ProviderModelsTabProps
   const count = provider.models?.length ?? 0;
 
   return (
-    <SettingsGroup
-      title={t("Model catalog", "模型目录")}
-      description={count > 0
-        ? t(`${count} models available on this provider.`, `该供应商已配置 ${count} 个模型。`)
-        : t("No models yet. Use Import models to fetch the remote list.", "还没有模型。用「导入模型」拉取远端列表。")}
-    >
+    <section className="model-catalog-section">
+      <header>
+        <h3>{t("Model catalog", "模型目录")}</h3>
+        <p>{count > 0
+          ? t(`${count} models available on this provider.`, `该供应商已配置 ${count} 个模型。`)
+          : t("No models yet. Use Import models to fetch the remote list.", "还没有模型。用「导入模型」拉取远端列表。")}</p>
+      </header>
       <ModelMetadataEditor
         // 切换供应商时重建：选中模型、新模型草稿和上下文单位都是内部状态，
         // 复用实例会把上一个供应商的选择带过来
@@ -34,6 +34,6 @@ export function ProviderModelsTab({ provider, onChange }: ProviderModelsTabProps
         provider={provider}
         onChange={onChange}
       />
-    </SettingsGroup>
+    </section>
   );
 }

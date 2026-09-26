@@ -35,23 +35,21 @@ export function AppearanceSettingsSection({ theme, onThemeChange }: AppearanceSe
           "界面偏好即时应用并保存在当前浏览器，不修改服务端配置。"
         )}
       />
-      <SettingsGroup
-        title={t("Interface language", "界面语言")}
-        description={t("Choose the language used by the Web interface.", "选择 Web 界面使用的语言。")}
-      >
-        <label className="settings-field">
-          <span>{t("Language", "语言")}</span>
-          <Select
-            value={locale}
-            options={[
-              { value: "zh-CN", label: "简体中文", description: t("Chinese (Simplified)", "简体中文") },
-              { value: "en-US", label: "English", description: t("English", "英语") }
-            ]}
-            ariaLabel={t("Interface language", "界面语言")}
-            onChange={setLocale}
-          />
-        </label>
-      </SettingsGroup>
+      <div className="appearance-language">
+        <div>
+          <strong>{t("Interface language", "界面语言")}</strong>
+          <small>{t("Applies immediately in this browser.", "切换后立即生效。")}</small>
+        </div>
+        <Select
+          value={locale}
+          options={[
+            { value: "zh-CN", label: "简体中文", description: t("Chinese (Simplified)", "简体中文") },
+            { value: "en-US", label: "English", description: t("English", "英语") }
+          ]}
+          ariaLabel={t("Interface language", "界面语言")}
+          onChange={setLocale}
+        />
+      </div>
       <SettingsGroup
         title={t("Theme and colors", "主题与配色")}
         description={t("Choose a compact color scheme for the workspace.", "选择适合工作区的紧凑配色方案。")}

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Trash2, Wrench, Sparkles, Settings2 } from "lucide-react";
+import { Pencil, Trash2, Wrench, Sparkles, Settings2 } from "lucide-react";
 import type { AppConfig } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
-import { TextArea } from "../../../shared/ui/form/text-area";
+import { AgentPromptEditorDialog } from "./agent-prompt-editor-dialog";
 import type { AgentProfile } from "../../agents/agent-types";
 import { DEFAULT_AGENT_ID } from "../../agents/agent-options";
 import { useI18n } from "../../i18n/use-i18n";
@@ -36,6 +36,7 @@ type AgentProfileEditorProps = {
 export function AgentProfileEditor({ config, profile, options, onChange, onRemove }: AgentProfileEditorProps) {
   const { t } = useI18n();
   const [tab, setTab] = useState<AgentEditorTab>("basic");
+  const [promptOpen, setPromptOpen] = useState(false);
   const skillCount = profile.skills_full.length + profile.skills_named.length;
   const deferredTools = profile.deferred_tools ?? [];
   // 通配符代表全部非常驻工具，逐项计数时按实际非常驻工具数量折算
@@ -173,14 +174,25 @@ export function AgentProfileEditor({ config, profile, options, onChange, onRemov
               "只写长期稳定的角色约束，具体任务由会话输入提供。"
             )}
           >
-            <label className="settings-field agent-prompt-field">
-              <span>{t("Prompt text", "提示词正文")}</span>
-              <TextArea
-                value={profile.system_prompt}
-                onChange={(event) => onChange({ system_prompt: event.target.value })}
-                placeholder={t("Describe responsibilities, boundaries, and output requirements", "描述职责、边界和输出要求")}
-              />
-            </label>
+            <div className="agent-prompt-preview">
+              <Button variant="secondary" onClick={() => setPromptOpen(true)}>
+                <Pencil size={13} />
+                {t("Edit prompt", "编辑提示词")}
+              </Button>
+              <p>{profile.system_prompt.trim()
+                ? profile.system_prompt
+                : t("No system prompt yet.", "还没有系统提示词。")}</p>
+              <small>{t(
+                `${profile.system_prompt.length} characters configured`,
+                `已配置 ${profile.system_prompt.length} 字符`
+              )}</small>
+            </div>
+            <AgentPromptEditorDialog
+              open={promptOpen}
+              value={profile.system_prompt}
+              onClose={() => setPromptOpen(false)}
+              onApply={(system_prompt) => onChange({ system_prompt })}
+            />
             <div className="settings-field full">
               <span>{t("Built-in prompt sections", "内置提示词分段")}</span>
               <AgentPromptSections

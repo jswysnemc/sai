@@ -101,18 +101,23 @@
   min-height: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  padding: 1.75rem clamp(1.25rem, 3vw, 3.5rem) 3rem;
+  padding: 1.25rem clamp(1rem, 2vw, 2rem) 2.5rem;
 }
 
-.settings-main-content { width: 100%; max-width: 70rem; margin: 0 auto; }
+.settings-main-content { width: 100%; max-width: 52rem; margin: 0 auto; }
 
 /* ---------- 对象列表中列 ---------- */
 
 .settings-objects-layout {
   display: grid;
-  grid-template-columns: minmax(15rem, 17.5rem) minmax(0, 1fr);
-  align-items: start;
-  gap:var(--space-2xl);
+  grid-template-columns: 15rem minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0;
+  min-height: calc(100dvh - 8rem);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--paper);
 }
 
 /* ---------- 状态与消息 ---------- */
@@ -146,7 +151,10 @@
 }
 
 @media (max-width: 60rem) {
-  .settings-objects-layout { grid-template-columns: 1fr; }
+  .settings-objects-layout {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
 }
 
 /* 手机端：顶栏保持单行紧凑，分类导航降级为吸顶横向滚动页签 */

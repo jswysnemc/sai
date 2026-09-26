@@ -1,4 +1,4 @@
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, FileCode2, WrapText } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 import { SyntaxHighlighter } from "./syntax-highlighter";
 import { useI18n } from "../i18n/use-i18n";
@@ -26,7 +26,12 @@ export const MarkdownCodeBlock = memo(function MarkdownCodeBlock({
 }: MarkdownCodeBlockProps) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
+  const [wrapped, setWrapped] = useState(style.wrapLongLines);
   const showHeader = style.showLanguageLabel || style.showCopyButton;
+
+  useEffect(() => {
+    setWrapped(style.wrapLongLines);
+  }, [style.wrapLongLines]);
 
   useEffect(() => {
     if (!copied) return;
@@ -41,16 +46,36 @@ export const MarkdownCodeBlock = memo(function MarkdownCodeBlock({
   };
 
   return (
-    <div className="markdown-code-block">
+    <div className="markdown-code-block" data-wrapped={wrapped ? "true" : "false"}>
       {showHeader && (
         <div className="markdown-code-head">
-          {style.showLanguageLabel && <span>{language || "text"}</span>}
-          {style.showCopyButton && (
-            <button type="button" onClick={() => void copySource()}>
-              {copied ? <Check size={13} /> : <Copy size={13} />}
-              <span>{copied ? t("Copied", "已复制") : t("Copy", "复制")}</span>
-            </button>
+          {style.showLanguageLabel && (
+            <span className="markdown-code-lang">
+              <FileCode2 size={13} />
+              {language || "text"}
+            </span>
           )}
+          <span className="markdown-code-actions">
+            <button
+              type="button"
+              aria-pressed={wrapped}
+              aria-label={wrapped ? t("Disable line wrap", "关闭自动换行") : t("Wrap long lines", "长行换行")}
+              title={wrapped ? t("Disable line wrap", "关闭自动换行") : t("Wrap long lines", "长行换行")}
+              onClick={() => setWrapped((current) => !current)}
+            >
+              <WrapText size={13} />
+            </button>
+            {style.showCopyButton && (
+              <button
+                type="button"
+                aria-label={copied ? t("Copied", "已复制") : t("Copy", "复制")}
+                title={copied ? t("Copied", "已复制") : t("Copy", "复制")}
+                onClick={() => void copySource()}
+              >
+                {copied ? <Check size={13} /> : <Copy size={13} />}
+              </button>
+            )}
+          </span>
         </div>
       )}
       <pre><SyntaxHighlighter language={language} source={source} showLineNumbers={style.lineNumbers} /></pre>

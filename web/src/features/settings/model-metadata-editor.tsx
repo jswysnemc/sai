@@ -190,6 +190,7 @@ export function ModelMetadataEditor({ provider, onChange }: ModelMetadataEditorP
             </div>
 
             <div className="settings-form-grid model-metadata-panel">
+              <div className="model-token-row">
               <div className="settings-field">
                 <span>{t("Context tokens", "上下文 token 数")}</span>
                 <div className="model-context-input">
@@ -232,6 +233,7 @@ export function ModelMetadataEditor({ provider, onChange }: ModelMetadataEditorP
                 />
                 <small>{t("Applied to Chat, Responses, and Anthropic requests", "应用于 Chat、Responses 和 Anthropic 请求")}</small>
               </label>
+              </div>
 
               <div className="settings-field">
                 <span>{t("Tool calls", "工具调用")}</span>

@@ -1,4 +1,4 @@
-import { Code2, LayoutTemplate, RotateCcw, Table2 } from "lucide-react";
+import { Check, Code2, LayoutTemplate, RotateCcw, Table2 } from "lucide-react";
 import type {
   MarkdownCodeBlockStylePreferences,
   MarkdownStylePreferences,
@@ -10,7 +10,6 @@ import { Button } from "../../shared/ui/button/button";
 import { Select } from "../../shared/ui/select/select";
 import { AppearancePreview } from "./appearance-preview/appearance-preview";
 import { ToggleRow } from "./controls/toggle-row";
-import { SettingsGroup } from "./editor-layout";
 import "./markdown-style-settings.css";
 
 type MarkdownStyleSettingsProps = {
@@ -76,19 +75,20 @@ export function MarkdownStyleSettings({
   const { t } = useI18n();
 
   return (
-    <SettingsGroup
-      title={t("Markdown rendering", "Markdown 渲染")}
-      description={t(
-        "Pick an overall style, then tune table structure and code block readability. Changes apply to all rendered Markdown immediately.",
-        "先选择整体风格，再细化表格结构与代码块可读性，修改后立即应用到全部 Markdown 内容。"
-      )}
-      actions={(
+    <section className="markdown-config-root">
+      <header className="markdown-config-head">
+        <div>
+          <h3>{t("Markdown rendering", "Markdown 渲染")}</h3>
+          <p>{t(
+            "Pick an overall style, then tune table structure and code block readability. Changes apply to all rendered Markdown immediately.",
+            "先选择整体风格，再细化表格结构与代码块可读性，修改后立即应用到全部 Markdown 内容。"
+          )}</p>
+        </div>
         <Button variant="secondary" onClick={onReset}>
           <RotateCcw size={14} />
           {t("Reset", "恢复默认")}
         </Button>
-      )}
-    >
+      </header>
       <fieldset className="markdown-style-panel markdown-preset-panel">
         <legend><span><LayoutTemplate size={15} />{t("Overall style", "整体风格")}</span></legend>
         <div className="markdown-preset-grid" role="group" aria-label={t("Markdown style preset", "Markdown 风格预设")}>
@@ -99,17 +99,18 @@ export function MarkdownStyleSettings({
               aria-pressed={option.value === preferences.preset}
               key={option.value}
             >
+              <Check size={12} className="markdown-preset-check" />
               <strong>{t(option.nameEn, option.nameZh)}</strong>
               <small>{t(option.descriptionEn, option.descriptionZh)}</small>
             </Button>
           ))}
         </div>
       </fieldset>
-      <div className="markdown-style-grid">
+      <div className="markdown-config-columns">
         <fieldset className="markdown-style-panel">
           <legend><span><Table2 size={15} />{t("Tables", "表格")}</span></legend>
-          <div className="markdown-style-fields">
-            <label className="settings-field">
+          <div className="markdown-config-stack">
+            <label className="markdown-config-row">
               <span>{t("Table borders", "表格边框")}</span>
               <Select
                 value={preferences.table.borderStyle}
@@ -122,7 +123,7 @@ export function MarkdownStyleSettings({
                 onChange={(borderStyle) => onTableChange({ borderStyle })}
               />
             </label>
-            <label className="settings-field">
+            <label className="markdown-config-row">
               <span>{t("Cell density", "单元格密度")}</span>
               <Select
                 value={preferences.table.density}
@@ -136,24 +137,28 @@ export function MarkdownStyleSettings({
               />
             </label>
             <ToggleRow
+              className="markdown-config-toggle"
               label={t("Full width", "占满内容宽度")}
               hint={t("Stretch short tables to the message width.", "短表格也扩展到消息内容宽度。")}
               checked={preferences.table.fullWidth}
               onChange={(fullWidth) => onTableChange({ fullWidth })}
             />
             <ToggleRow
+              className="markdown-config-toggle"
               label={t("Striped rows", "斑马纹")}
               hint={t("Add a subtle surface to alternating rows.", "为交替数据行增加轻微底色。")}
               checked={preferences.table.stripedRows}
               onChange={(stripedRows) => onTableChange({ stripedRows })}
             />
             <ToggleRow
+              className="markdown-config-toggle"
               label={t("Header background", "表头底色")}
               hint={t("Separate the header with a muted surface.", "使用克制底色区分表头。")}
               checked={preferences.table.headerBackground}
               onChange={(headerBackground) => onTableChange({ headerBackground })}
             />
             <ToggleRow
+              className="markdown-config-toggle"
               label={t("Wrap cell content", "单元格内容换行")}
               hint={t("Wrap long text instead of keeping every cell on one line.", "长文本可以换行，不强制每个单元格保持单行。")}
               checked={preferences.table.wrapCells}
@@ -164,8 +169,8 @@ export function MarkdownStyleSettings({
 
         <fieldset className="markdown-style-panel">
           <legend><span><Code2 size={15} />{t("Code blocks", "代码块")}</span></legend>
-          <div className="markdown-style-fields">
-            <label className="settings-field">
+          <div className="markdown-config-stack">
+            <label className="markdown-config-row">
               <span>{t("Font size", "代码字体大小")}</span>
               <Select
                 value={preferences.codeBlock.fontSize}
@@ -178,7 +183,7 @@ export function MarkdownStyleSettings({
                 onChange={(fontSize) => onCodeBlockChange({ fontSize })}
               />
             </label>
-            <label className="settings-field">
+            <label className="markdown-config-row">
               <span>{t("Tab width", "制表符宽度")}</span>
               <Select
                 value={preferences.codeBlock.tabSize}
@@ -191,7 +196,7 @@ export function MarkdownStyleSettings({
                 onChange={(tabSize) => onCodeBlockChange({ tabSize })}
               />
             </label>
-            <label className="settings-field">
+            <label className="markdown-config-row">
               <span>{t("Maximum height", "最大高度")}</span>
               <Select
                 value={preferences.codeBlock.maxHeight}
@@ -205,30 +210,35 @@ export function MarkdownStyleSettings({
               />
             </label>
             <ToggleRow
+              className="markdown-config-toggle"
               label={t("Line numbers", "显示行号")}
               hint={t("Show a fixed number column for every source line.", "为每一行源码显示连续编号。")}
               checked={preferences.codeBlock.lineNumbers}
               onChange={(lineNumbers) => onCodeBlockChange({ lineNumbers })}
             />
             <ToggleRow
+              className="markdown-config-toggle"
               label={t("Wrap long lines", "长行换行")}
               hint={t("Wrap long source lines instead of scrolling horizontally.", "长源码行自动折行，不使用横向滚动。")}
               checked={preferences.codeBlock.wrapLongLines}
               onChange={(wrapLongLines) => onCodeBlockChange({ wrapLongLines })}
             />
             <ToggleRow
+              className="markdown-config-toggle"
               label={t("Language label", "语言标签")}
               hint={t("Show the detected language in the code block header.", "在代码块头部显示识别到的语言。")}
               checked={preferences.codeBlock.showLanguageLabel}
               onChange={(showLanguageLabel) => onCodeBlockChange({ showLanguageLabel })}
             />
             <ToggleRow
+              className="markdown-config-toggle"
               label={t("Copy button", "复制按钮")}
               hint={t("Show the copy action in the code block header.", "在代码块头部显示复制操作。")}
               checked={preferences.codeBlock.showCopyButton}
               onChange={(showCopyButton) => onCodeBlockChange({ showCopyButton })}
             />
             <ToggleRow
+              className="markdown-config-toggle"
               label={t("Block border", "代码块外框")}
               hint={t("Add a thin neutral border around code blocks.", "为代码块增加同色系细边框。")}
               checked={preferences.codeBlock.showBorder}
@@ -238,6 +248,6 @@ export function MarkdownStyleSettings({
         </fieldset>
       </div>
       <AppearancePreview preferences={preferences} />
-    </SettingsGroup>
+    </section>
   );
 }
