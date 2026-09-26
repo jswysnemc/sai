@@ -177,6 +177,15 @@
   overflow: auto;
 }
 
+/* 列表按内容高度排列。min-height: 0 会把行压扁，滚动容器也就没有可滚的溢出。 */
+.sidebar-purpose-scroll > .session-list,
+.sidebar-purpose-scroll > .sidebar-history,
+.sidebar-purpose-scroll > .sidebar-recent-list,
+.sidebar-purpose-scroll > .sidebar-pinned {
+  flex: none;
+  min-height: auto;
+}
+
 .session-list {
   display: grid;
   align-content: start;

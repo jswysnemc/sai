@@ -7,6 +7,7 @@ import { Button } from "../../../shared/ui/button/button";
 import { FileTypeIcon } from "../../../shared/ui/file-icon";
 import { useI18n } from "../../i18n/use-i18n";
 import { DiffCodeView } from "../../chat/tool-renderers/diff/diff-code-view";
+import { EditorDiffBody } from "../../workspace/editor-diff-body";
 import type { DiffFile } from "../../chat/tool-renderers/diff/diff-model";
 import type { DiffLayout } from "../../chat/tool-renderers/diff-view";
 import { ToolFileReference } from "../../chat/tool-renderers/tool-file-reference";
@@ -199,7 +200,11 @@ export const FileDiffCard = memo(function FileDiffCard(props: FileDiffCardProps)
               layout={props.layout} wrap={props.wrap} onLoaded={setLoadedFile} />
           ) : (
             file.lines.length > 0 && (
-              <DiffCodeView file={file} language={languageOfPath(file.path)} layout={props.layout} wrap={props.wrap} />
+              props.layout === "side" ? (
+                <DiffCodeView file={file} language={languageOfPath(file.path)} layout={props.layout} wrap={props.wrap} />
+              ) : (
+                <EditorDiffBody file={file} path={file.path} language={languageOfPath(file.path)} showHeader={false} />
+              )
             )
           )}
         </div>

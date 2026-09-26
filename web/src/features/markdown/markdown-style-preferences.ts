@@ -41,7 +41,7 @@ export const DEFAULT_MARKDOWN_STYLE_PREFERENCES: MarkdownStylePreferences = {
     density: "comfortable",
     fullWidth: true,
     stripedRows: false,
-    headerBackground: false,
+    headerBackground: true,
     wrapCells: true
   },
   codeBlock: {

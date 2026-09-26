@@ -132,6 +132,7 @@
 .editor-wrap[aria-pressed="true"] { border-color: var(--line); background: var(--paper-deep); color: var(--ink); }
 .editor-area > .editor-diff { height: 100%; overflow: auto; background: var(--paper); }
 .editor-diff-sheet { min-height: 100%; color: var(--code-text); font: 400 var(--text-sm)/1.45 var(--font-code); tab-size: 4; }
+.editor-diff-sheet.is-embedded { min-height: 0; }
 .editor-diff-head {
   position: sticky;
   top: 0;

@@ -28,5 +28,10 @@ export function buildAppearancePreviewSample(locale: Locale): string {
     "```"
   ].join("\n");
 
-  return `${table}\n\n${code}`;
+  const note = [
+    `> [!NOTE]`,
+    `> ${text(locale, "Alerts keep the title and the left bar.", "提示块保留标题和左侧色条。")}`
+  ].join("\n");
+
+  return `${note}\n\n${table}\n\n${code}`;
 }

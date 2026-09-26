@@ -5,6 +5,7 @@ import { api } from "../../../api/client";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
 import { DiffCodeView } from "../../chat/tool-renderers/diff/diff-code-view";
+import { EditorDiffBody } from "../../workspace/editor-diff-body";
 import type { DiffFile } from "../../chat/tool-renderers/diff/diff-model";
 import { parseDiff } from "../../chat/tool-renderers/diff/diff-parser";
 import type { DiffLayout } from "../../chat/tool-renderers/diff-view";
@@ -56,6 +57,10 @@ export function FileDiffPreview(props: FileDiffPreviewProps) {
   if (!file.lines.length) return <p className="diff-file-note">{t("No text changes in this file", "此文件没有文本差异")}</p>;
   return <>
     {diff.data?.truncated && <p className="diff-file-note">{t("This file is too large to show in full", "此文件差异过大，当前仅显示部分内容")}</p>}
-    <DiffCodeView file={file} language={file.path.split(".").at(-1)} layout={props.layout} wrap={props.wrap} />
+    {props.layout === "side" ? (
+      <DiffCodeView file={file} language={file.path.split(".").at(-1)} layout={props.layout} wrap={props.wrap} />
+    ) : (
+      <EditorDiffBody file={file} path={file.path} language={file.path.split(".").at(-1)} showHeader={false} />
+    )}
   </>;
 }

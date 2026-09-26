@@ -12,6 +12,8 @@ type EditorDiffBodyProps = {
   file: DiffFile;
   path: string;
   language?: string;
+  /** 审阅列表已有文件头时不再重复路径行 */
+  showHeader?: boolean;
 };
 
 /**
@@ -20,7 +22,7 @@ type EditorDiffBodyProps = {
  * @param props 解析后的文件、路径和语言
  * @returns 文件头和差异正文
  */
-export function EditorDiffBody({ file, path, language }: EditorDiffBodyProps) {
+export function EditorDiffBody({ file, path, language, showHeader = true }: EditorDiffBodyProps) {
   const { t } = useI18n();
   const segments = useMemo(() => buildEditorDiffSegments(file.lines), [file.lines]);
   const highlights = useMemo(() => highlightDiffLines(file.lines, language), [file.lines, language]);
@@ -29,15 +31,15 @@ export function EditorDiffBody({ file, path, language }: EditorDiffBodyProps) {
   const lastLine = file.lines.reduce((max, line) => Math.max(max, line.oldLine ?? 0, line.newLine ?? 0), 1);
 
   return (
-    <div className="editor-diff-sheet" style={{ "--editor-diff-digits": `${Math.max(2, String(lastLine).length)}ch` } as CSSProperties}>
-      <header className="editor-diff-head">
+    <div className={showHeader ? "editor-diff-sheet" : "editor-diff-sheet is-embedded"} style={{ "--editor-diff-digits": `${Math.max(2, String(lastLine).length)}ch` } as CSSProperties}>
+      {showHeader && <header className="editor-diff-head">
         <span className="editor-diff-hash" aria-hidden>#</span>
         <span className="editor-diff-path" title={path}>{path}</span>
         <span className="editor-diff-stats">
           {file.added > 0 && <b>+{file.added}</b>}
           {file.removed > 0 && <i>-{file.removed}</i>}
         </span>
-      </header>
+      </header>}
       {segments.map((segment, index) => segment.kind === "gap" ? (
         <EditorDiffGap
           key={index}

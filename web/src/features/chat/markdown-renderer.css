@@ -29,10 +29,18 @@
   line-height: 1.28;
 }
 
-.markdown-body h1 { margin:var(--space-lg) 0 var(--space-2xs); padding-bottom:0; border-bottom: 0; font-size: 1.2em; }
-/* h2 不再画下划线：聊天回复里每个小节都画一条会与代码块、表格的线连成栅格，
-   层级由字号、字重与上方留白表达已经足够 */
-.markdown-body h2 { margin:var(--space-lg) 0 var(--space-2xs); font-size: 1.1em; }
+.markdown-body h1 {
+  margin: var(--space-lg) 0 var(--space-sm);
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--line);
+  font-size: 1.45em;
+}
+.markdown-body h2 {
+  margin: var(--space-xl) 0 var(--space-xs);
+  padding-bottom: var(--space-3xs);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  font-size: 1.22em;
+}
 .markdown-body h3 { margin:var(--space-md) 0 var(--space-3xs); font-size: 1.02em; }
 .markdown-body h4 { margin:var(--space-lg) 0 var(--space-2xs); font-size: 1.08em; }
 .markdown-body h5 { margin:var(--space-md) 0 var(--space-2xs); font-size: 1em; }
@@ -124,10 +132,35 @@
  * 与 TUI 弱化灰的 ▏竖条语言保持一致。
  */
 .markdown-body blockquote {
-  margin:var(--space-md) 0;
-  padding:var(--space-2xs) 0 var(--space-2xs) var(--space-md);
-  border-left: 2px solid var(--line-strong);
+  margin: var(--space-md) 0;
+  padding: var(--space-xs) var(--space-md);
+  border-left: 3px solid var(--line-strong);
+  border-radius: 0 var(--radius-2) var(--radius-2) 0;
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
 }
+
+.markdown-alert {
+  padding-top: var(--space-sm);
+}
+
+.markdown-alert::before {
+  display: block;
+  margin-bottom: var(--space-3xs);
+  font-size: var(--text-xs);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.markdown-alert-note { border-left-color: var(--blue, #3b82f6); }
+.markdown-alert-note::before { content: "NOTE"; color: var(--blue, #3b82f6); }
+.markdown-alert-tip { border-left-color: var(--diff-added-text, #1a7f37); }
+.markdown-alert-tip::before { content: "TIP"; color: var(--diff-added-text, #1a7f37); }
+.markdown-alert-important { border-left-color: var(--signal); }
+.markdown-alert-important::before { content: "IMPORTANT"; color: var(--signal); }
+.markdown-alert-warning { border-left-color: #d97706; }
+.markdown-alert-warning::before { content: "WARNING"; color: #d97706; }
+.markdown-alert-caution { border-left-color: var(--danger); }
+.markdown-alert-caution::before { content: "CAUTION"; color: var(--danger); }
 
 .markdown-body blockquote p {
   margin:var(--space-3xs) 0;
@@ -260,10 +293,12 @@
 
 .markdown-body th {
   border-bottom: 1px solid var(--line-strong);
-  background: transparent;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
   color: var(--ink);
   font-weight: 600;
 }
+
+.markdown-body[data-table-header="false"] th { background: transparent; }
 
 .markdown-body td {
   border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
@@ -321,13 +356,8 @@
 }
 
 /*
- * 代码块：以底色作为唯一的区块边界，去掉外框与头栏分隔线。
- * 原先外框、头栏底色、头栏下边线三层同时存在，块与块相邻时会连出四条平行线。
- * 头栏改为与代码同底，靠字号与颜色降级区分，块整体读起来是一整片而不是一个盒子。
- *
- * 底色同时从 --code-surface 换成 --paper-deep：前者在亮色主题下比页面底还亮
- * （#fcfdfd vs #f3f5f5），去掉边框后几乎读不出边界；--paper-deep 在 7 套主题下
- * 都定义为比页面更沉的一档，明暗主题都能只靠底色划出区块。
+ * 代码块：头栏常驻，语言名在左，复制在右，下面才是代码。
+ * 图表和 SVG 的工具条仍浮在内容右上角，悬停才出现。
  */
 .markdown-code-block,
 .mermaid-wrapper,
@@ -338,11 +368,25 @@
   max-width: 100%;
   margin:var(--space-sm) 0;
   overflow: hidden;
+  border: 1px solid var(--line);
   border-radius:var(--radius-2);
   background: var(--paper-deep);
 }
 
-.markdown-code-head,
+.markdown-code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  min-height: 2rem;
+  padding: 0 0.35rem 0 0.75rem;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ink) 4%, var(--paper));
+  color: var(--ink-soft);
+  font: 500 var(--text-xs) var(--font-code);
+  user-select: none;
+}
+
 .mermaid-toolbar,
 .markdown-svg-toolbar {
   position: absolute;
@@ -362,8 +406,6 @@
   user-select: none;
 }
 
-.markdown-code-block:hover .markdown-code-head,
-.markdown-code-block:focus-within .markdown-code-head,
 .mermaid-wrapper:hover .mermaid-toolbar,
 .mermaid-wrapper:focus-within .mermaid-toolbar,
 .markdown-svg-block:hover .markdown-svg-toolbar,
@@ -375,7 +417,7 @@
 .mermaid-toolbar > span,
 .markdown-svg-toolbar > span {
   margin-right: auto;
-  text-transform: lowercase;
+  text-transform: capitalize;
 }
 
 .markdown-code-head button,

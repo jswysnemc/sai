@@ -206,7 +206,7 @@
 /* 运行时分区的分组网格布局 */
 .runtime-groups {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  gap:0 var(--space-3xl);
+  gap: 1.75rem 0;
 }

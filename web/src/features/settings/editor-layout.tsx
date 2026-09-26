@@ -35,7 +35,7 @@ type SettingsGroupProps = {
 };
 
 /**
- * 渲染分组标题加分隔线的表单分组，替代嵌套圆角卡片。
+ * 渲染分组：标题在卡片外，字段收进同一张卡片。
  *
  * @param props 分组标题、可选图标、说明、操作节点和分组内容
  * @returns 表单分组
@@ -50,7 +50,7 @@ export function SettingsGroup({ title, icon, description, actions, children }: S
         </div>
         {actions}
       </div>
-      {children}
+      <div className="settings-group-card">{children}</div>
     </section>
   );
 }

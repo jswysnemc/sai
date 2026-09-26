@@ -74,12 +74,12 @@
 
 .settings-group {
   min-width: 0;
-  padding-bottom:var(--space-md);
+  padding-bottom: 0;
 }
 
 .settings-group + .settings-group {
-  padding-top:var(--space-xl);
-  border-top: 1px solid var(--line);
+  padding-top: 1.75rem;
+  border-top: 0;
 }
 
 .settings-group-head {
@@ -87,9 +87,9 @@
   align-items: flex-start;
   justify-content: space-between;
   gap:var(--space-lg);
-  padding-bottom:var(--space-sm);
-  margin-bottom:var(--space-lg);
-  border-bottom: 1px solid var(--line);
+  padding-bottom: 0;
+  margin-bottom: 0.5rem;
+  border-bottom: 0;
 }
 
 .settings-group-head h3 {
@@ -465,3 +465,105 @@
 
 /* 拉取远端模型期间用骨架屏占位，表单先让位 */
 .provider-editor-loading { margin-top:var(--space-2xl); }
+
+/* 分组标题在卡片外，字段收进一张圆角卡片，标题和说明在左，控件在右 */
+.settings-group-card {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--paper);
+  container-type: inline-size;
+}
+
+.settings-group-card .settings-form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.settings-group-card .settings-field,
+.settings-group-card .settings-toggle-field {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(8rem, 14rem);
+  column-gap: 1.5rem;
+  align-items: center;
+  margin: 0;
+  min-height: 3.25rem;
+  padding: 0.8rem 1rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.settings-group-card .settings-field:last-child,
+.settings-group-card .settings-toggle-field:last-child {
+  border-bottom: 0;
+}
+
+.settings-group-card .settings-field > span,
+.settings-group-card .settings-toggle-field > span {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.settings-group-card .settings-field > small,
+.settings-group-card .settings-toggle-field small {
+  grid-column: 1;
+  grid-row: 2;
+  font-family: var(--font-ui);
+}
+
+.settings-group-card .settings-field > :not(span):not(small),
+.settings-group-card .settings-toggle-field > input {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  justify-self: end;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+@container (max-width: 34rem) {
+  .settings-group-card .settings-field,
+  .settings-group-card .settings-toggle-field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-group-card .settings-field > :not(span):not(small),
+  .settings-group-card .settings-toggle-field > input {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: stretch;
+    width: auto;
+    max-width: 14rem;
+  }
+}
+
+.settings-group-card .ui-select,
+.settings-group-card .ui-select > button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.settings-group-card .ui-select > button {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-group-card .settings-toggle-field > input {
+  width: auto;
+  max-width: none;
+}
+
+.settings-group-card .settings-field:has(textarea) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.settings-group-card .settings-field:has(textarea) > :not(span):not(small) {
+  grid-column: 1;
+  grid-row: auto;
+  justify-self: stretch;
+  max-width: none;
+}

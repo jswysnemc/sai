@@ -9,6 +9,7 @@ import { ContextJsonBlock } from "./message/context-json-block";
 import { MermaidDiagram } from "./mermaid-diagram";
 import { MarkdownSvgBlock } from "./markdown-svg-block";
 import { remarkSvgBlocks } from "./markdown-svg";
+import { remarkGithubAlerts } from "./markdown-alerts";
 import { ToolFileReference } from "./tool-renderers/tool-file-reference";
 import {
   DEFAULT_MARKDOWN_STYLE_PREFERENCES,
@@ -28,7 +29,7 @@ function transformUrl(url: string): string {
 }
 
 /** 模块级插件常量，避免每次渲染创建新数组导致 ReactMarkdown 重新解析 */
-const remarkPlugins = [remarkGfm, remarkMath, remarkSvgBlocks];
+const remarkPlugins = [remarkGfm, remarkMath, remarkSvgBlocks, remarkGithubAlerts];
 const rehypePlugins = [rehypeKatex];
 /**
  * 流式阶段沿用与完成后相同的插件集。

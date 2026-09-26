@@ -61,4 +61,13 @@ describe("MarkdownRenderer style preferences", () => {
     expect(html).toContain("syntax-line-number");
     expect(html).not.toContain("markdown-code-head");
   });
+
+  it("把 GitHub 提示标记渲染成带类型的提示条", () => {
+    const html = renderToStaticMarkup(
+      <MarkdownRenderer source={"> [!WARNING]\n> 执行前先确认目标仓库。"} />
+    );
+    expect(html).toContain("markdown-alert-warning");
+    expect(html).toContain("执行前先确认目标仓库。");
+    expect(html).not.toContain("[!WARNING]");
+  });
 });
