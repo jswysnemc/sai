@@ -90,6 +90,15 @@ export type {
 } from "./contracts/gateways";
 
 export type {
+  JevAuditConfig,
+  JevConfig,
+  JevConnectionInfo,
+  JevProbeReport,
+  JevRoutingConfig,
+  JevStatus,
+} from "./contracts/jev";
+
+export type {
   CronJob,
   CreateCronJobRequest,
   UpdateCronJobRequest,

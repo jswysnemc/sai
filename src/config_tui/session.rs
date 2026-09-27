@@ -138,8 +138,8 @@ fn run_main_menu(
             )
             .to_string(),
             t(
-                "Less frequent settings: knowledge base, gateway channels and global parameters.",
-                "低频配置：知识库、渠道接入与全局参数。",
+                "Less frequent settings: knowledge base, gateway channels, global parameters and Jev.",
+                "低频配置：知识库、渠道接入、全局参数与 Jev。",
             )
             .to_string(),
             if dirty {
@@ -291,7 +291,7 @@ fn has_unsaved_changes(config: &AppConfig, baseline: Option<&str>) -> bool {
         .unwrap_or(true)
 }
 
-/// 高级设置二级菜单：知识库、渠道接入与全局参数等低频配置。///
+/// 高级设置二级菜单：知识库、渠道接入、全局参数与 Jev 等低频配置。///
 /// 参数:
 /// - `stdout`: 终端标准输出
 /// - `paths`: Sai 路径
@@ -310,6 +310,7 @@ fn run_advanced_menu(
             t("Knowledge base", "知识库管理"),
             t("Gateway channels", "渠道接入"),
             t("Global parameters", "全局参数"),
+            "Jev",
         ];
         let options = labels
             .iter()
@@ -332,6 +333,11 @@ fn run_advanced_menu(
                 "权限模式、上下文上限、工具行为与显示偏好。",
             )
             .to_string(),
+            t(
+                "Built-in TypeSafe Jev: tool and skill routing, permission audit and connection test.",
+                "内置 TypeSafe Jev：工具与 Skills 暴露决策、权限自动审核与连接测试。",
+            )
+            .to_string(),
         ];
         draw_menu_with_details(
             stdout,
@@ -350,13 +356,14 @@ fn run_advanced_menu(
             KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
-            KeyCode::Char(digit @ '1'..='3') => {
+            KeyCode::Char(digit @ '1'..='4') => {
                 selected = digit as usize - '1' as usize;
             }
             KeyCode::Enter => match selected {
                 0 => edit_knowledge_base(stdout, paths, config)?,
                 1 => edit_gateways(stdout, paths, config)?,
                 2 => edit_settings(stdout, config)?,
+                3 => super::jev::edit_jev(stdout, config)?,
                 _ => {}
             },
             _ => {}

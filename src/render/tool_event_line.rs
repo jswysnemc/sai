@@ -479,6 +479,8 @@ pub(crate) fn tool_verb(name: &str, tense: ToolVerbTense) -> &'static str {
         ("check_os_info", ToolVerbTense::Perfect) => "Checked",
         ("load", ToolVerbTense::Progressive) => "Loading",
         ("load", ToolVerbTense::Perfect) => "Loaded",
+        ("request_capability", ToolVerbTense::Progressive) => "Requesting",
+        ("request_capability", ToolVerbTense::Perfect) => "Requested",
         ("generate_image", ToolVerbTense::Progressive) => "Generating",
         ("generate_image", ToolVerbTense::Perfect) => "Generated",
         ("create_directory", ToolVerbTense::Progressive) => "Creating",
@@ -531,6 +533,7 @@ fn is_builtin_tool_verb(name: &str) -> bool {
             | "cron"
             | "check_os_info"
             | "load"
+            | "request_capability"
             | "create_directory"
             | "list_directory"
             | "generate_image"

@@ -33,6 +33,7 @@ impl AppConfig {
         // 3. 始终以独立文件为准注入运行时 mcp 配置
         config.mcp = super::mcp_file::load_mcp_config(paths)?;
         config.normalize_builtin_providers();
+        config.migrate_legacy_jev_routing();
         config.validate()?;
         Ok(config)
     }
@@ -162,6 +163,7 @@ impl AppConfig {
     pub fn validate(&self) -> Result<()> {
         self.plugins.web.validate()?;
         super::model_endpoints::validate(&self.model_endpoints)?;
+        self.jev.validate(&self.model_endpoints)?;
         if self.active_provider.trim().is_empty() {
             bail!("active_provider cannot be empty");
         }

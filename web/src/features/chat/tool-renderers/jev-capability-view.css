@@ -1,0 +1,63 @@
+.jev-capability {
+  display: grid;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md) var(--space-sm);
+  color: var(--ink);
+  font-family: var(--font-ui);
+}
+
+.jev-capability-need,
+.jev-capability-empty {
+  margin: 0;
+}
+
+.jev-capability-need {
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+.jev-capability-empty,
+.jev-capability h3 {
+  color: var(--ink-soft);
+  font: 400 var(--text-2xs)/1.4 var(--font-ui);
+}
+
+.jev-capability section {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+.jev-capability h3,
+.jev-capability ul {
+  margin: 0;
+  padding: 0;
+}
+
+.jev-capability ul {
+  display: grid;
+  gap: var(--space-2xs);
+  list-style: none;
+}
+
+.jev-capability li {
+  display: grid;
+  grid-template-columns: minmax(7rem, max-content) minmax(0, 1fr);
+  gap: var(--space-sm);
+  align-items: baseline;
+  min-height: 24px;
+  font-size: var(--text-sm);
+}
+
+.jev-capability li strong {
+  font-weight: 500;
+}
+
+.jev-capability li span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

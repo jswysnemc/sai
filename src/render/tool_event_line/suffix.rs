@@ -51,6 +51,7 @@ pub(super) fn tool_suffix(name: &str, arguments: &Value) -> Option<String> {
         "subagent" => subagent_suffix(arguments),
         "todo" | "cron" => action_suffix(arguments),
         "load" => load_suffix(arguments),
+        "request_capability" => string_field(arguments, &["need"]).map(compact_text),
         _ => None,
     }
 }
@@ -82,6 +83,7 @@ pub(super) fn tool_suffix_from_partial_text(name: &str, arguments: &str) -> Opti
         "subagent" => subagent_suffix_from_partial(arguments),
         "todo" | "cron" => action_suffix_from_partial(arguments),
         "load" => load_suffix_from_partial(arguments),
+        "request_capability" => string_field_from_partial(arguments, &["need"]).map(compact_text),
         _ => None,
     }
 }

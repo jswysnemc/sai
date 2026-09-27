@@ -28,7 +28,7 @@ export function LocaleSwitcher({ compact = false }: LocaleSwitcherProps) {
       title={`${title} · ${label}`}
       aria-label={title}
     >
-      <Languages size={compact ? 16 : 16} strokeWidth={1.8} />
+      <Languages size={16} />
       {!compact && <span>{label}</span>}
     </button>
   );

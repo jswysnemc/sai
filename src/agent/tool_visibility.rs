@@ -56,7 +56,7 @@ impl ToolVisibility {
     /// 返回:
     /// - 依据 `agent_runtime.deferred_tools` 构造的可见性状态
     pub(crate) fn from_config(config: &AppConfig) -> Self {
-        if config.jev_routing.enabled {
+        if config.jev.routing.enabled {
             return Self::with_jev_routing(config.agent_deferred_tools());
         }
         Self::new(config.agent_deferred_tools().to_vec())

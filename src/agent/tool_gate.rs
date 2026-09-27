@@ -42,9 +42,7 @@ pub(crate) fn evaluate_tool_gate(
     }
     // 3. 工具存在但当前不可见：提示先调用 load
     if !visibility.is_visible(name) {
-        return ToolGate::Reject(format!(
-            "tool error: tool {name} is not loaded in the current visible tool set; call load with type=tool and a keywords array first. If this tool was loaded in a previous conversation, the loaded-tool session state was reset or is unavailable."
-        ));
+        return ToolGate::Reject(hidden_tool_notice(visibility, name));
     }
     // 4. 参数必须满足真实工具 Schema，统一外壳不能降低具体调用的校验强度
     if let Err(err) = registry.validate_arguments(name, &call.function.arguments) {
@@ -61,6 +59,27 @@ pub(crate) fn evaluate_tool_gate(
 ///
 /// 返回:
 /// - 回传给模型的错误说明
+/// 构造当前不可见工具的错误说明。
+///
+/// Jev 模式下新能力只能向路由申请；`load` 只重读已经暴露过的资源。
+///
+/// 参数:
+/// - `visibility`: 当前可见性状态
+/// - `name`: 模型试图调用的工具名
+///
+/// 返回:
+/// - 回传给模型的错误说明
+fn hidden_tool_notice(visibility: &super::tool_visibility::ToolVisibility, name: &str) -> String {
+    if visibility.is_jev_routing() {
+        return format!(
+            "tool error: tool {name} is not exposed. Describe the capability in request_capability. Do not call load to discover it; load only re-reads resources Jev already exposed."
+        );
+    }
+    format!(
+        "tool error: tool {name} is not loaded in the current visible tool set; call load with type=tool and a keywords array first. If this tool was loaded in a previous conversation, the loaded-tool session state was reset or is unavailable."
+    )
+}
+
 fn invalid_arguments_notice(name: &str, error: &anyhow::Error) -> String {
     format!(
         "tool error: invalid arguments for {name}: {error:#}. Arguments must be a single JSON object matching the tool schema; remove unexpected fields, correct invalid values, and reissue the call."
@@ -84,8 +103,13 @@ fn unknown_tool_notice(
     name: &str,
 ) -> String {
     if visibility.is_progressive() {
+        let discover = if visibility.is_jev_routing() {
+            "Call request_capability and describe the capability you need. Do not call load to discover new tools."
+        } else {
+            "Call load with type=tool and a keywords array to discover available tools, or pick a different tool."
+        };
         return format!(
-            "tool error: unknown tool: {name}. It is not registered in this session. Call load with type=tool and a keywords array to discover available tools, or pick a different tool; do not retry this name."
+            "tool error: unknown tool: {name}. It is not registered in this session. {discover} Do not retry this name."
         );
     }
     let available = available_tool_names(registry, visibility);
@@ -293,6 +317,23 @@ mod tests {
             panic!("deferred tool must be rejected before load");
         };
         assert!(message.contains("is not loaded in the current visible tool set"));
+    }
+
+    /// 验证 Jev 模式下未暴露的工具指向 request_capability，而不是 load 发现。
+    #[test]
+    fn jev_hidden_tool_asks_for_request_capability() {
+        let registry = registry_with("web_search");
+        let mut config = crate::config::AppConfig::default();
+        config.jev.routing.enabled = true;
+        let visibility = super::super::tool_visibility::ToolVisibility::from_config(&config);
+
+        let gate = evaluate_tool_gate(&registry, &visibility, &call("web_search", "{}"));
+
+        let ToolGate::Reject(message) = gate else {
+            panic!("unexposed tool must be rejected");
+        };
+        assert!(message.contains("request_capability"), "{message}");
+        assert!(!message.contains("call load with type=tool"), "{message}");
     }
 
     /// 验证通配延迟配置不会隐藏基础问题工具。

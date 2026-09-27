@@ -212,6 +212,7 @@ export function readableToolName(name: string, backgroundTask = false): string {
     trash_path: "Trash",
     todo: "Todo",
     load: "Load",
+    request_capability: "Request",
     generate_image: "Generate image"
   };
   return labels[name] ?? name.replaceAll("_", " ");

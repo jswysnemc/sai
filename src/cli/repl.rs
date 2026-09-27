@@ -11,10 +11,13 @@ mod agent_selection;
 mod compact;
 mod exit_hint;
 mod input_restore;
+mod jev_commands;
+mod mode_commands;
 mod model_selection;
 mod navigation;
 mod plugin_commands;
 mod session_support;
+mod settings_commands;
 pub(super) mod subagent_commands;
 pub(super) mod subagent_input;
 mod submission_queue;
@@ -497,24 +500,7 @@ pub(super) async fn run_repl(
                 continue;
             }
         }
-        if input.eq_ignore_ascii_case("/plan") {
-            mode = AgentMode::Plan;
-            runtime.record_meta(format!("{}: {}", t("mode", "模式"), mode.label()))?;
-            continue;
-        }
-        if input.eq_ignore_ascii_case("/audit") {
-            mode = AgentMode::Audited;
-            runtime.record_meta(format!("{}: {}", t("mode", "模式"), mode.label()))?;
-            continue;
-        }
-        if input.eq_ignore_ascii_case("/yolo") {
-            mode = AgentMode::Yolo;
-            runtime.record_meta(format!("{}: {}", t("mode", "模式"), mode.label()))?;
-            continue;
-        }
-        if input.eq_ignore_ascii_case("/auto") || input.eq_ignore_ascii_case("/auto-audit") {
-            mode = AgentMode::AutoAudit;
-            runtime.record_meta(format!("{}: {}", t("mode", "模式"), mode.label()))?;
+        if mode_commands::handle(input, &mut mode, &mut runtime)? {
             continue;
         }
         if input.eq_ignore_ascii_case("/providers") {
@@ -530,46 +516,34 @@ pub(super) async fn run_repl(
             )?;
             continue;
         }
-        if input.eq_ignore_ascii_case("/config") {
-            let result = crate::config_tui::run(paths);
-            // 全屏备用屏退出后整页重放，避免残留边框
-            runtime.redraw()?;
-            if let Err(err) = result {
-                runtime.record_meta(err.to_string())?;
-                continue;
-            }
-            reload_repl_agent(
-                paths,
-                &mut config,
-                &mut client,
-                &mut agent,
-                mode,
-                thinking_override.as_deref(),
-            )?;
-            runtime.record_meta(t("configuration reloaded", "配置已重新加载").to_string())?;
-            continue;
-        }
         if input.eq_ignore_ascii_case("/undo") {
             navigation::undo_turn(&state, &mut runtime, &mut pending_undo, &mut prefill)?;
             continue;
         }
-        if let Some(rest) = repl_command_rest(input, "/thinking") {
-            let level = rest
-                .split_whitespace()
-                .next()
-                .map(std::string::ToString::to_string);
-            let result = run_set_thinking(paths, SetThinkingArgs { level });
-            // 交互选择会占用内联区域，退出后重放清除残留
-            if rest.trim().is_empty() {
-                runtime.redraw()?;
-            }
-            if let Err(err) = result {
-                runtime.record_meta(err.to_string())?;
-                continue;
-            }
-            thinking_override = None;
-            reload_repl_agent(paths, &mut config, &mut client, &mut agent, mode, None)?;
-            runtime.record_meta(t("configuration reloaded", "配置已重新加载").to_string())?;
+        if settings_commands::handle(
+            input,
+            paths,
+            &mut config,
+            &mut client,
+            &mut agent,
+            &mut runtime,
+            mode,
+            &mut thinking_override,
+        )? {
+            continue;
+        }
+        if jev_commands::handle(
+            input,
+            paths,
+            &mut config,
+            &mut client,
+            &mut agent,
+            &mut runtime,
+            mode,
+            thinking_override.as_deref(),
+        )
+        .await?
+        {
             continue;
         }
         if input.eq_ignore_ascii_case("/ps") {

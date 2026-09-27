@@ -7,16 +7,23 @@ use sai_plugin_runtime::{
 use std::path::Path;
 use std::time::Duration;
 
-/// 【权限审核】【后端选择】指定 Lua 插件时独占自动审核，不再调用聊天模型
+/// 【权限审核】【后端选择】内置 Jev 审核优先，其次为指定的 Lua 插件，最后为聊天模型
 #[derive(Clone)]
 pub(crate) enum AutoAuditBackend {
     Llm(OpenAiCompatibleClient),
     Plugin(PluginRuntime),
+    Jev(super::jev_audit::JevAuditRuntime),
 }
 
 impl AutoAuditBackend {
     /// 按配置选择审核后端，config/paths 为运行配置及目录；返回可执行后端
     pub(crate) fn resolve(config: &AppConfig, paths: &SaiPaths) -> Result<Self> {
+        if config.jev.audit.enabled {
+            // Jev 接入不可用时直接报错交还人工，不隐式改用其他审核方式
+            return Ok(Self::Jev(super::jev_audit::JevAuditRuntime::from_config(
+                config,
+            )?));
+        }
         if config.permission.auto_audit_plugin_id.trim().is_empty() {
             Ok(Self::Llm(super::auto_audit::resolve_auto_audit_client(
                 config, paths,
@@ -37,6 +44,7 @@ impl AutoAuditBackend {
         workdir: &Path,
     ) -> Result<bool> {
         match self {
+            Self::Jev(runtime) => runtime.run(request, context, workdir).await,
             Self::Llm(client) => {
                 super::auto_audit::run_auto_audit(
                     client,

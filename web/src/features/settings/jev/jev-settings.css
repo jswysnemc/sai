@@ -1,0 +1,57 @@
+/* Jev 设置：接入状态行与测试结果，沿用设置页的步进间距与字号 */
+
+.jev-status {
+  display: grid;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.jev-status-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.jev-status-summary {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2xs) var(--space-sm);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.jev-status-summary > svg { flex-shrink: 0; }
+.jev-status-summary.is-ready > svg { color: var(--signal); }
+.jev-status-summary.is-blocked > svg { color: var(--warning); }
+.jev-status-summary strong { color: var(--ink); font-weight: 500; }
+
+.jev-status-summary code,
+.jev-status-summary em {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-code);
+  font-size: var(--text-xs);
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jev-status-summary small {
+  flex-basis: 100%;
+  color: var(--warning);
+  font-size: var(--text-xs);
+}
+
+.jev-status-note {
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 40rem) {
+  .jev-status-row { align-items: flex-start; }
+  .jev-status-summary code { flex-basis: 100%; }
+}

@@ -90,8 +90,9 @@ pub(crate) fn save(paths: &SaiPaths, mut submitted: Value) -> Result<Value> {
     let current = serde_json::to_value(AppConfig::load_or_default(paths)?)?;
     merge_secret_sentinels(&mut submitted, &current);
     ensure_secret_sentinels_resolved(&submitted)?;
-    let config: AppConfig =
+    let mut config: AppConfig =
         serde_json::from_value(submitted).context("invalid Sai configuration")?;
+    config.migrate_legacy_jev_routing();
     config.validate()?;
     config.save(paths)?;
     load_redacted(paths)

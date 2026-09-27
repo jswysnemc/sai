@@ -55,6 +55,7 @@ const EXTRA_REPL_COMMANDS: &[&str] = &[
     "/ps",
     "/plugins",
     "/plugin",
+    "/jev",
 ];
 
 /// 其中只切换权限模式的命令：等价于 Shift+Tab 热切换，可立即生效。
@@ -309,6 +310,10 @@ fn command_description(command: &str) -> &'static str {
         ),
         "/yolo" => t("switch to YOLO mode", "切换到 YOLO 模式"),
         "/auto" | "/auto-audit" => t("switch to auto-audit mode", "切换到自动审核模式"),
+        "/jev" => t(
+            "Jev routing and permission audit status and switches",
+            "Jev 暴露决策与权限审核的状态和开关",
+        ),
         "/goal" => t("manage long-running goals", "管理长期目标"),
         "/tree" => t(
             "browse the session tree and switch branches",
@@ -500,6 +505,7 @@ mod tests {
             "/thinking",
             "/ps",
             "/undo",
+            "/jev test",
             "!ls",
         ] {
             assert_eq!(
@@ -534,6 +540,7 @@ mod tests {
             "/undo",
             "/thinking high",
             "/ps",
+            "/jev routing on",
         ] {
             assert!(
                 is_stream_command_text(command),

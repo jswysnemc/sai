@@ -1,4 +1,4 @@
-import { AlertCircle } from "../../shared/ui/icons";
+import { AlertCircle, ArrowRight } from "../../shared/ui/icons";
 import { useI18n } from "../i18n/use-i18n";
 import { formatDuration } from "./trajectory-format";
 import { RECORD_KIND_LABELS, type TrajectoryRecord } from "./trajectory-record";
@@ -62,7 +62,7 @@ export function TrajectoryRow({
         </span>
         {resultPreview && (
           <span className="trajectory-row-result" title={resultPreview}>
-            <span className="trajectory-row-arrow" aria-hidden>→</span>
+            <ArrowRight size={12} className="trajectory-row-arrow" aria-hidden />
             {resultPreview}
           </span>
         )}

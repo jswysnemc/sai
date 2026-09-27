@@ -138,6 +138,25 @@ fn edit_tool_result_keeps_diff_stats_on_status_line() {
     assert!(!output.contains("Added"));
 }
 
+/// 能力申请只列出暴露的名称，不倾倒工具 Schema。
+#[test]
+fn capability_result_lists_exposed_names() {
+    let output = render_result(
+        "request_capability",
+        true,
+        r#"{"ok":true,"router":"jev","tools":[{"name":"web_search","definition":{"type":"function","function":{"name":"web_search","description":"Search.","parameters":{"type":"object"}}}}],"skills":[{"name":"drawio","status":"loaded","content":"skill body marker"}],"instruction":"exposed"}"#,
+        ToolCallDisplayMode::Full,
+    );
+    let plain = crate::render::activity_animation::strip_ansi_for_test(&output);
+
+    assert!(plain.contains("Requested"), "{plain}");
+    assert!(plain.contains("1 tool · 1 skill"), "{plain}");
+    assert!(plain.contains("tool web_search"), "{plain}");
+    assert!(plain.contains("skill drawio"), "{plain}");
+    assert!(!plain.contains("parameters"), "{plain}");
+    assert!(!plain.contains("skill body marker"), "{plain}");
+}
+
 /// 非编辑类工具的状态行不受实时统计影响。
 #[test]
 fn non_edit_tools_keep_a_plain_status_line() {

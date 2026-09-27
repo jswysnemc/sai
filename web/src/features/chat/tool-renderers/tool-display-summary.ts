@@ -45,6 +45,10 @@ export function toolDisplaySummary(
     return humanizeCommand(command) || text(locale, "command", "命令");
   }
 
+  if (name === "request_capability") {
+    return compactText(stringField(args, "need"));
+  }
+
   if (name === "load") {
     const type = stringField(args, "type");
     const keywords = stringListField(args, "keywords");
@@ -332,6 +336,10 @@ function lenientSummaryFromPartial(
   locale: Locale,
   workspacePath: string
 ): string {
+  if (name === "request_capability") {
+    const need = lenientStringField(argumentsText, "need");
+    if (need) return compactText(need);
+  }
   if (name === "run_command" || name.includes("background_command")) {
     const command = lenientStringField(argumentsText, "command") || lenientStringField(argumentsText, "cmd");
     if (command) return humanizeCommand(command);

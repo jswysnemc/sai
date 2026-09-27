@@ -1,4 +1,5 @@
 import type { AppConfig, ModelEndpointConfig, ModelEndpointKind } from "../../../api/contracts/config";
+import { JEV_OFFICIAL_ENDPOINT } from "../jev/jev-config";
 
 /**
  * 【模型接入】【新增草稿】创建独立且稳定的标识，不改写聊天供应商。
@@ -10,6 +11,10 @@ import type { AppConfig, ModelEndpointConfig, ModelEndpointKind } from "../../..
 export function newModelEndpoint(endpoints: readonly ModelEndpointConfig[], kind: ModelEndpointKind, name: string): ModelEndpointConfig {
   let index = 1;
   while (endpoints.some((item) => item.id === `${kind}-${index}`)) index += 1;
+  // Jev 接入预填官方地址与模型，留空密钥时后端读取 TypeSafe 环境变量
+  if (kind === "jev") {
+    return { id: `${kind}-${index}`, kind, name: "TypeSafe Jev", endpoint: JEV_OFFICIAL_ENDPOINT, protocol: "auto", api_key: "", api_keys: [], api_key_balance: false, models: [], model: "jev-latest" };
+  }
   return { id: `${kind}-${index}`, kind, name, endpoint: "", protocol: "auto", api_key: "", api_keys: [{ id: "key-1", api_key: "", label: "" }], api_key_selected: "key-1", api_key_balance: false, models: [], model: "" };
 }
 

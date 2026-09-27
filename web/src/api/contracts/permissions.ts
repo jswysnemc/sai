@@ -8,6 +8,8 @@ export type PermissionConfig = {
   cli_mode?: RunMode;
   auto_audit_provider_id?: string;
   auto_audit_model?: string;
+  /** 指定 Lua 自动审核插件；内置 Jev 审核开启时不使用 */
+  auto_audit_plugin_id?: string;
 };
 
 export type SessionConfig = {

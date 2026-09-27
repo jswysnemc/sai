@@ -1,6 +1,5 @@
 use super::super::app_state::WebAppState;
 use super::super::error::{WebError, WebResult};
-use super::super::services::config_service::SECRET_SENTINEL;
 use crate::config::{ModelEndpointConfig, ModelEndpointKind};
 use crate::tools::image_generation::request::{model_catalog_url, ImageAuth};
 use axum::extract::State;
@@ -158,35 +157,13 @@ async fn generate_image(
 /// 将脱敏的浏览器草稿与服务端保存的真实密钥合并。
 fn restore_endpoint(
     state: &WebAppState,
-    mut submitted: ModelEndpointConfig,
+    submitted: ModelEndpointConfig,
 ) -> WebResult<ModelEndpointConfig> {
-    if submitted.kind != ModelEndpointKind::ImageGeneration {
-        return Err(WebError::bad_request(
-            "endpoint is not an image generation endpoint",
-        ));
-    }
-    let config = crate::config::AppConfig::load_or_default(&state.paths).map_err(WebError::from)?;
-    let current = config
-        .model_endpoints
-        .iter()
-        .find(|item| item.id == submitted.id)
-        .cloned();
-    if submitted.api_key == SECRET_SENTINEL {
-        submitted.api_key = current
-            .as_ref()
-            .map(|item| item.api_key.clone())
-            .unwrap_or_default();
-    }
-    if let Some(current) = current {
-        for key in &mut submitted.api_keys {
-            if key.api_key == SECRET_SENTINEL {
-                if let Some(previous) = current.api_keys.iter().find(|item| item.id == key.id) {
-                    key.api_key = previous.api_key.clone();
-                }
-            }
-        }
-    }
-    Ok(submitted)
+    super::model_endpoint_draft::restore_endpoint_secrets(
+        state,
+        submitted,
+        ModelEndpointKind::ImageGeneration,
+    )
 }
 
 /// 请求 OpenAI 兼容接口的模型目录，兼容带版本路径和完整生图路径的地址。

@@ -1,6 +1,7 @@
 import {
   Check,
   CircleDashed,
+  DiamondCheck,
   FileCode2,
   FilePenLine,
   FileSearch,
@@ -35,6 +36,7 @@ export function ToolIcon({ name, backgroundTask = false }: { name: string; backg
   if (name === "read_file") return <FileSearch size={size} />;
   if (name === "grep") return <Search size={size} />;
   if (name === "glob" || name === "list_dir") return <FolderTree size={size} />;
+  if (name === "request_capability") return <DiamondCheck size={size} />;
   if (name === "todo") return <ListTodo size={size} />;
   if (name === "trash_path" || name.includes("delete")) return <Trash2 size={size} />;
   if (name.includes("web") || name.includes("search")) return <Globe size={size} />;

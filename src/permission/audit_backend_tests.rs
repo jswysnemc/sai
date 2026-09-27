@@ -145,3 +145,28 @@ async fn permission_audit_reuses_selected_provider_without_persisting_key() {
             .contains("fixture-only")
     );
 }
+
+/// 开启内置 Jev 审核时优先于审核插件；接入缺失时报错交还人工
+#[test]
+fn builtin_jev_audit_takes_precedence_over_plugin() {
+    let (_root, paths, mut config) =
+        fixture("sai.register_permission_audit({review=function() return {decision='allow'} end})");
+    config.jev.audit.enabled = true;
+    config.model_endpoints = vec![crate::config::ModelEndpointConfig {
+        id: "jev-1".into(),
+        kind: crate::config::ModelEndpointKind::Jev,
+        name: "JEV".into(),
+        endpoint: crate::config::JEV_OFFICIAL_ENDPOINT.into(),
+        protocol: "auto".into(),
+        api_key: "fixture-only".into(),
+        api_keys: Vec::new(),
+        api_key_selected: None,
+        api_key_balance: false,
+        models: Vec::new(),
+        model: "jev-latest".into(),
+    }];
+    let backend = AutoAuditBackend::resolve(&config, &paths).unwrap();
+    assert!(matches!(backend, AutoAuditBackend::Jev(_)));
+    config.model_endpoints[0].api_key = "$env:SAI_JEV_AUDIT_TEST_MISSING".into();
+    assert!(AutoAuditBackend::resolve(&config, &paths).is_err());
+}

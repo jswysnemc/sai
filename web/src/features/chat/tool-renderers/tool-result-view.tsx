@@ -1,6 +1,8 @@
 import { BackgroundTaskToolView } from "./background-task-tool-view";
 import { EditToolView } from "./edit-tool-view";
 import { GenericToolView } from "./generic-tool-view";
+import { JevCapabilityView } from "./jev-capability-view";
+import { parseJevCapability } from "./jev-capability-data";
 import { ReadToolView } from "./read-tool-view";
 import { ShellToolView } from "./shell-tool-view";
 import { ImageGenerationToolView } from "./image-generation-tool-view";
@@ -20,6 +22,10 @@ type ToolResultViewProps = {
  * @returns 工具结果视图
  */
 export function ToolResultView({ name, argumentsText, output, headerPath, workspacePath }: ToolResultViewProps) {
+  if (name === "request_capability") {
+    const exposure = parseJevCapability(output);
+    if (exposure) return <JevCapabilityView argumentsText={argumentsText} exposure={exposure} />;
+  }
   if (name === "generate_image") {
     return <ImageGenerationToolView output={output} />;
   }

@@ -5,6 +5,7 @@ import {
   Braces,
   Cable,
   Database,
+  DiamondCheck,
   FileText,
   GitBranch,
   Globe,
@@ -70,14 +71,7 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     icon: Palette,
     searchKeys: ["image", "generation", "model", "endpoint", "生图", "图片", "密钥"]
   },
-{
-    id: "jev-models", group: "basics", appConfig: "required",
-    labelEn: "JEV models", labelZh: "JEV 模型",
-    descriptionEn: "JEV model request endpoints and API keys",
-    descriptionZh: "JEV 模型的独立请求地址和 API Key",
-    icon: Braces,
-    searchKeys: ["jev", "typesafe", "model", "endpoint", "决策", "密钥"]
-  },
+
 {
     id: "appearance",
     group: "basics",
@@ -176,6 +170,18 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     descriptionZh: "内置搜索路由、供应商地址与凭据",
     icon: Globe,
     searchKeys: ["web-search", "search", "tinyfish", "tavily", "firecrawl", "anysearch", "searxng", "duckduckgo", "网页", "搜索", "联网"]
+  },
+{
+    id: "jev", group: "agentCapabilities", appConfig: "required",
+    labelEn: "Jev", labelZh: "Jev",
+    descriptionEn: "Tool routing, permission audit, and connections",
+    descriptionZh: "工具暴露决策、权限自动审核与接入",
+    icon: DiamondCheck,
+    searchKeys: ["jev", "typesafe", "routing", "audit", "capability", "endpoint", "决策", "暴露", "审核", "密钥"],
+    subviews: [
+      { id: "features", labelEn: "Features", labelZh: "功能" },
+      { id: "connections", labelEn: "Connections", labelZh: "接入" }
+    ]
   },
 {
     id: "skills",
@@ -294,6 +300,8 @@ export function resolveSettingsSectionId(value: string | undefined | null): Sett
   if (!value) return DEFAULT_SETTINGS_SECTION;
   // 1. 兼容旧版插件设置地址，并统一迁移到 CLI 助手工具语义
   if (value === "plugins") return "cli-tools";
+  // 2. 旧版 JEV 模型地址并入 Jev 分区
+  if (value === "jev-models") return "jev";
   const match = SETTINGS_SECTIONS.find((item) => item.id === value);
   return match?.id ?? DEFAULT_SETTINGS_SECTION;
 }

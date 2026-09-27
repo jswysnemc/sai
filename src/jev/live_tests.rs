@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::JevRoutingConfig;
+use crate::config::{AppConfig, JevAuditConfig, JevRoutingConfig};
 
 /// 构造接近真实会话的候选集合。
 fn roster() -> Vec<Candidate> {
@@ -40,7 +40,8 @@ fn roster() -> Vec<Candidate> {
 /// 用真实 Jev 请求检查问题设计：返回每个候选的概率与最终选择。
 async fn decide(need: &str) -> (Vec<(String, f64)>, Selection) {
     let config = JevRoutingConfig::default();
-    let client = JevClient::from_config(&config).unwrap();
+    let connection = AppConfig::default().jev_connection().unwrap();
+    let client = JevClient::new(&connection, config.timeout_seconds).unwrap();
     let candidates = roster();
     let state = build_state(need, "", &["read_file".into(), "run_command".into()]);
     let answers = client
@@ -75,4 +76,32 @@ async fn live_jev_selects_relevant_capabilities() {
     let (scored, selection) = decide("你好，解释一下什么是闭包").await;
     println!("chat: {scored:?} -> {selection:?}");
     assert!(selection.is_empty());
+}
+
+#[tokio::test]
+#[ignore = "requires TYPESAFE_API_KEY and makes a live API request"]
+async fn live_jev_audit_allows_requested_operation() {
+    let connection = AppConfig::default().jev_connection().unwrap();
+    let client = JevClient::new(&connection, 10).unwrap();
+    let facts = audit::AuditFacts {
+        tool: "run_command",
+        arguments_json: r#"{"command":"echo hello"}"#,
+        context: "[user] Print hello using echo hello in the workspace.",
+        workdir: "/workspace",
+        policy: crate::prompts::AUTO_AUDIT_SYSTEM_PROMPT,
+    };
+    let verdict = audit::review(&client, &facts, &JevAuditConfig::default())
+        .await
+        .unwrap();
+    println!("audit: {verdict:?}");
+    assert!(!matches!(verdict, audit::AuditVerdict::Deny(_)));
+}
+
+#[tokio::test]
+#[ignore = "requires TYPESAFE_API_KEY and makes a live API request"]
+async fn live_jev_probe_succeeds() {
+    let connection = AppConfig::default().jev_connection().unwrap();
+    let report = probe::probe(&connection).await;
+    println!("probe: {report:?}");
+    assert!(report.ok, "{}", report.detail);
 }

@@ -8,6 +8,7 @@ import { GitSettingsPanel } from "../git/git-settings-panel";
 import { SshSettingsSection } from "../ssh/ssh-settings-section";
 import { ProviderSettingsSection } from "../provider-settings-section";
 import { ModelEndpointSettings } from "../model-endpoints/model-endpoint-settings";
+import { JevSettingsSection } from "../jev/jev-settings-section";
 import { CliToolsSettingsSection } from "../cli-tools/cli-tools-settings-section";
 import { WebSearchSettingsSection } from "../web-search/web-search-settings-section";
 import { RuntimeSettingsSection } from "../runtime-settings-section";
@@ -96,8 +97,9 @@ function renderAppConfigSection(
         />
       );
     case "image-models":
-    case "jev-models":
-      return <ModelEndpointSettings key={section} kind={section === "image-models" ? "image_generation" : "jev"} config={config} secretSentinel={settings.secretSentinel} onChange={settings.updateConfig} />;
+      return <ModelEndpointSettings key={section} kind="image_generation" config={config} secretSentinel={settings.secretSentinel} onChange={settings.updateConfig} />;
+    case "jev":
+      return <JevSettingsSection config={config} subview={subview} secretSentinel={settings.secretSentinel} dirty={settings.dirty} onConfigChange={settings.updateConfig} />;
     case "providers":
       return (
         <ProviderSettingsSection

@@ -4,6 +4,8 @@ mod form;
 mod gateways;
 mod ime;
 mod input;
+mod jev;
+mod jev_connection;
 mod knowledge;
 mod layout;
 mod model_metadata_form;

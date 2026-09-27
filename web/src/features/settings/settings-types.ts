@@ -5,7 +5,7 @@ import type { LucideIcon } from "../../shared/ui/icons";
 export type SettingsSectionId =
   | "providers"
   | "image-models"
-  | "jev-models"
+  | "jev"
   | "agents"
   | "cli-tools"
   | "web-search"

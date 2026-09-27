@@ -129,8 +129,12 @@ export function ProviderApiKeysField({
           <li className="provider-api-key-row" key={`${providerId}:${key.id}`}>
             <div className="provider-api-key-value">
               <PasswordField
-                value={key.api_key}
+                value={secretSentinel.length > 0 && key.api_key === secretSentinel ? "" : key.api_key}
+                savedValueHint={secretSentinel.length > 0 && key.api_key === secretSentinel ? t("Saved", "已保存") : undefined}
                 placeholder={t(`API key ${index + 1}`, `接口密钥 ${index + 1}`)}
+                onClearSavedValue={secretSentinel.length > 0 && key.api_key === secretSentinel
+                  ? () => updateKey(key.id, { api_key: "" })
+                  : undefined}
                 onReveal={secretSentinel.length > 0 && key.api_key === secretSentinel
                   ? () => onRevealKey
                     ? onRevealKey(key.id)

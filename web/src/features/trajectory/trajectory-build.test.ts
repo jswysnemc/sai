@@ -419,4 +419,22 @@ describe("buildTrajectory 的思考与注入", () => {
     expect(injected?.label).toBe("context-state");
     expect(model.records.map((record) => record.kind)).toEqual(["user", "message", "assistant"]);
   });
+
+  it("把 Jev 预选注入收成工具与 Skill 名单", () => {
+    const model = buildTrajectory(timeline([
+      turn({
+        turn_id: "t1",
+        injected_content: `<jev-exposed-capabilities>\nBefore this request\n${JSON.stringify({
+          ok: true,
+          tools: [{ name: "web_search", definition: { type: "function" } }],
+          skills: [{ name: "drawio", content: "full document" }]
+        })}\n</jev-exposed-capabilities>`
+      })
+    ]));
+
+    const injected = model.records.find((record) => record.kind === "message");
+    expect(injected?.label).toBe("jev");
+    expect(injected?.summary).toBe("web_search, skill:drawio");
+    expect(injected?.summary).not.toContain("full document");
+  });
 });

@@ -135,6 +135,24 @@ describe("ToolLifecycleCard 折叠行", () => {
     expect(html).toContain("language-bash");
   });
 
+  it("能力申请折叠行展示需求与暴露计数", () => {
+    const html = render(makeTool({
+      name: "request_capability",
+      arguments: JSON.stringify({ need: "search the web" }),
+      output: JSON.stringify({
+        ok: true,
+        router: "jev",
+        tools: [{ name: "web_search", definition: { type: "function", function: { name: "web_search", description: "Search.", parameters: {} } } }],
+        skills: []
+      })
+    }));
+    const plain = stripTags(html);
+    expect(plain).toContain("Request");
+    expect(plain).toContain("search the web");
+    expect(plain).toContain("1 个工具");
+    expect(plain).not.toContain("parameters");
+  });
+
   it("流式写入期间折叠行展示跳动中的增删徽章", () => {
     const html = render(makeTool({
       id: "writing",

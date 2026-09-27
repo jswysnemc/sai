@@ -58,11 +58,9 @@ export function PermissionDefaultSettings({ config, onConfigChange }: Permission
     onConfigChange({
       ...config,
       permission: {
+        // 保留界面未展示的字段（如审核插件），避免保存时被清空
+        ...config.permission,
         default_mode: config.permission?.default_mode ?? "yolo",
-        tui_mode: config.permission?.tui_mode,
-        cli_mode: config.permission?.cli_mode,
-        auto_audit_provider_id: config.permission?.auto_audit_provider_id,
-        auto_audit_model: config.permission?.auto_audit_model,
         ...patch
       }
     });
@@ -157,7 +155,9 @@ export function PermissionDefaultSettings({ config, onConfigChange }: Permission
               menuPreferredWidth={360}
               menuMinimumWidth={280}
             />
-            <small>{t("An empty value follows the current conversation model.", "留空时自动跟随当前会话模型。")}</small>
+            <small>{config.jev?.audit?.enabled
+              ? t("Jev audit is enabled under Settings > Jev, so this model is not used.", "已在“设置 > Jev”开启 Jev 审核，此模型不会被使用。")
+              : t("An empty value follows the current conversation model.", "留空时自动跟随当前会话模型。")}</small>
           </label>
         </div>
       </SettingsGroup>

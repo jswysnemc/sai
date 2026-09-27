@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from "../../shared/ui/icons";
+import { Plus, Trash2, X } from "../../shared/ui/icons";
 import { useState } from "react";
 import { Button } from "../../shared/ui/button/button";
 import { ContextActionMenu } from "../../shared/ui/menu/context-action-menu";
@@ -71,7 +71,7 @@ export function ImageWorkbenchSessions({ sessions, activeId, onSelect, onCreate,
           <button type="button" className="is-danger" disabled={selected.size === 0} onClick={() => { onRemoveMany([...selected]); exitSelection(); }} aria-label={t("Delete selected sessions", "删除所选会话")}>
             <Trash2 size={14} />
           </button>
-          <button type="button" onClick={exitSelection} aria-label={t("Exit selection", "退出选择")}>×</button>
+          <button type="button" onClick={exitSelection} aria-label={t("Exit selection", "退出选择")}><X size={14} /></button>
         </div>
       ) : (
         <div className="image-sessions-head">

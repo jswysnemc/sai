@@ -85,6 +85,27 @@ describe("toolResultSummary", () => {
     expect(toolResultSummary("grep", output, "en-US")?.label).toBe("1 matches");
   });
 
+  it("能力申请给出暴露计数，不把 Schema 当摘要", () => {
+    const output = JSON.stringify({
+      ok: true,
+      router: "jev",
+      tools: [{ name: "web_search", definition: { type: "function", function: { description: "Search." } } }],
+      skills: [{ name: "drawio", status: "loaded", content: "full" }]
+    });
+    expect(toolResultSummary("request_capability", output)).toEqual({
+      label: "1 个工具 · 1 个 Skill",
+      tone: "neutral"
+    });
+  });
+
+  it("能力申请没有匹配时标记未匹配", () => {
+    const output = JSON.stringify({ ok: true, router: "jev", tools: [], skills: [] });
+    expect(toolResultSummary("request_capability", output)).toEqual({
+      label: "未匹配",
+      tone: "neutral"
+    });
+  });
+
   it("空输出返回空摘要", () => {
     expect(toolResultSummary("read_file", "")).toBeNull();
   });

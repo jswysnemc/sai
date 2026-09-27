@@ -6,6 +6,7 @@ mod auto_audit;
 mod broker;
 mod command_policy;
 mod interaction;
+mod jev_audit;
 mod path_policy;
 mod policy;
 

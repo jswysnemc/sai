@@ -1,4 +1,5 @@
 import { parseImageReadNote, parseReadTextPages } from "./read-result-parser";
+import { jevCapabilityStatusLabel, parseJevCapability } from "./jev-capability-data";
 import { parseJsonRecord } from "./tool-data";
 import { text, type Locale } from "../../i18n/locale";
 
@@ -38,6 +39,7 @@ export function toolResultSummary(
 ): ToolResultSummary | null {
   if (!output) return null;
 
+  if (name === "request_capability") return capabilitySummary(output, locale);
   if (name === "read_file") return readSummary(output, locale);
   if (name === "grep" || name === "search_text") return matchSummary(output, locale);
   if (name === "glob" || name === "find_files" || name === "list_dir") return fileSummary(output, locale);
@@ -75,6 +77,19 @@ export function toolDiffStat(name: string, output: string): ToolDiffStat | null 
  * @param locale 界面语言
  * @returns 行数摘要
  */
+/**
+ * 汇总 Jev 本次暴露的工具与 Skill 数量。
+ *
+ * @param output 能力申请结果 JSON
+ * @param locale 界面语言
+ * @returns 计数摘要；不是 Jev 成功结果时返回空
+ */
+function capabilitySummary(output: string, locale: Locale): ToolResultSummary | null {
+  const exposure = parseJevCapability(output);
+  if (!exposure) return null;
+  return { label: jevCapabilityStatusLabel(exposure, locale), tone: "neutral" };
+}
+
 function readSummary(output: string, locale: Locale): ToolResultSummary | null {
   const image = parseImageReadNote(output);
   if (image) {

@@ -1,4 +1,4 @@
-import { ChevronRight, Plus } from "../../shared/ui/icons";
+import { ChevronRight, Plus, X } from "../../shared/ui/icons";
 import { useEffect, useState, type ReactNode, type RefObject } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";
@@ -157,7 +157,7 @@ export function SidebarTaskBoard(props: SidebarTaskBoardProps) {
             onDelete={() => void props.selection.requestBulkDelete()}
           />
           <button type="button" className="workspace-context-exit" onClick={props.selection.exitSelection} aria-label={t("Exit selection", "退出选择")} title={t("Exit selection", "退出选择")}>
-            ×
+            <X size={14} />
           </button>
         </div>
       )}

@@ -1,3 +1,4 @@
+import { X } from "../../shared/ui/icons";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import type { AppConfig } from "../../api/contracts";
@@ -173,7 +174,7 @@ export function RtkFilterSettings({ config, onConfigChange }: RtkFilterSettingsP
                 title={t("Remove from the list", "从列表中移除")}
                 onClick={() => toggleExcluded(name)}
               >
-                {name}<span aria-hidden="true">×</span>
+                {name}<X size={12} />
               </button>
             ))}
           </div>

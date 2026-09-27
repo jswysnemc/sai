@@ -12,8 +12,10 @@ mod goals;
 mod health;
 mod image_generation;
 mod input_history;
+mod jev;
 mod mcp_config;
 mod memory;
+mod model_endpoint_draft;
 mod notifications;
 mod permissions;
 mod prompts;
@@ -73,6 +75,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         .merge(subagent_models::routes())
         .merge(cron_jobs::routes())
         .merge(providers::routes())
+        .merge(jev::routes())
         .merge(prompts::routes())
         .merge(permissions::routes())
         .merge(questions::routes())

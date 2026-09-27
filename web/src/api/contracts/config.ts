@@ -1,3 +1,4 @@
+import type { JevConfig } from "./jev";
 import type { NotificationConfig, PermissionConfig, SessionConfig } from "./permissions";
 
 export type ProviderApiKey = {
@@ -193,6 +194,8 @@ export type AppConfig = {
   active_provider: string;
   providers: ProviderConfig[];
   model_endpoints?: ModelEndpointConfig[];
+  /** 内置 Jev 功能：工具与 skills 暴露决策、权限自动审核 */
+  jev?: JevConfig;
   permission?: PermissionConfig;
   /** 执行对话轮次的内核 */
   agent?: AgentEngineConfig;

@@ -1,4 +1,4 @@
-import { Database } from "../../../shared/ui/icons";
+import { ArrowDown, ArrowUp, Database } from "../../../shared/ui/icons";
 import type { TurnUsage } from "../../../api/contracts";
 import { useI18n } from "../../i18n/use-i18n";
 import { formatTurnElapsed } from "../live-run-indicator";
@@ -6,7 +6,7 @@ import { formatTurnElapsed } from "../live-run-indicator";
 /**
  * 展示一轮回复的耗时、首字延迟、输入输出 token、生成速率与缓存命中占比。
  *
- * 上下行沿用 TUI 会话总览的记号：↑ 为发给模型的上行、↓ 为返回的下行。
+ * 上下行沿用 TUI 会话总览的记号：向上箭头为发给模型的上行、向下箭头为返回的下行。
  * 用文本箭头而非图标——此前两枚不同形制的图标视觉重量不一致，
  * 文本字形天然同字号同基线。
  *
@@ -52,11 +52,11 @@ export function TurnMetrics({
       {usage && (
         <>
           <span className="turn-metric" title={t("Input tokens", "输入 token")}>
-            <span aria-hidden>↑</span>
+            <ArrowUp size={12} aria-hidden />
             {formatTokenCount(usage.prompt_tokens)}
           </span>
           <span className="turn-metric" title={t("Output tokens", "输出 token")}>
-            <span aria-hidden>↓</span>
+            <ArrowDown size={12} aria-hidden />
             {formatTokenCount(usage.completion_tokens)}
           </span>
           {tokensPerSec && (

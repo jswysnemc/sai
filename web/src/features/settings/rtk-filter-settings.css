@@ -63,9 +63,9 @@
 
 .rtk-command-tag:hover { border-color: var(--line-strong); background: var(--paper-deep); }
 
-.rtk-command-tag span { color: var(--ink-soft); }
+.rtk-command-tag svg { color: var(--ink-soft); }
 
-.rtk-command-tag:hover span { color: var(--danger); }
+.rtk-command-tag:hover svg { color: var(--danger); }
 
 .rtk-denylist-input {
   display: flex;

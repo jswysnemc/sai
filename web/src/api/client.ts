@@ -1,6 +1,7 @@
 import { loadTurnTree } from "./turn-tree-client";
 import { apiRequest } from "./api-request";
 import { usageApi } from "./usage-client";
+import { imageModelsApi, jevApi } from "./model-endpoint-client";
 export { apiRequest } from "./api-request";
 export { bootstrapSession, fetchAuthMode, hasActiveSession, loginWithPassword } from "./auth-client";
 import type { BranchSwitchResult } from "./turn-tree-contracts";
@@ -47,8 +48,6 @@ import type {
   ProviderSecretResponse,
   ProviderProbeReport,
   ProviderProbeMode,
-  ModelEndpointConfig,
-  ImageEndpointProbeReport,
   RunMode,
   RunModelSelection,
   ThinkingLevel,
@@ -543,33 +542,8 @@ export const api = {
         body: JSON.stringify({ provider, model, mode })
       })
   },
-  imageModels: {
-    /** 获取当前生图端点公开的模型目录。 */
-    models: (endpoint: ModelEndpointConfig) =>
-      apiRequest<{ models: string[] }>("/api/image-models/models", {
-        method: "POST",
-        body: JSON.stringify({ endpoint })
-      }),
-    /** 用一次最小真实图片请求探测生图端点。 */
-    test: (endpoint: ModelEndpointConfig) =>
-      apiRequest<ImageEndpointProbeReport>("/api/image-models/test", {
-        method: "POST",
-        body: JSON.stringify({ endpoint })
-      }),
-    /** 根据聊天中的提示词直接请求图片模型。 */
-    generate: (request: { endpointId: string; model?: string; prompt: string; aspectRatio: string; resolution: string; images?: string[] }) =>
-      apiRequest<Record<string, unknown>>("/api/image-models/generate", {
-        method: "POST",
-        body: JSON.stringify({
-          endpoint_id: request.endpointId,
-          model: request.model,
-          prompt: request.prompt,
-          aspect_ratio: request.aspectRatio,
-          resolution: request.resolution,
-          images: request.images ?? []
-        })
-      })
-  },
+  imageModels: imageModelsApi,
+  jev: jevApi,
   prompts: {
     list: (kind: PromptKind) => apiRequest<{ items: PromptSummary[] }>(`/api/prompts/${kind}`),
     read: (kind: PromptKind, name: string) => apiRequest<PromptDocument>(`/api/prompts/${kind}/${encodeURIComponent(name)}`),

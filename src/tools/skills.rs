@@ -307,7 +307,7 @@ pub(crate) fn visible_skill_catalog(
 /// - `<available-skills>` 提示片段
 pub fn skills_jev_prompt(paths: &SaiPaths) -> String {
     format!(
-        "<available-skills>\n已安装的 skills 与额外工具由 Jev 路由按需暴露：每轮开始前 Jev 会预先暴露与请求相关的资源，结果以 request_capability 工具结果的形式出现在上下文中。需要其他能力时调用 request_capability，用自然语言描述下一步要做的事。已暴露的资源不会再次返回，直接复用之前的结果；压缩后若正文丢失，用 load 按名称重新读取。需要沉淀可复用流程时，用 write_file 在 {} 下新建 <name>/SKILL.md，必须含 YAML frontmatter 的 name 与 description。\n</available-skills>",
+        "<available-skills>\nJev decides which extra tools and skills are exposed. Basic tools stay available as native tools.\nBefore each user message, a successful preselect is inserted in that same message inside <jev-exposed-capabilities>. Its JSON lists the newly exposed tool schemas and skill documents. Call those tools with invoke_tool, using the exact name and arguments from the schema, and follow the skill documents. If that block is absent, Jev exposed nothing new for this message; continue with the tools already available.\nTo ask for a capability that is not exposed yet, call request_capability and describe the next step in plain language. That tool result is the only additional exposure. Resources already exposed are not returned again; reuse the earlier block or tool result. If compaction removes a schema or skill document, call load with the exact name to read it again. Do not call load to discover new tools or skills.\nTo save a reusable procedure, use write_file under {} to create <name>/SKILL.md with YAML frontmatter name and description.\n</available-skills>",
         paths.skills_dir.display()
     )
 }
@@ -451,6 +451,20 @@ mod tests {
         assert!(prompt.contains("SKILL.md"));
         assert!(!prompt.contains("不支持创建"));
         assert!(!prompt.contains("不要把 skill 内容保存到知识库"));
+    }
+
+    #[test]
+    fn jev_skills_prompt_points_at_the_user_message_block() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path());
+        let prompt = skills_jev_prompt(&paths);
+
+        assert!(prompt.contains("<jev-exposed-capabilities>"));
+        assert!(prompt.contains("invoke_tool"));
+        assert!(prompt.contains("request_capability"));
+        assert!(prompt.contains("Do not call load to discover"));
+        assert!(!prompt.contains("request_capability 工具结果的形式"));
+        assert!(prompt.contains(&paths.skills_dir.display().to_string()));
     }
 
     #[test]

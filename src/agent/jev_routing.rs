@@ -113,7 +113,7 @@ impl Agent {
         messages: &[ChatMessage],
     ) -> Result<String> {
         if !self.tool_visibility.is_jev_routing() {
-            anyhow::bail!("request_capability is only available when jev_routing is enabled");
+            anyhow::bail!("request_capability is only available when jev.routing is enabled");
         }
         // 1. 解析需求并请求 Jev 判断
         let request = tools::jev_request::CapabilityRequest::parse(arguments)?;
@@ -132,7 +132,7 @@ impl Agent {
     /// 返回:
     /// - Jev 选中的资源；没有候选时返回空选择
     async fn jev_decide(&self, need: &str, messages: &[ChatMessage]) -> Result<Selection> {
-        let settings = &self.config.jev_routing;
+        let settings = &self.config.jev.routing;
         // 1. 收集候选，已暴露的资源不再参与判断
         let candidates: Vec<Candidate> =
             self.tool_visibility
@@ -151,7 +151,8 @@ impl Agent {
         let available = self.tool_visibility.exposed_resource_names(&self.tools);
         let state = jev::build_state(need, &conversation, &available);
         // 3. 一次请求批量评估全部候选
-        let client = JevClient::from_config(settings)?;
+        let connection = self.config.jev_connection()?;
+        let client = JevClient::new(&connection, settings.timeout_seconds)?;
         let answers = client
             .evaluate_nouls(&state, &jev::build_questions(&candidates))
             .await?;

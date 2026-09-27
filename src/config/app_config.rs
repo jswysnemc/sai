@@ -94,9 +94,12 @@ pub struct AppConfig {
     /// 会话网格：跨会话消息收发开关，默认只允许投递给自己
     #[serde(default)]
     pub mesh: super::mesh::MeshConfig,
-    /// 基于 TypeSafe Jev 的工具与 skills 暴露决策
+    /// 内置 TypeSafe Jev 功能：工具与 skills 暴露决策、权限自动审核
     #[serde(default)]
-    pub jev_routing: super::JevRoutingConfig,
+    pub jev: super::JevConfig,
+    /// 旧版 `jev_routing` 段，只在读取时迁移到 `jev.routing`
+    #[serde(default, rename = "jev_routing", skip_serializing)]
+    pub legacy_jev_routing: Option<serde_json::Value>,
 }
 
 /// 【应用配置】【指令默认值】缺省加载工作区与用户指令文件

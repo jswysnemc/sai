@@ -8,7 +8,7 @@ import type {
 } from "../../api/contracts";
 import type { SubagentDetail } from "../../api/contracts";
 import type { TrajectoryRecord, TrajectoryRecordKind } from "./trajectory-record";
-import { summarizeContent, summarizeToolArguments } from "./trajectory-format";
+import { summarizeContent, summarizeJevExposure, summarizeToolArguments } from "./trajectory-format";
 import { subagentIdFromOutput, subagentRecords } from "./trajectory-subagent";
 
 /** 构建产物：扁平记录表与按轮次归并的请求边界。 */
@@ -113,7 +113,7 @@ export function buildTrajectory(
         turnId: turn.turn_id,
         turnSeq: turn.seq,
         round: 0,
-        summary: summarizeContent(turn.injected_content),
+        summary: summarizeJevExposure(turn.injected_content) ?? summarizeContent(turn.injected_content),
         label: injectedLabel(turn.injected_content),
         startedAt: parseTimestamp(turn.user.timestamp),
         durationMs: null,
@@ -443,6 +443,7 @@ function injectedLabel(content: string): string {
   if (content.includes("<context-resource")) tags.push("resource");
   if (content.includes("<memory")) tags.push("memory");
   if (content.includes("<mode-instructions")) tags.push("mode");
+  if (content.includes("<jev-exposed-capabilities")) tags.push("jev");
   return tags.join(" · ") || "inject";
 }
 

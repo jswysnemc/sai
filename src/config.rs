@@ -11,7 +11,8 @@ mod cli_tools;
 pub mod defaults;
 mod gateway_defaults;
 mod git;
-mod jev_routing;
+mod jev;
+mod jev_legacy;
 mod mcp_file;
 mod mesh;
 mod model;
@@ -50,7 +51,12 @@ pub use agents::*;
 pub use cli_tools::*;
 #[allow(unused_imports)]
 pub use git::*;
-pub use jev_routing::JevRoutingConfig;
+#[allow(unused_imports)]
+pub use jev::{
+    jev_connection_for, jev_connection_info_for, JevAuditConfig, JevConfig, JevConnection,
+    JevConnectionInfo, JevConnectionSource, JevRoutingConfig, JEV_DEFAULT_MODEL,
+    JEV_KEY_ENV_NAMES, JEV_OFFICIAL_ENDPOINT,
+};
 #[allow(unused_imports)]
 pub use mcp_file::{
     init_mcp_config_file, load_mcp_config, parse_mcp_config_value, save_mcp_config,

@@ -206,11 +206,18 @@ fn repl_only_help_lines() -> Vec<String> {
         format!(
             "  /auto       {}",
             t(
-                "switch to auto-audit mode (LLM + human in parallel)",
-                "切换到自动审核模式（LLM 与人工并行）"
+                "switch to auto-audit mode (Jev or LLM + human in parallel)",
+                "切换到自动审核模式（Jev 或 LLM 与人工并行）"
             )
         ),
         format!("  /auto-audit {}", t("same as /auto", "与 /auto 相同")),
+        format!(
+            "  /jev [status|test|routing on|off|audit on|off]  {}",
+            t(
+                "Jev tool routing and permission audit",
+                "Jev 工具暴露决策与权限审核"
+            )
+        ),
         format!(
             "  /goal [text]  {}",
             t("create or update a persistent goal", "创建或更新持久目标")

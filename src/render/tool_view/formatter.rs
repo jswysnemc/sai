@@ -45,6 +45,11 @@ pub(crate) fn render_framed(view: &ToolView, mode: ToolCallDisplayMode, frame: u
             return rendered;
         }
     }
+    if view.name == "request_capability" {
+        if let Some(rendered) = super::capability::render(view, mode) {
+            return rendered;
+        }
+    }
     if view.name == "read_file" {
         if let Some(rendered) = super::read_file::render(view, mode) {
             return rendered;

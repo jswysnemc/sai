@@ -153,6 +153,18 @@ fn load_uses_load_label() {
         "Loading tool web_fetch"
     );
     assert_eq!(
+        tool_event_label("request_capability", Some(r#"{"need":"search the web"}"#)),
+        "Requesting search the web"
+    );
+    assert_eq!(
+        tool_event_label_tense(
+            "request_capability",
+            Some(r#"{"need":"search the web"}"#),
+            ToolVerbTense::Perfect
+        ),
+        "Requested search the web"
+    );
+    assert_eq!(
         tool_event_label("load", Some(r#"{"type":"skill","keywords":["yce"]}"#)),
         "Loading skill yce"
     );
