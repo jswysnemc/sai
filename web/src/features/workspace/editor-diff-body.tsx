@@ -17,7 +17,7 @@ type EditorDiffBodyProps = {
 };
 
 /**
- * 渲染编辑器里的统一差异：未修改行收成一条，改动行只留一列行号。
+ * 渲染编辑器里的统一差异：改动上下各留三行未修改内容，其余收成一条。
  *
  * @param props 解析后的文件、路径和语言
  * @returns 文件头和差异正文
@@ -40,31 +40,36 @@ export function EditorDiffBody({ file, path, language, showHeader = true }: Edit
           {file.removed > 0 && <i>-{file.removed}</i>}
         </span>
       </header>}
-      {segments.map((segment, index) => segment.kind === "gap" ? (
-        <EditorDiffGap
-          key={index}
-          path={path}
-          language={language}
-          segment={segment}
-          trailing={index === lastGap}
-          expanded={open.has(index)}
-          label={segment.count === 1
-            ? t("1 unmodified line", "1 行未修改")
-            : t(`${segment.count} unmodified lines`, `${segment.count} 行未修改`)}
-          onToggle={() => setOpen((current) => {
-            const next = new Set(current);
-            if (next.has(index)) next.delete(index);
-            else next.add(index);
-            return next;
-          })}
-        />
-      ) : (
-        <div className="editor-diff-change" key={index}>
-          {segment.lines.map((item) => (
-            <EditorDiffRow key={item.index} line={item.line} index={item.index} html={highlights.get(item.line)?.[item.line.kind === "removed" ? "old" : "new"]} />
-          ))}
-        </div>
-      ))}
+      {segments.map((segment, index) => {
+        if (segment.kind === "gap") {
+          return (
+            <EditorDiffGap
+              key={index}
+              path={path}
+              language={language}
+              segment={segment}
+              trailing={index === lastGap}
+              expanded={open.has(index)}
+              label={segment.count === 1
+                ? t("1 unmodified line", "1 行未修改")
+                : t(`${segment.count} unmodified lines`, `${segment.count} 行未修改`)}
+              onToggle={() => setOpen((current) => {
+                const next = new Set(current);
+                if (next.has(index)) next.delete(index);
+                else next.add(index);
+                return next;
+              })}
+            />
+          );
+        }
+        return (
+          <div className={segment.kind === "change" ? "editor-diff-change" : "editor-diff-context"} key={index}>
+            {segment.lines.map((item) => (
+              <EditorDiffRow key={item.index} line={item.line} index={item.index} html={highlights.get(item.line)?.[item.line.kind === "removed" ? "old" : "new"]} />
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }

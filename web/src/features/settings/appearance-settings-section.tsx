@@ -65,11 +65,8 @@ export function AppearanceSettingsSection({ theme, onThemeChange }: AppearanceSe
               <span className="theme-swatches">
                 {preset.colors.map((color) => <i style={{ background: color }} key={color} />)}
               </span>
-              <span className="theme-preset-copy">
-                <strong>{t(preset.nameEn, preset.nameZh)}</strong>
-                <small>{t(preset.descriptionEn, preset.descriptionZh)}</small>
-              </span>
-              <Check size={16} className="theme-preset-check" />
+              <strong>{t(preset.nameEn, preset.nameZh)}</strong>
+              <Check size={14} className="theme-preset-check" />
             </Button>
           ))}
         </div>

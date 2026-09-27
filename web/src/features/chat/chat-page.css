@@ -13,12 +13,17 @@
 .composer-error-dock .run-error { margin: 0 0 0.5rem; }
 .empty-session-stage .composer-dock { position: relative; bottom: auto; width: 100%; background: transparent; }
 .empty-session-stage .composer-shell { padding-top: 0; padding-bottom: 0; background: transparent; }
-.jump-to-bottom { position: absolute; bottom: 11rem; left: 50%; transform: translateX(-50%); z-index: 16; }
+.jump-to-bottom {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.35rem);
+  transform: translateX(-50%);
+  z-index: 16;
+}
 .model-switch-divider { display: flex; align-items: center; gap: 0.5rem; min-width: 0; margin: 1.5rem 0 0; color: var(--ink-soft); font-size: var(--text-xs); line-height: 1.5; }
 .model-switch-divider::before, .model-switch-divider::after { content: ""; flex: 1; min-width: 1rem; border-top: 1px solid var(--line); }
 .model-switch-divider-label { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 @media (max-width: 48rem) {
   :root { --chat-column-gutter: 1rem; }
   .message-column { padding-top: 1rem; }
-  .jump-to-bottom { bottom: 10rem; }
 }

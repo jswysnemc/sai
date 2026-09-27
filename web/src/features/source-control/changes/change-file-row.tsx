@@ -1,4 +1,4 @@
-import { ChevronDown, EyeOff, Minus, Plus, RotateCcw, Trash2 } from "../../../shared/ui/icons";
+import { EyeOff, Minus, Plus, RotateCcw, Trash2 } from "../../../shared/ui/icons";
 import type { CSSProperties } from "react";
 import type { GitStatusEntry } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
@@ -16,6 +16,7 @@ type ChangeFileRowProps = {
   busy: boolean;
   section: ChangeSectionKind;
   onSelect: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onToggle: () => void;
   onContextMenu: (event: React.MouseEvent<HTMLDivElement>) => void;
   onStage: () => void;
   onUnstage: () => void;
@@ -46,6 +47,14 @@ export function ChangeFileRow(props: ChangeFileRowProps) {
       style={style}
       onContextMenu={props.onContextMenu}
     >
+      <input
+        type="checkbox"
+        className="git-file-check"
+        checked={props.selected}
+        aria-label={t(`Select ${props.displayName}`, `选择 ${props.displayName}`)}
+        onChange={props.onToggle}
+        onClick={(event) => event.stopPropagation()}
+      />
       <Button className="git-file-main" onClick={props.onSelect} title={props.entry.path}>
         <FileTypeIcon name={props.entry.path} size={14} />
         <span className="git-file-path">
@@ -56,15 +65,14 @@ export function ChangeFileRow(props: ChangeFileRowProps) {
         <span className="git-file-trailing">
           {stat && (stat.added > 0 || stat.removed > 0) ? (
             <span className="git-file-diffstat">
-              {stat.added > 0 && <b>+{stat.added}</b>}
-              {stat.removed > 0 && <i>-{stat.removed}</i>}
+              <b>{stat.added > 0 ? `+${stat.added}` : ""}</b>
+              <i>{stat.removed > 0 ? `-${stat.removed}` : ""}</i>
             </span>
           ) : isNew ? (
             <span className="git-file-diffstat"><em>{t("New", "新建")}</em></span>
           ) : (
             <span className={`git-file-status tone-${statusTone(props.entry)}`}>{statusLabel(props.entry)}</span>
           )}
-          <ChevronDown size={14} className={props.active ? "is-open" : ""} aria-hidden="true" />
         </span>
       </Button>
       <span className="git-file-actions">

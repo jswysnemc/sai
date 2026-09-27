@@ -8,27 +8,44 @@ function line(kind: DiffLine["kind"], text = "", extra: Partial<DiffLine> = {}):
 }
 
 describe("buildEditorDiffSegments", () => {
-  it("把上下文和省略区间并成一条未修改间隔", () => {
+  it("改动两侧各留三行，中间的省略区间继续折叠", () => {
     const segments = buildEditorDiffSegments([
       line("added", "new"),
       line("context", "a"),
       line("context", "b"),
-      line("hunk", "@@", { foldedCount: 10 }),
       line("context", "c"),
+      line("hunk", "@@", { foldedCount: 10 }),
+      line("context", "d"),
+      line("context", "e"),
+      line("context", "f"),
       line("removed", "old")
     ]);
-    expect(segments.map((segment) => segment.kind)).toEqual(["change", "gap", "change"]);
-    expect(segments[1]).toMatchObject({ kind: "gap", count: 13 });
+    expect(segments.map((segment) => segment.kind)).toEqual(["change", "context", "gap", "context", "change"]);
+    expect(segments[1]).toMatchObject({ kind: "context", lines: [{ line: { text: "a" } }, { line: { text: "b" } }, { line: { text: "c" } }] });
+    expect(segments[2]).toMatchObject({ kind: "gap", count: 10 });
+    expect(segments[3]).toMatchObject({ kind: "context", lines: [{ line: { text: "d" } }, { line: { text: "e" } }, { line: { text: "f" } }] });
   });
 
-  it("保留文件开头和结尾的未修改间隔", () => {
+  it("不到六行的未修改内容直接展开", () => {
     const segments = buildEditorDiffSegments([
-      line("hunk", "@@", { foldedCount: 4 }),
+      line("context", "above-1"),
+      line("context", "above-2"),
       line("added", "x"),
       line("context", "tail")
     ]);
-    expect(segments.map((segment) => segment.kind)).toEqual(["gap", "change", "gap"]);
+    expect(segments.map((segment) => segment.kind)).toEqual(["context", "change", "context"]);
+    expect(segments[0]).toMatchObject({ lines: [{ line: { text: "above-1" } }, { line: { text: "above-2" } }] });
+    expect(segments[2]).toMatchObject({ lines: [{ line: { text: "tail" } }] });
+  });
+
+  it("文件开头的省略区间留在折叠条里，紧贴改动的行仍然可见", () => {
+    const segments = buildEditorDiffSegments([
+      line("hunk", "@@", { foldedCount: 4 }),
+      line("context", "near"),
+      line("added", "x")
+    ]);
+    expect(segments.map((segment) => segment.kind)).toEqual(["gap", "context", "change"]);
     expect(segments[0]).toMatchObject({ count: 4 });
-    expect(segments[2]).toMatchObject({ count: 1 });
+    expect(segments[1]).toMatchObject({ lines: [{ line: { text: "near" } }] });
   });
 });

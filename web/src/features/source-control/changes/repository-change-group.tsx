@@ -9,6 +9,7 @@ import type { ChangeListScope } from "./changes-review-bar";
 import { ChangeSection, type ChangeSectionKind } from "./change-section";
 import { countVisibleGitChanges, groupGitChanges, type GitUntrackedChangesMode } from "./change-groups";
 import { ChangeContextMenu } from "./change-context-menu";
+import { ChangeSelectionBar } from "./change-selection-bar";
 import { useChangeSelection } from "./use-change-selection";
 import "./repository-change-group.css";
 
@@ -173,15 +174,25 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
       </header>
       {open && (
         <div className="git-repository-change-sections">
+          <ChangeSelectionBar
+            entries={props.state.entries.filter((entry) => selection.selectedPaths.has(entry.path))}
+            busy={props.busy}
+            onStage={(paths) => void run("stage", { paths })}
+            onUnstage={(paths) => void run("unstage", { paths })}
+            onDiscard={(paths) => void run("discard", { paths })}
+            onClear={selection.clear}
+          />
           {props.listScope !== "staged" && groups.conflicts.length > 0 && (
             <ChangeSection
-              title={t(`Merge Changes ${groups.conflicts.length}`, `合并变更 ${groups.conflicts.length}`)}
+              title={t("Merge Changes", "合并变更")}
               entries={groups.conflicts}
               selectedPath={selectedPath}
               selectedPaths={selection.selectedPaths}
               viewMode={props.viewMode}
               busy={props.busy}
               onSelect={(path, event) => selectChange(path, "merge", event)}
+              onToggle={(path) => selection.select(path, { toggle: true, range: false })}
+              onSelectAll={(selected) => selection.setIncluded(groups.conflicts.map((entry) => entry.path), selected)}
               onContextMenu={(path, event) => openContextMenu(path, "merge", event)}
               onStageAll={() => void run("stage_all")}
               onUnstageAll={() => void run("unstage_all")}
@@ -194,13 +205,15 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
           )}
           {props.listScope !== "unstaged" && groups.staged.length > 0 && (
             <ChangeSection
-              title={t(`Staged Changes ${groups.staged.length}`, `已暂存变更 ${groups.staged.length}`)}
+              title={t("Staged Changes", "已暂存变更")}
               entries={groups.staged}
               selectedPath={selectedPath}
               selectedPaths={selection.selectedPaths}
               viewMode={props.viewMode}
               busy={props.busy}
               onSelect={(path, event) => selectChange(path, "staged", event)}
+              onToggle={(path) => selection.select(path, { toggle: true, range: false })}
+              onSelectAll={(selected) => selection.setIncluded(groups.staged.map((entry) => entry.path), selected)}
               onContextMenu={(path, event) => openContextMenu(path, "staged", event)}
               onStageAll={() => void run("stage_all")}
               onUnstageAll={() => void run("unstage_all")}
@@ -213,13 +226,15 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
           )}
           {props.listScope !== "staged" && groups.changes.length > 0 && (
             <ChangeSection
-              title={t(`Changes ${groups.changes.length}`, `更改 ${groups.changes.length}`)}
+              title={t("Changes", "更改")}
               entries={groups.changes}
               selectedPath={selectedPath}
               selectedPaths={selection.selectedPaths}
               viewMode={props.viewMode}
               busy={props.busy}
               onSelect={(path, event) => selectChange(path, "changes", event)}
+              onToggle={(path) => selection.select(path, { toggle: true, range: false })}
+              onSelectAll={(selected) => selection.setIncluded(groups.changes.map((entry) => entry.path), selected)}
               onContextMenu={(path, event) => openContextMenu(path, "changes", event)}
               onStageAll={() => void run("stage_all")}
               onUnstageAll={() => void run("unstage_all")}
@@ -232,13 +247,15 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
           )}
           {props.listScope !== "staged" && groups.untracked.length > 0 && (
             <ChangeSection
-              title={t(`Untracked ${groups.untracked.length}`, `未跟踪 ${groups.untracked.length}`)}
+              title={t("Untracked", "未跟踪")}
               entries={groups.untracked}
               selectedPath={selectedPath}
               selectedPaths={selection.selectedPaths}
               viewMode={props.viewMode}
               busy={props.busy}
               onSelect={(path, event) => selectChange(path, "untracked", event)}
+              onToggle={(path) => selection.select(path, { toggle: true, range: false })}
+              onSelectAll={(selected) => selection.setIncluded(groups.untracked.map((entry) => entry.path), selected)}
               onContextMenu={(path, event) => openContextMenu(path, "untracked", event)}
               onStageAll={() => void run("stage_all")}
               onUnstageAll={() => void run("unstage_all")}

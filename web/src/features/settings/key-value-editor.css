@@ -7,8 +7,9 @@
 
 .key-value-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 2.5rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 2rem 2rem;
   gap:var(--space-sm);
+  align-items: center;
 }
 
 .key-value-row input {
@@ -27,14 +28,17 @@
   outline: none;
 }
 
-.key-value-add {
-  justify-self: start;
+.key-value-row .key-value-add,
+.key-value-row .settings-secondary {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  place-items: center;
+  padding: 0;
 }
 
-.key-value-empty {
-  padding:var(--space-md) var(--space-lg);
-  border: 1px dashed var(--line);
-  border-radius:var(--radius-3);
-  color: var(--ink-soft);
-  font-size:var(--text-sm);
+.key-value-slot {
+  width: 2rem;
+  height: 2rem;
 }

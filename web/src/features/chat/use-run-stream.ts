@@ -12,7 +12,7 @@ import { createSessionRunScope } from "./session-run-scope";
 export { applyEventsToSessionRuns, sessionRunsReducer, upsertRunFromEvent, updateQueuedRunState } from "./session-runs-reducer";
 export type { HistoryTurnKey } from "./session-runs-reducer";
 
-const EVENT_TYPES = [
+export const EVENT_TYPES = [
   "run.queued",
   "run.queue.updated",
   "run.merged",
@@ -36,6 +36,7 @@ const EVENT_TYPES = [
   "workspace.changed",
   "content.flushed",
   "engine.ready",
+  "jev.preselect",
   "compaction.started",
   "compaction.delta",
   "compaction.finished",

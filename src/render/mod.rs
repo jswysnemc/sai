@@ -11,6 +11,7 @@ mod command_result_block;
 pub(crate) mod content_indent;
 mod edit_diff;
 mod engine_notice;
+mod jev_preselect;
 mod error;
 pub(crate) mod expandable;
 pub(crate) mod fold_text;
@@ -55,6 +56,7 @@ pub(crate) mod work_status;
 
 pub(crate) use command_result_block::command_result_streams;
 pub(crate) use engine_notice::engine_notice;
+pub(crate) use jev_preselect::format_jev_preselect;
 pub(crate) use error::write_chat_error;
 pub(crate) use expandable::render_expandable_body;
 pub(crate) use permission::{

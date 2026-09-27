@@ -63,7 +63,7 @@ export function SettingsPage() {
         <SettingsNav activeSection={section} />
         <main className="settings-main" ref={pageRef}>
           <div className="settings-main-content">
-          {meta?.subviews && (
+          {meta?.subviews && section !== "providers" && (
             <SettingsSubnav sectionId={section} subviews={meta.subviews} />
           )}
           <SettingsSectionBody

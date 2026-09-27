@@ -64,6 +64,25 @@ export function useChangeSelection(orderedPaths: string[]) {
     setAnchorPath(path);
   };
 
+  /**
+   * 把一批路径一并加入或移出选择，供分区全选使用。
+   *
+   * @param paths 目标路径
+   * @param included 为 true 时加入，为 false 时移出
+   * @returns 无返回值
+   */
+  const setIncluded = (paths: string[], included: boolean) => {
+    setSelectedPaths((current) => {
+      const next = new Set(current);
+      for (const path of paths) {
+        if (included) next.add(path);
+        else next.delete(path);
+      }
+      return next;
+    });
+    setAnchorPath(paths.at(-1) ?? null);
+  };
+
   /** 右键未选中文件时将其设为唯一选择。 */
   const selectForContext = (path: string) => {
     setSelectedPaths((current) => current.has(path) ? current : new Set([path]));
@@ -73,6 +92,7 @@ export function useChangeSelection(orderedPaths: string[]) {
   return {
     selectedPaths,
     select,
+    setIncluded,
     selectForContext,
     clear: () => {
       setSelectedPaths(new Set());

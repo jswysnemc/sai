@@ -1,4 +1,6 @@
-import { Check, Copy, FileCode2, WrapText } from "../../shared/ui/icons";
+import { Check, Copy, WrapText } from "../../shared/ui/icons";
+import { FileTypeIcon } from "../../shared/ui/file-icon";
+import { fileNameForLanguage } from "../../shared/ui/material-icons";
 import { memo, useEffect, useState } from "react";
 import { SyntaxHighlighter } from "./syntax-highlighter";
 import { useI18n } from "../i18n/use-i18n";
@@ -51,7 +53,7 @@ export const MarkdownCodeBlock = memo(function MarkdownCodeBlock({
         <div className="markdown-code-head">
           {style.showLanguageLabel && (
             <span className="markdown-code-lang">
-              <FileCode2 size={14} />
+              <FileTypeIcon name={fileNameForLanguage(language)} size={14} />
               {language || "text"}
             </span>
           )}

@@ -8,8 +8,9 @@ describe("MarkdownRenderer style preferences", () => {
     const html = renderToStaticMarkup(<MarkdownRenderer source="打开 `login-page/index.html` 查看页面。" />);
     expect(html).toContain("inline-file-reference");
     expect(html).toContain("/material-icons/html.svg");
-    expect(html).toContain("login-page/index.html");
-    expect(html).toMatch(/<button[^>]*>[\s\S]*material-icons[\s\S]*tool-file-reference-label[\s\S]*login-page\/index\.html/);
+    expect(html).toContain("login-page");
+    expect(html).toContain("/index.html");
+    expect(html).toMatch(/<button[^>]*>[\s\S]*material-icons[\s\S]*tool-file-reference-dir[\s\S]*login-page[\s\S]*tool-file-reference-name[\s\S]*\/index\.html/);
   });
 
   it("用量缩写不渲染成文件引用", () => {

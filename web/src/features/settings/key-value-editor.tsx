@@ -64,7 +64,10 @@ export function KeyValueEditor({
   onChange
 }: KeyValueEditorProps) {
   const { t } = useI18n();
-  const [rows, setRows] = useState<Row[]>(() => recordToRows(value ?? {}));
+  const [rows, setRows] = useState<Row[]>(() => {
+    const seeded = recordToRows(value ?? {});
+    return seeded.length > 0 ? seeded : [{ id: nextRowId++, key: "", value: "" }];
+  });
   // 记录上次同步给外部的快照，避免外部回写时覆盖正在编辑的空行
   const lastSyncedRef = useRef<string>(JSON.stringify(rowsToRecord(rows)));
 
@@ -72,7 +75,8 @@ export function KeyValueEditor({
   useEffect(() => {
     const externalJson = JSON.stringify(value ?? {});
     if (externalJson !== lastSyncedRef.current) {
-      const newRows = recordToRows(value ?? {});
+      const seeded = recordToRows(value ?? {});
+      const newRows = seeded.length > 0 ? seeded : [{ id: nextRowId++, key: "", value: "" }];
       setRows(newRows);
       lastSyncedRef.current = JSON.stringify(rowsToRecord(newRows));
     }
@@ -116,7 +120,10 @@ export function KeyValueEditor({
    * @param id 行标识
    */
   const handleRemove = (id: number) => {
-    updateRows((prev) => prev.filter((row) => row.id !== id));
+    updateRows((prev) => {
+      const next = prev.filter((row) => row.id !== id);
+      return next.length > 0 ? next : [{ id: nextRowId++, key: "", value: "" }];
+    });
   };
 
   /** 添加一个空行供用户编辑。 */
@@ -126,40 +133,49 @@ export function KeyValueEditor({
 
   return (
     <div className="key-value-editor">
-      {rows.length === 0 && (
-        <div className="key-value-empty">{t("No entries yet", "暂无条目")}</div>
-      )}
-      {rows.map((row) => (
-        <div className="key-value-row" key={row.id}>
-          <input
-            value={row.key}
-            onChange={(event) => handleFieldChange(row.id, "key", event.target.value)}
-            placeholder={keyPlaceholder ?? t("Key", "键")}
-            spellCheck={false}
-          />
-          <input
-            value={row.value}
-            onChange={(event) => handleFieldChange(row.id, "value", event.target.value)}
-            placeholder={valuePlaceholder ?? t("Value", "值")}
-            spellCheck={false}
-          />
-          <button
-            type="button"
-            className="settings-secondary"
-            aria-label={t("Remove entry", "删除条目")}
-            onClick={() => handleRemove(row.id)}
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
-      ))}
-      <button
-        type="button"
-        className="settings-secondary key-value-add"
-        onClick={handleAdd}
-      >
-        <Plus size={14} />{addLabel ?? t("Add entry", "添加条目")}
-      </button>
+      {rows.map((row, index) => {
+        const canRemove = rows.length > 1 || row.key.trim() !== "" || row.value.trim() !== "";
+        return (
+          <div className="key-value-row" key={row.id}>
+            <input
+              value={row.key}
+              onChange={(event) => handleFieldChange(row.id, "key", event.target.value)}
+              placeholder={keyPlaceholder ?? t("Key", "键")}
+              spellCheck={false}
+            />
+            <input
+              value={row.value}
+              onChange={(event) => handleFieldChange(row.id, "value", event.target.value)}
+              placeholder={valuePlaceholder ?? t("Value", "值")}
+              spellCheck={false}
+            />
+            {index === rows.length - 1 ? (
+              <button
+                type="button"
+                className="settings-secondary key-value-add"
+                aria-label={addLabel ?? t("Add entry", "添加条目")}
+                onClick={handleAdd}
+              >
+                <Plus size={14} />
+              </button>
+            ) : (
+              <span className="key-value-slot" />
+            )}
+            {canRemove ? (
+              <button
+                type="button"
+                className="settings-secondary"
+                aria-label={t("Remove entry", "删除条目")}
+                onClick={() => handleRemove(row.id)}
+              >
+                <Trash2 size={14} />
+              </button>
+            ) : (
+              <span className="key-value-slot" />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

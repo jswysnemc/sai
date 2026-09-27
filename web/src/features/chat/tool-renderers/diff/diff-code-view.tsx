@@ -4,6 +4,7 @@ import { Button } from "../../../../shared/ui/button/button";
 import { useI18n } from "../../../i18n/use-i18n";
 import type { DiffLayout } from "../diff-view";
 import { buildDiffCodeBlocks } from "./diff-code-blocks";
+import { foldPlan } from "./diff-blocks";
 import { DiffCodeRows } from "./diff-code-rows";
 import { DiffHunkFold } from "./diff-hunk-fold";
 import { highlightDiffLines } from "./diff-highlight";
@@ -28,7 +29,7 @@ export function DiffCodeView({ file, language, layout, wrap = true }: DiffCodeVi
   const highlights = useMemo(() => highlightDiffLines(file.lines, language), [file.lines, language]);
   const changes = useMemo(() => blocks.flatMap((block, index) => block.kind === "change" ? [index] : []), [blocks]);
   const foldable = useMemo(() => blocks.flatMap((block, index) =>
-    block.kind === "context" && block.lines.length > 0 ? [index] : []), [blocks]);
+    block.kind === "context" && foldPlan(block.lines.length).foldCount > 0 ? [index] : []), [blocks]);
   const [unfolded, setUnfolded] = useState<ReadonlySet<number>>(new Set());
   const [current, setCurrent] = useState(0);
   const changeRefs = useRef(new Map<number, HTMLDivElement>());
@@ -128,7 +129,8 @@ export function DiffCodeView({ file, language, layout, wrap = true }: DiffCodeVi
                 {detail && <code>{detail}</code>}
               </div>;
             }
-            const hiddenCount = block.kind === "context" ? block.lines.length : 0;
+            const plan = block.kind === "context" ? foldPlan(block.lines.length) : null;
+            const hiddenCount = plan?.foldCount ?? 0;
             const folded = hiddenCount > 0 && !unfolded.has(index);
             const changeOrdinal = changes.indexOf(index);
             const foldLabel = hiddenCount === 1
@@ -142,10 +144,14 @@ export function DiffCodeView({ file, language, layout, wrap = true }: DiffCodeVi
                 if (element) changeRefs.current.set(index, element);
                 else changeRefs.current.delete(index);
               }}>
-              {folded ? (
-                <Button variant="ghost" className="review-diff-fold" aria-expanded={false} onClick={() => toggleContext(index)}>
-                  {foldLabel}
-                </Button>
+              {folded && plan ? (
+                <>
+                  <DiffCodeRows lines={block.lines.slice(0, plan.head)} layout={layout} highlights={highlights} />
+                  <Button variant="ghost" className="review-diff-fold" aria-expanded={false} onClick={() => toggleContext(index)}>
+                    {foldLabel}
+                  </Button>
+                  <DiffCodeRows lines={block.lines.slice(block.lines.length - plan.tail)} layout={layout} highlights={highlights} />
+                </>
               ) : (
                 <>
                   <DiffCodeRows lines={block.lines} layout={layout} highlights={highlights} />

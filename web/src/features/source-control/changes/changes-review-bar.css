@@ -29,7 +29,17 @@
 .git-changes-review-stats i,
 .git-file-diffstat i { color: var(--danger); font-style: normal; font-weight: 600; }
 .git-file-diffstat em { color: var(--signal); font-style: normal; font-weight: 600; }
-.git-file-diffstat { display: inline-flex; gap: 0.35rem; font: 600 var(--text-2xs) var(--font-code); }
+.git-file-diffstat {
+  display: inline-grid;
+  grid-template-columns: 2.75rem 2.5rem;
+  justify-items: end;
+  column-gap: 0.2rem;
+  font: 500 var(--text-2xs)/1 var(--font-code);
+  font-variant-numeric: tabular-nums;
+}
+.git-file-diffstat em { grid-column: 1 / -1; }
+.git-file-diffstat b,
+.git-file-diffstat i { font-weight: 500; }
 .git-changes-review-branch {
   display: inline-flex;
   align-items: center;
@@ -42,6 +52,16 @@
 .git-changes-review-branch { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .git-changes-review-tools { display: flex; align-items: center; gap: 0.25rem; margin-left: auto; }
 .git-changes-review-icon { width: 1.75rem; height: 1.75rem; justify-content: center; border-radius: var(--radius-2); color: var(--ink-soft); }
+.git-changes-commit.ui-button {
+  min-height: 1.625rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--text-xs);
+}
+.git-changes-commit.ui-button:hover:not(:disabled) { background: var(--surface-hover); color: var(--ink); }
 .git-changes-push.ui-button {
   min-height: 1.625rem;
   padding: 0 0.7rem;

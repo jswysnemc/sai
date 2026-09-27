@@ -24,6 +24,11 @@
   min-width: 0;
 }
 
+.settings-editor > .settings-subnav {
+  margin-top: calc(-1 * var(--space-xs));
+  margin-bottom: var(--space-lg);
+}
+
 .editor-header {
   display: flex;
   align-items: center;
@@ -513,7 +518,7 @@
 /* 拉取远端模型期间用骨架屏占位，表单先让位 */
 .provider-editor-loading { margin-top:var(--space-2xl); }
 
-/* 分组标题在卡片外，字段收进一张圆角卡片，标题和说明在左，控件在右 */
+/* 分组标题在卡片外。普通字段上下排：标题、不超过 32rem 的控件、可换行说明。开关紧跟说明，不贴到卡片最右。 */
 .settings-group-card {
   overflow: hidden;
   border: 1px solid var(--line);
@@ -531,17 +536,25 @@
 .settings-group-card .settings-field,
 .settings-group-card .settings-toggle-field {
   display: grid;
-  grid-template-columns: 11.25rem minmax(8rem, 25rem);
+  grid-template-columns: minmax(0, 32rem);
   justify-content: start;
-  column-gap: var(--space-lg);
-  align-items: center;
+  row-gap: 0.3rem;
+  align-items: start;
   margin: 0;
   min-height: 0;
-  padding: var(--space-2xs) var(--space-lg);
+  padding: 0.7rem var(--space-lg);
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
   background: transparent;
+}
+
+.settings-group-card .settings-toggle-field {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 1rem;
+  max-width: 42rem;
 }
 
 /* 没有单行标签的字段是一整块编辑器，占满卡片，不再挤进右侧窄列 */
@@ -588,14 +601,28 @@
   line-height: var(--leading-snug);
 }
 
-.settings-group-card .settings-field > :not(span):not(small),
-.settings-group-card .settings-toggle-field > input {
-  grid-column: 2;
-  grid-row: 1 / span 2;
+.settings-group-card .settings-field > :not(span):not(small) {
+  grid-column: 1;
+  grid-row: 2;
   justify-self: stretch;
   width: 100%;
-  max-width: 25rem;
+  max-width: 32rem;
   min-width: 0;
+}
+
+.settings-group-card .settings-field > small {
+  grid-row: 3;
+}
+
+.settings-group-card .settings-toggle-field > span {
+  flex: 0 1 36rem;
+}
+
+.settings-group-card .settings-toggle-field > input {
+  flex: none;
+  align-self: center;
+  grid-column: auto;
+  grid-row: auto;
 }
 
 .settings-group-card .settings-field input:not(.switch-control):not([type="checkbox"]),
@@ -612,8 +639,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .settings-group-card .settings-field > :not(span):not(small),
-  .settings-group-card .settings-toggle-field > input {
+  .settings-group-card .settings-field > :not(span):not(small) {
     grid-column: 1;
     grid-row: auto;
     justify-self: stretch;
@@ -635,16 +661,16 @@
 
 .settings-group-card .settings-toggle-field > input,
 .settings-group-card .switch-control {
-  justify-self: end;
+  justify-self: start;
   width: var(--switch-track-width);
   min-width: var(--switch-track-width);
   max-width: var(--switch-track-width);
 }
 
 .settings-group-card .settings-toggle-field small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  text-overflow: unset;
+  white-space: normal;
 }
 
 .settings-group-card .settings-field:has(textarea) {

@@ -112,8 +112,12 @@
   color: var(--ink-soft);
 }
 
-.markdown-alert {
-  padding-top: var(--space-sm);
+.markdown-body blockquote.markdown-alert {
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  color: var(--ink);
 }
 
 .markdown-alert::before {
@@ -122,18 +126,14 @@
   font-size: var(--text-xs);
   font-weight: 650;
   letter-spacing: 0.04em;
+  color: var(--ink-soft);
 }
 
-.markdown-alert-note { border-left-color: var(--blue, #3b82f6); }
-.markdown-alert-note::before { content: "NOTE"; color: var(--blue, #3b82f6); }
-.markdown-alert-tip { border-left-color: var(--diff-added-text, #1a7f37); }
-.markdown-alert-tip::before { content: "TIP"; color: var(--diff-added-text, #1a7f37); }
-.markdown-alert-important { border-left-color: var(--signal); }
-.markdown-alert-important::before { content: "IMPORTANT"; color: var(--signal); }
-.markdown-alert-warning { border-left-color: #d97706; }
-.markdown-alert-warning::before { content: "WARNING"; color: #d97706; }
-.markdown-alert-caution { border-left-color: var(--danger); }
-.markdown-alert-caution::before { content: "CAUTION"; color: var(--danger); }
+.markdown-alert-note::before { content: "NOTE"; }
+.markdown-alert-tip::before { content: "TIP"; }
+.markdown-alert-important::before { content: "IMPORTANT"; }
+.markdown-alert-warning::before { content: "WARNING"; }
+.markdown-alert-caution::before { content: "CAUTION"; }
 
 .markdown-body blockquote p {
   margin:var(--space-3xs) 0;
@@ -177,26 +177,27 @@
 
 /* 行内代码：底色已足够区分，去掉描边，行内不再出现一圈细框打断阅读节奏 */
 .inline-code {
-  padding: 0.12em 0.4em;
+  /* 基线对齐会让字形贴在底色下沿，上方多留一截底色，整块才齐 */
+  padding: 0.38em 0.4em 0.12em;
   border-radius: var(--radius-1);
   background: var(--paper-deep);
   color: var(--code-text);
-  font: 500 0.88em/1.15 var(--font-code);
-  vertical-align: middle;
+  font: 500 0.88em/1.2 var(--font-code);
+  vertical-align: baseline;
   white-space: nowrap;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
 
 /*
- * 行内文件 pill：外层保持 inline，避免整块 flex 把后面的说明挤到下一行。
+ * 行内文件 pill：外层用 inline-block，才能按行宽收缩并省略目录。
  * 图标必须放在按钮内部做 inline-flex 排列，不能当兄弟节点——
  * 外层一旦不是 flex，图标会叠在路径文字上。
  */
 .markdown-body .inline-file-reference {
-  display: inline;
+  display: inline-block;
   max-width: min(100%, 16rem);
-  vertical-align: middle;
+  vertical-align: baseline;
 }
 
 .markdown-body .inline-file-reference svg,
@@ -205,33 +206,56 @@
   width: 1em;
   height: 1em;
   flex: 0 0 auto;
+  align-self: center;
 }
 
 .markdown-body .inline-file-reference button {
   display: inline-flex;
-  align-items: center;
+  /* 基线取文字，不取图标。这样和行内代码落在同一条基线上，底色才不会把字压在下沿 */
+  align-items: baseline;
   gap: 0.3em;
-  max-width: min(100%, 16rem);
+  max-width: 100%;
+  min-width: 0;
   min-height: 0;
   box-sizing: border-box;
   flex: none;
   overflow: hidden;
-  padding: 0.12em 0.4em;
+  padding: 0.38em 0.45em 0.12em;
   border: 0;
   border-radius: var(--radius-1);
   background: var(--paper-deep);
   color: var(--blue);
   font-size: 0.88em;
-  line-height: 1.15;
+  line-height: 1;
   white-space: nowrap;
-  vertical-align: middle;
-  text-overflow: ellipsis;
+  vertical-align: baseline;
 }
 
 .markdown-body .inline-file-reference .tool-file-reference-label {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  line-height: 1;
+}
+
+/* 目录先收缩并在末尾省略，文件名（含前导斜杠）尽量保持完整 */
+.markdown-body .inline-file-reference .tool-file-reference-dir {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.markdown-body .inline-file-reference .tool-file-reference-name {
+  flex: 0 0 auto;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .markdown-body .inline-file-reference button:hover {
@@ -371,9 +395,11 @@
   margin-right: auto;
 }
 
-.markdown-code-lang svg {
+.markdown-code-lang svg,
+.markdown-code-lang img {
   flex: none;
-  color: var(--ink-soft);
+  width: 14px;
+  height: 14px;
 }
 
 .markdown-code-actions {
@@ -750,6 +776,13 @@
   background: color-mix(in srgb, var(--blue) 6%, transparent);
   border-radius: 0 var(--radius-2) var(--radius-2) 0;
   padding:var(--space-2xs) var(--space-md);
+}
+.markdown-body[data-md-preset="vivid"] blockquote.markdown-alert,
+.markdown-body[data-md-preset="document"] blockquote.markdown-alert {
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
 }
 .markdown-body[data-md-preset="vivid"] strong { color: color-mix(in srgb, var(--blue) 55%, var(--ink)); }
 .markdown-body[data-md-preset="vivid"] .inline-code {

@@ -7,7 +7,7 @@ import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
 import { ChangeFileStatsContext, ChangeListExpandContext, ChangeListQueryContext } from "../changes/change-file-stats";
 import { ChangesReviewBar, type ChangeListScope } from "../changes/changes-review-bar";
-import { CommitControl } from "../changes/commit-control";
+import { CommitDialog } from "../changes/commit-dialog";
 import type { ChangeSectionKind } from "../changes/change-section";
 import { RepositoryChangeGroup } from "../changes/repository-change-group";
 import { MergeEditor } from "../conflicts/merge-editor";
@@ -64,6 +64,7 @@ export function GitChangesView(props: GitChangesViewProps) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const { fileComparison, scmState, state } = props;
+  const [commitOpen, setCommitOpen] = useState(false);
   const [scope, setScope] = useState<ChangeListScope>("uncommitted");
   const [query, setQuery] = useState("");
   const [finding, setFinding] = useState(false);
@@ -93,6 +94,7 @@ export function GitChangesView(props: GitChangesViewProps) {
   );
 
   return (
+    <>
     <SourceControlSplitView
       className="git-changes-body"
       detailKey={fileComparison.target?.headPath ?? scmState.selectedPath}
@@ -110,26 +112,6 @@ export function GitChangesView(props: GitChangesViewProps) {
             runOperation={props.runOperation}
           />
         )}
-        <CommitControl
-          message={scmState.message}
-          stagedCount={props.stagedCount}
-          workingCount={props.workingCount}
-          conflictedCount={props.conflictCount}
-          busy={props.busy}
-          enableSmartCommit={props.git.enable_smart_commit}
-          suggestSmartCommit={props.git.suggest_smart_commit}
-          showActionButton={props.git.show_action_button}
-          confirmEmptyCommits={props.git.confirm_empty_commits}
-          confirmSync={props.git.confirm_sync}
-          postCommitCommand={props.git.post_commit_command}
-          untrackedChanges={props.git.untracked_changes}
-          onMessageChange={scmState.setMessage}
-          onCommit={props.onCommit}
-          allowSuggestMessage={props.git.auto_commit_message_enabled !== false}
-          suggestingMessage={props.suggestingMessage}
-          onSuggestMessage={props.onSuggestMessage}
-        />
-
         <ChangeFileStatsContext.Provider value={fileStats}>
         <ChangeListQueryContext.Provider value={query}>
         <ChangeListExpandContext.Provider value={expandToken}>
@@ -145,6 +127,7 @@ export function GitChangesView(props: GitChangesViewProps) {
           onScopeChange={setScope}
           onQueryChange={setQuery}
           onFindingChange={setFinding}
+          onCommit={() => setCommitOpen(true)}
           onExpandAll={() => setExpandToken((value) => value + 1)}
           onRefresh={() => {
             void queryClient.invalidateQueries({ queryKey: ["git-status"] });
@@ -257,6 +240,28 @@ export function GitChangesView(props: GitChangesViewProps) {
         )}
       </div>
     </SourceControlSplitView>
+      <CommitDialog
+        open={commitOpen}
+        onClose={() => setCommitOpen(false)}
+        message={scmState.message}
+        stagedCount={props.stagedCount}
+        workingCount={props.workingCount}
+        conflictedCount={props.conflictCount}
+        busy={props.busy}
+        enableSmartCommit={props.git.enable_smart_commit}
+        suggestSmartCommit={props.git.suggest_smart_commit}
+        showActionButton={props.git.show_action_button}
+        confirmEmptyCommits={props.git.confirm_empty_commits}
+        confirmSync={props.git.confirm_sync}
+        postCommitCommand={props.git.post_commit_command}
+        untrackedChanges={props.git.untracked_changes}
+        onMessageChange={scmState.setMessage}
+        onCommit={props.onCommit}
+        allowSuggestMessage={props.git.auto_commit_message_enabled !== false}
+        suggestingMessage={props.suggestingMessage}
+        onSuggestMessage={props.onSuggestMessage}
+      />
+    </>
   );
 }
 

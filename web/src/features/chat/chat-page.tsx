@@ -560,6 +560,17 @@ export function ChatPage({ toolbar, selectedSessionId }: { toolbar?: ReactNode; 
       }}
       onUndo={() => setUndoConfirmOpen(true)}
       onAgentSelect={chatAgent.selectAgent}
+      floating={showJump ? (
+        <HoverRevealButton
+          className="jump-to-bottom"
+          expanded={running}
+          icon={<ArrowDown size={16} />}
+          label={running
+            ? t("Following paused · Jump to bottom", "已暂停跟随 · 回到底部")
+            : t("Jump to bottom", "回到底部")}
+          onClick={jumpToBottom}
+        />
+      ) : undefined}
       onCompact={() => activeSession
         ? run.startCompaction(activeSession.id, chatModel.selection ?? undefined)
         : Promise.resolve()}
@@ -701,17 +712,6 @@ export function ChatPage({ toolbar, selectedSessionId }: { toolbar?: ReactNode; 
           items={overviewItems}
           onNavigate={pauseFollowing}
         />
-        {showJump && (
-          <HoverRevealButton
-            className="jump-to-bottom"
-            expanded={running}
-            icon={<ArrowDown size={16} />}
-            label={running
-              ? t("Following paused · Jump to bottom", "已暂停跟随 · 回到底部")
-              : t("Jump to bottom", "回到底部")}
-            onClick={jumpToBottom}
-          />
-        )}
       </div>
       <ChatSessionDialogs
         undoOpen={undoConfirmOpen}

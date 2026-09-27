@@ -105,7 +105,12 @@ pub(super) fn handle_agent_event(
             );
             Ok(())
         }
-        AgentEvent::JevPreselect { .. } => Ok(()),
+        AgentEvent::JevPreselect { phase, detail } => {
+            if let Some(line) = crate::render::format_jev_preselect(phase.as_str(), detail.as_str()) {
+                println!("\x1b[2m{line}\x1b[0m");
+            }
+            Ok(())
+        }
         AgentEvent::FlushContent => renderer.flush_content(),
         AgentEvent::ExternalOutput => renderer.prepare_for_external_output(),
     }

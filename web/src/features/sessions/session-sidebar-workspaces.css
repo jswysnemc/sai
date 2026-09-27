@@ -50,12 +50,12 @@
 }
 
 .workspace-tree-row:hover .workspace-expand .workspace-chevron,
-.workspace-tree-row:focus-within .workspace-expand .workspace-chevron {
+.workspace-expand:focus-visible .workspace-chevron {
   display: block;
 }
 
 .workspace-tree-row:hover .workspace-expand > svg:not(.workspace-chevron),
-.workspace-tree-row:focus-within .workspace-expand > svg:not(.workspace-chevron) {
+.workspace-expand:focus-visible > svg:not(.workspace-chevron) {
   display: none;
 }
 

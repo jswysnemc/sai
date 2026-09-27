@@ -118,9 +118,8 @@
 
 .git-file-row {
   display: grid;
-  /* 单列：操作按钮已改为绝对定位悬浮层，不再占一列 grid 空间，
-     路径列因此拿到整行宽度（见下方 .git-file-actions 的说明） */
-  grid-template-columns: minmax(0, 1fr);
+  /* 勾选列固定，路径列占满剩余宽度。操作按钮仍是绝对定位悬浮层 */
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   min-height: 1.75rem;
   padding:0 var(--space-3xs) 0 0;
@@ -166,7 +165,7 @@
 .git-file-status.tone-deleted { color: var(--danger); }
 .git-file-status.tone-untracked { color: var(--ink-soft); }
 .git-file-status.tone-conflict { color: var(--warning); }
-.git-file-main > span:last-child { overflow: hidden; font:400 var(--text-xs) var(--font-code); text-overflow: ellipsis; white-space: nowrap; }
+.git-file-main > span:last-child:not(.git-file-trailing) { overflow: hidden; font:400 var(--text-xs) var(--font-code); text-overflow: ellipsis; white-space: nowrap; }
 /*
  * 行内操作按钮：悬浮层（对齐 VS Code 源代码管理列表的交互）。
  *
@@ -183,9 +182,9 @@
   display: flex;
   align-items: center;
   /* 左端 0.75rem 渐变过渡：悬浮层与被遮内容之间不出现生硬直边 */
-  padding-inline: 0.75rem var(--space-3xs);
-  border-radius: 0 var(--radius-2) var(--radius-2) 0;
-  background: linear-gradient(to right, transparent, var(--git-row-overlay-bg) 0.75rem);
+  padding-inline: 0.15rem var(--space-3xs);
+  border-radius: var(--radius-2);
+  background: var(--git-row-overlay-bg);
   opacity: 0;
   /* 隐藏时悬浮层叠在状态徽章上方，必须放行鼠标事件，否则挡住整行点击 */
   pointer-events: none;

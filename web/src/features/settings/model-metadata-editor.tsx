@@ -158,23 +158,27 @@ export function ModelMetadataEditor({ provider, onChange }: ModelMetadataEditorP
       </header>
       <div className="model-catalog-body">
         <div className="model-chip-list">
+          {models.length === 0 && (
+            <p className="model-catalog-empty">
+              {t("No models yet. Use Import models to fetch the remote list.", "还没有模型。用「导入模型」拉取远端列表。")}
+            </p>
+          )}
           {models.map((model) => (
-            <div className={model === selected ? "model-chip active" : "model-chip"} key={model}>
-              <Button className="model-chip-select" onClick={() => setSelected(model)}>
-                <ModelIcon model={model} size={14} />
-                {model}
-              </Button>
-              <Button
-                className="model-chip-remove"
-                onClick={() => void removeModel(model)}
-                aria-label={t(`Delete model ${model}`, `删除模型 ${model}`)}
-              >
-                <Trash2 size={12} />
-              </Button>
-            </div>
-          ))}
-        </div>
-        {selected && (
+            <div className={model === selected ? "model-row is-open" : "model-row"} key={model}>
+              <div className={model === selected ? "model-chip active" : "model-chip"}>
+                <Button className="model-chip-select" onClick={() => setSelected(model)} aria-expanded={model === selected}>
+                  <ModelIcon model={model} size={14} />
+                  {model}
+                </Button>
+                <Button
+                  className="model-chip-remove"
+                  onClick={() => void removeModel(model)}
+                  aria-label={t(`Delete model ${model}`, `删除模型 ${model}`)}
+                >
+                  <Trash2 size={12} />
+                </Button>
+              </div>
+              {model === selected && (
           <div className="model-metadata-form">
             <div className="model-metadata-head">
               <div>
@@ -312,7 +316,10 @@ export function ModelMetadataEditor({ provider, onChange }: ModelMetadataEditorP
               </div>
             </div>
           </div>
-        )}
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );

@@ -22,6 +22,8 @@ type ComposerSurfaceProps = {
   onPasteImages?: (files: File[], selectionStart: number, selectionEnd: number) => Promise<number | undefined>;
   onRemoveAttachment?: (id: number) => void;
   onSubmit: () => void;
+  /** 叠在输入框上沿外侧的浮层，跟随输入框高度 */
+  floating?: ReactNode;
   children: ReactNode;
 };
 
@@ -46,6 +48,7 @@ export function ComposerSurface({
   onPasteImages,
   onRemoveAttachment,
   onSubmit,
+  floating,
   children
 }: ComposerSurfaceProps) {
   const [dragging, setDragging] = useState(false);
@@ -94,6 +97,7 @@ export function ComposerSurface({
       }}
       onDrop={handleDrop}
     >
+      {floating}
       {attachments && onRemoveAttachment && (
         <AttachmentStrip attachments={attachments} onRemove={onRemoveAttachment} />
       )}

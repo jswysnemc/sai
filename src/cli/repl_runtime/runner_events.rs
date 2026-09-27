@@ -210,7 +210,14 @@ impl ReplRuntime {
                 ));
                 self.sync_transcript(true)
             }
-            AgentEvent::JevPreselect { .. } => Ok(()),
+            AgentEvent::JevPreselect { phase, detail } => {
+                if let Some(line) = crate::render::format_jev_preselect(phase.as_str(), detail.as_str()) {
+                    self.transcript.push_meta(line);
+                    self.sync_transcript(true)
+                } else {
+                    Ok(())
+                }
+            }
             AgentEvent::FlushContent => {
                 self.transcript.finalize_live_tail();
                 self.sync_transcript(true)

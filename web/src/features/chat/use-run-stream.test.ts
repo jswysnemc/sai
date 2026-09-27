@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WebEvent } from "../../api/contracts";
-import { applyEventsToSessionRuns, sessionRunsReducer, upsertRunFromEvent } from "./use-run-stream";
+import { applyEventsToSessionRuns, EVENT_TYPES, sessionRunsReducer, upsertRunFromEvent } from "./use-run-stream";
 
 /**
  * 构造服务端广播的事件。
@@ -413,5 +413,11 @@ describe("session runs server-driven upsert", () => {
     expect(failed.runs).toHaveLength(1);
     expect(failed.runs[0].completed).toBe(true);
     expect(failed.runs[0].error).toBe("连接中断");
+  });
+});
+
+describe("EVENT_TYPES", () => {
+  it("订阅 jev.preselect，让发送前卡片在判断结束时出现", () => {
+    expect(EVENT_TYPES).toContain("jev.preselect");
   });
 });

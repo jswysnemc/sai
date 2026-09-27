@@ -23,6 +23,8 @@ import {
   partitionByEnablement
 } from "./model/provider-enablement";
 import { ProviderHeaderActions } from "./providers/provider-header-actions";
+import { SettingsSubnav } from "./shell/settings-subnav";
+import { getSettingsSection } from "./settings-registry";
 import { PLACEHOLDER_BASE_URL, ProviderConnectionTab, buildDefaultModelOptions } from "./providers/provider-connection-tab";
 import { ProviderModelsTab } from "./providers/provider-models-tab";
 import { ProviderBehaviorTab } from "./providers/provider-behavior-tab";
@@ -523,6 +525,10 @@ export function ProviderSettingsSection({
               onDelete={() => void deleteProvider()}
             />
           }
+        />
+        <SettingsSubnav
+          sectionId="providers"
+          subviews={getSettingsSection("providers")?.subviews ?? []}
         />
         {fetchError && <div className="settings-inline-error">{fetchError.message}</div>}
         {secretError && <div className="settings-inline-error">{secretError.message}</div>}

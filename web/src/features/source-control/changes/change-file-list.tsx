@@ -26,6 +26,7 @@ type ChangeFileListProps = {
   busy: boolean;
   section: ChangeSectionKind;
   onSelect: (path: string, event: React.MouseEvent<HTMLButtonElement>) => void;
+  onToggle: (path: string) => void;
   onContextMenu: (path: string, event: React.MouseEvent<HTMLDivElement>) => void;
   onStage: (path: string) => void;
   onUnstage: (path: string) => void;
@@ -142,6 +143,7 @@ function renderFileRow(
       busy={props.busy}
       section={props.section}
       onSelect={(event) => props.onSelect(entry.path, event)}
+      onToggle={() => props.onToggle(entry.path)}
       onContextMenu={(event) => props.onContextMenu(entry.path, event)}
       onStage={() => props.onStage(entry.path)}
       onUnstage={() => props.onUnstage(entry.path)}

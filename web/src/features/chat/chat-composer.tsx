@@ -59,6 +59,7 @@ export function ChatComposer(props: ChatComposerProps) {
         onPasteImages={props.onAddImages}
         onRemoveAttachment={props.onRemoveAttachment}
         onSubmit={props.onSubmit}
+        floating={props.floating}
       >
         <div className="composer-footer">
           <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileChange} hidden />

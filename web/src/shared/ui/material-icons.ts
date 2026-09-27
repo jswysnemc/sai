@@ -129,6 +129,60 @@ const FOLDER_NAMES: Record<string, string> = {
   features: "folder-features"
 };
 
+/**
+ * Markdown 语言标签到已有文件扩展名的别名。
+ *
+ * 只指向 FILE_EXTENSIONS / FILE_NAMES 里已经复制的图标，避免再引入一套资源。
+ */
+const LANGUAGE_FILES: Record<string, string> = {
+  rust: "snippet.rs",
+  rs: "snippet.rs",
+  python: "snippet.py",
+  py: "snippet.py",
+  typescript: "snippet.ts",
+  ts: "snippet.ts",
+  javascript: "snippet.js",
+  js: "snippet.js",
+  tsx: "snippet.tsx",
+  jsx: "snippet.jsx",
+  golang: "snippet.go",
+  go: "snippet.go",
+  java: "snippet.java",
+  c: "snippet.c",
+  h: "snippet.h",
+  cpp: "snippet.cpp",
+  "c++": "snippet.cpp",
+  cxx: "snippet.cpp",
+  cc: "snippet.cpp",
+  json: "snippet.json",
+  jsonc: "snippet.json",
+  markdown: "snippet.md",
+  md: "snippet.md",
+  css: "snippet.css",
+  scss: "snippet.scss",
+  sass: "snippet.scss",
+  html: "snippet.html",
+  toml: "snippet.toml",
+  yaml: "snippet.yaml",
+  yml: "snippet.yml",
+  bash: "snippet.sh",
+  sh: "snippet.sh",
+  shell: "snippet.sh",
+  zsh: "snippet.sh",
+  console: "snippet.sh",
+  powershell: "snippet.ps1",
+  ps1: "snippet.ps1",
+  sql: "snippet.sql",
+  svg: "snippet.svg",
+  xml: "snippet.xml",
+  vue: "snippet.vue",
+  text: "snippet.txt",
+  plaintext: "snippet.txt",
+  txt: "snippet.txt",
+  dockerfile: "Dockerfile",
+  docker: "Dockerfile"
+};
+
 const DEFAULT_FILE = "file";
 const DEFAULT_FOLDER = "folder";
 const DEFAULT_FOLDER_OPEN = "folder-open";
@@ -184,6 +238,20 @@ function resolveFolderIcon(name: string, expanded: boolean): string {
  * 返回:
  * - public 下的 SVG 地址
  */
+/**
+ * 把代码块语言标签换成能命中类型图标的文件名。
+ *
+ * 未知语言回落到通用文件图标。
+ *
+ * @param language Markdown 围栏语言，大小写不敏感
+ * @returns 供文件图标解析使用的文件名
+ */
+export function fileNameForLanguage(language?: string): string {
+  const key = (language ?? "").trim().toLowerCase().split(/[\s{]/)[0] ?? "";
+  if (!key) return "snippet.txt";
+  return LANGUAGE_FILES[key] ?? `snippet.${key}`;
+}
+
 export function materialIconUrl(name: string, kind: "file" | "directory", expanded = false): string {
   const icon = kind === "directory" ? resolveFolderIcon(name, expanded) : resolveFileIcon(name);
   return `${import.meta.env.BASE_URL}material-icons/${icon}.svg`;

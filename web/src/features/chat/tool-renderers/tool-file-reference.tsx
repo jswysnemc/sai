@@ -1,6 +1,5 @@
 import { FileTypeIcon } from "../../../shared/ui/file-icon";
 import { type MouseEvent } from "react";
-import { useI18n } from "../../i18n/use-i18n";
 import { formatDisplayPath } from "../../workspace/workspace-path-utils";
 
 type ToolFileReferenceProps = {
@@ -20,8 +19,8 @@ type ToolFileReferenceProps = {
  * @returns 文件路径按钮
  */
 export function ToolFileReference({ path, label, workspacePath = "", className = "", icon = true }: ToolFileReferenceProps) {
-  const { t } = useI18n();
   const displayLabel = label || formatDisplayPath(path, workspacePath) || formatDisplayPath(path, "");
+  const { directory, name } = splitReferenceLabel(displayLabel || path);
 
   /**
    * 派发工作区统一文件打开事件。
@@ -38,10 +37,25 @@ export function ToolFileReference({ path, label, workspacePath = "", className =
 
   return (
     <span className={`tool-file-reference ${className}`.trim()}>
-      <button type="button" onClick={openFile} title={t("Open in editor", "在编辑器中打开")}>
+      <button type="button" onClick={openFile} title={displayLabel || path}>
         {icon && <FileTypeIcon name={path} size={14} />}
-        <span className="tool-file-reference-label">{displayLabel || path}</span>
+        <span className="tool-file-reference-label">
+          {directory ? <span className="tool-file-reference-dir">{directory}</span> : null}
+          <span className="tool-file-reference-name">{name}</span>
+        </span>
       </button>
     </span>
   );
+}
+
+/**
+ * 把路径拆成目录和带斜杠的文件名，窄宽度时先省略目录、留下文件名。
+ *
+ * @param label 展示用路径
+ * @returns 目录（不含末级斜杠）和文件名（含前导斜杠）
+ */
+function splitReferenceLabel(label: string): { directory: string; name: string } {
+  const cut = Math.max(label.lastIndexOf("/"), label.lastIndexOf("\\"));
+  if (cut <= 0) return { directory: "", name: label };
+  return { directory: label.slice(0, cut), name: label.slice(cut) };
 }

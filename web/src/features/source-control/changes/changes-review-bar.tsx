@@ -22,6 +22,7 @@ type ChangesReviewBarProps = {
   onScopeChange: (scope: ChangeListScope) => void;
   onQueryChange: (query: string) => void;
   onFindingChange: (finding: boolean) => void;
+  onCommit: () => void;
   onExpandAll: () => void;
   onRefresh: () => void;
 };
@@ -77,6 +78,7 @@ export function ChangesReviewBar(props: ChangesReviewBarProps) {
             <button type="button" role="menuitem" onClick={() => { props.onRefresh(); setMenuOpen(false); }}>{t("Refresh Changes", "刷新变更")}</button>
           </div>
         )}
+        <Button className="git-changes-commit" onClick={props.onCommit}>{t("Commit", "提交")}</Button>
         <Button className="git-changes-push" disabled={props.busy} onClick={() => void executeGitCommand("git.push", props.runOperation)}>{t("Push", "推送")}</Button>
       </div>
       {props.finding && (

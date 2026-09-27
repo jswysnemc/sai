@@ -2,7 +2,7 @@
  * 变更视图与提交图视图的两栏布局。
  *
  * 左栏宽度由 source-control-split-view 管理，右栏自适应承载差异；
- * 左栏内部只有变更列表滚动，提交框与底部动作条保持常驻可见。
+ * 左栏内部只有变更列表滚动，底部动作条保持可见；提交说明在工具条里按需打开。
  */
 
 /*
@@ -17,7 +17,7 @@
   border-right: 1px solid var(--line);
 }
 
-/* 变更列表是唯一的滚动区，长列表不会把提交框顶出视口 */
+/* 变更列表是唯一的滚动区，长列表不会把底部动作条顶出视口 */
 .git-change-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -25,7 +25,6 @@
   overscroll-behavior: contain;
 }
 
-.git-change-panel > .git-commit-box,
 .git-change-panel > .git-operation-bar,
 .git-change-panel > .git-change-footer,
 .git-change-panel > .git-remote-box {

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { RunMode, RunModelSelection, ThinkingLevel } from "../../../api/contracts";
 import type { ChatModelChoice } from "../chat-model-options";
 import type { ComposerAttachment } from "../composer/use-composer-attachments";
@@ -38,5 +39,7 @@ export type ChatComposerProps = {
   onUndo: () => void;
   onAgentSelect: (id: string) => void;
   onCompact: () => Promise<void>;
+  /** 贴在输入框上沿的浮层，输入区增高时一起上移 */
+  floating?: ReactNode;
   onContinueGoal: () => Promise<void>;
 };
