@@ -52,7 +52,7 @@ export function UsageSummaryTiles({ summary, t }: UsageSummaryTilesProps) {
       </div>
       {ratio && (
         <p className="usage-billing-note">
-          <Info size={13} />
+          <Info size={14} />
           {t(
             `Reported input is ${ratio} the billable amount: cached reads are billed at a fraction of the standard input price.`,
             `上报输入量是计费量的 ${ratio}：命中缓存的读取按标准输入价的一小部分计费。`

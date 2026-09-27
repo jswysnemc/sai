@@ -44,7 +44,7 @@ export function TurnTreePanel({ tree, busy, onSelect, onClose }: TurnTreePanelPr
           aria-label={t("Close branches", "关闭分支面板")}
           title={t("Close branches", "关闭分支面板")}
         >
-          <X size={13} />
+          <X size={14} />
         </Button>
       </header>
       <div className="turn-tree-body">

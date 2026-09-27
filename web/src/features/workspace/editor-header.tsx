@@ -119,7 +119,7 @@ export function EditorHeader({
       <ActionMenu
         className="editor-more"
         label={t("Editor actions", "编辑器操作")}
-        trigger={<MoreHorizontal size={15} />}
+        trigger={<MoreHorizontal size={16} />}
         triggerClassName="editor-more-trigger"
         items={[
           ...(savable ? [{ id: "save", label: t("Save", "保存"), shortcut: "Ctrl+S", disabled: !canSave, onSelect: onSave }] : []),

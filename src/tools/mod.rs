@@ -13,6 +13,7 @@ mod file_read;
 pub(crate) mod fs_path;
 pub(crate) mod groups;
 pub(crate) mod image_generation;
+pub(crate) mod jev_request;
 mod memory;
 pub(crate) mod mesh;
 pub(crate) mod model_attachment;
@@ -52,6 +53,7 @@ pub(crate) use progressive::{
     register_loader as register_progressive_loader, DEFERRED_ALL_EXCEPT_ANCHOR_BOOTSTRAP,
     INVOKE_NAME, LOAD_NAME,
 };
+pub(crate) use jev_request::REQUEST_CAPABILITY_NAME;
 pub use registry::{empty_parameters, ToolPermission, ToolProgress, ToolRegistry, ToolSpec};
 pub(crate) use registry::{
     PluginReplyContexts, PluginToolPolicyStates, PreparedPluginReplies, ToolModelAttachment,
@@ -61,9 +63,10 @@ pub(crate) use skill_management::{
     create_managed_skill, list_managed_skills, read_managed_skill, set_managed_skill_enabled,
     update_managed_skill, ManagedSkill,
 };
-pub(crate) use skills::load_installed_skill;
+pub(crate) use skills::{load_installed_skill, visible_skill_catalog};
 pub use skills::{
-    load_installed_skill_document, skill_catalog, skills_catalog_prompt, skills_prompt,
+    load_installed_skill_document, skill_catalog, skills_catalog_prompt, skills_jev_prompt,
+    skills_prompt,
 };
 
 pub fn readable_tool_name(name: &str) -> &str {
@@ -74,6 +77,7 @@ pub fn readable_tool_name(name: &str) -> &str {
         "todo" => "任务清单",
         "cron" => "定时任务",
         "read_file" => "读取文件",
+        "request_capability" => "能力申请",
         "write_file" => "写入文件",
         "str_replace" => "字符串替换",
         "create_goal" => "创建目标",

@@ -70,7 +70,7 @@ export function SubagentCard({ subagent, active = false, onSelect, onCancel }: S
         {subagent.error && <p className="subagent-error">{subagent.error}</p>}
       </div>
       {alive && (
-        <button type="button" className="subagent-cancel" onClick={(event) => void handleCancel(event)}><Ban size={13} />{t("Cancel", "取消")}</button>
+        <button type="button" className="subagent-cancel" onClick={(event) => void handleCancel(event)}><Ban size={14} />{t("Cancel", "取消")}</button>
       )}
     </article>
   );

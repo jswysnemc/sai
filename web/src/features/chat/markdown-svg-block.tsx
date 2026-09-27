@@ -23,8 +23,8 @@ export const MarkdownSvgBlock = memo(function MarkdownSvgBlock({ source }: { sou
   const [invalid, setInvalid] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const viewOptions: readonly SegmentedControlOption<"preview" | "source">[] = [
-    { value: "preview", label: t("Preview", "预览"), icon: <Eye size={13} /> },
-    { value: "source", label: t("Source", "源码"), icon: <Code2 size={13} /> }
+    { value: "preview", label: t("Preview", "预览"), icon: <Eye size={14} /> },
+    { value: "source", label: t("Source", "源码"), icon: <Code2 size={14} /> }
   ];
 
   useEffect(() => {
@@ -53,11 +53,11 @@ export const MarkdownSvgBlock = memo(function MarkdownSvgBlock({ source }: { sou
           className="markdown-svg-view-switcher"
         />
         <button type="button" disabled={invalid} onClick={() => setLightboxOpen(true)}>
-          <Maximize2 size={13} />
+          <Maximize2 size={14} />
           {t("Enlarge", "放大")}
         </button>
         <button type="button" onClick={() => void copySource()}>
-          {copied ? <Check size={13} /> : <Copy size={13} />}
+          {copied ? <Check size={14} /> : <Copy size={14} />}
           {copied ? t("Copied", "已复制") : t("Copy", "复制")}
         </button>
       </div>

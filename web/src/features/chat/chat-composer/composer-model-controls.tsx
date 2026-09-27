@@ -21,7 +21,7 @@ export function ComposerModelControls({ composer, engine, loading }: ComposerMod
       <AgentSelector choices={composer.agentChoices} selection={composer.agentSelection} loading={composer.agentLoading} disabled={false} onSelect={composer.onAgentSelect} />
       <span className="composer-control-divider" aria-hidden />
       {(engine && composer.choices.length === 0 ? <EngineConnectionBadge status={engine} running={composer.running} />
-        : loading ? <span className="composer-engine-badge"><Cpu size={13} />{t("Loading engine", "读取内核")}</span>
+        : loading ? <span className="composer-engine-badge"><Cpu size={14} />{t("Loading engine", "读取内核")}</span>
           : <ModelThinkingSelector choices={composer.choices} selection={composer.selection} pendingSelection={composer.pendingSelection} thinkingLevel={composer.thinkingLevel} thinkingLevels={composer.thinkingLevels} loading={composer.modelLoading} disabled={false} onModelSelect={composer.onModelSelect} onThinkingLevelChange={composer.onThinkingLevelChange} />)}
       {engine && composer.choices.length > 0 && <AcpRuntimeControls status={engine} running={composer.running} />}
     </div>

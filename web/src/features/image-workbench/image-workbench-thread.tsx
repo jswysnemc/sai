@@ -32,7 +32,7 @@ export function ImageWorkbenchThread({ turns }: ImageWorkbenchThreadProps) {
           <div className="image-turn-result">
             {turn.status === "loading" && <ImageWorkbenchWaiting aspectRatio={turn.aspectRatio} />}
             {turn.status === "error" && (
-              <p className="image-turn-error" role="alert"><CircleAlert size={15} aria-hidden /><span>{turn.error}</span></p>
+              <p className="image-turn-error" role="alert"><CircleAlert size={16} aria-hidden /><span>{turn.error}</span></p>
             )}
             {turn.status === "success" && turn.output && <ImageGenerationToolView output={turn.output} />}
           </div>

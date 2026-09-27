@@ -168,7 +168,7 @@ export function CommitControl(props: CommitControlProps) {
             aria-label={props.suggestingMessage ? t("Generating…", "生成中…") : t("Generate commit message", "生成提交说明")}
             title={props.suggestingMessage ? t("Generating…", "生成中…") : t("Generate commit message", "生成提交说明")}
           >
-            <Sparkles size={13} />
+            <Sparkles size={14} />
           </Button>
         )}
         {props.showActionButton && <div className="git-commit-split">
@@ -188,7 +188,7 @@ export function CommitControl(props: CommitControlProps) {
             aria-expanded={menuOpen}
             aria-label={t("Choose commit action", "选择提交操作")}
           >
-            <ChevronDown size={13} />
+            <ChevronDown size={14} />
           </Button>
           {menuOpen && (
             <div className="git-commit-menu" role="menu">

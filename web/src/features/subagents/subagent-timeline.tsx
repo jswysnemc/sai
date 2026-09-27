@@ -42,7 +42,7 @@ function ToolEntry({ entry, running }: { entry: Extract<SubagentTimelineEntry, {
     <div className="subagent-timeline-tool">
       <button type="button" onClick={() => detail && setExpanded((value) => !value)} aria-expanded={detail ? expanded : undefined}>
         <span className={`subagent-timeline-tool-state${pending ? " pending" : entry.ok ? " ok" : " failed"}`}>
-          {pending ? (running ? <Loader2 size={13} className="spin" /> : <Wrench size={13} />) : entry.ok ? <CircleCheck size={13} /> : <CircleX size={13} />}
+          {pending ? (running ? <Loader2 size={14} className="spin" /> : <Wrench size={14} />) : entry.ok ? <CircleCheck size={14} /> : <CircleX size={14} />}
         </span>
         <span className="subagent-timeline-tool-step">#{entry.step}</span>
         <span className="subagent-timeline-tool-name">{entry.name}</span>

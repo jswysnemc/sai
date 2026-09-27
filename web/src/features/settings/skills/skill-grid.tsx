@@ -99,7 +99,7 @@ export function SkillGrid({ skills, filters, scanning, error, onFiltersChange, o
       {error && <div className="settings-inline-error">{error}</div>}
       {scanning && (
         <div className="skill-library-scan-status" role="status">
-          <RefreshCw size={13} className="is-spinning" />
+          <RefreshCw size={14} className="is-spinning" />
           {t("Scanning Skill directories", "正在扫描 Skill 目录")}
         </div>
       )}
@@ -110,7 +110,7 @@ export function SkillGrid({ skills, filters, scanning, error, onFiltersChange, o
         </ul>
       ) : (
         <div className="skill-grid-empty">
-          <Search size={19} aria-hidden="true" />
+          <Search size={20} aria-hidden="true" />
           <strong>{skills.length === 0 ? t("No Skills found", "尚未发现 Skill") : t("No matching Skills", "没有匹配的 Skill")}</strong>
           <span>{skills.length === 0
             ? t("Scan configured directories or add a global Skill.", "扫描已配置目录，或新增一个全局 Skill。")

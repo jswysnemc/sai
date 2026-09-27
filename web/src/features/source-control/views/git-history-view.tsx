@@ -46,11 +46,11 @@ export function GitHistoryView(props: GitHistoryViewProps) {
           {(ahead > 0 || behind > 0) && (
             <small className="git-history-sync">
               <span>
-                <ArrowUp size={10} />
+                <ArrowUp size={12} />
                 {ahead}
               </span>
               <span>
-                <ArrowDown size={10} />
+                <ArrowDown size={12} />
                 {behind}
               </span>
             </small>

@@ -51,7 +51,7 @@ export const MarkdownCodeBlock = memo(function MarkdownCodeBlock({
         <div className="markdown-code-head">
           {style.showLanguageLabel && (
             <span className="markdown-code-lang">
-              <FileCode2 size={13} />
+              <FileCode2 size={14} />
               {language || "text"}
             </span>
           )}
@@ -63,7 +63,7 @@ export const MarkdownCodeBlock = memo(function MarkdownCodeBlock({
               title={wrapped ? t("Disable line wrap", "关闭自动换行") : t("Wrap long lines", "长行换行")}
               onClick={() => setWrapped((current) => !current)}
             >
-              <WrapText size={13} />
+              <WrapText size={14} />
             </button>
             {style.showCopyButton && (
               <button
@@ -72,7 +72,7 @@ export const MarkdownCodeBlock = memo(function MarkdownCodeBlock({
                 title={copied ? t("Copied", "已复制") : t("Copy", "复制")}
                 onClick={() => void copySource()}
               >
-                {copied ? <Check size={13} /> : <Copy size={13} />}
+                {copied ? <Check size={14} /> : <Copy size={14} />}
               </button>
             )}
           </span>

@@ -92,7 +92,7 @@ export function BottomTerminalPanel({ manager, height, onResize, onClose }: Bott
                 aria-label={t(`Close ${terminal.title}`, `关闭 ${terminal.title}`)}
                 title={t("Close terminal", "关闭终端")}
               >
-                <X size={11} />
+                <X size={12} />
               </Button>
             </div>
           ))}

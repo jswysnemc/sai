@@ -26,11 +26,11 @@ export function SubagentOverview({ selectedId, onSelect, onCancel }: SubagentOve
     <div className="subagent-overview">
       <header className="subagent-overview-head">
         <div className="subagent-overview-title">
-          <Bot size={15} />
+          <Bot size={16} />
           <strong>{t("Subagents", "子智能体")}</strong>
           <span className="subagent-overview-count">{running > 0 ? t(`${running} running · ${subagents.length} total`, `${running} 运行中 · 共 ${subagents.length}`) : t(`${subagents.length} total`, `${subagents.length} 个`)}</span>
         </div>
-        <button type="button" onClick={() => void query.refetch()} aria-label={t("Refresh subagents", "刷新子智能体")}><RefreshCw size={13} /></button>
+        <button type="button" onClick={() => void query.refetch()} aria-label={t("Refresh subagents", "刷新子智能体")}><RefreshCw size={14} /></button>
       </header>
       <div className="subagent-overview-list">
         {subagents.map((subagent: Subagent) => (
@@ -44,7 +44,7 @@ export function SubagentOverview({ selectedId, onSelect, onCancel }: SubagentOve
         ))}
         {!query.isLoading && subagents.length === 0 && (
           <div className="subagent-overview-empty">
-            <Bot size={26} />
+            <Bot size={20} />
             <p>{t("No subagents yet", "还没有子智能体")}</p>
             <span>{t("Subagent status appears here after the main conversation starts a task.", "主对话启动任务后，子智能体状态会显示在这里")}</span>
           </div>

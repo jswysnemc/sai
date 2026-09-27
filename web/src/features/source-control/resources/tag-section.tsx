@@ -39,7 +39,7 @@ export function TagSection(props: TagSectionProps) {
       <div className="git-resource-create compact">
         <Tag size={12} />
         <input value={tagName} onChange={(event) => setTagName(event.target.value)} placeholder={t("Tag name", "标签名称")} spellCheck={false} />
-        <Button disabled={props.busy || !tagName.trim()} onClick={() => void createTag()} title={t("Create tag at HEAD", "在 HEAD 创建标签")}><Plus size={11} /></Button>
+        <Button disabled={props.busy || !tagName.trim()} onClick={() => void createTag()} title={t("Create tag at HEAD", "在 HEAD 创建标签")}><Plus size={12} /></Button>
       </div>
       {props.tags.slice(0, 8).map((tag) => (
         <div className="git-resource-row" key={tag.name}>
@@ -49,7 +49,7 @@ export function TagSection(props: TagSectionProps) {
               tag: tag.name,
               confirmTitle: t("Delete tag?", "删除标签？"),
               confirmDescription: tag.name
-            })}><Trash2 size={11} /></Button>
+            })}><Trash2 size={12} /></Button>
           </div>
         </div>
       ))}

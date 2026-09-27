@@ -277,6 +277,41 @@ pub fn skill_catalog(config: &AppConfig, paths: &SaiPaths) -> Result<Vec<SkillCa
         .collect())
 }
 
+/// 枚举当前 Agent 可见的 skill 名称与描述，供 Jev 暴露决策使用。
+///
+/// 参数:
+/// - `config`: 当前应用配置
+/// - `paths`: 应用目录路径集合
+///
+/// 返回:
+/// - 按 Agent 策略筛选后的目录条目
+pub(crate) fn visible_skill_catalog(
+    config: &AppConfig,
+    paths: &SaiPaths,
+) -> Result<Vec<SkillCatalogEntry>> {
+    Ok(visible_skill_entries(config, paths)?
+        .into_iter()
+        .map(|(entry, _)| SkillCatalogEntry {
+            name: entry.name,
+            description: entry.description,
+        })
+        .collect())
+}
+
+/// 生成 Jev 暴露决策模式下的 skill 说明；不列出目录，skill 由 Jev 按需暴露。
+///
+/// 参数:
+/// - `paths`: 应用目录路径集合
+///
+/// 返回:
+/// - `<available-skills>` 提示片段
+pub fn skills_jev_prompt(paths: &SaiPaths) -> String {
+    format!(
+        "<available-skills>\n已安装的 skills 与额外工具由 Jev 路由按需暴露：每轮开始前 Jev 会预先暴露与请求相关的资源，结果以 request_capability 工具结果的形式出现在上下文中。需要其他能力时调用 request_capability，用自然语言描述下一步要做的事。已暴露的资源不会再次返回，直接复用之前的结果；压缩后若正文丢失，用 load 按名称重新读取。需要沉淀可复用流程时，用 write_file 在 {} 下新建 <name>/SKILL.md，必须含 YAML frontmatter 的 name 与 description。\n</available-skills>",
+        paths.skills_dir.display()
+    )
+}
+
 fn skill_name(raw: &str, fallback: &str) -> String {
     frontmatter_value(raw, "name").unwrap_or_else(|| fallback.to_string())
 }

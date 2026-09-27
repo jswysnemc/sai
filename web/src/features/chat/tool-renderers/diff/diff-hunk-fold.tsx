@@ -68,7 +68,7 @@ export function DiffHunkFold({ path, line, className, detail, children }: DiffHu
   return (
     <>
       <button type="button" className={className} aria-expanded={open} onClick={() => void toggle()}>
-        {open ? <ChevronUp size={13} aria-hidden /> : <ChevronDown size={13} aria-hidden />}
+        {open ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
         <span>{label}</span>
         {detail && <code>{detail}</code>}
       </button>

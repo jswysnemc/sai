@@ -118,7 +118,7 @@ function EditorDiffGap({ path, language, segment, trailing, expanded, label, onT
   return (
     <div className="editor-diff-gap-block">
       <button type="button" className="editor-diff-gap" aria-expanded={expanded} onClick={() => void toggle()}>
-        <Icon size={13} aria-hidden />
+        <Icon size={14} aria-hidden />
         <span>{text}</span>
       </button>
       {expanded && <ExpandedGap language={language} segment={segment} loaded={loaded} />}

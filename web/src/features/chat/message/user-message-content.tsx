@@ -44,7 +44,7 @@ export function UserMessageContent({ content }: { content: string }) {
       {expanded?.preview && (
         <div className={`user-atom-preview user-${expanded.atom.type}-preview`}>
           <div className="user-atom-preview-header">
-            {expanded.atom.type === "skill" ? <BookOpen size={13} /> : <Target size={13} />}
+            {expanded.atom.type === "skill" ? <BookOpen size={14} /> : <Target size={14} />}
             <span>{expanded.atom.type === "skill" ? `/${expanded.atom.name}` : t("Goal details", "目标详情")}</span>
             <Button
               className="user-atom-preview-close"

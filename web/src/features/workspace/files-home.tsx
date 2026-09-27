@@ -69,8 +69,8 @@ export function FilesHome({ recentFiles, onSelectFile, onBrowseFiles }: FilesHom
     <div className="files-home">
       <WorkspaceFileSearch value={query} onChange={setQuery} placeholder={t("Files, Folders...", "文件、文件夹...")} />
       <div className="files-home-actions">
-        <button type="button" onClick={onBrowseFiles}><FolderSearch size={15} />{t("Browse Files", "浏览文件")}</button>
-        <button type="button" onClick={() => setCreating(true)}><FilePlus2 size={15} />{t("New File", "新建文件")}</button>
+        <button type="button" onClick={onBrowseFiles}><FolderSearch size={16} />{t("Browse Files", "浏览文件")}</button>
+        <button type="button" onClick={() => setCreating(true)}><FilePlus2 size={16} />{t("New File", "新建文件")}</button>
       </div>
       {creating && (
         <form className="files-home-create" onSubmit={(event) => { event.preventDefault(); void createFile(); }}>

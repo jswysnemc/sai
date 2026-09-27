@@ -98,8 +98,8 @@ export function ChangeFileList(props: ChangeFileListProps) {
                   aria-expanded={!collapsed}
                   title={row.path}
                 >
-                  <ChevronRight size={11} className={collapsed ? "" : "open"} />
-                  {collapsed ? <Folder size={13} /> : <FolderOpen size={13} />}
+                  <ChevronRight size={12} className={collapsed ? "" : "open"} />
+                  {collapsed ? <Folder size={14} /> : <FolderOpen size={14} />}
                   <span>{row.name}</span>
                 </Button>
               );

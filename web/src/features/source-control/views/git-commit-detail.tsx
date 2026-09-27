@@ -37,7 +37,7 @@ export function GitCommitDetail({ details, diff, selectedPath, onSelectPath, loc
           {commit.short_sha} · {commit.author_name} · {formatGitDate(commit.author_date, locale)}
           {commitUrl && (
             <a className="git-commit-link" href={commitUrl} target="_blank" rel="noreferrer noopener">
-              <ExternalLink size={11} />
+              <ExternalLink size={12} />
               {t("View on GitHub", "在 GitHub 查看")}
             </a>
           )}

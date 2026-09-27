@@ -51,7 +51,7 @@ export function GitDiffStat(props: GitDiffStatProps) {
         onClick={() => setExpanded((value) => !value)}
         aria-expanded={expanded}
       >
-        {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         <span className="git-diff-stat-summary">{summaryLine}</span>
         <span className="git-diff-stat-hint">
           {expanded

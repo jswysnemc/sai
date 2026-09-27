@@ -36,7 +36,7 @@ export function MemoryIndexPreview({ workspace }: MemoryIndexPreviewProps) {
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
       >
-        <Eye size={13} />
+        <Eye size={14} />
         {t("Injected index preview", "注入索引预览")}
         {!open && (
           <small>

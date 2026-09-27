@@ -123,7 +123,7 @@ export function GlobalSearchDialog({ open, workspaces, onClose, onAction, onOpen
     <Modal open={open} title={t("Search", "搜索")} size="small" className="global-search-modal" onClose={onClose} initialFocusRef={inputRef}>
       <div className="global-search-content">
         <label className="global-search-input">
-          <Search size={17} aria-hidden />
+          <Search size={16} aria-hidden />
           <input ref={inputRef} role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls={listId} aria-activedescendant={results.length ? `${listId}-${selectedIndex}` : undefined} value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }} onKeyDown={handleKeyDown} placeholder={t("Search tasks, commands or project files", "搜索任务、命令或项目文件")} aria-label={t("Search tasks, commands or project files", "搜索任务、命令或项目文件")} autoComplete="off" spellCheck={false} />
           <Button variant="ghost" size="small" onClick={onClose} aria-label={t("Close search", "关闭搜索")}>Esc</Button>
         </label>
@@ -133,7 +133,7 @@ export function GlobalSearchDialog({ open, workspaces, onClose, onAction, onOpen
         ]} />
         <div id={listId} className="global-search-results" role="listbox" aria-label={t("Search results", "搜索结果")}>
           {results.map((result, index) => <Button key={result.id} id={`${listId}-${index}`} variant="ghost" role="option" tabIndex={-1} aria-selected={index === selectedIndex} className={index === selectedIndex ? "active" : ""} onMouseEnter={() => setActiveIndex(index)} onClick={() => runResult(result)}>
-            <result.icon size={15} aria-hidden /><span className="global-search-result-label">{result.label}<small>{result.detail}</small></span>{result.shortcut && <kbd>{result.shortcut}</kbd>}
+            <result.icon size={16} aria-hidden /><span className="global-search-result-label">{result.label}<small>{result.detail}</small></span>{result.shortcut && <kbd>{result.shortcut}</kbd>}
           </Button>)}
           {results.length === 0 && <p className="global-search-empty" role="status">{showFiles && fileTree.isLoading ? t("Loading files…", "正在读取文件…") : t("No matching results", "没有匹配结果")}</p>}
         </div>

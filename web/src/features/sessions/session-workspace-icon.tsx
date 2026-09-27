@@ -1,8 +1,8 @@
-import { Folder, FolderGit2 } from "../../shared/ui/icons";
+import { Folder, FolderGit2, type IconSize } from "../../shared/ui/icons";
 
 type SessionWorkspaceIconProps = {
   isGitRepository: boolean;
-  size?: number;
+  size?: IconSize;
 };
 
 /**

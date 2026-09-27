@@ -17,7 +17,7 @@ export function GitOutputPanel({ entries }: { entries: GitOutputEntry[] }) {
   return (
     <section className={`git-output-panel${open ? " open" : ""}`}>
       <Button className="git-output-toggle" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-        <TerminalSquare size={13} />
+        <TerminalSquare size={14} />
         <span>{t("Git Output", "Git 输出")}</span>
         {failed > 0 && <strong>{failed}</strong>}
         <ChevronDown size={12} />

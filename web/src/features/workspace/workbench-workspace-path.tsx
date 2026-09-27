@@ -13,7 +13,7 @@ export function WorkbenchWorkspacePath() {
   const active = workspaces.data?.workspaces.find((workspace) => workspace.id === workspaces.data.active_id);
   return (
     <div className="workbench-workspace-path min-w-0" aria-label={t("Current workspace path", "当前工作区路径")} title={active?.path}>
-      <FolderGit2 size={13} aria-hidden="true" />
+      <FolderGit2 size={14} aria-hidden="true" />
       <span dir="ltr">{active?.path ?? t("Workspace", "工作区")}</span>
     </div>
   );

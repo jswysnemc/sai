@@ -1,0 +1,268 @@
+/*
+ * 服务端目录弹窗
+ *
+ * 与 Modal 共用同一层表面：body 去掉内边距，控制条、列表、底栏各自只用一条细线分隔，
+ * 不再嵌套第二层带边框的面板。目录行固定 28px，常规视窗下可见 12 行以上。
+ */
+
+.ui-modal.medium.directory-picker {
+  width: min(36rem, calc(100vw - 2rem));
+}
+
+.server-directory-dialog {
+  display: flex;
+  flex-direction: column;
+  height: min(34rem, 70vh);
+  min-height: 0;
+}
+
+/* 双层控制条：路径导航 / 根目录与过滤 */
+.directory-toolbar {
+  display: grid;
+  flex: none;
+  gap: var(--space-2xs);
+  padding: var(--space-sm) var(--space-lg);
+  border-bottom: 1px solid var(--line);
+}
+
+.directory-path-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  height: 1.75rem;
+  padding-right: var(--space-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--paper);
+}
+
+.directory-path-row:focus-within {
+  border-color: var(--line-strong);
+}
+
+.directory-up-button.ui-button-icon {
+  flex-basis: 1.625rem;
+  width: 1.625rem;
+  height: 1.625rem;
+  min-height: 1.625rem;
+}
+
+.directory-path-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font: 400 var(--text-xs) / 1 var(--font-code);
+  text-overflow: ellipsis;
+}
+
+.directory-path-input::placeholder,
+.directory-filter input::placeholder {
+  color: var(--technical-muted);
+}
+
+.directory-path-spinner {
+  color: var(--ink-soft);
+}
+
+.directory-filter-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  height: 1.75rem;
+  min-width: 0;
+}
+
+/* 根目录：单行横向滚动，数量再多也不撑高控制条 */
+.directory-roots {
+  display: flex;
+  flex: 1 1 auto;
+  gap: var(--space-3xs);
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.directory-roots::-webkit-scrollbar {
+  display: none;
+}
+
+.directory-root.ui-button {
+  flex: none;
+  min-height: 1.5rem;
+  padding-inline: var(--space-xs);
+  color: var(--ink-soft);
+  font: 400 var(--text-2xs) / 1 var(--font-code);
+  white-space: nowrap;
+}
+
+.directory-root.ui-button.is-active {
+  background: color-mix(in srgb, var(--signal) 10%, transparent);
+  color: var(--signal);
+}
+
+.directory-filter {
+  display: flex;
+  flex: 0 1 13rem;
+  align-items: center;
+  gap: var(--space-xs);
+  height: 1.5rem;
+  margin-left: auto;
+  padding: 0 var(--space-sm);
+  border: 1px solid transparent;
+  border-radius: var(--radius-2);
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+}
+
+.directory-filter:focus-within {
+  border-color: var(--line-strong);
+  background: var(--paper);
+}
+
+.directory-filter input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font: 400 var(--text-xs) / 1 var(--font-ui);
+}
+
+/* 目录列表 */
+.directory-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-2xs) var(--space-sm);
+  outline: 1px dashed transparent;
+  outline-offset: -4px;
+  transition: outline-color var(--transition-fast);
+}
+
+/* 投放提示只用列表内置虚线框，不覆盖蒙层 */
+.directory-list.is-drop-target {
+  outline-color: color-mix(in srgb, var(--signal) 60%, transparent);
+}
+
+.directory-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  height: 1.75rem;
+  padding: 0 var(--space-sm);
+  border-radius: var(--radius-2);
+  color: var(--ink-soft);
+  cursor: pointer;
+  user-select: none;
+}
+
+.directory-row.is-highlighted {
+  background: color-mix(in srgb, var(--signal) 7%, transparent);
+  color: var(--ink);
+}
+
+.directory-row.is-highlighted .directory-row-label > svg.lucide {
+  color: var(--signal);
+}
+
+.directory-row-label {
+  flex: 1 1 auto;
+  gap: var(--space-sm);
+  font-size: var(--text-sm);
+  line-height: var(--leading-tight);
+}
+
+.directory-row-name {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.directory-git {
+  flex: none;
+  gap: var(--space-3xs);
+  color: var(--signal);
+  font: 500 var(--text-2xs) / 1 var(--font-code);
+}
+
+.directory-row-select.ui-button {
+  flex: none;
+  min-height: 1.375rem;
+  padding-inline: var(--space-sm);
+  font-size: var(--text-2xs);
+}
+
+.directory-create-row {
+  cursor: default;
+}
+
+.directory-create-row input {
+  flex: 1;
+  min-width: 0;
+  height: 1.375rem;
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-1);
+  outline: none;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 var(--text-xs) / 1 var(--font-code);
+}
+
+.directory-create-row input:focus {
+  border-color: var(--line-strong);
+}
+
+.directory-message {
+  margin: var(--space-2xs) 0;
+  padding: var(--space-2xs) var(--space-sm);
+  border-radius: var(--radius-2);
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+}
+
+.directory-message.is-error {
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--danger);
+}
+
+.directory-message.is-drop {
+  color: var(--signal);
+}
+
+.directory-empty {
+  display: grid;
+  min-height: 6rem;
+  place-content: center;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+/* 底栏：左侧新建文件夹，右侧主操作 */
+.directory-footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg);
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 40rem) {
+  .server-directory-dialog {
+    height: min(34rem, 78vh);
+  }
+
+  .directory-filter {
+    flex-basis: 9rem;
+  }
+}

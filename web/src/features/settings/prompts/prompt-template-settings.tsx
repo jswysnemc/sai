@@ -73,7 +73,7 @@ export function PromptTemplateSettings({ templates, onChange }: PromptTemplateSe
               onClick={() => resetTemplate(definition.id)}
               title={t("Restore this prompt", "恢复该提示词")}
             >
-              <RotateCcw size={13} />
+              <RotateCcw size={14} />
               {t("Restore default", "恢复默认")}
             </Button>
           )}

@@ -111,7 +111,7 @@ export function SshImportDialog(props: SshImportDialogProps) {
             {t("Cancel", "取消")}
           </Button>
           <Button variant="primary" onClick={() => void submit()} disabled={importing || selected.size === 0}>
-            {importing ? <Loader2 size={13} className="ssh-spin" /> : <Download size={13} />}
+            {importing ? <Loader2 size={14} className="ssh-spin" /> : <Download size={14} />}
             {t(`Import ${selected.size}`, `导入 ${selected.size} 个`)}
           </Button>
         </>

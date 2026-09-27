@@ -115,7 +115,10 @@ fn is_concurrent_read_only_call(
     visibility: &ToolVisibility,
     call: &ToolCall,
 ) -> bool {
-    if call.function.name == "ask_question" || visibility.is_loader_call(&call.function.name) {
+    if call.function.name == "ask_question"
+        || call.function.name == tools::REQUEST_CAPABILITY_NAME
+        || visibility.is_loader_call(&call.function.name)
+    {
         return false;
     }
     registry
@@ -297,7 +300,10 @@ pub(crate) fn resolve_execution_call(
     if tool_name.is_empty() {
         bail!("invoke_tool tool_name must be non-empty");
     }
-    if tool_name == tools::LOAD_NAME || tool_name == tools::INVOKE_NAME {
+    if tool_name == tools::LOAD_NAME
+        || tool_name == tools::INVOKE_NAME
+        || tool_name == tools::REQUEST_CAPABILITY_NAME
+    {
         bail!("invoke_tool cannot target gateway tool: {tool_name}");
     }
     if !request.arguments.is_object() {

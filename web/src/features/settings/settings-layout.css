@@ -15,9 +15,9 @@
 .settings-back {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  min-height: 1.875rem;
-  padding: 0.25rem 0.5rem;
+  gap: var(--space-xs);
+  min-height: 1.75rem;
+  padding: var(--space-2xs) var(--space-sm);
   border-radius: var(--radius-2);
   color: var(--ink-soft);
   font-size: var(--text-sm);
@@ -45,7 +45,7 @@
   width: 100%;
   height: var(--toolbar-height);
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 0 var(--space-2xl);
 }
 
 .settings-topbar h1 {
@@ -101,7 +101,7 @@
   min-height: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  padding: 1.25rem clamp(1rem, 2vw, 2rem) 2.5rem;
+  padding: var(--space-2xl) clamp(var(--space-2xl), 2vw, var(--space-5xl)) var(--space-5xl);
 }
 
 .settings-main-content { width: 100%; max-width: 76rem; margin: 0 auto; }
@@ -116,13 +116,13 @@
   min-height: calc(100dvh - 8rem);
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-4);
   background: var(--paper);
 }
 
 .settings-objects-layout > :not(.object-list) {
   min-width: 0;
-  padding: 1rem 1.25rem 1.5rem;
+  padding: var(--space-2xl);
 }
 
 /* ---------- 状态与消息 ---------- */
@@ -187,14 +187,14 @@
 }
 
 @media (max-width: 48rem) {
-  .settings-topbar-inner { gap: 0.5rem; padding-inline: 0.75rem; }
-  .settings-back { gap: 0; padding: 0.375rem; }
+  .settings-topbar-inner { gap: var(--space-sm); padding-inline: var(--space-lg); }
+  .settings-back { gap: 0; padding: var(--space-xs); }
   .settings-back span { display: none; }
-  .settings-topbar-actions { gap: 0.375rem; }
+  .settings-topbar-actions { gap: var(--space-xs); }
   .settings-status-badge { width: 1.625rem; padding: 0; justify-content: center; }
   .settings-status-badge-text { display: none; }
   .settings-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
-  .settings-main { padding: 1.25rem 1rem 3rem; }
+  .settings-main { padding: var(--space-lg) var(--space-lg) var(--space-5xl); }
   .settings-save-hint { max-width: 9rem; font-size: var(--text-xs); }
 }
 
@@ -221,5 +221,5 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  gap: 1.75rem 0;
+  gap: var(--space-2xl) 0;
 }

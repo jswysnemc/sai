@@ -93,7 +93,7 @@ export function RuntimeOverview({ sessionId, placement = "floating" }: RuntimeOv
 
   /** 胶囊内容：活动播报优先，其次展示 Todo 或子智能体，Git 不可用时不占位。 */
   const pillContent = placement === "toolbar"
-    ? <><ListChecks size={15} aria-hidden /><span className="sr-only">{t("Work overview", "工作概览")}</span>{data.subagents.running > 0 && <span>{data.subagents.running}</span>}</>
+    ? <><ListChecks size={16} aria-hidden /><span className="sr-only">{t("Work overview", "工作概览")}</span>{data.subagents.running > 0 && <span>{data.subagents.running}</span>}</>
     : pulse
     ? <PulseContent pulse={pulse} />
     : activeTodo
@@ -188,7 +188,7 @@ export function RuntimeOverview({ sessionId, placement = "floating" }: RuntimeOv
               const Icon = todoIcons[item.status];
               return (
                 <div className={`runtime-overview-item is-${item.status}`} key={item.id}>
-                  <Icon size={13} aria-hidden />
+                  <Icon size={14} aria-hidden />
                   <span>{item.text}</span>
                 </div>
               );
@@ -206,7 +206,7 @@ export function RuntimeOverview({ sessionId, placement = "floating" }: RuntimeOv
             <small>{data.subagents.running > 0
               ? t(`${data.subagents.running} running`, `${data.subagents.running} 运行中`)
               : t(`${data.subagents.completed} completed`, `${data.subagents.completed} 已结束`)}</small>
-            <ChevronRight size={13} aria-hidden />
+            <ChevronRight size={14} aria-hidden />
           </Button>
           {data.subagents.overviewItems.map((subagent) => (
             <Button
@@ -237,7 +237,7 @@ export function RuntimeOverview({ sessionId, placement = "floating" }: RuntimeOv
               <Button className="runtime-overview-row branch-row" onClick={openGitFileTree}>
                 <GitBranch size={14} aria-hidden />
                 <span>{data.git.branch}</span>
-                <ChevronRight size={13} aria-hidden />
+                <ChevronRight size={14} aria-hidden />
               </Button>
             )}
           </section>
@@ -290,7 +290,7 @@ function GoalOverview({ goal }: { goal: Goal }) {
             const Icon = completed ? CheckCircle2 : current ? CircleDot : Circle;
             return (
               <div className={`runtime-overview-item runtime-overview-goal-update${completed ? " is-completed" : ""}`} key={`${entry.at}-${index}`}>
-                <Icon size={13} aria-hidden />
+                <Icon size={14} aria-hidden />
                 <span title={entry.message}>{entry.message}</span>
               </div>
             );

@@ -47,7 +47,7 @@ export function ChangeFileRow(props: ChangeFileRowProps) {
       onContextMenu={props.onContextMenu}
     >
       <Button className="git-file-main" onClick={props.onSelect} title={props.entry.path}>
-        <FileTypeIcon name={props.entry.path} size={13} />
+        <FileTypeIcon name={props.entry.path} size={14} />
         <span className="git-file-path">
           <strong>{props.displayName}</strong>
           {directory && <small>{directory}</small>}

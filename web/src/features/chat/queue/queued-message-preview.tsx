@@ -34,7 +34,7 @@ export function QueuedImageStrip({
               aria-label={t(`Remove image ${index + 1}`, `删除第 ${index + 1} 张图片`)}
               title={t("Remove image", "删除图片")}
             >
-              <X size={10} />
+              <X size={12} />
             </button>
           )}
         </span>
@@ -76,7 +76,7 @@ export function QueuedMessagePreview({
         <>
           <QueuedImageStrip imageUrls={imageUrls} />
           <span className="queued-message-preview-images" aria-hidden="true">
-            <ImageIcon size={11} />
+            <ImageIcon size={12} />
             {imageUrls.length}
           </span>
         </>

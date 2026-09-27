@@ -33,7 +33,7 @@ export function PublishRepositoryControl(props: PublishRepositoryControlProps) {
     return (
       <div className="git-remote-box is-collapsed">
         <Button className="git-remote-reveal" onClick={() => setOpen(true)} title={props.remoteUrl || label}>
-          <CloudUpload size={13} />
+          <CloudUpload size={14} />
           <span>{label}</span>
         </Button>
       </div>
@@ -55,7 +55,7 @@ export function PublishRepositoryControl(props: PublishRepositoryControlProps) {
         disabled={!props.remoteUrl.trim() || props.busy}
         onClick={action}
       >
-        {props.canPublish && <CloudUpload size={13} />}
+        {props.canPublish && <CloudUpload size={14} />}
         {props.remoteConfigured
           ? t("Update remote", "更新远端")
           : props.canPublish

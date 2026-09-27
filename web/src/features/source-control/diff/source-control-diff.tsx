@@ -160,7 +160,7 @@ export function SourceControlDiff(props: SourceControlDiffProps) {
     <span>{t("Loading diff...", "正在读取差异…")}</span></div>;
   if (props.error) return <div className="pane-error">{props.error.message}</div>;
   if (!props.data || files.length === 0) return <div className="git-diff-empty">
-    <GitCompare size={22} aria-hidden /><strong>{t("No changes to review", "没有待审阅的变更")}</strong>
+    <GitCompare size={20} aria-hidden /><strong>{t("No changes to review", "没有待审阅的变更")}</strong>
     <span>{reviewMode === "branch" ? t("This branch has no differences against its baseline", "当前分支相对基线没有差异")
       : t("The working tree is clean", "工作区没有未提交的改动")}</span>
   </div>;

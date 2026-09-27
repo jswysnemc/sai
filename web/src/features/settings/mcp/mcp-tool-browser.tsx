@@ -46,9 +46,9 @@ export function McpToolBrowser({ serverId, tools, scanning, scanned, error, onSc
 
       {error && <div className="settings-inline-error">{error}</div>}
       {!scanned && !scanning ? (
-        <div className="mcp-tool-empty"><Wrench size={18} /><span>{t(`Scan ${serverId} to load its tool catalog.`, `扫描 ${serverId} 以读取工具目录。`)}</span></div>
+        <div className="mcp-tool-empty"><Wrench size={16} /><span>{t(`Scan ${serverId} to load its tool catalog.`, `扫描 ${serverId} 以读取工具目录。`)}</span></div>
       ) : scanned && tools.length === 0 ? (
-        <div className="mcp-tool-empty"><Wrench size={18} /><span>{t("The server returned no tools.", "服务未返回工具。")}</span></div>
+        <div className="mcp-tool-empty"><Wrench size={16} /><span>{t("The server returned no tools.", "服务未返回工具。")}</span></div>
       ) : (
         <div className="mcp-tool-browser-body">
           <nav className="mcp-tool-list" aria-label={t("MCP tools", "MCP 工具列表")}>
@@ -59,7 +59,7 @@ export function McpToolBrowser({ serverId, tools, scanning, scanned, error, onSc
                 className={tool.name === selectedName ? "active" : ""}
                 onClick={() => setSelectedName(tool.name)}
               >
-                <Wrench size={13} />
+                <Wrench size={14} />
                 <span><strong>{tool.name}</strong><small>{tool.description || t("No description", "无说明")}</small></span>
               </button>
             ))}
@@ -71,7 +71,7 @@ export function McpToolBrowser({ serverId, tools, scanning, scanned, error, onSc
                 <code>mcp_{selected.server_id}_{selected.name}</code>
               </div>
               <p>{selected.description || t("This tool does not provide a description.", "此工具未提供说明。")}</p>
-              <div className="mcp-tool-schema-title"><Braces size={13} />{t("Input schema", "输入参数结构")}</div>
+              <div className="mcp-tool-schema-title"><Braces size={14} />{t("Input schema", "输入参数结构")}</div>
               <pre>{JSON.stringify(selected.input_schema ?? {}, null, 2)}</pre>
             </article>
           )}

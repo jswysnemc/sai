@@ -78,7 +78,7 @@ export function CronJobForm({ sessions, pending, onSubmit }: CronJobFormProps) {
   return (
     <form className="cron-form" onSubmit={(event) => void handleSubmit(event)}>
       <div className="cron-section-heading">
-        <CalendarPlus size={18} />
+        <CalendarPlus size={16} />
         <div><h2>{t("Create task", "创建任务")}</h2><p>{t("Tasks run through the active Gateway scheduler.", "任务由正在运行的 Gateway 调度器执行。")}</p></div>
       </div>
       <div className="cron-form-grid">
@@ -100,7 +100,7 @@ export function CronJobForm({ sessions, pending, onSubmit }: CronJobFormProps) {
         <label><span>{scheduleKind === "once" ? t("Run time", "执行时间") : t("First run time", "首次执行时间")}</span><input type="datetime-local" value={runAt} onChange={(event) => setRunAt(event.target.value)} /></label>
         {scheduleKind === "interval" && <label><span>{t("Interval in minutes", "间隔分钟数")}</span><input type="number" min={1} step={1} value={intervalMinutes} onChange={(event) => setIntervalMinutes(Number(event.target.value))} /></label>}
       </div>
-      <button type="submit" className="cron-primary-button" disabled={pending || invalid || sessions.length === 0}>{pending ? <LoaderCircle size={15} className="spin" /> : <CalendarPlus size={15} />}{t("Create task", "创建任务")}</button>
+      <button type="submit" className="cron-primary-button" disabled={pending || invalid || sessions.length === 0}>{pending ? <LoaderCircle size={16} className="spin" /> : <CalendarPlus size={16} />}{t("Create task", "创建任务")}</button>
     </form>
   );
 }

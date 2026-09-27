@@ -94,6 +94,9 @@ pub struct AppConfig {
     /// 会话网格：跨会话消息收发开关，默认只允许投递给自己
     #[serde(default)]
     pub mesh: super::mesh::MeshConfig,
+    /// 基于 TypeSafe Jev 的工具与 skills 暴露决策
+    #[serde(default)]
+    pub jev_routing: super::JevRoutingConfig,
 }
 
 /// 【应用配置】【指令默认值】缺省加载工作区与用户指令文件

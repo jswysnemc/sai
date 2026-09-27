@@ -28,19 +28,17 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  min-height: 2.5rem;
-  padding-bottom: 0.85rem;
-  margin-bottom: 1rem;
-  border-bottom: 1px solid var(--line);
+  gap: var(--space-lg);
+  min-height: 2rem;
+  margin-bottom: var(--space-lg);
 }
 
 .editor-header-copy {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   flex: 1 1 auto;
-  column-gap: 0.65rem;
-  row-gap: 0.05rem;
+  column-gap: var(--space-sm);
+  row-gap: var(--space-3xs);
   align-items: baseline;
   min-width: 0;
 }
@@ -56,7 +54,7 @@
   flex: 0 0 auto;
   min-width: max-content;
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   letter-spacing: -0.02em;
   white-space: nowrap;
@@ -67,8 +65,8 @@
   min-width: 0;
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.75rem;
-  line-height: 1.45;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
   white-space: normal;
 }
 
@@ -76,14 +74,14 @@
   display: flex;
   align-items: center;
   flex: none;
-  gap: 0.4rem;
+  gap: var(--space-2xs);
 }
 
 .editor-header-actions .settings-danger {
-  margin-left: 0.25rem;
+  margin-left: var(--space-2xs);
 }
 
-/* ---------- 分组标题与分隔线 ---------- */
+/* ---------- 分组标题 ---------- */
 
 .settings-group {
   min-width: 0;
@@ -91,8 +89,7 @@
 }
 
 .settings-group + .settings-group {
-  padding-top: 1.75rem;
-  border-top: 0;
+  padding-top: var(--space-2xl);
 }
 
 .settings-group-head {
@@ -100,14 +97,13 @@
   align-items: flex-start;
   justify-content: space-between;
   gap:var(--space-lg);
-  padding-bottom: 0;
-  margin-bottom: 0.5rem;
-  border-bottom: 0;
+  margin-bottom: var(--space-sm);
 }
 
-.settings-group-head h3 {
+.settings-group-head h3,
+.settings-group-heading {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   letter-spacing: -0.01em;
 }
@@ -119,11 +115,40 @@
   margin-bottom:var(--space-3xs);
 }
 
-.settings-group-head p {
+.settings-group-head p,
+.settings-group-description {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.75rem;
-  line-height: 1.45;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
+/* 可折叠分组：整行标题是展开按钮，箭头与标题首基线对齐 */
+.settings-group-toggle.ui-button {
+  justify-content: flex-start;
+  min-height: 0;
+  margin: calc(var(--space-2xs) * -1) calc(var(--space-sm) * -1);
+  padding: var(--space-2xs) var(--space-sm);
+  color: var(--ink);
+  text-align: left;
+}
+
+.settings-group-toggle-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.settings-group-chevron {
+  color: var(--ink-soft);
+  transition: transform var(--duration-base) var(--ease-standard);
+}
+
+.settings-group-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.settings-group.is-collapsible .settings-group-card {
+  margin-top: var(--space-3xs);
 }
 
 /* ---------- 按钮 ---------- */
@@ -141,9 +166,9 @@
   justify-content: center;
   gap:var(--space-xs);
   height: 2rem;
-  padding: 0 0.75rem;
+  padding: 0 var(--space-lg);
   border-radius:var(--radius-3);
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   font-weight: 500;
   white-space: nowrap;
   transition:
@@ -208,7 +233,7 @@
 .settings-tabs {
   display: flex;
   gap:var(--space-2xs);
-  margin-bottom:var(--space-2xl);
+  margin-bottom:var(--space-lg);
   overflow-x: auto;
   border-bottom: 1px solid var(--line);
   scrollbar-width: none;
@@ -221,7 +246,7 @@
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  height: 2.125rem;
+  height: 2rem;
   padding:0 var(--space-lg);
   border: 0;
   border-bottom: 2px solid transparent;
@@ -244,20 +269,20 @@
 .settings-form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
-  gap:var(--space-md) var(--space-lg);
+  gap:var(--space-sm) var(--space-lg);
 }
 
 .settings-field {
   display: grid;
   align-content: start;
-  gap:var(--space-xs);
+  gap:var(--space-2xs);
   min-width: 0;
 }
 
 .settings-field.full { grid-column: 1 / -1; }
 /* 标签用中等字重，与界面其余部分的 500 保持一致，避免局部过粗 */
 .settings-field > span { color: var(--ink); font-size:var(--text-sm); font-weight: 500; }
-.settings-field > small { color: var(--ink-soft); font-size:var(--text-sm); line-height: 1.45; }
+.settings-field > small { color: var(--ink-soft); font-size:var(--text-sm); line-height: var(--leading-snug); }
 
 .settings-field input:not(.switch-control),
 .settings-field textarea {
@@ -282,7 +307,7 @@
 
 .settings-field textarea {
   min-height: 7.5rem;
-  padding:var(--space-md) var(--space-md);
+  padding:var(--space-sm);
   resize: vertical;
   line-height: 1.55;
 }
@@ -307,7 +332,7 @@
   align-items: center;
   justify-content: space-between;
   gap:var(--space-2xl);
-  min-height: 2.25rem;
+  min-height: 2rem;
   padding:var(--space-2xs) var(--space-sm);
   border: 1px solid var(--line);
   border-radius:var(--radius-3);
@@ -460,16 +485,16 @@
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: 0.75rem;
+  gap: var(--space-lg);
   min-height: 0;
-  margin-top: 0.75rem;
-  padding: 1.5rem 1rem;
+  margin-top: var(--space-lg);
+  padding: var(--space-2xl);
   border: 1px solid var(--line);
   border-radius: var(--radius-3);
   background: color-mix(in srgb, var(--ink) 2%, var(--paper));
   color: var(--ink-soft);
-  font-size: 0.8125rem;
-  line-height: 1.5;
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
   text-align: center;
 }
 
@@ -492,7 +517,7 @@
 .settings-group-card {
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-4);
   background: var(--paper);
   container-type: inline-size;
 }
@@ -508,11 +533,11 @@
   display: grid;
   grid-template-columns: 11.25rem minmax(8rem, 25rem);
   justify-content: start;
-  column-gap: 0.75rem;
+  column-gap: var(--space-lg);
   align-items: center;
   margin: 0;
   min-height: 0;
-  padding: 0.45rem 1rem;
+  padding: var(--space-2xs) var(--space-lg);
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
@@ -523,7 +548,7 @@
 .settings-group-card .settings-field:not(:has(> span)) {
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  padding: 0.5rem 0.75rem;
+  padding: var(--space-sm) var(--space-lg);
 }
 
 .settings-group-card .settings-field:not(:has(> span)) > :not(span):not(small) {
@@ -550,7 +575,7 @@
   grid-column: 1;
   grid-row: 1;
   min-width: 0;
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   font-weight: 500;
 }
 
@@ -559,8 +584,8 @@
   grid-column: 1;
   grid-row: 2;
   font-family: var(--font-ui);
-  font-size: 0.75rem;
-  line-height: 1.4;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
 }
 
 .settings-group-card .settings-field > :not(span):not(small),
@@ -578,7 +603,7 @@
 .settings-group-card .ui-password-field input {
   height: 2rem;
   min-height: 2rem;
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
 }
 
 @container (max-width: 34rem) {

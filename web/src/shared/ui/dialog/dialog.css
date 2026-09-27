@@ -56,5 +56,6 @@
 .ui-modal-header > button { display: grid; width: 28px; height: 28px; padding: 0; place-items: center; border: 0; border-radius:var(--radius-2); background: transparent; color: var(--ink-soft); transition: background var(--transition-fast), color var(--transition-fast); }
 .ui-modal-header > button:hover { background: var(--paper-deep); color: var(--ink); }
 .ui-modal-body { min-height: 0; overflow: auto; padding:var(--space-2xl) var(--space-2xl); }
+.ui-modal-body.is-flush { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
 .ui-modal-footer { display: flex; justify-content: flex-end; gap:var(--space-sm); padding:var(--space-lg) var(--space-2xl); border-top: 1px solid var(--line); }
 .confirm-dialog-detail { color: var(--ink-soft); font-size:var(--text-xs); }

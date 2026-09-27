@@ -210,7 +210,7 @@ export function McpServerEditor({
       />
 
       <div className="settings-note-card">
-        <Cable size={15} />
+        <Cable size={16} />
         <div>
           <strong>{t("Independent config file", "独立配置文件")}</strong>
           <p>

@@ -185,7 +185,7 @@ function statusText(
 function ToolPermissionBadge({ autoAudited, t }: { autoAudited: boolean; t: (en: string, zh: string) => string }) {
   return (
     <span className={autoAudited ? "tool-permission-badge auto" : "tool-permission-badge"}>
-      <ShieldCheck size={11} aria-hidden />
+      <ShieldCheck size={12} aria-hidden />
       {autoAudited ? t("Auto-approved", "自动放行") : t("Approved", "已批准")}
     </span>
   );

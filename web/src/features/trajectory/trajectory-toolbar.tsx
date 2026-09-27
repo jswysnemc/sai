@@ -91,7 +91,7 @@ export function TrajectoryToolbar({
   return (
     <div className="trajectory-toolbar" role="toolbar" aria-label={t("Trajectory toolbar", "轨迹工具栏")}>
       <div className="trajectory-toolbar-search">
-        <Search size={13} aria-hidden />
+        <Search size={14} aria-hidden />
         <input
           type="search"
           value={query}
@@ -141,14 +141,14 @@ export function TrajectoryToolbar({
             ? t("Switch the overview to equal-width records", "概览切换为等宽排列")
             : t("Switch the overview to recorded durations", "概览切换为真实耗时")}
         >
-          {durationMode ? <Clock size={13} aria-hidden /> : <ListOrdered size={13} aria-hidden />}
+          {durationMode ? <Clock size={14} aria-hidden /> : <ListOrdered size={14} aria-hidden />}
           {durationMode ? t("Duration", "耗时") : t("Sequence", "顺序")}
         </Button>
         <Button
           onClick={onToggleAll}
           title={allCollapsed ? t("Expand all turns", "展开所有轮次") : t("Collapse all turns", "折叠所有轮次")}
         >
-          {allCollapsed ? <ChevronsUpDown size={13} aria-hidden /> : <ChevronsDownUp size={13} aria-hidden />}
+          {allCollapsed ? <ChevronsUpDown size={14} aria-hidden /> : <ChevronsDownUp size={14} aria-hidden />}
           {allCollapsed ? t("Expand", "展开") : t("Collapse", "折叠")}
         </Button>
         <Button
@@ -156,7 +156,7 @@ export function TrajectoryToolbar({
           disabled={!sessionId || exporting}
           title={t("Export the latest real API request and response", "导出最近一次真实 API 请求与响应")}
         >
-          <Download size={13} aria-hidden />
+          <Download size={14} aria-hidden />
           {exporting ? t("Exporting", "导出中") : t("Export API", "导出 API")}
         </Button>
       </div>

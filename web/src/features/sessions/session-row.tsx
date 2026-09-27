@@ -91,7 +91,7 @@ export function SessionRow({
     <div className={rowClass} onContextMenu={onContextMenu}>
       {selectable && (
         <Button variant="ghost" className="session-check" onClick={onToggleChecked} aria-label={t(`Select ${session.title}`, `选择 ${session.title}`)}>
-          {checked ? <CheckSquare2 size={15} /> : <Square size={15} />}
+          {checked ? <CheckSquare2 size={16} /> : <Square size={16} />}
         </Button>
       )}
         <Button variant="ghost" className="session-main" aria-current={session.active ? "page" : undefined} onClick={selectable ? onToggleChecked : onOpen}>

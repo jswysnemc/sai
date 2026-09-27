@@ -49,7 +49,7 @@ export function TrajectoryDetails({ record, onClose }: TrajectoryDetailsProps) {
           aria-label={t("Close details", "关闭详情")}
           onClick={onClose}
         >
-          <X size={13} aria-hidden />
+          <X size={14} aria-hidden />
         </button>
       </header>
 

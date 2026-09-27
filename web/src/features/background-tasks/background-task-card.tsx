@@ -22,7 +22,7 @@ export function BackgroundTaskCard({ task, active, onSelect, onStop }: { task: B
         </span>
         <small>{running ? formatBackgroundTaskDuration(task, undefined, locale) : t("Done", "已结束")}</small>
       </button>
-      {running && <button type="button" className="background-task-stop" onClick={onStop} aria-label={t(`Stop ${task.label}`, `停止 ${task.label}`)}><Square size={11} /></button>}
+      {running && <button type="button" className="background-task-stop" onClick={onStop} aria-label={t(`Stop ${task.label}`, `停止 ${task.label}`)}><Square size={12} /></button>}
     </article>
   );
 }

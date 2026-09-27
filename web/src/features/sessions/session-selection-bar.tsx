@@ -37,7 +37,7 @@ export function SessionSelectionBar({
         aria-label={allSelected ? t("Clear selection", "取消全选") : t("Select all", "全选")}
         title={allSelected ? t("Clear selection", "取消全选") : t("Select all", "全选")}
       >
-        <CheckSquare2 size={13} />
+        <CheckSquare2 size={14} />
         <span>{allSelected ? t("Clear", "取消全选") : t("Select all", "全选")}</span>
       </button>
       <span className="workspace-selection-count">{t(`${selectedCount} selected`, `已选 ${selectedCount}`)}</span>
@@ -49,7 +49,7 @@ export function SessionSelectionBar({
         aria-label={t("Delete selected sessions", "删除所选会话")}
         title={t("Delete selected sessions", "删除所选会话")}
       >
-        <Trash2 size={13} />
+        <Trash2 size={14} />
         <span>{busy ? t("Deleting", "删除中") : t("Delete", "删除")}</span>
       </button>
     </div>

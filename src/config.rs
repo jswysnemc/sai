@@ -11,6 +11,7 @@ mod cli_tools;
 pub mod defaults;
 mod gateway_defaults;
 mod git;
+mod jev_routing;
 mod mcp_file;
 mod mesh;
 mod model;
@@ -45,9 +46,11 @@ pub use agent_presets::{ensure_surface_agent_defaults, seed_default_agent_profil
 pub use agent_tool_modes::{normalize_deferred_tools, DEFERRED_ALL_NON_BASE};
 #[allow(unused_imports)]
 pub use agents::*;
+#[allow(unused_imports)]
 pub use cli_tools::*;
 #[allow(unused_imports)]
 pub use git::*;
+pub use jev_routing::JevRoutingConfig;
 #[allow(unused_imports)]
 pub use mcp_file::{
     init_mcp_config_file, load_mcp_config, parse_mcp_config_value, save_mcp_config,

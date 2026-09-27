@@ -106,7 +106,7 @@ export const FileDiffCard = memo(function FileDiffCard(props: FileDiffCardProps)
           aria-label={props.collapsed ? t(`Expand ${file.path}`, `展开 ${file.path}`) : t(`Collapse ${file.path}`, `折叠 ${file.path}`)}>
           <ChevronDown size={14} className={`git-file-card-chevron${props.collapsed ? "" : " open"}`} aria-hidden />
         </Button>
-        <FileTypeIcon name={file.path} size={15} />
+        <FileTypeIcon name={file.path} size={16} />
         <span className={`git-file-card-path${deleted ? " is-deleted" : ""}`}>
           <ToolFileReference
             path={file.path}
@@ -131,7 +131,7 @@ export const FileDiffCard = memo(function FileDiffCard(props: FileDiffCardProps)
                 title={lineOps ? t("Back to inline diff", "返回内联差异") : t("Stage lines or hunks", "按行或区块暂存")}
                 aria-pressed={lineOps}
               >
-                <ListChecks size={13} />
+                <ListChecks size={14} />
               </Button>
             )}
             {canUnstage && (
@@ -141,7 +141,7 @@ export const FileDiffCard = memo(function FileDiffCard(props: FileDiffCardProps)
                 onClick={() => void props.runOperation("unstage", { path: file.path })}
                 title={t("Unstage", "取消暂存")}
               >
-                <Minus size={13} />
+                <Minus size={14} />
               </Button>
             )}
             {canStage && (
@@ -151,7 +151,7 @@ export const FileDiffCard = memo(function FileDiffCard(props: FileDiffCardProps)
                 onClick={() => void props.runOperation("stage", { path: file.path })}
                 title={entry?.conflicted ? t("Mark as resolved", "标记为已解决") : t("Stage", "暂存")}
               >
-                <Plus size={13} />
+                <Plus size={14} />
               </Button>
             )}
             {canDiscard && (
@@ -161,7 +161,7 @@ export const FileDiffCard = memo(function FileDiffCard(props: FileDiffCardProps)
                 onClick={discard}
                 title={entry?.untracked ? t("Delete untracked file", "删除未跟踪文件") : t("Discard changes", "撤销修改")}
               >
-                {entry?.untracked ? <Trash2 size={13} /> : <RotateCcw size={13} />}
+                {entry?.untracked ? <Trash2 size={14} /> : <RotateCcw size={14} />}
               </Button>
             )}
           </span>

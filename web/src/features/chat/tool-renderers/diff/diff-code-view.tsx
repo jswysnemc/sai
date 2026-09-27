@@ -90,18 +90,18 @@ export function DiffCodeView({ file, language, layout, wrap = true }: DiffCodeVi
         <div className="review-diff-navigation" role="group" aria-label={t("Navigate changes", "变更导航")}>
           <Button variant="ghost" size="icon" disabled={ordinal === 0} onClick={() => goToChange(ordinal - 1)}
             aria-label={t("Previous change", "上一处变更")} title={t("Previous change (Shift+F7)", "上一处变更（Shift+F7）")}>
-            <ChevronUp size={13} />
+            <ChevronUp size={14} />
           </Button>
           <span className="review-diff-position">{changes.length ? ordinal + 1 : 0}/{changes.length}</span>
           <Button variant="ghost" size="icon" disabled={ordinal >= changes.length - 1} onClick={() => goToChange(ordinal + 1)}
             aria-label={t("Next change", "下一处变更")} title={t("Next change (F7)", "下一处变更（F7）")}>
-            <ChevronDown size={13} />
+            <ChevronDown size={14} />
           </Button>
           {foldable.length > 0 && <Button variant="ghost" size="icon" aria-pressed={allExpanded}
             onClick={() => setUnfolded(allExpanded ? new Set() : new Set(foldable))}
             aria-label={allExpanded ? t("Fold context", "折叠上下文") : t("Expand context", "展开上下文")}
             title={allExpanded ? t("Fold context", "折叠上下文") : t("Expand context", "展开上下文")}>
-            {allExpanded ? <FoldVertical size={13} /> : <UnfoldVertical size={13} />}
+            {allExpanded ? <FoldVertical size={14} /> : <UnfoldVertical size={14} />}
           </Button>}
         </div>
       </div>
@@ -123,7 +123,7 @@ export function DiffCodeView({ file, language, layout, wrap = true }: DiffCodeVi
                 );
               }
               return <div className="review-diff-gap" key={index}>
-                <Ellipsis size={13} aria-hidden />
+                <Ellipsis size={14} aria-hidden />
                 <span>{line.kind === "no-newline" ? t("No newline at end of file", "文件末尾没有换行")
                   : line.foldedCount ? t(`${line.foldedCount} lines omitted`, `未显示 ${line.foldedCount} 行`)
                     : t("Next section", "下一处区段")}</span>
@@ -143,7 +143,7 @@ export function DiffCodeView({ file, language, layout, wrap = true }: DiffCodeVi
               }}>
               <DiffCodeRows lines={folded ? block.lines.slice(0, CONTEXT_LINES) : block.lines} layout={layout} highlights={highlights} />
               {hiddenCount > 0 && <Button variant="ghost" className="review-diff-fold" aria-expanded={!folded} onClick={() => toggleContext(index)}>
-                {folded ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
+                {folded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
                 {folded ? t(`Show ${hiddenCount} unchanged lines`, `展开 ${hiddenCount} 行上下文`) : t("Fold context", "折叠上下文")}
               </Button>}
               {folded && <DiffCodeRows lines={block.lines.slice(-CONTEXT_LINES)} layout={layout} highlights={highlights} />}

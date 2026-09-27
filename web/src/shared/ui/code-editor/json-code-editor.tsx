@@ -40,7 +40,7 @@ export function JsonCodeEditor({ value, height = 420, ariaLabel, onChange }: Jso
   const dark = isDarkTheme(theme);
   return (
     <div className="json-code-editor" aria-label={resolvedAriaLabel}>
-      <header><span><Braces size={13} />JSON</span><button type="button" onClick={() => void editor?.getAction("editor.action.formatDocument")?.run()} disabled={!editor}><WandSparkles size={13} />{t("Format", "格式化")}</button></header>
+      <header><span><Braces size={14} />JSON</span><button type="button" onClick={() => void editor?.getAction("editor.action.formatDocument")?.run()} disabled={!editor}><WandSparkles size={14} />{t("Format", "格式化")}</button></header>
       <div className="json-editor-surface" style={{ height }}>
         {ready ? <Editor language="json" value={value} theme={dark ? "vs-dark" : "light"} onChange={(next) => onChange(next ?? "")} onMount={(instance) => setEditor(instance)} options={{ automaticLayout: true, minimap: { enabled: false }, fontFamily: "Fira Code", fontSize: 12, lineHeight: 20, scrollBeyondLastLine: false, folding: true, bracketPairColorization: { enabled: true }, formatOnPaste: true, padding: { top: 10, bottom: 10 }, ariaLabel: resolvedAriaLabel }} /> : <div className="editor-state">{t("Loading JSON editor", "加载 JSON 编辑器")}</div>}
       </div>

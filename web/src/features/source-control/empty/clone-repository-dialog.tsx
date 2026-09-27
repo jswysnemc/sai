@@ -66,7 +66,7 @@ export function CloneRepositoryDialog(props: CloneRepositoryDialogProps) {
     >
       <div className="clone-repository-form">
         <label>
-          <span><Download size={13} />{t("Repository URL", "仓库地址")}</span>
+          <span><Download size={14} />{t("Repository URL", "仓库地址")}</span>
           <input
             autoFocus
             value={remoteUrl}
@@ -79,7 +79,7 @@ export function CloneRepositoryDialog(props: CloneRepositoryDialogProps) {
           />
         </label>
         <label>
-          <span><Folder size={13} />{t("Folder name", "文件夹名称")}</span>
+          <span><Folder size={14} />{t("Folder name", "文件夹名称")}</span>
           <input
             value={directory}
             placeholder={t("Derived from repository URL", "根据仓库地址自动推导")}

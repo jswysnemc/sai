@@ -139,7 +139,7 @@ export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
               `当前轮继续使用原模型；${pending.model} 将于下一轮生效`
             )}
           >
-            <Clock3 size={11} aria-hidden />
+            <Clock3 size={12} aria-hidden />
             {t(`${pending.model} next turn`, `${pending.model} 下轮生效`)}
           </span>
         )}
@@ -171,7 +171,7 @@ export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
               aria-label={t(`Model ${props.selection?.model ?? "not configured"}`, `模型 ${props.selection?.model ?? "未配置"}`)}
             >
               <span><small>{t("Model", "模型")}</small><strong>{props.selection?.model ?? t("Not configured", "未配置")}</strong></span>
-              <ChevronRight size={13} />
+              <ChevronRight size={14} />
             </button>
             <button
               type="button"
@@ -182,7 +182,7 @@ export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
               aria-label={t(`Reasoning effort ${thinkingLabel}`, `推理强度 ${thinkingLabel}`)}
             >
               <span><small>{t("Reasoning effort", "推理强度")}</small><strong>{thinkingLabel}</strong></span>
-              <ChevronRight size={13} />
+              <ChevronRight size={14} />
             </button>
           </div>
           <div className="model-thinking-options">
@@ -230,9 +230,9 @@ function ModelOptions({ choices, selection, pendingSelection, query, onQueryChan
           const isPending = choice.providerId === pendingSelection?.providerId && choice.model === pendingSelection.model;
           return (
             <button type="button" role="option" aria-selected={active} aria-label={`${choice.model}，${choice.providerName}`} className={active ? "active" : isPending ? "pending" : ""} key={`${choice.providerId}-${choice.model}`} onClick={() => onSelect(choice)}>
-              <span className="model-thinking-option-main"><ModelIcon model={choice.model} size={15} /><strong>{choice.model}</strong></span>
+              <span className="model-thinking-option-main"><ModelIcon model={choice.model} size={16} /><strong>{choice.model}</strong></span>
               {isPending
-                ? <small className="model-thinking-option-pending"><Clock3 size={11} aria-hidden />{t("Next turn", "下轮生效")}</small>
+                ? <small className="model-thinking-option-pending"><Clock3 size={12} aria-hidden />{t("Next turn", "下轮生效")}</small>
                 : <small>{choice.providerName}</small>}
               <Check size={14} />
             </button>

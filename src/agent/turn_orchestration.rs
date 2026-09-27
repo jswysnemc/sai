@@ -181,7 +181,15 @@ impl Agent {
             None
         };
         perf.mark("memory association");
-        let plugin_reply_reminder = plugin_reply_plan.reminder.as_deref();
+        // Jev 暴露决策：请求模型前预先暴露相关工具与 skill，结果与插件提醒一起并入用户消息
+        let jev_block = self.jev_preselect(&turn_id, &input).await;
+        perf.mark("jev preselect");
+        let turn_reminder = [plugin_reply_plan.reminder.as_deref(), jev_block.as_deref()]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        let plugin_reply_reminder = (!turn_reminder.is_empty()).then_some(turn_reminder.as_str());
         let mut messages = settle_step(
             &mut guard,
             self.chat_messages_for_turn(

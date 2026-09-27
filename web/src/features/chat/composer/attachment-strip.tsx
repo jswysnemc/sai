@@ -20,7 +20,7 @@ export function AttachmentStrip({ attachments, onRemove }: { attachments: Compos
         {attachments.map((attachment) => (
           <div className="composer-attachment" key={attachment.id} title={attachment.name}>
             <button type="button" className="attachment-preview-button" onClick={() => setPreview(attachment)} aria-label={t(`Preview ${attachment.name}`, `预览 ${attachment.name}`)}><img src={attachment.dataUrl} alt={attachment.name} /></button>
-            <button type="button" className="attachment-remove" onClick={() => onRemove(attachment.id)} aria-label={t(`Remove ${attachment.name}`, `移除 ${attachment.name}`)}><X size={13} /></button>
+            <button type="button" className="attachment-remove" onClick={() => onRemove(attachment.id)} aria-label={t(`Remove ${attachment.name}`, `移除 ${attachment.name}`)}><X size={14} /></button>
           </div>
         ))}
       </div>

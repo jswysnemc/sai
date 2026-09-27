@@ -50,8 +50,8 @@ export function ContextUsagePanel({ usage, compactPending, compactDisabled, comp
         ? t(`Compacted ${session.compacted_turns} turns · ${formatCompactionReason(session.latest_checkpoint_reason, t)}`, `已压缩 ${session.compacted_turns} 轮 · ${formatCompactionReason(session.latest_checkpoint_reason, t)}`)
         : t("Not compacted", "尚未压缩")}</div>
       <div className="context-compaction-actions">
-        <Button variant="ghost" size="small" onClick={onConfigure}><SlidersHorizontal size={13} />{t("Settings", "压缩设置")}</Button>
-        <Button size="small" onClick={onCompact} disabled={compactPending || compactDisabled || usage.runtime.active_run}><Archive size={13} />{compactPending ? t("Compacting", "正在压缩") : t("Compact now", "手动压缩")}</Button>
+        <Button variant="ghost" size="small" onClick={onConfigure}><SlidersHorizontal size={14} />{t("Settings", "压缩设置")}</Button>
+        <Button size="small" onClick={onCompact} disabled={compactPending || compactDisabled || usage.runtime.active_run}><Archive size={14} />{compactPending ? t("Compacting", "正在压缩") : t("Compact now", "手动压缩")}</Button>
       </div>
       {compactError && <p className="usage-error" role="alert">{compactError}</p>}
       {session.compaction_warning && <p className="context-compaction-result">{localizeApiMessage(session.compaction_warning, locale)}</p>}

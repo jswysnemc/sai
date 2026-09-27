@@ -59,7 +59,7 @@ export function DiffUnifiedView({ file, language }: { file: DiffFile; language?:
                 })}
                 aria-label={t(`Show ${foldCount} unchanged lines`, `展开 ${foldCount} 行未修改内容`)}
               >
-                <ChevronDown size={13} aria-hidden />
+                <ChevronDown size={14} aria-hidden />
                 <span>{t(`${foldCount} unchanged lines`, `${foldCount} 行未修改内容`)}</span>
               </button>
             )}
@@ -77,7 +77,7 @@ export function DiffUnifiedView({ file, language }: { file: DiffFile; language?:
                 })}
                 aria-label={t("Fold unchanged lines", "折叠未修改内容")}
               >
-                <ChevronUp size={13} aria-hidden />
+                <ChevronUp size={14} aria-hidden />
                 <span>{t("Fold unchanged lines", "折叠未修改内容")}</span>
               </button>
             )}
@@ -157,7 +157,7 @@ function UnifiedMarker({
   if (line.foldedCount) {
     return (
       <div className="diff-unified-fold diff-unified-hunk-fold" role="status">
-        <ChevronDown size={13} aria-hidden />
+        <ChevronDown size={14} aria-hidden />
         <span>{t(`${line.foldedCount} unchanged lines`, `${line.foldedCount} 行未修改内容`)}</span>
       </div>
     );

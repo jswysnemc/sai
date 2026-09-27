@@ -19,7 +19,7 @@ type CronJobListProps = {
 export function CronJobList({ jobs, pendingId, onToggle, onRemove }: CronJobListProps) {
   const { t } = useI18n();
   if (jobs.length === 0) {
-    return <div className="cron-empty"><CalendarClock size={24} /><strong>{t("No scheduled tasks", "暂无定时任务")}</strong><span>{t("One-time and fixed-interval tasks appear here after creation.", "创建单次任务或固定间隔任务后会显示在这里。")}</span></div>;
+    return <div className="cron-empty"><CalendarClock size={20} /><strong>{t("No scheduled tasks", "暂无定时任务")}</strong><span>{t("One-time and fixed-interval tasks appear here after creation.", "创建单次任务或固定间隔任务后会显示在这里。")}</span></div>;
   }
   return <div className="cron-job-list">{jobs.map((job) => <CronJobRow key={job.id} job={job} pending={pendingId === job.id} onToggle={() => onToggle(job)} onRemove={() => onRemove(job)} />)}</div>;
 }

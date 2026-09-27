@@ -35,7 +35,7 @@ export function BranchSwitcher({ tree, turnId, busy, onSwitch }: BranchSwitcherP
 
   return (
     <div className="branch-switcher" aria-label={t("Branch versions", "分支版本")}>
-      <GitBranch size={11} aria-hidden />
+      <GitBranch size={12} aria-hidden />
       <button
         type="button"
         disabled={busy || index === 0}

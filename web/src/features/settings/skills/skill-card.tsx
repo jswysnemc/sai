@@ -44,7 +44,7 @@ export function SkillCard({ skill, onOpen }: SkillCardProps) {
             <span>{skillScopeLabel(skill.scope, t)}</span>
             <code>{skill.directory_name}</code>
           </span>
-          <ChevronRight size={15} aria-hidden="true" />
+          <ChevronRight size={16} aria-hidden="true" />
         </span>
       </Button>
     </li>

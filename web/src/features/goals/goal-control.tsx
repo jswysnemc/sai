@@ -187,17 +187,17 @@ export function GoalControl({ sessionId, running, draftValue, onDraftChange, onC
 
         {goal && goal.status === "active" && !running && (
           <Button className="composer-rail-button goal-control-action" onClick={() => void continueGoal()} disabled={busy} title={t("Continue goal", "继续目标")} aria-label={t("Continue goal", "继续目标")}>
-            <Play size={13} />
+            <Play size={14} />
           </Button>
         )}
         {goal && goal.status === "active" && (
           <Button className="composer-rail-button goal-control-action" onClick={() => void updateStatus("paused")} disabled={busy} title={t("Pause goal", "暂停目标")} aria-label={t("Pause goal", "暂停目标")}>
-            <Pause size={13} />
+            <Pause size={14} />
           </Button>
         )}
         {goal && ["paused", "blocked", "usage_limited"].includes(goal.status) && (
           <Button className="composer-rail-button goal-control-action" onClick={() => void updateStatus("active")} disabled={busy || running} title={t("Resume goal", "恢复目标")} aria-label={t("Resume goal", "恢复目标")}>
-            <Play size={13} />
+            <Play size={14} />
           </Button>
         )}
 
@@ -253,11 +253,11 @@ export function GoalControl({ sessionId, running, draftValue, onDraftChange, onC
 
             <div className="goal-marker-actions">
               <Button variant="danger" onClick={() => void clear()} disabled={busy} title={t("Cancel goal", "取消目标")}>
-                <Trash2 size={13} />
+                <Trash2 size={14} />
                 <span>{t("Cancel", "取消目标")}</span>
               </Button>
               <Button onClick={() => void editGoal()} disabled={busy} title={t("Edit goal", "编辑目标")}>
-                <Pencil size={13} />
+                <Pencil size={14} />
                 <span>{t("Edit", "编辑")}</span>
               </Button>
             </div>

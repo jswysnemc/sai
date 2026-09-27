@@ -26,7 +26,7 @@ export function AgentSelector({ choices, selection, loading, disabled, onSelect 
   const [quickConfigOpen, setQuickConfigOpen] = useState(false);
   return (
     <div className="agent-selector">
-      <Bot size={13} aria-hidden />
+      <Bot size={14} aria-hidden />
       <Select
         value={selection?.id ?? ""}
         options={choices.map((choice) => ({ value: choice.id, label: choice.name }))}
@@ -44,7 +44,7 @@ export function AgentSelector({ choices, selection, loading, disabled, onSelect 
         title={t("Subagent models & thinking", "子任务模型与思考")}
         aria-label={t("Subagent models & thinking", "子任务模型与思考")}
       >
-        <Settings2 size={13} />
+        <Settings2 size={14} />
       </Button>
       {quickConfigOpen && (
         <SubagentModelDialog open onClose={() => setQuickConfigOpen(false)} />

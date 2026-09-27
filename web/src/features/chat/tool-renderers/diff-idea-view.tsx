@@ -126,7 +126,7 @@ export function DiffIdeaView({ file, language }: { file: DiffFile; language?: st
             title={t("Previous change", "上一处变更")}
             aria-label={t("Previous change", "上一处变更")}
           >
-            <ChevronUp size={13} />
+            <ChevronUp size={14} />
           </button>
           <span>{current + 1} / {changeCount}</span>
           <button
@@ -136,7 +136,7 @@ export function DiffIdeaView({ file, language }: { file: DiffFile; language?: st
             title={t("Next change", "下一处变更")}
             aria-label={t("Next change", "下一处变更")}
           >
-            <ChevronDown size={13} />
+            <ChevronDown size={14} />
           </button>
           <button
             type="button"
@@ -146,7 +146,7 @@ export function DiffIdeaView({ file, language }: { file: DiffFile; language?: st
             aria-pressed={allExpanded}
             disabled={allFoldableIndexes.length === 0}
           >
-            <UnfoldVertical size={13} />
+            <UnfoldVertical size={14} />
           </button>
         </span>
       </div>

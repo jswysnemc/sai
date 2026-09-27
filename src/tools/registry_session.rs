@@ -66,6 +66,7 @@ impl ToolRegistry {
             "update_goal",
             crate::tools::LOAD_NAME,
             crate::tools::INVOKE_NAME,
+            crate::tools::REQUEST_CAPABILITY_NAME,
         ]);
         if self.contains("subagent") {
             crate::tools::subagent::register(

@@ -139,7 +139,7 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
   return (
     <section className="side-conversation-pane">
       <header className="side-conversation-head">
-        <MessageSquareText size={15} aria-hidden />
+        <MessageSquareText size={16} aria-hidden />
         <div>
           <strong>{request.title}</strong>
           <span>{t("From the main conversation", "来自主会话")}</span>
@@ -209,7 +209,7 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
               aria-label={t("Add images", "添加图片")}
               title={t("Add images", "添加图片")}
             >
-              <Paperclip size={18} />
+              <Paperclip size={16} />
             </button>
             {activeRun ? (
               <button type="button" className="composer-send stop" onClick={() => activeRun.runId && void run.stop(activeRun.runId)} aria-label={t("Stop", "停止")} title={t("Stop", "停止")}>
@@ -217,7 +217,7 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
               </button>
             ) : (
               <button className="composer-send" type="submit" disabled={!input.trim()} aria-label={t("Send", "发送")} title={t("Send", "发送")}>
-                <ArrowRight size={18} />
+                <ArrowRight size={16} />
               </button>
             )}
           </div>

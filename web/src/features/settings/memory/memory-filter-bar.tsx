@@ -65,7 +65,7 @@ export function MemoryFilterBar({
         />
         {query && (
           <button type="button" onClick={() => onQueryChange("")} aria-label={t("Clear filter", "清除筛选")}>
-            <X size={13} />
+            <X size={14} />
           </button>
         )}
       </label>

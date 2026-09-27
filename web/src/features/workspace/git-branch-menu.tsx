@@ -168,8 +168,8 @@ export function GitBranchMenu(props: GitBranchMenuProps) {
       </Button>
       {(props.state.ahead || props.state.behind) ? (
         <span className="git-review-sync">
-          {props.state.ahead > 0 && <b><ArrowUp size={10} />{props.state.ahead}</b>}
-          {props.state.behind > 0 && <i><ArrowDown size={10} />{props.state.behind}</i>}
+          {props.state.ahead > 0 && <b><ArrowUp size={12} />{props.state.ahead}</b>}
+          {props.state.behind > 0 && <i><ArrowDown size={12} />{props.state.behind}</i>}
         </span>
       ) : null}
       {props.state.upstream && <small title={props.state.upstream}>{props.state.upstream}</small>}
@@ -193,7 +193,7 @@ export function GitBranchMenu(props: GitBranchMenuProps) {
         footer={(
           <>
             <Button onClick={() => setRenameBranch(null)}>{t("Cancel", "取消")}</Button>
-            <Button variant="primary" onClick={() => void rename()} disabled={props.busy || !renameValue.trim()}><Pencil size={13} />{t("Rename", "重命名")}</Button>
+            <Button variant="primary" onClick={() => void rename()} disabled={props.busy || !renameValue.trim()}><Pencil size={14} />{t("Rename", "重命名")}</Button>
           </>
         )}
       >

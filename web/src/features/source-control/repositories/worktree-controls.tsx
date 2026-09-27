@@ -42,7 +42,7 @@ export function WorktreeControls(props: WorktreeControlsProps) {
 
   return (
     <div className="git-worktree-create">
-      <span><GitBranchPlus size={13} />{t("Create worktree", "创建 worktree")}</span>
+      <span><GitBranchPlus size={14} />{t("Create worktree", "创建 worktree")}</span>
       <input value={path} onChange={(event) => setPath(event.target.value)} placeholder={t("Path", "路径")} spellCheck={false} />
       <input value={newBranch} onChange={(event) => setNewBranch(event.target.value)} placeholder={t("New branch (optional)", "新分支（可选）")} spellCheck={false} />
       <input value={startPoint} onChange={(event) => setStartPoint(event.target.value)} placeholder={t("Start point (optional)", "起点（可选）")} spellCheck={false} />

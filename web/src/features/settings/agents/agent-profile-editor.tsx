@@ -176,7 +176,7 @@ export function AgentProfileEditor({ config, profile, options, onChange, onRemov
           >
             <div className="agent-prompt-preview">
               <Button variant="secondary" onClick={() => setPromptOpen(true)}>
-                <Pencil size={13} />
+                <Pencil size={14} />
                 {t("Edit prompt", "编辑提示词")}
               </Button>
               <p>{profile.system_prompt.trim()

@@ -190,7 +190,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
         </Button>
         <div className="sidebar-heading-actions">
           <Button variant="ghost" size="icon" className="icon-button" aria-label={t("Collapse session sidebar", "折叠会话侧栏")} title={t("Collapse session sidebar", "折叠会话侧栏")} onClick={onToggleCollapsed}>
-            <PanelLeftClose size={16} />
+            <PanelLeftClose size={14} />
           </Button>
         </div>
       </div>

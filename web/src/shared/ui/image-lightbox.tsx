@@ -73,7 +73,7 @@ export function ImageLightbox({ src, alt, onClose }: ImageLightboxProps) {
   return (
     <div className="image-lightbox" role="dialog" aria-label={alt || t("Image viewer", "图片查看")} onClick={onClose} onWheel={onWheel}>
       <button type="button" className="image-lightbox-close" aria-label={t("Close image", "关闭图片")} onClick={onClose}>
-        <X size={18} />
+        <X size={16} />
       </button>
       <img
         className={`image-lightbox-image${dragging ? " dragging" : ""}`}

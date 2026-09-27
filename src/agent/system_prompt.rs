@@ -56,7 +56,10 @@ pub(crate) fn build_base_system_prompt_for_phase(
     {
         let progressive = !config.agent_deferred_tools().is_empty()
             || config.active_deepseek_anchor_enabled().unwrap_or(false);
-        let prompt = if progressive {
+        // Jev 暴露决策开启时不列目录，skill 由 Jev 按需暴露
+        let prompt = if config.jev_routing_active() {
+            tools::skills_jev_prompt(paths)
+        } else if progressive {
             tools::skills_catalog_prompt(config, paths)?
         } else {
             tools::skills_prompt(config, paths)?

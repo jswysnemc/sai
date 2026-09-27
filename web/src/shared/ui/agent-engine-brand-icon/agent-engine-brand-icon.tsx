@@ -1,11 +1,11 @@
 import claudeCodeIconUrl from "@lobehub/icons-static-svg/icons/claudecode-color.svg";
 import codexIconUrl from "@lobehub/icons-static-svg/icons/codex-color.svg";
-import { Cpu } from "../icons";
+import { Cpu, type IconSize } from "../icons";
 import "./agent-engine-brand-icon.css";
 
 type AgentEngineBrandIconProps = {
   engine: string;
-  size?: number;
+  size?: IconSize;
   className?: string;
 };
 

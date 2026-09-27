@@ -34,20 +34,20 @@ export function WorkbenchToolbar({ workspaceOpen, terminalOpen, activePanel, ove
   return (
     <div className="workbench-toolbar" role="toolbar" aria-label={t("Workbench actions", "工作台操作")}>
       <Button variant="ghost" size="small" className="workbench-tool" aria-label={t("Browse files", "浏览文件")} title={t(`Browse files (${modifier}+Shift+E)`, `浏览文件 (${modifier}+Shift+E)`)} aria-pressed={workspaceOpen && activePanel === "files"} onClick={() => openPanel("files")}>
-        <IconFiles size={15} /><span className="workbench-tool-label hidden xl:inline">{t("Files", "文件")}</span>
+        <IconFiles size={16} /><span className="workbench-tool-label hidden xl:inline">{t("Files", "文件")}</span>
       </Button>
       <Button variant="ghost" size="small" className="workbench-tool" aria-label={t("Review changes", "审阅变更")} title={t(`Review changes (${modifier}+Shift+G)`, `审阅变更 (${modifier}+Shift+G)`)} aria-pressed={workspaceOpen && activePanel === "diff"} onClick={() => openPanel("diff")}>
-        <IconReview size={15} /><span className="workbench-tool-label">{t("Review", "审阅")}</span>
+        <IconReview size={16} /><span className="workbench-tool-label">{t("Review", "审阅")}</span>
       </Button>
-      <Button variant="ghost" size="icon" className="workbench-terminal-tool hidden md:inline-flex" aria-label={t("Toggle bottom terminal", "切换底部终端")} title={t(`Terminal (${modifier}+J)`, `终端 (${modifier}+J)`)} aria-pressed={terminalOpen} onClick={() => requestWorkbenchCommand("toggle-terminal")}><SquareTerminal size={15} /></Button>
+      <Button variant="ghost" size="icon" className="workbench-terminal-tool hidden md:inline-flex" aria-label={t("Toggle bottom terminal", "切换底部终端")} title={t(`Terminal (${modifier}+J)`, `终端 (${modifier}+J)`)} aria-pressed={terminalOpen} onClick={() => requestWorkbenchCommand("toggle-terminal")}><SquareTerminal size={16} /></Button>
       {overview}
-      <ActionMenu label={t("Workbench menu", "工作台菜单")} trigger={<MoreHorizontal size={17} />} items={[
-        { id: "terminal", label: t("Toggle terminal", "切换终端"), icon: <SquareTerminal size={15} />, shortcut: `${modifier}+J`, onSelect: () => requestWorkbenchCommand("toggle-terminal") },
-        { id: "tasks", label: t("Background tasks", "后台任务"), icon: <Activity size={15} />, onSelect: () => openPanel("tasks") },
-        { id: "subagents", label: t("Subagents", "子智能体"), icon: <Bot size={15} />, onSelect: () => openPanel("subagents") },
-        { id: "sidebar", label: workspaceOpen ? t("Hide side panel", "隐藏侧面板") : t("Show side panel", "显示侧面板"), icon: <PanelRight size={15} />, separator: true, onSelect: onToggleWorkspace },
-        { id: "swap", label: t("Swap chat and workspace", "交换对话与工作区"), icon: <ArrowLeftRight size={15} />, disabled: !workspaceOpen, onSelect: onSwap },
-        { id: "maximize", label: t("Maximize workspace", "最大化工作区"), icon: <Maximize2 size={15} />, disabled: !workspaceOpen, onSelect: onMaximize }
+      <ActionMenu label={t("Workbench menu", "工作台菜单")} trigger={<MoreHorizontal size={16} />} items={[
+        { id: "terminal", label: t("Toggle terminal", "切换终端"), icon: <SquareTerminal size={16} />, shortcut: `${modifier}+J`, onSelect: () => requestWorkbenchCommand("toggle-terminal") },
+        { id: "tasks", label: t("Background tasks", "后台任务"), icon: <Activity size={16} />, onSelect: () => openPanel("tasks") },
+        { id: "subagents", label: t("Subagents", "子智能体"), icon: <Bot size={16} />, onSelect: () => openPanel("subagents") },
+        { id: "sidebar", label: workspaceOpen ? t("Hide side panel", "隐藏侧面板") : t("Show side panel", "显示侧面板"), icon: <PanelRight size={16} />, separator: true, onSelect: onToggleWorkspace },
+        { id: "swap", label: t("Swap chat and workspace", "交换对话与工作区"), icon: <ArrowLeftRight size={16} />, disabled: !workspaceOpen, onSelect: onSwap },
+        { id: "maximize", label: t("Maximize workspace", "最大化工作区"), icon: <Maximize2 size={16} />, disabled: !workspaceOpen, onSelect: onMaximize }
       ]} />
     </div>
   );

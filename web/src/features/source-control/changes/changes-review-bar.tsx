@@ -56,7 +56,7 @@ export function ChangesReviewBar(props: ChangesReviewBarProps) {
             {scopes.map((item) => (
               <button key={item.id} type="button" role="menuitem" onClick={() => { props.onScopeChange(item.id); setScopeOpen(false); }}>
                 <span>{t(item.en, item.zh)}</span>
-                {item.id === props.scope && <Check size={13} />}
+                {item.id === props.scope && <Check size={14} />}
               </button>
             ))}
           </div>
@@ -81,7 +81,7 @@ export function ChangesReviewBar(props: ChangesReviewBarProps) {
       </div>
       {props.finding && (
         <label className="git-changes-review-find">
-          <Search size={13} />
+          <Search size={14} />
           <TextInput autoFocus value={props.query} onChange={(event) => props.onQueryChange(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") props.onFindingChange(false); }} placeholder={t("Find in changes", "在变更中查找")} aria-label={t("Find in changes", "在变更中查找")} />
         </label>
       )}

@@ -623,6 +623,20 @@ impl Agent {
                         messages.push(ChatMessage::tool(call.id, context_output));
                         continue;
                     }
+                    if self.tool_visibility.is_jev_routing()
+                        && call.function.name == tools::REQUEST_CAPABILITY_NAME
+                    {
+                        self.respond_capability_request(
+                            turn_id,
+                            recorded_call,
+                            call,
+                            messages,
+                            &mut repeat_guard,
+                            on_event,
+                        )
+                        .await?;
+                        continue;
+                    }
                     perf.mark(&format!("tool {} start", call.function.name));
                     let mut tool_hook_ctx = hook_ctx.clone();
                     tool_hook_ctx.tool_name = Some(call.function.name.clone());

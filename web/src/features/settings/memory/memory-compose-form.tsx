@@ -84,7 +84,7 @@ export function MemoryComposeForm({ pending, workspace, onCollapse, onSubmit }: 
           onClick={onCollapse}
           disabled={pending}
         >
-          <X size={13} /> {t("Collapse", "收起")}
+          <X size={14} /> {t("Collapse", "收起")}
         </button>
       </div>
       <div className="memory-compose-row">

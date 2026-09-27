@@ -141,6 +141,8 @@ export function RuntimeSettingsSection({ config, subview, onConfigChange }: Runt
             />
           </SettingsGroup>
           <SettingsGroup
+            collapsible
+            defaultOpen={false}
             title={t("Session mesh", "会话网格")}
             description={t(
               "Mesh tools can deliver messages to other sessions and subagents. Cross-session delivery stays off by default.",
@@ -171,6 +173,8 @@ export function RuntimeSettingsSection({ config, subview, onConfigChange }: Runt
             <AgentEngineSettings config={config} onConfigChange={onConfigChange} />
           </SettingsGroup>
           <SettingsGroup
+            collapsible
+            defaultOpen={false}
             title={t("Failure retry", "失败重试")}
             description={t(
               "Retry transient transport failures (disconnects, timeouts, gateway errors) before any model output starts. Business errors and streams already producing output are never retried.",

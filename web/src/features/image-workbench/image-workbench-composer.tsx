@@ -97,7 +97,7 @@ export function ImageWorkbenchComposer(props: ImageWorkbenchComposerProps) {
       >
         <div className="composer-footer">
           <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={addUploadedFiles} />
-          <Button variant="ghost" size="icon" className="composer-attach" disabled={props.submitting} title={t("Attach images", "添加图片")} aria-label={t("Add images", "添加图片")} onClick={() => fileInputRef.current?.click()}><Plus size={18} /></Button>
+          <Button variant="ghost" size="icon" className="composer-attach" disabled={props.submitting} title={t("Attach images", "添加图片")} aria-label={t("Add images", "添加图片")} onClick={() => fileInputRef.current?.click()}><Plus size={16} /></Button>
           <div className="composer-model-controls">
             {modelOptions.length > 0 && (
               <div className="composer-mode">
@@ -169,7 +169,7 @@ export function ImageWorkbenchComposer(props: ImageWorkbenchComposerProps) {
           </div>
           <div className="composer-actions">
             <Button variant="primary" size="icon" type="submit" className="composer-send" disabled={disabled || !hasDraft} aria-label={t("Generate image", "生成图片")} title={t("Generate image", "生成图片")}>
-              {props.submitting ? <Loader2 size={16} className="composer-send-spin" /> : <ArrowUp size={18} />}
+              {props.submitting ? <Loader2 size={16} className="composer-send-spin" /> : <ArrowUp size={16} />}
             </Button>
           </div>
         </div>

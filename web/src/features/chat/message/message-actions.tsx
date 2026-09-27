@@ -61,7 +61,7 @@ export function MessageActions({
       {extra}
       {onRetry && (
         <button type="button" className="message-copy" onClick={onRetry} aria-label={t("Retry turn", "重试本轮")} title={t("Retry turn", "重试本轮")} disabled={busy}>
-          <RotateCcw size={13} />
+          <RotateCcw size={14} />
         </button>
       )}
       {onEdit && (
@@ -73,7 +73,7 @@ export function MessageActions({
           title={t("Edit this message and resend it as a new branch", "编辑本条消息并作为新分支重新发送")}
           disabled={busy}
         >
-          <Pencil size={13} />
+          <Pencil size={14} />
         </button>
       )}
       {onContinueFrom && (
@@ -85,7 +85,7 @@ export function MessageActions({
           title={t("Continue from this turn as a new branch", "从这里继续，形成新分支")}
           disabled={busy}
         >
-          <GitBranch size={13} />
+          <GitBranch size={14} />
         </button>
       )}
       {onSideConversation && (
@@ -97,11 +97,11 @@ export function MessageActions({
           title={t("Ask about this response without changing the main conversation", "针对本条回复提问，不修改主会话")}
           disabled={busy}
         >
-          <MessageSquarePlus size={13} />
+          <MessageSquarePlus size={14} />
         </button>
       )}
       <button type="button" className="message-copy" onClick={onCopy} aria-label={t("Copy original message", "复制消息原文")} title={t("Copy original", "复制原文")}>
-        {copied ? <Check size={13} /> : <Copy size={13} />}
+        {copied ? <Check size={14} /> : <Copy size={14} />}
       </button>
       <Toast notice={notice} onDismiss={dismissToast} />
     </div>

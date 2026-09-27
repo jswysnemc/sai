@@ -61,7 +61,7 @@ export function SshKnownHostPrompt(props: SshKnownHostPromptProps) {
     >
       <div className={`ssh-known-host ${changed ? "changed" : "unknown"}`}>
         <div className="ssh-known-host-icon">
-          {changed ? <ShieldAlert size={18} /> : <ShieldQuestion size={18} />}
+          {changed ? <ShieldAlert size={16} /> : <ShieldQuestion size={16} />}
         </div>
         <dl>
           <div>

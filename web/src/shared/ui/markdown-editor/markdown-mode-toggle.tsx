@@ -1,5 +1,4 @@
-import { Code2, Eye } from "../icons";
-import type { ComponentType } from "react";
+import { Code2, Eye, type LucideIcon } from "../icons";
 import { MARKDOWN_EDITOR_MODES, type MarkdownEditorMode } from "./markdown-editor-mode";
 
 type MarkdownModeToggleProps = {
@@ -10,7 +9,7 @@ type MarkdownModeToggleProps = {
 };
 
 /** 各模式的图标与文案。 */
-const MODE_META: Record<MarkdownEditorMode, { icon: ComponentType<{ size?: number }>; en: string; zh: string }> = {
+const MODE_META: Record<MarkdownEditorMode, { icon: LucideIcon; en: string; zh: string }> = {
   preview: { icon: Eye, en: "Preview", zh: "预览" },
   source: { icon: Code2, en: "Source", zh: "源码" },
 };
@@ -37,7 +36,7 @@ export function MarkdownModeToggle({ mode, onChange, t }: MarkdownModeToggleProp
             aria-pressed={mode === item}
             title={`${label} (Ctrl+/)`}
           >
-            <Icon size={13} />
+            <Icon size={14} />
             <span>{label}</span>
           </button>
         );

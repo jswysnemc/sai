@@ -144,7 +144,7 @@ export function SshTargetPicker(props: SshTargetPickerProps) {
               props.onCreateLocal();
             }}
           >
-            <SquareTerminal size={13} />
+            <SquareTerminal size={14} />
             <span>{t("Local shell", "本地 Shell")}</span>
           </button>
           <div className="ssh-target-separator" />
@@ -166,7 +166,7 @@ export function SshTargetPicker(props: SshTargetPickerProps) {
                   });
               }}
             >
-              <Server size={13} />
+              <Server size={14} />
               <span>{host.label}</span>
               <small>{sshHostAddress(host)}</small>
             </button>
@@ -181,7 +181,7 @@ export function SshTargetPicker(props: SshTargetPickerProps) {
                 navigate("/settings/ssh");
               }}
             >
-              <Settings2 size={13} />
+              <Settings2 size={14} />
               <span>{t("Add SSH host", "添加 SSH 主机")}</span>
             </button>
           )}

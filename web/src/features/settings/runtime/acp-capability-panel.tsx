@@ -47,7 +47,7 @@ export function AcpCapabilityPanel({ engine, status, loading, error }: AcpCapabi
       <header className="acp-capability-head">
         <div className="acp-capability-heading">
           <span className="acp-capability-heading-icon" aria-hidden>
-            <AgentEngineBrandIcon engine={engine} size={15} />
+            <AgentEngineBrandIcon engine={engine} size={16} />
           </span>
           <span>
             <strong>{t("ACP runtime capabilities", "ACP 运行能力")}</strong>
@@ -59,14 +59,14 @@ export function AcpCapabilityPanel({ engine, status, loading, error }: AcpCapabi
 
       {state === "loading" && (
         <AcpPanelMessage
-          icon={<Loader2 className="acp-capability-spinner" />}
+          icon={<Loader2 size={16} className="acp-capability-spinner" />}
           title={t("Loading runtime status", "正在加载运行状态")}
           detail={t("Checking the selected ACP engine.", "正在查询所选 ACP 内核。")}
         />
       )}
       {state === "disconnected" && (
         <AcpPanelMessage
-          icon={<CircleDashed />}
+          icon={<CircleDashed size={16} />}
           title={runtime
             ? t("Process disconnected", "当前未连接")
             : t("No handshake yet", "尚未完成握手")}
@@ -83,7 +83,7 @@ export function AcpCapabilityPanel({ engine, status, loading, error }: AcpCapabi
       )}
       {state === "error" && (
         <AcpPanelMessage
-          icon={<X />}
+          icon={<X size={16} />}
           title={t("Runtime status query failed", "运行状态查询失败")}
           detail={errorMessage || t("The server did not return an ACP runtime status.", "服务端未返回 ACP 运行状态。")}
           danger
@@ -94,7 +94,7 @@ export function AcpCapabilityPanel({ engine, status, loading, error }: AcpCapabi
         <div className="acp-capability-content">
           <div className="acp-runtime-summary">
             <div className="acp-runtime-agent">
-              <AgentEngineBrandIcon engine={engine} size={15} />
+              <AgentEngineBrandIcon engine={engine} size={16} />
               <span>
                 <strong>{runtime.agent_name || status?.label || t("ACP agent", "ACP 内核")}</strong>
                 <small>
@@ -105,7 +105,7 @@ export function AcpCapabilityPanel({ engine, status, loading, error }: AcpCapabi
               </span>
             </div>
             <div className="acp-runtime-commands">
-              <span className="acp-runtime-label"><TerminalSquare size={13} aria-hidden />{t("Slash commands", "斜杠命令")}</span>
+              <span className="acp-runtime-label"><TerminalSquare size={14} aria-hidden />{t("Slash commands", "斜杠命令")}</span>
               {commands.length > 0 ? (
                 <div className="acp-command-list">
                   {commands.map((command) => (

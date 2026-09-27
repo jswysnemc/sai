@@ -183,7 +183,7 @@ export function PasswordField({
               aria-label={t("Clear the saved value", "清除已保存的值")}
               title={t("Clear the saved value", "清除已保存的值")}
             >
-              <X size={11} />
+              <X size={12} />
             </button>
           )}
         </span>
@@ -198,7 +198,7 @@ export function PasswordField({
           aria-label={copied ? t("Copied", "已复制") : t("Copy password", "复制密码")}
           title={copied ? t("Copied", "已复制") : t("Copy password", "复制密码")}
         >
-          {copied ? <Check size={15} /> : <Copy size={15} />}
+          {copied ? <Check size={16} /> : <Copy size={16} />}
         </button>
       )}
       <button
@@ -214,10 +214,10 @@ export function PasswordField({
             : t("Show password", "显示密码")}
       >
         {revealing
-          ? <Loader2 size={15} className="spin" />
+          ? <Loader2 size={16} className="spin" />
           : state.visible
-            ? <EyeOff size={15} />
-            : <Eye size={15} />}
+            ? <EyeOff size={16} />
+            : <Eye size={16} />}
       </button>
     </div>
   );

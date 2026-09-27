@@ -33,7 +33,7 @@ export function WorkspaceEmptyState({ onOpen }: WorkspaceEmptyStateProps) {
           const shortcut = PANEL_SHORTCUTS[option.type];
           return (
             <button type="button" key={option.type} onClick={() => onOpen(option.type)}>
-              <Icon size={15} aria-hidden />
+              <Icon size={16} aria-hidden />
               <span>{t(option.labelEn, option.labelZh)}</span>
               {shortcut ? <kbd>{modifier}+{shortcut}</kbd> : <kbd aria-hidden="true" />}
             </button>

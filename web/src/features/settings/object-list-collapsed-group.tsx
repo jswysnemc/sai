@@ -42,7 +42,7 @@ export function ObjectListCollapsedGroup({
         onClick={() => setExpanded((value) => !value)}
         aria-expanded={expanded}
       >
-        <ChevronRight size={13} aria-hidden />
+        <ChevronRight size={14} aria-hidden />
         <span>{title}</span>
         <small>{items.length}</small>
       </button>

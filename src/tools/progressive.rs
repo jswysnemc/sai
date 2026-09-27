@@ -19,6 +19,41 @@ pub(crate) const DEFERRED_ALL_EXCEPT_ANCHOR_BOOTSTRAP: &str = "**anchored-standa
 /// - 无
 pub(crate) fn register_loader(registry: &mut ToolRegistry, deferred: &[String]) {
     let description = loader_description(registry, deferred);
+    register_loader_described(registry, deferred, description);
+}
+
+/// 注册 Jev 暴露决策模式下的渐进网关。
+///
+/// 该模式不在 `load` 描述中列出可加载目录，额外资源统一由 Jev 决定暴露，
+/// `load` 只用于重新读取已经暴露过的资源。
+///
+/// 参数:
+/// - `registry`: 已注册完整工具处理器的工具注册表
+/// - `deferred`: 当前 Agent 需要 load 才暴露的工具名，可含通配符
+///
+/// 返回:
+/// - 无
+pub(crate) fn register_jev_loader(registry: &mut ToolRegistry, deferred: &[String]) {
+    register_loader_described(registry, deferred, JEV_LOADER_DESCRIPTION.to_string());
+}
+
+/// Jev 模式下 `load` 的描述。
+const JEV_LOADER_DESCRIPTION: &str = "Re-read tool schemas or skill documents that were already exposed in this conversation, for example after context compaction removed them. Set type to tool or skill and pass exact names in the keywords array. Do not use load to discover new capabilities; call request_capability instead. After a tool schema is available, call invoke_tool with its exact name and matching arguments.";
+
+/// 按给定描述注册 `load`，存在延迟工具时同时注册 `invoke_tool`。
+///
+/// 参数:
+/// - `registry`: 工具注册表
+/// - `deferred`: 延迟工具配置
+/// - `description`: `load` 的工具描述
+///
+/// 返回:
+/// - 无
+fn register_loader_described(
+    registry: &mut ToolRegistry,
+    deferred: &[String],
+    description: String,
+) {
     registry.register(ToolSpec::new(
         LOAD_NAME,
         description,
@@ -114,7 +149,7 @@ pub(crate) fn visible_tool_names(registry: &ToolRegistry, deferred: &[String]) -
 /// 返回:
 /// - 工具是否需要先调用 load
 pub(crate) fn is_deferred_tool(name: &str, deferred: &[String]) -> bool {
-    if name == LOAD_NAME || name == INVOKE_NAME {
+    if name == LOAD_NAME || name == INVOKE_NAME || name == super::REQUEST_CAPABILITY_NAME {
         return false;
     }
     if deferred

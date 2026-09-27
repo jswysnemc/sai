@@ -62,14 +62,14 @@ export function ChatComposer(props: ChatComposerProps) {
       >
         <div className="composer-footer">
           <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileChange} hidden />
-          <Button variant="ghost" size="icon" className="composer-attach" onClick={() => fileInputRef.current?.click()} disabled={availability.inputDisabled} title={t("Attach images", "添加图片")} aria-label={t("Add images", "添加图片")}><Plus size={18} /></Button>
+          <Button variant="ghost" size="icon" className="composer-attach" onClick={() => fileInputRef.current?.click()} disabled={availability.inputDisabled} title={t("Attach images", "添加图片")} aria-label={t("Add images", "添加图片")}><Plus size={16} /></Button>
           <ComposerModelControls composer={props} engine={externalEngine} loading={enginePending} />
           <div className="composer-actions">
             {availability.showStop ? (
               <Button variant="primary" size="icon" className="composer-send stop" onClick={props.onStop} aria-label={t("Stop run", "停止运行")} title={t("Stop run", "停止运行")}><Square size={12} fill="currentColor" /></Button>
             ) : (
               <Button variant="primary" size="icon" type="submit" className="composer-send" disabled={availability.sendDisabled || props.submitting} aria-label={props.running ? t("Queue message", "排队发送") : t("Send message", "发送消息")} title={props.running ? t("Queue message", "排队发送") : t("Send message", "发送消息")}>
-                {props.submitting ? <Loader2 size={16} className="composer-send-spin" /> : <ArrowUp size={18} />}
+                {props.submitting ? <Loader2 size={16} className="composer-send-spin" /> : <ArrowUp size={16} />}
               </Button>
             )}
           </div>

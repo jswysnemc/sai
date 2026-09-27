@@ -45,7 +45,7 @@ export function SearchApiKeysField({
         <span>{t("API keys", "接口密钥")}</span>
         {hiddenCount > 0 && (
           <Button variant="ghost-danger" onClick={clearSavedKeys}>
-            <Trash2 size={13} />
+            <Trash2 size={14} />
             {t("Clear saved keys", "清除已保存密钥")}
           </Button>
         )}

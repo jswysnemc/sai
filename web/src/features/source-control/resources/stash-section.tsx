@@ -30,14 +30,14 @@ export function StashSection(props: StashSectionProps) {
         <div className="git-resource-row" key={stash.reference}>
           <span title={stash.subject}><strong>{stash.reference}</strong><small>{stash.subject}</small></span>
           <div>
-            <Button title={t("Show stash", "查看储藏内容")} onClick={() => setPreview(stash)}><Eye size={11} /></Button>
-            <Button disabled={props.busy} title={t("Apply stash", "应用储藏")} onClick={() => void props.runOperation("stash_apply", { stash_ref: stash.reference })}><Play size={11} /></Button>
-            <Button disabled={props.busy} title={t("Pop stash", "弹出储藏")} onClick={() => void props.runOperation("stash_pop", { stash_ref: stash.reference })}><ArchiveRestore size={11} /></Button>
+            <Button title={t("Show stash", "查看储藏内容")} onClick={() => setPreview(stash)}><Eye size={12} /></Button>
+            <Button disabled={props.busy} title={t("Apply stash", "应用储藏")} onClick={() => void props.runOperation("stash_apply", { stash_ref: stash.reference })}><Play size={12} /></Button>
+            <Button disabled={props.busy} title={t("Pop stash", "弹出储藏")} onClick={() => void props.runOperation("stash_pop", { stash_ref: stash.reference })}><ArchiveRestore size={12} /></Button>
             <Button disabled={props.busy} title={t("Drop stash", "删除储藏")} onClick={() => void props.runOperation("stash_drop", {
               stash_ref: stash.reference,
               confirmTitle: t("Drop stash?", "删除储藏记录？"),
               confirmDescription: stash.subject
-            })}><Trash2 size={11} /></Button>
+            })}><Trash2 size={12} /></Button>
           </div>
         </div>
       ))}

@@ -28,7 +28,7 @@ export function WorkbenchStatusBar({ branch, terminalOpen }: WorkbenchStatusBarP
         </Button>
         {activity.runningSubagents > 0 && <Button variant="ghost" size="small" onClick={() => window.dispatchEvent(new Event("sai:open-subagents"))} title={t("Running subagents", "运行中的子智能体")}><Bot size={12} /><span>{activity.runningSubagents}</span></Button>}
         <Button variant="ghost" size="small" aria-label={t("Toggle terminal", "切换终端")} aria-pressed={terminalOpen} onClick={() => requestWorkbenchCommand("toggle-terminal")}><SquareTerminal size={12} /><span className="hidden sm:inline">{t("Terminal", "终端")}</span></Button>
-        <Button variant="ghost" size="small" aria-label={t("Open command menu", "打开命令菜单")} title={t("Commands and shortcuts", "命令与快捷键")} onClick={() => requestWorkbenchCommand("search")}><Keyboard size={13} /></Button>
+        <Button variant="ghost" size="small" aria-label={t("Open command menu", "打开命令菜单")} title={t("Commands and shortcuts", "命令与快捷键")} onClick={() => requestWorkbenchCommand("search")}><Keyboard size={14} /></Button>
       </div>
     </footer>
   );

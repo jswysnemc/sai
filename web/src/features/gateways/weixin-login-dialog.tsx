@@ -142,7 +142,7 @@ export function WeixinLoginDialog({ open, baseUrl, botType, onClose, onConfirmed
           {snapshot?.qrcode_svg ? (
             <div className="weixin-login-qr-image" dangerouslySetInnerHTML={{ __html: snapshot.qrcode_svg }} />
           ) : (
-            <div className="weixin-login-qr-placeholder"><LoaderCircle size={22} className="spin" /></div>
+            <div className="weixin-login-qr-placeholder"><LoaderCircle size={20} className="spin" /></div>
           )}
         </div>
         <p className={confirmed ? "weixin-login-status confirmed" : "weixin-login-status"}>{phaseLabel(snapshot, t, locale)}</p>

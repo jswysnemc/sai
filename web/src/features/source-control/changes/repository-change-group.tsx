@@ -160,10 +160,10 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
       <header className="git-repository-changes-head">
         <Button className="git-repository-changes-toggle" onClick={() => setOpen((value) => !value)}>
           <ChevronDown size={12} className={open ? "open" : ""} />
-          <FolderGit2 size={13} />
+          <FolderGit2 size={14} />
           <span>
             <strong>{props.name}</strong>
-            <small><GitBranch size={10} />{props.state.head || "HEAD"}</small>
+            <small><GitBranch size={12} />{props.state.head || "HEAD"}</small>
           </span>
           <em>{changed}</em>
         </Button>

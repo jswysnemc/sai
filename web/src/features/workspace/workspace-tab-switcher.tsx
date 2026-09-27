@@ -75,12 +75,12 @@ export function WorkspaceTabSwitcher({ tabs, activeTabId, onActivate, onClose, i
         title={t("Open tabs", "打开的标签页")}
         onClick={() => setOpen((value) => !value)}
       >
-        <ChevronDown size={15} />
+        <ChevronDown size={16} />
       </Button>
       {open && createPortal(
         <div ref={menuRef} className="workspace-tab-switcher-menu" style={style}>
           <label>
-            <Search size={13} aria-hidden />
+            <Search size={14} aria-hidden />
             <input
               autoFocus
               value={query}

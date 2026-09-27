@@ -1,4 +1,4 @@
-import { CalendarClock, FolderOpen, PanelLeftOpen, Search, Settings2, SquarePen } from "../../shared/ui/icons";
+import { CalendarClock, FolderOpen, PanelLeftOpen, Search, Settings2, SquarePen, type IconSize } from "../../shared/ui/icons";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../shared/ui/button/button";
 import { LocaleSwitcher } from "../i18n/locale-switcher";
@@ -22,8 +22,9 @@ type SidebarCollapsedRailProps = {
 export function SidebarCollapsedRail({ onExpand, onNewSession, onSearch, newSessionPending, onOpenDirectory, onAfterNavigate }: SidebarCollapsedRailProps) {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const shortcuts = [
-    { label: t("Expand session sidebar", "展开会话侧栏"), icon: PanelLeftOpen, action: onExpand },
+  // 1. 整框类面板图标视觉更重，降一级与相邻线性图标保持同等重量
+  const shortcuts: { label: string; icon: typeof PanelLeftOpen; action: () => void; disabled?: boolean; size?: IconSize }[] = [
+    { label: t("Expand session sidebar", "展开会话侧栏"), icon: PanelLeftOpen, action: onExpand, size: 14 },
     { label: t("New task", "新建任务"), icon: SquarePen, action: onNewSession, disabled: newSessionPending },
     { label: t("Search", "搜索"), icon: Search, action: onSearch },
     { label: t("Scheduled tasks", "定时任务"), icon: CalendarClock, action: () => { navigate("/cron-jobs"); onAfterNavigate?.(); } },
@@ -32,8 +33,8 @@ export function SidebarCollapsedRail({ onExpand, onNewSession, onSearch, newSess
   ];
   return (
     <>
-      {shortcuts.map(({ label, icon: Icon, action, disabled }) => (
-        <Button key={label} variant="ghost" size="icon" className="sidebar-rail-button" onClick={action} disabled={disabled} aria-label={label} title={label}><Icon size={17} /></Button>
+      {shortcuts.map(({ label, icon: Icon, action, disabled, size = 16 }) => (
+        <Button key={label} variant="ghost" size="icon" className="sidebar-rail-button" onClick={action} disabled={disabled} aria-label={label} title={label}><Icon size={size} /></Button>
       ))}
       <div className="collapsed-app-menu">
         <SidebarAppMenu collapsed onOpenDirectory={onOpenDirectory} onAfterNavigate={onAfterNavigate} />

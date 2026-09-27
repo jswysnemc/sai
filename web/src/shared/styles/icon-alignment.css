@@ -1,0 +1,49 @@
+/*
+ * 图标与文字的基线对齐
+ *
+ * 目标：图标几何中心落在字形视觉中线（约 0.35em，中英文一致）上，混排时不上浮也不下沉。
+ * 图标先以底边坐在文字基线上，再下移 (图标边长 / 2 - 0.35em)。偏移量随图标尺寸变化，
+ * 尺寸阶梯只有四级，用 width 属性给出半边长。
+ *
+ * 1. 行内流：Tailwind preflight 把 svg 设为块级，行内混排需显式加 .icon-inline，
+ *    改为 inline-block 后用 vertical-align 下移。
+ * 2. 弹性容器：容器加 .icon-label（或 .icon-baseline），子项按首基线对齐；
+ *    svg 没有文字基线，以底边坐在基线上，再用独立的 translate 属性下移。
+ *    translate 与 transform: rotate(...) 分属不同属性，展开箭头旋转时不会互相覆盖。
+ * 3. 固定高度的行（按钮、列表行）保持外层居中，在内部包一层 .icon-label，
+ *    避免 baseline 把整行内容推到行顶。
+ */
+:root {
+  --icon-optical-center: 0.35em;
+}
+
+svg.lucide {
+  --icon-half: 8px;
+}
+
+svg.lucide[width="12"] { --icon-half: 6px; }
+svg.lucide[width="14"] { --icon-half: 7px; }
+svg.lucide[width="20"] { --icon-half: 10px; }
+
+svg.lucide.icon-inline {
+  display: inline-block;
+  vertical-align: calc(var(--icon-optical-center) - var(--icon-half));
+}
+
+.icon-baseline {
+  align-items: baseline;
+}
+
+.icon-label {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--space-xs);
+}
+
+.icon-baseline > svg.lucide,
+.icon-label > svg.lucide {
+  flex-shrink: 0;
+  align-self: baseline;
+  translate: 0 calc(var(--icon-half) - var(--icon-optical-center));
+}

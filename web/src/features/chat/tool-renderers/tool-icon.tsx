@@ -55,10 +55,10 @@ export type ToolCardState = "preparing" | "running" | "completed" | "failed" | "
  * @returns 状态标记元素，无需标记时返回 null
  */
 export function ToolStatusMark({ state }: { state: ToolCardState }) {
-  if (state === "completed" || state === "allowed") return <Check size={13} />;
-  if (state === "failed" || state === "denied") return <X size={13} />;
-  if (state === "pending") return <ShieldAlert size={13} />;
-  if (state === "preparing") return <CircleDashed className="tool-arguments-spinner" size={13} />;
+  if (state === "completed" || state === "allowed") return <Check size={14} />;
+  if (state === "failed" || state === "denied") return <X size={14} />;
+  if (state === "pending") return <ShieldAlert size={14} />;
+  if (state === "preparing") return <CircleDashed className="tool-arguments-spinner" size={14} />;
   return null;
 }
 

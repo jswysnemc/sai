@@ -30,8 +30,8 @@ type ProviderConnectionTabProps = {
 /**
  * 供应商编辑器的连接页签：身份、接入点、凭据与连通性。
  *
- * 页签内部按接入流程分为两组：先填身份与地址，再配密钥并验证，
- * 与 runtime 等分区的 SettingsGroup 视觉语言一致。
+ * 高频的接入点（API 地址、默认模型、协议）放在首屏，其后是凭据与连通性；
+ * 显示名称与稳定 ID 属于低频配置，折叠在页签末尾。
  *
  * @param props 供应商状态与更新回调
  * @returns 连接页签内容
@@ -61,40 +61,6 @@ export function ProviderConnectionTab({
   return (
     <>
       <SettingsGroup
-        title={t("Identity", "身份")}
-        description={t(
-          "Display name and the stable ID stored in the configuration file.",
-          "界面显示名与配置文件中的稳定标识。"
-        )}
-      >
-        <div className="settings-form-grid">
-          <label className="settings-field">
-            <span>{t("Display name", "显示名称")}</span>
-            <input
-              value={provider.display_name}
-              onChange={(event) => onDisplayNameChange(event.target.value)}
-            />
-            <small>{t("Used in model menus and status displays. The ID follows this name until you edit it.", "用于模型菜单和状态展示。未手动改 ID 时，标识会跟随名称。")}</small>
-          </label>
-          <label className="settings-field">
-            <span>{t("Provider ID", "供应商 ID")}</span>
-            <input
-              value={idDraft ?? provider.id}
-              onChange={(event) => onIdDraftChange(event.target.value)}
-              onBlur={(event) => onCommitId(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") event.currentTarget.blur();
-                if (event.key === "Escape") onIdEscape();
-              }}
-              spellCheck={false}
-              aria-invalid={idError ? true : undefined}
-            />
-            <small className={idError ? "settings-field-error" : undefined}>{idError || t("Stable identifier in the configuration file", "配置文件中的稳定标识")}</small>
-          </label>
-        </div>
-      </SettingsGroup>
-
-      <SettingsGroup
         title={t("Endpoint", "接入点")}
         description={t(
           "Where requests go and which protocol they speak.",
@@ -112,6 +78,13 @@ export function ProviderConnectionTab({
             <small>{t("Base URL of the compatible API; the server accesses it when fetching models", "兼容接口的基础地址，获取模型时由服务端访问")}</small>
           </label>
           <div className="settings-field">
+            <span>{t("Default model", "默认模型")}</span>
+            {models.length > 0
+              ? <Select value={provider.default_model ?? ""} options={defaultModelOptions} onChange={(value) => onPatch({ default_model: value })} ariaLabel={t("Default model", "默认模型")} />
+              : <Select value="" options={emptyModelOptions} disabled onChange={() => undefined} ariaLabel={t("Default model", "默认模型")} />}
+            <small>{models.length > 0 ? t("Used when no model is selected manually", "未手动切换时使用") : t("Add models on the Models tab first", "先在模型页签添加模型")}</small>
+          </div>
+          <div className="settings-field">
             <span>{t("Protocol", "协议")}</span>
             <Select
               value={provider.protocol ?? "auto"}
@@ -120,13 +93,6 @@ export function ProviderConnectionTab({
               ariaLabel={t("Provider protocol", "供应商协议")}
             />
             <small>{t("The protocol determines request and reasoning parameter formats", "协议决定请求和思考参数格式")}</small>
-          </div>
-          <div className="settings-field">
-            <span>{t("Default model", "默认模型")}</span>
-            {models.length > 0
-              ? <Select value={provider.default_model ?? ""} options={defaultModelOptions} onChange={(value) => onPatch({ default_model: value })} ariaLabel={t("Default model", "默认模型")} />
-              : <Select value="" options={emptyModelOptions} disabled onChange={() => undefined} ariaLabel={t("Default model", "默认模型")} />}
-            <small>{models.length > 0 ? t("Used when no model is selected manually", "未手动切换时使用") : t("Add models on the Models tab first", "先在模型页签添加模型")}</small>
           </div>
         </div>
       </SettingsGroup>
@@ -172,8 +138,60 @@ export function ProviderConnectionTab({
           <small>{t("Run a normal model response test or a separate tool-calling test with the selected key.", "可以使用当前选中的密钥分别测试普通模型响应和工具调用。")}</small>
         </div>
       </SettingsGroup>
+      <SettingsGroup
+        // 按列表位置重置折叠状态：ID 会跟随名称变化，用它作 key 会在输入名称时重建分组丢失焦点
+        // 仍是占位地址的新供应商默认展开，便于先改名称
+        key={providerIndex}
+        collapsible
+        defaultOpen={isPlaceholderEndpoint(provider.base_url)}
+        title={t("Identity", "身份")}
+        description={t(
+          "Display name and the stable ID stored in the configuration file.",
+          "界面显示名与配置文件中的稳定标识。"
+        )}
+      >
+        <div className="settings-form-grid">
+          <label className="settings-field">
+            <span>{t("Display name", "显示名称")}</span>
+            <input
+              value={provider.display_name}
+              onChange={(event) => onDisplayNameChange(event.target.value)}
+            />
+            <small>{t("Used in model menus and status displays. The ID follows this name until you edit it.", "用于模型菜单和状态展示。未手动改 ID 时，标识会跟随名称。")}</small>
+          </label>
+          <label className="settings-field">
+            <span>{t("Provider ID", "供应商 ID")}</span>
+            <input
+              value={idDraft ?? provider.id}
+              onChange={(event) => onIdDraftChange(event.target.value)}
+              onBlur={(event) => onCommitId(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+                if (event.key === "Escape") onIdEscape();
+              }}
+              spellCheck={false}
+              aria-invalid={idError ? true : undefined}
+            />
+            <small className={idError ? "settings-field-error" : undefined}>{idError || t("Stable identifier in the configuration file", "配置文件中的稳定标识")}</small>
+          </label>
+        </div>
+      </SettingsGroup>
     </>
   );
+}
+
+/** 新建供应商时填入的占位地址。 */
+export const PLACEHOLDER_BASE_URL = "https://api.example.com/v1";
+
+/**
+ * 判断接入地址是否仍为空或占位值。
+ *
+ * @param baseUrl 当前 API 地址
+ * @returns 未填写真实地址时返回 true
+ */
+function isPlaceholderEndpoint(baseUrl: string): boolean {
+  const value = baseUrl.trim();
+  return value === "" || value === PLACEHOLDER_BASE_URL;
 }
 
 /**

@@ -39,7 +39,7 @@ export function ToolFileReference({ path, label, workspacePath = "", className =
   return (
     <span className={`tool-file-reference ${className}`.trim()}>
       <button type="button" onClick={openFile} title={t("Open in editor", "在编辑器中打开")}>
-        {icon && <FileTypeIcon name={path} size={13} />}
+        {icon && <FileTypeIcon name={path} size={14} />}
         <span className="tool-file-reference-label">{displayLabel || path}</span>
       </button>
     </span>

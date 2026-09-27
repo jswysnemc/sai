@@ -21,13 +21,13 @@ export function ImageGenerationResult({ result }: { result: ImageGenerationResul
       </div>
       {result.status === "loading" && (
         <div className="chat-image-generation-status" aria-busy="true">
-          <LoaderCircle size={15} className="chat-image-generation-spin" aria-hidden />
+          <LoaderCircle size={16} className="chat-image-generation-spin" aria-hidden />
           <span>{t("Generating image", "正在生成图片")}</span>
         </div>
       )}
       {result.status === "error" && (
         <div className="chat-image-generation-error" role="alert">
-          <CircleAlert size={15} aria-hidden />
+          <CircleAlert size={16} aria-hidden />
           <span>{result.message}</span>
         </div>
       )}

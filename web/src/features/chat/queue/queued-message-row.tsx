@@ -145,7 +145,7 @@ export function QueuedMessageRow(props: QueuedMessageRowProps) {
         aria-label={t(`Reorder message ${props.position + 1}`, `调整第 ${props.position + 1} 条消息顺序`)}
         title={t("Drag to reorder; use arrow keys for precise movement", "拖动排序；方向键微调")}
       >
-        <GripVertical size={15} />
+        <GripVertical size={16} />
       </Button>
 
       <div className="queued-message-content">
@@ -184,7 +184,7 @@ export function QueuedMessageRow(props: QueuedMessageRowProps) {
               aria-label={t("Save queued message", "保存排队消息")}
               title={t("Save", "保存")}
             >
-              {busy === "update" ? <Loader2 size={15} className="queued-busy-spin" /> : <Check size={15} />}
+              {busy === "update" ? <Loader2 size={16} className="queued-busy-spin" /> : <Check size={16} />}
             </Button>
             <Button
               className="queued-message-icon-action"
@@ -197,7 +197,7 @@ export function QueuedMessageRow(props: QueuedMessageRowProps) {
               aria-label={t("Cancel editing", "取消编辑")}
               title={t("Cancel", "取消")}
             >
-              <X size={15} />
+              <X size={16} />
             </Button>
           </>
         ) : (

@@ -79,7 +79,7 @@ export function SystemUsage({ selection, mode, agentId, onCompact, compactDisabl
   return (
     <div className="system-usage" ref={rootRef}>
       <Button ref={contextRef} variant="ghost" size="small" className="system-usage-trigger" onClick={() => setOpen(open === "context" ? null : "context")} aria-expanded={open === "context"} aria-label={t("View context usage", "查看上下文用量")}>
-        <span className="usage-ring" style={{ background: `conic-gradient(var(--signal) ${contextPercent}%, var(--line) 0)` }}><Gauge size={10} /></span>
+        <span className="usage-ring" style={{ background: `conic-gradient(var(--signal) ${contextPercent}%, var(--line) 0)` }}><Gauge size={12} /></span>
         <span className="hidden sm:inline-flex"><strong>{usage.data ? formatTokenCount(usage.data.session.context_prompt_tokens) : "--"}</strong><small>{contextPercent}%</small></span>
       </Button>
       <Button ref={processRef} variant="ghost" size="icon" className="system-process-trigger" onClick={() => setOpen(open === "process" ? null : "process")} aria-expanded={open === "process"} aria-label={t("View process resources", "查看进程资源")}><Cpu size={14} /></Button>

@@ -20,7 +20,7 @@ export function WorkspaceFileSearch({ value, onChange, placeholder, autoFocus = 
   const label = placeholder ?? t("Filter files", "筛选文件");
   return (
     <label className="workspace-file-search">
-      <Search size={13} aria-hidden="true" />
+      <Search size={14} aria-hidden="true" />
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}

@@ -1,4 +1,7 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { ChevronRight } from "../../shared/ui/icons";
+import { Button } from "../../shared/ui/button/button";
+import { Collapse } from "../../shared/ui/collapse/collapse";
 
 type EditorHeaderProps = {
   kicker: string;
@@ -31,26 +34,46 @@ type SettingsGroupProps = {
   icon?: ReactNode;
   description?: string;
   actions?: ReactNode;
+  /** 低频配置可折叠，标题行变为展开按钮 */
+  collapsible?: boolean;
+  /** 可折叠分组的初始展开状态 */
+  defaultOpen?: boolean;
   children: ReactNode;
 };
 
 /**
- * 渲染分组：标题在卡片外，字段收进同一张卡片。
+ * 渲染分组：标题在卡片外，字段收进同一张卡片；低频分组可折叠。
  *
- * @param props 分组标题、可选图标、说明、操作节点和分组内容
+ * @param props 分组标题、可选图标、说明、操作节点、折叠设置和分组内容
  * @returns 表单分组
  */
-export function SettingsGroup({ title, icon, description, actions, children }: SettingsGroupProps) {
+export function SettingsGroup({ title, icon, description, actions, collapsible = false, defaultOpen = true, children }: SettingsGroupProps) {
+  const [open, setOpen] = useState(defaultOpen);
+  const expanded = !collapsible || open;
   return (
-    <section className="settings-group">
+    <section className={`settings-group${collapsible ? " is-collapsible" : ""}`}>
       <div className="settings-group-head">
-        <div>
-          <div className="settings-group-title">{icon}<h3>{title}</h3></div>
-          {description && <p>{description}</p>}
-        </div>
+        {collapsible ? (
+          <Button variant="ghost" className="settings-group-toggle" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+            <span className="icon-label">
+              <ChevronRight size={14} className={open ? "settings-group-chevron is-open" : "settings-group-chevron"} aria-hidden />
+              <span className="settings-group-toggle-copy">
+                <span className="settings-group-title">{icon}<span className="settings-group-heading" role="heading" aria-level={3}>{title}</span></span>
+                {description && <span className="settings-group-description">{description}</span>}
+              </span>
+            </span>
+          </Button>
+        ) : (
+          <div>
+            <div className="settings-group-title">{icon}<h3>{title}</h3></div>
+            {description && <p>{description}</p>}
+          </div>
+        )}
         {actions}
       </div>
-      <div className="settings-group-card">{children}</div>
+      {collapsible
+        ? <Collapse open={expanded}><div className="settings-group-card">{children}</div></Collapse>
+        : <div className="settings-group-card">{children}</div>}
     </section>
   );
 }

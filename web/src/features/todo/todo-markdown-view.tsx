@@ -137,7 +137,7 @@ export function TodoMarkdownView({ sessionId, compact = false }: { sessionId?: s
         const Icon = statusIcons[item.status];
         return (
           <li key={item.id} className={`todo-markdown-item is-${item.status}`}>
-            <Icon size={15} />
+            <Icon size={16} />
             <span>{item.text}</span>
           </li>
         );
@@ -157,7 +157,7 @@ export function TodoMarkdownView({ sessionId, compact = false }: { sessionId?: s
             aria-label={t("Older plan", "更早计划")}
             title={t("Older plan", "更早计划")}
           >
-            <ChevronLeft size={compact ? 13 : 15} />
+            <ChevronLeft size={compact ? 14 : 16} />
           </button>
         )}
         <button
@@ -169,7 +169,7 @@ export function TodoMarkdownView({ sessionId, compact = false }: { sessionId?: s
           aria-haspopup="listbox"
         >
           <span className="todo-trigger-icon">
-            <ListChecks size={compact ? 13 : 14} />
+            <ListChecks size={compact ? 14 : 14} />
           </span>
           <span className="todo-trigger-body">
             <span className="todo-trigger-line">
@@ -185,7 +185,7 @@ export function TodoMarkdownView({ sessionId, compact = false }: { sessionId?: s
               </span>
             )}
           </span>
-          <ChevronDown size={compact ? 12 : 15} className={open ? "open" : ""} />
+          <ChevronDown size={compact ? 12 : 16} className={open ? "open" : ""} />
         </button>
         {plans.length > 1 && (
           <button
@@ -196,7 +196,7 @@ export function TodoMarkdownView({ sessionId, compact = false }: { sessionId?: s
             aria-label={t("Newer plan", "更新计划")}
             title={t("Newer plan", "更新计划")}
           >
-            <ChevronRight size={compact ? 13 : 15} />
+            <ChevronRight size={compact ? 14 : 16} />
           </button>
         )}
       </div>

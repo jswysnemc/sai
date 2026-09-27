@@ -36,15 +36,15 @@ export function EditorContextMenu(props: EditorContextMenuProps) {
 
   return (
     <div ref={ref} className="editor-context-menu" style={position} role="menu">
-      <button type="button" role="menuitem" onClick={copyPath}><Copy size={13} />{t("Copy path", "复制路径")}</button>
+      <button type="button" role="menuitem" onClick={copyPath}><Copy size={14} />{t("Copy path", "复制路径")}</button>
       {props.wordWrap !== null && (
         <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onToggleWordWrap(); }}>
-          <WrapText size={13} />{props.wordWrap ? t("Disable word wrap", "关闭自动换行") : t("Enable word wrap", "开启自动换行")}
+          <WrapText size={14} />{props.wordWrap ? t("Disable word wrap", "关闭自动换行") : t("Enable word wrap", "开启自动换行")}
         </button>
       )}
       {props.savable && (
         <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onSave(); }} disabled={!props.canSave}>
-          <Save size={13} />{t("Save", "保存")}
+          <Save size={14} />{t("Save", "保存")}
         </button>
       )}
     </div>

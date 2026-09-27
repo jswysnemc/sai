@@ -90,7 +90,7 @@ export function MarkdownStyleSettings({
         </Button>
       </header>
       <fieldset className="markdown-style-panel markdown-preset-panel">
-        <legend><span><LayoutTemplate size={15} />{t("Overall style", "整体风格")}</span></legend>
+        <legend><span><LayoutTemplate size={16} />{t("Overall style", "整体风格")}</span></legend>
         <div className="markdown-preset-grid" role="group" aria-label={t("Markdown style preset", "Markdown 风格预设")}>
           {PRESET_OPTIONS.map((option) => (
             <Button
@@ -108,7 +108,7 @@ export function MarkdownStyleSettings({
       </fieldset>
       <div className="markdown-config-columns">
         <fieldset className="markdown-style-panel">
-          <legend><span><Table2 size={15} />{t("Tables", "表格")}</span></legend>
+          <legend><span><Table2 size={16} />{t("Tables", "表格")}</span></legend>
           <div className="markdown-config-stack">
             <label className="markdown-config-row">
               <span>{t("Table borders", "表格边框")}</span>
@@ -168,7 +168,7 @@ export function MarkdownStyleSettings({
         </fieldset>
 
         <fieldset className="markdown-style-panel">
-          <legend><span><Code2 size={15} />{t("Code blocks", "代码块")}</span></legend>
+          <legend><span><Code2 size={16} />{t("Code blocks", "代码块")}</span></legend>
           <div className="markdown-config-stack">
             <label className="markdown-config-row">
               <span>{t("Font size", "代码字体大小")}</span>

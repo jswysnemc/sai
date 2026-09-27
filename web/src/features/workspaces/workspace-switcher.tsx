@@ -67,7 +67,7 @@ export function WorkspaceSwitcher() {
   return (
     <div className="workspace-switcher" ref={rootRef}>
       <button ref={triggerRef} className="workspace-trigger" type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open} title={active?.path}>
-        <FolderGit2 size={13} /><strong className={showPath && active ? "path" : undefined}>{showPath && active ? active.path : activeName}</strong><ChevronDown size={12} className={open ? "open" : ""} />
+        <FolderGit2 size={14} /><strong className={showPath && active ? "path" : undefined}>{showPath && active ? active.path : activeName}</strong><ChevronDown size={12} className={open ? "open" : ""} />
       </button>
       {active?.path && active.path !== activeName && (
         <button
@@ -83,7 +83,7 @@ export function WorkspaceSwitcher() {
       )}
       {open && createPortal(
         <div ref={menuRef} className="workspace-menu" style={menuStyle}>
-          <div className="workspace-menu-head"><span><strong>{activeName}</strong><small>{active?.path}</small></span><button type="button" aria-label={t("Close workspace menu", "关闭工作区菜单")} onClick={() => setOpen(false)}><X size={15} /></button></div>
+          <div className="workspace-menu-head"><span><strong>{activeName}</strong><small>{active?.path}</small></span><button type="button" aria-label={t("Close workspace menu", "关闭工作区菜单")} onClick={() => setOpen(false)}><X size={16} /></button></div>
           <div className="workspace-items">
             {[...(workspaces.data?.workspaces ?? [])].sort((left, right) => right.last_opened_at.localeCompare(left.last_opened_at)).map((workspace) => (
               <button type="button" className="workspace-item" key={workspace.id} onClick={() => workspace.id !== workspaces.data?.active_id && switchWorkspace.mutate(workspace.id)}>
@@ -91,7 +91,7 @@ export function WorkspaceSwitcher() {
               </button>
             ))}
           </div>
-          <button type="button" className="workspace-add" onClick={() => { setOpen(false); setBrowserOpen(true); }}><FolderOpen size={15} /><span>{t("Browse server directories", "浏览服务端目录")}</span></button>
+          <button type="button" className="workspace-add" onClick={() => { setOpen(false); setBrowserOpen(true); }}><FolderOpen size={16} /><span>{t("Browse server directories", "浏览服务端目录")}</span></button>
           {switchWorkspace.error && <p className="form-error workspace-error">{switchWorkspace.error.message}</p>}
         </div>,
         document.body

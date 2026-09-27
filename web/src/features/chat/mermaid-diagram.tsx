@@ -105,8 +105,8 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source }: { source:
   const [copied, setCopied] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const viewOptions: readonly SegmentedControlOption<"preview" | "source">[] = [
-    { value: "preview", label: t("Preview", "预览"), icon: <Eye size={13} /> },
-    { value: "source", label: t("Source", "源码"), icon: <Code2 size={13} /> }
+    { value: "preview", label: t("Preview", "预览"), icon: <Eye size={14} /> },
+    { value: "source", label: t("Source", "源码"), icon: <Code2 size={14} /> }
   ];
 
   useEffect(() => {
@@ -165,8 +165,8 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source }: { source:
       <div className="mermaid-toolbar">
         <span>mermaid</span>
         <SegmentedControl value={view} options={viewOptions} onChange={setView} ariaLabel={t("Mermaid display mode", "Mermaid 展示方式")} className="mermaid-view-switcher" />
-        <button type="button" className="mermaid-copy" disabled={!svg || Boolean(error)} onClick={openLightbox}><Maximize2 size={13} />{t("Enlarge", "放大")}</button>
-        <button type="button" className="mermaid-copy" onClick={() => void copySource()}>{copied ? <Check size={13} /> : <Copy size={13} />}{copied ? t("Copied", "已复制") : t("Copy", "复制")}</button>
+        <button type="button" className="mermaid-copy" disabled={!svg || Boolean(error)} onClick={openLightbox}><Maximize2 size={14} />{t("Enlarge", "放大")}</button>
+        <button type="button" className="mermaid-copy" onClick={() => void copySource()}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? t("Copied", "已复制") : t("Copy", "复制")}</button>
       </div>
       {view === "source" || error || !svg
         ? <pre className="mermaid-source"><code>{source}</code></pre>

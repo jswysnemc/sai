@@ -85,7 +85,7 @@ export function SessionListView({
   return (
     <div className="session-list sidebar-sessions-view">
       {(showWorkspaceHeader || selecting) && <div className="workspace-context-row">
-        <SessionWorkspaceIcon isGitRepository={workspace.is_git_repository} size={13} />
+        <SessionWorkspaceIcon isGitRepository={workspace.is_git_repository} size={14} />
         <strong title={workspace.workspace_path}>{workspaceName}</strong>
         {workspaceRunning && <ActiveAgentIndicator />}
         <small>{t(`${sessions.length} sessions`, `${sessions.length} 个会话`)}</small>
@@ -97,7 +97,7 @@ export function SessionListView({
             aria-label={t("Exit selection", "退出选择")}
             title={t("Exit selection", "退出选择")}
           >
-            <X size={13} />
+            <X size={14} />
           </button>
         )}
       </div>}

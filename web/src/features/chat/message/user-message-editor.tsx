@@ -85,7 +85,7 @@ export function UserMessageEditor({ content, imageUrls, busy, onCancel, onSubmit
             aria-label={t("Attach image", "附加图片")}
             title={t("Attach image", "附加图片")}
           >
-            <Paperclip size={18} />
+            <Paperclip size={16} />
           </button>
         </div>
         <div className="composer-actions">
@@ -97,7 +97,7 @@ export function UserMessageEditor({ content, imageUrls, busy, onCancel, onSubmit
             aria-label={t("Cancel editing", "取消编辑")}
             title={t("Cancel editing", "取消编辑")}
           >
-            <X size={15} />
+            <X size={16} />
           </button>
           <button
             type="button"
@@ -107,7 +107,7 @@ export function UserMessageEditor({ content, imageUrls, busy, onCancel, onSubmit
             aria-label={t("Resend as a new branch", "作为新分支重新发送")}
             title={t("Undo to this message and resend as a new branch", "退回本条消息并作为新分支重新发送")}
           >
-            <ArrowRight size={18} />
+            <ArrowRight size={16} />
           </button>
         </div>
       </div>

@@ -45,7 +45,7 @@ export function GatewaySettingsSection({ config, dirty, onGatewayChange, onSave 
     <div className="settings-editor gateway-settings">
       <SettingsGroup
         title="QQ"
-        icon={<GatewayBrandIcon gatewayId="qq" size={19} />}
+        icon={<GatewayBrandIcon gatewayId="qq" size={20} />}
         description={t("Configure QQ bot transport and authentication.", "配置 QQ 机器人监听方式和认证信息。")}
         actions={<label className="settings-switch"><input type="checkbox" checked={qq.enabled} onChange={(event) => onGatewayChange("qq", { enabled: event.target.checked })} /><span /><strong>{qq.enabled ? t("Enabled", "已启用") : t("Disabled", "未启用")}</strong></label>}
       >

@@ -85,8 +85,7 @@ impl Agent {
             && (tool_visibility.is_progressive()
                 || (config.skills.enabled && config.has_visible_skills()))
         {
-            let deferred = tool_visibility.deferred_tools().to_vec();
-            tools::register_progressive_loader(&mut tools, &deferred);
+            jev_routing::register_tool_gateways(&mut tools, &tool_visibility);
         }
         if tool_visibility.is_progressive() {
             let loaded = state.load_loaded_tools()?;
@@ -255,8 +254,7 @@ impl Agent {
         self.tool_visibility =
             ToolVisibility::from_config_with_anchor(&self.config, anchor_enabled, anchor_promoted);
         if self.tools_enabled && self.tool_visibility.is_progressive() {
-            let deferred = self.tool_visibility.deferred_tools().to_vec();
-            tools::register_progressive_loader(&mut tools, &deferred);
+            jev_routing::register_tool_gateways(&mut tools, &self.tool_visibility);
         }
         self.tools = tools;
         // 与工具权限配置共享原子模式，保证运行中 Shift+Tab 立即生效
@@ -298,8 +296,7 @@ impl Agent {
         crate::goal::register_tools_for_config(&mut tools, self.state.goal_file(), &self.config)
             .expect("failed to register goal tools");
         if self.tools_enabled && self.tool_visibility.is_progressive() {
-            let deferred = self.tool_visibility.deferred_tools().to_vec();
-            tools::register_progressive_loader(&mut tools, &deferred);
+            jev_routing::register_tool_gateways(&mut tools, &self.tool_visibility);
         }
         self.tools = tools;
         self.tool_visibility
@@ -380,8 +377,7 @@ impl Agent {
             && (self.tool_visibility.is_progressive()
                 || (self.config.skills.enabled && self.config.has_visible_skills()))
         {
-            let deferred = self.tool_visibility.deferred_tools().to_vec();
-            tools::register_progressive_loader(&mut tools, &deferred);
+            jev_routing::register_tool_gateways(&mut tools, &self.tool_visibility);
         }
         self.tools = tools;
         if self.tool_visibility.is_progressive() {

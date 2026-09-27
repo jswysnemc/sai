@@ -66,7 +66,7 @@ export function WorkspaceActivityRail(props: WorkspaceActivityRailProps) {
       <div className="workspace-activity-rail-bottom">
         <div className="rail-menu-anchor" ref={menuRef}>
           <button type="button" className={menuOpen ? "active" : ""} onClick={() => setMenuOpen((value) => !value)} title={t("Layout options", "布局选项")} aria-label={t("Layout options", "布局选项")} aria-expanded={menuOpen}>
-            <SlidersHorizontal size={15} />
+            <SlidersHorizontal size={16} />
           </button>
           {menuOpen && (
             <div className="rail-layout-menu" role="menu">

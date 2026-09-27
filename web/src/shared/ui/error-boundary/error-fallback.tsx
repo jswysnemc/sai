@@ -23,7 +23,7 @@ export function ErrorFallback({ error, label, onRetry }: ErrorFallbackProps) {
       <strong>{label ?? t("This section failed to render", "该区域渲染失败")}</strong>
       <p>{error.message}</p>
       <button type="button" onClick={onRetry}>
-        <RotateCcw size={13} />
+        <RotateCcw size={14} />
         {t("Retry", "重试")}
       </button>
     </div>

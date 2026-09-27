@@ -23,7 +23,7 @@ import {
   partitionByEnablement
 } from "./model/provider-enablement";
 import { ProviderHeaderActions } from "./providers/provider-header-actions";
-import { ProviderConnectionTab, buildDefaultModelOptions } from "./providers/provider-connection-tab";
+import { PLACEHOLDER_BASE_URL, ProviderConnectionTab, buildDefaultModelOptions } from "./providers/provider-connection-tab";
 import { ProviderModelsTab } from "./providers/provider-models-tab";
 import { ProviderBehaviorTab } from "./providers/provider-behavior-tab";
 import { ProviderAdvancedTab } from "./providers/provider-advanced-tab";
@@ -130,7 +130,7 @@ export function ProviderSettingsSection({
     const next: ProviderConfig = {
       id,
       display_name: t("New provider", "新供应商"),
-      base_url: "https://api.example.com/v1",
+      base_url: PLACEHOLDER_BASE_URL,
       protocol: "auto",
       api_key: "",
       api_keys: [{ id: "key-1", api_key: "", label: "" }],

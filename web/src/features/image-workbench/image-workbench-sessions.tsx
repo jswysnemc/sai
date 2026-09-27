@@ -69,7 +69,7 @@ export function ImageWorkbenchSessions({ sessions, activeId, onSelect, onCreate,
           <button type="button" onClick={() => setSelected(allSelected ? new Set() : new Set(ids))}>{allSelected ? t("Clear", "取消") : t("All", "全选")}</button>
           <span>{t(`${selected.size} selected`, `已选 ${selected.size}`)}</span>
           <button type="button" className="is-danger" disabled={selected.size === 0} onClick={() => { onRemoveMany([...selected]); exitSelection(); }} aria-label={t("Delete selected sessions", "删除所选会话")}>
-            <Trash2 size={13} />
+            <Trash2 size={14} />
           </button>
           <button type="button" onClick={exitSelection} aria-label={t("Exit selection", "退出选择")}>×</button>
         </div>
@@ -99,7 +99,7 @@ export function ImageWorkbenchSessions({ sessions, activeId, onSelect, onCreate,
                 {session.turns.length > 0 && <small>{session.turns.length}</small>}
               </button>
               {!selecting && (
-                <Button variant="ghost" size="icon" aria-label={t(`Delete ${session.title}`, `删除${session.title}`)} title={t("Delete", "删除")} onClick={() => onRemove(session.id)}><Trash2 size={13} /></Button>
+                <Button variant="ghost" size="icon" aria-label={t(`Delete ${session.title}`, `删除${session.title}`)} title={t("Delete", "删除")} onClick={() => onRemove(session.id)}><Trash2 size={14} /></Button>
               )}
             </li>
           );

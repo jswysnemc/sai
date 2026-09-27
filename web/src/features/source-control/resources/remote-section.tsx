@@ -45,7 +45,7 @@ export function RemoteSection(props: RemoteSectionProps) {
         <RadioTower size={12} />
         <input value={remoteName} onChange={(event) => setRemoteName(event.target.value)} placeholder={t("Name", "名称")} spellCheck={false} />
         <input value={remoteUrl} onChange={(event) => setRemoteUrl(event.target.value)} placeholder={t("Remote URL", "远端地址")} spellCheck={false} />
-        <Button disabled={props.busy || !remoteName.trim() || !remoteUrl.trim()} onClick={() => void addRemote()} title={t("Add remote", "新增远端")}><Plus size={11} /></Button>
+        <Button disabled={props.busy || !remoteName.trim() || !remoteUrl.trim()} onClick={() => void addRemote()} title={t("Add remote", "新增远端")}><Plus size={12} /></Button>
       </div>
       {props.remotes.map((remote) => (
         <div className="git-resource-row" key={remote.name}>
@@ -55,12 +55,12 @@ export function RemoteSection(props: RemoteSectionProps) {
               disabled={props.busy}
               title={t(`Push current branch to ${remote.name}`, `将当前分支推送到 ${remote.name}`)}
               onClick={() => void executeGitCommand("git.pushTo", props.runOperation, { remote_name: remote.name })}
-            ><CloudUpload size={11} /></Button>
+            ><CloudUpload size={12} /></Button>
             <Button disabled={props.busy} title={t("Remove remote", "删除远端")} onClick={() => void props.runOperation("remote_remove", {
               remote_name: remote.name,
               confirmTitle: t("Remove remote?", "删除远端？"),
               confirmDescription: `${remote.name} · ${remote.fetch_url || remote.push_url}`
-            })}><Trash2 size={11} /></Button>
+            })}><Trash2 size={12} /></Button>
           </div>
         </div>
       ))}

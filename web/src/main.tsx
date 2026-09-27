@@ -11,6 +11,7 @@ import "katex/dist/katex.min.css";
 import "./shared/styles/tokens.css";
 import "./shared/styles/tailwind.css";
 import "./shared/styles/global.css";
+import "./shared/styles/icon-alignment.css";
 import "./shared/styles/scrollbar.css";
 import "./shared/styles/surfaces.css";
 

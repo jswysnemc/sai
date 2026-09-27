@@ -25,7 +25,7 @@ export function TerminalDock({
           <TerminalPane terminalId={terminalId} title={title} />
         ) : (
           <div className="terminal-empty">
-            <TerminalSquare size={22} />
+            <TerminalSquare size={20} />
             <p>{t("No active terminal", "没有活动终端")}</p>
           </div>
         )}

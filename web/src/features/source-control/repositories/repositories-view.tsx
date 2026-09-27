@@ -109,11 +109,11 @@ export function RepositoriesView(props: RepositoriesViewProps) {
         <div>
           {props.hiddenCount > 0 && (
             <Button className="git-toolbar-icon" onClick={props.onShowAll} aria-label={t("Show closed repositories", "显示已关闭仓库")}>
-              <RotateCcw size={13} />
+              <RotateCcw size={14} />
             </Button>
           )}
           <Button className="git-toolbar-icon" onClick={props.onRefresh} aria-label={t("Refresh repositories", "刷新仓库")}>
-            <RefreshCw size={13} />
+            <RefreshCw size={14} />
           </Button>
         </div>
       </header>
@@ -181,8 +181,8 @@ function RepositoryMeta(props: { head: string; changed: number; ahead: number; b
     <span className="git-repository-meta">
       <small>{props.head || "HEAD"}</small>
       {props.changed > 0 && <small>{props.changed}</small>}
-      {props.ahead > 0 && <small><ArrowUp size={10} />{props.ahead}</small>}
-      {props.behind > 0 && <small><ArrowDown size={10} />{props.behind}</small>}
+      {props.ahead > 0 && <small><ArrowUp size={12} />{props.ahead}</small>}
+      {props.behind > 0 && <small><ArrowDown size={12} />{props.behind}</small>}
     </span>
   );
 }

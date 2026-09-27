@@ -79,7 +79,7 @@ export function ObjectListPanel({
       </div>
       {headerSlot}
       <label className="object-list-search">
-        <Search size={13} />
+        <Search size={14} />
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={searchPlaceholder} spellCheck={false} />
       </label>
       {topSlot}

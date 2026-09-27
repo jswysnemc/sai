@@ -13,6 +13,8 @@ type ModalProps = {
   className?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  /** 内容自带分区与内边距时去掉 body 默认内边距，避免内外两层留白与边框叠加 */
+  flush?: boolean;
   initialFocusRef?: RefObject<HTMLElement | null>;
   onClose: () => void;
 };
@@ -23,7 +25,7 @@ type ModalProps = {
  * @param props 弹层状态、标题、内容和关闭回调
  * @returns Portal 弹层
  */
-export function Modal({ open, title, description, size = "medium", className, children, footer, initialFocusRef, onClose }: ModalProps) {
+export function Modal({ open, title, description, size = "medium", className, children, footer, flush = false, initialFocusRef, onClose }: ModalProps) {
   const { t } = useI18n();
   const titleId = useId();
   const descriptionId = useId();
@@ -72,7 +74,7 @@ export function Modal({ open, title, description, size = "medium", className, ch
           <div><h2 id={titleId}>{title}</h2>{description && <p id={descriptionId}>{description}</p>}</div>
           <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("Close dialog", "关闭对话框")}><X size={16} /></Button>
         </header>
-        <div className="ui-modal-body">{children}</div>
+        <div className={flush ? "ui-modal-body is-flush" : "ui-modal-body"}>{children}</div>
         {footer && <footer className="ui-modal-footer">{footer}</footer>}
       </section>
     </div>,

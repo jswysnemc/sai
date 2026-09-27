@@ -14,6 +14,7 @@ mod external_tool_history;
 mod external_turn;
 mod external_wake_policy;
 mod instruction_files;
+mod jev_routing;
 mod inter_message;
 mod lifecycle;
 mod load_request;

@@ -31,7 +31,7 @@ export function FileComparisonView(props: FileComparisonViewProps) {
     <div className="git-file-comparison">
       <header className="git-file-comparison-head">
         <span title={`${props.target.basePath} → ${props.target.headPath}`}>
-          <GitCompareArrows size={13} />
+          <GitCompareArrows size={14} />
           {t("File Comparison", "文件比较")}
         </span>
         <Button
@@ -69,7 +69,7 @@ function FileComparisonBody(props: Pick<FileComparisonViewProps, "data" | "loadi
   if (!props.data?.patch) {
     return (
       <div className="git-diff-empty">
-        <GitCompare size={22} aria-hidden />
+        <GitCompare size={20} aria-hidden />
         <strong>{t("No differences", "两个文件内容一致")}</strong>
         <span>{t("The compared files have identical content", "所比较的两个文件内容完全相同")}</span>
       </div>

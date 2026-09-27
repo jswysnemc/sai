@@ -36,7 +36,7 @@ export function MemoryEvictedSearch() {
           className="memory-tool-toggle"
           onClick={() => setOpen(true)}
         >
-          <History size={13} />
+          <History size={14} />
           {t("Evicted context", "逐出上下文")}
           <small>{t("Search turns removed by compaction", "检索被压缩清出的轮次")}</small>
         </button>
@@ -52,7 +52,7 @@ export function MemoryEvictedSearch() {
         onClick={() => setOpen(false)}
         aria-expanded="true"
       >
-        <History size={13} />
+        <History size={14} />
         {t("Evicted context", "逐出上下文")}
       </button>
       <label className="memory-search">

@@ -7,8 +7,8 @@ import {
   GitCompare,
   History,
   RefreshCw,
+  type LucideIcon,
 } from "../../../shared/ui/icons";
-import type { ComponentType } from "react";
 import type { GitBranch, GitRepositoryState } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
@@ -39,7 +39,7 @@ type GitToolbarProps = {
 };
 
 /** 三种视图的图标与文案。 */
-const VIEW_TABS: { mode: GitWatchMode; icon: ComponentType<{ size?: number }>; en: string; zh: string }[] = [
+const VIEW_TABS: { mode: GitWatchMode; icon: LucideIcon; en: string; zh: string }[] = [
   { mode: "changes", icon: GitCompare, en: "Changes", zh: "变更" },
   { mode: "history", icon: History, en: "Graph", zh: "提交图" },
   { mode: "repositories", icon: FolderGit2, en: "Repositories", zh: "仓库" },
@@ -85,7 +85,7 @@ export function GitToolbar(props: GitToolbarProps) {
               className={active ? "git-toolbar-view active" : "git-toolbar-view"}
               onClick={() => props.onModeChange(tab.mode)}
             >
-              <Icon size={13} />
+              <Icon size={14} />
               <span>{t(tab.en, tab.zh)}</span>
               {tab.mode === "changes" && props.countBadge !== null && (
                 <span className="git-view-count-badge">{props.countBadge}</span>

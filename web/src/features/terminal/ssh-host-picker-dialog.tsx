@@ -140,7 +140,7 @@ export function SshHostPickerDialog({ open, onClose, onPick }: SshHostPickerDial
               disabled={connectingId !== null}
               onClick={() => { setError(null); setDraft(EMPTY_SSH_HOST_FORM); }}
             >
-              <Plus size={13} aria-hidden />
+              <Plus size={14} aria-hidden />
               <span>{t("Add SSH host", "添加 SSH 主机")}</span>
             </Button>
           </>

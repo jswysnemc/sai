@@ -42,7 +42,7 @@ export function GitSetupView(props: GitSetupViewProps) {
         <div>
           <span className="eyebrow">{t("Git workspace", "Git 工作区")}</span>
           <h2>
-            <GitBranch size={15} />
+            <GitBranch size={16} />
             {t("Version control", "版本管理")}
           </h2>
         </div>

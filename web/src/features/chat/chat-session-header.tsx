@@ -30,7 +30,7 @@ export function ChatSessionHeader({ title, workspace, branch, viewSwitch, branch
       <Button variant="ghost" size="icon" className="chat-header-menu md:hidden" onClick={() => window.dispatchEvent(new Event(MOBILE_SIDEBAR_TOGGLE_EVENT))} aria-label={t("Open session sidebar", "打开会话侧栏")} title={t("Open session sidebar", "打开会话侧栏")}><PanelLeft size={16} /></Button>
       <Button variant="ghost" size="icon" className="chat-header-expand" onClick={() => window.dispatchEvent(new CustomEvent(WORKBENCH_COMMAND_EVENT, { detail: "toggle-sidebar" }))} aria-label={t("Expand session sidebar", "展开会话侧栏")} title={t("Expand session sidebar", "展开会话侧栏")}><PanelLeft size={16} /></Button>
       <div className="chat-header-main">
-        {workspace && <span className="chat-header-project hidden lg:inline-flex" aria-label={t("Project context", "项目上下文")} title={[workspace.path, branch].filter(Boolean).join(" · ")}><FolderGit2 size={13} aria-hidden /><span>{workspaceName}</span><span className="chat-header-divider" aria-hidden>/</span></span>}
+        {workspace && <span className="chat-header-project hidden lg:inline-flex" aria-label={t("Project context", "项目上下文")} title={[workspace.path, branch].filter(Boolean).join(" · ")}><FolderGit2 size={14} aria-hidden /><span>{workspaceName}</span><span className="chat-header-divider" aria-hidden>/</span></span>}
         <h1 title={title}>{title}</h1>
       </div>
       {branchNavigation}

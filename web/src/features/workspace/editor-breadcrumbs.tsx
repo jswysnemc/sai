@@ -63,7 +63,7 @@ export function EditorBreadcrumbs({ path, onSelectFile }: EditorBreadcrumbsProps
               aria-expanded={openPath === part.path}
             >
               <span>{part.label}</span>
-              <ChevronDown size={10} aria-hidden="true" />
+              <ChevronDown size={12} aria-hidden="true" />
             </button>
           </span>
         ))}

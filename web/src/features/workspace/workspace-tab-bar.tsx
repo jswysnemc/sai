@@ -145,7 +145,7 @@ export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
             items={ACTIVE_WORKSPACE_PANEL_OPTIONS.map((item) => ({
               id: item.type,
               label: t(item.labelEn, item.labelZh),
-              icon: <item.icon size={15} />,
+              icon: <item.icon size={16} />,
               onSelect: () => props.onAdd(item.type)
             }))}
           />

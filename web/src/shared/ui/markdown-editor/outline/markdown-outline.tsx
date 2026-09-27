@@ -60,7 +60,7 @@ export function MarkdownOutline({ headings, activeIndex, onSelect }: MarkdownOut
       </div>
       <div className="markdown-outline-panel">
         <header>
-          <ListTree size={13} />
+          <ListTree size={14} />
           <span>{t("Outline", "大纲")}</span>
           <button
             type="button"
@@ -70,7 +70,7 @@ export function MarkdownOutline({ headings, activeIndex, onSelect }: MarkdownOut
             aria-label={pinLabel}
             title={pinLabel}
           >
-            {pinned ? <PinOff size={13} /> : <Pin size={13} />}
+            {pinned ? <PinOff size={14} /> : <Pin size={14} />}
           </button>
         </header>
         <ol ref={listRef}>

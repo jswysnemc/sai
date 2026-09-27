@@ -1,0 +1,21 @@
+/* 平滑折叠：行高在 0fr 与 1fr 之间过渡，内容高度无需预先测量 */
+.ui-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--duration-slow) var(--ease-out);
+}
+
+.ui-collapse.is-open {
+  grid-template-rows: 1fr;
+}
+
+.ui-collapse-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-collapse {
+    transition: none;
+  }
+}

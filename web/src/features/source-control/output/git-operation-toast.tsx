@@ -45,7 +45,7 @@ export function GitOperationToast({ notice, onDismiss }: GitOperationToastProps)
       {notice.kind === "success" ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
       <p>{notice.message}</p>
       <button type="button" onClick={onDismiss} aria-label={t("Dismiss notification", "关闭提示")}>
-        <X size={13} />
+        <X size={14} />
       </button>
     </div>
   );

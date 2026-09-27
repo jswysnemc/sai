@@ -371,7 +371,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
         {showHeading && <span>{t("Files", "文件")}</span>}
         {embedded && <span className="file-tree-title" title={workspaceLabel}>{workspaceLabel || t("Files", "文件")}</span>}
         <div className="file-tree-actions">
-          <Button className="file-tree-search-toggle" variant="ghost" size="icon" aria-pressed={searchOpen || Boolean(search)} onClick={() => setSearchOpen((open) => !open || Boolean(search))} aria-label={t("Filter files", "筛选文件")} title={t("Filter files", "筛选文件")}><Search size={13} /></Button>
+          <Button className="file-tree-search-toggle" variant="ghost" size="icon" aria-pressed={searchOpen || Boolean(search)} onClick={() => setSearchOpen((open) => !open || Boolean(search))} aria-label={t("Filter files", "筛选文件")} title={t("Filter files", "筛选文件")}><Search size={14} /></Button>
           <ActionMenu
             label={t("File tree actions", "文件树操作")}
             trigger={<MoreHorizontal size={14} />}
@@ -396,8 +396,8 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
             <TextInput autoFocus value={action.value} onChange={(event) => setAction({ ...action, value: event.target.value })} onKeyDown={(event) => { if (event.key === "Enter") void submitAction(); if (event.key === "Escape") setAction(null); }} aria-label={t("File or directory name", "文件或目录名称")} spellCheck={false} />
             {action.kind !== "rename" && (
               <>
-                <button type="button" aria-pressed={action.kind === "file"} onClick={() => setAction({ ...action, kind: "file" })} aria-label={t("New File", "新建文件")}><FilePlus2 size={13} /></button>
-                <button type="button" aria-pressed={action.kind === "directory"} onClick={() => setAction({ ...action, kind: "directory" })} aria-label={t("New Folder", "新建文件夹")}><FolderPlus size={13} /></button>
+                <button type="button" aria-pressed={action.kind === "file"} onClick={() => setAction({ ...action, kind: "file" })} aria-label={t("New File", "新建文件")}><FilePlus2 size={14} /></button>
+                <button type="button" aria-pressed={action.kind === "directory"} onClick={() => setAction({ ...action, kind: "directory" })} aria-label={t("New Folder", "新建文件夹")}><FolderPlus size={14} /></button>
               </>
             )}
           </div>
@@ -533,8 +533,8 @@ function TreeRow({ node, depth, open, selected, focused, gitEntry, directoryTone
           : "tree-row-name"}>{node.name}</span>
       {directory && (
         <span className="tree-row-actions">
-          <button type="button" onClick={(event) => { event.stopPropagation(); onCreate("file"); }} aria-label={t("New File", "新建文件")} title={t("New File", "新建文件")}><FilePlus2 size={13} /></button>
-          <button type="button" onClick={(event) => { event.stopPropagation(); onCreate("directory"); }} aria-label={t("New Folder", "新建文件夹")} title={t("New Folder", "新建文件夹")}><FolderPlus size={13} /></button>
+          <button type="button" onClick={(event) => { event.stopPropagation(); onCreate("file"); }} aria-label={t("New File", "新建文件")} title={t("New File", "新建文件")}><FilePlus2 size={14} /></button>
+          <button type="button" onClick={(event) => { event.stopPropagation(); onCreate("directory"); }} aria-label={t("New Folder", "新建文件夹")} title={t("New Folder", "新建文件夹")}><FolderPlus size={14} /></button>
         </span>
       )}
       {gitEntry && <span className={`tree-row-git-status git-${fileTreeGitStatusTone(gitEntry.entry)}`}>{fileTreeGitStatusLabel(gitEntry.entry)}</span>}

@@ -69,7 +69,7 @@ export function AppearanceSettingsSection({ theme, onThemeChange }: AppearanceSe
                 <strong>{t(preset.nameEn, preset.nameZh)}</strong>
                 <small>{t(preset.descriptionEn, preset.descriptionZh)}</small>
               </span>
-              <Check size={15} className="theme-preset-check" />
+              <Check size={16} className="theme-preset-check" />
             </Button>
           ))}
         </div>

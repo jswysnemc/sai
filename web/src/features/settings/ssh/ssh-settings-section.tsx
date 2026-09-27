@@ -144,11 +144,11 @@ export function SshSettingsSection() {
       >
         <div className="ssh-host-actions">
           <Button variant="primary" onClick={startCreate}>
-            <Plus size={13} />
+            <Plus size={14} />
             {t("Add host", "新增主机")}
           </Button>
           <Button variant="secondary" onClick={() => setImportOpen(true)}>
-            <Download size={13} />
+            <Download size={14} />
             {t("Import from ~/.ssh/config", "从 ~/.ssh/config 导入")}
           </Button>
         </div>
@@ -165,7 +165,7 @@ export function SshSettingsSection() {
                   <span>{sshHostAddress(host)}</span>
                 </div>
                 <button type="button" onClick={() => startEdit(host)} aria-label={t("Edit host", "编辑主机")}>
-                  <Pencil size={13} />
+                  <Pencil size={14} />
                 </button>
                 <button
                   type="button"
@@ -173,7 +173,7 @@ export function SshSettingsSection() {
                   onClick={() => void remove(host)}
                   aria-label={t("Remove host", "删除主机")}
                 >
-                  <Trash2 size={13} />
+                  <Trash2 size={14} />
                 </button>
               </li>
             ))}

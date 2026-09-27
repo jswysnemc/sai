@@ -207,7 +207,7 @@ export function TurnFileChanges({
               onClick={() => void discardAll()}
               title={t("Undo all changes this turn", "撤销本轮全部改动")}
             >
-              <RotateCcw size={13} aria-hidden />
+              <RotateCcw size={14} aria-hidden />
               <span>{t("Undo", "撤销")}</span>
             </button>
           )}
@@ -217,7 +217,7 @@ export function TurnFileChanges({
             onClick={reviewChanges}
             title={t("Review changes", "审阅改动")}
           >
-            <PanelRightOpen size={13} aria-hidden />
+            <PanelRightOpen size={14} aria-hidden />
             <span>{t("Review", "审阅")}</span>
           </button>
         </div>
@@ -327,12 +327,12 @@ function TurnFileContextMenu(props: TurnFileContextMenuProps) {
 
   return (
     <div ref={ref} className="turn-file-context-menu" style={{ left: props.x, top: props.y }} role="menu">
-      <button type="button" role="menuitem" onClick={() => choose(props.onOpen)}><FileText size={13} />{t("Open file", "打开文件")}</button>
-      <button type="button" role="menuitem" onClick={() => choose(props.onReview)}><FileDiff size={13} />{t("Review changes", "审阅改动")}</button>
-      <button type="button" role="menuitem" onClick={() => choose(props.onReveal)}><FolderSearch size={13} />{t("Reveal in file tree", "在文件树中显示")}</button>
-      <button type="button" role="menuitem" onClick={() => choose(() => { void navigator.clipboard.writeText(props.path); })}><Copy size={13} />{t("Copy path", "复制路径")}</button>
+      <button type="button" role="menuitem" onClick={() => choose(props.onOpen)}><FileText size={14} />{t("Open file", "打开文件")}</button>
+      <button type="button" role="menuitem" onClick={() => choose(props.onReview)}><FileDiff size={14} />{t("Review changes", "审阅改动")}</button>
+      <button type="button" role="menuitem" onClick={() => choose(props.onReveal)}><FolderSearch size={14} />{t("Reveal in file tree", "在文件树中显示")}</button>
+      <button type="button" role="menuitem" onClick={() => choose(() => { void navigator.clipboard.writeText(props.path); })}><Copy size={14} />{t("Copy path", "复制路径")}</button>
       {props.canDiscard && (
-        <button type="button" role="menuitem" className="danger" onClick={() => choose(props.onDiscard)}><RotateCcw size={13} />{t("Undo this file", "撤销此文件")}</button>
+        <button type="button" role="menuitem" className="danger" onClick={() => choose(props.onDiscard)}><RotateCcw size={14} />{t("Undo this file", "撤销此文件")}</button>
       )}
     </div>
   );

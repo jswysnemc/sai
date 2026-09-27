@@ -78,7 +78,7 @@ export function SubagentDetailView({ subagent, onBack, onCancel }: SubagentDetai
         <button type="button" className="subagent-detail-back" onClick={onBack}><ArrowLeft size={14} />{t("Overview", "概览")}</button>
         <SubagentStatusBadge status={current.status} />
         {alive && (
-          <button type="button" className="subagent-detail-cancel" onClick={() => onCancel(current.id)}><Ban size={13} />{t("Cancel", "取消")}</button>
+          <button type="button" className="subagent-detail-cancel" onClick={() => onCancel(current.id)}><Ban size={14} />{t("Cancel", "取消")}</button>
         )}
       </header>
       <div className="subagent-detail-scroll" ref={scrollRef}>
@@ -117,7 +117,7 @@ export function SubagentDetailView({ subagent, onBack, onCancel }: SubagentDetai
                 aria-label={t("Send message to subagent", "向子智能体发送留言")}
                 title={t("Send message to subagent", "向子智能体发送留言")}
               >
-                <ArrowRight size={18} />
+                <ArrowRight size={16} />
               </button>
             </div>
           </div>

@@ -133,7 +133,7 @@ function MenuList({ entries, onSelect, onBack }: MenuListProps) {
               onSelect(entry);
             }}
           >
-            <span className="md-menu-icon">{entry.checked ? <Check size={13} /> : Icon ? <Icon size={13} /> : null}</span>
+            <span className="md-menu-icon">{entry.checked ? <Check size={14} /> : Icon ? <Icon size={14} /> : null}</span>
             <span className="md-menu-label">{entry.label}</span>
             {entry.shortcut && <kbd>{entry.shortcut}</kbd>}
             {entry.children && <ChevronRight size={12} className="md-menu-chevron" />}

@@ -118,7 +118,7 @@ export function ProviderApiKeysField({
       <div className="provider-api-keys-head">
         <span>{t("API keys", "接口密钥")}</span>
         <Button className="provider-api-keys-add" onClick={addKey}>
-          <Plus size={13} />
+          <Plus size={14} />
           {t("Add key", "新增密钥")}
         </Button>
       </div>
@@ -154,7 +154,7 @@ export function ProviderApiKeysField({
                 aria-label={t("Remove key", "移除密钥")}
                 title={t("Remove key", "移除密钥")}
               >
-                <Trash2 size={13} />
+                <Trash2 size={14} />
               </button>
             )}
           </li>

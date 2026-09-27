@@ -95,7 +95,7 @@ export function MemoryEntryCard({
           onClick={() => setExpanded((value) => !value)}
           aria-expanded={expanded}
         >
-          {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           <code>{entry.name}</code>
         </button>
         <span className="memory-type-badge" data-type={entry.type}>
@@ -111,11 +111,11 @@ export function MemoryEntryCard({
             aria-label={t("Edit memory", "编辑记忆")}
             title={t("Edit in place; saving the same identifier updates it", "就地编辑；保存同名标识即更新")}
           >
-            <Pencil size={13} />
+            <Pencil size={14} />
           </button>
         )}
         <button type="button" onClick={() => onRemove(entry.name)} aria-label={t("Delete memory", "删除记忆")}>
-          <Trash2 size={13} />
+          <Trash2 size={14} />
         </button>
       </header>
       <p>{entry.description}</p>
@@ -135,7 +135,7 @@ export function MemoryEntryCard({
               )}
               {(detail.data.links?.length ?? 0) > 0 && (
                 <div className="memory-item-links">
-                  <Link2 size={13} />
+                  <Link2 size={14} />
                   {detail.data.links?.map((link) => (
                     <button
                       key={link}
@@ -251,7 +251,7 @@ function MemoryEditForm({
       )}
       <div className="memory-edit-actions">
         <button type="button" className="settings-secondary" onClick={onCancel} disabled={pending}>
-          <X size={13} /> {t("Cancel", "取消")}
+          <X size={14} /> {t("Cancel", "取消")}
         </button>
         <button
           type="button"
@@ -268,7 +268,7 @@ function MemoryEditForm({
             })
           }
         >
-          <Check size={13} /> {pending ? t("Saving", "保存中") : t("Save changes", "保存修改")}
+          <Check size={14} /> {pending ? t("Saving", "保存中") : t("Save changes", "保存修改")}
         </button>
       </div>
       {nextDescription.trim().length === 0 && (

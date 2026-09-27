@@ -79,7 +79,7 @@ export function SettingsNav({ activeSection }: SettingsNavProps) {
               to={`/settings/${id}`}
               className={({ isActive }) => (isActive || id === activeSection ? "active" : undefined)}
             >
-              <Icon size={15} aria-hidden />
+              <Icon size={16} aria-hidden />
               <span>
                 <strong>{t(labelEn, labelZh)}</strong>
               </span>

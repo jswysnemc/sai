@@ -51,8 +51,8 @@ export function BackgroundTasksPanel() {
           )}
         </div>
         <div className="background-task-actions">
-          <button type="button" onClick={() => void manager.refresh()}><RefreshCw size={13} /><span>{t("Refresh", "刷新")}</span></button>
-          <button type="button" onClick={() => void manager.cleanup()}><Trash2 size={13} /><span>{t("Clean finished", "清理已结束")}</span></button>
+          <button type="button" onClick={() => void manager.refresh()}><RefreshCw size={14} /><span>{t("Refresh", "刷新")}</span></button>
+          <button type="button" onClick={() => void manager.cleanup()}><Trash2 size={14} /><span>{t("Clean finished", "清理已结束")}</span></button>
         </div>
       </header>
       {tasks.length === 0 && !manager.loading ? (

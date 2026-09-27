@@ -89,7 +89,7 @@ export function RemoteSetupDialog(props: RemoteSetupDialogProps) {
             disabled={!submittable}
             aria-busy={props.busy || undefined}
           >
-            {props.action === "push" ? <Upload size={13} /> : <RefreshCw size={13} />}
+            {props.action === "push" ? <Upload size={14} /> : <RefreshCw size={14} />}
             {submitLabels[props.action]}
           </Button>
         </>

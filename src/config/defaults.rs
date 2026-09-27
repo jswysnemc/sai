@@ -45,6 +45,7 @@ impl Default for AppConfig {
             system_prompt: None,
             load_instruction_files: true,
             mesh: super::mesh::MeshConfig::default(),
+            jev_routing: super::JevRoutingConfig::default(),
         }
     }
 }

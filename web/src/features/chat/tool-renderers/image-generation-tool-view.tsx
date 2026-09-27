@@ -30,7 +30,7 @@ export function ImageGenerationToolView({ output }: ImageGenerationToolViewProps
     return (
       <ToolPanel className="image-generation-tool-view">
         <div className="image-generation-waiting" aria-busy="true">
-          <LoaderCircle size={15} className="animate-spin" aria-hidden />
+          <LoaderCircle size={16} className="animate-spin" aria-hidden />
           <span>{t("Generating image", "正在生成图片")}</span>
         </div>
       </ToolPanel>
