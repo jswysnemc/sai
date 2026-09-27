@@ -114,7 +114,7 @@ impl Agent {
         turn_id: Option<String>,
         inter_message_source: Option<Arc<dyn InterMessageSource>>,
         wait_for_external: bool,
-        on_event: F,
+        mut on_event: F,
     ) -> Result<ChatResult>
     where
         F: FnMut(AgentEvent) -> Result<()>,
@@ -182,7 +182,10 @@ impl Agent {
         };
         perf.mark("memory association");
         // Jev 暴露决策：请求模型前预先暴露相关工具与 skill，结果与插件提醒一起并入用户消息
-        let jev_block = self.jev_preselect(&turn_id, &input).await;
+        let jev_block = settle_step(
+            &mut guard,
+            self.jev_preselect(&turn_id, &input, &mut on_event).await,
+        )?;
         perf.mark("jev preselect");
         let turn_reminder = [plugin_reply_plan.reminder.as_deref(), jev_block.as_deref()]
             .into_iter()

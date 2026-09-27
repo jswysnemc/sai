@@ -1,5 +1,9 @@
 import type { PendingQuestion, PermissionDecision, PermissionRequest, QueueInsertAt, QuestionResponse, SshSecretRequest, TurnUsage, WebEvent } from "../../api/contracts";
 import { text, type Locale } from "../i18n/locale";
+import { parseJevCapability, type JevCapabilityExposure } from "./tool-renderers/jev-capability-data";
+
+/** 用户消息发往模型前的 Jev 预选阶段。 */
+export type JevPreselectPhase = "running" | "ready" | "empty" | "failed";
 
 export type ToolLifecycle = {
   id: string;
@@ -32,6 +36,7 @@ export type LiveMessagePart =
   | { id: string; type: "text"; source: string }
   | { id: string; type: "automatic_input"; kind: string; source: string }
   | { id: string; type: "tool"; tool: ToolLifecycle }
+  | { id: string; type: "jev"; phase: JevPreselectPhase; exposure: JevCapabilityExposure; detail: string }
   | { id: string; type: "permission"; request: PermissionRequest; decision?: PermissionDecision }
   | { id: string; type: "engine_ready"; engine: string; version: string }
   | { id: string; type: "question"; pending: PendingQuestion; response?: QuestionResponse }
@@ -231,6 +236,8 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
         status: payload.ok === false ? "failed" : "completed",
         endedAtMs: eventTimeMs(event.timestamp)
       });
+    case "jev.preselect":
+      return applyJevPreselect(state, payload);
     case "engine.ready":
       // 外部内核连上后的运行时证据：名称与版本来自 ACP 握手响应，
       // 只有真正拉起子进程才拿得到，用来分辨本轮由谁执行
@@ -368,6 +375,37 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
     default:
       return state;
   }
+}
+
+/**
+ * 把发送前的 Jev 预选写到本轮部件最前面。
+ *
+ * 同一次判断会先报 running，再报 ready、empty 或 failed。
+ * 后来的阶段替换前一张卡，不再新增一条。
+ *
+ * @param state 当前运行状态
+ * @param payload 预选事件载荷
+ * @returns 带有预选卡的状态
+ */
+function applyJevPreselect(state: LiveRunState, payload: Record<string, unknown>): LiveRunState {
+  const phase = jevPreselectPhase(payload.phase);
+  const detail = typeof payload.detail === "string" ? payload.detail : "";
+  const exposure = phase === "ready"
+    ? parseJevCapability(detail) ?? { tools: [], skills: [] }
+    : { tools: [], skills: [] };
+  const part: LiveMessagePart = { id: "jev-preselect", type: "jev", phase, exposure, detail };
+  return { ...state, parts: [part, ...state.parts.filter((item) => item.type !== "jev")] };
+}
+
+/**
+ * 读取预选阶段；未知值按已完成处理，避免卡片停在转圈。
+ *
+ * @param value 事件里的 phase
+ * @returns 界面认识的阶段
+ */
+function jevPreselectPhase(value: unknown): JevPreselectPhase {
+  if (value === "running" || value === "empty" || value === "failed" || value === "ready") return value;
+  return "ready";
 }
 
 /**

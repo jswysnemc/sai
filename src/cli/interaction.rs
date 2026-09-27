@@ -105,6 +105,7 @@ pub(super) fn handle_agent_event(
             );
             Ok(())
         }
+        AgentEvent::JevPreselect { .. } => Ok(()),
         AgentEvent::FlushContent => renderer.flush_content(),
         AgentEvent::ExternalOutput => renderer.prepare_for_external_output(),
     }

@@ -100,6 +100,15 @@ describe("groupActivityParts", () => {
     expect(collectWaveSecrets(segments[0].items).map((part) => part.id)).toEqual(["sec1"]);
   });
 
+  it("keeps the pre-send Jev judgment outside the tool work log", () => {
+    const segments = groupActivityParts([
+      { id: "jev", type: "jev", phase: "ready", exposure: { tools: [], skills: [] }, detail: "" },
+      tool("t1"),
+      text("body")
+    ]);
+    expect(segments.map((segment) => segment.type)).toEqual(["part", "preamble", "part"]);
+  });
+
   it("counts reasoning segments and tools", () => {
     const segments = groupActivityParts([reasoning("r1"), tool("t1"), tool("t2")]);
     if (segments[0].type !== "preamble") throw new Error("expected preamble");

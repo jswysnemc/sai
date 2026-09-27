@@ -8,6 +8,7 @@ import { SshSecretCard } from "../../ssh/ssh-secret-card";
 import { AutomaticInputPart } from "./automatic-input-part";
 import { EngineReadyPart } from "./engine-ready-part";
 import { ActivityPreamble } from "./activity-preamble";
+import { JevExposureCard } from "./jev-exposure-card";
 import { groupActivityParts } from "./group-activity-parts";
 import { ReasoningBlock } from "../reasoning-block";
 
@@ -52,6 +53,7 @@ function renderStandalonePart(part: LiveMessagePart, live?: boolean) {
     return <ReasoningBlock key={part.id} source={part.source} live={live && !part.endedAt} startedAt={part.startedAt} endedAt={part.endedAt} />;
   }
   if (part.type === "tool") return <ToolLifecycleCard key={part.id} tool={part.tool} />;
+  if (part.type === "jev") return <JevExposureCard key={part.id} phase={part.phase} exposure={part.exposure} detail={part.detail} />;
   if (part.type === "permission") return <PermissionRequestCard key={part.id} request={part.request} decision={part.decision} active={Boolean(live)} />;
   if (part.type === "question") return <QuestionRequestCard key={part.id} pending={part.pending} response={part.response} active={Boolean(live)} />;
   if (part.type === "ssh_secret") return <SshSecretCard key={part.id} request={part.request} resolved={part.resolved} active={Boolean(live)} />;

@@ -33,6 +33,45 @@ describe("HistoryTurn", () => {
     expect(html).toContain("工具 1");
   });
 
+  it("shows the Jev preselect inside the work log without schemas", () => {
+    const turn: SessionTimelineTurn = {
+      turn_id: "jev-turn",
+      seq: 1,
+      status: "completed",
+      automatic: false,
+      user: { timestamp: "now", content: "了解当前项目" },
+      assistant: { timestamp: "later", content: "当前项目为 Sai" },
+      injected_content: `<jev-exposed-capabilities>\nBefore this request\n${JSON.stringify({
+        ok: true,
+        router: "jev",
+        tools: [{
+          name: "web_search",
+          definition: { function: { description: "Search the web. schema_marker_hidden", parameters: { secret: true } } }
+        }],
+        skills: [{ name: "drawio", status: "loaded", content: "SKILL_BODY_HIDDEN" }]
+      })}\n</jev-exposed-capabilities>`,
+      tools: [{
+        id: "read",
+        name: "read_file",
+        arguments: "{\"path\":\"README.md\"}",
+        status: "completed",
+        output: "readme",
+        created_at: "now"
+      }]
+    };
+
+    const html = renderWithProviders(<HistoryTurn turn={turn} />);
+
+    expect(html).toContain("发送前");
+    expect(html).toContain("处理过程 · 工具 1");
+    expect(html.indexOf("发送前")).toBeLessThan(html.indexOf("处理过程"));
+    expect(html).toContain("web_search, skill:drawio");
+    expect(html).toContain("1 个工具 · 1 个 Skill");
+    expect(html).not.toContain("schema_marker_hidden");
+    expect(html).not.toContain("SKILL_BODY_HIDDEN");
+    expect(html).not.toContain("README.md");
+  });
+
   it("folds completed tools behind the activity header instead of stacking them", () => {
     const turn: SessionTimelineTurn = {
       turn_id: "fold-turn",

@@ -400,6 +400,10 @@ impl EventAssembler {
                 "engine.ready",
                 json!({ "engine": engine, "version": version }),
             )],
+            AgentEvent::JevPreselect { phase, detail } => vec![self.event(
+                "jev.preselect",
+                json!({ "phase": phase, "detail": detail }),
+            )],
             AgentEvent::FlushContent => vec![self.event("content.flushed", json!({}))],
             AgentEvent::ExternalOutput => vec![self.event("external.output", json!({}))],
         }

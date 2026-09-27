@@ -23,6 +23,25 @@ export type JevCapabilityExposure = {
  * @param output 工具输出
  * @returns 暴露名单；不是 Jev 成功结果时返回空
  */
+/**
+ * 从用户消息注入前缀里取出本轮 Jev 预选结果。
+ *
+ * 标签存在就表示 Jev 被调用过。JSON 解析失败时仍返回空名单，
+ * 让界面能标出这次调用，而不是把它藏进原文。
+ *
+ * @param content 供应商用户消息的注入前缀
+ * @returns 暴露名单；没有预选标签时返回空
+ */
+export function parseJevExposureBlock(content: string): JevCapabilityExposure | null {
+  const match = /<jev-exposed-capabilities>([\s\S]*?)<\/jev-exposed-capabilities>/u.exec(content);
+  if (!match) return null;
+  const body = match[1] ?? "";
+  const jsonStart = body.indexOf("{");
+  const jsonEnd = body.lastIndexOf("}");
+  if (jsonStart < 0 || jsonEnd < jsonStart) return { tools: [], skills: [] };
+  return parseJevCapability(body.slice(jsonStart, jsonEnd + 1)) ?? { tools: [], skills: [] };
+}
+
 export function parseJevCapability(output: string): JevCapabilityExposure | null {
   const record = parseJsonRecord(output);
   if (!record || record.ok !== true || record.router !== "jev") return null;

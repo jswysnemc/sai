@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jevCapabilityStatusLabel, parseJevCapability } from "./jev-capability-data";
+import { jevCapabilityStatusLabel, parseJevCapability, parseJevExposureBlock } from "./jev-capability-data";
 
 const exposed = JSON.stringify({
   ok: true,
@@ -46,6 +46,13 @@ describe("parseJevCapability", () => {
   it("工具错误和其它工具结果不按能力申请解析", () => {
     expect(parseJevCapability("tool error: jev unavailable")).toBeNull();
     expect(parseJevCapability(JSON.stringify({ ok: true, tools: [] }))).toBeNull();
+  });
+
+  it("从预选注入块取出名单，并忽略标签外的说明", () => {
+    const content = `<context-state>{"keep":true}</context-state>\n<jev-exposed-capabilities>\nBefore this request\n${exposed}\n</jev-exposed-capabilities>`;
+    expect(parseJevExposureBlock(content)?.tools.map((item) => item.name)).toEqual(["web_search"]);
+    expect(parseJevExposureBlock(content)?.skills[0]?.detail).toBe("loaded");
+    expect(parseJevExposureBlock("no jev here")).toBeNull();
   });
 
   it("按数量生成折叠行计数", () => {

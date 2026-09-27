@@ -1,8 +1,8 @@
 import { memo, useMemo, type ReactNode } from "react";
 import type { HistoryEntry, SessionTimelineTurn, TimelineToolEntry } from "../../api/contracts";
 import type { SessionTurnTree } from "../../api/turn-tree-contracts";
-import type { LiveRunState } from "./run-event-reducer";
-import type { LiveMessagePart } from "./run-event-reducer";
+import type { LiveMessagePart, LiveRunState } from "./run-event-reducer";
+import { parseJevExposureBlock } from "./tool-renderers/jev-capability-data";
 import { LiveRunIndicator } from "./live-run-indicator";
 import { MessageActions } from "./message/message-actions";
 import { MessageParts } from "./message/message-parts";
@@ -321,6 +321,8 @@ function historyMessageParts(message: HistoryEntry): LiveMessagePart[] {
  */
 function historyTurnParts(turn: SessionTimelineTurn): LiveMessagePart[] {
   const parts: LiveMessagePart[] = [];
+  const exposure = parseJevExposureBlock(turn.injected_content ?? "");
+  if (exposure) parts.push({ id: `${turn.turn_id}-jev`, type: "jev", phase: "ready", exposure, detail: "" });
   const messages = [...(turn.messages ?? [])].sort((left, right) => left.seq - right.seq);
   let messageIndex = 0;
 

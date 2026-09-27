@@ -103,4 +103,13 @@ pub enum AgentEvent {
         engine: String,
         version: String,
     },
+    /// 用户消息发往模型前的 Jev 预选。
+    ///
+    /// 只通知界面。不写入助手工具调用，避免思考型模型缺少 reasoning。
+    JevPreselect {
+        /// running、ready、empty 或 failed。
+        phase: String,
+        /// ready 时为暴露结果 JSON，failed 时为错误摘要。
+        detail: String,
+    },
 }

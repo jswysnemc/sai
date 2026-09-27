@@ -210,6 +210,7 @@ impl ReplRuntime {
                 ));
                 self.sync_transcript(true)
             }
+            AgentEvent::JevPreselect { .. } => Ok(()),
             AgentEvent::FlushContent => {
                 self.transcript.finalize_live_tail();
                 self.sync_transcript(true)

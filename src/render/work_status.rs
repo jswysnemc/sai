@@ -70,7 +70,8 @@ impl WorkStatus {
             | AgentEvent::ContextUpdated(_)
             | AgentEvent::EngineReady { .. }
             | AgentEvent::FlushContent
-            | AgentEvent::ExternalOutput => None,
+            | AgentEvent::ExternalOutput
+            | AgentEvent::JevPreselect { .. } => None,
         }
     }
 

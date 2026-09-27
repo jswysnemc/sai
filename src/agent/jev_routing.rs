@@ -12,15 +12,28 @@ impl Agent {
     /// 参数:
     /// - `turn_id`: 当前轮次标识，用于排除运行中轮次读取近期历史
     /// - `input`: 用户本轮输入
+    /// - `on_event`: 界面事件回调；判断开始和结束都会通知，不写入工具调用
     ///
     /// 返回:
-    /// - 需要注入用户消息的暴露结果块
-    pub(super) async fn jev_preselect(&mut self, turn_id: &str, input: &str) -> Option<String> {
+    /// - 需要注入用户消息的暴露结果块；未启用、未选中或失败时为空
+    pub(super) async fn jev_preselect<F>(
+        &mut self,
+        turn_id: &str,
+        input: &str,
+        on_event: &mut F,
+    ) -> Result<Option<String>>
+    where
+        F: FnMut(AgentEvent) -> Result<()>,
+    {
         if !self.tools_enabled || !self.tool_visibility.is_jev_routing() || input.trim().is_empty()
         {
-            return None;
+            return Ok(None);
         }
-        // 1. 读取近期历史作为判断背景
+        // 1. 先告诉界面正在判断，再读取近期历史作为背景
+        on_event(AgentEvent::JevPreselect {
+            phase: "running".to_string(),
+            detail: String::new(),
+        })?;
         let history = match self.chat_base_context_projection(Some(turn_id)) {
             Ok(projection) => projection.messages,
             Err(error) => {
@@ -28,13 +41,23 @@ impl Agent {
                 Vec::new()
             }
         };
-        // 2. 请求 Jev 判断，失败时退回基础工具，不阻断对话
+        // 2. 请求 Jev 判断，失败或未选中时退回基础工具，不阻断对话
         let selection = match self.jev_decide(input, &history).await {
             Ok(selection) if !selection.is_empty() => selection,
-            Ok(_) => return None,
+            Ok(_) => {
+                on_event(AgentEvent::JevPreselect {
+                    phase: "empty".to_string(),
+                    detail: String::new(),
+                })?;
+                return Ok(None);
+            }
             Err(error) => {
                 eprintln!("【Jev路由】【请求前预选】判断失败，本轮仅暴露基础工具: {error:#}");
-                return None;
+                on_event(AgentEvent::JevPreselect {
+                    phase: "failed".to_string(),
+                    detail: error.to_string(),
+                })?;
+                return Ok(None);
             }
         };
         // 3. 标记暴露并包装为注入块
@@ -44,10 +67,20 @@ impl Agent {
             &self.config,
             &self.paths,
         ) {
-            Ok(output) => Some(preselect_block(&output)),
+            Ok(output) => {
+                on_event(AgentEvent::JevPreselect {
+                    phase: "ready".to_string(),
+                    detail: output.clone(),
+                })?;
+                Ok(Some(preselect_block(&output)))
+            }
             Err(error) => {
                 eprintln!("【Jev路由】【请求前预选】暴露资源失败: {error:#}");
-                None
+                on_event(AgentEvent::JevPreselect {
+                    phase: "failed".to_string(),
+                    detail: error.to_string(),
+                })?;
+                Ok(None)
             }
         }
     }
