@@ -84,7 +84,9 @@ export function SessionRow({
     "session-row",
     session.active ? "active" : "",
     checked ? "selected" : "",
-    loaded ? "loaded" : "unloaded"
+    loaded ? "loaded" : "unloaded",
+    running ? "is-running" : "",
+    unread ? "is-unread" : ""
   ].filter(Boolean).join(" ");
 
   return (
@@ -96,8 +98,12 @@ export function SessionRow({
       )}
         <Button variant="ghost" className="session-main" aria-current={session.active ? "page" : undefined} onClick={selectable ? onToggleChecked : onOpen}>
           <span className="session-summary">
+            <i
+              className="session-guide"
+              aria-hidden={!(running || unread)}
+              aria-label={running ? t("Session is working", "会话正在工作") : unread ? t("Unread", "未读") : undefined}
+            />
             <strong>{session.title}</strong>
-            {unread && <i className="session-unread" aria-label={t("Unread", "未读")} />}
             {running && <ActiveAgentIndicator holder={holder} />}
             <small title={new Date(session.updated_at).toLocaleString(locale)}>
               {formatRelativeTime(session.updated_at, locale, now)}

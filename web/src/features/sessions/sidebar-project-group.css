@@ -20,10 +20,9 @@
 .sidebar-project-actions .ui-button { width: 1.5rem; min-height: 1.5rem; height: 1.5rem; flex-basis: 1.5rem; }
 .sidebar-project-sessions .session-list { display: block; overflow: visible; }
 .sidebar-project-sessions .workspace-session-children { padding-left: 0; }
-.sidebar-project-sessions .session-main { padding-left: 1.375rem; }
 .sidebar-project-sessions .session-main strong { font-size: var(--text-base); font-weight: 400; color: var(--ink); }
 .sidebar-project-sessions .session-row.active .session-main strong { font-weight: 500; }
-.sidebar-project-sessions .session-list-empty { margin: 0; padding: 0.5rem 1.375rem; font-size: var(--text-sm); color: var(--ink-soft); }
-.sidebar-project-sessions .sidebar-show-more { justify-content: flex-start; width: 100%; min-height: 1.75rem; padding-left: 1.375rem; font-size: var(--text-xs); }
+.sidebar-project-sessions .session-list-empty { margin: 0; padding: 0.5rem var(--space-sm); font-size: var(--text-sm); color: var(--ink-soft); }
+.sidebar-project-sessions .sidebar-show-more { justify-content: flex-start; width: 100%; min-height: 1.75rem; padding-left: var(--space-sm); font-size: var(--text-xs); }
 @media (pointer: coarse) { .sidebar-project-actions { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sidebar-project-toggle > svg:first-child { transition: none; } }

@@ -36,15 +36,17 @@ impl ToolVisibility {
         self.loaded_skill_order.clone()
     }
 
-    /// 清空本会话 skill 载入记录。
+    /// 清空本会话 skill 载入记录，以及只宣布过名称的预选记录。
     ///
-    /// 压缩后历史里的正文可能被剪掉，必须允许再次全文 load。
+    /// 压缩后历史里的正文和预选名单可能被剪掉，必须允许再次 load 或再次宣布。
     ///
     /// 返回:
     /// - 无
     pub(crate) fn clear_loaded_skills(&mut self) {
         self.loaded_skills.clear();
         self.loaded_skill_order.clear();
+        self.announced_tools.clear();
+        self.announced_skills.clear();
     }
 
     /// 加载多个 skill 文档；已在本会话 load 过的只回 already_loaded。

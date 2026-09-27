@@ -123,20 +123,15 @@ export function WorkspaceListView({
                   aria-label={expanded ? t(`Collapse ${name}`, `收起 ${name}`) : t(`Expand ${name}`, `展开 ${name}`)}
                   onClick={() => onToggleExpanded(workspace.workspace_id)}
                 >
-                  <ChevronRight size={14} data-open={expanded} />
+                  <ChevronRight className="workspace-chevron" size={14} data-open={expanded} />
+                  <SessionWorkspaceIcon isGitRepository={workspace.is_git_repository} size={14} />
                 </button>
                 <button
                   type="button"
                   className="workspace-tree-main"
                   aria-expanded={expanded}
-                  onClick={() => {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7368/ingest/77461c80-9be3-44e4-ac14-3725f6920049',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff618c'},body:JSON.stringify({sessionId:'ff618c',hypothesisId:'W',location:'workspace-list-view.tsx:workspace-row',message:'workspace row toggles sessions without activating',data:{workspaceId:workspace.workspace_id,expanded,active:workspace.active,activate:false},timestamp:Date.now()})}).catch(()=>{});
-                    // #endregion
-                    onToggleExpanded(workspace.workspace_id);
-                  }}
+                  onClick={() => onToggleExpanded(workspace.workspace_id)}
                 >
-                  <SessionWorkspaceIcon isGitRepository={workspace.is_git_repository} size={14} />
                   <span className="workspace-summary">
                     <strong>{name}</strong>
                     {running && <ActiveAgentIndicator />}

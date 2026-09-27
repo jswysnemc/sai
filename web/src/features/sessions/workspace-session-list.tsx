@@ -1,4 +1,6 @@
+import { useQuery } from "@tanstack/react-query";
 import type { MouseEvent } from "react";
+import { api } from "../../api/client";
 import type { WorkspaceSessions } from "../../api/contracts";
 import { formatRelativeTime } from "../../shared/format-relative-time";
 import { useI18n } from "../i18n/use-i18n";
@@ -24,6 +26,7 @@ type WorkspaceSessionListProps = {
  */
 export function WorkspaceSessionList({ workspace, runningSessions, now, onOpenSession, onContextMenu }: WorkspaceSessionListProps) {
   const { locale, t } = useI18n();
+  const sidebarIndex = useQuery({ queryKey: ["session-sidebar"], queryFn: () => api.sessionSidebar.read() });
   const sessions = [...workspace.sessions].sort((left, right) => right.updated_at.localeCompare(left.updated_at));
   if (sessions.length === 0) {
     return <p className="workspace-session-empty">{t("No sessions yet", "还没有会话")}</p>;
@@ -33,15 +36,21 @@ export function WorkspaceSessionList({ workspace, runningSessions, now, onOpenSe
       {sessions.map((session) => {
         const active = workspace.active && session.active;
         const running = runningSessions.has(sessionActivityKey(workspace.workspace_id, session.id));
+        const unread = Boolean(sidebarIndex.data?.unread[session.id]);
         return (
           <button
             key={sidebarSessionKey(workspace.workspace_id, session.id)}
             type="button"
-            className={active ? "workspace-session-item active" : "workspace-session-item"}
+            className={["workspace-session-item", active ? "active" : "", running ? "is-running" : "", unread ? "is-unread" : ""].filter(Boolean).join(" ")}
             aria-current={active ? "page" : undefined}
             onClick={() => onOpenSession(workspace.workspace_id, session.id, workspace.active, session.active)}
             onContextMenu={(event) => onContextMenu?.(session.id, session.title, event)}
           >
+            <i
+              className="session-guide"
+              aria-hidden={!(running || unread)}
+              aria-label={running ? t("Session is working", "会话正在工作") : unread ? t("Unread", "未读") : undefined}
+            />
             <span>{session.title}</span>
             {running && <ActiveAgentIndicator holder={session.holder} />}
             <small className="workspace-session-time" title={new Date(session.updated_at).toLocaleString(locale)}>{formatRelativeTime(session.updated_at, locale, now)}</small>

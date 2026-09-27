@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
-import type { ClipboardEvent, FormEvent, KeyboardEvent, PointerEvent } from "react";
+import type { ClipboardEvent, DragEvent, FormEvent, KeyboardEvent, PointerEvent } from "react";
 import { useOutsidePointerDown } from "../../../shared/hooks/use-outside-pointer-down";
 import {
   deleteAdjacentComposerAtom,
@@ -329,6 +329,50 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
   };
 
   /**
+   * 允许把图片或文件拖进编辑区：图片走附件，其余文件写成引用。
+   *
+   * @param event 拖放事件
+   * @returns 无返回值
+   */
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (props.disabled) return;
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  };
+
+  /**
+   * 把拖入的文件交给附件或插入为文件引用。
+   *
+   * @param event 拖放事件
+   * @returns 无返回值
+   */
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    const files = Array.from(event.dataTransfer.files);
+    if (files.length === 0 || props.disabled) return;
+    const editor = event.currentTarget;
+    const selection = readEditorTextSelection(editor) ?? { start: props.value.length, end: props.value.length };
+    event.preventDefault();
+    event.stopPropagation();
+    const images = files.filter((file) => file.type.startsWith("image/"));
+    const others = files.filter((file) => !file.type.startsWith("image/"));
+    if (images.length > 0 && props.onPasteImages) {
+      void props.onPasteImages(images, selection.start, selection.end).then((caret) => {
+        if (caret === undefined) return;
+        requestAnimationFrame(() => {
+          setEditorTextSelection(editor, caret);
+          ensureComposerCaretVisible(editor);
+        });
+      });
+    }
+    if (others.length === 0) return;
+    const mention = others.map((file) => `@${file.name}`).join(" ");
+    if (!insertEditorPlainText(editor, mention)) return;
+    const next = serializeComposerAtomEditor(editor);
+    props.onChange(next);
+  };
+
+  /**
    * 点击文件引用时选择完整 token，避免光标进入路径正文。
    *
    * @param event 指针按下事件
@@ -491,6 +535,8 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
         onPointerDown={handlePointerDown}
       />
     </div>

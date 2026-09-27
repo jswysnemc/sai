@@ -17,8 +17,6 @@ type DiffCodeViewProps = {
   wrap?: boolean;
 };
 
-const CONTEXT_LINES = 3;
-
 /**
  * 渲染适合工作区审阅的代码差异，共用行号、字符着色、上下文折叠与变更导航。
  * @param props 文件差异、语言、统一或并排布局及换行设置
@@ -30,7 +28,7 @@ export function DiffCodeView({ file, language, layout, wrap = true }: DiffCodeVi
   const highlights = useMemo(() => highlightDiffLines(file.lines, language), [file.lines, language]);
   const changes = useMemo(() => blocks.flatMap((block, index) => block.kind === "change" ? [index] : []), [blocks]);
   const foldable = useMemo(() => blocks.flatMap((block, index) =>
-    block.kind === "context" && block.lines.length > CONTEXT_LINES * 2 ? [index] : []), [blocks]);
+    block.kind === "context" && block.lines.length > 0 ? [index] : []), [blocks]);
   const [unfolded, setUnfolded] = useState<ReadonlySet<number>>(new Set());
   const [current, setCurrent] = useState(0);
   const changeRefs = useRef(new Map<number, HTMLDivElement>());
@@ -130,9 +128,12 @@ export function DiffCodeView({ file, language, layout, wrap = true }: DiffCodeVi
                 {detail && <code>{detail}</code>}
               </div>;
             }
-            const hiddenCount = block.kind === "context" ? Math.max(0, block.lines.length - CONTEXT_LINES * 2) : 0;
+            const hiddenCount = block.kind === "context" ? block.lines.length : 0;
             const folded = hiddenCount > 0 && !unfolded.has(index);
             const changeOrdinal = changes.indexOf(index);
+            const foldLabel = hiddenCount === 1
+              ? t("1 unmodified line", "1 行未修改")
+              : t(`${hiddenCount} unmodified lines`, `${hiddenCount} 行未修改`);
             return <div key={index} className={`review-diff-block ${block.kind}`}
               data-change={block.kind === "change" ? changeOrdinal : undefined}
               data-active={block.kind === "change" && ordinal === changeOrdinal ? "true" : undefined}
@@ -141,12 +142,18 @@ export function DiffCodeView({ file, language, layout, wrap = true }: DiffCodeVi
                 if (element) changeRefs.current.set(index, element);
                 else changeRefs.current.delete(index);
               }}>
-              <DiffCodeRows lines={folded ? block.lines.slice(0, CONTEXT_LINES) : block.lines} layout={layout} highlights={highlights} />
-              {hiddenCount > 0 && <Button variant="ghost" className="review-diff-fold" aria-expanded={!folded} onClick={() => toggleContext(index)}>
-                {folded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                {folded ? t(`Show ${hiddenCount} unchanged lines`, `展开 ${hiddenCount} 行上下文`) : t("Fold context", "折叠上下文")}
-              </Button>}
-              {folded && <DiffCodeRows lines={block.lines.slice(-CONTEXT_LINES)} layout={layout} highlights={highlights} />}
+              {folded ? (
+                <Button variant="ghost" className="review-diff-fold" aria-expanded={false} onClick={() => toggleContext(index)}>
+                  {foldLabel}
+                </Button>
+              ) : (
+                <>
+                  <DiffCodeRows lines={block.lines} layout={layout} highlights={highlights} />
+                  {hiddenCount > 0 && <Button variant="ghost" className="review-diff-fold" aria-expanded onClick={() => toggleContext(index)}>
+                    {t("Fold context", "折叠上下文")}
+                  </Button>}
+                </>
+              )}
             </div>;
           })}
         </div>

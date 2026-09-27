@@ -97,6 +97,9 @@ function resourcesOf(value: unknown, kind: JevExposedResource["kind"]): JevExpos
  * @returns 首句说明；没有定义时为空
  */
 function toolDetail(item: JsonRecord): string {
+  if (typeof item.description === "string" && item.description.trim()) {
+    return firstSentence(item.description);
+  }
   const definition = item.definition;
   if (!isRecord(definition)) return "";
   const functionDef = definition.function;
@@ -111,6 +114,9 @@ function toolDetail(item: JsonRecord): string {
  * @returns loaded、already_loaded 或空
  */
 function skillDetail(item: JsonRecord): string {
+  if (typeof item.description === "string" && item.description.trim()) {
+    return firstSentence(item.description);
+  }
   return typeof item.status === "string" ? item.status.trim() : "";
 }
 

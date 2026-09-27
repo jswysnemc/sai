@@ -166,6 +166,7 @@
 .editor-diff-gap {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
   width: 100%;
   min-height: 1.5rem;
@@ -175,7 +176,7 @@
   background: color-mix(in srgb, var(--ink) 3.5%, var(--paper));
   color: var(--ink-soft);
   font: 400 var(--text-xs)/1.4 var(--font-ui);
-  text-align: left;
+  text-align: center;
   cursor: pointer;
 }
 .editor-diff-gap:hover { background: color-mix(in srgb, var(--ink) 6%, var(--paper)); color: var(--ink); }

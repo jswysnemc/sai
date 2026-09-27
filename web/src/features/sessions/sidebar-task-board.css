@@ -129,7 +129,7 @@
 
 .sidebar-history .session-list {
   min-width: 0;
-  padding-left: 0.75rem;
+  padding-left: 0;
 }
 
 .sidebar-history > button:hover { color: var(--ink); }

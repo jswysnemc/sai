@@ -24,8 +24,8 @@ pub(crate) fn register_loader(registry: &mut ToolRegistry, deferred: &[String]) 
 
 /// 注册 Jev 暴露决策模式下的渐进网关。
 ///
-/// 该模式不在 `load` 描述中列出可加载目录，额外资源统一由 Jev 决定暴露，
-/// `load` 只用于重新读取已经暴露过的资源。
+/// 该模式不在 `load` 描述中列出可加载目录。预选已经带上工具 Schema，
+/// `load` 用来读取 skill 全文，也可以在压缩后重读 Schema 或文档。
 ///
 /// 参数:
 /// - `registry`: 已注册完整工具处理器的工具注册表
@@ -38,7 +38,7 @@ pub(crate) fn register_jev_loader(registry: &mut ToolRegistry, deferred: &[Strin
 }
 
 /// Jev 模式下 `load` 的描述。
-const JEV_LOADER_DESCRIPTION: &str = "Re-read tool schemas or skill documents that were already exposed in this conversation, for example after context compaction removed them. Set type to tool or skill and pass exact names in the keywords array. Do not use load to discover new capabilities; call request_capability instead. After a tool schema is available, call invoke_tool with its exact name and matching arguments.";
+const JEV_LOADER_DESCRIPTION: &str = "Read a skill document that Jev named by description, or re-read a tool schema or skill document after context compaction. Set type to tool or skill and pass exact names in the keywords array. Do not use load to discover new capabilities; call request_capability instead. After a tool schema is available, call invoke_tool with its exact name and matching arguments.";
 
 /// 按给定描述注册 `load`，存在延迟工具时同时注册 `invoke_tool`。
 ///

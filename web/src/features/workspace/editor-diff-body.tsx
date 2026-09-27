@@ -48,7 +48,9 @@ export function EditorDiffBody({ file, path, language, showHeader = true }: Edit
           segment={segment}
           trailing={index === lastGap}
           expanded={open.has(index)}
-          label={t(`${segment.count} unmodified lines`, `${segment.count} 行未修改`)}
+          label={segment.count === 1
+            ? t("1 unmodified line", "1 行未修改")
+            : t(`${segment.count} unmodified lines`, `${segment.count} 行未修改`)}
           onToggle={() => setOpen((current) => {
             const next = new Set(current);
             if (next.has(index)) next.delete(index);

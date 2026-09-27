@@ -72,8 +72,14 @@ impl ToolVisibility {
         }
         // 3. 剔除已暴露的资源
         crate::jev::pending_candidates(all, |candidate| match candidate.kind {
-            CandidateKind::Tool => self.is_tool_exposed(&candidate.name),
-            CandidateKind::Skill => self.loaded_skills.contains(&candidate.name),
+            CandidateKind::Tool => {
+                self.is_tool_exposed(&candidate.name)
+                    || self.announced_tools.contains(&candidate.name)
+            }
+            CandidateKind::Skill => {
+                self.loaded_skills.contains(&candidate.name)
+                    || self.announced_skills.contains(&candidate.name)
+            }
         })
     }
 
@@ -148,6 +154,69 @@ impl ToolVisibility {
             "Jev found no additional tool or skill for this need. Continue with the tools already available, or call request_capability again with a more specific description."
         } else {
             "Jev exposed the resources below. Call exposed tools through invoke_tool with the exact tool name and arguments matching the returned schema; do not call them directly. Follow the exposed skill documents when they apply. These resources stay exposed for the rest of the conversation."
+        };
+        Ok(serde_json::to_string_pretty(&json!({
+            "ok": true,
+            "router": "jev",
+            "tools": tools_json,
+            "skills": skills_json,
+            "instruction": instruction,
+        }))?)
+    }
+
+    /// 预选注入工具 Schema，skill 只注入名称和描述。
+    ///
+    /// 工具会记成已 load，之后可直接 invoke_tool。skill 离开后续预选候选，
+    /// 但不会记成已 load，模型要执行流程时仍调用 load 读取全文。
+    ///
+    /// 参数:
+    /// - `registry`: 当前完整工具注册表
+    /// - `selection`: Jev 选中的工具与 skill
+    /// - `config`: 当前应用配置
+    /// - `paths`: 应用目录路径集合
+    ///
+    /// 返回:
+    /// - 工具带 Schema、skill 只有名称和描述的 JSON 文本
+    pub(crate) fn announce_selection(
+        &mut self,
+        registry: &ToolRegistry,
+        selection: &Selection,
+        config: &AppConfig,
+        paths: &SaiPaths,
+    ) -> Result<String> {
+        let loaded = self.load_tools(registry, &selection.tools)?;
+        let tools_json = loaded
+            .newly_loaded_tools
+            .iter()
+            .filter_map(|name| {
+                registry
+                    .definition(name)
+                    .map(|definition| json!({"name": name, "definition": definition}))
+            })
+            .collect::<Vec<_>>();
+        let catalog = if config.skills.enabled && !selection.skills.is_empty() {
+            tools::visible_skill_catalog(config, paths).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let mut skills_json = Vec::new();
+        for name in &selection.skills {
+            if self.loaded_skills.contains(name) || self.announced_skills.contains(name) {
+                continue;
+            }
+            let Some(entry) = catalog.iter().find(|entry| entry.name == *name) else {
+                continue;
+            };
+            self.announced_skills.insert(name.clone());
+            skills_json.push(json!({
+                "name": entry.name,
+                "description": entry.description,
+            }));
+        }
+        let instruction = if tools_json.is_empty() && skills_json.is_empty() {
+            "Jev found no additional tool or skill for this need. Continue with the tools already available, or call request_capability again with a more specific description."
+        } else {
+            "Jev exposed the tool schemas below. Call those tools through invoke_tool with the exact name and arguments matching the schema. Listed skills include only a name and description; call load with type skill and that exact name before following the document."
         };
         Ok(serde_json::to_string_pretty(&json!({
             "ok": true,
@@ -272,5 +341,49 @@ mod tests {
             )
             .unwrap();
         assert!(output.contains("found no additional"));
+    }
+
+    #[test]
+    fn preselect_announces_name_and_description_without_the_document() {
+        let registry = registry();
+        let temp = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(temp.path());
+        let skill_dir = paths.skills_dir.join("design-taste-frontend");
+        std::fs::create_dir_all(&skill_dir).unwrap();
+        std::fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: design-taste-frontend\ndescription: Frontend design rules\n---\n\nFULL SKILL BODY THAT MUST STAY OUT\n",
+        )
+        .unwrap();
+        let config = AppConfig::default();
+        let mut visibility = ToolVisibility::with_jev_routing(&[]);
+        let selection = Selection {
+            tools: vec!["web_search".to_string()],
+            skills: vec!["design-taste-frontend".to_string()],
+        };
+        let output = visibility
+            .announce_selection(&registry, &selection, &config, &paths)
+            .unwrap();
+        let parsed = serde_json::from_str::<Value>(&output).unwrap();
+        assert_eq!(parsed["tools"][0]["name"], "web_search");
+        assert!(parsed["tools"][0]["definition"]["function"]["parameters"].is_object());
+        assert!(visibility.is_tool_exposed("web_search"));
+        assert_eq!(parsed["skills"][0]["name"], "design-taste-frontend");
+        assert_eq!(parsed["skills"][0]["description"], "Frontend design rules");
+        assert!(parsed["skills"][0].get("content").is_none());
+        assert!(!output.contains("FULL SKILL BODY"));
+        assert!(!visibility
+            .jev_candidates(&registry, &config, &paths)
+            .iter()
+            .any(|item| item.name == "design-taste-frontend" || item.name == "web_search"));
+
+        let loaded = visibility
+            .load_skills(
+                &["design-taste-frontend".to_string()],
+                &config,
+                &paths,
+            )
+            .unwrap();
+        assert!(loaded.contains("FULL SKILL BODY"));
     }
 }

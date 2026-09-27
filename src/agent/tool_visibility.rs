@@ -19,6 +19,10 @@ pub(crate) struct ToolVisibility {
     pub(super) loaded_skills: BTreeSet<String>,
     /// skill 首次被 load 的顺序
     pub(super) loaded_skill_order: Vec<String>,
+    /// 预选只宣布过名称和描述、尚未 load 的工具
+    pub(super) announced_tools: BTreeSet<String>,
+    /// 预选只宣布过名称和描述、尚未 load 的 skill
+    pub(super) announced_skills: BTreeSet<String>,
     /// DeepSeek Anchored Standard 是否控制当前会话的工具目录。
     anchor_enabled: bool,
     /// false 表示请求 #1 尚未产生持久 assistant/tool 信号。
@@ -42,6 +46,8 @@ impl ToolVisibility {
             loaded_order: Vec::new(),
             loaded_skills: BTreeSet::new(),
             loaded_skill_order: Vec::new(),
+            announced_tools: BTreeSet::new(),
+            announced_skills: BTreeSet::new(),
             anchor_enabled: false,
             anchor_promoted: false,
             jev_routing: false,

@@ -8,9 +8,10 @@ const largeFile: DiffFile = {
 };
 
 describe("diff file collapse state", () => {
-  it("大文件在初次渲染前就折叠，选中的大文件则直接展开", () => {
+  it("未选中的文件先收起，选中的文件直接展开", () => {
     expect(isDiffFileCollapsed(largeFile, new Map(), null)).toBe(true);
     expect(isDiffFileCollapsed(largeFile, new Map(), largeFile.path)).toBe(false);
+    expect(isDiffFileCollapsed({ ...largeFile, path: "small.ts", lines: largeFile.lines.slice(0, 2) }, new Map(), null)).toBe(true);
   });
   it("后续数据刷新保留用户明确设置的状态", () => {
     expect(isDiffFileCollapsed(largeFile, new Map([[largeFile.path, false]]), null)).toBe(false);

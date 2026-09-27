@@ -60,8 +60,8 @@ impl Agent {
                 return Ok(None);
             }
         };
-        // 3. 标记暴露并包装为注入块
-        match self.tool_visibility.expose_selection(
+        // 3. 工具带上 Schema，skill 只宣布名称和描述
+        match self.tool_visibility.announce_selection(
             &self.tools,
             &selection,
             &self.config,

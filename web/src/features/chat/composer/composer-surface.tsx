@@ -1,4 +1,4 @@
-import type { FormEvent, ReactNode } from "react";
+import { useState, type DragEvent, type FormEvent, type ReactNode } from "react";
 import { AttachmentStrip } from "./attachment-strip";
 import { ComposerTextarea } from "./composer-textarea";
 import type { ComposerAttachment } from "./use-composer-attachments";
@@ -48,16 +48,51 @@ export function ComposerSurface({
   onSubmit,
   children
 }: ComposerSurfaceProps) {
+  const [dragging, setDragging] = useState(false);
+
   /** 统一处理表单提交和输入区 Enter 提交。 */
   const submit = (event?: FormEvent) => {
     event?.preventDefault();
     if (!submitDisabled) onSubmit();
   };
 
+  /**
+   * 整块输入壳接受拖入，图片在编辑区之外落下时也记成附件。
+   *
+   * @param event 拖放事件
+   * @returns 无返回值
+   */
+  const handleDragOver = (event: DragEvent<HTMLFormElement>) => {
+    if (disabled || !event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setDragging(true);
+  };
+
+  /**
+   * 编辑区自己的 drop 会先停掉冒泡；落到壳上的图片仍走附件。
+   *
+   * @param event 拖放事件
+   * @returns 无返回值
+   */
+  const handleDrop = (event: DragEvent<HTMLFormElement>) => {
+    setDragging(false);
+    const files = Array.from(event.dataTransfer.files).filter((file) => file.type.startsWith("image/"));
+    if (disabled || files.length === 0 || !onPasteImages) return;
+    event.preventDefault();
+    void onPasteImages(files, value.length, value.length);
+  };
+
   return (
     <form
-      className={`composer-surface composer-surface-${variant}${className ? ` ${className}` : ""}`}
+      className={`composer-surface composer-surface-${variant}${dragging ? " is-dragover" : ""}${className ? ` ${className}` : ""}`}
       onSubmit={submit}
+      onDragOver={handleDragOver}
+      onDragLeave={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        setDragging(false);
+      }}
+      onDrop={handleDrop}
     >
       {attachments && onRemoveAttachment && (
         <AttachmentStrip attachments={attachments} onRemove={onRemoveAttachment} />
