@@ -1,3 +1,4 @@
+pub(super) use super::process_liveness::process_exists;
 use super::SubmissionSource;
 use crate::state::ActiveRunSummary;
 use anyhow::{bail, Result};
@@ -388,43 +389,6 @@ fn insert_process_run(session_id: &str, owner: SessionOwner) -> Result<()> {
 fn release_process_run(session_id: &str) {
     if let Ok(mut runs) = active_runs().lock() {
         runs.remove(session_id);
-    }
-}
-
-/// 判断进程是否仍存在。
-///
-/// 参数:
-/// - `pid`: 进程 ID
-///
-/// 返回:
-/// - 是否存在
-pub(super) fn process_exists(pid: u32) -> bool {
-    if pid == 0 {
-        return false;
-    }
-    if pid == std::process::id() {
-        return true;
-    }
-    #[cfg(unix)]
-    {
-        if pid > i32::MAX as u32 {
-            return false;
-        }
-        let status = unsafe { libc::kill(pid as i32, 0) };
-        status == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
-    }
-    #[cfg(windows)]
-    {
-        std::process::Command::new("tasklist")
-            .args(["/FI", &format!("PID eq {pid}"), "/NH"])
-            .output()
-            .map(|output| String::from_utf8_lossy(&output.stdout).contains(&pid.to_string()))
-            .unwrap_or(false)
-    }
-    #[cfg(not(any(unix, windows)))]
-    {
-        let _ = pid;
-        false
     }
 }
 

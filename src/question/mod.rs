@@ -1,8 +1,9 @@
+mod attachments;
 mod broker;
 
 pub(crate) use broker::{
-    answer_question, cancel_question, discard_pending_questions_for_session, pending_questions,
-    request_question, resolve_question, PendingQuestion,
+    answer_question_with_images, cancel_question, discard_pending_questions_for_session,
+    pending_questions, request_question, resolve_question, PendingQuestion,
 };
 
 use anyhow::{bail, Context, Result};
@@ -90,6 +91,10 @@ pub type QuestionAnswers = Vec<Vec<String>>;
 #[serde(tag = "status", content = "data", rename_all = "snake_case")]
 pub enum QuestionResponse {
     Answered(QuestionAnswers),
+    AnsweredWithImages {
+        answers: QuestionAnswers,
+        image_urls: Vec<Vec<String>>,
+    },
     Cancelled,
     Unavailable(String),
 }

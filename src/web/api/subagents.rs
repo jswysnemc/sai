@@ -86,8 +86,14 @@ fn subagent_sse_event(event: &crate::tools::subagent_event::SubagentStreamEvent)
 /// 返回:
 /// - 归属当前会话的子智能体快照
 async fn list(State(state): State<WebAppState>) -> WebResult<Json<Vec<SubagentSnapshot>>> {
-    let store = crate::state::StateStore::new(&state.paths).map_err(WebError::from)?;
-    let owner_key = store.state_dir().display().to_string();
+    let Some(session) =
+        crate::state::active_session_if_present(&state.paths).map_err(WebError::from)?
+    else {
+        return Ok(Json(Vec::new()));
+    };
+    let (_, directory) =
+        crate::state::locate_session_dirs(&state.paths, &session.id).map_err(WebError::from)?;
+    let owner_key = directory.display().to_string();
     Ok(Json(list_subagents_for_owner(&owner_key)))
 }
 

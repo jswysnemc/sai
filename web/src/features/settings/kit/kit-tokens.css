@@ -15,7 +15,7 @@
   --sk-panel-gap: 1.25rem;
   /* 对象列表宽度 */
   --sk-list-width: 15.5rem;
-  /* 表单类页面的内容最大宽度 */
+  /* 全部设置分区共用的内容最大宽度 */
   --sk-form-max: 80rem;
   /* 开关尺寸 */
   --sk-switch-w: 1.75rem;

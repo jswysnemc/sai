@@ -254,12 +254,8 @@ async fn session_probe_finds_an_empty_open_session_in_another_workspace() {
 
     crate::runtime_cwd::scope(cwd.clone(), async {
         let (local, _) = session_in(&paths, &cwd, "local");
-        let foreign_sessions = crate::state::list_sessions_for_workspace(&paths, &other).unwrap();
-        let foreign = foreign_sessions
-            .iter()
-            .find(|session| session.id == "default")
-            .cloned()
-            .expect("opening a workspace creates the default session before any prompt");
+        let foreign =
+            crate::state::create_session_for_workspace(&paths, &other, Some("Empty")).unwrap();
         let foreign_dir =
             crate::state::state_dir_for_workspace_session(&paths, &other, &foreign.id)
                 .unwrap()

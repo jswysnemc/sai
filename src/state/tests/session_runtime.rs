@@ -130,7 +130,7 @@ fn sessions_have_isolated_conversations() {
         .complete_turn("turn_work", "work reply", None)
         .unwrap();
 
-    switch_session(&paths, "default").unwrap();
+    switch_session(&paths, default_store.session_id()).unwrap();
     let default_store = StateStore::new(&paths).unwrap();
     let default_history = default_store.load_conversation().unwrap();
 

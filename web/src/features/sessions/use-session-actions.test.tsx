@@ -66,6 +66,26 @@ function setup() {
 }
 
 describe("会话切换并发", () => {
+  it("创建后立即打开新会话，不等待旧列表和历史刷新", async () => {
+    const test = setup();
+    test.client.setQueryData(["config"], { config: { agent: { engine: "native" } } });
+    const session: Session = { id: "new", title: "New session", active: true, created_at: "now", updated_at: "now" };
+    vi.spyOn(api.sessions, "create").mockResolvedValue(session);
+    const gate = deferred();
+    vi.mocked(api.sessions.list).mockImplementation(async () => {
+      await gate.promise;
+      return [...test.tree()[0].sessions, session];
+    });
+    const created = test.actions.create.mutateAsync(undefined);
+    try {
+      await vi.waitFor(() => expect(test.displayedId()).toBe("new"), { timeout: 300 });
+      expect(test.onNavigate).toHaveBeenCalled();
+    } finally {
+      gate.resolve();
+      await created;
+    }
+  });
+
   it("快速选择 B、C 时，当前标签页保留最后选择且不修改服务端指针", async () => {
     const test = setup();
     const first = test.actions.openSession("workspace", "B", true, false);

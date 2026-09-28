@@ -3,6 +3,7 @@ import { FileTypeIcon } from "../../shared/ui/file-icon";
 import { fileNameForLanguage } from "../../shared/ui/material-icons";
 import { memo, useEffect, useState } from "react";
 import { SyntaxHighlighter } from "./syntax-highlighter";
+import { isTreeCode, MarkdownTreeCode } from "./markdown-tree-code";
 import { useI18n } from "../i18n/use-i18n";
 import {
   DEFAULT_MARKDOWN_STYLE_PREFERENCES,
@@ -80,7 +81,9 @@ export const MarkdownCodeBlock = memo(function MarkdownCodeBlock({
           </span>
         </div>
       )}
-      <pre><SyntaxHighlighter language={language} source={source} showLineNumbers={style.lineNumbers} /></pre>
+      <pre>{isTreeCode(source)
+        ? <MarkdownTreeCode source={source} showLineNumbers={style.lineNumbers} />
+        : <SyntaxHighlighter language={language} source={source} showLineNumbers={style.lineNumbers} />}</pre>
     </div>
   );
 });

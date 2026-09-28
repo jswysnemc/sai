@@ -1,8 +1,7 @@
-use super::model::{SessionInfo, DEFAULT_SESSION_ID};
+use super::model::SessionInfo;
 use super::repository::sort_sessions;
 use super::repository_paths::{current_session_file, sessions_file};
 use anyhow::{Context, Result};
-use chrono::Utc;
 use std::path::Path;
 
 #[cfg(test)]
@@ -21,28 +20,12 @@ pub(crate) fn session_index_io_counts() -> (usize, usize) {
     )
 }
 
-/// 【会话索引】【默认会话】确保默认会话存在，已有索引保持只读。
-///
-/// 参数:
-/// - `base_state_dir`: 工作区会话作用域目录
-///
-/// 返回:
-/// - 会话列表
-pub(super) fn ensure_default_session_for_base(base_state_dir: &Path) -> Result<Vec<SessionInfo>> {
-    std::fs::create_dir_all(base_state_dir)?;
+/// 【会话索引】【只读列表】读取并排序会话，空工作区保持为空。
+/// @param base_state_dir 工作区会话目录
+/// @returns 按更新时间排列的已有会话，不创建记录或目录
+pub(super) fn read_sorted_sessions(base_state_dir: &Path) -> Result<Vec<SessionInfo>> {
     let mut sessions = read_sessions_from_base(base_state_dir)?;
-    let missing_default = !sessions
-        .iter()
-        .any(|session| session.id == DEFAULT_SESSION_ID);
-    if missing_default {
-        let now = Utc::now().to_rfc3339();
-        sessions.push(SessionInfo::default_with_time(&now));
-    }
     sort_sessions(&mut sessions);
-    // 1. 【会话索引】【只读列表】已有索引只在需要补默认会话时写入
-    if missing_default {
-        save_sessions_to_base(base_state_dir, &sessions)?;
-    }
     Ok(sessions)
 }
 
@@ -55,11 +38,11 @@ pub(super) fn ensure_default_session_for_base(base_state_dir: &Path) -> Result<V
 /// - 当前会话 ID
 pub(super) fn read_current_session_id_from_base(base_state_dir: &Path) -> Result<String> {
     let file = current_session_file(base_state_dir);
-    if !file.exists() {
-        write_current_session_id_to_base(base_state_dir, DEFAULT_SESSION_ID)?;
-        return Ok(DEFAULT_SESSION_ID.to_string());
-    }
-    let value = std::fs::read_to_string(file)?;
+    let value = match std::fs::read_to_string(file) {
+        Ok(value) => value,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(String::new()),
+        Err(error) => return Err(error.into()),
+    };
     Ok(value.trim().to_string())
 }
 

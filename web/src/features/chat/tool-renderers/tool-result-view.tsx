@@ -6,6 +6,8 @@ import { parseJevCapability } from "./jev-capability-data";
 import { ReadToolView } from "./read-tool-view";
 import { ShellToolView } from "./shell-tool-view";
 import { ImageGenerationToolView } from "./image-generation-tool-view";
+import { parseQuestionTool } from "../../question/question-tool-data";
+import { QuestionToolView } from "../../question/question-tool-view";
 
 type ToolResultViewProps = {
   name: string;
@@ -22,6 +24,10 @@ type ToolResultViewProps = {
  * @returns 工具结果视图
  */
 export function ToolResultView({ name, argumentsText, output, headerPath, workspacePath }: ToolResultViewProps) {
+  if (name === "ask_question" || name === "request_user_input") {
+    const data = parseQuestionTool(argumentsText, output);
+    if (data) return <QuestionToolView data={data} />;
+  }
   if (name === "request_capability") {
     const exposure = parseJevCapability(output);
     if (exposure) return <JevCapabilityView argumentsText={argumentsText} exposure={exposure} />;

@@ -135,7 +135,6 @@
   margin: 0 auto;
 }
 
-.settings-main-content[data-layout="wide"] { max-width: none; }
 
 .settings-error,
 .settings-state {

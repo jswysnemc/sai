@@ -7,7 +7,7 @@
 
 .sk-master-detail {
   display: grid;
-  grid-template-columns: var(--sk-list-width) minmax(0, 1fr);
+  grid-template-columns: minmax(11rem, min(22%, var(--sk-list-width))) minmax(0, 1fr);
   align-items: start;
   min-width: 0;
 }

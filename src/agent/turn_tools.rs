@@ -332,98 +332,31 @@ impl Agent {
                             messages.push(ChatMessage::tool(call.id, output));
                             continue;
                         }
-                        let request =
-                            match crate::question::QuestionRequest::parse(&call.function.arguments)
-                            {
-                                Ok(request) => request,
-                                Err(err) => {
-                                    let output =
-                                        format!("tool error: invalid ask_question request: {err}");
-                                    repeat_guard.observe_rejected(
-                                        &call.function.name,
-                                        &call.function.arguments,
-                                    );
-                                    self.record_simple_tool_result(
-                                        turn_id,
-                                        recorded_call,
-                                        false,
-                                        &output,
-                                    )?;
-                                    on_event(AgentEvent::ToolResult {
-                                        name: call.function.name.clone(),
-                                        ok: false,
-                                        output: output.clone(),
-                                    })?;
-                                    messages.push(ChatMessage::tool(call.id, output));
-                                    continue;
-                                }
-                            };
-                        let (pending, response_rx) =
-                            crate::question::request_question(self.session_id(), request.clone());
-                        let request_id = pending.id.clone();
-                        on_event(AgentEvent::QuestionRequested(pending))?;
-                        let response = response_rx
-                            .await
-                            .unwrap_or(crate::question::QuestionResponse::Cancelled);
-                        on_event(AgentEvent::QuestionResolved {
-                            request_id,
-                            response: response.clone(),
-                        })?;
-                        let output = match response {
-                            crate::question::QuestionResponse::Answered(answers) => {
-                                match crate::question::QuestionExchange::new(request, answers) {
-                                    Ok(exchange) => {
-                                        crate::question::answered_tool_output(&exchange)
-                                    }
-                                    Err(err) => {
-                                        let output = format!(
-                                            "tool error: invalid ask_question answers: {err}"
-                                        );
-                                        self.record_simple_tool_result(
-                                            turn_id,
-                                            recorded_call,
-                                            false,
-                                            &output,
-                                        )?;
-                                        on_event(AgentEvent::ToolResult {
-                                            name: call.function.name.clone(),
-                                            ok: false,
-                                            output: output.clone(),
-                                        })?;
-                                        messages.push(ChatMessage::tool(call.id, output));
-                                        continue;
-                                    }
-                                }
-                            }
-                            crate::question::QuestionResponse::Cancelled => {
-                                let output = crate::question::unavailable_tool_output(
-                                    "user cancelled the question",
-                                );
-                                self.record_simple_tool_result(
-                                    turn_id,
-                                    recorded_call,
-                                    false,
-                                    &output,
-                                )?;
-                                on_event(AgentEvent::ToolResult {
-                                    name: call.function.name.clone(),
-                                    ok: false,
-                                    output: output.clone(),
-                                })?;
-                                messages.push(ChatMessage::tool(call.id, output));
-                                continue;
-                            }
-                            crate::question::QuestionResponse::Unavailable(reason) => {
-                                crate::question::unavailable_tool_output(&reason)
-                            }
-                        };
-                        self.record_simple_tool_result(turn_id, recorded_call, true, &output)?;
+                        let execution = self
+                            .execute_question(&call.function.arguments, on_event)
+                            .await?;
+                        if execution.failed {
+                            repeat_guard
+                                .observe_rejected(&call.function.name, &call.function.arguments);
+                        }
+                        self.record_simple_tool_result(
+                            turn_id,
+                            recorded_call,
+                            !execution.failed,
+                            &execution.output,
+                        )?;
+                        self.state.record_tool_result_images(
+                            turn_id,
+                            &recorded_call.id,
+                            &execution.model_attachments,
+                        )?;
                         on_event(AgentEvent::ToolResult {
                             name: call.function.name.clone(),
-                            ok: true,
-                            output: output.clone(),
+                            ok: !execution.failed,
+                            output: execution.output.clone(),
                         })?;
-                        messages.push(ChatMessage::tool(call.id, output));
+                        messages.push(ChatMessage::tool(call.id, execution.output));
+                        round_model_attachments.extend(execution.model_attachments);
                         continue;
                     }
                     if defer_sibling_tools {

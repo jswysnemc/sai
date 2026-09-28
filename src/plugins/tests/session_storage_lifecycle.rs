@@ -22,6 +22,7 @@ async fn session_deletion_cleans_plugin_scopes_without_touching_other_workspaces
     ];
     for work in &workspaces {
         std::fs::create_dir(work).unwrap();
+        crate::state::ensure_workspace_session(&paths, work, "default", "Fixture").unwrap();
         let store = StateStore::for_workspace_session(&paths, work, "default").unwrap();
         let scope = store.state_dir().display().to_string();
         for host in &hosts {

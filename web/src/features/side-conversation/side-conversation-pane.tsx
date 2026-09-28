@@ -1,20 +1,16 @@
-import { ArrowRight, MessageSquareText, Paperclip, Square } from "../../shared/ui/icons";
+import { MessageSquareText } from "../../shared/ui/icons";
 import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { RunMode, RunModelSelection } from "../../api/contracts";
-import { Select } from "../../shared/ui/select/select";
 import { LiveRunMessage } from "../chat/chat-message";
-import { ComposerSurface } from "../chat/composer/composer-surface";
-import { ModelThinkingSelector } from "../chat/model-thinking-selector";
-import { createRunModeOptions } from "../permission/run-mode-options";
 import { useChatModel } from "../chat/use-chat-model";
 import { useRunStream } from "../chat/use-run-stream";
 import { useComposerAttachments } from "../chat/composer/use-composer-attachments";
 import { useI18n } from "../i18n/use-i18n";
 import { composeSideConversationInput } from "./side-conversation-context";
 import { SIDE_CONVERSATION_SESSION_PREFIX, type SideConversationRequest } from "./side-conversation-events";
+import { SideConversationComposer } from "./side-conversation-composer";
 import "./side-conversation-pane.css";
 
 type SideConversationPaneProps = {
@@ -39,13 +35,13 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
   const composerAttachments = useComposerAttachments(`side:${request.id}`);
   const sessionRef = useRef<string | undefined>(undefined);
   const activeRunRef = useRef<string | undefined>(undefined);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const submittingRef = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
   const modelPreferences = useChatModel(`side:${request.id}`);
   const effectiveModelSelection = modelSelection ?? modelPreferences.selection;
   const selectedModel = effectiveModelSelection
     ? modelPreferences.choices.find((choice) => choice.providerId === effectiveModelSelection.providerId && choice.model === effectiveModelSelection.model) ?? null
     : null;
-  const runModeOptions = createRunModeOptions(t);
   const run = useRunStream(request.workspaceId, sessionId, () => undefined);
   const activeRun = run.states.find((state) => !state.completed);
 
@@ -94,7 +90,9 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
   const submit = async () => {
     const question = input.trim();
     const attachments = composerAttachments.attachments;
-    if ((!question && attachments.length === 0) || activeRun) return;
+    if ((!question && attachments.length === 0) || activeRun || submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
     setError(null);
     setInput("");
     try {
@@ -118,22 +116,24 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
     } catch (cause) {
       setInput(question);
       setError(toDisplayError(cause, "Failed to start side conversation", "旁路对话启动失败").message);
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   };
 
   /**
-   * 读取文件选择器中的图片并交给统一附件状态。
-   *
-   * @param event 文件输入变更事件
-   * @returns 无返回值
+   * 统一处理文件选择、粘贴及拖入图片的失败反馈。
+   * @param files 图片文件；start 和 end 为编辑器选区
+   * @returns 添加成功后的光标位置，失败时返回 undefined
    */
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
-    if (files.length === 0) return;
-    void composerAttachments.addFiles(files, input.length, input.length).catch((cause) => {
+  const addImages = async (files: File[], start: number, end: number): Promise<number | undefined> => {
+    try {
+      return await composerAttachments.addFiles(files, start, end);
+    } catch (cause) {
       setError(toDisplayError(cause, "Failed to add image", "添加图片失败").message);
-    });
+      return undefined;
+    }
   };
 
   return (
@@ -157,72 +157,18 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
         ))}
         {error && <div className="side-conversation-error" role="alert">{error}</div>}
       </div>
-      <ComposerSurface
-        variant="compact"
-        className="composer side-conversation-composer"
-        value={input}
-        historyEntries={[]}
-        disabled={Boolean(activeRun)}
-        submitDisabled={(!input.trim() && composerAttachments.attachments.length === 0) || Boolean(activeRun)}
-        placeholder={t("Ask a question about this response", "针对这条回复提问")}
-        attachments={composerAttachments.attachments}
-        onChange={setInput}
-        onPasteImages={composerAttachments.addFiles}
-        onRemoveAttachment={composerAttachments.removeAttachment}
-        onSubmit={() => void submit()}
-      >
-        <div className="composer-footer">
-          <div className="composer-toolrail">
-            <div className="composer-model-group">
-              <ModelThinkingSelector
-                choices={modelPreferences.choices}
-                selection={selectedModel}
-                thinkingLevel={thinkingLevel}
-                thinkingLevels={modelPreferences.thinkingLevels}
-                loading={modelPreferences.isLoading}
-                disabled={Boolean(activeRun)}
-                onModelSelect={setModelSelection}
-                onThinkingLevelChange={setThinkingLevel}
-              />
-              <div className="composer-mode">
-                <Select
-                  value={mode}
-                  options={runModeOptions}
-                  disabled={Boolean(activeRun)}
-                  ariaLabel={t("Run mode", "运行模式")}
-                  menuPreferredWidth={240}
-                  menuMinimumWidth={200}
-                  menuAlign="left"
-                  menuClassName="run-mode-menu"
-                  onChange={setMode}
-                />
-              </div>
-            </div>
-          </div>
-          <div className="composer-actions">
-            <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileChange} hidden />
-            <button
-              type="button"
-              className="composer-icon-button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={Boolean(activeRun)}
-              aria-label={t("Add images", "添加图片")}
-              title={t("Add images", "添加图片")}
-            >
-              <Paperclip size={16} />
-            </button>
-            {activeRun ? (
-              <button type="button" className="composer-send stop" onClick={() => activeRun.runId && void run.stop(activeRun.runId)} aria-label={t("Stop", "停止")} title={t("Stop", "停止")}>
-                <Square size={12} fill="currentColor" />
-              </button>
-            ) : (
-              <button className="composer-send" type="submit" disabled={!input.trim()} aria-label={t("Send", "发送")} title={t("Send", "发送")}>
-                <ArrowRight size={16} />
-              </button>
-            )}
-          </div>
-        </div>
-      </ComposerSurface>
+      <SideConversationComposer
+        value={input} attachments={composerAttachments.attachments}
+        running={Boolean(activeRun)} submitting={submitting} mode={mode} onModeChange={setMode}
+        onChange={setInput} onPasteImages={addImages} onRemoveAttachment={composerAttachments.removeAttachment}
+        onSubmit={() => void submit()} onStop={() => { if (activeRun?.runId) void run.stop(activeRun.runId); }}
+        model={{
+          choices: modelPreferences.choices, selection: selectedModel, thinkingLevel,
+          thinkingLevels: modelPreferences.thinkingLevels, loading: modelPreferences.isLoading,
+          disabled: Boolean(activeRun) || submitting, onModelSelect: setModelSelection,
+          onThinkingLevelChange: setThinkingLevel
+        }}
+      />
     </section>
   );
 }

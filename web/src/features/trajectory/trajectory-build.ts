@@ -8,7 +8,8 @@ import type {
 } from "../../api/contracts";
 import type { SubagentDetail } from "../../api/contracts";
 import type { TrajectoryRecord, TrajectoryRecordKind } from "./trajectory-record";
-import { summarizeContent, summarizeJevExposure, summarizeToolArguments } from "./trajectory-format";
+import { summarizeContent, summarizeToolArguments } from "./trajectory-format";
+import { trajectoryInjections } from "./trajectory-injections";
 import { subagentIdFromOutput, subagentRecords } from "./trajectory-subagent";
 
 /** 构建产物：扁平记录表与按轮次归并的请求边界。 */
@@ -106,20 +107,20 @@ export function buildTrajectory(
       }
     });
 
-    if (turn.injected_content?.trim()) {
+    for (const injection of trajectoryInjections(turn.injected_content ?? "")) {
       push({
-        id: `${turn.turn_id}/injected`,
+        id: `${turn.turn_id}/${injection.id}`,
         kind: "message",
         turnId: turn.turn_id,
         turnSeq: turn.seq,
         round: 0,
-        summary: summarizeJevExposure(turn.injected_content) ?? summarizeContent(turn.injected_content),
-        label: injectedLabel(turn.injected_content),
+        summary: injection.summary,
+        label: injection.label,
         startedAt: parseTimestamp(turn.user.timestamp),
         durationMs: null,
         failed: false,
         running: false,
-        detail: { input: turn.injected_content }
+        detail: { input: injection.content, jevExposure: injection.exposure }
       });
     }
 
@@ -433,18 +434,6 @@ function contentToText(content: unknown): string {
     })
     .filter(Boolean)
     .join("\n");
-}
-
-/** 根据注入正文里的标签给出短标签。 */
-function injectedLabel(content: string): string {
-  const tags: string[] = [];
-  if (content.includes("<context-state")) tags.push("context-state");
-  if (content.includes("instruction_files") || content.includes("<instruction-files")) tags.push("AGENT.md");
-  if (content.includes("<context-resource")) tags.push("resource");
-  if (content.includes("<memory")) tags.push("memory");
-  if (content.includes("<mode-instructions")) tags.push("mode");
-  if (content.includes("<jev-exposed-capabilities")) tags.push("jev");
-  return tags.join(" · ") || "inject";
 }
 
 /**

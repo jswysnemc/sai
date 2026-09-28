@@ -1,4 +1,4 @@
-use super::super::model::{SessionInfo, DEFAULT_SESSION_ID};
+use super::super::model::SessionInfo;
 use chrono::Utc;
 
 /// 生成新会话 ID。
@@ -29,7 +29,7 @@ pub(in crate::state::sessions) fn sanitize_session_id(session_id: &str) -> Strin
         .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
         .collect::<String>();
     if value.is_empty() {
-        DEFAULT_SESSION_ID.to_string()
+        "invalid_session".to_string()
     } else {
         value
     }
@@ -67,12 +67,8 @@ pub(super) fn title_from_message(message: &str, fallback: &str) -> String {
 /// - 无
 pub(in crate::state::sessions) fn sort_sessions(sessions: &mut [SessionInfo]) {
     sessions.sort_by(|a, b| {
-        if a.id == DEFAULT_SESSION_ID {
-            std::cmp::Ordering::Greater
-        } else if b.id == DEFAULT_SESSION_ID {
-            std::cmp::Ordering::Less
-        } else {
-            b.updated_at.cmp(&a.updated_at)
-        }
+        b.updated_at
+            .cmp(&a.updated_at)
+            .then_with(|| a.id.cmp(&b.id))
     });
 }

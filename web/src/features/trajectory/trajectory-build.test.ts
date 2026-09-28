@@ -433,7 +433,7 @@ describe("buildTrajectory 的思考与注入", () => {
     ]));
 
     const injected = model.records.find((record) => record.kind === "message");
-    expect(injected?.label).toBe("jev");
+    expect(injected?.label).toBe("Jev");
     expect(injected?.summary).toBe("web_search, skill:drawio");
     expect(injected?.summary).not.toContain("full document");
   });

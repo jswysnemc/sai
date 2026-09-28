@@ -327,8 +327,8 @@ async fn rename(
     let session = crate::state::rename_session(&state.paths, &id, &request.title)
         .map_err(|error| WebError::bad_request(error.to_string()))?;
     let workspace = state.workspaces.active().map_err(WebError::from)?;
-    let active = crate::state::active_session(&state.paths).map_err(WebError::from)?;
-    let selected = session.id == active.id;
+    let active = crate::state::active_session_if_present(&state.paths).map_err(WebError::from)?;
+    let selected = active.is_some_and(|active| session.id == active.id);
     Ok(Json(session_response(
         &state.paths,
         FilePath::new(&workspace.path),

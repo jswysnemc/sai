@@ -1,4 +1,5 @@
 import type { PermissionDecision, TurnUsage } from "../../api/contracts";
+import type { JevCapabilityExposure } from "../chat/tool-renderers/jev-capability-data";
 
 /** 轨迹记录的种类；决定行标签与配色。 */
 export type TrajectoryRecordKind =
@@ -48,6 +49,8 @@ export type TrajectoryRecord = {
 
 /** 展开详情时才使用的完整内容，列表渲染不读取。 */
 export type TrajectoryRecordDetail = {
+  /** 发送前 Jev 决策的结构化结果 */
+  jevExposure?: JevCapabilityExposure;
   /** 请求侧完整内容：用户输入、助手正文或工具入参 */
   input?: string;
   /** 入参是否为 JSON，决定详情面板是否格式化 */

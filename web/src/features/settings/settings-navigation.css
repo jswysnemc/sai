@@ -93,8 +93,8 @@ a.settings-back {
 .settings-navigation a:focus-visible { outline: none; box-shadow: var(--ring-focus); }
 
 /* 未保存标记：导航项右侧的警示色圆点 */
-.settings-nav-dirty {
-  flex: none;
+.settings-navigation a > .settings-nav-dirty {
+  flex: 0 0 0.375rem;
   width: 0.375rem;
   height: 0.375rem;
   border-radius: var(--radius-circle);

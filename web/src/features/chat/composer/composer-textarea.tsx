@@ -9,7 +9,8 @@ import {
   renderComposerAtomEditor,
   selectComposerAtom,
   serializeComposerAtomEditor,
-  setEditorTextSelection
+  setEditorTextSelection,
+  syncEditorTrailingBreak
 } from "./composer-atom-editor";
 import { findFileMentionTrigger, formatFileMention } from "./file-mention-token";
 import { FileMentionPopover } from "./file-mention-popover";
@@ -263,6 +264,7 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
     const editor = event.currentTarget;
     const previous = lastSnapshotRef.current;
     const next = serializeComposerAtomEditor(editor);
+    syncEditorTrailingBreak(editor);
     const selection = readEditorTextSelection(editor) ?? { start: next.length, end: next.length };
     // 1. 记录用户输入产生的变更，供 Ctrl+Z / Ctrl+Y 使用
     editHistoryRef.current.record(previous, { value: next, selection });

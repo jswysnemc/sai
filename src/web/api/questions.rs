@@ -1,7 +1,7 @@
 use super::super::app_state::WebAppState;
 use super::super::error::{WebError, WebResult};
 use crate::question::{
-    answer_question, cancel_question, pending_questions, QuestionAnswers, QuestionResponse,
+    answer_question_with_images, cancel_question, pending_questions, QuestionAnswers,
 };
 use axum::extract::Path;
 use axum::routing::{get, post};
@@ -15,6 +15,8 @@ struct QuestionAnswerRequest {
     answers: Option<QuestionAnswers>,
     #[serde(default)]
     cancelled: bool,
+    #[serde(default)]
+    image_urls: Vec<Vec<String>>,
 }
 
 /// 返回结构化提问路由。
@@ -22,6 +24,7 @@ pub(super) fn routes() -> Router<WebAppState> {
     Router::new()
         .route("/api/questions/session/:id", get(list))
         .route("/api/questions/:id/answer", post(answer))
+        .layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024))
 }
 
 /// 返回会话当前等待处理的提问。
@@ -43,7 +46,6 @@ async fn answer(
             "answers are required unless cancelled",
         ));
     };
-    answer_question(&id, answers).map_err(WebError::from)?;
-    let _ = QuestionResponse::Answered(vec![]);
+    answer_question_with_images(&id, answers, request.image_urls).map_err(WebError::from)?;
     Ok(Json(json!({ "accepted": true, "status": "answered" })))
 }

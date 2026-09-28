@@ -21,17 +21,17 @@ mod tests {
     }
 
     #[test]
-    fn default_session_uses_workspace_state_dir() {
+    fn explicit_active_session_uses_workspace_state_dir() {
         let temp = tempfile::tempdir().unwrap();
         let paths = test_paths(temp.path().to_path_buf());
 
         let session = ensure_active_session(&paths).unwrap();
         let scope_dir = session_scope_dir(&paths).unwrap();
 
-        assert_eq!(session.id, DEFAULT_SESSION_ID);
+        assert_ne!(session.id, "default");
         assert_eq!(
-            active_state_dir(&paths).unwrap(),
-            scope_dir.join("data").join(DEFAULT_SESSION_ID)
+            state_dir_for_session(&paths, &session.id).unwrap(),
+            scope_dir.join("data").join(&session.id)
         );
     }
 
@@ -44,7 +44,9 @@ mod tests {
         let active = ensure_active_session(&paths).unwrap();
 
         assert_eq!(active.id, session.id);
-        assert!(active_state_dir(&paths).unwrap().ends_with(&session.id));
+        assert!(state_dir_for_session(&paths, &session.id)
+            .unwrap()
+            .ends_with(&session.id));
     }
 
     #[test]
@@ -88,53 +90,22 @@ mod tests {
         );
     }
 
+    /// 【会话管理】【删除回退】删除当前会话只选择已有会话，删除最后一条后保持空列表。
+    /// @returns 无；无外部参数
     #[test]
-    fn delete_active_session_switches_to_default() {
-        let temp = tempfile::tempdir().unwrap();
-        let paths = test_paths(temp.path().to_path_buf());
-        let session = create_session(&paths, Some("Work")).unwrap();
-
-        assert!(delete_session(&paths, &session.id).unwrap());
-
-        assert_eq!(
-            ensure_active_session(&paths).unwrap().id,
-            DEFAULT_SESSION_ID
-        );
-    }
-
-    #[test]
-    fn allows_deleting_default_and_all_sessions() {
-        let temp = tempfile::tempdir().unwrap();
-        let paths = test_paths(temp.path().to_path_buf());
-        let first = create_session(&paths, Some("First")).unwrap();
-        let default_id = DEFAULT_SESSION_ID.to_string();
-        let deleted = delete_sessions(&paths, &[first.id.clone(), default_id.clone()]).unwrap();
-        assert!(deleted.contains(&first.id));
-        assert!(deleted.contains(&default_id));
-        // 删空后 ensure 会补回空白默认会话
-        let active = ensure_active_session(&paths).unwrap();
-        assert_eq!(active.id, DEFAULT_SESSION_ID);
-        assert_eq!(list_sessions(&paths).unwrap().len(), 1);
-    }
-
-    #[test]
-    fn deletes_multiple_sessions_with_one_index_update() {
+    fn deletion_selects_existing_session_without_creating_default() {
         let temp = tempfile::tempdir().unwrap();
         let paths = test_paths(temp.path().to_path_buf());
         let first = create_session(&paths, Some("First")).unwrap();
         let second = create_session(&paths, Some("Second")).unwrap();
-
-        let deleted = delete_sessions(&paths, &[first.id.clone(), second.id.clone()]).unwrap();
-        let remaining = list_sessions(&paths).unwrap();
-
-        assert_eq!(deleted.len(), 2);
-        assert!(remaining
-            .iter()
-            .all(|session| session.id == DEFAULT_SESSION_ID));
+        assert!(delete_session(&paths, &second.id).unwrap());
         assert_eq!(
-            ensure_active_session(&paths).unwrap().id,
-            DEFAULT_SESSION_ID
+            active_session_if_present(&paths).unwrap().unwrap().id,
+            first.id
         );
+        assert!(delete_session(&paths, &first.id).unwrap());
+        assert!(list_sessions(&paths).unwrap().is_empty());
+        assert!(active_session_if_present(&paths).unwrap().is_none());
     }
 
     #[test]
@@ -152,53 +123,5 @@ mod tests {
             .unwrap();
 
         assert_eq!(updated.title, "hello project world");
-    }
-
-    #[test]
-    fn migrates_legacy_sessions_into_workspace_scope() {
-        let temp = tempfile::tempdir().unwrap();
-        let paths = test_paths(temp.path().to_path_buf());
-        let legacy_session = SessionInfo {
-            id: "session_old".to_string(),
-            title: "Old work".to_string(),
-            created_at: "2026-01-01T00:00:00Z".to_string(),
-            updated_at: "2026-01-01T00:00:00Z".to_string(),
-        };
-        let legacy_sessions_dir = paths.state_dir.join("sessions");
-        std::fs::create_dir_all(legacy_sessions_dir.join("data/session_old")).unwrap();
-        std::fs::create_dir_all(&paths.state_dir).unwrap();
-        std::fs::write(
-            legacy_sessions_dir.join("index.json"),
-            serde_json::to_string_pretty(&vec![legacy_session.clone()]).unwrap(),
-        )
-        .unwrap();
-        std::fs::write(legacy_sessions_dir.join("current"), "session_old\n").unwrap();
-        std::fs::write(
-            legacy_sessions_dir.join("data/session_old/usage.json"),
-            "old session usage",
-        )
-        .unwrap();
-        std::fs::write(paths.state_dir.join("conversation.jsonl"), "legacy default").unwrap();
-
-        let active = ensure_active_session(&paths).unwrap();
-        let scope_dir = session_scope_dir(&paths).unwrap();
-
-        assert_eq!(active.id, "session_old");
-        assert!(sessions_file(&scope_dir).exists());
-        assert_eq!(
-            std::fs::read_to_string(current_session_file(&scope_dir)).unwrap(),
-            "session_old\n"
-        );
-        assert_eq!(
-            std::fs::read_to_string(scope_dir.join("data/session_old/usage.json")).unwrap(),
-            "old session usage"
-        );
-        assert_eq!(
-            std::fs::read_to_string(
-                session_state_dir(&scope_dir, DEFAULT_SESSION_ID).join("conversation.jsonl")
-            )
-            .unwrap(),
-            "legacy default"
-        );
     }
 }

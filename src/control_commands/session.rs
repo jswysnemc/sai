@@ -232,7 +232,7 @@ mod tests {
         let _ = crate::state::create_session(&paths, Some("work")).unwrap();
         let choices = session_resume_choices(&paths).unwrap();
         assert!(choices.iter().any(|(_, label)| label.starts_with('*')));
-        assert!(choices.len() >= 2);
+        assert_eq!(choices.len(), 1);
     }
 
     /// 【TUI】【恢复会话】已打开的会话在列表里标出终端/网页/网关，未打开的不标。

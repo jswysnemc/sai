@@ -52,14 +52,32 @@ export function commitLocalSessionSelection(client: QueryClient, workspaceId: st
   notifyManager.batch(() => {
     client.setQueryData<Session[]>(["sessions"], (sessions) => {
       if (!sessions?.some((session) => session.id === sessionId)) return sessions;
-      return sessions.map((session) => ({ ...session, active: session.id === sessionId }));
+      return sessions.map((session) => session.active === (session.id === sessionId) ? session : { ...session, active: session.id === sessionId });
     });
     client.setQueryData<WorkspaceSessions[]>(["session-tree"], (tree) => tree?.map((workspace) => {
       if (workspace.workspace_id !== workspaceId) return workspace;
       return {
         ...workspace,
-        sessions: workspace.sessions.map((session) => ({ ...session, active: session.id === sessionId }))
+        sessions: workspace.sessions.map((session) => session.active === (session.id === sessionId) ? session : { ...session, active: session.id === sessionId })
       };
     }));
+  });
+}
+
+/**
+ * 【会话导航】【创建缓存】将已经创建的会话加入所属列表，供界面立即选择。
+ * @param client 查询客户端；workspaceId 为所属工作区；session 为创建接口返回的记录
+ * @returns 无返回值
+ */
+export function insertCreatedSession(client: QueryClient, workspaceId: string, session: Session): void {
+  notifyManager.batch(() => {
+    const tree = client.getQueryData<WorkspaceSessions[]>(["session-tree"]);
+    if (tree?.some((workspace) => workspace.workspace_id === workspaceId && workspace.active)) {
+      client.setQueryData<Session[]>(["sessions"], (sessions) => [session, ...(sessions ?? []).filter((item) => item.id !== session.id)]);
+    }
+    client.setQueryData<WorkspaceSessions[]>(["session-tree"], (workspaces) => workspaces?.map((workspace) =>
+      workspace.workspace_id === workspaceId
+        ? { ...workspace, sessions: [session, ...workspace.sessions.filter((item) => item.id !== session.id)] }
+        : workspace));
   });
 }

@@ -4,9 +4,14 @@ mod sidebar_index;
 
 mod model;
 mod repository;
+#[cfg(test)]
+pub use repository::active_state_dir;
 mod repository_paths;
 mod workspace;
 mod workspace_repository;
+
+#[cfg(test)]
+mod lifecycle_tests;
 
 #[cfg(test)]
 pub(crate) use index::session_index_io_counts;
@@ -16,10 +21,11 @@ pub use listing::{list_located_sessions, list_located_sessions_for_workspace};
 pub use model::{LocatedSession, SessionInfo};
 #[allow(unused_imports)]
 pub use repository::{
-    active_state_dir, create_session, create_session_detached, create_session_for_workspace,
-    delete_session, delete_sessions, ensure_active_session, list_all_sessions, locate_session_dirs,
-    rename_session, session_scope_dir, state_dir_for_session, switch_session,
-    switch_session_located, title_from_message_public, touch_session_with_message,
+    active_session_if_present, create_session, create_session_detached,
+    create_session_for_workspace, delete_session, delete_sessions, ensure_active_session,
+    list_all_sessions, locate_session_dirs, rename_session, session_scope_dir,
+    state_dir_for_session, switch_session, switch_session_located, title_from_message_public,
+    touch_session_with_message,
 };
 pub use sidebar_index::{
     load_sidebar_index, patch_sidebar_index, sidebar_session_key, SidebarGroup, SidebarIndex,

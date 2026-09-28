@@ -20,13 +20,14 @@ export type QuestionAnswersController = {
   answers: QuestionAnswers;
   customDrafts: string[];
   summary: string[];
+  imageUrls: string[][];
   submitting: boolean;
   error: Error | null;
   setStep: (step: number) => void;
   setCustomDraft: (step: number, value: string) => void;
   toggleOption: (step: number, value: string, multiple: boolean, interactive: boolean) => void;
-  saveCustom: (step: number, multiple: boolean, interactive: boolean) => void;
-  submit: (override?: QuestionAnswers) => Promise<void>;
+  saveCustom: (step: number, multiple: boolean, interactive: boolean, images?: string[]) => void;
+  submit: (override?: QuestionAnswers, imagesOverride?: string[][]) => Promise<void>;
   cancel: () => Promise<void>;
 };
 
@@ -47,6 +48,7 @@ export function useQuestionAnswers(pending: PendingQuestion, response: QuestionR
   const [answers, setAnswers] = useState<QuestionAnswers>(() => initialAnswers(questions));
   const [customDrafts, setCustomDrafts] = useState<string[]>(() => initialCustomDrafts(questions));
   const [summary, setSummary] = useState<string[]>(() => summaryFromResponse(response, t));
+  const [imageUrls, setImageUrls] = useState<string[][]>(() => response?.status === "answered_with_images" ? response.data.image_urls : questions.map(() => []));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -57,6 +59,7 @@ export function useQuestionAnswers(pending: PendingQuestion, response: QuestionR
     setAnswers(initialAnswers(questions));
     setCustomDrafts(initialCustomDrafts(questions));
     setSummary(summaryFromResponse(response, t));
+    setImageUrls(response?.status === "answered_with_images" ? response.data.image_urls : questions.map(() => []));
     setSubmitting(false);
     setError(null);
   }, [pending.id, questions, response, t]);
@@ -67,7 +70,7 @@ export function useQuestionAnswers(pending: PendingQuestion, response: QuestionR
    * @param override 单选自动提交时传入的最新答案，绕开状态更新延迟
    * @returns 提交完成后的 Promise
    */
-  const submit = async (override?: QuestionAnswers): Promise<void> => {
+  const submit = async (override?: QuestionAnswers, imagesOverride?: string[][]): Promise<void> => {
     const finalAnswers = override ?? answers;
     if (firstUnanswered(questions, finalAnswers) !== -1) {
       setError(new LocalizedError("Answer every question first", "请先回答所有问题"));
@@ -76,7 +79,7 @@ export function useQuestionAnswers(pending: PendingQuestion, response: QuestionR
     setSubmitting(true);
     setError(null);
     try {
-      await api.questions.answer(pending.id, finalAnswers);
+      await api.questions.answer(pending.id, finalAnswers, imagesOverride ?? imageUrls);
       setStatus("answered");
       setSummary(summarizeAnswers(finalAnswers, t));
     } catch (cause) {
@@ -110,9 +113,9 @@ export function useQuestionAnswers(pending: PendingQuestion, response: QuestionR
    * @param next 最新的答案集合
    * @returns 无返回值
    */
-  const advanceOrSubmit = (next: QuestionAnswers): void => {
+  const advanceOrSubmit = (next: QuestionAnswers, nextImages: string[][]): void => {
     const target = firstUnanswered(questions, next);
-    if (target === -1) void submit(next);
+    if (target === -1) void submit(next, nextImages);
     else if (target !== step) setStep(target);
   };
 
@@ -124,10 +127,12 @@ export function useQuestionAnswers(pending: PendingQuestion, response: QuestionR
    * @param advance 是否执行单选推进
    * @returns 无返回值
    */
-  const commit = (index: number, value: string[], advance: boolean): void => {
+  const commit = (index: number, value: string[], advance: boolean, images: string[] = []): void => {
     const next = answers.map((item, position) => (position === index ? value : [...item]));
     setAnswers(next);
-    if (advance) advanceOrSubmit(next);
+    const nextImages = imageUrls.map((item, position) => position === index ? images : item);
+    setImageUrls(nextImages);
+    if (advance) advanceOrSubmit(next, nextImages);
   };
 
   const toggleOption = (index: number, value: string, multiple: boolean, interactive: boolean): void => {
@@ -136,21 +141,21 @@ export function useQuestionAnswers(pending: PendingQuestion, response: QuestionR
     const nextValue = multiple
       ? selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value]
       : [value];
-    commit(index, nextValue, !multiple && interactive);
+    commit(index, nextValue, !multiple && interactive, multiple ? imageUrls[index] : []);
   };
 
-  const saveCustom = (index: number, multiple: boolean, interactive: boolean): void => {
-    const value = (customDrafts[index] ?? "").trim();
+  const saveCustom = (index: number, multiple: boolean, interactive: boolean, images: string[] = []): void => {
+    const value = (customDrafts[index] ?? "").trim() || (images.length ? t("See attached images", "请查看所附图片") : "");
     if (!value) return;
     const selected = answers[index] ?? [];
     // 1. 多选追加且去重，单选替换为自定义回答
     const nextValue = multiple ? (selected.includes(value) ? selected : [...selected, value]) : [value];
-    commit(index, nextValue, !multiple && interactive);
+    commit(index, nextValue, !multiple && interactive, images);
   };
 
   const setCustomDraft = (index: number, value: string): void => {
     setCustomDrafts((prev) => prev.map((item, position) => (position === index ? value : item)));
   };
 
-  return { status, step, answers, customDrafts, summary, submitting, error, setStep, setCustomDraft, toggleOption, saveCustom, submit, cancel };
+  return { status, step, answers, customDrafts, summary, imageUrls, submitting, error, setStep, setCustomDraft, toggleOption, saveCustom, submit, cancel };
 }

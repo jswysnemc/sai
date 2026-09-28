@@ -32,7 +32,7 @@ pub(super) fn run_init(paths: &SaiPaths, kind: InitKind) -> Result<()> {
         t("Creating state files", "正在创建状态文件"),
         &paths.state_dir.display().to_string(),
     )?;
-    StateStore::new(paths)?.init_files()?;
+    std::fs::create_dir_all(&paths.state_dir)?;
     let _config = AppConfig::load_or_default(paths)?;
     print_init_step(
         interactive,

@@ -29,6 +29,7 @@ export function renderComposerAtomEditor(editor: HTMLElement, value: string): vo
     fragment.append(createAtom(segment));
   }
   editor.replaceChildren(fragment);
+  syncEditorTrailingBreak(editor);
 }
 
 /**
@@ -48,6 +49,7 @@ export function serializeComposerAtomEditor(editor: Node): string {
       value += serializeComposerAtomEditor(child);
       continue;
     }
+    if (child.hasAttribute("data-composer-trailing-break")) continue;
     const atom = child.getAttribute(ATOM_ATTRIBUTE);
     if (atom !== null) {
       value += atom;
@@ -186,7 +188,26 @@ export function insertEditorPlainText(editor: HTMLElement, text: string): boolea
   selection.removeAllRanges();
   selection.addRange(range);
   editor.normalize();
+  syncEditorTrailingBreak(editor);
   return true;
+}
+
+/**
+ * 为末尾换行提供光标所在的空行，并移除已经不需要的占位换行。
+ * @param editor 编辑器根节点
+ * @returns 无；占位节点不参与文本序列化
+ */
+export function syncEditorTrailingBreak(editor: HTMLElement): void {
+  const existing = editor.querySelector("[data-composer-trailing-break]");
+  if (serializeComposerAtomEditor(editor).endsWith("\n")) {
+    if (!existing) {
+      const placeholder = document.createElement("br");
+      placeholder.setAttribute("data-composer-trailing-break", "true");
+      editor.append(placeholder);
+    }
+  } else {
+    existing?.remove();
+  }
 }
 
 /** 根据片段类型创建带 Lucide 图标的不可编辑原子节点。 */

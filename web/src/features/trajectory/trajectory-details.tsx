@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useCopyAction } from "../chat/tool-renderers/use-copy-action";
 import { useI18n } from "../i18n/use-i18n";
 import { DetailsBody } from "./details-body";
+import { JevCapabilityView } from "../chat/tool-renderers/jev-capability-view";
 import { formatClock, formatDuration, formatTokens, prettyJson } from "./trajectory-format";
 import { RECORD_KIND_LABELS, recordEndedAt, type TrajectoryRecord } from "./trajectory-record";
 import "./trajectory-details.css";
@@ -86,7 +87,7 @@ export function TrajectoryDetails({ record, onClose }: TrajectoryDetailsProps) {
       {detail.reasoning && (
         <Block title={t("Reasoning", "思考过程")} body={detail.reasoning} />
       )}
-      {detail.sections?.length
+      {detail.jevExposure ? <JevCapabilityView argumentsText="{}" exposure={detail.jevExposure} /> : detail.sections?.length
         ? detail.sections.map((section) => (
             <Block key={section.id} title={section.label} body={section.content} />
           ))

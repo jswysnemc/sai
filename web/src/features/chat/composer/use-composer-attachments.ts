@@ -23,7 +23,8 @@ export type ComposerAttachment = ComposerAttachmentDraft;
 export function useComposerAttachments(sessionId?: string | null) {
   const { t } = useI18n();
   const [attachments, setAttachments] = useState<ComposerAttachment[]>(() => readComposerAttachmentDraft(sessionId));
-  const sequence = useRef(0);
+  // 1. 恢复草稿时同步恢复编号，避免切回问题后新增附件与旧附件共用标识
+  const sequence = useRef(attachments.reduce((max, item) => Math.max(max, item.id), 0));
   const sessionRef = useRef(sessionId);
 
   // 1. 切换会话时恢复草稿；同一会话内同步写入跨路由缓存

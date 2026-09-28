@@ -1,9 +1,9 @@
 pub(super) use super::index::{
-    ensure_default_session_for_base, read_current_session_id_from_base, save_sessions_to_base,
+    read_current_session_id_from_base, read_sorted_sessions, save_sessions_to_base,
 };
 use super::index::{read_sessions_from_base, write_current_session_id_to_base};
-use super::model::{LocatedSession, SessionInfo, DEFAULT_SESSION_ID};
-use super::repository_paths::{current_session_file, sessions_file};
+use super::model::{LocatedSession, SessionInfo};
+use super::repository_paths::current_session_file;
 use super::workspace::{current_workspace_scope, WorkspaceScope};
 use crate::paths::SaiPaths;
 use anyhow::{bail, Context, Result};
@@ -99,7 +99,7 @@ fn create_session_record(
         created_at: now.clone(),
         updated_at: now,
     };
-    let mut sessions = ensure_default_session_for_base(&scope.state_dir)?;
+    let mut sessions = read_sorted_sessions(&scope.state_dir)?;
     sessions.insert(0, session.clone());
     save_sessions_to_base(&scope.state_dir, &sessions)?;
     if activate {
@@ -149,7 +149,7 @@ pub fn switch_session_located(paths: &SaiPaths, session_id: &str) -> Result<Sess
 /// - 切换后的会话信息
 fn switch_session_in_base(base_state_dir: &Path, session_id: &str) -> Result<SessionInfo> {
     let session_id = session_id.trim();
-    let session = ensure_default_session_for_base(base_state_dir)?
+    let session = read_sorted_sessions(base_state_dir)?
         .into_iter()
         .find(|session| session.id == session_id)
         .with_context(|| format!("session not found: {session_id}"))?;
@@ -173,7 +173,7 @@ pub fn rename_session(paths: &SaiPaths, session_id: &str, title: &str) -> Result
     if title.is_empty() {
         bail!("session title cannot be empty");
     }
-    let mut sessions = ensure_default_session_for_base(&scope.state_dir)?;
+    let mut sessions = read_sorted_sessions(&scope.state_dir)?;
     let session = sessions
         .iter_mut()
         .find(|session| session.id == session_id.trim())
@@ -257,7 +257,7 @@ pub(super) fn delete_sessions_in_base(
             std::fs::remove_dir_all(session_dir)?;
         }
     }
-    // 3. 当前会话被删时，切到剩余最新会话；若已删空则写入空标记，下一次 ensure 再补默认
+    // 3. 当前会话被删时，切到剩余最新会话；若已删空则写入空标记，后续只读请求保持空状态
     let current = read_current_session_id_from_base(state_dir)?;
     if deleted.contains(&current) {
         if let Some(fallback) = sessions.first() {
@@ -278,29 +278,30 @@ pub(super) fn delete_sessions_in_base(
 /// 返回:
 /// - 当前会话信息
 pub fn ensure_active_session(paths: &SaiPaths) -> Result<SessionInfo> {
-    let scope = current_session_scope(paths)?;
-    let sessions = ensure_default_session_for_base(&scope.state_dir)?;
-    let active_id = read_current_session_id_from_base(&scope.state_dir)?;
-    if let Some(session) = sessions.iter().find(|session| session.id == active_id) {
-        std::fs::create_dir_all(session_state_dir(&scope.state_dir, &session.id))?;
-        return Ok(session.clone());
+    if let Some(session) = active_session_if_present(paths)? {
+        return Ok(session);
     }
-    write_current_session_id_to_base(&scope.state_dir, DEFAULT_SESSION_ID)?;
-    let session = sessions
-        .into_iter()
-        .find(|session| session.id == DEFAULT_SESSION_ID)
-        .expect("default session must exist");
-    std::fs::create_dir_all(session_state_dir(&scope.state_dir, &session.id))?;
-    Ok(session)
+    create_session(paths, None)
 }
 
-/// 返回当前会话状态目录。
-///
-/// 参数:
-/// - `paths`: Sai 路径
-///
-/// 返回:
-/// - 当前会话状态目录
+/// 【会话管理】【活动选择】读取已存在的活动会话，不隐式创建记录。
+/// @param paths 应用路径
+/// @returns 已选会话或最新会话；空工作区返回 None
+pub fn active_session_if_present(paths: &SaiPaths) -> Result<Option<SessionInfo>> {
+    let scope = current_session_scope(paths)?;
+    let sessions = read_sorted_sessions(&scope.state_dir)?;
+    let active_id = read_current_session_id_from_base(&scope.state_dir)?;
+    Ok(sessions
+        .iter()
+        .find(|session| session.id == active_id)
+        .or_else(|| sessions.first())
+        .cloned())
+}
+
+/// 【会话管理】【测试准备】为明确需要活动会话的测试创建并返回状态目录。
+/// @param paths 隔离应用路径
+/// @returns 活动会话的状态目录；生产读取路径不调用此方法
+#[cfg(test)]
 pub fn active_state_dir(paths: &SaiPaths) -> Result<PathBuf> {
     let scope = current_session_scope(paths)?;
     let session = ensure_active_session(paths)?;
@@ -409,21 +410,11 @@ pub fn list_all_sessions(paths: &SaiPaths) -> Result<Vec<LocatedSession>> {
     Ok(located)
 }
 
-/// 读取当前会话 ID，文件缺失时按默认会话处理且不写盘。
-///
-/// 参数:
-/// - `base_state_dir`: 工作区会话作用域目录
-///
-/// 返回:
-/// - 当前会话 ID
+/// 【会话管理】【活动指针】只读获取已有指针。
+/// @param base_state_dir 会话作用域目录
+/// @returns 指针值，缺失或不可读时返回空字符串
 fn current_session_id_if_present(base_state_dir: &Path) -> String {
-    let file = current_session_file(base_state_dir);
-    if !file.is_file() {
-        return DEFAULT_SESSION_ID.to_string();
-    }
-    std::fs::read_to_string(file)
-        .map(|value| value.trim().to_string())
-        .unwrap_or_else(|_| DEFAULT_SESSION_ID.to_string())
+    read_current_session_id_from_base(base_state_dir).unwrap_or_default()
 }
 
 /// 若索引中存在该会话则返回会话状态目录。
@@ -448,157 +439,11 @@ pub fn session_scope_dir(paths: &SaiPaths) -> Result<PathBuf> {
     Ok(current_session_scope(paths)?.state_dir)
 }
 
-/// 返回完成旧状态迁移后的当前工作区会话作用域。
-///
-/// 参数:
-/// - `paths`: Sai 路径
-///
-/// 返回:
-/// - 当前工作区会话作用域
+/// 【会话管理】【作用域】定位当前工作区，不迁移或创建历史会话。
+/// @param paths 应用路径
+/// @returns 当前工作区会话目录
 pub(super) fn current_session_scope(paths: &SaiPaths) -> Result<WorkspaceScope> {
-    let scope = current_workspace_scope(paths)?;
-    migrate_legacy_sessions_to_workspace(paths, &scope.state_dir)?;
-    Ok(scope)
-}
-
-/// 首次使用工作区会话时迁移旧版全局会话状态。
-///
-/// 参数:
-/// - `paths`: Sai 路径
-/// - `workspace_state_dir`: 当前工作区会话作用域目录
-///
-/// 返回:
-/// - 迁移是否成功
-pub(super) fn migrate_legacy_sessions_to_workspace(
-    paths: &SaiPaths,
-    workspace_state_dir: &Path,
-) -> Result<()> {
-    if workspace_has_state(workspace_state_dir)? {
-        return Ok(());
-    }
-
-    let legacy_sessions_dir = paths.state_dir.join("sessions");
-    let legacy_index = legacy_sessions_dir.join("index.json");
-    let legacy_current = legacy_sessions_dir.join("current");
-    let legacy_data_dir = legacy_sessions_dir.join("data");
-    let has_legacy_sessions =
-        legacy_index.exists() || legacy_current.exists() || legacy_data_dir.exists();
-    let has_legacy_default = legacy_default_files()
-        .iter()
-        .any(|name| paths.state_dir.join(name).exists());
-    if !has_legacy_sessions && !has_legacy_default {
-        return Ok(());
-    }
-
-    std::fs::create_dir_all(workspace_state_dir)?;
-    copy_file_if_missing(&legacy_index, &sessions_file(workspace_state_dir))?;
-    copy_file_if_missing(&legacy_current, &current_session_file(workspace_state_dir))?;
-    copy_dir_contents_if_missing(&legacy_data_dir, &workspace_state_dir.join("data"))?;
-
-    if has_legacy_default {
-        let default_dir = session_state_dir(workspace_state_dir, DEFAULT_SESSION_ID);
-        std::fs::create_dir_all(&default_dir)?;
-        for name in legacy_default_files() {
-            copy_file_if_missing(&paths.state_dir.join(name), &default_dir.join(name))?;
-        }
-    }
-    Ok(())
-}
-
-/// 判断工作区会话作用域是否已经存在有效状态。
-///
-/// 参数:
-/// - `workspace_state_dir`: 当前工作区会话作用域目录
-///
-/// 返回:
-/// - 存在状态时返回 true
-fn workspace_has_state(workspace_state_dir: &Path) -> Result<bool> {
-    if sessions_file(workspace_state_dir).exists()
-        || current_session_file(workspace_state_dir).exists()
-    {
-        return Ok(true);
-    }
-    has_dir_entries(&workspace_state_dir.join("data"))
-}
-
-/// 返回旧版默认会话状态文件名。
-///
-/// 返回:
-/// - 文件名列表
-fn legacy_default_files() -> &'static [&'static str] {
-    &[
-        "conversation.db",
-        "conversation.jsonl",
-        "usage.json",
-        "loaded-tools.json",
-        "sai.log",
-        "profile.md",
-        "compaction-summary.json",
-        "prompt.sha256",
-    ]
-}
-
-/// 判断目录是否存在条目。
-///
-/// 参数:
-/// - `path`: 目录路径
-///
-/// 返回:
-/// - 存在条目时返回 true
-fn has_dir_entries(path: &Path) -> Result<bool> {
-    if !path.is_dir() {
-        return Ok(false);
-    }
-    Ok(std::fs::read_dir(path)?.next().transpose()?.is_some())
-}
-
-/// 复制文件，目标已存在时跳过。
-///
-/// 参数:
-/// - `source`: 源文件路径
-/// - `target`: 目标文件路径
-///
-/// 返回:
-/// - 复制是否成功
-fn copy_file_if_missing(source: &Path, target: &Path) -> Result<()> {
-    if !source.is_file() || target.exists() {
-        return Ok(());
-    }
-    if let Some(parent) = target.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::copy(source, target)?;
-    Ok(())
-}
-
-/// 递归复制目录内容，目标已存在的条目会跳过。
-///
-/// 参数:
-/// - `source`: 源目录路径
-/// - `target`: 目标目录路径
-///
-/// 返回:
-/// - 复制是否成功
-fn copy_dir_contents_if_missing(source: &Path, target: &Path) -> Result<()> {
-    if !source.is_dir() {
-        return Ok(());
-    }
-    std::fs::create_dir_all(target)?;
-    for entry in std::fs::read_dir(source)? {
-        let entry = entry?;
-        let source_path = entry.path();
-        let target_path = target.join(entry.file_name());
-        if target_path.exists() {
-            continue;
-        }
-        let file_type = entry.file_type()?;
-        if file_type.is_dir() {
-            copy_dir_contents_if_missing(&source_path, &target_path)?;
-        } else if file_type.is_file() {
-            copy_file_if_missing(&source_path, &target_path)?;
-        }
-    }
-    Ok(())
+    current_workspace_scope(paths)
 }
 
 /// 根据用户消息更新会话标题和更新时间。
@@ -615,7 +460,7 @@ pub fn touch_session_with_message(
     session_id: &str,
     message: &str,
 ) -> Result<()> {
-    let mut sessions = ensure_default_session_for_base(base_state_dir)?;
+    let mut sessions = read_sorted_sessions(base_state_dir)?;
     let now = Utc::now().to_rfc3339();
     if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
         if session.title == "New session" || session.title == "Default" {

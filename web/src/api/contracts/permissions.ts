@@ -84,6 +84,7 @@ export type QuestionAnswers = string[][];
 
 export type QuestionResponse =
   | { status: "answered"; data: QuestionAnswers }
+  | { status: "answered_with_images"; data: { answers: QuestionAnswers; image_urls: string[][] } }
   | { status: "cancelled" }
   | { status: "unavailable"; data: string };
 

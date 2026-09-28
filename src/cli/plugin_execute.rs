@@ -330,6 +330,7 @@ mod tests {
         let workdir = root.path().join("first");
         std::fs::create_dir(&workdir).unwrap();
         crate::runtime_cwd::scope(workdir.clone(), async {
+            crate::state::ensure_workspace_session(&paths, &workdir, "default", "Fixture").unwrap();
             let state = crate::state::StateStore::for_workspace_session(&paths, &workdir, "default").unwrap();
             let arguments = json!({"state":{"version":1,"items":[{"id":"old","text":"kept","status":"pending","created_at":"old","updated_at":"old"}],"history":[]}}).to_string();
             command(&config, &paths, "todo", "import", &arguments, Some("default"), AgentMode::Yolo).await.unwrap();
@@ -340,6 +341,7 @@ mod tests {
             assert!(command(&config, &paths, "todo", "import", &arguments, Some("../other"), AgentMode::Yolo).await.is_err());
             let other = root.path().join("second");
             std::fs::create_dir(&other).unwrap();
+            crate::state::ensure_workspace_session(&paths, &other, "default", "Fixture").unwrap();
             let isolated = crate::state::StateStore::for_workspace_session(&paths, &other, "default").unwrap();
             assert!(view.snapshot("default", isolated.state_dir(), &other).await.unwrap().items.is_empty());
         }).await;

@@ -26,6 +26,9 @@ mod mode;
 mod model_context;
 pub(crate) mod model_json;
 mod plugin_commands;
+mod question_execution;
+#[cfg(test)]
+mod question_execution_tests;
 mod recovery;
 pub(crate) mod repeat_guard;
 #[cfg(test)]

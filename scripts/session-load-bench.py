@@ -14,6 +14,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+from session_action_bench import measure_session_actions
 
 
 def fixture_paths(root):
@@ -156,6 +157,9 @@ def run_benchmark(args, root):
                     result.update(kind="list", endpoint=endpoint, sessions=count)
                     records.append(result)
                     print(json.dumps(result), flush=True)
+                for result in measure_session_actions(origin, count, args.repeats):
+                    records.append(result)
+                    print(json.dumps(result), flush=True)
             # 2. 【会话载入】【历史测量】固定会话数与返回轮数，只增加已有历史规模
             seed_sessions(state, 1)
             read_json(origin + "/api/sessions/default/timeline?limit=1")
@@ -212,6 +216,7 @@ def main():
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--max-list-ms", type=float)
     parser.add_argument("--max-history-ms", type=float)
+    parser.add_argument("--max-action-ms", type=float)
     parser.add_argument("--tui", action="store_true", help="Also measure a Unix PTY; requires pyte")
     parser.add_argument("--tree", action="store_true", help="Also verify the complete branch index")
     parser.add_argument("--max-terminal-bytes", type=int)
@@ -227,7 +232,8 @@ def main():
         args.output.write_text(json.dumps(records, indent=2) + "\n", encoding="utf-8")
     failed = [
         record for record in records
-        if (budget := {"list": args.max_list_ms, "history": args.max_history_ms}.get(record["kind"]))
+        if (budget := {"list": args.max_list_ms, "history": args.max_history_ms,
+                       "create": args.max_action_ms, "switch": args.max_action_ms}.get(record["kind"]))
         is not None and record["median_ms"] > budget
     ]
     failed.extend(record for record in records if record["kind"] == "tui"

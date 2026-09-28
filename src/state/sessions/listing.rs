@@ -1,11 +1,6 @@
-use super::index::{
-    ensure_default_session_for_base, read_current_session_id_from_base,
-    write_current_session_id_to_base,
-};
-use super::model::{LocatedSession, DEFAULT_SESSION_ID};
-use super::repository::{
-    current_session_scope, migrate_legacy_sessions_to_workspace, session_state_dir,
-};
+use super::index::{read_current_session_id_from_base, read_sorted_sessions};
+use super::model::LocatedSession;
+use super::repository::{current_session_scope, session_state_dir};
 use super::workspace::{workspace_scope_for_path, WorkspaceScope};
 use crate::paths::SaiPaths;
 use anyhow::{Context, Result};
@@ -26,7 +21,6 @@ pub fn list_located_sessions_for_workspace(
     workspace_path: &Path,
 ) -> Result<Vec<LocatedSession>> {
     let scope = workspace_scope_for_path(paths, workspace_path);
-    migrate_legacy_sessions_to_workspace(paths, &scope.state_dir)?;
     list_scope(&scope)
 }
 
@@ -34,12 +28,14 @@ pub fn list_located_sessions_for_workspace(
 /// @param scope 已定位的工作区会话作用域
 /// @returns 元数据与目录保持一致的会话列表
 fn list_scope(scope: &WorkspaceScope) -> Result<Vec<LocatedSession>> {
-    let sessions = ensure_default_session_for_base(&scope.state_dir)?;
+    let sessions = read_sorted_sessions(&scope.state_dir)?;
     let mut current = read_current_session_id_from_base(&scope.state_dir)?;
-    // 1. 【会话载入】【活动指针】只修复已失效的选择，正常读取不改写任何索引
+    // 1. 【会话载入】【活动指针】失效选择回退到已有会话，空列表不写入占位指针
     if !sessions.iter().any(|session| session.id == current) {
-        current = DEFAULT_SESSION_ID.to_string();
-        write_current_session_id_to_base(&scope.state_dir, &current)?;
+        current = sessions
+            .first()
+            .map(|session| session.id.clone())
+            .unwrap_or_default();
     }
     let workspace_id = scope
         .state_dir

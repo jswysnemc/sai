@@ -205,6 +205,7 @@ async fn todo_storage_isolates_workspaces_and_direct_cli_cleanup() {
     for workspace in ["first", "second"] {
         let path = root.path().join(workspace);
         std::fs::create_dir(&path).unwrap();
+        crate::state::ensure_workspace_session(&paths, &path, "default", "Fixture").unwrap();
         let store = StateStore::for_workspace_session(&paths, &path, "default").unwrap();
         let scope = store.state_dir().display().to_string();
         let mut ctx = context(&path, &scope, true);

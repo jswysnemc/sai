@@ -10,6 +10,8 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
+mod empty;
+
 #[derive(Debug, Default, Deserialize)]
 struct SystemUsageQuery {
     agent_id: Option<String>,
@@ -25,7 +27,7 @@ struct SystemUsageResponse {
     runtime: RuntimeUsageResponse,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 struct SessionUsageResponse {
     id: String,
     requests: u64,
@@ -107,7 +109,12 @@ async fn usage(
     let config =
         resolve_usage_config(&state.paths, &base_config, &query).map_err(WebError::from)?;
     let mode = AgentMode::parse(query.mode.as_deref()).map_err(WebError::from)?;
-    let store = StateStore::new(&state.paths).map_err(WebError::from)?;
+    let Some(session) =
+        crate::state::active_session_if_present(&state.paths).map_err(WebError::from)?
+    else {
+        return empty::usage(&state, &base_config, context_window_tokens);
+    };
+    let store = StateStore::for_session(&state.paths, &session.id).map_err(WebError::from)?;
     // 用量顶栏不应因瞬时 DB 忙碌打挂；快照失败时降级为零值并带警告
     let snapshot = match store.session_snapshot(context_window_tokens) {
         Ok(snapshot) => snapshot,

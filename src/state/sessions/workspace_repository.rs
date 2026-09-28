@@ -1,8 +1,8 @@
 use super::model::SessionInfo;
 use super::repository::{
-    current_session_scope, delete_sessions_in_base, ensure_default_session_for_base,
-    migrate_legacy_sessions_to_workspace, read_current_session_id_from_base, sanitize_session_id,
-    save_sessions_to_base, session_state_dir, sort_sessions,
+    current_session_scope, delete_sessions_in_base, read_current_session_id_from_base,
+    read_sorted_sessions, sanitize_session_id, save_sessions_to_base, session_state_dir,
+    sort_sessions,
 };
 use super::workspace::workspace_scope_for_path;
 use crate::paths::SaiPaths;
@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 /// - 当前工作区会话列表
 pub fn list_sessions(paths: &SaiPaths) -> Result<Vec<SessionInfo>> {
     let scope = current_session_scope(paths)?;
-    ensure_default_session_for_base(&scope.state_dir)
+    read_sorted_sessions(&scope.state_dir)
 }
 
 /// 读取指定工作区的会话列表。
@@ -35,8 +35,7 @@ pub fn list_sessions_for_workspace(
     workspace_path: &Path,
 ) -> Result<Vec<SessionInfo>> {
     let scope = workspace_scope_for_path(paths, workspace_path);
-    migrate_legacy_sessions_to_workspace(paths, &scope.state_dir)?;
-    ensure_default_session_for_base(&scope.state_dir)
+    read_sorted_sessions(&scope.state_dir)
 }
 
 /// 读取指定工作区的当前会话标识。
@@ -49,9 +48,14 @@ pub fn list_sessions_for_workspace(
 /// - 当前会话标识
 pub fn active_session_id_for_workspace(paths: &SaiPaths, workspace_path: &Path) -> Result<String> {
     let scope = workspace_scope_for_path(paths, workspace_path);
-    migrate_legacy_sessions_to_workspace(paths, &scope.state_dir)?;
-    ensure_default_session_for_base(&scope.state_dir)?;
-    read_current_session_id_from_base(&scope.state_dir)
+    let sessions = read_sorted_sessions(&scope.state_dir)?;
+    let current = read_current_session_id_from_base(&scope.state_dir)?;
+    Ok(sessions
+        .iter()
+        .find(|session| session.id == current)
+        .or_else(|| sessions.first())
+        .map(|session| session.id.clone())
+        .unwrap_or_default())
 }
 
 /// 在指定工作区中确保稳定标识的会话存在。
@@ -70,14 +74,16 @@ pub fn ensure_workspace_session(
     session_id: &str,
     title: &str,
 ) -> Result<SessionInfo> {
+    if session_id.trim().is_empty() {
+        bail!("session id cannot be empty");
+    }
     let session_id = sanitize_session_id(session_id);
     let title = title.trim();
     if title.is_empty() {
         bail!("session title cannot be empty");
     }
     let scope = workspace_scope_for_path(paths, workspace_path);
-    migrate_legacy_sessions_to_workspace(paths, &scope.state_dir)?;
-    let mut sessions = ensure_default_session_for_base(&scope.state_dir)?;
+    let mut sessions = read_sorted_sessions(&scope.state_dir)?;
     if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
         if session.title != title {
             session.title = title.to_string();
@@ -121,9 +127,6 @@ pub fn delete_sessions_for_workspace(
     session_ids: &[String],
 ) -> Result<Vec<String>> {
     let scope = workspace_scope_for_path(paths, workspace_path);
-    migrate_legacy_sessions_to_workspace(paths, &scope.state_dir)?;
-    // 索引缺失时先补默认会话，避免空索引下把删除误判成「会话不存在」
-    ensure_default_session_for_base(&scope.state_dir)?;
     delete_sessions_in_base(paths, &scope.state_dir, session_ids)
 }
 
@@ -142,9 +145,8 @@ pub fn state_dir_for_workspace_session(
     session_id: &str,
 ) -> Result<(PathBuf, PathBuf)> {
     let scope = workspace_scope_for_path(paths, workspace_path);
-    migrate_legacy_sessions_to_workspace(paths, &scope.state_dir)?;
     let session_id = session_id.trim();
-    ensure_default_session_for_base(&scope.state_dir)?
+    read_sorted_sessions(&scope.state_dir)?
         .into_iter()
         .find(|session| session.id == session_id)
         .with_context(|| format!("session not found: {session_id}"))?;

@@ -117,6 +117,7 @@ async fn session_data_clear_removes_todo_files_only_for_selected_workspace() {
     for name in ["first", "second"] {
         let work = root.path().join(name);
         std::fs::create_dir(&work).unwrap();
+        crate::state::ensure_workspace_session(&paths, &work, "default", "Fixture").unwrap();
         let store = StateStore::for_workspace_session(&paths, &work, "default").unwrap();
         std::fs::write(
             store.state_dir().join("todos.json"),

@@ -15,6 +15,8 @@ mod session_snapshot;
 mod session_timeline;
 mod session_turn_preview;
 mod sessions;
+#[cfg(test)]
+pub use sessions::active_state_dir;
 mod store_context_epoch;
 mod store_lifecycle;
 mod store_provider_input;
@@ -55,9 +57,9 @@ pub use session_turn_preview::SessionTurnPreview;
 pub(crate) use sessions::session_index_io_counts;
 #[allow(unused_imports)]
 pub use sessions::{
-    active_session_id_for_workspace, active_state_dir, create_session, create_session_detached,
-    create_session_for_workspace, current_workspace_id, delete_session, delete_sessions,
-    delete_sessions_for_workspace, ensure_active_session as active_session,
+    active_session_id_for_workspace, active_session_if_present, create_session,
+    create_session_detached, create_session_for_workspace, current_workspace_id, delete_session,
+    delete_sessions, delete_sessions_for_workspace, ensure_active_session as active_session,
     ensure_workspace_session, list_all_sessions, list_located_sessions,
     list_located_sessions_for_workspace, list_sessions, list_sessions_for_workspace,
     load_sidebar_index, locate_session_dirs, patch_sidebar_index, rename_session,

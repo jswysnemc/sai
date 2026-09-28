@@ -356,10 +356,10 @@ export const api = {
       })
   },
   questions: {
-    answer: (id: string, answers: string[][]) =>
+    answer: (id: string, answers: string[][], imageUrls?: string[][]) =>
       apiRequest<{ accepted: boolean }>(`/api/questions/${id}/answer`, {
         method: "POST",
-        body: JSON.stringify({ answers })
+        body: JSON.stringify({ answers, image_urls: imageUrls })
       }),
     cancel: (id: string) =>
       apiRequest<{ accepted: boolean }>(`/api/questions/${id}/answer`, {

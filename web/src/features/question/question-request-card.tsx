@@ -62,10 +62,11 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
               question={current}
               selected={answers[step] ?? []}
               customDraft={controller.customDrafts[step] ?? ""}
-              interactive={live}
+              attachmentKey={`question:${pending.id}:${step}`}
+              interactive={live && !submitting}
               onToggle={(value) => controller.toggleOption(step, value, Boolean(current.multiple), live)}
               onCustomDraft={(value) => controller.setCustomDraft(step, value)}
-              onSaveCustom={() => controller.saveCustom(step, Boolean(current.multiple), live)}
+              onSaveCustom={(images) => controller.saveCustom(step, Boolean(current.multiple), live, images)}
               steps={<QuestionStepDots count={questions.length} current={step} satisfied={satisfied} onSelect={controller.setStep} t={t} />}
               t={t}
             />
@@ -105,7 +106,7 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
             </div>
           </div>
         ) : (
-          <QuestionHistory questions={questions} summary={summary} t={t} />
+          <QuestionHistory questions={questions} summary={summary} images={controller.imageUrls} t={t} />
         )}
       </Collapse>
     </section>

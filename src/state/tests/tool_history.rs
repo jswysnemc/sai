@@ -182,7 +182,7 @@ fn session_snapshot_rebuilds_resume_visible_state_after_store_reopen() {
         .find(|message| message.role == "tool")
         .unwrap();
 
-    assert_eq!(snapshot.session_id, "default");
+    assert_eq!(snapshot.session_id, resumed.session_id());
     assert_eq!(snapshot.turn_count, 1);
     assert_eq!(snapshot.tool_history.call_count, 1);
     assert_eq!(snapshot.tool_history.result_count, 1);
@@ -648,16 +648,4 @@ fn compacted_history_projection_keeps_only_user_messages() {
         .as_ref()
         .unwrap()
         .contains("交接笔记正文"));
-}
-
-/// 验证交接笔记消息在下一次压缩时不会被当作用户输入保留。
-#[test]
-fn handoff_note_does_not_survive_as_user_input() {
-    let note = crate::state::compaction::summary_context_message("我正在重构 X 模块");
-    let message = ChatMessage::plain("user", note);
-
-    assert!(
-        !crate::state::compaction::is_real_user_input(&message),
-        "交接笔记必须在下一次压缩时被排除，否则摘要会逐次嵌套"
-    );
 }

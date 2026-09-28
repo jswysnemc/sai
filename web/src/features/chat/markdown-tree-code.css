@@ -1,0 +1,15 @@
+.markdown-tree-code { display: block; white-space: pre; }
+.markdown-tree-line { white-space: pre; }
+.tree-connector {
+  position: relative;
+  display: inline-block;
+  width: 1ch;
+  height: 1lh;
+  vertical-align: bottom;
+  color: transparent;
+}
+.tree-connector::before, .tree-connector::after { position: absolute; content: ""; background: var(--ink); }
+.tree-connector[data-glyph="│"]::before, .tree-connector[data-glyph="├"]::before { top: 0; bottom: 0; left: 50%; width: 0.0625rem; }
+.tree-connector[data-glyph="└"]::before { top: 0; bottom: 50%; left: 50%; width: 0.0625rem; }
+.tree-connector[data-glyph="├"]::after, .tree-connector[data-glyph="└"]::after { top: 50%; left: 50%; right: 0; height: 0.0625rem; }
+.tree-connector[data-glyph="─"]::after { top: 50%; left: 0; right: 0; height: 0.0625rem; }

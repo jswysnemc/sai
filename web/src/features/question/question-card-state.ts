@@ -59,7 +59,7 @@ export function firstUnanswered(questions: QuestionPrompt[], answers: QuestionAn
  */
 export function responseStatus(response?: QuestionResponse): CardStatus {
   if (!response) return "pending";
-  if (response.status === "answered") return "answered";
+  if (response.status === "answered" || response.status === "answered_with_images") return "answered";
   if (response.status === "cancelled") return "cancelled";
   return "unavailable";
 }
@@ -83,6 +83,7 @@ export function summarizeAnswers(answers: QuestionAnswers, t: Translate): string
  * @returns 每个问题对应的摘要；未回答时为空数组
  */
 export function summaryFromResponse(response: QuestionResponse | undefined, t: Translate): string[] {
+  if (response?.status === "answered_with_images") return summarizeAnswers(response.data.answers, t);
   if (!response || response.status !== "answered") return [];
   return summarizeAnswers(response.data, t);
 }

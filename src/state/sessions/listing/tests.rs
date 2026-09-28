@@ -10,10 +10,11 @@ fn lists_fresh_metadata_without_rewriting_or_creating_session_directories() {
     let workspace = root.path().join("workspace");
     std::fs::create_dir(&workspace).unwrap();
     let scope = workspace_scope_for_path(&paths, &workspace);
+    super::super::create_session_for_workspace(&paths, &workspace, Some("First")).unwrap();
     let first = list_located_sessions_for_workspace(&paths, &workspace).unwrap();
     assert_eq!(first.len(), 1);
     assert!(first[0].is_current);
-    assert!(!first[0].state_dir.exists());
+    std::fs::remove_dir(&first[0].state_dir).unwrap();
     let mut info = first[0].info.clone();
     info.title = "Updated elsewhere".into();
     let bytes = serde_json::to_vec(&[info]).unwrap();
@@ -39,6 +40,8 @@ fn same_named_sessions_keep_their_workspace_identity() {
     let second = root.path().join("second");
     std::fs::create_dir(&first).unwrap();
     std::fs::create_dir(&second).unwrap();
+    super::super::ensure_workspace_session(&paths, &first, "shared-id", "First").unwrap();
+    super::super::ensure_workspace_session(&paths, &second, "shared-id", "Second").unwrap();
     let left = list_located_sessions_for_workspace(&paths, &first).unwrap();
     let right = list_located_sessions_for_workspace(&paths, &second).unwrap();
     assert_eq!(left[0].info.id, right[0].info.id);

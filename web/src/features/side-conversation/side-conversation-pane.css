@@ -5,6 +5,7 @@
   height: 100%;
   min-height: 0;
   background: var(--paper);
+  container-type: inline-size;
 }
 
 .side-conversation-head {
@@ -66,13 +67,14 @@
 }
 
 .side-conversation-composer {
-  width: calc(100% - (2 * var(--space-sm)));
-  margin: var(--space-sm) 0;
-  align-self: end;
-  justify-self: center;
+  min-width: 0;
+  padding-inline: var(--space-md);
 }
 
-.side-conversation-composer .composer-footer { margin-top: 0; }
+.side-conversation-composer .composer,
+.side-conversation-composer .composer-context-footer {
+  max-width: none;
+}
 
 @media (max-width: 48rem) {
   .side-conversation-messages {

@@ -294,7 +294,7 @@
   border-radius:var(--radius-3);
   background: transparent;
   color: var(--ink-soft);
-  font-size:var(--text-sm);
+  font: 400 var(--text-xs)/1 var(--font-ui);
   text-align: left;
   text-decoration: none;
   cursor: pointer;

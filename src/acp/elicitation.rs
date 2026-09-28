@@ -34,7 +34,8 @@ pub(crate) async fn handle(
         response: response.clone(),
     });
     let action = match response {
-        crate::question::QuestionResponse::Answered(answers) => {
+        crate::question::QuestionResponse::Answered(answers)
+        | crate::question::QuestionResponse::AnsweredWithImages { answers, .. } => {
             let content = fields
                 .into_iter()
                 .zip(answers)

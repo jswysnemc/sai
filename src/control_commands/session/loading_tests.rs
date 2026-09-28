@@ -11,8 +11,8 @@ async fn resume_choices_have_bounded_index_io() {
     let workspace = root.path().join("workspace");
     std::fs::create_dir(&workspace).unwrap();
     crate::runtime_cwd::scope(workspace, async {
-        crate::state::create_session(&paths, None).unwrap();
-        let (scope, _) = crate::state::locate_session_dirs(&paths, "default").unwrap();
+        let initial = crate::state::create_session(&paths, None).unwrap();
+        let (scope, _) = crate::state::locate_session_dirs(&paths, &initial.id).unwrap();
         let sessions = (0..64)
             .map(|index| SessionInfo {
                 id: if index == 0 {

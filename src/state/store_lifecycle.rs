@@ -17,7 +17,7 @@ impl StateStore {
     pub fn new(paths: &SaiPaths) -> Result<Self> {
         let session = sessions::ensure_active_session(paths)?;
         let base_state_dir = sessions::session_scope_dir(paths)?;
-        let state_dir = sessions::active_state_dir(paths)?;
+        let state_dir = base_state_dir.join("data").join(&session.id);
         let conv_db = Arc::new(ConversationDb::open(&state_dir)?);
         let store = Self {
             plugin_state_root: Some(paths.state_dir.clone()),

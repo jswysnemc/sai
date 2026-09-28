@@ -9,10 +9,11 @@ type QuestionOptionPanelProps = {
   question: QuestionPrompt;
   selected: string[];
   customDraft: string;
+  attachmentKey?: string;
   interactive: boolean;
   onToggle: (value: string) => void;
   onCustomDraft: (value: string) => void;
-  onSaveCustom: () => void;
+  onSaveCustom: (images: string[]) => void;
   /** 多问题步进指示器，与问题文本首基线对齐放在同一行右侧 */
   steps?: ReactNode;
   t: Translate;
@@ -24,7 +25,7 @@ type QuestionOptionPanelProps = {
  * @param props 问题内容、当前答案和交互回调
  * @returns 紧凑的问题选择面板
  */
-export function QuestionOptionPanel({ question, selected, customDraft, interactive, onToggle, onCustomDraft, onSaveCustom, steps, t }: QuestionOptionPanelProps) {
+export function QuestionOptionPanel({ question, selected, customDraft, attachmentKey = "question", interactive, onToggle, onCustomDraft, onSaveCustom, steps, t }: QuestionOptionPanelProps) {
   const multiple = Boolean(question.multiple);
   const allowCustom = question.custom !== false && interactive;
   // 1. 不在预设选项里的已选值来自自定义回答，单独列出便于确认
@@ -70,7 +71,7 @@ export function QuestionOptionPanel({ question, selected, customDraft, interacti
           </div>
         ))}
       </div>
-      {allowCustom && <QuestionCustomAnswer draft={customDraft} onDraft={onCustomDraft} onSave={onSaveCustom} t={t} />}
+      {allowCustom && <QuestionCustomAnswer key={attachmentKey} attachmentKey={attachmentKey} allowImages={!question.validation} openInitially={question.options.length === 0} draft={customDraft} onDraft={onCustomDraft} onSave={onSaveCustom} t={t} />}
     </div>
   );
 }

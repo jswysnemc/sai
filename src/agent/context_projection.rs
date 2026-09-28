@@ -1,5 +1,9 @@
 use super::*;
 
+#[cfg(test)]
+#[path = "context_projection_tests.rs"]
+mod tests;
+
 impl Agent {
     /// 构造当前轮完整请求消息。
     ///

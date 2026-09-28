@@ -48,18 +48,37 @@ pub(crate) fn request_question(
 
 /// 提交结构化回答并唤醒等待中的工具。
 pub(crate) fn answer_question(id: &str, answers: QuestionAnswers) -> Result<()> {
+    answer_question_with_images(id, answers, Vec::new())
+}
+
+/// 【结构化提问】【图片回答】校验文字和按题分组的图片，再唤醒等待方。
+/// @param id 待答请求标识；answers 每题文字答案；image_urls 每题图片 data URL
+/// @returns 提交结果；校验失败时保留原待答请求
+pub(crate) fn answer_question_with_images(
+    id: &str,
+    answers: QuestionAnswers,
+    image_urls: Vec<Vec<String>>,
+) -> Result<()> {
     let mut map = pending().lock().unwrap();
     let Some(entry) = map.get(id) else {
         bail!("question request is no longer pending")
     };
     // 先校验，失败时保留 pending，避免用户点错后请求丢失导致整轮挂死
     validate_answers(&entry.question.request, &answers)?;
+    super::attachments::validate(&entry.question.request, &image_urls)?;
     let entry = map
         .remove(id)
         .expect("pending question must still exist after validation");
     entry
         .sender
-        .send(QuestionResponse::Answered(answers))
+        .send(if image_urls.iter().all(Vec::is_empty) {
+            QuestionResponse::Answered(answers)
+        } else {
+            QuestionResponse::AnsweredWithImages {
+                answers,
+                image_urls,
+            }
+        })
         .map_err(|_| anyhow::anyhow!("question requester is no longer running"))
 }
 
@@ -89,6 +108,10 @@ pub(crate) fn unavailable_question(id: &str, reason: impl Into<String>) -> Resul
 pub(crate) fn resolve_question(id: &str, response: QuestionResponse) -> Result<()> {
     match response {
         QuestionResponse::Answered(answers) => answer_question(id, answers),
+        QuestionResponse::AnsweredWithImages {
+            answers,
+            image_urls,
+        } => answer_question_with_images(id, answers, image_urls),
         QuestionResponse::Cancelled => cancel_question(id),
         QuestionResponse::Unavailable(reason) => unavailable_question(id, reason),
     }

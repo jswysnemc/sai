@@ -1,0 +1,13 @@
+.question-tool-view { padding: 0.75rem; }
+.question-tool-item + .question-tool-item { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--line); }
+.question-tool-item > header { display: flex; gap: 0.5rem; align-items: baseline; margin-bottom: 0.375rem; font-size: var(--text-sm); }
+.question-tool-item > header > span { color: var(--ink-soft); font-size: var(--text-xs); }
+.question-tool-options { display: grid; gap: 0.25rem; margin: 0.5rem 0; padding: 0; list-style: none; }
+.question-tool-options > li { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.375rem 0.5rem; border-radius: var(--radius-2); }
+.question-tool-options > li[data-selected] { background: var(--surface-selected); }
+.question-tool-options svg { flex: none; margin-top: 0.125rem; }
+.question-tool-options strong { font-size: var(--text-sm); font-weight: 500; }
+.question-tool-options p { margin: 0.125rem 0 0; color: var(--ink-soft); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.question-tool-answer { display: grid; gap: 0.25rem; font-size: var(--text-sm); }
+.question-tool-answer > span { color: var(--ink-soft); font-size: var(--text-xs); }
+.question-tool-answer p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
