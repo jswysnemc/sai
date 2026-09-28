@@ -1,11 +1,12 @@
 import { Bot } from "../../../shared/ui/icons";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { AgentProfileConfig, AppConfig } from "../../../api/contracts";
 import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import { DEFAULT_AGENT_ID } from "../../agents/agent-options";
 import type { AgentProfile } from "../../agents/agent-types";
 import { useI18n } from "../../i18n/use-i18n";
-import { ObjectListPanel } from "../object-list-panel";
+import { MasterDetail, ObjectList } from "../kit";
+import { useSettingsItem } from "../shell/use-settings-item";
 import { AgentProfileEditor } from "./agent-profile-editor";
 import {
   BUILTIN_AGENT_PROFILES,
@@ -36,12 +37,8 @@ export function AgentProfileWorkspace({ config, options, onConfigChange }: Agent
     () => buildVisibleAgentProfiles(stored, options, config.subagent?.profiles, locale),
     [config.subagent?.profiles, locale, options, stored]
   );
-  const [selectedId, setSelectedId] = useState(DEFAULT_AGENT_ID);
+  const [selectedId, setSelectedId] = useSettingsItem(profiles.map((profile) => profile.id), DEFAULT_AGENT_ID);
   const selected = profiles.find((profile) => profile.id === selectedId) ?? profiles[0] ?? null;
-
-  useEffect(() => {
-    if (selected && selected.id !== selectedId) setSelectedId(selected.id);
-  }, [selected, selectedId]);
 
   /**
    * 写回主 Agent 档案数组。
@@ -104,8 +101,7 @@ export function AgentProfileWorkspace({ config, options, onConfigChange }: Agent
   };
 
   return (
-    <div className="settings-objects-layout agent-profile-workspace">
-      <ObjectListPanel
+    <MasterDetail list={<ObjectList
         title={t("Agent profiles", "Agent 档案")}
         items={profiles.map((profile) => {
           const skillCount = profile.skills_full.length + profile.skills_named.length;
@@ -119,11 +115,11 @@ export function AgentProfileWorkspace({ config, options, onConfigChange }: Agent
           ];
           // 沿用模型是默认状态，逐项重复只会把这行挤到换行，指定了才值得占位
           if (profile.model) metaParts.push(profile.model);
-          if (badges.length > 0) metaParts.unshift(badges.join(" · "));
           return {
             id: profile.id,
             name: profile.name || profile.id,
             meta: metaParts.join(" · "),
+            tags: badges,
             icon: <Bot size={14} />,
             marked: profile.id === DEFAULT_AGENT_ID || profile.register_to_main
           };
@@ -133,7 +129,7 @@ export function AgentProfileWorkspace({ config, options, onConfigChange }: Agent
         addLabel={t("Add Agent", "新增 Agent")}
         onSelect={setSelectedId}
         onAdd={addProfile}
-      />
+      />}>
       {selected ? (
         <AgentProfileEditor
           config={config}
@@ -145,6 +141,6 @@ export function AgentProfileWorkspace({ config, options, onConfigChange }: Agent
       ) : (
         <div className="settings-empty">{t("No editable Agent profiles", "没有可编辑的 Agent 档案")}</div>
       )}
-    </div>
+    </MasterDetail>
   );
 }

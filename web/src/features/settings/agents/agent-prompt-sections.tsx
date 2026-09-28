@@ -1,5 +1,7 @@
 import type { PromptSectionId, PromptSectionToggles } from "../../../api/contracts";
 import { useI18n } from "../../i18n/use-i18n";
+import { Button } from "../../../shared/ui/button/button";
+import { SwitchField } from "../kit";
 import type { PromptSectionOption } from "./agents-types";
 
 type AgentPromptSectionsProps = {
@@ -92,24 +94,13 @@ export function AgentPromptSections({ sections, options, onChange }: AgentPrompt
             `已启用 ${activeCount}/${catalog.length} 个内置分段`
           )}
         </span>
-        <button type="button" className="settings-secondary" onClick={() => toggleAll(activeCount > 0 ? false : true)}>
+        <Button variant="secondary" onClick={() => toggleAll(activeCount > 0 ? false : true)}>
           {activeCount > 0 ? t("Turn all off", "全部关闭") : t("Turn all on", "全部开启")}
-        </button>
+        </Button>
       </header>
-      <div className="agent-prompt-sections-list">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         {catalog.map((section) => (
-          <label key={section.id} className="agent-prompt-section-item">
-            <span>
-              <strong>{t(section.label_en, section.label_zh)}</strong>
-              <small>{t(section.hint_en, section.hint_zh)}</small>
-            </span>
-            <input
-              type="checkbox"
-              className="switch-control"
-              checked={enabled(section.id)}
-              onChange={(event) => toggle(section.id, event.target.checked)}
-            />
-          </label>
+          <SwitchField key={section.id} label={t(section.label_en, section.label_zh)} hint={t(section.hint_en, section.hint_zh)} anchor={`agents.prompt_sections.${section.id}`} checked={enabled(section.id)} onChange={(value) => toggle(section.id, value)} />
         ))}
       </div>
     </div>

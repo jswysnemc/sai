@@ -1,16 +1,14 @@
 import type { UseMutationResult } from "@tanstack/react-query";
-import { Cable, Plus } from "../../../shared/ui/icons";
 import type { McpServerConfig } from "../../../api/contracts";
 import type { McpToolInfo } from "../../../api/mcp-tool-contracts";
 import { toDisplayError } from "../../../api/api-error";
 import { Button } from "../../../shared/ui/button/button";
-import { Select } from "../../../shared/ui/select/select";
-import { SettingsGroup } from "../editor-layout";
+import { ChoicePills, EmptyGuide, FieldGrid, SettingsField, SettingsPanel, SkListInput, SkNumberInput, SkTextInput } from "../kit";
 import { KeyValueEditor } from "../key-value-editor";
 import { McpToolBrowser } from "./mcp-tool-browser";
 import { useI18n } from "../../i18n/use-i18n";
 
-type McpServerEditorProps = {
+type Props = {
   server: McpServerConfig | undefined;
   selectedIndex: number;
   path: string;
@@ -21,206 +19,35 @@ type McpServerEditorProps = {
 };
 
 /**
- * 渲染单个 MCP 服务的结构化表单与工具扫描。
- *
- * @param props 当前服务与更新回调
- * @returns 服务编辑区
+ * 【MCP】【服务编辑】编辑传输参数并在当前服务下展示发现结果。
+ * @param props 服务、扫描状态与草稿更新回调
+ * @returns 服务表单与工具目录
  */
-export function McpServerEditor({
-  server,
-  selectedIndex,
-  path,
-  scannedServerId,
-  scanTools,
-  onUpdateServer,
-  onAddServer
-}: McpServerEditorProps) {
+export function McpServerEditor({ server, selectedIndex, scannedServerId, scanTools, onUpdateServer, onAddServer }: Props) {
   const { t } = useI18n();
-  if (!server) {
-    return (
-      <div className="settings-empty">
-        <p>
-          {t(
-            "No MCP servers yet. Connect stdio, HTTP, or SSE servers to expose tools as mcp_<server>_<tool>.",
-            "还没有 MCP 服务。可接入 stdio / HTTP / SSE，工具会注册为 mcp_<server>_<tool>。"
-          )}
-        </p>
-        <Button className="settings-secondary" onClick={onAddServer}>
-          <Plus size={14} />
-          {t("Add MCP server", "添加 MCP 服务")}
-        </Button>
-      </div>
-    );
-  }
-
+  if (!server) return <EmptyGuide title={t("No MCP servers configured", "尚未配置 MCP 服务")} description={t("Connect a local process or a remote HTTP/SSE endpoint.", "可连接本地进程或远程 HTTP/SSE 端点。")} action={<Button variant="secondary" onClick={onAddServer}>{t("Add MCP server", "添加 MCP 服务")}</Button>} />;
   const transport = server.transport ?? "stdio";
-  const transportOptions = [
-    { value: "stdio", label: t("stdio (local process)", "stdio（本地进程）") },
-    { value: "http", label: "HTTP" },
-    { value: "sse", label: "SSE" }
-  ];
-
-  return (
-    <>
-      <SettingsGroup
-        title={t("Server identity", "服务标识")}
-        description={t("Stable id and transport used to reach the server", "稳定标识与连接方式")}
-      >
-        <div className="settings-form-grid">
-          <label className="settings-field">
-            <span>{t("Server ID", "服务 ID")}</span>
-            <input
-              value={server.id}
-              onChange={(event) => onUpdateServer(selectedIndex, { id: event.target.value.trim() || server.id })}
-              spellCheck={false}
-            />
-            <small>{t("Used in tool names: mcp_<id>_<tool>", "会出现在工具名：mcp_<id>_<tool>")}</small>
-          </label>
-          <div className="settings-field">
-            <span>{t("Transport", "传输方式")}</span>
-            <Select
-              value={transport}
-              options={transportOptions}
-              onChange={(value) => onUpdateServer(selectedIndex, { transport: value })}
-              ariaLabel={t("MCP transport", "MCP 传输方式")}
-            />
-            <small>{t("stdio for local CLIs; HTTP/SSE for remote endpoints", "本地 CLI 用 stdio，远程端点用 HTTP/SSE")}</small>
-          </div>
-          <label className="settings-field">
-            <span>{t("Timeout (ms)", "超时（毫秒）")}</span>
-            <input
-              type="number"
-              min={100}
-              max={300000}
-              value={server.timeout_ms ?? 30_000}
-              onChange={(event) => onUpdateServer(selectedIndex, {
-                timeout_ms: event.target.value === "" ? null : Number(event.target.value)
-              })}
-            />
-            <small>{t("Request / process startup timeout", "请求或进程启动超时")}</small>
-          </label>
-        </div>
-      </SettingsGroup>
-
-      {transport === "stdio" ? (
-        <SettingsGroup
-          title={t("stdio process", "stdio 进程")}
-          description={t("Local command that speaks MCP over stdin/stdout", "通过 stdin/stdout 对话的本地命令")}
-        >
-          <div className="settings-form-grid">
-            <label className="settings-field">
-              <span>{t("Command", "命令")}</span>
-              <input
-                value={server.command ?? ""}
-                onChange={(event) => onUpdateServer(selectedIndex, { command: event.target.value })}
-                spellCheck={false}
-                placeholder="npx"
-              />
-              <small>{t("Executable on PATH, e.g. npx / uvx / node", "PATH 上的可执行文件，如 npx / uvx / node")}</small>
-            </label>
-            <label className="settings-field">
-              <span>{t("Working directory", "工作目录")}</span>
-              <input
-                value={server.cwd ?? ""}
-                onChange={(event) => onUpdateServer(selectedIndex, { cwd: event.target.value || null })}
-                spellCheck={false}
-                placeholder={t("Optional; defaults to workspace", "可选；默认工作区")}
-              />
-            </label>
-            <label className="settings-field full">
-              <span>{t("Arguments", "参数")}</span>
-              <textarea
-                rows={3}
-                value={(server.args ?? []).join("\n")}
-                onChange={(event) => onUpdateServer(selectedIndex, {
-                  args: event.target.value
-                    .split(/\r?\n/)
-                    .map((line) => line.trim())
-                    .filter(Boolean)
-                })}
-                spellCheck={false}
-                placeholder={"-y\n@modelcontextprotocol/server-filesystem\n."}
-              />
-              <small>{t("One argument per line (safer than space splitting)", "每行一个参数，比空格拆分更稳")}</small>
-            </label>
-            <div className="settings-field full">
-              <span>{t("Environment", "环境变量")}</span>
-              <KeyValueEditor
-                value={server.env ?? {}}
-                keyPlaceholder={t("Variable name", "变量名")}
-                valuePlaceholder={t("Value", "值")}
-                addLabel={t("Add environment variable", "添加环境变量")}
-                onChange={(env) => onUpdateServer(selectedIndex, { env })}
-              />
-              <small>{t("Extra env for the child process", "子进程额外环境变量")}</small>
-            </div>
-          </div>
-        </SettingsGroup>
-      ) : (
-        <SettingsGroup
-          title={t("Remote endpoint", "远程端点")}
-          description={transport === "sse"
-            ? t("SSE stream plus optional dedicated message URL", "SSE 流，以及可选独立 message URL")
-            : t("Streamable HTTP MCP endpoint", "Streamable HTTP MCP 端点")}
-        >
-          <div className="settings-form-grid">
-            <label className="settings-field full">
-              <span>URL</span>
-              <input
-                value={server.url ?? ""}
-                onChange={(event) => onUpdateServer(selectedIndex, { url: event.target.value || null })}
-                spellCheck={false}
-                placeholder="http://127.0.0.1:3000/mcp"
-              />
-              <small>{t("Base MCP endpoint URL", "MCP 基础端点")}</small>
-            </label>
-            {transport === "sse" && (
-              <label className="settings-field full">
-                <span>message_url</span>
-                <input
-                  value={server.message_url ?? ""}
-                  onChange={(event) => onUpdateServer(selectedIndex, { message_url: event.target.value || null })}
-                  spellCheck={false}
-                  placeholder={t("Optional; parsed from SSE endpoint event when empty", "可选；留空时从 SSE endpoint 事件解析")}
-                />
-              </label>
-            )}
-            <div className="settings-field full">
-              <span>{t("Headers", "请求头")}</span>
-              <KeyValueEditor
-                value={server.headers ?? {}}
-                keyPlaceholder={t("Header name", "Header 名")}
-                valuePlaceholder={t("Header value", "Header 值")}
-                addLabel={t("Add header", "添加请求头")}
-                onChange={(headers) => onUpdateServer(selectedIndex, { headers })}
-              />
-              <small>{t("Auth headers or custom routing metadata", "鉴权头或自定义路由元数据")}</small>
-            </div>
-          </div>
-        </SettingsGroup>
-      )}
-
-      <McpToolBrowser
-        serverId={server.id}
-        tools={scannedServerId === server.id ? (scanTools.data?.tools ?? []) : []}
-        scanning={scanTools.isPending}
-        scanned={scannedServerId === server.id}
-        error={scanTools.error ? toDisplayError(scanTools.error, "MCP tool scan failed", "MCP 工具扫描失败").message : null}
-        onScan={() => void scanTools.mutateAsync(server).catch(() => undefined)}
-      />
-
-      <div className="settings-note-card">
-        <Cable size={16} />
-        <div>
-          <strong>{t("Independent config file", "独立配置文件")}</strong>
-          <p>
-            {t(
-              `MCP lives in ${path}. Save with the section button; top-bar AppConfig Save does not write this file.`,
-              `MCP 保存在 ${path}。请用本节保存按钮；顶栏 AppConfig 保存不会写入此文件。`
-            )}
-          </p>
-        </div>
-      </div>
-    </>
-  );
+  /** 合并当前服务字段；参数为补丁，返回无值。 */
+  const update = (patch: Partial<McpServerConfig>) => onUpdateServer(selectedIndex, patch);
+  const ownScan = JSON.stringify(scanTools.variables) === JSON.stringify(server);
+  return <>
+    <SettingsPanel title={t("Connection", "连接")}>
+      <FieldGrid>
+        <SettingsField label={t("Server ID", "服务 ID")} anchor="mcp.id" hint={t("Used in exposed tool names.", "用于暴露的工具名称。")}><SkTextInput value={server.id} onChange={(id) => update({ id: id.trim() || server.id })} /></SettingsField>
+        <SettingsField label={t("Transport", "传输方式")} anchor="mcp.transport"><ChoicePills value={transport} options={[{ value: "stdio", label: "stdio" }, { value: "http", label: "HTTP" }, { value: "sse", label: "SSE" }]} onChange={(value) => update({ transport: value })} /></SettingsField>
+        <SettingsField label={t("Timeout", "超时")} anchor="mcp.timeout_ms" size="sm" hint={t("Request or process startup timeout.", "请求或进程启动超时。")}><SkNumberInput value={server.timeout_ms ?? 30000} min={100} max={300000} unit="ms" onChange={(timeout_ms) => update({ timeout_ms })} /></SettingsField>
+        {transport === "stdio" ? <>
+          <SettingsField label={t("Command", "命令")} anchor="mcp.command" hint={t("Executable on PATH, such as npx, uvx or node.", "PATH 中的可执行文件，如 npx、uvx 或 node。")}><SkTextInput mono value={server.command ?? ""} onChange={(command) => update({ command })} /></SettingsField>
+          <SettingsField label={t("Working directory", "工作目录")} anchor="mcp.cwd"><SkTextInput mono value={server.cwd ?? ""} onChange={(cwd) => update({ cwd: cwd || null })} /></SettingsField>
+          <SettingsField label={t("Arguments", "参数")} anchor="mcp.args" hint={t("One argument per line; spaces within an argument are preserved.", "每行一个参数，保留参数内部空格。")}><SkListInput value={server.args ?? []} onChange={(args) => update({ args })} /></SettingsField>
+          <SettingsField label={t("Environment", "环境变量")} anchor="mcp.env" span="full"><KeyValueEditor value={server.env ?? {}} keyPlaceholder={t("Variable name", "变量名")} valuePlaceholder={t("Value", "值")} addLabel={t("Add variable", "添加变量")} onChange={(env) => update({ env })} /></SettingsField>
+        </> : <>
+          <SettingsField label="URL" anchor="mcp.url" span="full"><SkTextInput mono value={server.url ?? ""} onChange={(url) => update({ url: url || null })} /></SettingsField>
+          {transport === "sse" && <SettingsField label={t("Message address", "消息地址")} anchor="mcp.message_url" span="full" hint={t("Optional; read from the SSE endpoint event when empty.", "可选；留空时从 SSE 端点事件读取。")}><SkTextInput mono value={server.message_url ?? ""} onChange={(message_url) => update({ message_url: message_url || null })} /></SettingsField>}
+          <SettingsField label={t("Headers", "请求头")} anchor="mcp.headers" span="full"><KeyValueEditor value={server.headers ?? {}} keyPlaceholder={t("Header name", "请求头名称")} valuePlaceholder={t("Header value", "请求头值")} addLabel={t("Add header", "添加请求头")} onChange={(headers) => update({ headers })} /></SettingsField>
+        </>}
+      </FieldGrid>
+    </SettingsPanel>
+    <McpToolBrowser key={server.id} serverId={server.id} tools={ownScan && scannedServerId === server.id ? (scanTools.data?.tools ?? []) : []} scanning={ownScan && scanTools.isPending} scanned={ownScan && scannedServerId === server.id} error={ownScan && scanTools.error ? toDisplayError(scanTools.error, "MCP tool scan failed", "MCP 工具扫描失败").message : null} onScan={() => scanTools.mutate(server)} />
+  </>;
 }

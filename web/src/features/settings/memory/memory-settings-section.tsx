@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Brain, Plus } from "../../../shared/ui/icons";
+import { Plus } from "../../../shared/ui/icons";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../../api/client";
-import type { AppConfig, MemoryWriteRequest, MemoryWriteResult } from "../../../api/contracts";
+import type { AppConfig, MemorySummary, MemoryWriteRequest, MemoryWriteResult } from "../../../api/contracts";
+import { Button } from "../../../shared/ui/button/button";
+import { SettingsPanel, SwitchField } from "../kit";
 import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import { useI18n } from "../../i18n/use-i18n";
 import { MemoryComposeForm, MemoryWriteFeedback } from "./memory-compose-form";
@@ -12,6 +14,7 @@ import { MemoryFilterBar } from "./memory-filter-bar";
 import { EMPTY_MEMORY_FILTER, filterMemories, type MemoryFilter } from "./memory-filter";
 import { MemoryIndexPreview } from "./memory-index-preview";
 import { MemoryMetaRow } from "./memory-meta-row";
+import { useMemoryBatchDelete } from "./use-memory-batch-delete";
 import { MemoryToolsRow } from "./memory-tools-row";
 import "./memory-settings-section.css";
 
@@ -76,18 +79,20 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
       await refresh();
     }
   });
+  const batchDelete = useMemoryBatchDelete(refresh);
   const remove = useMutation({
-    mutationFn: (name: string) =>
-      api.memory.remove(name, { workspace: selectedWorkspace }),
-    onSuccess: async (_, name) => {
-      await queryClient.invalidateQueries({ queryKey: ["memory-detail", name] });
+    mutationFn: ({ name, scope }: MemorySummary) =>
+      api.memory.remove(name, { workspace: selectedWorkspace, scope }),
+    onSuccess: async (_, entry) => {
+      await queryClient.invalidateQueries({ queryKey: ["memory-detail", entry.name] });
       await refresh();
     }
   });
   const reset = useMutation({ mutationFn: api.memory.reset, onSuccess: refresh });
 
   /** 删除前确认：删除不可恢复，误触图标不该直接生效。 */
-  const removeWithConfirm = async (name: string) => {
+  const removeWithConfirm = async (entry: MemorySummary) => {
+    const name = entry.name;
     const confirmed = await confirm({
       title: t("Delete memory", "删除记忆"),
       description: t(
@@ -97,7 +102,7 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
       confirmLabel: t("Delete", "删除"),
       danger: true
     });
-    if (confirmed) remove.mutate(name);
+    if (confirmed) remove.mutate(entry);
   };
 
   /** 清空前确认：范围是所有工作区的记忆，不只是当前工作区。 */
@@ -152,12 +157,7 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
   };
 
   return (
-    <section className="settings-section-card">
-      <header className="settings-section-head">
-        <h2>
-          <Brain size={16} /> {t("Memory", "记忆管理")}
-        </h2>
-      </header>
+    <SettingsPanel title={t("Stored entries", "已存条目")}>
 
       <MemoryMetaRow
         stats={stats.data}
@@ -186,13 +186,13 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
           }}
         />
       ) : (
-        <button
-          type="button"
-          className="settings-secondary memory-compose-toggle"
+        <Button
+          variant="secondary"
+          className="self-start"
           onClick={() => setComposing(true)}
         >
           <Plus size={14} /> {t("New memory", "新建记忆")}
-        </button>
+        </Button>
       )}
       <MemoryWriteFeedback result={writeResult} />
 
@@ -206,6 +206,10 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
         onQueryChange={(query) => setFilter((current) => ({ ...current, query }))}
       />
 
+      {filter.type !== "all" && visibleEntries.length > 0 && <div>
+        <Button variant="ghost-danger" disabled={batchDelete.pending} onClick={() => void batchDelete.removeDisplayed(visibleEntries, selectedWorkspace)}>{t(`Delete ${visibleEntries.length} displayed entries`, `删除展示的 ${visibleEntries.length} 条记忆`)}</Button>
+      </div>}
+      {batchDelete.error && <div className="settings-inline-error">{batchDelete.error}</div>}
       <MemoryEntryList
         entries={visibleEntries}
         loading={entries.isLoading}
@@ -222,30 +226,19 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
 
       <div className="memory-footer-row">
         {config && onConfigChange && (
-          <label className="settings-toggle-field memory-enabled-toggle">
-            <span>
-              <strong>{t("Enable memory", "启用记忆")}</strong>
-              <small>{t("Disabled: tools unregistered, index not injected", "关闭后不注册记忆工具，也不注入索引")}</small>
-            </span>
-            <input
-              type="checkbox"
-              checked={enabled}
-              onChange={(event) => toggleEnabled(event.target.checked)}
-            />
-          </label>
+          <SwitchField label={t("Enable memory", "启用记忆")} anchor="memory.enabled" hint={t("Disabled: tools are unregistered and the index is not injected.", "关闭后不注册记忆工具，也不注入索引。") } checked={enabled} onChange={toggleEnabled} />
         )}
-        <button
-          type="button"
-          className="settings-danger"
+        <Button
+          variant="ghost-danger"
           onClick={resetWithConfirm}
           disabled={reset.isPending}
           title={t("Clears memories in every workspace, not just the selected one.", "清空的是所有工作区的记忆，不只是当前选中的工作区。")}
         >
           {reset.isPending ? t("Clearing…", "清空中…") : t("Clear all memories", "清空全部记忆")}
-        </button>
+        </Button>
       </div>
 
       {error && <div className="settings-inline-error">{(error as Error).message}</div>}
-    </section>
+    </SettingsPanel>
   );
 }

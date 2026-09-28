@@ -7,7 +7,7 @@ type MemoryEntryListProps = {
   /** 列表仍在加载时为真：空列表不能先显示「暂无」再突然变出条目 */
   loading: boolean;
   workspace?: string;
-  onRemove: (name: string) => void;
+  onRemove: (entry: MemorySummary) => void;
   /** 点击 [[链接]] 时跳转到目标条目 */
   onNavigate: (name: string) => void;
   /** 链接跳转的目标条目与触发序号 */

@@ -23,7 +23,7 @@ const SCOPE_LABELS: Record<MemoryScope, { en: string; zh: string }> = {
 type MemoryEntryCardProps = {
   entry: MemorySummary;
   workspace?: string;
-  onRemove: (name: string) => void;
+  onRemove: (entry: MemorySummary) => void;
   /** 点击 [[链接]] 时跳转到目标条目 */
   onNavigate: (name: string) => void;
   /** 外部要求展开某条时置为真（链接跳转用） */
@@ -53,10 +53,10 @@ export function MemoryEntryCard({
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saveNote, setSaveNote] = useState<string | null>(null);
-  const query: MemoryQuery = { workspace };
+  const query: MemoryQuery = { workspace, scope: entry.scope };
 
   const detail = useQuery({
-    queryKey: ["memory-detail", entry.name, workspace],
+    queryKey: ["memory-detail", entry.name, workspace, entry.scope],
     queryFn: () => api.memory.show(entry.name, query),
     enabled: expanded
   });
@@ -72,7 +72,7 @@ export function MemoryEntryCard({
     mutationFn: (request: Parameters<typeof api.memory.remember>[0]) =>
       api.memory.remember(request),
     onSuccess: async (result: MemoryWriteResult) => {
-      await queryClient.invalidateQueries({ queryKey: ["memory-detail", entry.name, workspace] });
+      await queryClient.invalidateQueries({ queryKey: ["memory-detail", entry.name, workspace, entry.scope] });
       await queryClient.invalidateQueries({ queryKey: ["memory-entries"] });
       await queryClient.invalidateQueries({ queryKey: ["memory-stats"] });
       setEditing(false);
@@ -114,7 +114,7 @@ export function MemoryEntryCard({
             <Pencil size={14} />
           </button>
         )}
-        <button type="button" onClick={() => onRemove(entry.name)} aria-label={t("Delete memory", "删除记忆")}>
+        <button type="button" onClick={() => onRemove(entry)} aria-label={t("Delete memory", "删除记忆")}>
           <Trash2 size={14} />
         </button>
       </header>

@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import { api } from "../../../api/client";
 import { toDisplayError } from "../../../api/api-error";
 import type { ManagedSkill } from "../../../api/skill-contracts";
@@ -11,7 +13,6 @@ import { SkillGrid } from "./skill-grid";
 import { SkillsSettingsTabs, type SkillsSettingsView } from "./skills-settings-tabs";
 import {
   INITIAL_SKILL_LIBRARY_FILTERS,
-  normalizeSkillLibraryPage,
   type SkillLibraryFilters,
   type SkillLibraryPage
 } from "./skill-view-state";
@@ -42,12 +43,26 @@ export function SkillsSettingsSection({ config, onConfigChange }: SkillsSettings
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const list = useQuery({ queryKey: ["managed-skills"], queryFn: api.skills.managedList });
-  const [page, setPage] = useState<SkillLibraryPage>({ kind: "grid" });
+  const confirm = useConfirm();
+  const [params, setParams] = useSearchParams();
+  const requested = params.get("item");
+  const page: SkillLibraryPage = params.get("create") === "1" ? { kind: "create" } : requested ? { kind: "detail", skillId: requested } : { kind: "grid" };
+  /** 同步技能详情与创建状态到地址；参数为目标页面，返回无值。 */
+  const setPage = (next: SkillLibraryPage) => setParams((current) => {
+    const updated = new URLSearchParams(current);
+    updated.delete("item");
+    updated.delete("create");
+    if (next.kind === "detail") updated.set("item", next.skillId);
+    if (next.kind === "create") updated.set("create", "1");
+    return updated;
+  }, { replace: true });
   const [filters, setFilters] = useState<SkillLibraryFilters>(INITIAL_SKILL_LIBRARY_FILTERS);
   const [directoryName, setDirectoryName] = useState("");
   const [content, setContent] = useState("");
   const [dirty, setDirty] = useState(false);
-  const [view, setView] = useState<SkillsSettingsView>("library");
+  const view: SkillsSettingsView = params.get("view") === "behavior" ? "behavior" : "library";
+  /** 同步技能库视图；参数为视图名称，返回无值。 */
+  const setView = (view: SkillsSettingsView) => setParams((current) => { const next = new URLSearchParams(current); next.set("view", view); return next; }, { replace: true });
 
   const skills = list.data?.skills ?? [];
   const selectedId = page.kind === "detail" ? page.skillId : "";
@@ -55,8 +70,10 @@ export function SkillsSettingsSection({ config, onConfigChange }: SkillsSettings
 
   useEffect(() => {
     if (!list.isFetched || list.isFetching) return;
-    setPage((current) => normalizeSkillLibraryPage(current, skills));
-  }, [list.isFetched, list.isFetching, skills]);
+    if (requested && !skills.some((skill) => skill.id === requested)) {
+      setParams((current) => { const next = new URLSearchParams(current); next.delete("item"); return next; }, { replace: true });
+    }
+  }, [list.isFetched, list.isFetching, skills, requested, setParams]);
 
   const document = useQuery({
     queryKey: ["managed-skill", selectedId],
@@ -132,7 +149,9 @@ export function SkillsSettingsSection({ config, onConfigChange }: SkillsSettings
   };
 
   /** 返回技能库网格并清理当前编辑状态。 */
-  const returnToLibrary = () => {
+  const returnToLibrary = async () => {
+    if (save.isPending) return;
+    if (dirty && !await confirm({ title: t("Discard Skill changes?", "放弃技能修改？"), description: t("The current document has unsaved changes.", "当前文档存在未保存修改。"), confirmLabel: t("Discard", "放弃修改"), danger: true })) return;
     setPage({ kind: "grid" });
     setContent("");
     setDirty(false);

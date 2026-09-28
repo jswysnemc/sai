@@ -9,6 +9,8 @@ export type SettingsSearchEntry = {
   subview?: string;
   /** 对象分区中需要先选中的条目 */
   item?: string;
+  /** 对象内部页签，如 Agent 工具权限或 Skills 运行策略 */
+  view?: string;
   labelEn: string;
   labelZh: string;
   /** 额外关键词：配置键、同义词、常见说法 */

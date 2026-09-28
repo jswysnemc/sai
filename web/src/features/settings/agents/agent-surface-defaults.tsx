@@ -1,5 +1,5 @@
 import type { AppConfig } from "../../../api/contracts";
-import { Select } from "../../../shared/ui/select/select";
+import { SettingsField, SettingsPanel, SkSelect } from "../kit";
 import { useI18n } from "../../i18n/use-i18n";
 import { buildVisibleAgentProfiles } from "./agent-profile-state";
 import type { AgentOptions } from "./agents-types";
@@ -41,27 +41,11 @@ export function AgentSurfaceDefaults({ config, options, onConfigChange }: AgentS
     return config.gateway_agent ?? "gateway";
   };
 
-  return (
-    <section className="agent-surface-defaults">
-      <div className="settings-section-heading">
-        <div>
-          <strong>{t("Default Agent by entry point", "入口默认 Agent")}</strong>
-          <small>{t("Configure the web workspace, TUI REPL, one-shot CLI, and messaging gateway independently.", "分别控制网页工作台、TUI REPL、单次 CLI 和消息网关。")}</small>
-        </div>
-      </div>
-      <div className="agent-surface-grid">
-        {surfaces.map((surface) => (
-          <label key={surface.field} className="agent-surface-field" title={surface.description}>
-            <span>{surface.label}</span>
-            <Select
-              value={valueOf(surface.field)}
-              options={choices}
-              onChange={(next) => update(surface.field, next)}
-              ariaLabel={t(`Default Agent for ${surface.label}`, `${surface.label} 默认 Agent`)}
-            />
-          </label>
-        ))}
-      </div>
-    </section>
-  );
+  return <SettingsPanel title={t("Default Agent by entry point", "入口默认 Agent")}>
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {surfaces.map((surface) => <SettingsField key={surface.field} label={surface.label} anchor={`agents.${surface.field}`} hint={surface.description}>
+        <SkSelect value={valueOf(surface.field)} options={choices} onChange={(next) => update(surface.field, next)} />
+      </SettingsField>)}
+    </div>
+  </SettingsPanel>;
 }

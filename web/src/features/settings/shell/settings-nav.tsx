@@ -7,6 +7,7 @@ import type { SettingsSectionId } from "../settings-types";
 import { useI18n } from "../../i18n/use-i18n";
 import type { AppConfig } from "../../../api/contracts";
 import { SETTINGS_SEARCH_INDEX } from "../search/settings-search-index";
+import { buildCapabilitySearchEntries } from "../search/entries-agent-capabilities";
 import { buildCliToolSearchEntries } from "../search/entries-cli-tools";
 
 type SettingsNavProps = {
@@ -56,7 +57,7 @@ export function SettingsNav({ activeSection, config, dirtySections, onExit }: Se
 
   // 1. 分区按关键字过滤后归组；字段结果单独排序
   const grouped = useMemo(() => groupSettingsSections(filterSettingsSections(query)), [query]);
-  const searchIndex = useMemo(() => [...SETTINGS_SEARCH_INDEX, ...buildCliToolSearchEntries(config)], [config]);
+  const searchIndex = useMemo(() => [...SETTINGS_SEARCH_INDEX, ...buildCliToolSearchEntries(config), ...buildCapabilitySearchEntries(config)], [config]);
   const fieldHits = useMemo(() => searchSettingsFields(query, locale, searchIndex), [locale, query, searchIndex]);
   const searching = query.trim().length > 0;
 
@@ -107,7 +108,7 @@ export function SettingsNav({ activeSection, config, dirtySections, onExit }: Se
         <div className="settings-nav-group settings-nav-fields">
           <div className="settings-nav-group-label">{t("Settings", "设置项")}</div>
           {fieldHits.map((hit) => (
-            <Link key={hit.entry.anchor} to={searchEntryHref(hit.entry)} className="settings-nav-field">
+            <Link key={`${hit.entry.section}:${hit.entry.item ?? ""}:${hit.entry.anchor}`} to={searchEntryHref(hit.entry)} className="settings-nav-field">
               <strong>{hit.label}</strong>
               <small>{hit.location}</small>
             </Link>

@@ -1,5 +1,5 @@
 import type { MemoryStats } from "../../../api/contracts";
-import { Select } from "../../../shared/ui/select/select";
+import { SkSelect } from "../kit";
 import { useI18n } from "../../i18n/use-i18n";
 
 type MemoryMetaRowProps = {
@@ -52,12 +52,12 @@ export function MemoryMetaRow({
       </dl>
 
       {workspaceCount > 1 && (
-        <Select
+        <div className="w-full sm:w-64"><SkSelect
           value={selectedWorkspace ?? workspaceOptions[0]?.value ?? ""}
           options={workspaceOptions}
           ariaLabel={t("Choose workspace", "选择工作区")}
           onChange={onWorkspaceChange}
-        />
+        /></div>
       )}
 
       {notesDir && (

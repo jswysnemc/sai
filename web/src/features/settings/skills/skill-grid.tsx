@@ -1,8 +1,8 @@
-import { Plus, RefreshCw, Search } from "../../../shared/ui/icons";
-import { useMemo } from "react";
+import { Plus, RefreshCw } from "../../../shared/ui/icons";
+import { useMemo, useState } from "react";
 import type { ManagedSkill } from "../../../api/skill-contracts";
 import { Button } from "../../../shared/ui/button/button";
-import { Select } from "../../../shared/ui/select/select";
+import { ChoicePills, DataTable, EmptyGuide, SettingsPanel, SkSelect, SkTextInput, StatusBadge } from "../kit";
 import { useI18n } from "../../i18n/use-i18n";
 import { SkillCard } from "./skill-card";
 import { filterManagedSkills, skillScopeLabel, type SkillStatusFilter } from "./skill-list-filter";
@@ -28,6 +28,7 @@ type SkillGridProps = {
  */
 export function SkillGrid({ skills, filters, scanning, error, onFiltersChange, onOpen, onAdd, onScan }: SkillGridProps) {
   const { t } = useI18n();
+  const [layout, setLayout] = useState<"grid" | "list">("grid");
   const scopes = useMemo(() => [...new Set(skills.map((skill) => skill.scope))].sort(), [skills]);
   const visibleSkills = useMemo(
     () => filterManagedSkills(skills, filters.query, filters.status, filters.scope),
@@ -46,77 +47,23 @@ export function SkillGrid({ skills, filters, scanning, error, onFiltersChange, o
     ? String(skills.length)
     : `${visibleSkills.length}/${skills.length}`;
 
-  return (
-    <section className="skill-library-view" aria-label={t("Skills library", "Skills 技能库")} aria-busy={scanning}>
-      <header className="skill-library-header">
-        <div>
-          <h2>{t("Skills", "Skills")}</h2>
-          <p>{t("Open a Skill to inspect its instructions and settings.", "打开 Skill 后查看并设置其指令与状态。")}</p>
-        </div>
-        <div className="skill-library-actions">
-          <Button onClick={onScan} disabled={scanning}>
-            <RefreshCw size={14} className={scanning ? "is-spinning" : ""} />
-            {t("Scan", "扫描")}
-          </Button>
-          <Button variant="primary" onClick={onAdd}>
-            <Plus size={14} />
-            {t("Add Skill", "新增 Skill")}
-          </Button>
-        </div>
-      </header>
-
-      <div className="skill-library-controls">
-        <label className="skill-library-search">
-          <Search size={14} aria-hidden="true" />
-          <input
-            type="search"
-            value={filters.query}
-            onChange={(event) => onFiltersChange({ ...filters, query: event.target.value })}
-            placeholder={t("Search name, description, or source", "搜索名称、说明或来源")}
-            aria-label={t("Search Skills", "搜索 Skills")}
-            spellCheck={false}
-          />
-        </label>
-        <div className="skill-library-filters">
-          <Select
-            value={filters.status}
-            options={statusOptions}
-            ariaLabel={t("Filter Skill status", "筛选 Skill 状态")}
-            menuMinimumWidth={140}
-            onChange={(status) => onFiltersChange({ ...filters, status })}
-          />
-          <Select
-            value={filters.scope}
-            options={scopeOptions}
-            ariaLabel={t("Filter Skill source", "筛选 Skill 来源")}
-            menuMinimumWidth={168}
-            onChange={(scope) => onFiltersChange({ ...filters, scope })}
-          />
-        </div>
-        <span className="skill-library-count">{t(`${resultCount} results`, `${resultCount} 项`)}</span>
-      </div>
-
-      {error && <div className="settings-inline-error">{error}</div>}
-      {scanning && (
-        <div className="skill-library-scan-status" role="status">
-          <RefreshCw size={14} className="is-spinning" />
-          {t("Scanning Skill directories", "正在扫描 Skill 目录")}
-        </div>
-      )}
-
-      {visibleSkills.length > 0 ? (
-        <ul className="skill-grid" aria-label={t("Available Skills", "可用 Skills")}>
-          {visibleSkills.map((skill) => <SkillCard key={skill.id} skill={skill} onOpen={onOpen} />)}
-        </ul>
-      ) : (
-        <div className="skill-grid-empty">
-          <Search size={20} aria-hidden="true" />
-          <strong>{skills.length === 0 ? t("No Skills found", "尚未发现 Skill") : t("No matching Skills", "没有匹配的 Skill")}</strong>
-          <span>{skills.length === 0
-            ? t("Scan configured directories or add a global Skill.", "扫描已配置目录，或新增一个全局 Skill。")
-            : t("Adjust the search or filters to see more results.", "调整搜索词或筛选条件后重试。")}</span>
-        </div>
-      )}
-    </section>
-  );
+  return <SettingsPanel title={t("Library", "技能库")} description={t(`${resultCount} results`, `${resultCount} 项`)} actions={<>
+    <ChoicePills value={layout} onChange={setLayout} ariaLabel={t("Library view", "技能库视图")} options={[{ value: "grid", label: t("Grid", "网格") }, { value: "list", label: t("List", "列表") }]} />
+    <Button variant="secondary" onClick={onScan} disabled={scanning}><RefreshCw size={14} />{t("Scan", "扫描")}</Button>
+    <Button variant="primary" onClick={onAdd}><Plus size={14} />{t("Add Skill", "新增 Skill")}</Button>
+  </>}>
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_10rem_10rem]">
+      <SkTextInput type="search" value={filters.query} onChange={(query) => onFiltersChange({ ...filters, query })} placeholder={t("Search name, description, or source", "搜索名称、说明或来源")} aria-label={t("Search Skills", "搜索 Skills")} />
+      <SkSelect value={filters.status} options={statusOptions} ariaLabel={t("Filter Skill status", "筛选 Skill 状态")} onChange={(status) => onFiltersChange({ ...filters, status })} />
+      <SkSelect value={filters.scope} options={scopeOptions} ariaLabel={t("Filter Skill source", "筛选 Skill 来源")} onChange={(scope) => onFiltersChange({ ...filters, scope })} />
+    </div>
+    {error && <div className="settings-inline-error">{error}</div>}
+    {scanning && <p role="status" className="text-xs">{t("Scanning Skill directories", "正在扫描 Skill 目录")}</p>}
+    {!visibleSkills.length ? <EmptyGuide title={skills.length ? t("No matching Skills", "没有匹配的 Skill") : t("No Skills found", "尚未发现 Skill")} /> : layout === "grid" ? <ul className="skill-grid" aria-label={t("Available Skills", "可用 Skills")}>{visibleSkills.map((skill) => <SkillCard key={skill.id} skill={skill} onOpen={onOpen} />)}</ul> : <DataTable label={t("Available Skills", "可用 Skills")} rows={visibleSkills} rowKey={(skill) => skill.id} columns={[
+      { id: "name", header: t("Name", "名称"), sortValue: (skill) => skill.name, render: (skill) => <Button variant="ghost" onClick={() => onOpen(skill.id)}>{skill.name}</Button> },
+      { id: "description", header: t("Description", "说明"), render: (skill) => skill.description },
+      { id: "source", header: t("Source", "来源"), sortValue: (skill) => skill.scope, render: (skill) => skillScopeLabel(skill.scope, t) },
+      { id: "status", header: t("Status", "状态"), render: (skill) => <StatusBadge tone={skill.enabled ? "success" : "neutral"}>{skill.enabled ? t("Enabled", "已启用") : t("Disabled", "已禁用")}</StatusBadge> }
+    ]} />}
+  </SettingsPanel>;
 }

@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useSelectedFallback } from "../controls/use-selected-fallback";
+import { useSettingsItem } from "../shell/use-settings-item";
 import { api } from "../../../api/client";
 import type { McpConfig, McpServerConfig } from "../../../api/contracts";
 import { useConfigDocument } from "../use-config-document";
@@ -26,7 +26,7 @@ export function useMcpConfig() {
   const mcp = document.draft;
   const [raw, setRaw] = useState("");
   const [mode, setMode] = useState<McpEditorMode>("form");
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedId, setSelectedId] = useSettingsItem((mcp?.servers ?? []).map((server) => server.id));
   const [parseError, setParseError] = useState<string | null>(null);
   const [scannedServerId, setScannedServerId] = useState("");
 
@@ -38,7 +38,6 @@ export function useMcpConfig() {
   }, [mcp, document.dirty]);
 
   const servers = mcp?.servers ?? [];
-  useSelectedFallback(selectedId, servers.map((server) => server.id), setSelectedId);
 
   const selectedIndex = Math.max(0, servers.findIndex((server) => server.id === selectedId));
   const server = servers[selectedIndex];
@@ -150,7 +149,8 @@ export function useMcpConfig() {
     //    非法输入只标记待保存，保存时再报解析错误
     try {
       document.update(parseMcpJson(value));
-    } catch {
+    } catch (cause) {
+      setParseError(cause instanceof Error ? cause.message : String(cause));
       document.markDirty();
     }
   };

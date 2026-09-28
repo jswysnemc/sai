@@ -6,10 +6,9 @@ import { MarkdownEditor } from "../../../shared/ui/markdown-editor/markdown-edit
 import { MarkdownModeToggle } from "../../../shared/ui/markdown-editor/markdown-mode-toggle";
 import { useMarkdownMode } from "../../../shared/ui/markdown-editor/use-markdown-mode";
 import { isDarkTheme, useTheme } from "../../theme/theme";
-import { EditorHeader } from "../editor-layout";
+import { DetailHeader, InlineSwitch, SettingsField, SkTextInput } from "../kit";
 import { useI18n } from "../../i18n/use-i18n";
 import { composeSkillDocument, parseSkillDocument } from "./skill-document";
-import { skillScopeLabel } from "./skill-list-filter";
 
 type SkillEditorProps = {
   skill: ManagedSkill | null;
@@ -55,21 +54,16 @@ export function SkillEditor(props: SkillEditorProps) {
   };
 
   return (
-    <section className="settings-editor skill-editor">
-      <EditorHeader
-        kicker={creating ? t("Global Skill", "全局 Skill") : (skill ? skillScopeLabel(skill.scope, t) : "Skills")}
+    <section className="grid min-w-0 gap-4">
+      <DetailHeader
         title={creating ? t("New Skill", "新增 Skill") : (skill?.name ?? t("Skill manager", "Skill 管理"))}
-        description={creating
+        subtitle={creating
           ? t("Create a global Skill directory with a complete SKILL.md document.", "在全局目录新增 Skill，并写入完整 SKILL.md。")
           : (skill ? skill.path : t("Select a Skill to inspect or edit its document.", "选择 Skill 后查看或编辑文档。"))}
         actions={creating || skill ? (
           <>
             {skill && !creating && (
-              <label className="settings-switch skill-enabled-switch">
-                <input type="checkbox" checked={skill.enabled} onChange={(event) => props.onEnabledChange(event.target.checked)} />
-                <span />
-                <strong>{skill.enabled ? t("Enabled", "已启用") : t("Disabled", "已禁用")}</strong>
-              </label>
+              <InlineSwitch label={t("Enabled", "已启用")} checked={skill.enabled} onChange={props.onEnabledChange} />
             )}
             <Button variant="primary" className="skill-save-button" disabled={!dirty || saving} onClick={props.onSave}>
               <Save size={14} />
@@ -88,19 +82,7 @@ export function SkillEditor(props: SkillEditorProps) {
       ) : (
         <>
           {creating && (
-            <label className="skill-directory-field">
-              <span>{t("Directory name", "目录名称")}</span>
-              <input
-                value={directoryName}
-                onChange={(event) => {
-                  props.onDirectoryNameChange(event.target.value);
-                  updateDocument({ name: event.target.value });
-                }}
-                placeholder="code-review"
-                spellCheck={false}
-                aria-label={t("Directory name", "目录名称")}
-              />
-            </label>
+            <SettingsField label={t("Directory name", "目录名称")}><SkTextInput value={directoryName} onChange={(name) => { props.onDirectoryNameChange(name); updateDocument({ name }); }} placeholder="code-review" /></SettingsField>
           )}
           <section className="skill-document-workspace">
             <div className="skill-doc-toolbar">

@@ -1,261 +1,50 @@
-import { useEffect, useState } from "react";
-import { Pencil, Trash2, Wrench, Sparkles, Settings2 } from "../../../shared/ui/icons";
+import { useSearchParams } from "react-router-dom";
 import type { AppConfig } from "../../../api/contracts";
-import { Button } from "../../../shared/ui/button/button";
-import { AgentPromptEditorDialog } from "./agent-prompt-editor-dialog";
 import type { AgentProfile } from "../../agents/agent-types";
 import { DEFAULT_AGENT_ID } from "../../agents/agent-options";
 import { useI18n } from "../../i18n/use-i18n";
-import { EditorHeader, SettingsGroup } from "../editor-layout";
+import { DetailHeader, InlineSwitch, LocalTabs, SettingsPanel, StatusBadge, SwitchField } from "../kit";
 import type { AgentOptions } from "./agents-types";
 import { AgentSkillPermissions } from "./agent-skill-permissions";
-import { AgentPromptSections } from "./agent-prompt-sections";
 import { AgentToolPermissions } from "./agent-tool-permissions";
+import { AgentBasicsPanel } from "./agent-basics-panel";
+import { BUILTIN_AGENT_PROFILES } from "./agent-profile-state";
 import { DEFERRED_ALL_NON_BASE } from "./agent-tool-mode-state";
-import { AgentRuntimeFields } from "./agent-runtime-fields";
+import { fieldAnchorId } from "../search/field-anchor";
 
 type AgentEditorTab = "basic" | "tools" | "skills";
-
-type AgentProfileEditorProps = {
-  config: AppConfig;
-  profile: AgentProfile;
-  options: AgentOptions;
-  onChange: (patch: Partial<AgentProfile>) => void;
-  onRemove: () => void;
-};
+type Props = { config: AppConfig; profile: AgentProfile; options: AgentOptions; onChange: (patch: Partial<AgentProfile>) => void; onRemove: () => void };
 
 /**
- * 渲染主 Agent 档案编辑器，并按基础配置、工具权限和 Skills 分页。
- *
- * 每个页签内部用 SettingsGroup 分组：页签负责切换关注面，
- * 分组负责说明一段配置的用途，两层各司其职。
- *
- * @param props 当前配置、档案、可选能力和操作回调
- * @returns 主 Agent 档案编辑器
+ * 【Agent】【档案编辑】组合对象操作、基础配置和能力权限页签。
+ * @param props 配置、档案、能力选项与更新回调
+ * @returns 档案编辑区
  */
-export function AgentProfileEditor({ config, profile, options, onChange, onRemove }: AgentProfileEditorProps) {
+export function AgentProfileEditor({ config, profile, options, onChange, onRemove }: Props) {
   const { t } = useI18n();
-  const [tab, setTab] = useState<AgentEditorTab>("basic");
-  const [promptOpen, setPromptOpen] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const tab: AgentEditorTab = params.get("view") === "tools" ? "tools" : params.get("view") === "skills" ? "skills" : "basic";
   const skillCount = profile.skills_full.length + profile.skills_named.length;
-  const deferredTools = profile.deferred_tools ?? [];
-  // 通配符代表全部非常驻工具，逐项计数时按实际非常驻工具数量折算
-  const deferredCount = deferredTools.includes(DEFERRED_ALL_NON_BASE)
-    ? options.tools.filter((tool) => !tool.resident).length
-    : deferredTools.length;
-  const isBuiltin = profile.id === DEFAULT_AGENT_ID || ["general", "explore"].includes(profile.id);
-  const tabs: Array<{ id: AgentEditorTab; label: string; icon: typeof Settings2 }> = [
-    { id: "basic", label: t("Basics", "基础配置"), icon: Settings2 },
-    { id: "tools", label: t("Tool permissions", "工具权限"), icon: Wrench },
-    { id: "skills", label: t("Skills", "技能"), icon: Sparkles }
-  ];
-
-  useEffect(() => {
-    setTab("basic");
-  }, [profile.id]);
-
-  return (
-    <section className="settings-editor agent-profile-editor">
-      <EditorHeader
-        kicker="Agent"
-        title={profile.name || profile.id}
-        description={
-          profile.description
-            ? `${profile.id} · ${profile.description}`
-            : t(`${profile.id}, with ${profile.enabled_tools.length} tools and ${skillCount} Skills enabled.`, `${profile.id}，已启用 ${profile.enabled_tools.length} 个工具和 ${skillCount} 个 Skills。`)
-        }
-        actions={<>
-          {profile.id !== DEFAULT_AGENT_ID && (
-            <>
-              <label className="settings-switch">
-                <input
-                  type="checkbox"
-                  checked={profile.register_to_main}
-                  onChange={(event) => onChange({ register_to_main: event.target.checked })}
-                />
-                <span />
-                <strong>{profile.register_to_main ? t("Registered with main Agent", "已向主 Agent 注册") : t("Not registered", "未注册")}</strong>
-              </label>
-              <label className="settings-switch">
-                <input
-                  type="checkbox"
-                  checked={profile.load_instruction_files}
-                  onChange={(event) => onChange({ load_instruction_files: event.target.checked })}
-                />
-                <span />
-                <strong>{profile.load_instruction_files ? t("Loads AGENT.md files", "加载 AGENT.md") : t("Skips AGENT.md files", "不加载 AGENT.md")}</strong>
-              </label>
-            </>
-          )}
-          {!isBuiltin && (
-            <Button className="settings-danger" onClick={onRemove}>
-              <Trash2 size={14} />{t("Delete profile", "删除档案")}
-            </Button>
-          )}
-        </>}
-      />
-
-      <div className="agent-profile-stats" aria-label={t("Profile summary", "档案摘要")}>
-        <div>
-          <span>{t("Tools", "工具")}</span>
-          <strong>{profile.enabled_tools.length}</strong>
-          <small>/{options.tools.length || "—"}</small>
-        </div>
-        <div>
-          <span>{t("Load on demand", "按需加载")}</span>
-          <strong>{deferredCount}</strong>
-          <small>/{profile.enabled_tools.length || options.tools.length || "—"}</small>
-        </div>
-        <div>
-          <span>{t("Skills", "技能")}</span>
-          <strong>{skillCount}</strong>
-          <small>/{options.skills.length || "—"}</small>
-        </div>
-        <div>
-          <span>{t("Model", "模型")}</span>
-          <strong>{profile.model ? `${profile.provider_id || "?"} / ${profile.model}` : t("Inherit current", "沿用当前")}</strong>
-        </div>
-        <div>
-          <span>{t("Thinking", "思考")}</span>
-          <strong>{profile.thinking_level || "auto"}</strong>
-        </div>
-      </div>
-
-      <nav className="settings-tabs agent-editor-tabs" aria-label={t("Agent configuration categories", "Agent 配置分类")}>
-        {tabs.map(({ id, label, icon: Icon }) => (
-          <Button
-            key={id}
-            className={tab === id ? "active" : ""}
-            onClick={() => setTab(id)}
-          >
-            <Icon size={14} aria-hidden="true" />
-            {label}
-            {id === "tools" && <em>{profile.enabled_tools.length}</em>}
-            {id === "skills" && <em>{skillCount}</em>}
-          </Button>
-        ))}
-      </nav>
-
-      {tab === "basic" && (
-        <>
-          <SettingsGroup
-            title={t("Identity and runtime", "身份与运行时")}
-            description={t(
-              "How this Agent is named and which model it runs on.",
-              "该 Agent 的名称与使用的模型。"
-            )}
-          >
-            <div className="settings-form-grid">
-              <label className="settings-field">
-                <span>{t("Display name", "显示名称")}</span>
-                <input value={profile.name} onChange={(event) => onChange({ name: event.target.value })} />
-                <small>{t("Used in Agent selection menus and runtime status", "用于 Agent 选择菜单和运行状态展示")}</small>
-              </label>
-              <AgentRuntimeFields
-                config={config}
-                providerId={profile.provider_id}
-                model={profile.model}
-                thinkingLevel={profile.thinking_level}
-                inheritModelLabel={t("Inherit current model", "沿用当前模型")}
-                thinkingHelp={t("Override the provider's default reasoning effort", "覆盖供应商的默认推理强度")}
-                onChange={onChange}
-              />
-              <label className="settings-field full">
-                <span>{t("Purpose", "用途描述")}</span>
-                <input value={profile.description} onChange={(event) => onChange({ description: event.target.value })} />
-                <small>{t("The main Agent uses this description to decide when to invoke this Agent", "主 Agent 根据这段描述判断是否调用该 Agent")}</small>
-              </label>
-            </div>
-          </SettingsGroup>
-          <SettingsGroup
-            title={t("System prompt", "系统提示词")}
-            description={t(
-              "Stable role constraints only; the conversation supplies the task.",
-              "只写长期稳定的角色约束，具体任务由会话输入提供。"
-            )}
-          >
-            <div className="agent-prompt-preview">
-              <Button variant="secondary" onClick={() => setPromptOpen(true)}>
-                <Pencil size={14} />
-                {t("Edit prompt", "编辑提示词")}
-              </Button>
-              <p>{profile.system_prompt.trim()
-                ? profile.system_prompt
-                : t("No system prompt yet.", "还没有系统提示词。")}</p>
-              <small>{t(
-                `${profile.system_prompt.length} characters configured`,
-                `已配置 ${profile.system_prompt.length} 字符`
-              )}</small>
-            </div>
-            <AgentPromptEditorDialog
-              open={promptOpen}
-              value={profile.system_prompt}
-              onClose={() => setPromptOpen(false)}
-              onApply={(system_prompt) => onChange({ system_prompt })}
-            />
-            <div className="settings-field full">
-              <span>{t("Built-in prompt sections", "内置提示词分段")}</span>
-              <AgentPromptSections
-                sections={profile.prompt_sections}
-                options={options.prompt_sections}
-                onChange={(sections) => onChange({ prompt_sections: sections })}
-              />
-              <small>{t("These are appended to the system prompt. Turn them all off with an empty prompt above to get a blank agent.", "这些内容会追加到系统提示词。全部关闭且上方提示词留空，即得到空白 Agent。")}</small>
-            </div>
-          </SettingsGroup>
-        </>
-      )}
-      {tab === "tools" && (
-        <SettingsGroup
-          title={t("Tool whitelist", "工具白名单")}
-          description={t(
-            "The final set of tools this Agent may call.",
-            "该 Agent 可调用工具的最终集合。"
-          )}
-          actions={
-            <label className="agent-tools-exclusive">
-              <span>
-                <strong>{t("Exclusive whitelist", "独占白名单")}</strong>
-                <small>
-                  {t(
-                    "The list below is final: an empty list means no tools at all, and the subagent / todo / ask_question fallbacks are not added back.",
-                    "下面的列表就是最终结果：留空表示一个工具都不给，也不再补回 subagent / todo / ask_question 兜底工具。"
-                  )}
-                </small>
-              </span>
-              <input
-                type="checkbox"
-                className="switch-control"
-                checked={profile.tools_exclusive ?? false}
-                onChange={(event) => onChange({ tools_exclusive: event.target.checked })}
-              />
-            </label>
-          }
-        >
-          <AgentToolPermissions
-            tools={options.tools}
-            enabled={profile.enabled_tools}
-            deferred={profile.deferred_tools ?? []}
-            onChange={(enabledTools, deferredTools) => onChange({ enabled_tools: enabledTools, deferred_tools: deferredTools })}
-          />
-        </SettingsGroup>
-      )}
-      {tab === "skills" && (
-        <SettingsGroup
-          title={t("Skill exposure", "技能暴露")}
-          description={t(
-            "Which Skills this Agent can load at runtime.",
-            "该 Agent 运行时可以加载哪些 Skills。"
-          )}
-        >
-          <AgentSkillPermissions
-            skills={options.skills}
-            fullNames={profile.skills_full}
-            namedNames={profile.skills_named}
-            onChange={(fullNames, namedNames) => onChange({ skills_full: fullNames, skills_named: namedNames })}
-          />
-        </SettingsGroup>
-      )}
-    </section>
-  );
+  const deferred = profile.deferred_tools ?? [];
+  const deferredCount = deferred.includes(DEFERRED_ALL_NON_BASE) ? options.tools.filter((tool) => !tool.resident).length : deferred.length;
+  const builtin = profile.id === DEFAULT_AGENT_ID || BUILTIN_AGENT_PROFILES.some((item) => item.id === profile.id);
+  return <>
+    <DetailHeader title={profile.name || profile.id} badges={<>
+      <StatusBadge>{t(`${profile.enabled_tools.length} tools`, `${profile.enabled_tools.length} 个工具`)}</StatusBadge>
+      <StatusBadge>{t(`${deferredCount} on demand`, `${deferredCount} 个按需加载`)}</StatusBadge>
+      <StatusBadge>{t(`${skillCount} Skills`, `${skillCount} 个技能`)}</StatusBadge>
+    </>} actions={profile.id !== DEFAULT_AGENT_ID && <>
+      <InlineSwitch label={t("Register with main Agent", "向主 Agent 注册")} checked={profile.register_to_main} onChange={(register_to_main) => onChange({ register_to_main })} />
+      <InlineSwitch label={t("Load AGENT.md", "加载 AGENT.md")} checked={profile.load_instruction_files} onChange={(load_instruction_files) => onChange({ load_instruction_files })} />
+    </>} menuItems={builtin ? [] : [{ id: "delete", label: t("Delete profile", "删除档案"), danger: true, onSelect: onRemove }]} />
+    <LocalTabs value={tab} items={[{ id: "basic", label: t("Basics", "基础配置") }, { id: "tools", label: t("Tool permissions", "工具权限"), count: profile.enabled_tools.length }, { id: "skills", label: t("Skills", "技能"), count: skillCount }]} ariaLabel={t("Agent configuration categories", "Agent 配置分类")} onChange={(view) => setParams((current) => { const next = new URLSearchParams(current); next.set("view", view); return next; }, { replace: true })} />
+    {tab === "basic" && <AgentBasicsPanel key={profile.id} config={config} profile={profile} options={options} onChange={onChange} />}
+    {tab === "tools" && <SettingsPanel title={t("Tool whitelist", "工具白名单")} id={fieldAnchorId("agents.enabled_tools")}>
+      <SwitchField label={t("Exclusive whitelist", "独占白名单")} checked={profile.tools_exclusive ?? false} hint={t("Only selected tools are available; an empty list disables every tool, including fallback tools.", "仅提供所选工具；留空会关闭全部工具，包括兜底工具。")} onChange={(tools_exclusive) => onChange({ tools_exclusive })} />
+      <AgentToolPermissions tools={options.tools} enabled={profile.enabled_tools} deferred={deferred} onChange={(enabled_tools, deferred_tools) => onChange({ enabled_tools, deferred_tools })} />
+    </SettingsPanel>}
+    {tab === "skills" && <SettingsPanel title={t("Skill exposure", "技能暴露")} id={fieldAnchorId("agents.skills")}>
+      <AgentSkillPermissions skills={options.skills} fullNames={profile.skills_full} namedNames={profile.skills_named} onChange={(skills_full, skills_named) => onChange({ skills_full, skills_named })} />
+    </SettingsPanel>}
+  </>;
 }

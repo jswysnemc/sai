@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Plus, X } from "../../../shared/ui/icons";
 import type { MemoryType, MemoryWriteRequest, MemoryWriteResult } from "../../../api/contracts";
-import { Select } from "../../../shared/ui/select/select";
+import { Button } from "../../../shared/ui/button/button";
+import { ChoicePills, FieldGrid, SettingsField, SettingsPanel, SkTextArea, SkTextInput, SwitchField } from "../kit";
 import { useI18n } from "../../i18n/use-i18n";
 import { missingRationaleMarkers } from "./memory-filter";
 
@@ -74,89 +75,17 @@ export function MemoryComposeForm({ pending, workspace, onCollapse, onSubmit }: 
     setContent("");
   };
 
-  return (
-    <div className="memory-compose">
-      <div className="memory-compose-head">
-        <h3>{t("New memory", "新建记忆")}</h3>
-        <button
-          type="button"
-          className="settings-secondary"
-          onClick={onCollapse}
-          disabled={pending}
-        >
-          <X size={14} /> {t("Collapse", "收起")}
-        </button>
-      </div>
-      <div className="memory-compose-row">
-        <label className="memory-compose-field">
-          <span>{t("Identifier", "标识")}</span>
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder={t("kebab-case, also the file name", "短横线分隔，同时是文件名")}
-          />
-        </label>
-        <label className="memory-compose-field">
-          <span>{t("Summary", "摘要")}</span>
-          <input
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder={t("One line shown in the index", "索引里显示的一行")}
-          />
-        </label>
-      </div>
-      <div className="memory-compose-row">
-        <label className="memory-compose-field">
-          <span>{t("Type", "类型")}</span>
-          <Select
-            value={memoryType}
-            options={TYPE_HINTS.map((hint) => ({
-              value: hint.value,
-              label: t(hint.en, hint.zh),
-              description: t(hint.hintEn, hint.hintZh)
-            }))}
-            ariaLabel={t("Choose memory type", "选择记忆类型")}
-            onChange={(value) => setMemoryType(value as MemoryType)}
-          />
-        </label>
-        <label className="memory-compose-field">
-          <span>{t("Index hook", "索引提示")}</span>
-          <input
-            value={hook}
-            onChange={(event) => setHook(event.target.value)}
-            placeholder={t("Optional; defaults to the summary", "可选；留空沿用摘要")}
-          />
-        </label>
-        <label className="memory-compose-scope">
-          <input type="checkbox" checked={global} onChange={(event) => setGlobal(event.target.checked)} />
-          <span>
-            <strong>{t("Global", "全局")}</strong>
-            <small>{t("Applies in every workspace", "在所有工作区生效")}</small>
-          </span>
-        </label>
-      </div>
-      <textarea
-        value={content}
-        onChange={(event) => setContent(event.target.value)}
-        placeholder={t(
-          "The fact itself. For feedback and project, add Why: and How to apply: lines.",
-          "事实本身。工作方式与项目约束需补 Why: 与 How to apply: 两行。"
-        )}
-        rows={4}
-      />
-      {missing.length > 0 && (
-        <div className="memory-rationale-hint">
-          {t(
-            `Missing ${missing.join(" and ")} — without them a later turn cannot judge whether this still applies.`,
-            `缺 ${missing.join(" 与 ")}——缺了理由，下一轮无法判断这条在新情境下还适不适用。`
-          )}
-        </div>
-      )}
-      <button type="button" onClick={submit} disabled={!ready || pending}>
-        <Plus size={14} /> {pending ? t("Saving", "保存中") : t("Save memory", "保存记忆")}
-      </button>
-    </div>
-  );
+  return <SettingsPanel title={t("New memory", "新建记忆")} actions={<Button variant="secondary" onClick={onCollapse} disabled={pending}><X size={14} />{t("Collapse", "收起")}</Button>}>
+    <FieldGrid>
+      <SettingsField label={t("Identifier", "标识")}><SkTextInput value={name} onChange={setName} placeholder={t("kebab-case, also the file name", "短横线分隔，同时是文件名")} /></SettingsField>
+      <SettingsField label={t("Summary", "摘要")}><SkTextInput value={description} onChange={setDescription} /></SettingsField>
+      <SettingsField label={t("Type", "类型")} span="full"><ChoicePills value={memoryType} onChange={setMemoryType} options={TYPE_HINTS.map((hint) => ({ value: hint.value, label: t(hint.en, hint.zh) }))} /></SettingsField>
+      <SettingsField label={t("Index hook", "索引提示")} hint={t("Optional; defaults to the summary.", "可选；留空沿用摘要。") }><SkTextInput value={hook} onChange={setHook} /></SettingsField>
+      <SwitchField label={t("Global", "全局")} hint={t("Applies in every workspace.", "在所有工作区生效。") } checked={global} onChange={setGlobal} />
+      <SettingsField label={t("Content", "正文")} span="full" hint={missing.length ? t(`Add ${missing.join(" and ")} to explain when this applies.`, `补充 ${missing.join(" 与 ")}，说明适用条件。`) : undefined}><SkTextArea value={content} onChange={setContent} rows={4} /></SettingsField>
+    </FieldGrid>
+    <div><Button variant="primary" onClick={() => void submit()} disabled={!ready || pending}><Plus size={14} />{pending ? t("Saving", "保存中") : t("Save memory", "保存记忆")}</Button></div>
+  </SettingsPanel>;
 }
 
 /**

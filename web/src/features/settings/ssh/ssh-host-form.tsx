@@ -1,5 +1,5 @@
 import { useI18n } from "../../i18n/use-i18n";
-import { TextFieldRow } from "../controls/field-row";
+import { FieldGrid, SettingsField, SkTextInput } from "../kit";
 import { validateSshHostForm, type SshHostFormState } from "./ssh-host-form-state";
 
 type SshHostFormProps = {
@@ -30,57 +30,15 @@ export function SshHostForm(props: SshHostFormProps) {
     props.onChange({ ...props.form, ...patch });
   };
 
-  return (
-    <div className="ssh-host-form">
-      <TextFieldRow
-        label={t("Name", "名称")}
-        hint={t("Shown in the terminal target list; defaults to the hostname.", "展示在终端目标列表中，留空则使用主机名。")}
-        value={props.form.label}
-        placeholder={t("Build server", "构建服务器")}
-        onChange={(label) => update({ label })}
-      />
-      <TextFieldRow
-        label={t("Host", "主机")}
-        hint={errors.hostname ? t("Host is required.", "主机不能为空。") : undefined}
-        value={props.form.hostname}
-        placeholder="example.com"
-        onChange={(hostname) => update({ hostname })}
-      />
-      <TextFieldRow
-        label={t("Port", "端口")}
-        hint={
-          errors.port
-            ? t("Port must be between 1 and 65535.", "端口需在 1 到 65535 之间。")
-            : t("Defaults to 22 when left empty.", "留空时使用 22。")
-        }
-        value={props.form.port}
-        placeholder="22"
-        onChange={(port) => update({ port })}
-      />
-      <TextFieldRow
-        label={t("User", "用户名")}
-        hint={errors.username ? t("User is required.", "用户名不能为空。") : undefined}
-        value={props.form.username}
-        placeholder="deploy"
-        onChange={(username) => update({ username })}
-      />
-      <TextFieldRow
-        label={t("Private key", "私钥")}
-        hint={t(
-          "Path to the private key file. Leave empty to try the default keys under ~/.ssh.",
-          "私钥文件路径。留空则依次尝试 ~/.ssh 下的默认私钥。"
-        )}
-        value={props.form.identityFile}
-        placeholder="~/.ssh/id_ed25519"
-        onChange={(identityFile) => update({ identityFile })}
-      />
-      <TextFieldRow
-        label={t("Directory", "登录目录")}
-        hint={t("Directory to enter after login. Leave empty to use the remote default.", "登录后进入的目录，留空则使用远端默认目录。")}
-        value={props.form.remoteDirectory}
-        placeholder="/srv/app"
-        onChange={(remoteDirectory) => update({ remoteDirectory })}
-      />
-    </div>
-  );
+  const fields = [
+    { key: "label", en: "Name", zh: "名称", hint: t("Shown in the terminal target list; defaults to the hostname.", "展示在终端目标列表中，留空则使用主机名。") },
+    { key: "hostname", en: "Host", zh: "主机", error: errors.hostname ? t("Host is required.", "主机不能为空。") : undefined },
+    { key: "port", en: "Port", zh: "端口", hint: t("Defaults to 22 when empty.", "留空时使用 22。"), error: errors.port ? t("Port must be between 1 and 65535.", "端口需在 1 到 65535 之间。") : undefined },
+    { key: "username", en: "User", zh: "用户名", error: errors.username ? t("User is required.", "用户名不能为空。") : undefined },
+    { key: "identityFile", en: "Private key", zh: "私钥", hint: t("Path on the server; leave empty to try default keys under ~/.ssh.", "服务端私钥路径；留空尝试 ~/.ssh 下的默认私钥。") },
+    { key: "remoteDirectory", en: "Directory", zh: "登录目录", hint: t("Directory to enter after login; empty uses the remote default.", "登录后进入的目录，留空使用远端默认目录。") }
+  ] as const;
+  return <FieldGrid>{fields.map((field) => <SettingsField key={field.key} label={t(field.en, field.zh)} anchor={`ssh.${field.key}`} size={field.key === "port" ? "sm" : "full"} hint={"hint" in field ? field.hint : undefined} error={"error" in field ? field.error : undefined}>
+    <SkTextInput value={props.form[field.key]} inputMode={field.key === "port" ? "numeric" : undefined} onChange={(value) => update({ [field.key]: value })} />
+  </SettingsField>)}</FieldGrid>;
 }

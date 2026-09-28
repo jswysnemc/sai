@@ -37,7 +37,6 @@ export function SkillDetailView({ loading, onBack, ...editorProps }: SkillDetail
           <ArrowLeft size={14} />
           {t("Back to library", "返回技能库")}
         </Button>
-        <span>{editorProps.creating ? t("New Skill", "新增 Skill") : (editorProps.skill?.name ?? t("Skill details", "Skill 详情"))}</span>
       </div>
       {loading ? (
         <div className="skill-detail-loading" aria-label={t("Loading Skill", "正在加载 Skill")}>

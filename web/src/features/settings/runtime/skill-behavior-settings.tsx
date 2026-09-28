@@ -1,6 +1,6 @@
 import type { AppConfig } from "../../../api/contracts";
 import { Link } from "react-router-dom";
-import { SettingsGroup } from "../editor-layout";
+import { SettingsPanel } from "../kit";
 import { StructuredConfigFields } from "../structured-config-fields";
 import { useI18n } from "../../i18n/use-i18n";
 
@@ -25,7 +25,7 @@ export function SkillBehaviorSettings({
   const { t } = useI18n();
   const value = (config.skills as Record<string, unknown> | undefined) ?? {};
   return (
-    <SettingsGroup
+    <SettingsPanel
       title={t("Skill behavior", "技能行为")}
       description={t(
         "Control progressive loading and whether Skills may run shell commands. Skill files are managed separately.",
@@ -49,8 +49,10 @@ export function SkillBehaviorSettings({
       )}
       <StructuredConfigFields
         value={value}
+        anchorPrefix="skills"
+        configPath="skills"
         onChange={(next) => onConfigChange({ ...config, skills: next })}
       />
-    </SettingsGroup>
+    </SettingsPanel>
   );
 }

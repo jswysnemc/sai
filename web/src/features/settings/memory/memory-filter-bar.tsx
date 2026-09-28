@@ -1,5 +1,5 @@
-import { Search, X } from "../../../shared/ui/icons";
-import type { MemoryScope, MemorySummary, MemoryType } from "../../../api/contracts";
+import { ChoicePills, SettingsField, SkTextInput } from "../kit";
+import type { MemorySummary } from "../../../api/contracts";
 import { useI18n } from "../../i18n/use-i18n";
 import {
   countMemories,
@@ -53,53 +53,9 @@ export function MemoryFilterBar({
   const { t } = useI18n();
   const counts = countMemories(entries);
 
-  return (
-    <div className="memory-filter-bar">
-      <label className="memory-search">
-        <Search size={14} />
-        <input
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-          placeholder={t("Filter by identifier or summary", "按标识或摘要筛选")}
-          aria-label={t("Filter memories", "筛选记忆")}
-        />
-        {query && (
-          <button type="button" onClick={() => onQueryChange("")} aria-label={t("Clear filter", "清除筛选")}>
-            <X size={14} />
-          </button>
-        )}
-      </label>
-
-      <div className="memory-chip-row" role="group" aria-label={t("Memory type", "记忆类型")}>
-        {TYPE_LABELS.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            className="memory-chip"
-            data-active={type === option.value}
-            data-type={option.value}
-            onClick={() => onTypeChange(option.value)}
-          >
-            {t(option.en, option.zh)}
-            <span className="memory-chip-count">{counts.types[option.value]}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="memory-chip-row" role="group" aria-label={t("Memory scope", "记忆作用域")}>
-        {SCOPE_LABELS.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            className="memory-chip"
-            data-active={scope === option.value}
-            onClick={() => onScopeChange(option.value)}
-          >
-            {t(option.en, option.zh)}
-            <span className="memory-chip-count">{counts.scopes[option.value]}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+  return <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,max-content)_minmax(0,max-content)]">
+    <SettingsField label={t("Search", "搜索")} anchor="memory.search" span="full"><SkTextInput type="search" value={query} onChange={onQueryChange} placeholder={t("Filter by identifier or summary", "按标识或摘要筛选")} /></SettingsField>
+    <SettingsField label={t("Memory type", "记忆类型")} anchor="memory.type"><ChoicePills value={type} onChange={onTypeChange} options={TYPE_LABELS.map((option) => ({ value: option.value, label: `${t(option.en, option.zh)} ${counts.types[option.value]}` }))} /></SettingsField>
+    <SettingsField label={t("Memory scope", "记忆作用域")} anchor="memory.scope"><ChoicePills value={scope} onChange={onScopeChange} options={SCOPE_LABELS.map((option) => ({ value: option.value, label: `${t(option.en, option.zh)} ${counts.scopes[option.value]}` }))} /></SettingsField>
+  </div>;
 }

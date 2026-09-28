@@ -1,5 +1,5 @@
 import type { AppConfig } from "../../../api/contracts";
-import { Select } from "../../../shared/ui/select/select";
+import { SettingsField, SkSelect } from "../kit";
 import { AGENT_THINKING_OPTIONS, buildAgentModelChoices } from "../../agents/agent-runtime-options";
 import { useI18n } from "../../i18n/use-i18n";
 
@@ -46,9 +46,8 @@ export function AgentRuntimeFields({
   const current = providerId && model ? `${providerId}\t${model}` : "";
 
   return <>
-    <div className="settings-field">
-      <span>{t("Model", "模型")}</span>
-      <Select
+    <SettingsField label={t("Model", "模型")} anchor="agents.model" hint={t("Task-specific model settings take priority over this profile; this profile overrides shared defaults.", "任务专属模型优先于此档案，此档案优先于共享默认值。")}>
+      <SkSelect
         value={current}
         options={[{ value: "", label: inheritModelLabel }, ...modelChoices]}
         onChange={(value) => {
@@ -58,12 +57,9 @@ export function AgentRuntimeFields({
         disabled={modelChoices.length === 0}
         ariaLabel={t("Agent model", "Agent 模型")}
       />
-      <small>{t("For subagents, task-specific settings take priority over this model; this model takes priority over shared defaults.", "作为子任务运行时，类型专用设置优先于此处模型，此处模型优先于共享默认值。")}</small>
-    </div>
-    <div className="settings-field">
-      <span>{t("Thinking level", "思考等级")}</span>
-      <Select value={thinkingLevel || "auto"} options={AGENT_THINKING_OPTIONS} onChange={(value) => onChange({ thinking_level: value })} ariaLabel={t("Agent thinking level", "Agent 思考等级")} />
-      <small>{thinkingHelp}</small>
-    </div>
+    </SettingsField>
+    <SettingsField label={t("Thinking level", "思考等级")} anchor="agents.thinking_level" hint={thinkingHelp}>
+      <SkSelect value={thinkingLevel || "auto"} options={AGENT_THINKING_OPTIONS} onChange={(value) => onChange({ thinking_level: value })} ariaLabel={t("Agent thinking level", "Agent 思考等级")} />
+    </SettingsField>
   </>;
 }

@@ -1,82 +1,29 @@
-import { Braces, RefreshCw, Wrench } from "../../../shared/ui/icons";
-import { useEffect, useState } from "react";
+import { RefreshCw } from "../../../shared/ui/icons";
+import { useState } from "react";
 import type { McpToolInfo } from "../../../api/mcp-tool-contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
-import "./mcp-tool-browser.css";
+import { MasterDetail, ObjectList, SettingsPanel } from "../kit";
 
-type McpToolBrowserProps = {
-  serverId: string;
-  tools: McpToolInfo[];
-  scanning: boolean;
-  scanned: boolean;
-  error: string | null;
-  onScan: () => void;
-};
+type Props = { serverId: string; tools: McpToolInfo[]; scanning: boolean; scanned: boolean; error: string | null; onScan: () => void };
 
 /**
- * 展示 MCP 工具扫描结果及完整输入参数结构。
- *
- * @param props 服务标识、工具结果、扫描状态与触发回调
- * @returns MCP 工具浏览器
+ * 【MCP】【工具发现】展示可筛选、可折叠的工具目录和完整输入结构。
+ * @param props 服务标识、发现结果、请求状态与扫描回调
+ * @returns 工具目录面板
  */
-export function McpToolBrowser({ serverId, tools, scanning, scanned, error, onScan }: McpToolBrowserProps) {
+export function McpToolBrowser({ serverId, tools, scanning, scanned, error, onScan }: Props) {
   const { t } = useI18n();
   const [selectedName, setSelectedName] = useState("");
-
-  useEffect(() => {
-    if (!tools.some((tool) => tool.name === selectedName)) {
-      setSelectedName(tools[0]?.name ?? "");
-    }
-  }, [selectedName, tools]);
-
-  const selected = tools.find((tool) => tool.name === selectedName) ?? null;
-  return (
-    <section className="mcp-tool-browser">
-      <header className="mcp-tool-browser-head">
-        <div>
-          <strong>{t("Discovered tools", "已发现工具")}</strong>
-          <small>{t("Inspect descriptions and input JSON Schema returned by the server.", "查看服务返回的说明与输入 JSON Schema。")}</small>
-        </div>
-        <Button className="settings-secondary" onClick={onScan} disabled={scanning}>
-          <RefreshCw size={14} className={scanning ? "is-spinning" : ""} />
-          {scanning ? t("Scanning", "正在扫描") : t("Scan tools", "扫描工具")}
-        </Button>
-      </header>
-
-      {error && <div className="settings-inline-error">{error}</div>}
-      {!scanned && !scanning ? (
-        <div className="mcp-tool-empty"><Wrench size={16} /><span>{t(`Scan ${serverId} to load its tool catalog.`, `扫描 ${serverId} 以读取工具目录。`)}</span></div>
-      ) : scanned && tools.length === 0 ? (
-        <div className="mcp-tool-empty"><Wrench size={16} /><span>{t("The server returned no tools.", "服务未返回工具。")}</span></div>
-      ) : (
-        <div className="mcp-tool-browser-body">
-          <nav className="mcp-tool-list" aria-label={t("MCP tools", "MCP 工具列表")}>
-            {tools.map((tool) => (
-              <button
-                type="button"
-                key={tool.name}
-                className={tool.name === selectedName ? "active" : ""}
-                onClick={() => setSelectedName(tool.name)}
-              >
-                <Wrench size={14} />
-                <span><strong>{tool.name}</strong><small>{tool.description || t("No description", "无说明")}</small></span>
-              </button>
-            ))}
-          </nav>
-          {selected && (
-            <article className="mcp-tool-detail">
-              <div className="mcp-tool-detail-title">
-                <span><Wrench size={14} />{selected.name}</span>
-                <code>mcp_{selected.server_id}_{selected.name}</code>
-              </div>
-              <p>{selected.description || t("This tool does not provide a description.", "此工具未提供说明。")}</p>
-              <div className="mcp-tool-schema-title"><Braces size={14} />{t("Input schema", "输入参数结构")}</div>
-              <pre>{JSON.stringify(selected.input_schema ?? {}, null, 2)}</pre>
-            </article>
-          )}
-        </div>
-      )}
-    </section>
-  );
+  const selected = tools.find((tool) => tool.name === selectedName) ?? tools[0];
+  return <SettingsPanel title={t("Discovered tools", "已发现工具")} collapsible actions={<Button variant="secondary" onClick={onScan} disabled={scanning}><RefreshCw size={14} />{scanning ? t("Scanning", "正在扫描") : t("Scan tools", "扫描工具")}</Button>}>
+    {error && <div className="settings-inline-error">{error}</div>}
+    {!scanned && !scanning ? <p className="text-xs text-muted">{t(`Scan ${serverId} to load its tool catalog.`, `扫描 ${serverId} 以读取工具目录。`)}</p> : !tools.length ? <p className="text-xs text-muted">{scanning ? t("Loading tools", "正在读取工具") : t("The server returned no tools.", "服务未返回工具。")}</p> : <MasterDetail list={<ObjectList title={t("Tools", "工具")} items={tools.map((tool) => ({ id: tool.name, name: tool.name, meta: tool.description }))} selectedId={selected?.name ?? ""} onSelect={setSelectedName} searchPlaceholder={t("Search tools", "搜索工具")} />}>
+      {selected && <div className="grid min-w-0 gap-2 text-xs">
+        <strong className="break-all">{selected.name}</strong>
+        <p className="whitespace-pre-wrap break-words">{selected.description}</p>
+        <pre className="max-h-64 overflow-auto rounded border border-[var(--line)] p-2 text-xs">{JSON.stringify(selected.input_schema ?? {}, null, 2)}</pre>
+      </div>}
+    </MasterDetail>}
+  </SettingsPanel>;
 }

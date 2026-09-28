@@ -30,9 +30,9 @@ export function SkillCard({ skill, onOpen }: SkillCardProps) {
                 ? <Globe2 size={16} />
                 : <BookOpen size={16} />}
           </span>
-          <span className="skill-card-status" data-enabled={skill.enabled}>
+          <span className="skill-card-status" data-enabled={skill.enabled} aria-label={skill.enabled ? t("Enabled", "已启用") : t("Disabled", "已禁用")}>
             <i aria-hidden="true" />
-            {skill.enabled ? t("Enabled", "已启用") : t("Disabled", "已禁用")}
+            {!skill.enabled && t("Disabled", "已禁用")}
           </span>
         </span>
         <span className="skill-card-copy">

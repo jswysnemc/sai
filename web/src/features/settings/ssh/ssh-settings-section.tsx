@@ -1,12 +1,12 @@
-import { Download, Pencil, Plus, Server, Trash2 } from "../../../shared/ui/icons";
-import { useEffect, useState } from "react";
+import { Download, Pencil, Plus, Trash2 } from "../../../shared/ui/icons";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../../../api/client";
 import type { SshHost } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import { Modal } from "../../../shared/ui/dialog/modal";
 import { useI18n } from "../../i18n/use-i18n";
-import { EditorHeader, SettingsGroup } from "../editor-layout";
+import { DataTable, SettingsPanel, SkTextInput } from "../kit";
 import { SshHostForm } from "./ssh-host-form";
 import {
   EMPTY_SSH_HOST_FORM,
@@ -30,6 +30,7 @@ import "./ssh-settings.css";
 export function SshSettingsSection() {
   const { t } = useI18n();
   const confirm = useConfirm();
+  const [query, setQuery] = useState("");
   const [hosts, setHosts] = useState<SshHost[]>([]);
   const [editing, setEditing] = useState<SshHost | null>(null);
   const [form, setForm] = useState<SshHostFormState>(EMPTY_SSH_HOST_FORM);
@@ -124,64 +125,26 @@ export function SshSettingsSection() {
     }
   };
 
-  return (
-    <>
-      <EditorHeader
-        kicker={t("Remote access", "远程访问")}
-        title={t("SSH", "SSH")}
-        description={t(
-          "Hosts for the remote terminal and the agent's SSH tools. Only the private key path is stored — passwords are typed when connecting. Enable the SSH group on the Agent page so the model can use these hosts.",
-          "这些主机同时给远程终端和 Agent 的 SSH 工具用。只保存私钥路径，密码在连接时输入。要让模型用这些主机，请在 Agent 配置里打开「SSH 远程」工具组。"
-        )}
-      />
-
-      <SettingsGroup
-        title={t("Hosts", "主机")}
-        description={t(
-          "Sai connects from the machine running the server, not from the browser.",
-          "连接由运行 Sai 服务的机器发起，而非浏览器所在机器。"
-        )}
-      >
-        <div className="ssh-host-actions">
-          <Button variant="primary" onClick={startCreate}>
-            <Plus size={14} />
-            {t("Add host", "新增主机")}
-          </Button>
-          <Button variant="secondary" onClick={() => setImportOpen(true)}>
-            <Download size={14} />
-            {t("Import from ~/.ssh/config", "从 ~/.ssh/config 导入")}
-          </Button>
-        </div>
-
-        {hosts.length === 0 ? (
-          <p className="ssh-host-empty">{t("No SSH hosts configured yet.", "尚未配置 SSH 主机。")}</p>
-        ) : (
-          <ul className="ssh-host-list">
-            {hosts.map((host) => (
-              <li key={host.id}>
-                <Server size={14} />
-                <div className="ssh-host-info">
-                  <strong>{host.label}</strong>
-                  <span>{sshHostAddress(host)}</span>
-                </div>
-                <button type="button" onClick={() => startEdit(host)} aria-label={t("Edit host", "编辑主机")}>
-                  <Pencil size={14} />
-                </button>
-                <button
-                  type="button"
-                  className="ssh-host-remove"
-                  onClick={() => void remove(host)}
-                  aria-label={t("Remove host", "删除主机")}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {error && <p className="ssh-host-error">{error}</p>}
-      </SettingsGroup>
-
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return hosts.filter((host) => [host.label, sshHostAddress(host)].some((value) => value.toLowerCase().includes(needle)));
+  }, [hosts, query]);
+  return <>
+    <SettingsPanel title={t("Hosts", "主机")} description={t("The Sai server establishes connections. Passwords are requested when connecting; only private key paths are stored.", "连接由 Sai 服务端发起。密码在连接时输入，此处只保存私钥路径。")} actions={<>
+      <Button variant="primary" onClick={startCreate}><Plus size={14} />{t("Add host", "新增主机")}</Button>
+      <Button variant="secondary" onClick={() => setImportOpen(true)}><Download size={14} />{t("Import from ~/.ssh/config", "从 ~/.ssh/config 导入")}</Button>
+    </>}>
+      <SkTextInput type="search" value={query} onChange={setQuery} aria-label={t("Search hosts", "搜索主机")} placeholder={t("Search name or address", "搜索名称或地址")} />
+      <DataTable label={t("SSH hosts", "SSH 主机")} rows={visible} rowKey={(host) => host.id} columns={[
+        { id: "name", header: t("Name", "名称"), sortValue: (host) => host.label, render: (host) => host.label },
+        { id: "address", header: t("Address", "地址"), sortValue: sshHostAddress, render: (host) => <span className="break-all">{sshHostAddress(host)}</span> },
+        { id: "actions", header: t("Actions", "操作"), render: (host) => <div className="flex gap-1">
+          <Button variant="ghost" size="icon" onClick={() => startEdit(host)} aria-label={t("Edit host", "编辑主机")}><Pencil size={14} /></Button>
+          <Button variant="ghost-danger" size="icon" onClick={() => void remove(host)} aria-label={t("Remove host", "删除主机")}><Trash2 size={14} /></Button>
+        </div> }
+      ]} />
+      {error && <p className="ssh-host-error">{error}</p>}
+    </SettingsPanel>
       <Modal
         open={formOpen}
         title={editing ? t("Edit host", "编辑主机") : t("Add host", "新增主机")}
@@ -202,6 +165,5 @@ export function SshSettingsSection() {
       </Modal>
 
       <SshImportDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={() => void refresh()} />
-    </>
-  );
+    </>;
 }

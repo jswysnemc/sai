@@ -22,8 +22,9 @@ export function useSettingsItem(ids: readonly string[], fallbackId?: string): [s
   }, [setParams]);
 
   useEffect(() => {
-    if (selected !== requested) select(selected);
-  }, [requested, select, selected]);
+    // 1. 异步列表尚未就绪时保留地址中的对象，避免刷新丢失选择
+    if (ids.length > 0 && selected !== requested) select(selected);
+  }, [ids.length, requested, select, selected]);
 
   return [selected, select];
 }

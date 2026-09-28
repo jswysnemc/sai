@@ -1,77 +1,4 @@
-.agent-settings-shell {
-  display: grid;
-  gap:var(--space-xl);
-  min-width: 0;
-}
-
-.agent-surface-defaults {
-  display: grid;
-  gap:var(--space-sm);
-  padding-bottom:var(--space-lg);
-  border-bottom: 1px solid var(--line);
-}
-
-.agent-surface-defaults .settings-section-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap:var(--space-lg);
-}
-
-.agent-surface-defaults .settings-section-heading strong,
-.agent-surface-defaults .settings-section-heading small {
-  display: block;
-}
-
-.agent-surface-defaults .settings-section-heading strong {
-  color: var(--ink);
-  font-size:var(--text-base);
-}
-
-.agent-surface-defaults .settings-section-heading small {
-  margin-top:var(--space-3xs);
-  color: var(--ink-soft);
-  font-size:var(--text-xs);
-  line-height: 1.35;
-}
-
-/*
- * 入口默认 Agent
- *
- * 每个入口就是一次下拉选择，标签 + 下拉两行足够。此前用的卡片把当前值在
- * 标题右侧和下拉框里各显示一遍，说明文字又与 title 属性重复，四张卡撑掉
- * 近 150px 高度换来的信息量只有四个选择框。
- */
-.agent-surface-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap:var(--space-sm) var(--space-md);
-}
-
-.agent-surface-field {
-  display: grid;
-  gap:var(--space-3xs);
-  min-width: 0;
-}
-
-.agent-surface-field > span {
-  color: var(--ink-soft);
-  font-size:var(--text-2xs);
-  line-height: var(--leading-control);
-}
-
-.agent-surface-field .ui-select > button {
-  min-height: 1.875rem;
-  padding:0 var(--space-sm);
-  border-radius:var(--radius-2);
-  font-size:var(--text-sm);
-}
-
-.agent-surface-field .ui-select > button svg {
-  width: 0.875rem;
-  height: 0.875rem;
-}
-
+.agent-settings-shell { display: grid; gap: 1rem; min-width: 0; }
 .agent-settings-loading,
 .agent-settings-load-error {
   display: flex;
@@ -108,11 +35,9 @@
 
 .agent-settings-loading small,
 .agent-settings-load-error small {
-  overflow: hidden;
   color: var(--ink-soft);
   font-size:var(--text-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .agent-settings-load-error {
@@ -121,63 +46,4 @@
 
 .agent-settings-load-error strong {
   color: var(--danger);
-}
-
-.agent-profile-workspace {
-  align-items: stretch;
-  gap: 0;
-  min-height: calc(100dvh - 8rem);
-}
-
-.agent-profile-workspace .object-list {
-  max-height: none;
-  padding-right: 0;
-}
-
-.agent-profile-workspace .object-list-item {
-  padding:var(--space-xs) var(--space-sm);
-}
-
-/*
- * 档案元信息单行截断。
- *
- * 「内置 · 已注册 · 24 工具 · 31 技能」这类串长短不一，一旦换行，列表项就
- * 高低参差、扫读时对不齐。这里只作用于 Agent 工作区，不动其他设置页的列表。
- */
-.agent-profile-workspace .object-list-copy small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agent-profile-workspace .object-list-search {
-  height: 2rem;
-  margin-bottom:var(--space-sm);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .agent-settings-loading > span { animation: none; }
-}
-
-@media (max-width: 75rem) {
-  .agent-surface-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 48rem) {
-  .agent-settings-shell { gap:var(--space-lg); }
-
-  .agent-settings-load-error {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .agent-settings-load-error .settings-secondary {
-    width: 100%;
-  }
-
-  .agent-profile-workspace {
-    min-height: 0;
-  }
 }

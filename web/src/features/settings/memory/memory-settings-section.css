@@ -44,9 +44,7 @@
   background: var(--technical-surface-muted, transparent);
   font-size: var(--text-xs);
   opacity: 0.7;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   max-width: 100%;
 }
 

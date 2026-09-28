@@ -1,3 +1,4 @@
+import { AGENT_CAPABILITY_ENTRIES } from "./entries-agent-capabilities";
 import { WEB_SEARCH_ENTRIES } from "./entries-web-search";
 import { MODEL_SERVICE_SEARCH_ENTRIES } from "./entries-model-services";
 import { GIT_SEARCH_ENTRIES } from "./entries-git";
@@ -15,6 +16,7 @@ export type { SettingsSearchEntry } from "./settings-search-types";
  * 校验分区与子页均已注册、锚点不重复。
  */
 export const SETTINGS_SEARCH_INDEX: readonly SettingsSearchEntry[] = [
+  ...AGENT_CAPABILITY_ENTRIES,
   ...GIT_SEARCH_ENTRIES,
   ...RUNTIME_SEARCH_ENTRIES,
   ...PERSONALIZATION_SEARCH_ENTRIES,
