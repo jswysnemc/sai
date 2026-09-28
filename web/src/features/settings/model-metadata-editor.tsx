@@ -6,6 +6,8 @@ import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { ModelIcon } from "../../shared/ui/model-icon";
 import { DetailHeader, EmptyGuide, MasterDetail, ObjectList, SettingsPanel, SkTextInput } from "./kit";
 import { ModelCapabilityFields } from "./model/model-capability-fields";
+import { ModelMetadataPreview } from "./model/model-metadata-preview";
+import { ProviderConnectionTest } from "./model/provider-connection-test";
 import { useI18n } from "../i18n/use-i18n";
 
 type ModelMetadataEditorProps = {
@@ -98,6 +100,10 @@ export function ModelMetadataEditor({ provider, onChange }: ModelMetadataEditorP
         <MasterDetail list={<ObjectList title={t("Models", "模型")} items={models.map((model) => ({ id: model, name: model, marked: model === provider.default_model, icon: <ModelIcon model={model} size={14} /> }))} selectedId={selected} onSelect={setSelected} searchPlaceholder={t("Filter models", "筛选模型")} />}>
           <DetailHeader title={selected} subtitle={t("Model capabilities and context", "单模型能力与上下文")} actions={<Button size="small" disabled={provider.default_model === selected} onClick={() => onChange({ default_model: selected })}>{provider.default_model === selected ? t("Default model", "默认模型") : t("Set as default", "设为默认")}</Button>} menuItems={[{ id: "delete", label: t(`Delete model ${selected}`, `删除模型 ${selected}`), icon: <Trash2 size={14} />, danger: true, onSelect: () => void removeModel(selected) }]} />
           <ModelCapabilityFields key={selected} metadata={metadata} onChange={updateMetadata} />
+          <SettingsPanel title={t("Test selected model", "测试当前模型")} description={t("Uses this model and the selected provider key; the default model stays unchanged.", "使用当前模型与供应商所选密钥，不修改默认模型。")}>
+            <ProviderConnectionTest provider={provider} model={selected} selectedKeyId={provider.api_key_selected} />
+          </SettingsPanel>
+          <ModelMetadataPreview model={selected} metadata={metadata} />
         </MasterDetail>
       )}
     </SettingsPanel>

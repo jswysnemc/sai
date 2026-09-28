@@ -1,4 +1,5 @@
 import type { AppConfig } from "../../../api/contracts";
+import { ContextBudgetPreview } from "./context-budget-preview";
 import { useI18n } from "../../i18n/use-i18n";
 import { CompactionModelField } from "../compaction-model-field";
 import { FieldGrid, SettingsField, SettingsPanel, SkNumberInput } from "../kit";
@@ -36,6 +37,7 @@ export function ContextSettings({ config, onConfigChange }: RuntimeSettingsProps
         <CompactionModelField config={config} onConfigChange={onConfigChange} />
         <MemoryExtractionModelField config={config} onConfigChange={onConfigChange} />
       </FieldGrid>
+      <ContextBudgetPreview limit={context.default_max_chars ?? 120_000} ratio={context.compaction_ratio ?? 0.9} reserve={context.compaction_reserve_tokens ?? 50_000} />
     </SettingsPanel>
   );
 }

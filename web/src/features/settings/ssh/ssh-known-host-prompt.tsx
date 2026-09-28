@@ -3,11 +3,13 @@ import type { SshHostKeyPrompt } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { Modal } from "../../../shared/ui/dialog/modal";
 import { useI18n } from "../../i18n/use-i18n";
+import { InlineNotice } from "../kit";
 import "./ssh-known-host-prompt.css";
 
 type SshKnownHostPromptProps = {
   prompt: SshHostKeyPrompt | null;
   busy: boolean;
+  error?: string | null;
   onTrust: () => void;
   onCancel: () => void;
 };
@@ -59,6 +61,7 @@ export function SshKnownHostPrompt(props: SshKnownHostPromptProps) {
         </>
       }
     >
+      {props.error && <InlineNotice tone="danger">{props.error}</InlineNotice>}
       <div className={`ssh-known-host ${changed ? "changed" : "unknown"}`}>
         <div className="ssh-known-host-icon">
           {changed ? <ShieldAlert size={16} /> : <ShieldQuestion size={16} />}

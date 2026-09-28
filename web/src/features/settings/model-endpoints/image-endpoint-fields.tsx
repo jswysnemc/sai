@@ -126,7 +126,7 @@ export function ImageEndpointFields({
             </Button>
           </div>
           {fetchError && <p className="provider-probe-error">{fetchError}</p>}
-          {models.length > 0 && <div className="model-endpoint-models">{models.map((model) => <span key={model}>{model}</span>)}</div>}
+          {models.length > 0 && <div className="model-endpoint-models">{models.map((model) => <Button key={model} size="small" variant={model === activeModel ? "primary" : "secondary"} aria-pressed={model === activeModel} onClick={() => onPatch({ model })}>{model}</Button>)}</div>}
         </div>
       </SettingsPanel>
 

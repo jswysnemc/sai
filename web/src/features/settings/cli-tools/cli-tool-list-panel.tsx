@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
-import { Button } from "../../../shared/ui/button/button";
-import { ObjectList } from "../kit";
+import { ChoicePills, LocalTabs, SkTextInput } from "../kit";
 import {
-  cliToolCategoryLabel,
   cliToolLabel,
   getCliToolCatalogEntry
 } from "./cli-tool-catalog";
@@ -29,82 +27,25 @@ type CliToolListPanelProps = {
  */
 export function CliToolListPanel({ tools, selectedId, onSelect }: CliToolListPanelProps) {
   const { locale, t } = useI18n();
+  const [query, setQuery] = useState("");
   const [status, setStatus] = useState<CliToolStatusFilter>("all");
 
-  // 1. 状态筛选只改变左侧列表，不修改工具配置
+  // 1. 状态筛选只改变导航列表，不修改工具配置
   const visibleTools = useMemo(
-    () => tools.filter(({ config }) => {
+    () => tools.filter(({ id, config }) => {
       const enabled = config.enabled !== false;
-      return status === "all" || (status === "enabled" ? enabled : !enabled);
+      const matches = `${id} ${cliToolLabel(getCliToolCatalogEntry(id), locale)}`.toLowerCase().includes(query.trim().toLowerCase());
+      return matches && (status === "all" || (status === "enabled" ? enabled : !enabled));
     }),
-    [status, tools]
+    [locale, query, status, tools]
   );
 
-  return (
-    <ObjectList
-      title={t("CLI assistant tools", "CLI 助手工具")}
-      items={visibleTools.map(({ id, config }) => {
-        const entry = getCliToolCatalogEntry(id);
-        const Icon = entry.icon;
-        const enabled = config.enabled !== false;
-        const state = enabled ? t("Enabled", "已启用") : t("Disabled", "已停用");
-        return {
-          id,
-          name: cliToolLabel(entry, locale),
-          meta: cliToolCategoryLabel(entry.category, locale) + " · " + state,
-          icon: <Icon size={14} />,
-          marked: enabled
-        };
-      })}
-      selectedId={selectedId}
-      searchPlaceholder={t("Search CLI tools", "搜索 CLI 助手工具")}
-      headerSlot={(
-        <div className="cli-tool-filter" aria-label={t("Filter tools by status", "按状态筛选工具")}>
-          <FilterButton
-            active={status === "all"}
-            label={t("All", "全部")}
-            onClick={() => setStatus("all")}
-          />
-          <FilterButton
-            active={status === "enabled"}
-            label={t("Enabled", "启用")}
-            onClick={() => setStatus("enabled")}
-          />
-          <FilterButton
-            active={status === "disabled"}
-            label={t("Disabled", "停用")}
-            onClick={() => setStatus("disabled")}
-          />
-        </div>
-      )}
-      onSelect={onSelect}
-    />
-  );
-}
-
-/**
- * 渲染工具状态筛选按钮。
- *
- * @param props 激活状态、按钮文案和点击回调
- * @returns 统一样式筛选按钮
- */
-function FilterButton({
-  active,
-  label,
-  onClick
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <Button
-      variant="secondary"
-      className={active ? "active" : ""}
-      aria-pressed={active}
-      onClick={onClick}
-    >
-      {label}
-    </Button>
-  );
+  return <div className="grid min-w-0 gap-2">
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="w-full sm:max-w-64"><SkTextInput type="search" value={query} onChange={setQuery} aria-label={t("Search CLI tools", "搜索 CLI 助手工具")} placeholder={t("Search CLI tools", "搜索 CLI 助手工具")} /></div>
+      <ChoicePills value={status} options={[{ value: "all", label: t("All", "全部") }, { value: "enabled", label: t("Enabled", "启用") }, { value: "disabled", label: t("Disabled", "停用") }]} onChange={setStatus} ariaLabel={t("Filter tools by status", "按状态筛选工具")} />
+    </div>
+    <LocalTabs value={selectedId} items={visibleTools.map(({ id }) => { const entry = getCliToolCatalogEntry(id); const Icon = entry.icon; return { id, label: cliToolLabel(entry, locale), icon: <Icon size={14} /> }; })} onChange={onSelect} ariaLabel={t("CLI assistant tools", "CLI 助手工具")} />
+    {!visibleTools.length && <p className="m-0 text-xs text-muted">{t("No matching tools", "没有匹配的工具")}</p>}
+  </div>;
 }

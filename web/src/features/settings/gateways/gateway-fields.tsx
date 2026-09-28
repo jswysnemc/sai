@@ -3,14 +3,14 @@ import { useI18n } from "../../i18n/use-i18n";
 import { ChoicePills, FieldGrid, SettingsField, SkSecretInput, SkTextInput } from "../kit";
 import type { GatewayId } from "../settings-types";
 
-type Props = { gateway: GatewayId; config: AppConfig; onChange: (patch: Record<string, unknown>) => void };
+type Props = { gateway: GatewayId; config: AppConfig; secretSentinel: string; onChange: (patch: Record<string, unknown>) => void };
 
 /**
  * 【网关】【配置字段】按照平台展示接入与认证字段。
  * @param props 平台、配置与草稿更新回调
  * @returns 响应式字段栅格
  */
-export function GatewayFields({ gateway, config, onChange }: Props) {
+export function GatewayFields({ gateway, config, secretSentinel, onChange }: Props) {
   const { t } = useI18n();
   const value = config.gateways[gateway];
   const fields = gateway === "qq" ? [
@@ -30,7 +30,7 @@ export function GatewayFields({ gateway, config, onChange }: Props) {
   return <FieldGrid>
     {gateway === "qq" && <SettingsField label={t("Transport", "传输方式")} anchor="gateways.qq.transport"><ChoicePills value={config.gateways.qq.transport} options={[{ value: "webhook", label: "Webhook" }, { value: "websocket", label: "WebSocket" }]} onChange={(transport) => onChange({ transport })} /></SettingsField>}
     {fields.map((field) => <SettingsField key={field.key} label={t(field.en, field.zh)} anchor={`gateways.${gateway}.${field.key}`} configKey={`gateways.${gateway}.${field.key}`} size={field.size as "sm" | "md" | undefined} hint={field.hint}>
-      {field.secret ? <SkSecretInput value={String(value[field.key as keyof typeof value] ?? "")} onChange={(next) => onChange({ [field.key]: next })} /> : <SkTextInput value={String(value[field.key as keyof typeof value] ?? "")} onChange={(next) => onChange({ [field.key]: next })} />}
+      {field.secret ? <SkSecretInput secretSentinel={secretSentinel} value={String(value[field.key as keyof typeof value] ?? "")} onChange={(next) => onChange({ [field.key]: next })} /> : <SkTextInput value={String(value[field.key as keyof typeof value] ?? "")} onChange={(next) => onChange({ [field.key]: next })} />}
     </SettingsField>)}
   </FieldGrid>;
 }

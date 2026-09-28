@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { useSettingsItem } from "../shell/use-settings-item";
 import type { AppConfig } from "../../../api/contracts";
-import { DetailHeader, EmptyGuide, MasterDetail } from "../kit";
-import { CliToolConfigEditor } from "./cli-tool-config-editor";
+import { DetailHeader, EmptyGuide } from "../kit";
 import { CliToolListPanel } from "./cli-tool-list-panel";
+import { CliToolConfigEditor } from "./cli-tool-config-editor";
 import {
   cliToolDescription,
   cliToolLabel,
@@ -45,11 +45,8 @@ export function CliToolsSettingsSection({
   const entry = getCliToolCatalogEntry(selected.id);
 
   return (
-    <MasterDetail list={<CliToolListPanel
-        tools={tools}
-        selectedId={selected.id}
-        onSelect={setSelectedId}
-      />}>
+    <div className="min-w-0">
+        <CliToolListPanel tools={tools} selectedId={selected.id} onSelect={setSelectedId} />
         <DetailHeader
           title={cliToolLabel(entry, locale)}
           subtitle={cliToolDescription(entry, locale)}
@@ -66,6 +63,6 @@ export function CliToolsSettingsSection({
             }
           })}
         />
-    </MasterDetail>
+    </div>
   );
 }

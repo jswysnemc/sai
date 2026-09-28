@@ -60,30 +60,29 @@ export function ModelEndpointSettings({ kind, config, secretSentinel, onChange }
 
   if (!items.length) return <EmptyGuide title={t("No model connections configured", "尚未配置模型接入")} description={t("Add an endpoint to configure its address, credentials and model.", "新增接入后配置请求地址、凭据与模型。")} action={<Button onClick={add}>{t("Add model connection", "新增模型接入")}</Button>} />;
 
-  return (
-    <MasterDetail list={<ObjectList title={t("Connections", "接入列表")} items={items.map((item) => ({ id: item.id, name: item.name, meta: item.model }))} selectedId={selected?.id ?? ""} searchPlaceholder={t("Search models", "搜索模型")} addLabel={t("Add model connection", "新增模型接入")} onSelect={setSelectedId} onAdd={add} />}>
-        {selected && <DetailHeader title={selected.name} actions={<Button variant="ghost" size="small" onClick={() => void remove()}><Trash2 size={14} aria-hidden />{t("Delete", "删除")}</Button>} />}
-        {selected
-          ? kind === "image_generation"
-            ? <ImageEndpointFields
-              endpoint={selected}
-              keys={endpointKeys as ModelEndpointApiKey[]}
-              selectedKey={selectedKey}
-              secretSentinel={secretSentinel}
-              onPatch={patch}
-              onKeysChange={(value) => patch({ ...value, api_key: "" })}
-              onRevealKey={revealKey}
-            />
-            : <JevEndpointFields
-              endpoint={selected}
-              keys={endpointKeys as ModelEndpointApiKey[]}
-              selectedKey={selectedKey}
-              secretSentinel={secretSentinel}
-              onPatch={patch}
-              onKeysChange={(value) => patch({ ...value, api_key: "" })}
-              onRevealKey={revealKey}
-            />
-          : <EmptyGuide title={t("No model connections configured", "尚未配置模型接入")} description={t("Add an endpoint to configure its address, credentials and model.", "新增接入后配置请求地址、凭据与模型。")} action={<Button onClick={add}>{t("Add model connection", "新增模型接入")}</Button>} />}
-    </MasterDetail>
-  );
+  const detail = <>
+    {selected && <DetailHeader title={selected.name} actions={<>{items.length === 1 && <Button size="small" onClick={add}>{t("Add model connection", "新增模型接入")}</Button>}<Button variant="ghost" size="small" onClick={() => void remove()}><Trash2 size={14} aria-hidden />{t("Delete", "删除")}</Button></>} />}
+    {selected
+      ? kind === "image_generation"
+        ? <ImageEndpointFields
+          endpoint={selected}
+          keys={endpointKeys as ModelEndpointApiKey[]}
+          selectedKey={selectedKey}
+          secretSentinel={secretSentinel}
+          onPatch={patch}
+          onKeysChange={(value) => patch({ ...value, api_key: "" })}
+          onRevealKey={revealKey}
+        />
+        : <JevEndpointFields
+          endpoint={selected}
+          keys={endpointKeys as ModelEndpointApiKey[]}
+          selectedKey={selectedKey}
+          secretSentinel={secretSentinel}
+          onPatch={patch}
+          onKeysChange={(value) => patch({ ...value, api_key: "" })}
+          onRevealKey={revealKey}
+        />
+      : <EmptyGuide title={t("No model connections configured", "尚未配置模型接入")} description={t("Add an endpoint to configure its address, credentials and model.", "新增接入后配置请求地址、凭据与模型。")} action={<Button onClick={add}>{t("Add model connection", "新增模型接入")}</Button>} />}
+  </>;
+  return items.length === 1 ? <div className="min-w-0">{detail}</div> : <MasterDetail list={<ObjectList title={t("Connections", "接入列表")} items={items.map((item) => ({ id: item.id, name: item.name, meta: item.model }))} selectedId={selected?.id ?? ""} searchPlaceholder={t("Search models", "搜索模型")} addLabel={t("Add model connection", "新增模型接入")} onSelect={setSelectedId} onAdd={add} />}>{detail}</MasterDetail>;
 }

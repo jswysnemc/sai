@@ -4,7 +4,7 @@
   gap: var(--space-2xs);
 }
 
-.model-endpoint-models span {
+.model-endpoint-models button {
   max-width: 100%;
   padding: 0.25rem 0.45rem;
   border: 1px solid var(--line);

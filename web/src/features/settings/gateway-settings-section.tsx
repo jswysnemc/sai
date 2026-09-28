@@ -13,6 +13,7 @@ import { useI18n } from "../i18n/use-i18n";
 type GatewaySettingsSectionProps = {
   config: AppConfig;
   dirty: boolean;
+  secretSentinel: string;
   onGatewayChange: (gateway: GatewayId, patch: Record<string, unknown>) => void;
   onSave: () => Promise<void>;
 };
@@ -23,7 +24,7 @@ type GatewaySettingsSectionProps = {
  * @param props 网关配置、更新回调和保存回调
  * @returns 网关设置区域
  */
-export function GatewaySettingsSection({ config, dirty, onGatewayChange, onSave }: GatewaySettingsSectionProps) {
+export function GatewaySettingsSection({ config, dirty, secretSentinel, onGatewayChange, onSave }: GatewaySettingsSectionProps) {
   const { t } = useI18n();
   const weixin = config.gateways.weixin;
   const [loginOpen, setLoginOpen] = useState(false);
@@ -48,7 +49,7 @@ export function GatewaySettingsSection({ config, dirty, onGatewayChange, onSave 
         <GatewayRuntimeControl gatewayId={gateway} enabled={config.gateways[gateway].enabled} dirty={dirty} onSave={onSave} />
       </>}
     >
-      <GatewayFields gateway={gateway} config={config} onChange={(patch) => onGatewayChange(gateway, patch)} />
+      <GatewayFields secretSentinel={secretSentinel} gateway={gateway} config={config} onChange={(patch) => onGatewayChange(gateway, patch)} />
       {gateway === "weixin" && <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
         <Button variant="secondary" onClick={() => setLoginOpen(true)}><QrCode size={14} />{t("Scan QR code to log in", "扫码登录")}</Button>
         <span>{t("Account credentials are filled after login.", "登录后回填账户凭据。")}</span>

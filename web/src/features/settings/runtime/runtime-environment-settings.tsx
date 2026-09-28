@@ -3,6 +3,7 @@ import { FieldGrid, SettingsPanel } from "../kit";
 import { TerminalSettingsFields } from "../terminal-settings-fields";
 import { PasteKeySettings } from "./paste-key-settings";
 import { PermissionDefaultSettings } from "./permission-default-settings";
+import { TerminalDisplaySettings } from "./terminal-display-settings";
 import type { RuntimeSettingsProps } from "./runtime-settings-types";
 
 /**
@@ -21,6 +22,7 @@ export function RuntimeEnvironmentSettings(props: RuntimeSettingsProps) {
           <PasteKeySettings {...props} />
         </FieldGrid>
       </SettingsPanel>
+      <TerminalDisplaySettings />
     </>
   );
 }

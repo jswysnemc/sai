@@ -160,6 +160,7 @@ function renderAppConfigSection(
     case "gateways":
       return (
         <GatewaySettingsSection
+          secretSentinel={settings.secretSentinel}
           config={config}
           dirty={settings.dirty}
           onGatewayChange={settings.updateGateway}

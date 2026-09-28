@@ -27,7 +27,7 @@ export function AppearancePreview({ preferences }: AppearancePreviewProps) {
     <section className="appearance-preview" aria-label={t("Preview", "效果预览")}>
       <header className="appearance-preview-head">
         <strong>{t("Preview", "效果预览")}</strong>
-        <small>{t("Reflects the settings above.", "实时反映上方设置。")}</small>
+        <small>{t("Reflects the current settings.", "实时反映当前设置。")}</small>
       </header>
       <div className="appearance-preview-body">
         <MarkdownRenderer source={sample} stylePreferences={preferences} />

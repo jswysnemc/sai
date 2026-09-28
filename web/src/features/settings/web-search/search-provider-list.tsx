@@ -43,6 +43,7 @@ export function SearchProviderList({
           id,
           name: provider.label,
           meta: providerStatusLabel(config, id, available, t),
+          tags: provider.features.map(([en, zh]) => t(en, zh)),
           icon: <Icon size={14} />,
           marked: available
         };

@@ -27,7 +27,7 @@ export function ModelCapabilityFields({ metadata, onChange }: { metadata: ModelM
 
   return <FieldGrid>
     <SettingsField label={t("Context tokens", "上下文 token 数")} anchor="providers.models.context_chars" configKey="model_metadata.context_chars" hint={t("Choose tokens, thousands or millions.", "支持原始数量、千或百万为单位。")}>
-      <div className="grid grid-cols-[minmax(0,10rem)_5rem] gap-2">
+      <div className="grid grid-cols-[minmax(0,10rem)_6.5rem] gap-2">
         <SkNumberInput value={metadata.context_chars === undefined ? null : metadata.context_chars / divisor} min={0} allowEmpty onChange={(value) => onChange({ context_chars: value === null ? undefined : Math.round(value * divisor) })} />
         <SkSelect value={unit} options={[{ value: "none", label: t("Tokens", "无") }, { value: "k", label: "k" }, { value: "m", label: "m" }]} onChange={setUnit} ariaLabel={t("Context unit", "上下文单位")} />
       </div>

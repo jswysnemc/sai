@@ -6,3 +6,6 @@
 .json-code-editor > header button { min-height: 26px; padding:0 var(--space-xs); border: 0; border-radius:var(--radius-1); background: transparent; color: var(--ink-soft); font-size:var(--text-2xs); }
 .json-code-editor > header button:hover:not(:disabled) { background: var(--paper-deep); color: var(--ink); }
 .json-editor-surface { min-height: 120px; }
+.ui-modal.large.json-editor-dialog { width: calc(100vw - 2rem); height: calc(100dvh - 2rem); max-height: none; }
+.json-editor-dialog .json-code-editor { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; border: 0; border-radius: 0; }
+.json-editor-dialog .json-editor-surface { min-height: 0; }

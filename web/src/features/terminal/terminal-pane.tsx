@@ -3,7 +3,8 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { useEffect, useRef, useState } from "react";
 import { FOCUS_COMPOSER_EVENT, INSERT_TERMINAL_SELECTION_EVENT, type TerminalSelectionDetail } from "../chat/composer/composer-events";
-import { createTerminalOptions } from "./terminal-options";
+import { createTerminalOptions, terminalDisplayOptions } from "./terminal-options";
+import { subscribeTerminalPreferences } from "./terminal-preferences";
 import { connectTerminalSession, type TerminalConnectionStatus } from "./terminal-session-controller";
 import { TerminalContextMenu } from "./terminal-context-menu";
 import { disposeTerminalView } from "./terminal-disposal";
@@ -42,10 +43,14 @@ export function TerminalPane({ terminalId, title }: { terminalId: string; title:
       onError: setError,
       disconnectedMessage: t("The terminal connection was lost. Select the terminal again or create a new session.", "终端连接已断开，请重新选择终端或新建会话")
     });
-    const observer = new ResizeObserver(() => {
+    /** 【Web 终端】【显示更新】应用显示偏好并同步字符网格；无参数，无返回值 */
+    const updateDisplay = () => {
+      Object.assign(terminal.options, terminalDisplayOptions());
       fit.fit();
       controller.resize(terminal.cols, terminal.rows);
-    });
+    };
+    const unsubscribeDisplay = subscribeTerminalPreferences(updateDisplay);
+    const observer = new ResizeObserver(updateDisplay);
     observer.observe(container);
     /** 使用终端选区打开专用右键菜单。 */
     const handleContextMenu = (event: MouseEvent) => {
@@ -56,6 +61,7 @@ export function TerminalPane({ terminalId, title }: { terminalId: string; title:
     return () => {
       container.removeEventListener("contextmenu", handleContextMenu);
       observer.disconnect();
+      unsubscribeDisplay();
       controller.dispose();
       disposeTerminalView(terminal);
       terminalRef.current = null;

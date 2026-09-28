@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button } from "../../../shared/ui/button/button";
 import type { ProviderConfig } from "../../../api/contracts";
 import { JsonCodeEditor, type JsonEditorDiagnostic } from "../../../shared/ui/code-editor/json-code-editor";
 import { useI18n } from "../../i18n/use-i18n";
@@ -31,6 +32,9 @@ export function ProviderAdvancedTab({ provider, onPatch }: ProviderAdvancedTabPr
     <SettingsPanel title={t("Custom request payload", "自定义请求载荷")} description={t("Merged into each request; explicit fields take precedence.", "合并到每次模型请求，显式配置字段优先。")}>
       <FieldGrid columns={1}>
         <SettingsField label={t("Extra headers", "自定义请求头")} anchor="providers.advanced.extra_headers" configKey="providers.extra_headers" hint={t("Authorization is not overridden.", "不会覆盖 Authorization。")}>
+          <div className="mb-2 flex flex-wrap gap-1" aria-label={t("Header presets", "请求头预设")}>
+            {["OpenAI-Organization", "OpenAI-Project", "X-Custom"].map((header) => <Button size="small" key={header} disabled={Object.keys(provider.extra_headers ?? {}).some((key) => key.toLowerCase() === header.toLowerCase())} onClick={() => onPatch({ extra_headers: { ...provider.extra_headers, [header]: "" } })}>{header}</Button>)}
+          </div>
           <KeyValueEditor value={provider.extra_headers ?? {}} onChange={(extra_headers) => onPatch({ extra_headers })} />
         </SettingsField>
         <SettingsField label={t("Custom body JSON", "自定义 body JSON")} anchor="providers.advanced.extra_body" configKey="providers.extra_body">

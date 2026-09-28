@@ -180,6 +180,7 @@ export function PasswordField({
             <button
               type="button"
               onClick={onClearSavedValue}
+              disabled={disabled || revealing}
               aria-label={t("Clear the saved value", "清除已保存的值")}
               title={t("Clear the saved value", "清除已保存的值")}
             >
@@ -201,7 +202,7 @@ export function PasswordField({
           {copied ? <Check size={16} /> : <Copy size={16} />}
         </button>
       )}
-      <button
+      {(!savedValueHint || onReveal) && <button
         type="button"
         onClick={() => void toggleVisibility()}
         onMouseDown={(event) => event.preventDefault()}
@@ -218,7 +219,7 @@ export function PasswordField({
           : state.visible
             ? <EyeOff size={16} />
             : <Eye size={16} />}
-      </button>
+      </button>}
     </div>
   );
 }

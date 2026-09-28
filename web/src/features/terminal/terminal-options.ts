@@ -1,4 +1,5 @@
 import type { ITerminalOptions, ITheme } from "@xterm/xterm";
+import { getTerminalPreferences, TERMINAL_FONTS } from "./terminal-preferences";
 
 /**
  * 终端字体栈。
@@ -6,9 +7,17 @@ import type { ITerminalOptions, ITheme } from "@xterm/xterm";
  * xterm 按字符单元格排版，CJK 占两个单元格宽，因此 CJK 回退必须是真正的等宽字族；
  * 换成比例字族会让含中文的行与光标位置错开。这里只补等宽 CJK，未安装时退回 monospace。
  */
-export const TERMINAL_FONT_FAMILY =
-  '"Fira Code", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, ' +
-  '"Sarasa Mono SC", "Noto Sans Mono CJK SC", monospace';
+export { TERMINAL_FONT_FAMILY } from "./terminal-preferences";
+
+/**
+ * 将浏览器偏好换算为 xterm 显示参数。
+ * @returns 等宽字体、像素字号和有限回滚行数
+ */
+export function terminalDisplayOptions(): Pick<ITerminalOptions, "fontFamily" | "fontSize" | "scrollback"> {
+  const preferences = getTerminalPreferences();
+  const rootSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  return { fontFamily: TERMINAL_FONTS[preferences.font], fontSize: rootSize * preferences.fontSizeRem, scrollback: preferences.scrollback };
+}
 
 /**
  * 创建终端显示和交互选项。
@@ -17,8 +26,7 @@ export const TERMINAL_FONT_FAMILY =
  */
 export function createTerminalOptions(): ITerminalOptions {
   return {
-    fontFamily: TERMINAL_FONT_FAMILY,
-    fontSize: 12,
+    ...terminalDisplayOptions(),
     fontWeight: "400",
     fontWeightBold: "500",
     letterSpacing: 0,

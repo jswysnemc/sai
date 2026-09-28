@@ -17,11 +17,13 @@ export type SearchProviderCatalogEntry = {
   descriptionZh: string;
   environmentVariable?: string;
   icon: LucideIcon;
+  features: Array<[string, string]>;
 };
 
 export const SEARCH_PROVIDER_CATALOG: SearchProviderCatalogEntry[] = [
   {
     id: "tinyfish",
+    features: [["Location", "位置偏好"], ["Language", "语言偏好"]],
     label: "TinyFish",
     descriptionEn: "Search API with location and language preferences",
     descriptionZh: "支持位置与语言偏好的搜索接口",
@@ -30,6 +32,7 @@ export const SEARCH_PROVIDER_CATALOG: SearchProviderCatalogEntry[] = [
   },
   {
     id: "tavily",
+    features: [["Deep search", "深入搜索"], ["Page content", "网页正文"], ["Answers", "综合答案"]],
     label: "Tavily",
     descriptionEn: "Research-oriented results with optional answers and raw content",
     descriptionZh: "面向研究的结果，可附带答案与原始正文",
@@ -38,6 +41,7 @@ export const SEARCH_PROVIDER_CATALOG: SearchProviderCatalogEntry[] = [
   },
   {
     id: "firecrawl",
+    features: [["Search", "搜索"], ["Content extraction", "正文提取"]],
     label: "Firecrawl",
     descriptionEn: "Search and extraction with main-content filtering",
     descriptionZh: "搜索与正文提取，可过滤页面非正文内容",
@@ -46,6 +50,7 @@ export const SEARCH_PROVIDER_CATALOG: SearchProviderCatalogEntry[] = [
   },
   {
     id: "anysearch",
+    features: [["General search", "通用搜索"]],
     label: "AnySearch",
     descriptionEn: "General search API with a configurable endpoint",
     descriptionZh: "可配置服务地址的通用搜索接口",
@@ -54,6 +59,7 @@ export const SEARCH_PROVIDER_CATALOG: SearchProviderCatalogEntry[] = [
   },
   {
     id: "searxng",
+    features: [["Metasearch", "聚合搜索"], ["Self-hosted", "自托管"]],
     label: "SearXNG",
     descriptionEn: "Self-hosted metasearch endpoint",
     descriptionZh: "自托管聚合搜索服务",
@@ -61,6 +67,7 @@ export const SEARCH_PROVIDER_CATALOG: SearchProviderCatalogEntry[] = [
   },
   {
     id: "duckduckgo",
+    features: [["No API key", "无需密钥"], ["Fallback", "回退搜索"]],
     label: "DuckDuckGo",
     descriptionEn: "Built-in fallback without credentials",
     descriptionZh: "无需凭据的内置回退搜索",

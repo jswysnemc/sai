@@ -1,4 +1,4 @@
-import { Download, Pencil, Plus, Trash2 } from "../../../shared/ui/icons";
+import { Download, Pencil, Plus, Terminal, Trash2 } from "../../../shared/ui/icons";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../../api/client";
 import type { SshHost } from "../../../api/contracts";
@@ -17,6 +17,8 @@ import {
   type SshHostFormState
 } from "./ssh-host-form-state";
 import { SshImportDialog } from "./ssh-import-dialog";
+import { useSshTerminal } from "./use-ssh-terminal";
+import { SshTerminalDialog } from "./ssh-terminal-dialog";
 import "./ssh-settings.css";
 
 /**
@@ -30,6 +32,7 @@ import "./ssh-settings.css";
 export function SshSettingsSection() {
   const { t } = useI18n();
   const confirm = useConfirm();
+  const connection = useSshTerminal();
   const [query, setQuery] = useState("");
   const [hosts, setHosts] = useState<SshHost[]>([]);
   const [editing, setEditing] = useState<SshHost | null>(null);
@@ -139,6 +142,7 @@ export function SshSettingsSection() {
         { id: "name", header: t("Name", "名称"), sortValue: (host) => host.label, render: (host) => host.label },
         { id: "address", header: t("Address", "地址"), sortValue: sshHostAddress, render: (host) => <span className="break-all">{sshHostAddress(host)}</span> },
         { id: "actions", header: t("Actions", "操作"), render: (host) => <div className="flex gap-1">
+          <Button variant="ghost" size="icon" disabled={connection.busy} onClick={() => void connection.open(host)} aria-label={t(`Open ${host.label} in a terminal`, `在终端中打开 ${host.label}`)} title={t("Open in terminal", "在终端中打开")}><Terminal size={14} /></Button>
           <Button variant="ghost" size="icon" onClick={() => startEdit(host)} aria-label={t("Edit host", "编辑主机")}><Pencil size={14} /></Button>
           <Button variant="ghost-danger" size="icon" onClick={() => void remove(host)} aria-label={t("Remove host", "删除主机")}><Trash2 size={14} /></Button>
         </div> }
@@ -165,5 +169,6 @@ export function SshSettingsSection() {
       </Modal>
 
       <SshImportDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={() => void refresh()} />
+      <SshTerminalDialog connection={connection} />
     </>;
 }
