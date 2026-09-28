@@ -4,9 +4,8 @@ import { api } from "../../../api/client";
 import { toDisplayError } from "../../../api/api-error";
 import type { ModelEndpointApiKey, ModelEndpointConfig } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
-import { Select } from "../../../shared/ui/select/select";
 import { useI18n } from "../../i18n/use-i18n";
-import { SettingsGroup } from "../editor-layout";
+import { FieldGrid, SettingsField, SettingsPanel, SkSelect, SkTextInput } from "../kit";
 import { ProviderApiKeysField } from "../provider-api-keys-field";
 import { endpointForProbe } from "./endpoint-for-probe";
 import { ImageConnectionTest } from "./image-connection-test";
@@ -42,7 +41,7 @@ export function ImageEndpointFields({
   const [fetching, setFetching] = useState(false);
   const [fetchError, setFetchError] = useState("");
   const models = endpoint.models ?? [];
-  const modelOptions = models.map((model) => ({ value: model, label: model }));
+  const modelOptions = [...new Set([endpoint.model, ...models].filter(Boolean))].map((model) => ({ value: model, label: model }));
   const activeModel = endpoint.model || models[0] || "";
 
   /**
@@ -65,49 +64,44 @@ export function ImageEndpointFields({
 
   return (
     <>
-      <SettingsGroup
+      <SettingsPanel
         title={t("Endpoint", "接入点")}
         description={t("Where image requests go, which format they use, and which model draws them.", "生图请求发往哪里、使用哪种格式、由哪个模型绘制。")}
       >
-        <div className="settings-form-grid">
-          <label className="settings-field full">
-            <span>{t("API address", "API 地址")}</span>
-            <input
+        <FieldGrid>
+          <SettingsField label={t("API address", "API 地址")} anchor="image-models.endpoint" configKey="model_endpoints.endpoint" hint={t("Complete HTTP(S) URL, including any version path and port.", "完整 HTTP(S) 地址，包含版本路径与端口。")}>
+            <SkTextInput
               value={endpoint.endpoint}
-              onChange={(event) => onPatch({ endpoint: event.target.value })}
+              onChange={(value) => onPatch({ endpoint: value })}
               placeholder="https://example.com/v1/images/generations"
               spellCheck={false}
             />
-            <small>{t("Complete HTTP(S) URL, including any version path and port.", "完整 HTTP(S) 地址，包含版本路径与端口。")}</small>
-          </label>
-          <label className="settings-field">
-            <span>{t("Model", "模型")}</span>
+          </SettingsField>
+          <SettingsField label={t("Model", "模型")} anchor="image-models.model" configKey="model_endpoints.model" hint={t("The model field sent with every image request.", "每次生图请求都会发送此模型字段。")}>
             {modelOptions.length > 0 ? (
-              <Select value={activeModel} options={modelOptions} onChange={(model) => onPatch({ model })} ariaLabel={t("Image model", "生图模型")} />
+              <SkSelect value={activeModel} options={modelOptions} onChange={(model) => onPatch({ model })} ariaLabel={t("Image model", "生图模型")} />
             ) : (
-              <input value={endpoint.model} onChange={(event) => onPatch({ model: event.target.value })} placeholder="gpt-image-1" spellCheck={false} />
+              <SkTextInput value={endpoint.model} onChange={(value) => onPatch({ model: value })} placeholder="gpt-image-1" spellCheck={false} />
             )}
-            <small>{t("The model field sent with every image request.", "每次生图请求都会发送此模型字段。")}</small>
-          </label>
-          <div className="settings-field">
-            <span>{t("Protocol", "协议")}</span>
-            <Select
+          </SettingsField>
+          <SettingsField label={t("Protocol", "协议")} anchor="image-models.protocol" configKey="model_endpoints.protocol" hint={t("Auto adapts the URL, body, and authentication; choose a format to override it.", "自动模式会适配地址、请求体和认证方式，也可以手动指定格式。")}>
+            <SkSelect
               value={endpoint.protocol ?? "auto"}
               options={imageProtocolOptions()}
               onChange={(protocol) => onPatch({ protocol })}
               ariaLabel={t("Image request format", "生图请求格式")}
               menuMinimumWidth={230}
             />
-            <small>{t("Auto adapts the URL, body, and authentication; choose a format to override it.", "自动模式会适配地址、请求体和认证方式，也可以手动指定格式。")}</small>
-          </div>
-        </div>
-      </SettingsGroup>
+          </SettingsField>
+        </FieldGrid>
+      </SettingsPanel>
 
-      <SettingsGroup
+      <SettingsPanel
         title={t("Credentials", "凭据")}
+        id="settings-field-image-models-api_keys"
         description={t("API keys for this image connection, with optional load balancing across multiple keys.", "当前生图接入的 API 密钥，多密钥时可启用负载均衡。")}
       >
-        <div className="settings-field full">
+        <div className="grid min-w-0 gap-2">
           <ProviderApiKeysField
             key={endpoint.id}
             providerId={endpoint.id}
@@ -118,11 +112,11 @@ export function ImageEndpointFields({
             onRevealKey={onRevealKey}
             onChange={onKeysChange}
           />
-          <small>{t("Use one selected key by default, or enable load balancing when multiple keys are configured. Environment variables can be referenced with `$env:VARIABLE_NAME`.", "默认使用一个选中的密钥；配置多个密钥后可以启用负载均衡。支持使用 `$env:VARIABLE_NAME` 引用环境变量。")}</small>
+          <small className="sk-field-hint">{t("Use one selected key by default, or enable load balancing when multiple keys are configured. Environment variables can be referenced with `$env:VARIABLE_NAME`.", "默认使用一个选中的密钥；配置多个密钥后可以启用负载均衡。支持使用 `$env:VARIABLE_NAME` 引用环境变量。")}</small>
         </div>
-      </SettingsGroup>
+      </SettingsPanel>
 
-      <SettingsGroup
+      <SettingsPanel
         title={t("Model catalog", "模型目录")}
         description={models.length > 0 ? t(`${models.length} models imported from this endpoint.`, `已从该端点导入 ${models.length} 个模型。`) : t("Fetch the endpoint catalog, then choose the model above.", "获取端点模型目录后，可以在上方选择模型。")}
       >
@@ -136,13 +130,13 @@ export function ImageEndpointFields({
           {fetchError && <p className="provider-probe-error">{fetchError}</p>}
           {models.length > 0 && <div className="model-endpoint-models">{models.map((model) => <span key={model}>{model}</span>)}</div>}
         </div>
-      </SettingsGroup>
+      </SettingsPanel>
 
-      <SettingsGroup
+      <SettingsPanel
         title={t("Connectivity", "连通性")}
         description={t("Send a small real image request to verify the address, key, and model.", "发送一次小尺寸真实生图请求，验证地址、密钥与模型。")}
       >
-        <div className="settings-field full">
+        <div className="grid min-w-0 gap-2">
           <ImageConnectionTest
             key={`${endpoint.id}:${endpoint.model}:${selectedKey ?? ""}`}
             endpoint={endpoint}
@@ -151,22 +145,18 @@ export function ImageEndpointFields({
             secretSentinel={secretSentinel}
           />
         </div>
-      </SettingsGroup>
+      </SettingsPanel>
 
-      <SettingsGroup
-        collapsible
-        defaultOpen={endpoint.name.trim().length === 0}
+      <SettingsPanel
         title={t("Identity", "身份")}
         description={t("Name shown in the image model menu.", "显示在生图模型菜单中的名称。")}
       >
-        <div className="settings-form-grid">
-          <label className="settings-field">
-            <span>{t("Display name", "显示名称")}</span>
-            <input value={endpoint.name} onChange={(event) => onPatch({ name: event.target.value })} />
-            <small>{t("Shown in the chat image model menu.", "显示在聊天页的生图模型菜单中。")}</small>
-          </label>
-        </div>
-      </SettingsGroup>
+        <FieldGrid>
+          <SettingsField label={t("Display name", "显示名称")} anchor="image-models.name" configKey="model_endpoints.name" hint={t("Shown in the chat image model menu.", "显示在聊天页的生图模型菜单中。")}>
+            <SkTextInput value={endpoint.name} onChange={(value) => onPatch({ name: value })} />
+          </SettingsField>
+        </FieldGrid>
+      </SettingsPanel>
     </>
   );
 }

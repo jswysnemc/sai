@@ -1,19 +1,18 @@
 import { Plus } from "../../shared/ui/icons";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { AppConfig, ProviderApiKey, ProviderConfig } from "../../api/contracts";
-import { EditorHeader } from "./editor-layout";
+import { DetailHeader, MasterDetail, ObjectList, StatusBadge } from "./kit";
+import { useSettingsItem } from "./shell/use-settings-item";
 import { ModelImportDialog } from "./model-import-dialog";
-import { ObjectListPanel } from "./object-list-panel";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { Toast, useToast } from "../../shared/ui/notify/notify";
 import { ModelIcon } from "../../shared/ui/model-icon";
 import { SkeletonText } from "../../shared/ui/skeleton/skeleton";
 import { useI18n } from "../i18n/use-i18n";
 import { clearNewSessionModelReference } from "../sessions/new-session-preferences";
-import { useSelectedFallback } from "./controls/use-selected-fallback";
 import { findProviderIndex, nextProviderId, providerIdConflict } from "./model/provider-selection";
 import { formatTemperature, parseTemperature } from "./model/temperature-field";
 import { providerIdFollowsName, suggestedProviderId } from "./model/provider-id-sync";
@@ -29,6 +28,7 @@ import { PLACEHOLDER_BASE_URL, ProviderConnectionTab, buildDefaultModelOptions }
 import { ProviderModelsTab } from "./providers/provider-models-tab";
 import { ProviderBehaviorTab } from "./providers/provider-behavior-tab";
 import { ProviderAdvancedTab } from "./providers/provider-advanced-tab";
+import { mergeProviderModels } from "./providers/merge-provider-models";
 
 type ProviderSettingsSectionProps = {
   config: AppConfig;
@@ -73,7 +73,7 @@ export function ProviderSettingsSection({
   const { notice, showToast, dismissToast } = useToast();
   // 子页由路由解析保证合法，此处仅作类型收窄的回落
   const tab = (subview ?? "connection") as "connection" | "models" | "behavior" | "advanced";
-  const [selectedId, setSelectedId] = useState(config.active_provider || config.providers[0]?.id || "");
+  const [selectedId, setSelectedId] = useSettingsItem(config.providers.map((item) => item.id), config.active_provider);
   const [fetching, setFetching] = useState(false);
   const [fetchError, setFetchError] = useState<Error | null>(null);
   const [secretError, setSecretError] = useState<Error | null>(null);
@@ -86,6 +86,7 @@ export function ProviderSettingsSection({
     thinking_levels?: string[];
   }>>({});
   const [importOpen, setImportOpen] = useState(false);
+  const modelRequest = useRef(0);
 
   /**
    * 丢弃上一个供应商拉取到的远端模型目录。
@@ -96,6 +97,8 @@ export function ProviderSettingsSection({
    * @returns 无返回值
    */
   const clearRemoteModels = () => {
+    modelRequest.current += 1;
+    setFetching(false);
     setRemoteModels([]);
     setRemoteMetadata({});
     setImportOpen(false);
@@ -113,10 +116,6 @@ export function ProviderSettingsSection({
   const provider = selectedIndex >= 0 ? config.providers[selectedIndex] : undefined;
   const providerKeys = provider ? normalizedProviderApiKeys(provider) : [];
   const selectedProviderKey = provider?.api_key_selected ?? providerKeys[0]?.id;
-
-  // 回落到列表首项而非 active_provider：后者表示"正在使用哪个"，
-  // 与"正在编辑哪个"无关，用它回落会在改名中间态把编辑区弹回旧供应商
-  useSelectedFallback(selectedId, config.providers.map((item) => item.id), setSelectedId);
 
   useEffect(() => {
     if (!provider) return;
@@ -242,17 +241,19 @@ export function ProviderSettingsSection({
   /** 获取当前供应商远端模型并打开导入弹层。 */
   const fetchModels = async () => {
     if (!provider) return;
+    const request = ++modelRequest.current;
     setFetching(true);
     setFetchError(null);
     try {
       const response = await api.providers.models(provider);
+      if (request !== modelRequest.current) return;
       setRemoteModels(response.models);
       setRemoteMetadata(response.metadata);
       setImportOpen(true);
     } catch (error) {
-      setFetchError(toDisplayError(error, "Failed to fetch models", "获取模型失败"));
+      if (request === modelRequest.current) setFetchError(toDisplayError(error, "Failed to fetch models", "获取模型失败"));
     } finally {
-      setFetching(false);
+      if (request === modelRequest.current) setFetching(false);
     }
   };
 
@@ -263,34 +264,9 @@ export function ProviderSettingsSection({
       setImportOpen(false);
       return;
     }
-    const nextModels = [...(provider.models ?? [])];
-    for (const model of models) if (!nextModels.includes(model)) nextModels.push(model);
-    const modelMetadata = { ...(provider.model_metadata ?? {}) };
-    for (const model of models) {
-      const metadata = remoteMetadata[model];
-      if (!metadata?.context_chars && !metadata?.max_output_tokens && !metadata?.tags?.length
-        && !metadata?.thinking_levels?.length) continue;
-      const current = modelMetadata[model] ?? {};
-      modelMetadata[model] = {
-        ...current,
-        ...(!current.context_chars && metadata.context_chars ? { context_chars: metadata.context_chars } : {}),
-        ...(!current.max_output_tokens && metadata.max_output_tokens ? { max_output_tokens: metadata.max_output_tokens } : {}),
-        ...(metadata.tags?.length
-          ? { tags: Array.from(new Set([...(current.tags ?? []), ...metadata.tags])) }
-          : {}),
-        // 已手工设置过的支持范围不被目录覆盖：这里正是纠正目录错误的地方
-        ...(!current.thinking_levels?.length && metadata.thinking_levels?.length
-          ? { thinking_levels: metadata.thinking_levels }
-          : {})
-      };
-    }
-    onProviderChange(selectedIndex, {
-      models: nextModels,
-      model_metadata: modelMetadata,
-      default_model: provider.default_model || nextModels[0] || ""
-    });
+    onProviderChange(selectedIndex, mergeProviderModels(provider, models, remoteMetadata));
     setImportOpen(false);
-    navigate("/settings/providers/models");
+    navigate(`/settings/providers/models?item=${encodeURIComponent(provider.id)}`);
   };
 
   /**
@@ -386,7 +362,7 @@ export function ProviderSettingsSection({
     });
     if (!confirmed) return;
     const providers = config.providers.filter((_, index) => index !== selectedIndex);
-    const activeProvider = config.active_provider === provider.id ? providers[0]?.id ?? "" : config.active_provider;
+    const activeProvider = nextActiveProvider(providers, config.active_provider);
     const clearsNewSessionModel = config.session?.new_session_provider_id === provider.id;
     onConfigChange({
       ...config,
@@ -486,8 +462,8 @@ export function ProviderSettingsSection({
   });
 
   return (
-    <div className="settings-objects-layout">
-      <ObjectListPanel
+    <>
+    <MasterDetail list={<ObjectList
         title={t("Providers", "供应商")}
         items={providerGroups.enabled.map(providerListItem)}
         collapsedItems={providerGroups.disabled.map(providerListItem)}
@@ -504,16 +480,14 @@ export function ProviderSettingsSection({
           clearRemoteModels();
         }}
         onAdd={addProvider}
-      />
-      <section className="settings-editor">
+      />}>
         <Toast notice={notice} onDismiss={dismissToast} />
-        <EditorHeader
-          kicker={t("Model provider", "模型供应商")}
+        <DetailHeader
           title={provider.display_name || provider.id}
-          description={t("Configure the endpoint, credentials, and models available from this provider.", "配置接口、凭据和当前供应商可用的模型。")}
+          badges={<StatusBadge>{t(`${provider.models?.length ?? 0} models`, `${provider.models?.length ?? 0} 个模型`)}</StatusBadge>}
+          menuItems={[{ id: "delete", label: t("Delete provider", "删除供应商"), danger: true, onSelect: () => void deleteProvider() }]}
           actions={
             <ProviderHeaderActions
-              config={config}
               provider={provider}
               enabled={isProviderEnabled(provider)}
               isCurrent={provider.id === config.active_provider}
@@ -522,7 +496,6 @@ export function ProviderSettingsSection({
               onToggleEnabled={(enabled) => void toggleProviderEnabled(enabled)}
               onFetchModels={() => void fetchModels()}
               onSetCurrent={setAsCurrentProvider}
-              onDelete={() => void deleteProvider()}
             />
           }
         />
@@ -584,7 +557,7 @@ export function ProviderSettingsSection({
             onPatch={(patch) => onProviderChange(selectedIndex, patch)}
           />
         )}
-      </section>
+    </MasterDetail>
       <ModelImportDialog
         open={importOpen}
         models={remoteModels}
@@ -593,6 +566,6 @@ export function ProviderSettingsSection({
         onClose={() => setImportOpen(false)}
         onImport={importModels}
       />
-    </div>
+    </>
   );
 }

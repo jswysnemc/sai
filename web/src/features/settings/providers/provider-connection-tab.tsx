@@ -1,9 +1,9 @@
 import { createElement } from "react";
 import type { ProviderApiKey, ProviderConfig } from "../../../api/contracts";
 import { ModelIcon } from "../../../shared/ui/model-icon";
-import { Select } from "../../../shared/ui/select/select";
 import { useI18n } from "../../i18n/use-i18n";
-import { SettingsGroup } from "../editor-layout";
+import { FieldGrid, SettingsField, SettingsPanel, SkSelect, SkTextInput } from "../kit";
+import { fieldAnchorId } from "../search/field-anchor";
 import { ProviderApiKeysField } from "../provider-api-keys-field";
 import { ProviderConnectionTest } from "../model/provider-connection-test";
 import { protocolOptions } from "./provider-options";
@@ -28,171 +28,47 @@ type ProviderConnectionTabProps = {
 };
 
 /**
- * 供应商编辑器的连接页签：身份、接入点、凭据与连通性。
- *
- * 高频的接入点（API 地址、默认模型、协议）放在首屏，其后是凭据与连通性；
- * 显示名称与稳定 ID 属于低频配置，折叠在页签末尾。
- *
- * @param props 供应商状态与更新回调
- * @returns 连接页签内容
+ * 【供应商设置】【连接】编辑地址、模型、凭据与身份并保留草稿探测入口。
+ * @param props 供应商、密钥、标识草稿与更新回调
+ * @returns 连接设置页签
  */
-export function ProviderConnectionTab({
-  provider,
-  providerIndex,
-  providerKeys,
-  selectedProviderKey,
-  secretSentinel,
-  idDraft,
-  idError,
-  defaultModelOptions,
-  remoteMetadata,
-  onIdDraftChange,
-  onCommitId,
-  onIdEscape,
-  onDisplayNameChange,
-  onPatch,
-  onRevealKey,
-  onKeysChange
-}: ProviderConnectionTabProps) {
+export function ProviderConnectionTab({ provider, providerKeys, selectedProviderKey, secretSentinel, idDraft, idError, defaultModelOptions, onIdDraftChange, onCommitId, onIdEscape, onDisplayNameChange, onPatch, onRevealKey, onKeysChange }: ProviderConnectionTabProps) {
   const { t } = useI18n();
-  const models = provider.models ?? [];
-  const emptyModelOptions = [{ value: "", label: t("Add models on the Models tab first", "先在模型页签添加模型") }];
-
-  return (
-    <>
-      <SettingsGroup
-        title={t("Endpoint", "接入点")}
-        description={t(
-          "Where requests go and which protocol they speak.",
-          "请求发往哪里、使用哪种协议。"
-        )}
-      >
-        <div className="settings-form-grid">
-          <label className="settings-field full">
-            <span>{t("API address", "API 地址")}</span>
-            <input
-              value={provider.base_url}
-              onChange={(event) => onPatch({ base_url: event.target.value })}
-              spellCheck={false}
-            />
-            <small>{t("Base URL of the compatible API; the server accesses it when fetching models", "兼容接口的基础地址，获取模型时由服务端访问")}</small>
-          </label>
-          <div className="settings-field">
-            <span>{t("Default model", "默认模型")}</span>
-            {models.length > 0
-              ? <Select value={provider.default_model ?? ""} options={defaultModelOptions} onChange={(value) => onPatch({ default_model: value })} ariaLabel={t("Default model", "默认模型")} />
-              : <Select value="" options={emptyModelOptions} disabled onChange={() => undefined} ariaLabel={t("Default model", "默认模型")} />}
-            <small>{models.length > 0 ? t("Used when no model is selected manually", "未手动切换时使用") : t("Add models on the Models tab first", "先在模型页签添加模型")}</small>
-          </div>
-          <div className="settings-field">
-            <span>{t("Protocol", "协议")}</span>
-            <Select
-              value={provider.protocol ?? "auto"}
-              options={protocolOptions()}
-              onChange={(value) => onPatch({ protocol: value })}
-              ariaLabel={t("Provider protocol", "供应商协议")}
-            />
-            <small>{t("The protocol determines request and reasoning parameter formats", "协议决定请求和思考参数格式")}</small>
-          </div>
-        </div>
-      </SettingsGroup>
-
-      <SettingsGroup
-        title={t("Credentials", "凭据")}
-        description={t(
-          "API keys for this provider, with optional load balancing across multiple keys.",
-          "当前供应商的 API 密钥，多密钥时可启用负载均衡。"
-        )}
-      >
-        <div className="settings-field full">
-          <ProviderApiKeysField
-            // 切换供应商时重建：密钥框内部持有明文状态，
-            // 复用实例会把上一个供应商的密钥露出来
-            key={provider.id}
-            providerId={provider.id}
-            keys={providerKeys}
-            selected={selectedProviderKey}
-            balance={provider.api_key_balance === true}
-            secretSentinel={secretSentinel}
-            onRevealKey={onRevealKey}
-            onChange={onKeysChange}
-          />
-          <small>{t("Use one selected key by default, or enable load balancing when multiple keys are configured. Environment variables can be referenced with `$env:VARIABLE_NAME`.", "默认使用一个选中的密钥；配置多个密钥后可以启用负载均衡。支持使用 `$env:VARIABLE_NAME` 引用环境变量。")}</small>
-        </div>
-      </SettingsGroup>
-
-      <SettingsGroup
-        title={t("Connectivity", "连通性")}
-        description={t(
-          "Verify the endpoint and key with a real request.",
-          "用一次真实请求验证地址与密钥。"
-        )}
-      >
-        <div className="settings-field full">
-          <ProviderConnectionTest
-            key={`${provider.id}:${provider.default_model ?? ""}:${selectedProviderKey ?? ""}`}
-            provider={provider}
-            model={provider.default_model || undefined}
-            selectedKeyId={selectedProviderKey}
-          />
-          <small>{t("Run a normal model response test or a separate tool-calling test with the selected key.", "可以使用当前选中的密钥分别测试普通模型响应和工具调用。")}</small>
-        </div>
-      </SettingsGroup>
-      <SettingsGroup
-        // 按列表位置重置折叠状态：ID 会跟随名称变化，用它作 key 会在输入名称时重建分组丢失焦点
-        // 仍是占位地址的新供应商默认展开，便于先改名称
-        key={providerIndex}
-        collapsible
-        defaultOpen={isPlaceholderEndpoint(provider.base_url)}
-        title={t("Identity", "身份")}
-        description={t(
-          "Display name and the stable ID stored in the configuration file.",
-          "界面显示名与配置文件中的稳定标识。"
-        )}
-      >
-        <div className="settings-form-grid">
-          <label className="settings-field">
-            <span>{t("Display name", "显示名称")}</span>
-            <input
-              value={provider.display_name}
-              onChange={(event) => onDisplayNameChange(event.target.value)}
-            />
-            <small>{t("Used in model menus and status displays. The ID follows this name until you edit it.", "用于模型菜单和状态展示。未手动改 ID 时，标识会跟随名称。")}</small>
-          </label>
-          <label className="settings-field">
-            <span>{t("Provider ID", "供应商 ID")}</span>
-            <input
-              value={idDraft ?? provider.id}
-              onChange={(event) => onIdDraftChange(event.target.value)}
-              onBlur={(event) => onCommitId(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") event.currentTarget.blur();
-                if (event.key === "Escape") onIdEscape();
-              }}
-              spellCheck={false}
-              aria-invalid={idError ? true : undefined}
-            />
-            <small className={idError ? "settings-field-error" : undefined}>{idError || t("Stable identifier in the configuration file", "配置文件中的稳定标识")}</small>
-          </label>
-        </div>
-      </SettingsGroup>
-    </>
-  );
+  return <>
+    <SettingsPanel title={t("Endpoint", "接入点")} description={t("Where requests go and which protocol they use.", "配置请求地址、默认模型与接口协议。")}>
+      <FieldGrid>
+        <SettingsField label={t("API address", "API 地址")} anchor="providers.connection.base_url" configKey="providers.base_url" span="full" hint={t("Base URL of the compatible API, including its version path.", "兼容接口的基础地址，包含版本路径。")}>
+          <SkTextInput mono value={provider.base_url} onChange={(value) => onPatch({ base_url: value })} />
+        </SettingsField>
+        <SettingsField label={t("Default model", "默认模型")} anchor="providers.connection.default_model" configKey="providers.default_model" hint={t("Used when no model is selected manually.", "未手动选择模型时使用。")}>
+          <SkSelect value={provider.default_model ?? ""} options={defaultModelOptions.length ? defaultModelOptions : [{ value: "", label: t("Add models on the Models tab first", "先在模型页签添加模型") }]} disabled={!defaultModelOptions.length} onChange={(value) => onPatch({ default_model: value })} />
+        </SettingsField>
+        <SettingsField label={t("Protocol", "协议")} anchor="providers.connection.protocol" configKey="providers.protocol" hint={t("Determines request and reasoning parameter formats.", "决定请求与思考参数的格式。")}>
+          <SkSelect value={provider.protocol ?? "auto"} options={protocolOptions()} onChange={(value) => onPatch({ protocol: value })} />
+        </SettingsField>
+      </FieldGrid>
+    </SettingsPanel>
+    <SettingsPanel title={t("Credentials", "凭据")} description={t("Use a selected key or rotate across multiple keys. Environment references use $env:VARIABLE_NAME.", "固定使用所选密钥或在多个密钥间轮换。环境变量使用 $env:VARIABLE_NAME 引用。")} id={fieldAnchorId("providers.connection.api_keys")}>
+      <ProviderApiKeysField key={provider.id} providerId={provider.id} keys={providerKeys} selected={selectedProviderKey} balance={provider.api_key_balance === true} secretSentinel={secretSentinel} onRevealKey={onRevealKey} onChange={onKeysChange} />
+    </SettingsPanel>
+    <SettingsPanel title={t("Connectivity", "连通性")} description={t("Test normal responses or tool calls using the selected key.", "使用所选密钥测试普通响应或工具调用。")}>
+      <ProviderConnectionTest key={`${provider.id}:${provider.default_model ?? ""}:${selectedProviderKey ?? ""}`} provider={provider} model={provider.default_model || undefined} selectedKeyId={selectedProviderKey} />
+    </SettingsPanel>
+    <SettingsPanel title={t("Identity", "身份")}>
+      <FieldGrid>
+        <SettingsField label={t("Display name", "显示名称")} anchor="providers.connection.display_name" configKey="providers.display_name" hint={t("The ID follows this name until you edit the ID manually.", "手动修改 ID 前，标识会随显示名称更新。")}>
+          <SkTextInput value={provider.display_name} onChange={onDisplayNameChange} />
+        </SettingsField>
+        <SettingsField label={t("Provider ID", "供应商 ID")} anchor="providers.connection.id" configKey="providers.id" error={idError || undefined} hint={t("Stable identifier used by configuration references.", "供配置引用使用的稳定标识。")}>
+          <SkTextInput value={idDraft ?? provider.id} onChange={onIdDraftChange} onBlur={(event) => onCommitId(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); if (event.key === "Escape") onIdEscape(); }} />
+        </SettingsField>
+      </FieldGrid>
+    </SettingsPanel>
+  </>;
 }
 
 /** 新建供应商时填入的占位地址。 */
 export const PLACEHOLDER_BASE_URL = "https://api.example.com/v1";
-
-/**
- * 判断接入地址是否仍为空或占位值。
- *
- * @param baseUrl 当前 API 地址
- * @returns 未填写真实地址时返回 true
- */
-function isPlaceholderEndpoint(baseUrl: string): boolean {
-  const value = baseUrl.trim();
-  return value === "" || value === PLACEHOLDER_BASE_URL;
-}
 
 /**
  * 构造默认模型下拉选项；历史值不在模型列表时保留为可选项。

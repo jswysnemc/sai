@@ -1,115 +1,43 @@
+import { useState } from "react";
 import type { ProviderConfig } from "../../../api/contracts";
-import { JsonCodeEditor } from "../../../shared/ui/code-editor/json-code-editor";
-import { Select } from "../../../shared/ui/select/select";
+import { JsonCodeEditor, type JsonEditorDiagnostic } from "../../../shared/ui/code-editor/json-code-editor";
 import { useI18n } from "../../i18n/use-i18n";
-import { SettingsGroup } from "../editor-layout";
+import { ChoicePills, FieldGrid, InlineNotice, SettingsField, SettingsPanel, SkTextInput, SwitchField } from "../kit";
 import { KeyValueEditor } from "../key-value-editor";
 import { isClaudeClientStyle, userAgentPlaceholder } from "./provider-options";
 
-type ProviderAdvancedTabProps = {
-  provider: ProviderConfig;
-  onPatch: (patch: Partial<ProviderConfig>) => void;
-};
+type ProviderAdvancedTabProps = { provider: ProviderConfig; onPatch: (patch: Partial<ProviderConfig>) => void };
 
 /**
- * 供应商编辑器的高级页签：客户端模拟、User-Agent 与自定义请求载荷。
- *
- * 客户端模拟是这一页的主开关，决定了 UA 缺省值与可用的附加开关，
- * 因此独占第一组；请求头与 body 属于手工覆盖项，归入第二组。
- *
- * @param props 供应商状态与更新回调
- * @returns 高级页签内容
+ * 【供应商设置】【高级请求】编辑客户端标识、请求头与自定义请求体。
+ * @param props 供应商配置及局部更新回调
+ * @returns 高级设置页签
  */
 export function ProviderAdvancedTab({ provider, onPatch }: ProviderAdvancedTabProps) {
   const { t } = useI18n();
-  const claudeSimulation = isClaudeClientStyle(provider.client_style);
-
-  return (
-    <>
-      <SettingsGroup
-        title={t("Client identity", "客户端标识")}
-        description={t(
-          "Pretend to be a specific CLI client; some proxies only serve recognized clients.",
-          "模拟特定 CLI 客户端；部分代理只服务可识别的客户端。"
-        )}
-      >
-        <div className="settings-form-grid">
-          <div className="settings-field">
-            <span>{t("Client style", "客户端模拟")}</span>
-            <Select
-              value={provider.client_style ?? "auto"}
-              options={[
-                { value: "auto", label: t("Auto", "自动") },
-                { value: "default", label: t("Default", "默认") },
-                { value: "codex", label: "Codex CLI" },
-                { value: "claude", label: "Claude Code" },
-              ]}
-              onChange={(value) => onPatch({ client_style: value })}
-              ariaLabel={t("Client style", "客户端模拟")}
-            />
-            <small>{t("Codex forces Responses body and codex_cli_rs headers. Claude forces Anthropic Messages with Claude Code headers (beta, x-app, session). Use for 1M-context Claude proxies.", "Codex 强制 Responses 与 codex_cli_rs 头。Claude 强制 Anthropic Messages 与 Claude Code 头（beta、x-app、session）。适用于 1M 上下文 Claude 代理。")}</small>
-          </div>
-          {claudeSimulation && (
-            <label className="settings-toggle-field">
-              <span>
-                <strong>{t("Claude 1M context", "Claude 启用 1M 上下文")}</strong>
-                <small>{t(
-                  "Attach context-1m-2025-08-07 in anthropic-beta. Enabled by default.",
-                  "在 anthropic-beta 中附加 context-1m-2025-08-07，默认启用。"
-                )}</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={provider.claude_1m_context !== false}
-                onChange={(event) => onPatch({
-                  claude_1m_context: event.target.checked
-                })}
-              />
-            </label>
-          )}
-          <label className="settings-field">
-            <span>User-Agent</span>
-            <input
-              value={provider.user_agent ?? ""}
-              onChange={(event) => onPatch({ user_agent: event.target.value })}
-              spellCheck={false}
-              placeholder={userAgentPlaceholder(provider)}
-            />
-            <small>{t("Empty uses Codex/Claude CLI UA when Client style matches, otherwise sai/0.1. Overrides User-Agent in extra headers.", "留空时：客户端模拟为 Codex/Claude 则用对应 CLI UA，否则 sai/0.1。优先于自定义请求头中的 User-Agent。")}</small>
-          </label>
-        </div>
-      </SettingsGroup>
-
-      <SettingsGroup
-        title={t("Custom request payload", "自定义请求载荷")}
-        description={t(
-          "Merged into every model request; explicit fields take precedence.",
-          "合并到每次模型请求；显式配置字段优先。"
-        )}
-      >
-        <div className="settings-form-grid">
-          <div className="settings-field full">
-            <span>{t("Extra headers", "自定义请求头")}</span>
-            <KeyValueEditor
-              value={provider.extra_headers ?? {}}
-              onChange={(extra_headers) => onPatch({ extra_headers })}
-            />
-            <small>{t("Merged into each model request; Authorization is not overridden", "合并到每次模型请求，不覆盖 Authorization")}</small>
-          </div>
-          <div className="settings-json-field full">
-            <div>
-              <span>{t("Custom body JSON", "自定义 body JSON")}</span>
-              <small>{t("The object is merged into each model request; explicit fields take precedence", "对象会合并到每次模型请求，显式配置字段优先")}</small>
-            </div>
-            <JsonCodeEditor
-              value={provider.extra_body || "{}"}
-              onChange={(value) => onPatch({ extra_body: value === "{}" ? "" : value })}
-              height={220}
-              ariaLabel={t("Provider custom body JSON", "供应商自定义 body JSON")}
-            />
-          </div>
-        </div>
-      </SettingsGroup>
-    </>
-  );
+  const [diagnostics, setDiagnostics] = useState<JsonEditorDiagnostic[]>([]);
+  return <>
+    <SettingsPanel title={t("Client identity", "客户端标识")} description={t("Choose the request format and identity required by the upstream endpoint.", "选择上游接入要求的请求格式与客户端标识。")}>
+      <FieldGrid>
+        <SettingsField label={t("Client style", "客户端模拟")} anchor="providers.advanced.client_style" configKey="providers.client_style" hint={t("Codex uses Responses and CLI headers; Claude uses Anthropic Messages and Claude Code headers.", "Codex 使用 Responses 与 CLI 请求头；Claude 使用 Anthropic Messages 与 Claude Code 请求头。")}>
+          <ChoicePills value={provider.client_style ?? "auto"} options={[{ value: "auto", label: t("Auto", "自动") }, { value: "default", label: t("Default", "默认") }, { value: "codex", label: "Codex CLI" }, { value: "claude", label: "Claude Code" }]} onChange={(value) => onPatch({ client_style: value })} />
+        </SettingsField>
+        <SettingsField label="User-Agent" anchor="providers.advanced.user_agent" configKey="providers.user_agent" hint={t("Empty uses the selected client's default. Overrides extra headers.", "留空使用所选客户端默认值，优先于自定义请求头。")}>
+          <SkTextInput value={provider.user_agent ?? ""} placeholder={userAgentPlaceholder(provider)} onChange={(value) => onPatch({ user_agent: value })} />
+        </SettingsField>
+        {isClaudeClientStyle(provider.client_style) && <SwitchField label={t("Claude 1M context", "Claude 启用 1M 上下文")} anchor="providers.advanced.claude_1m_context" configKey="providers.claude_1m_context" hint={t("Add the extended-context beta header; enabled by default.", "附加扩展上下文请求头，默认启用。")} checked={provider.claude_1m_context !== false} onChange={(value) => onPatch({ claude_1m_context: value })} />}
+      </FieldGrid>
+    </SettingsPanel>
+    <SettingsPanel title={t("Custom request payload", "自定义请求载荷")} description={t("Merged into each request; explicit fields take precedence.", "合并到每次模型请求，显式配置字段优先。")}>
+      <FieldGrid columns={1}>
+        <SettingsField label={t("Extra headers", "自定义请求头")} anchor="providers.advanced.extra_headers" configKey="providers.extra_headers" hint={t("Authorization is not overridden.", "不会覆盖 Authorization。")}>
+          <KeyValueEditor value={provider.extra_headers ?? {}} onChange={(extra_headers) => onPatch({ extra_headers })} />
+        </SettingsField>
+        <SettingsField label={t("Custom body JSON", "自定义 body JSON")} anchor="providers.advanced.extra_body" configKey="providers.extra_body">
+          {diagnostics[0] && <InlineNotice tone="danger">{t(`Line ${diagnostics[0].line}: ${diagnostics[0].message}`, `第 ${diagnostics[0].line} 行：${diagnostics[0].message}`)}</InlineNotice>}
+          <JsonCodeEditor value={provider.extra_body || "{}"} onChange={(value) => onPatch({ extra_body: value === "{}" ? "" : value })} onDiagnostics={setDiagnostics} height="18rem" ariaLabel={t("Provider custom body JSON", "供应商自定义 body JSON")} />
+        </SettingsField>
+      </FieldGrid>
+    </SettingsPanel>
+  </>;
 }

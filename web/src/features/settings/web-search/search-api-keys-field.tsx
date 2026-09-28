@@ -1,3 +1,4 @@
+import { SettingsField, SkListInput } from "../kit";
 import { Trash2 } from "../../../shared/ui/icons";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
@@ -8,6 +9,7 @@ import {
 } from "./web-search-config";
 
 type SearchApiKeysFieldProps = {
+  anchor?: string;
   keys: string[];
   environmentVariable: string;
   secretSentinel: string;
@@ -21,6 +23,7 @@ type SearchApiKeysFieldProps = {
  * @returns 多行密钥编辑字段
  */
 export function SearchApiKeysField({
+  anchor,
   keys,
   environmentVariable,
   secretSentinel,
@@ -40,37 +43,8 @@ export function SearchApiKeysField({
   };
 
   return (
-    <div className="settings-field full search-api-keys-field">
-      <div className="search-api-keys-head">
-        <span>{t("API keys", "接口密钥")}</span>
-        {hiddenCount > 0 && (
-          <Button variant="ghost-danger" onClick={clearSavedKeys}>
-            <Trash2 size={14} />
-            {t("Clear saved keys", "清除已保存密钥")}
-          </Button>
-        )}
-      </div>
-      <textarea
-        rows={Math.min(7, Math.max(3, visibleKeys.length + 1))}
-        value={visibleKeys.join("\n")}
-        placeholder={"$env:" + environmentVariable}
-        onChange={(event) => onChange(mergeSearchApiKeyText(keys, event.target.value, secretSentinel))}
-        spellCheck={false}
-        autoComplete="off"
-      />
-      <small>
-        {hiddenCount > 0
-          ? t(
-              hiddenCount === 1
-                ? "1 saved key remains hidden. Add direct keys or $env references one per line."
-                : hiddenCount + " saved keys remain hidden. Add direct keys or $env references one per line.",
-              "已隐藏 " + hiddenCount + " 个已保存密钥。每行可新增一个直接密钥或 $env 引用。"
-            )
-          : t(
-              "One key or $env reference per line. The runtime also checks " + environmentVariable + ".",
-              "每行填写一个密钥或 $env 引用。运行时也会读取 " + environmentVariable + "。"
-            )}
-      </small>
-    </div>
+    <SettingsField label={t("API keys", "接口密钥")} anchor={anchor} span="full" aside={hiddenCount > 0 && <Button variant="ghost-danger" size="small" onClick={clearSavedKeys}><Trash2 size={14} />{t("Clear saved keys", "清除已保存密钥")}</Button>} hint={hiddenCount > 0 ? t(`${hiddenCount} saved keys remain hidden; add one key or environment reference per line.`, `已隐藏 ${hiddenCount} 个已保存密钥；每行新增一个密钥或环境变量引用。`) : t(`One key or environment reference per line. Also reads ${environmentVariable}.`, `每行填写一个密钥或环境变量引用，也会读取 ${environmentVariable}。`)}>
+      <SkListInput value={visibleKeys} rows={Math.min(7, Math.max(3, visibleKeys.length + 1))} placeholder={"$env:" + environmentVariable} onChange={(value) => onChange(mergeSearchApiKeyText(keys, value.join("\n"), secretSentinel))} />
+    </SettingsField>
   );
 }

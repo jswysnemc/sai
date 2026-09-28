@@ -7,6 +7,8 @@ export type SettingsSearchEntry = {
   section: SettingsSectionId;
   /** 字段所在子页；分区无子页时省略 */
   subview?: string;
+  /** 对象分区中需要先选中的条目 */
+  item?: string;
   labelEn: string;
   labelZh: string;
   /** 额外关键词：配置键、同义词、常见说法 */

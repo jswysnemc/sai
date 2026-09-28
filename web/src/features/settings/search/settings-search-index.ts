@@ -1,3 +1,5 @@
+import { WEB_SEARCH_ENTRIES } from "./entries-web-search";
+import { MODEL_SERVICE_SEARCH_ENTRIES } from "./entries-model-services";
 import { GIT_SEARCH_ENTRIES } from "./entries-git";
 import { RUNTIME_SEARCH_ENTRIES } from "./entries-runtime";
 import { PERSONALIZATION_SEARCH_ENTRIES } from "./entries-personalization";
@@ -15,5 +17,7 @@ export type { SettingsSearchEntry } from "./settings-search-types";
 export const SETTINGS_SEARCH_INDEX: readonly SettingsSearchEntry[] = [
   ...GIT_SEARCH_ENTRIES,
   ...RUNTIME_SEARCH_ENTRIES,
-  ...PERSONALIZATION_SEARCH_ENTRIES
+  ...PERSONALIZATION_SEARCH_ENTRIES,
+  ...WEB_SEARCH_ENTRIES,
+  ...MODEL_SERVICE_SEARCH_ENTRIES
 ];

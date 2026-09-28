@@ -5,7 +5,7 @@ import { DialogProvider } from "../../shared/ui/dialog/dialog-provider";
 import { ModelMetadataEditor } from "./model-metadata-editor";
 
 /** 模型详情页标题里的选中模型名 */
-const SELECTED_MODEL = /<strong>([^<]+)<\/strong><small>单模型能力与上下文<\/small>/;
+const SELECTED_MODEL = /<h2>([^<]+)<\/h2>/;
 
 /**
  * 构造最小可用的供应商配置。

@@ -99,7 +99,7 @@ function renderAppConfigSection(
     case "image-models":
       return <ModelEndpointSettings key={section} kind="image_generation" config={config} secretSentinel={settings.secretSentinel} onChange={settings.updateConfig} />;
     case "jev":
-      return <JevSettingsSection config={config} subview={subview} secretSentinel={settings.secretSentinel} dirty={settings.dirty} onConfigChange={settings.updateConfig} />;
+      return <JevSettingsSection config={config} secretSentinel={settings.secretSentinel} dirty={settings.dirty} onConfigChange={settings.updateConfig} />;
     case "providers":
       return (
         <ProviderSettingsSection

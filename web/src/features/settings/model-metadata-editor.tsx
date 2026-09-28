@@ -4,12 +4,9 @@ import type { ModelMetadata, ProviderConfig } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { ModelIcon } from "../../shared/ui/model-icon";
-import { Select } from "../../shared/ui/select/select";
+import { DetailHeader, EmptyGuide, MasterDetail, ObjectList, SettingsPanel, SkTextInput } from "./kit";
+import { ModelCapabilityFields } from "./model/model-capability-fields";
 import { useI18n } from "../i18n/use-i18n";
-
-const MODEL_TAGS = ["tool", "thinking", "vision", "web_search", "fast", "low_cost"];
-/** 按强度升序排列的思考等级；auto 不在其列，它对任何模型都可用。 */
-const THINKING_LEVELS = ["none", "low", "medium", "high", "xhigh", "max"];
 
 type ModelMetadataEditorProps = {
   provider: ProviderConfig;
@@ -35,24 +32,6 @@ export function ModelMetadataEditor({ provider, onChange }: ModelMetadataEditorP
   }, [models.join("\u0000"), provider.default_model, selected]);
 
   const metadata = provider.model_metadata?.[selected] ?? {};
-  const [contextUnit, setContextUnit] = useState<"none" | "k" | "m">("none");
-  const contextDivisor = contextUnit === "k" ? 1_000 : contextUnit === "m" ? 1_000_000 : 1;
-  const contextValue = metadata.context_chars ? metadata.context_chars / contextDivisor : "";
-  const toolOptions = [
-    { value: "enabled", label: t("Allowed", "允许") },
-    { value: "disabled", label: t("Disabled", "禁用") }
-  ];
-  const contextUnitOptions = [
-    { value: "none", label: t("None", "无") },
-    { value: "k", label: "k" },
-    { value: "m", label: "m" }
-  ];
-  const webSearchToolOptions = [
-    { value: "enabled", label: t("Enabled", "启用") },
-    { value: "hide_builtin", label: t("Hide local tool with the same name", "隐藏本地同名工具") },
-    { value: "rename_local", label: t("Rename local tool", "更名本地工具") }
-  ];
-
   /**
    * 新增模型标识并选中。
    */
@@ -108,219 +87,19 @@ export function ModelMetadataEditor({ provider, onChange }: ModelMetadataEditorP
     });
   };
 
-  /**
-   * 切换当前模型标签。
-   *
-   * @param tag 标签名
-   */
-  const toggleTag = (tag: string) => {
-    const tags = metadata.tags ?? [];
-    updateMetadata({ tags: tags.includes(tag) ? tags.filter((item) => item !== tag) : [...tags, tag] });
-  };
-
-  /**
-   * 切换当前模型支持的思考等级。
-   *
-   * @param level 等级名
-   */
-  const toggleThinkingLevel = (level: string) => {
-    const levels = metadata.thinking_levels ?? [];
-    const next = levels.includes(level)
-      ? levels.filter((item) => item !== level)
-      : [...levels, level];
-    // 按强度升序存储，配置文件里读起来与界面顺序一致
-    updateMetadata({ thinking_levels: THINKING_LEVELS.filter((item) => next.includes(item)) });
-  };
-
   return (
-    <section className="model-catalog">
-      <header>
-        <div>
-          <span>{t("Model catalog", "模型目录")}</span>
-          <small>{t(`${models.length} models`, `${models.length} 个模型`)}</small>
-        </div>
-        <div className="model-add">
-          <input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                addModel();
-              }
-            }}
-            placeholder={t("Add model ID", "新增模型 ID")}
-          />
-          <Button className="model-add-button" onClick={addModel} aria-label={t("Add model", "新增模型")}>
-            <Plus size={14} />
-          </Button>
-        </div>
-      </header>
-      <div className="model-catalog-body">
-        <div className="model-chip-list">
-          {models.length === 0 && (
-            <p className="model-catalog-empty">
-              {t("No models yet. Use Import models to fetch the remote list.", "还没有模型。用「导入模型」拉取远端列表。")}
-            </p>
-          )}
-          {models.map((model) => (
-            <div className={model === selected ? "model-row is-open" : "model-row"} key={model}>
-              <div className={model === selected ? "model-chip active" : "model-chip"}>
-                <Button className="model-chip-select" onClick={() => setSelected(model)} aria-expanded={model === selected}>
-                  <ModelIcon model={model} size={14} />
-                  {model}
-                </Button>
-                <Button
-                  className="model-chip-remove"
-                  onClick={() => void removeModel(model)}
-                  aria-label={t(`Delete model ${model}`, `删除模型 ${model}`)}
-                >
-                  <Trash2 size={12} />
-                </Button>
-              </div>
-              {model === selected && (
-          <div className="model-metadata-form">
-            <div className="model-metadata-head">
-              <div>
-                <strong>{selected}</strong>
-                <small>{t("Model capabilities and context", "单模型能力与上下文")}</small>
-              </div>
-              <Button
-                className={provider.default_model === selected ? "settings-secondary active" : "settings-secondary"}
-                onClick={() => onChange({ default_model: selected })}
-              >
-                {provider.default_model === selected ? t("Default model", "默认模型") : t("Set as default", "设为默认")}
-              </Button>
-            </div>
-
-            <div className="settings-form-grid model-metadata-panel">
-              <div className="model-token-row">
-              <div className="settings-field">
-                <span>{t("Context tokens", "上下文 token 数")}</span>
-                <div className="model-context-input">
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={contextValue}
-                    onChange={(event) =>
-                      updateMetadata({
-                        context_chars: event.target.value
-                          ? Math.round(Number(event.target.value) * contextDivisor)
-                          : undefined
-                      })
-                    }
-                    placeholder={t("For example, 128", "例如 128")}
-                  />
-                  <Select
-                    value={contextUnit}
-                    options={contextUnitOptions}
-                    onChange={(value) => setContextUnit(value as "none" | "k" | "m")}
-                    ariaLabel={t("Context unit", "上下文单位")}
-                  />
-                </div>
-                <small>{t("Supports no unit, k, or m", "支持无单位、k、m")}</small>
-              </div>
-
-              <label className="settings-field">
-                <span>{t("Maximum output tokens", "最大输出 token 数")}</span>
-                <input
-                  type="number"
-                  min="1"
-                  value={metadata.max_output_tokens ?? ""}
-                  onChange={(event) =>
-                    updateMetadata({
-                      max_output_tokens: event.target.value ? Number(event.target.value) : undefined
-                    })
-                  }
-                  placeholder="32768"
-                />
-                <small>{t("Applied to Chat, Responses, and Anthropic requests", "应用于 Chat、Responses 和 Anthropic 请求")}</small>
-              </label>
-              </div>
-
-              <div className="settings-field">
-                <span>{t("Tool calls", "工具调用")}</span>
-                <Select
-                  value={metadata.tools_enabled === false ? "disabled" : "enabled"}
-                  options={toolOptions}
-                  onChange={(value) => updateMetadata({ tools_enabled: value === "enabled" ? undefined : false })}
-                  ariaLabel={t("Model tool calls", "模型工具调用")}
-                />
-                <small>{t("Override the provider default capability", "覆盖供应商默认能力")}</small>
-              </div>
-
-              <div className="settings-field full">
-                <span>{t("Web search tool", "网页搜索工具")}</span>
-                <Select
-                  value={metadata.web_search_tool_mode ?? "enabled"}
-                  options={webSearchToolOptions}
-                  onChange={(value) =>
-                    updateMetadata({
-                      web_search_tool_mode:
-                        value === "enabled" ? undefined : (value as ModelMetadata["web_search_tool_mode"])
-                    })
-                  }
-                  ariaLabel={t("Web search tool policy", "网页搜索工具策略")}
-                />
-                <small>
-                  {t(
-                    "Keep enabled by default, hide the local tool, or rename it before sending",
-                    "默认启用，也可隐藏本地工具或在发送前改名"
-                  )}
-                </small>
-              </div>
-
-              <div className="model-tag-field settings-field full">
-                <span>{t("Supported reasoning levels", "支持的推理强度")}</span>
-                <div className="model-tag-list">
-                  {THINKING_LEVELS.map((level) => (
-                    <Button
-                      key={level}
-                      className={(metadata.thinking_levels ?? []).includes(level) ? "settings-secondary active" : "settings-secondary"}
-                      onClick={() => toggleThinkingLevel(level)}
-                    >
-                      {level}
-                    </Button>
-                  ))}
-                  {(metadata.thinking_levels?.length ?? 0) > 0 && (
-                    <Button
-                      className="settings-secondary"
-                      onClick={() => updateMetadata({ thinking_levels: undefined })}
-                    >
-                      {t("Clear", "清空")}
-                    </Button>
-                  )}
-                </div>
-                <small>
-                  {t(
-                    "Filled in from the model catalog when models are fetched. Select none to offer every level — do that when the catalog data is wrong. auto is always available.",
-                    "拉取模型时从模型目录填入。一个都不选表示不限制，目录数据有误时这样处理。auto 始终可用。"
-                  )}
-                </small>
-              </div>
-
-              <div className="model-tag-field settings-field full">
-                <span>{t("Model tags", "模型标签")}</span>
-                <div className="model-tag-list">
-                  {MODEL_TAGS.map((tag) => (
-                    <Button
-                      key={tag}
-                      className={(metadata.tags ?? []).includes(tag) ? "settings-secondary active" : "settings-secondary"}
-                      onClick={() => toggleTag(tag)}
-                    >
-                      {tag}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-              )}
-            </div>
-          ))}
-        </div>
+    <SettingsPanel title={t("Model catalog", "模型目录")} description={t(`${models.length} configured models`, `已配置 ${models.length} 个模型`)} actions={
+      <div className="flex min-w-0 items-center gap-2">
+        <SkTextInput value={draft} onChange={setDraft} placeholder={t("Add model ID", "新增模型 ID")} aria-label={t("Add model ID", "新增模型 ID")} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addModel(); } }} />
+        <Button size="icon" onClick={addModel} aria-label={t("Add model", "新增模型")} disabled={!draft.trim() || models.includes(draft.trim())}><Plus size={14} /></Button>
       </div>
-    </section>
+    }>
+      {!models.length ? <EmptyGuide title={t("No models yet", "尚未配置模型")} description={t("Enter a model ID above or import the remote catalog.", "在上方填写模型标识，或导入远端模型目录。")} /> : (
+        <MasterDetail list={<ObjectList title={t("Models", "模型")} items={models.map((model) => ({ id: model, name: model, marked: model === provider.default_model, icon: <ModelIcon model={model} size={14} /> }))} selectedId={selected} onSelect={setSelected} searchPlaceholder={t("Filter models", "筛选模型")} />}>
+          <DetailHeader title={selected} subtitle={t("Model capabilities and context", "单模型能力与上下文")} actions={<Button size="small" disabled={provider.default_model === selected} onClick={() => onChange({ default_model: selected })}>{provider.default_model === selected ? t("Default model", "默认模型") : t("Set as default", "设为默认")}</Button>} menuItems={[{ id: "delete", label: t(`Delete model ${selected}`, `删除模型 ${selected}`), icon: <Trash2 size={14} />, danger: true, onSelect: () => void removeModel(selected) }]} />
+          <ModelCapabilityFields key={selected} metadata={metadata} onChange={updateMetadata} />
+        </MasterDetail>
+      )}
+    </SettingsPanel>
   );
 }

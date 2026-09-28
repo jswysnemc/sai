@@ -2,8 +2,7 @@ import { Plus, Trash2 } from "../../shared/ui/icons";
 import { api } from "../../api/client";
 import type { ProviderApiKey } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
-import { PasswordField } from "../../shared/ui/password-field";
-import { Select } from "../../shared/ui/select/select";
+import { ChoicePills, FieldGrid, SettingsField, SkSecretInput, SkSelect, SkTextInput } from "./kit";
 import { useI18n } from "../i18n/use-i18n";
 import "./provider-api-keys-field.css";
 
@@ -126,15 +125,13 @@ export function ProviderApiKeysField({
         {editorKeys.map((key, index) => (
           // 同一供应商内 key.id 唯一，跨供应商会重复：带上供应商标识，
           // 避免切换供应商时 React 复用上一个供应商的输入框实例
-          <li className="provider-api-key-row" key={`${providerId}:${key.id}`}>
+          <li className={editorKeys.length > 1 ? "provider-api-key-row has-remove" : "provider-api-key-row"} key={`${providerId}:${key.id}`}>
             <div className="provider-api-key-value">
-              <PasswordField
-                value={secretSentinel.length > 0 && key.api_key === secretSentinel ? "" : key.api_key}
-                savedValueHint={secretSentinel.length > 0 && key.api_key === secretSentinel ? t("Saved", "已保存") : undefined}
+              <SkSecretInput
+                value={key.api_key}
+                secretSentinel={secretSentinel}
+                ariaLabel={t(`API key ${index + 1}`, `接口密钥 ${index + 1}`)}
                 placeholder={t(`API key ${index + 1}`, `接口密钥 ${index + 1}`)}
-                onClearSavedValue={secretSentinel.length > 0 && key.api_key === secretSentinel
-                  ? () => updateKey(key.id, { api_key: "" })
-                  : undefined}
                 onReveal={secretSentinel.length > 0 && key.api_key === secretSentinel
                   ? () => onRevealKey
                     ? onRevealKey(key.id)
@@ -143,43 +140,41 @@ export function ProviderApiKeysField({
                 onChange={(value) => updateKey(key.id, { api_key: value })}
               />
             </div>
-            <input
+            <SkTextInput
+              aria-label={t(`Key ${index + 1} note`, `密钥 ${index + 1} 备注`)}
               className="provider-api-key-label"
               value={key.label ?? ""}
               placeholder={t("Note", "备注")}
               spellCheck={false}
-              onChange={(event) => updateKey(key.id, { label: event.target.value })}
+              onChange={(value) => updateKey(key.id, { label: value })}
             />
             {editorKeys.length > 1 && (
-              <button
-                type="button"
+              <Button
+                variant="ghost" size="icon"
                 className="provider-api-key-remove"
                 onClick={() => removeKey(key.id)}
                 aria-label={t("Remove key", "移除密钥")}
                 title={t("Remove key", "移除密钥")}
               >
                 <Trash2 size={14} />
-              </button>
+              </Button>
             )}
           </li>
         ))}
       </ul>
       {editorKeys.length > 1 && (
-        <div className="provider-api-keys-controls">
-          <div className="provider-api-keys-strategy">
-            <span>{t("Key usage", "密钥使用方式")}</span>
-            <Select
+        <FieldGrid className="provider-api-keys-controls">
+          <SettingsField label={t("Key usage", "密钥使用方式")} hint={t("Use one selected key or rotate requests across all configured keys.", "固定使用一个密钥，或在全部已配置密钥间轮换。")}>
+            <ChoicePills
               value={balance ? "balance" : "selected"}
               options={[
                 {
                   value: "selected",
                   label: t("Use selected key", "固定使用所选密钥"),
-                  description: t("Send every request with one key", "所有请求使用同一个密钥")
                 },
                 {
                   value: "balance",
                   label: t("Load balance", "负载均衡"),
-                  description: t("Rotate across all configured keys", "在全部已配置密钥间轮换")
                 }
               ]}
               onChange={(value) => onChange({
@@ -189,10 +184,9 @@ export function ProviderApiKeysField({
               })}
               ariaLabel={t("Key usage", "密钥使用方式")}
             />
-          </div>
-          <div className="provider-api-keys-selected">
-            <span>{balance ? t("Test key", "测试密钥") : t("Working key", "工作密钥")}</span>
-            <Select
+          </SettingsField>
+          <SettingsField label={balance ? t("Test key", "测试密钥") : t("Working key", "工作密钥")} hint={balance ? t("Requests rotate across all keys; tests use the selected key.", "正式请求轮换使用全部密钥，测试使用所选密钥。") : undefined}>
+            <SkSelect
               value={selectedId ?? ""}
               options={editorKeys.map((key, index) => ({
                 value: key.id,
@@ -202,13 +196,8 @@ export function ProviderApiKeysField({
               ariaLabel={balance ? t("API key used for tests", "用于测试的接口密钥") : t("Working API key", "工作接口密钥")}
               menuMinimumWidth={180}
             />
-            {balance && (
-              <small>
-                {t("Requests rotate across all keys; tests use this key.", "正式请求会在全部密钥间轮换；连通性测试使用这里选中的密钥。")}
-              </small>
-            )}
-          </div>
-        </div>
+          </SettingsField>
+        </FieldGrid>
       )}
     </div>
   );

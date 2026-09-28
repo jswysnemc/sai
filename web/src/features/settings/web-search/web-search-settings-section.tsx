@@ -1,8 +1,9 @@
-import { useState } from "react";
 import type { AppConfig } from "../../../api/contracts";
-import { EditorHeader } from "../editor-layout";
+import { MasterDetail, SwitchField } from "../kit";
+import { useSettingsItem } from "../shell/use-settings-item";
 import { useI18n } from "../../i18n/use-i18n";
 import {
+  WEB_SEARCH_PROVIDER_IDS,
   normalizeWebSearchSelection,
   readWebSearchConfig,
   writeWebSearchConfig,
@@ -33,7 +34,8 @@ export function WebSearchSettingsSection({
 }: WebSearchSettingsSectionProps) {
   const { t } = useI18n();
   const webSearch = normalizeWebSearchSelection(readWebSearchConfig(config));
-  const [selectedProvider, setSelectedProvider] = useState<WebSearchProviderId>("tinyfish");
+  const [selectedId, setSelectedProvider] = useSettingsItem(WEB_SEARCH_PROVIDER_IDS);
+  const selectedProvider = selectedId as WebSearchProviderId;
 
   /**
    * 将 Web 搜索配置写回历史兼容的 plugins.web 键。
@@ -47,50 +49,23 @@ export function WebSearchSettingsSection({
 
   return (
     <div className={webSearch.enabled ? "web-search-settings" : "web-search-settings is-disabled"}>
-      <section className="settings-editor web-search-overview">
-        <EditorHeader
-          kicker={t("Web search", "Web 搜索")}
-          title={t("Search routing and providers", "搜索路由与供应商")}
-          description={t(
-            "Configure provider order, credentials, endpoints, and provider-specific retrieval behavior.",
-            "配置供应商路由、凭据、服务地址与各供应商的检索行为。"
-          )}
-          actions={(
-            <label className="settings-switch web-search-master-switch">
-              <input
-                type="checkbox"
-                checked={webSearch.enabled}
-                aria-label={t("Enable Web search", "启用 Web 搜索")}
-                onChange={(event) => updateWebSearch({
-                  ...webSearch,
-                  enabled: event.target.checked
-                })}
-              />
-              <span aria-hidden="true" />
-              <strong>
-                {webSearch.enabled ? t("Enabled", "已启用") : t("Disabled", "已停用")}
-              </strong>
-            </label>
-          )}
-        />
+      <SwitchField label={t("Enable Web search", "启用 Web 搜索")} anchor="web-search.enabled" configKey="plugins.web.enabled" checked={webSearch.enabled} onChange={(enabled) => updateWebSearch({ ...webSearch, enabled })} />
         <WebSearchGlobalSettings
           config={webSearch}
           onChange={updateWebSearch}
         />
-      </section>
-      <div className="settings-objects-layout web-search-provider-layout">
-        <SearchProviderList
+      <MasterDetail list={<SearchProviderList
           config={webSearch}
           selectedId={selectedProvider}
           onSelect={setSelectedProvider}
-        />
+        />}>
         <SearchProviderEditor
           providerId={selectedProvider}
           config={webSearch}
           secretSentinel={secretSentinel}
           onChange={updateWebSearch}
         />
-      </div>
+      </MasterDetail>
     </div>
   );
 }

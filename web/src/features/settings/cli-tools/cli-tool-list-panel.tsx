@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
-import { ObjectListPanel } from "../object-list-panel";
+import { ObjectList } from "../kit";
 import {
   cliToolCategoryLabel,
   cliToolLabel,
@@ -41,7 +41,7 @@ export function CliToolListPanel({ tools, selectedId, onSelect }: CliToolListPan
   );
 
   return (
-    <ObjectListPanel
+    <ObjectList
       title={t("CLI assistant tools", "CLI 助手工具")}
       items={visibleTools.map(({ id, config }) => {
         const entry = getCliToolCatalogEntry(id);
@@ -58,7 +58,7 @@ export function CliToolListPanel({ tools, selectedId, onSelect }: CliToolListPan
       })}
       selectedId={selectedId}
       searchPlaceholder={t("Search CLI tools", "搜索 CLI 助手工具")}
-      topSlot={(
+      headerSlot={(
         <div className="cli-tool-filter" aria-label={t("Filter tools by status", "按状态筛选工具")}>
           <FilterButton
             active={status === "all"}

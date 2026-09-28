@@ -1,3 +1,4 @@
+import { SettingsPanel, SwitchField } from "../kit";
 import { StructuredConfigFields } from "../structured-config-fields";
 import {
   groupCliToolFields,
@@ -7,6 +8,7 @@ import {
 import { useI18n } from "../../i18n/use-i18n";
 
 type CliToolConfigEditorProps = {
+  toolId: string;
   config: Record<string, unknown>;
   secretSentinel: string;
   onChange: (config: Record<string, unknown>) => void;
@@ -19,6 +21,7 @@ type CliToolConfigEditorProps = {
  * @returns 工具总开关与分组配置表单
  */
 export function CliToolConfigEditor({
+  toolId,
   config,
   secretSentinel,
   onChange
@@ -46,22 +49,7 @@ export function CliToolConfigEditor({
   return (
     <div className={enabled ? "cli-tool-config-editor" : "cli-tool-config-editor is-disabled"}>
       {enabledKey && (
-        <label className="settings-toggle-field cli-tool-enable-row">
-          <span>
-            <strong>{t("Available to CLI assistants", "对 CLI 助手开放")}</strong>
-            <small>
-              {enabled
-                ? t("The assistant may select this tool when the task requires it.", "CLI 助手可在任务需要时选择该工具。")
-                : t("The tool stays configured but is not exposed to CLI assistants.", "配置继续保留，但不会向 CLI 助手开放。")}
-            </small>
-          </span>
-          <input
-            type="checkbox"
-            checked={enabled}
-            aria-label={t("Available to CLI assistants", "对 CLI 助手开放")}
-            onChange={(event) => onChange({ ...config, [enabledKey]: event.target.checked })}
-          />
-        </label>
+        <SwitchField label={t("Available to CLI assistants", "对 CLI 助手开放")} hint={t("Keep the configuration while controlling whether assistants can use this tool.", "控制 CLI 助手能否使用此工具，停用时保留配置。")} anchor={`cli-tools.${toolId}.${enabledKey}`} configKey={`plugins.${toolId}.${enabledKey}`} checked={enabled} onChange={(checked) => onChange({ ...config, [enabledKey]: checked })} />
       )}
       {groups.length === 0 ? (
         <div className="settings-state cli-tool-empty-options">
@@ -70,17 +58,15 @@ export function CliToolConfigEditor({
       ) : (
         <div className="cli-tool-config-groups">
           {groups.map((group) => (
-            <section className="cli-tool-config-group" key={group.id}>
-              <header className="cli-tool-config-group-head">
-                <h3>{groupTitles[group.id]}</h3>
-                <p>{groupHints[group.id]}</p>
-              </header>
+            <SettingsPanel key={group.id} title={groupTitles[group.id]} description={groupHints[group.id]}>
               <StructuredConfigFields
                 value={Object.fromEntries(group.entries)}
+                configPath={`plugins.${toolId}`}
+                anchorPrefix={`cli-tools.${toolId}`}
                 secretSentinel={secretSentinel}
                 onChange={(next) => onChange({ ...config, ...next })}
               />
-            </section>
+            </SettingsPanel>
           ))}
         </div>
       )}

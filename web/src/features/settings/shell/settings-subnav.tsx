@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import type { SettingsSectionId, SettingsSubviewMeta } from "../settings-types";
 import { useI18n } from "../../i18n/use-i18n";
 
@@ -18,12 +18,13 @@ type SettingsSubnavProps = {
  */
 export function SettingsSubnav({ sectionId, subviews }: SettingsSubnavProps) {
   const { t } = useI18n();
+  const { search } = useLocation();
   return (
     <nav className="sk-tabs settings-subnav" aria-label={t("Section pages", "分区子页")}>
       {subviews.map((item) => (
         <NavLink
           key={item.id}
-          to={`/settings/${sectionId}/${item.id}`}
+          to={`/settings/${sectionId}/${item.id}${search}`}
           className={({ isActive }) => (isActive ? "active" : undefined)}
         >
           {t(item.labelEn, item.labelZh)}

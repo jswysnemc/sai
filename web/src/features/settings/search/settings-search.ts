@@ -100,5 +100,5 @@ function searchEntryLocation(entry: SettingsSearchEntry, zh: boolean): string {
  */
 export function searchEntryHref(entry: SettingsSearchEntry): string {
   const path = entry.subview ? `/settings/${entry.section}/${entry.subview}` : `/settings/${entry.section}`;
-  return `${path}?focus=${encodeURIComponent(entry.anchor)}`;
+  return `${path}?focus=${encodeURIComponent(entry.anchor)}${entry.item ? `&item=${encodeURIComponent(entry.item)}` : ""}`;
 }

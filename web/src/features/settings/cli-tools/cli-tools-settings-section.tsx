@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
-import { useSelectedFallback } from "../controls/use-selected-fallback";
+import { useMemo } from "react";
+import { useSettingsItem } from "../shell/use-settings-item";
 import type { AppConfig } from "../../../api/contracts";
-import { EditorHeader } from "../editor-layout";
+import { DetailHeader, EmptyGuide, MasterDetail } from "../kit";
 import { CliToolConfigEditor } from "./cli-tool-config-editor";
 import { CliToolListPanel } from "./cli-tool-list-panel";
 import {
@@ -37,43 +37,25 @@ export function CliToolsSettingsSection({
     [config.plugins]
   );
   const toolIds = tools.map(({ id }) => id);
-  const [selectedId, setSelectedId] = useState(toolIds[0] ?? "");
+  const [selectedId, setSelectedId] = useSettingsItem(toolIds);
 
-  useSelectedFallback(selectedId, toolIds, setSelectedId);
-
-  if (!selectedId) {
-    return (
-      <section className="settings-editor">
-        <EditorHeader
-          kicker={t("CLI assistant tools", "CLI 助手工具")}
-          title={t("No optional tools found", "没有可选工具")}
-          description={t(
-            "The current configuration does not contain optional CLI assistant tools.",
-            "当前配置中没有 CLI 助手可选工具。"
-          )}
-        />
-      </section>
-    );
-  }
+  if (!selectedId) return <EmptyGuide title={t("No optional tools found", "没有可选工具")} description={t("No optional CLI tools are present in the current configuration.", "当前配置中没有 CLI 助手可选工具。")} />;
 
   const selected = tools.find(({ id }) => id === selectedId) ?? tools[0];
   const entry = getCliToolCatalogEntry(selected.id);
 
   return (
-    <div className="settings-objects-layout cli-tools-layout">
-      <CliToolListPanel
+    <MasterDetail list={<CliToolListPanel
         tools={tools}
         selectedId={selected.id}
         onSelect={setSelectedId}
-      />
-      <section className="settings-editor">
-        <EditorHeader
-          kicker={t("Optional CLI capability", "CLI 可选能力")}
+      />}>
+        <DetailHeader
           title={cliToolLabel(entry, locale)}
-          description={cliToolDescription(entry, locale)}
-          actions={<code className="cli-tool-id">{selected.id}</code>}
+          subtitle={cliToolDescription(entry, locale)}
         />
         <CliToolConfigEditor
+          toolId={selected.id}
           config={selected.config}
           secretSentinel={secretSentinel}
           onChange={(next) => onConfigChange({
@@ -84,7 +66,6 @@ export function CliToolsSettingsSection({
             }
           })}
         />
-      </section>
-    </div>
+    </MasterDetail>
   );
 }

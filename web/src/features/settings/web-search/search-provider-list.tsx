@@ -1,4 +1,4 @@
-import { ObjectListPanel } from "../object-list-panel";
+import { ObjectList } from "../kit";
 import { useI18n } from "../../i18n/use-i18n";
 import {
   WEB_SEARCH_PROVIDER_IDS,
@@ -33,7 +33,7 @@ export function SearchProviderList({
   ).length;
 
   return (
-    <ObjectListPanel
+    <ObjectList
       title={t("Search providers", "搜索供应商")}
       items={WEB_SEARCH_PROVIDER_IDS.map((id) => {
         const provider = getSearchProvider(id);
@@ -49,7 +49,7 @@ export function SearchProviderList({
       })}
       selectedId={selectedId}
       searchPlaceholder={t("Search providers", "搜索供应商")}
-      topSlot={(
+      headerSlot={(
         <div className="search-provider-summary">
           <span>{t("Enabled", "已启用")}</span>
           <strong>{enabledCount} / {WEB_SEARCH_PROVIDER_IDS.length}</strong>

@@ -5,9 +5,13 @@ import { filterSettingsSections, groupSettingsSections } from "../settings-regis
 import { searchEntryHref, searchSettingsFields } from "../search/settings-search";
 import type { SettingsSectionId } from "../settings-types";
 import { useI18n } from "../../i18n/use-i18n";
+import type { AppConfig } from "../../../api/contracts";
+import { SETTINGS_SEARCH_INDEX } from "../search/settings-search-index";
+import { buildCliToolSearchEntries } from "../search/entries-cli-tools";
 
 type SettingsNavProps = {
   activeSection: SettingsSectionId;
+  config?: AppConfig | null;
   /** 有未保存修改的分区 */
   dirtySections: ReadonlySet<SettingsSectionId>;
   /** 返回主界面链接的点击处理，用于未保存修改确认 */
@@ -22,7 +26,7 @@ type SettingsNavProps = {
  * @param props 当前分区、未保存分区与离开处理
  * @returns 侧栏导航；窄屏下为横向分类栏
  */
-export function SettingsNav({ activeSection, dirtySections, onExit }: SettingsNavProps) {
+export function SettingsNav({ activeSection, config, dirtySections, onExit }: SettingsNavProps) {
   const { t, locale } = useI18n();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
@@ -52,7 +56,8 @@ export function SettingsNav({ activeSection, dirtySections, onExit }: SettingsNa
 
   // 1. 分区按关键字过滤后归组；字段结果单独排序
   const grouped = useMemo(() => groupSettingsSections(filterSettingsSections(query)), [query]);
-  const fieldHits = useMemo(() => searchSettingsFields(query, locale), [locale, query]);
+  const searchIndex = useMemo(() => [...SETTINGS_SEARCH_INDEX, ...buildCliToolSearchEntries(config)], [config]);
+  const fieldHits = useMemo(() => searchSettingsFields(query, locale, searchIndex), [locale, query, searchIndex]);
   const searching = query.trim().length > 0;
 
   /**

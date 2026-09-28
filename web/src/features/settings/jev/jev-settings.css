@@ -1,5 +1,7 @@
 /* Jev 设置：接入状态行与测试结果，沿用设置页的步进间距与字号 */
 
+.jev-feature-grid > .sk-panel { margin: 0; padding: 0; border: 0; }
+
 .jev-status {
   display: grid;
   gap: var(--space-sm);
@@ -32,12 +34,11 @@
 .jev-status-summary code,
 .jev-status-summary em {
   min-width: 0;
-  overflow: hidden;
   font-family: var(--font-code);
   font-size: var(--text-xs);
   font-style: normal;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .jev-status-summary small {

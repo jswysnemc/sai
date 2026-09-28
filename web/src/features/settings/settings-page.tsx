@@ -88,7 +88,7 @@ export function SettingsPage() {
         onDiscard={settings.discard}
       />
       <div className="settings-workspace">
-        <SettingsNav activeSection={section} dirtySections={dirtySections} onExit={onExit} />
+        <SettingsNav activeSection={section} config={settings.config} dirtySections={dirtySections} onExit={onExit} />
         <main className="settings-main" ref={pageRef}>
           <div className="settings-main-content" data-layout={meta?.layout ?? "form"}>
             {meta?.subviews && section !== "providers" && (
