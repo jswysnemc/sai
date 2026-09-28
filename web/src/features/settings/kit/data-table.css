@@ -1,0 +1,127 @@
+/* 【Web 设置】【数据表】紧凑行高、数值右对齐、表头吸顶 */
+
+.sk-table-wrap {
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--paper-raised);
+}
+
+.sk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
+.sk-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 1.875rem;
+  padding: 0 var(--space-md);
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.sk-table td {
+  height: 2rem;
+  padding: var(--space-2xs) var(--space-md);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  color: var(--ink);
+  vertical-align: middle;
+}
+
+.sk-table tbody tr:last-child td { border-bottom: 0; }
+.sk-table tbody tr:hover td { background: var(--surface-hover); }
+.sk-table tbody tr.is-clickable { cursor: pointer; }
+.sk-table tbody tr.is-selected td { background: var(--surface-selected); }
+
+.sk-table .is-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sk-table .is-center { text-align: center; }
+
+.sk-table .is-check {
+  width: 2rem;
+  padding-right: 0;
+}
+
+.sk-table-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.sk-table-sort:hover,
+.sk-table-sort.is-active { color: var(--ink); }
+
+.sk-table-sort:focus-visible {
+  outline: 1px solid var(--ink-soft);
+  outline-offset: 2px;
+}
+
+.sk-table-empty td {
+  height: 4rem;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.sk-cell-main {
+  display: grid;
+  gap: 0.0625rem;
+  min-width: 0;
+}
+
+.sk-cell-main strong {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.sk-cell-main small {
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.sk-cell-mono { font-family: var(--font-code); font-size: var(--text-xs); }
+
+/* 占比条：数值旁的迷你直方条 */
+.sk-share {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  justify-content: flex-end;
+  min-width: 6.5rem;
+}
+
+.sk-share-track {
+  flex: none;
+  width: 3.5rem;
+  height: 0.3125rem;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--surface-soft);
+}
+
+.sk-share-track > i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--signal);
+}

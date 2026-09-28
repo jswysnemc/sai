@@ -19,7 +19,7 @@ type SettingsSubnavProps = {
 export function SettingsSubnav({ sectionId, subviews }: SettingsSubnavProps) {
   const { t } = useI18n();
   return (
-    <nav className="settings-tabs settings-subnav" aria-label={t("Section pages", "分区子页")}>
+    <nav className="sk-tabs settings-subnav" aria-label={t("Section pages", "分区子页")}>
       {subviews.map((item) => (
         <NavLink
           key={item.id}

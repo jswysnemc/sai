@@ -100,13 +100,14 @@ describe("groupActivityParts", () => {
     expect(collectWaveSecrets(segments[0].items).map((part) => part.id)).toEqual(["sec1"]);
   });
 
-  it("keeps the pre-send Jev judgment outside the tool work log", () => {
+  it("places the pre-send Jev judgment after the tool overview", () => {
     const segments = groupActivityParts([
       { id: "jev", type: "jev", phase: "ready", exposure: { tools: [], skills: [] }, detail: "" },
       tool("t1"),
       text("body")
     ]);
-    expect(segments.map((segment) => segment.type)).toEqual(["part", "preamble", "part"]);
+    expect(segments.map((segment) => segment.type)).toEqual(["preamble", "part", "part"]);
+    expect(segments[1]).toMatchObject({ type: "part", part: { type: "jev" } });
   });
 
   it("counts reasoning segments and tools", () => {

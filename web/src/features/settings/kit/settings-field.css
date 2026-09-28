@@ -1,0 +1,98 @@
+/* 【Web 设置】【字段】标签、控件、说明三段式字段与容器自适应栅格 */
+
+/*
+ * 栅格最多排 --sk-cols 列：列宽取「均分宽度」与「最小列宽」中的较大值，
+ * 容器变窄到放不下最小列宽时自动减少列数，无需容器查询。
+ */
+.sk-grid {
+  --sk-cols: 2;
+  --sk-col-min: 17rem;
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(
+      min(100%, max(var(--sk-col-min), calc((100% - (var(--sk-cols) - 1) * var(--sk-col-gap)) / var(--sk-cols)))),
+      1fr
+    )
+  );
+  gap: var(--sk-row-gap) var(--sk-col-gap);
+  align-items: start;
+  min-width: 0;
+}
+
+.sk-grid[data-columns="1"] { --sk-cols: 1; }
+.sk-grid[data-columns="3"] { --sk-cols: 3; --sk-col-min: 12rem; }
+
+.sk-grid + .sk-grid { margin-top: var(--sk-row-gap); }
+
+.sk-field {
+  display: grid;
+  align-content: start;
+  gap: 0.3125rem;
+  min-width: 0;
+}
+
+.sk-field.is-full,
+.sk-switch-field.is-full { grid-column: 1 / -1; }
+
+.sk-field-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.sk-field-label {
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--text-base);
+  font-weight: 500;
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
+}
+
+.sk-field-aside {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin-left: auto;
+}
+
+.sk-field-control {
+  width: 100%;
+  min-width: 0;
+}
+
+.sk-field[data-size="xs"] > .sk-field-control { max-width: 6rem; }
+.sk-field[data-size="sm"] > .sk-field-control { max-width: 10rem; }
+.sk-field[data-size="md"] > .sk-field-control { max-width: 16rem; }
+.sk-field[data-size="lg"] > .sk-field-control { max-width: 24rem; }
+
+.sk-field-hint {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
+}
+
+.sk-field-hint.is-error { color: var(--danger); }
+
+.sk-field-hint code {
+  padding: 0 0.1875rem;
+  border-radius: var(--radius-1);
+  background: var(--surface-soft);
+  font-size: 0.95em;
+}
+
+/* 搜索定位后的短暂高亮：底色淡入淡出，不改变布局 */
+.sk-flash {
+  border-radius: var(--radius-3);
+  animation: sk-flash 1.6s var(--ease-out);
+}
+
+@keyframes sk-flash {
+  0%,
+  35% { background: color-mix(in srgb, var(--signal) 16%, transparent); box-shadow: 0 0 0 0.375rem color-mix(in srgb, var(--signal) 16%, transparent); }
+  100% { background: transparent; box-shadow: 0 0 0 0.375rem transparent; }
+}

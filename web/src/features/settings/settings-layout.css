@@ -1,6 +1,6 @@
 @import "./settings-navigation.css";
 
-/* 设置页框架：页面容器、吸顶标题条、分类导航、对象列表和编辑区骨架 */
+/* 【Web 设置】【页面框架】页面容器、吸顶顶栏、两栏工作区与主体宽度 */
 
 .settings-page {
   display: grid;
@@ -27,7 +27,7 @@
 .settings-back:hover { background: var(--surface-hover); color: var(--ink); }
 .settings-back:focus-visible { outline: none; box-shadow: var(--ring-focus); }
 
-/* ---------- 吸顶紧凑标题条 ---------- */
+/* ---------- 吸顶顶栏：分区路径与保存区 ---------- */
 
 .settings-topbar {
   position: sticky;
@@ -35,63 +35,88 @@
   z-index: 20;
   border-bottom: 1px solid var(--line);
   background: var(--paper);
-  box-shadow: none;
 }
 
 .settings-topbar-inner {
   display: flex;
   align-items: center;
-  gap:var(--space-lg);
+  gap: var(--space-lg);
   width: 100%;
   height: var(--toolbar-height);
-  margin: 0 auto;
   padding: 0 var(--space-2xl);
 }
 
-.settings-topbar h1 {
-  margin: 0;
+.settings-crumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
   min-width: 0;
+  color: var(--ink-soft);
+}
+
+.settings-crumbs > svg { flex: none; }
+
+.settings-crumbs h1 {
+  margin: 0;
   overflow: hidden;
+  color: var(--ink);
   font-size: var(--text-base);
   font-weight: 500;
-  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-crumb-separator { color: var(--line-strong); }
+
+.settings-crumb-subview {
+  overflow: hidden;
+  font-size: var(--text-base);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .settings-topbar-actions {
   display: flex;
+  flex: none;
   align-items: center;
-  gap:var(--space-md);
+  gap: var(--space-sm);
   margin-left: auto;
 }
 
-.settings-status-badge {
+.settings-save-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.settings-save-bar .ui-button { min-height: 1.5rem; }
+
+.settings-save-state {
   display: inline-flex;
   align-items: center;
-  gap:var(--space-2xs);
-  height: 26px;
-  padding:0 var(--space-md);
-  border-radius: var(--radius-pill);
-  font-size:var(--text-sm);
-  font-weight: 500;
+  gap: var(--space-2xs);
+  margin-right: var(--space-2xs);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
   white-space: nowrap;
 }
 
-.settings-status-badge.saved { background: transparent; color: var(--ink-soft); }
-.settings-status-badge.dirty { background: color-mix(in srgb, var(--warning) 14%, transparent); color: var(--warning); }
-.settings-status-badge.failed { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
-.settings-status-badge-text {
-  max-width: 22rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.settings-save-state.is-dirty { color: var(--warning); }
+.settings-save-state.is-failed { color: var(--danger); }
+
+.settings-save-hint {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  white-space: nowrap;
 }
 
 /* ---------- 主体两栏工作区 ---------- */
 
 .settings-workspace {
   display: grid;
-  grid-template-columns: 14.5rem minmax(0, 1fr);
+  grid-template-columns: 13.5rem minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
 }
@@ -101,12 +126,18 @@
   min-height: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  padding: var(--space-2xl) clamp(var(--space-2xl), 2vw, var(--space-5xl)) var(--space-5xl);
+  padding: var(--space-2xl) var(--space-4xl) var(--space-5xl);
 }
 
-.settings-main-content { width: 100%; max-width: 76rem; margin: 0 auto; }
+.settings-main-content {
+  width: 100%;
+  max-width: var(--sk-form-max);
+  margin: 0 auto;
+}
 
-/* ---------- 对象列表中列 ---------- */
+.settings-main-content[data-layout="wide"] { max-width: none; }
+
+/* ---------- 旧版分区共用样式：分区迁移到 kit 后删除 ---------- */
 
 .settings-objects-layout {
   display: grid;
@@ -125,55 +156,49 @@
   padding: var(--space-2xl);
 }
 
-/* ---------- 状态与消息 ---------- */
-
 .settings-error,
 .settings-state {
-  margin-top:var(--space-2xl);
-  padding:var(--space-md) var(--space-lg);
-  border-radius:var(--radius-3);
-  font-size:var(--text-base);
+  margin-top: var(--space-2xl);
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-3);
+  font-size: var(--text-base);
 }
 
 .settings-error { background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); }
 .settings-state { color: var(--ink-soft); }
 
 .settings-inline-error {
-  margin:var(--space-lg) 0 0;
-  padding:var(--space-sm) var(--space-md);
+  margin: var(--space-lg) 0 0;
+  padding: var(--space-sm) var(--space-md);
   border: 1px solid color-mix(in srgb, var(--danger) 32%, transparent);
-  border-radius:var(--radius-3);
+  border-radius: var(--radius-3);
   background: color-mix(in srgb, var(--danger) 8%, transparent);
   color: var(--danger);
-  font-size:var(--text-sm);
+  font-size: var(--text-sm);
 }
 
-
-/* ---------- 响应式 ---------- */
-
-@media (max-width: 75rem) {
-  .settings-objects-layout { grid-template-columns: minmax(14rem, 16rem) minmax(0, 1fr); }
-}
-
-@media (max-width: 60rem) {
-  .settings-objects-layout {
-    grid-template-columns: 1fr;
-    min-height: 0;
-  }
-}
-
-/* 手机端：顶栏保持单行紧凑，分类导航降级为吸顶横向滚动页签 */
-
-.settings-save-hint {
-  display: inline-flex;
-  align-items: center;
-  max-width: 11rem;
+.settings-inline-note {
+  margin: 0 0 var(--space-lg);
   color: var(--ink-soft);
-  font-size:var(--text-sm);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: var(--text-sm);
+  line-height: 1.55;
 }
+
+.settings-inline-note a { color: var(--signal); text-decoration: none; }
+.settings-inline-note a:hover { text-decoration: underline; }
+
+.skills-settings-page {
+  display: grid;
+  gap: var(--space-2xl);
+}
+
+.runtime-groups {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-2xl) 0;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -186,40 +211,29 @@
   border: 0;
 }
 
+/* ---------- 响应式 ---------- */
+
+@media (max-width: 75rem) {
+  .settings-main { padding-inline: var(--space-2xl); }
+  .settings-objects-layout { grid-template-columns: minmax(14rem, 16rem) minmax(0, 1fr); }
+}
+
+@media (max-width: 60rem) {
+  .settings-objects-layout {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+}
+
+/* 手机端：顶栏保持单行紧凑，分类导航降级为吸顶横向滚动页签 */
 @media (max-width: 48rem) {
   .settings-topbar-inner { gap: var(--space-sm); padding-inline: var(--space-lg); }
-  .settings-back { gap: 0; padding: var(--space-xs); }
-  .settings-back span { display: none; }
-  .settings-topbar-actions { gap: var(--space-xs); }
-  .settings-status-badge { width: 1.625rem; padding: 0; justify-content: center; }
-  .settings-status-badge-text { display: none; }
+  .settings-crumb-separator,
+  .settings-crumb-subview { display: none; }
+  .settings-save-state > span,
+  .settings-save-label { display: none; }
+  .settings-save-state { margin-right: 0; }
   .settings-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .settings-main { padding: var(--space-lg) var(--space-lg) var(--space-5xl); }
-  .settings-save-hint { max-width: 9rem; font-size: var(--text-xs); }
-}
-
-.settings-inline-note {
-  margin:0 0 var(--space-lg);
-  color: var(--ink-soft);
-  font-size:var(--text-sm);
-  line-height: 1.55;
-}
-.settings-inline-note a {
-  color: var(--signal);
-  text-decoration: none;
-}
-.settings-inline-note a:hover {
-  text-decoration: underline;
-}
-.skills-settings-page {
-  display: grid;
-  gap:var(--space-2xl);
-}
-
-/* 运行时分区的分组网格布局 */
-.runtime-groups {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  gap: var(--space-2xl) 0;
+  .settings-save-hint { font-size: var(--text-xs); }
 }

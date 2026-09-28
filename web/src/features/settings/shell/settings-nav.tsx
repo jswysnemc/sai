@@ -1,25 +1,30 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, NavLink } from "react-router-dom";
-import { ArrowLeft, Search } from "../../../shared/ui/icons";
-import {
-  filterSettingsSections,
-  groupSettingsSections
-} from "../settings-registry";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { Link, NavLink, useNavigate } from "react-router-dom";
+import { ArrowLeft, Search, X } from "../../../shared/ui/icons";
+import { filterSettingsSections, groupSettingsSections } from "../settings-registry";
+import { searchEntryHref, searchSettingsFields } from "../search/settings-search";
 import type { SettingsSectionId } from "../settings-types";
 import { useI18n } from "../../i18n/use-i18n";
 
 type SettingsNavProps = {
   activeSection: SettingsSectionId;
+  /** 有未保存修改的分区 */
+  dirtySections: ReadonlySet<SettingsSectionId>;
+  /** 返回主界面链接的点击处理，用于未保存修改确认 */
+  onExit: (event: MouseEvent<HTMLAnchorElement>, to: string) => void;
 };
 
 /**
- * 渲染分组设置导航与搜索过滤。
+ * 渲染设置导航：返回入口、字段级搜索、分组分区与未保存标记。
  *
- * @param props 当前激活 section
- * @returns 侧栏 / 移动端横向导航
+ * 搜索同时匹配分区与字段：字段结果点击后跳到所在分区与子页并高亮字段。
+ *
+ * @param props 当前分区、未保存分区与离开处理
+ * @returns 侧栏导航；窄屏下为横向分类栏
  */
-export function SettingsNav({ activeSection }: SettingsNavProps) {
+export function SettingsNav({ activeSection, dirtySections, onExit }: SettingsNavProps) {
   const { t, locale } = useI18n();
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const navigationRef = useRef<HTMLElement>(null);
 
@@ -27,7 +32,8 @@ export function SettingsNav({ activeSection }: SettingsNavProps) {
     const media = window.matchMedia("(width < 48rem)");
     let frame = 0;
     /**
-     * 在横向分类栏中显示当前分类，同时移除已隐藏搜索框中的筛选条件。
+     * 在横向分类栏中显示当前分类，同时清空已隐藏搜索框中的筛选条件。
+     *
      * @returns 无返回值
      */
     const revealSelection = () => {
@@ -44,30 +50,66 @@ export function SettingsNav({ activeSection }: SettingsNavProps) {
     };
   }, [activeSection, locale]);
 
-  // 1. 按关键字过滤，再按分组归类
-  const grouped = useMemo(() => {
-    const filtered = filterSettingsSections(query, locale);
-    return groupSettingsSections(filtered);
-  }, [locale, query]);
+  // 1. 分区按关键字过滤后归组；字段结果单独排序
+  const grouped = useMemo(() => groupSettingsSections(filterSettingsSections(query)), [query]);
+  const fieldHits = useMemo(() => searchSettingsFields(query, locale), [locale, query]);
+  const searching = query.trim().length > 0;
+
+  /**
+   * 回车跳到第一个字段结果；没有字段结果时打开第一个分区。
+   *
+   * @param event 键盘事件
+   * @returns 无返回值
+   */
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Escape") {
+      setQuery("");
+      return;
+    }
+    if (event.key !== "Enter") return;
+    const firstField = fieldHits[0];
+    if (firstField) {
+      navigate(searchEntryHref(firstField.entry));
+      return;
+    }
+    const firstSection = grouped[0]?.sections[0];
+    if (firstSection) navigate(`/settings/${firstSection.id}`);
+  };
 
   return (
     <nav ref={navigationRef} className="settings-navigation" aria-label={t("Settings categories", "设置分类")}>
-      <Link to="/" className="settings-back" aria-label={t("Back to workspace", "返回主界面")}>
+      <Link to="/" className="settings-back" aria-label={t("Back to workspace", "返回主界面")} onClick={(event) => onExit(event, "/")}>
         <ArrowLeft size={16} />
         <span>{t("Back to workspace", "返回主界面")}</span>
       </Link>
       <label className="settings-nav-search">
-        <span className="sr-only">{t("Search settings", "搜索设置")}</span>
         <Search size={14} aria-hidden />
         <input
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder={t("Search settings", "搜索设置")}
-          aria-label={t("Search settings", "搜索设置")}
+          onKeyDown={handleSearchKeyDown}
+          placeholder={t("Search settings", "搜索设置项")}
+          aria-label={t("Search settings", "搜索设置项")}
         />
+        {searching && (
+          <button type="button" className="settings-nav-search-clear" onClick={() => setQuery("")} aria-label={t("Clear search", "清空搜索")}>
+            <X size={12} />
+          </button>
+        )}
       </label>
-      {grouped.length === 0 && (
+      {searching && fieldHits.length > 0 && (
+        <div className="settings-nav-group settings-nav-fields">
+          <div className="settings-nav-group-label">{t("Settings", "设置项")}</div>
+          {fieldHits.map((hit) => (
+            <Link key={hit.entry.anchor} to={searchEntryHref(hit.entry)} className="settings-nav-field">
+              <strong>{hit.label}</strong>
+              <small>{hit.location}</small>
+            </Link>
+          ))}
+        </div>
+      )}
+      {searching && grouped.length === 0 && fieldHits.length === 0 && (
         <div className="settings-nav-empty">{t("No matching settings", "没有匹配的设置项")}</div>
       )}
       {grouped.map(({ group, sections }) => (
@@ -83,6 +125,9 @@ export function SettingsNav({ activeSection }: SettingsNavProps) {
               <span>
                 <strong>{t(labelEn, labelZh)}</strong>
               </span>
+              {dirtySections.has(id) && (
+                <span className="settings-nav-dirty" role="img" title={t("Unsaved changes", "有未保存的修改")} aria-label={t("Unsaved changes", "有未保存的修改")} />
+              )}
             </NavLink>
           ))}
         </div>

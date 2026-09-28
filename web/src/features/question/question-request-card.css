@@ -18,18 +18,18 @@
 }
 
 .question-request-card.is-live {
-  padding: var(--space-md) var(--space-lg);
-  border-color: color-mix(in srgb, var(--signal) 24%, var(--technical-border));
-  background: color-mix(in srgb, var(--signal) 3%, var(--technical-surface));
+  padding: 0.65rem 0.75rem 0.5rem;
+  border-color: var(--line);
+  background: var(--paper);
+  color: var(--ink);
 }
 
 .question-status-icon {
   color: var(--technical-muted);
 }
 
-.question-request-card.is-live .question-status-icon,
 .question-request-card.is-answered .question-status-icon {
-  color: var(--signal);
+  color: var(--ink-soft);
 }
 
 .question-request-card.is-cancelled .question-status-icon,
@@ -119,7 +119,8 @@
 
 .question-text {
   margin: 0;
-  font-size: var(--text-base);
+  color: var(--ink);
+  font-size: var(--text-sm);
   font-weight: 500;
   line-height: var(--leading-snug);
 }
@@ -149,12 +150,12 @@
 }
 
 .question-step.is-done .question-step-dot {
-  background: var(--technical-muted);
+  background: color-mix(in srgb, var(--ink) 42%, transparent);
 }
 
 .question-step.is-current .question-step-dot {
   width: 0.75rem;
-  background: var(--signal);
+  background: var(--ink);
 }
 
 .question-steps-position {
@@ -177,8 +178,12 @@
   min-height: 1.75rem;
   padding: var(--space-2xs) var(--space-sm);
   border-radius: var(--radius-2);
-  color: var(--technical-text);
+  color: var(--ink);
   text-align: left;
+}
+
+.question-option.is-selected {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
 }
 
 .question-option.ui-button:active:not(:disabled) {
@@ -195,7 +200,7 @@
 }
 
 .question-option.is-selected .lucide {
-  color: var(--signal);
+  color: var(--ink);
 }
 
 .question-option-line {
@@ -249,12 +254,37 @@
   padding-block: var(--space-3xs);
 }
 
-/* 操作行：右对齐的取消与确认，错误信息占据左侧 */
+/* 操作行：左侧切换题目，右侧取消与确认 */
 .question-request-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-2xs);
+  min-height: 1.75rem;
+}
+
+.question-pager {
+  display: inline-flex;
+  align-items: center;
+  margin-right: auto;
+  gap: 0.1rem;
+}
+
+.question-pager-button.ui-button {
+  width: 1.75rem;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  min-height: 1.75rem;
+  padding: 0;
+  color: var(--ink-soft);
+}
+
+.question-pager-index {
+  min-width: 2.25rem;
+  color: var(--ink-soft);
+  font: 500 var(--text-2xs) / 1 var(--font-code);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 .question-request-error {

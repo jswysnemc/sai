@@ -52,7 +52,26 @@ export function groupActivityParts(parts: LiveMessagePart[]): MessageSegment[] {
       followedByText: parts[index]?.type === "text"
     });
   }
-  return segments;
+  return placeJevAfterToolOverview(segments);
+}
+
+/**
+ * 把发送前的 Jev 判断放到第一组工具总览后面。
+ *
+ * 判断发生在工具调用之前，事件顺序也把它记在最前。
+ * 界面上工具总览先出现，这条结论跟在总览后面，模型还在响应时仍然看得见。
+ *
+ * @param segments 已编组的段落
+ * @returns 调整过 Jev 位置的段落；没有工具总览时保持原顺序
+ */
+function placeJevAfterToolOverview(segments: MessageSegment[]): MessageSegment[] {
+  const preambleIndex = segments.findIndex((segment) => segment.type === "preamble");
+  const jevIndex = segments.findIndex((segment) => segment.type === "part" && segment.part.type === "jev");
+  if (preambleIndex < 0 || jevIndex < 0 || jevIndex > preambleIndex) return segments;
+  const next = segments.slice();
+  const [jev] = next.splice(jevIndex, 1);
+  next.splice(preambleIndex, 0, jev);
+  return next;
 }
 
 /**

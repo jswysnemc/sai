@@ -1,0 +1,130 @@
+/* 【Web 设置】【详情标题】对象名称、状态、操作与更多菜单同处一行 */
+
+.sk-detail-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-md);
+  min-height: 2rem;
+  margin-bottom: var(--space-md);
+}
+
+.sk-detail-heading {
+  display: flex;
+  flex: 1 1 14rem;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.sk-detail-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+}
+
+.sk-detail-copy {
+  display: grid;
+  gap: 0.0625rem;
+  min-width: 0;
+}
+
+.sk-detail-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.sk-detail-title-row h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
+}
+
+.sk-detail-subtitle {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
+}
+
+.sk-detail-subtitle.is-mono { font-family: var(--font-code); font-size: var(--text-xs); }
+
+.sk-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+  margin-left: auto;
+}
+
+/* ---------- 页签 ---------- */
+
+.sk-tabs {
+  display: flex;
+  gap: 0.125rem;
+  margin-bottom: var(--space-lg);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+  scrollbar-width: none;
+}
+
+.sk-tabs::-webkit-scrollbar { display: none; }
+
+.sk-tabs > a,
+.sk-tabs > button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-xs);
+  height: 2rem;
+  margin-bottom: -1px;
+  padding: 0 var(--space-md);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--text-base);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.sk-tabs > a:hover,
+.sk-tabs > button:hover { color: var(--ink); }
+
+.sk-tabs > a.active,
+.sk-tabs > button.active,
+.sk-tabs > button[aria-selected="true"] {
+  border-bottom-color: var(--signal);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.sk-tabs > a:focus-visible,
+.sk-tabs > button:focus-visible {
+  outline: 1px solid var(--ink-soft);
+  outline-offset: -3px;
+}
+
+.sk-tabs em {
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 48rem) {
+  .sk-detail-actions { justify-content: flex-start; margin-left: 0; }
+}

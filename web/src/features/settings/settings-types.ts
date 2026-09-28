@@ -39,17 +39,23 @@ export type GatewayId = "qq" | "weixin";
 
 export type SettingsConfigController = {
   config: AppConfig | null;
+  /** 服务端最近一次加载或保存的配置快照，用于判断分区是否有未保存修改 */
+  baseline: AppConfig | null;
   /** 服务端用于表示敏感字段未修改的占位符 */
   secretSentinel: string;
   dirty: boolean;
   loading: boolean;
   saving: boolean;
   error: Error | null;
+  /** 最近一次保存失败的原因；保存成功或重新编辑后清空 */
+  saveError: Error | null;
   saved: boolean;
   updateConfig: (config: AppConfig) => void;
   updateProvider: (index: number, patch: Partial<ProviderConfig>) => void;
   updateGateway: (gateway: GatewayId, patch: Record<string, unknown>) => void;
   saveConfig: () => Promise<void>;
+  /** 放弃未保存修改，恢复为服务端快照 */
+  discard: () => void;
   /** 重新拉取配置 */
   retry: () => void;
 };
@@ -61,6 +67,14 @@ export type SettingsSubviewMeta = {
   labelEn: string;
   labelZh: string;
 };
+
+/**
+ * 分区主体布局。
+ *
+ * - form: 表单类页面，内容限宽居中
+ * - wide: 对象分区与数据页，占满主区宽度
+ */
+export type SettingsLayout = "form" | "wide";
 
 /** 设置 section 注册项。 */
 export type SettingsSectionMeta = {
@@ -80,6 +94,12 @@ export type SettingsSectionMeta = {
   saveHintZh?: string;
   /** 二级子页；声明后子页进入 /settings/:sectionId/:subview 路由 */
   subviews?: SettingsSubviewMeta[];
+  /** 旧子页段到新子页段的映射，保持旧书签可用 */
+  legacySubviews?: Record<string, string>;
+  /** 主体布局，缺省为 form */
+  layout?: SettingsLayout;
+  /** 分区编辑的 AppConfig 顶层键，用于导航上的未保存标记 */
+  configKeys?: string[];
 };
 
 /** 侧栏分组元数据。 */

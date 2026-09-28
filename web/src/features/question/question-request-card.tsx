@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MessageSquareText } from "../../shared/ui/icons";
+import { ChevronLeft, ChevronRight, MessageSquareText } from "../../shared/ui/icons";
 import type { PendingQuestion, QuestionResponse } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
 import { Collapse } from "../../shared/ui/collapse/collapse";
@@ -70,6 +70,31 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
               t={t}
             />
             <div className="question-request-actions">
+              {questions.length > 1 && (
+                <div className="question-pager">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="question-pager-button"
+                    disabled={submitting || step <= 0}
+                    aria-label={t("Previous question", "上一题")}
+                    onClick={() => controller.setStep(step - 1)}
+                  >
+                    <ChevronLeft size={14} />
+                  </Button>
+                  <span className="question-pager-index">{step + 1}/{questions.length}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="question-pager-button"
+                    disabled={submitting || step >= questions.length - 1}
+                    aria-label={t("Next question", "下一题")}
+                    onClick={() => controller.setStep(step + 1)}
+                  >
+                    <ChevronRight size={14} />
+                  </Button>
+                </div>
+              )}
               {error && <span className="question-request-error" role="alert">{error.message}</span>}
               <Button variant="ghost" size="small" disabled={submitting} onClick={() => void controller.cancel()}>
                 {t("Cancel", "取消")}

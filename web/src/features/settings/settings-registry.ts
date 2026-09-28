@@ -1,22 +1,3 @@
-import {
-  BarChart3,
-  Bot,
-  Brain,
-  Braces,
-  Cable,
-  Database,
-  DiamondCheck,
-  FileText,
-  GitBranch,
-  Globe,
-  KeyRound,
-  Palette,
-  Server,
-  SlidersHorizontal,
-  Sparkles,
-  Wrench,
-  Webhook
-} from "../../shared/ui/icons";
 import type {
   SettingsAppConfigUse,
   SettingsGroupId,
@@ -24,284 +5,29 @@ import type {
   SettingsSectionId,
   SettingsSectionMeta
 } from "./settings-types";
+import { SETTINGS_GROUPS, SETTINGS_SECTIONS } from "./settings-sections";
+
+export { SETTINGS_GROUPS, SETTINGS_SECTIONS } from "./settings-sections";
 
 /** 默认打开的设置 section。 */
 export const DEFAULT_SETTINGS_SECTION: SettingsSectionId = "providers";
 
-/**
- * 侧栏分组顺序与文案。
- */
-export const SETTINGS_GROUPS: SettingsGroupMeta[] = [
-  { id: "basics", labelEn: "Basics", labelZh: "基础" },
-  { id: "agentCapabilities", labelEn: "Agent capabilities", labelZh: "智能体能力" },
-  { id: "dataAndStats", labelEn: "Data and stats", labelZh: "数据与统计" }
-];
+/** 旧版分区地址到现分区的映射。 */
+const LEGACY_SECTION_IDS: Record<string, SettingsSectionId> = {
+  plugins: "cli-tools",
+  "jev-models": "jev"
+};
 
 /**
- * 设置页 section 注册表。
- *
- * 新增 section：
- * 1. 在 SettingsSectionId 联合类型中补充 id
- * 2. 在本数组追加元数据
- * 3. 在 SettingsSectionBody 中挂载组件
- */
-export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
-{
-    id: "providers",
-    group: "basics",
-    appConfig: "required",
-    labelEn: "LLM providers",
-    labelZh: "LLM 供应商",
-    descriptionEn: "Endpoints, credentials, and model lists",
-    descriptionZh: "接口、凭据和模型列表",
-    icon: KeyRound,
-    searchKeys: ["provider", "model", "api_key", "base_url", "供应商", "模型", "凭据"],
-    subviews: [
-      { id: "connection", labelEn: "Connection", labelZh: "连接" },
-      { id: "models", labelEn: "Models", labelZh: "模型" },
-      { id: "behavior", labelEn: "Behavior", labelZh: "行为" },
-      { id: "advanced", labelEn: "Advanced", labelZh: "高级" }
-    ]
-  },
-{
-    id: "image-models", group: "basics", appConfig: "required",
-    labelEn: "Image models", labelZh: "生图模型",
-    descriptionEn: "Image model request endpoints and API keys",
-    descriptionZh: "生图模型的独立请求地址和 API Key",
-    icon: Palette,
-    searchKeys: ["image", "generation", "model", "endpoint", "生图", "图片", "密钥"]
-  },
-
-{
-    id: "appearance",
-    group: "basics",
-    appConfig: "none",
-    saveHintEn: "Applies immediately",
-    saveHintZh: "即时生效",
-    labelEn: "Appearance",
-    labelZh: "外观",
-    descriptionEn: "Language, theme, colors, and Markdown rendering",
-    descriptionZh: "界面语言、主题、颜色与 Markdown 渲染",
-    icon: Palette,
-    searchKeys: ["theme", "language", "locale", "appearance", "markdown", "table", "code", "主题", "语言", "配色", "表格", "代码块"]
-  },
-{
-    id: "runtime",
-    group: "basics",
-    appConfig: "required",
-    labelEn: "Runtime",
-    labelZh: "运行时",
-    descriptionEn: "Sessions, permissions, terminal, and display",
-    descriptionZh: "会话、权限、终端与显示",
-    icon: SlidersHorizontal,
-    searchKeys: ["runtime", "session", "model", "thinking", "permission", "notification", "terminal", "context", "display", "tools", "debug", "api", "mesh", "cross_session", "retry", "backoff", "会话", "模型", "思考", "权限", "通知", "终端", "上下文", "压缩比例", "预留", "调试", "网格", "跨会话", "重试", "退避", "失败"],
-    subviews: [
-      { id: "engine", labelEn: "Engine", labelZh: "对话内核" },
-      { id: "permissions", labelEn: "Permissions", labelZh: "权限" },
-      { id: "terminal", labelEn: "Terminal", labelZh: "终端" },
-      { id: "context", labelEn: "Context", labelZh: "上下文" },
-      { id: "tools", labelEn: "Tools and display", labelZh: "工具与显示" }
-    ]
-  },
-{
-    id: "prompts",
-    group: "basics",
-    appConfig: "required",
-    labelEn: "Internal prompts",
-    labelZh: "内部提示词",
-    descriptionEn: "Commit messages, session titles, and context compaction",
-    descriptionZh: "提交说明、会话标题与上下文压缩",
-    icon: FileText,
-    searchKeys: ["prompt", "template", "commit", "title", "compaction", "variable", "提示词", "模板", "提交", "标题", "压缩", "变量"]
-  },
-{
-    id: "git",
-    group: "basics",
-    appConfig: "required",
-    labelEn: "Git",
-    labelZh: "Git",
-    descriptionEn: "Repositories, commits, remotes, and safety",
-    descriptionZh: "仓库、提交、远端和安全确认",
-    icon: GitBranch,
-    searchKeys: ["git", "scm", "commit", "remote", "仓库", "提交"]
-  },
-{
-    id: "ssh",
-    group: "basics",
-    appConfig: "optional",
-    saveHintEn: "Actions in section",
-    saveHintZh: "操作在本节内完成",
-    labelEn: "SSH",
-    labelZh: "SSH",
-    descriptionEn: "Remote hosts for terminal sessions",
-    descriptionZh: "终端会话可用的远程主机",
-    icon: Server,
-    searchKeys: ["ssh", "remote", "host", "terminal", "远程", "主机", "终端"]
-  },
-{
-    id: "agents",
-    group: "basics",
-    appConfig: "required",
-    labelEn: "Agent profiles",
-    labelZh: "Agent 配置",
-    descriptionEn: "Prompts, tools, and skill exposure",
-    descriptionZh: "系统提示词、工具与技能暴露",
-    icon: Bot,
-    searchKeys: ["agent", "prompt", "tool", "skill", "权限"]
-  },
-{
-    id: "cli-tools",
-    group: "agentCapabilities",
-    appConfig: "required",
-    labelEn: "CLI assistant tools",
-    labelZh: "CLI 助手工具",
-    descriptionEn: "Optional tools exposed to CLI assistants",
-    descriptionZh: "配置 CLI 助手可使用的可选工具",
-    icon: Wrench,
-    searchKeys: ["cli", "assistant", "tool", "optional", "plugin", "助手", "工具", "可选工具", "插件"]
-  },
-{
-    id: "web-search",
-    group: "agentCapabilities",
-    appConfig: "required",
-    labelEn: "Web search",
-    labelZh: "网页搜索",
-    descriptionEn: "Built-in search routing, endpoints, and credentials",
-    descriptionZh: "内置搜索路由、供应商地址与凭据",
-    icon: Globe,
-    searchKeys: ["web-search", "search", "tinyfish", "tavily", "firecrawl", "anysearch", "searxng", "duckduckgo", "网页", "搜索", "联网"]
-  },
-{
-    id: "jev", group: "agentCapabilities", appConfig: "required",
-    labelEn: "Jev", labelZh: "Jev",
-    descriptionEn: "Tool routing, permission audit, and connections",
-    descriptionZh: "工具暴露决策、权限自动审核与接入",
-    icon: DiamondCheck,
-    searchKeys: ["jev", "typesafe", "routing", "audit", "capability", "endpoint", "决策", "暴露", "审核", "密钥"],
-    subviews: [
-      { id: "features", labelEn: "Features", labelZh: "功能" },
-      { id: "connections", labelEn: "Connections", labelZh: "接入" }
-    ]
-  },
-{
-    id: "skills",
-    group: "agentCapabilities",
-    appConfig: "optional",
-    saveHintEn: "Actions in section",
-    saveHintZh: "操作在本节内完成",
-    labelEn: "Skills",
-    labelZh: "Skills",
-    descriptionEn: "Scan, edit, create, and enable Skills",
-    descriptionZh: "扫描、编辑、新增与启停 Skills",
-    icon: Sparkles,
-    searchKeys: ["skill", "skills", "SKILL.md", "技能"]
-  },
-{
-    id: "mcp",
-    group: "agentCapabilities",
-    appConfig: "none",
-    saveHintEn: "Saves in section",
-    saveHintZh: "在本节内保存",
-    labelEn: "MCP",
-    labelZh: "MCP",
-    descriptionEn: "External Model Context Protocol servers",
-    descriptionZh: "外部 MCP 工具服务",
-    icon: Server,
-    searchKeys: ["mcp", "stdio", "sse", "server", "工具服务"]
-  },
-{
-    id: "hooks",
-    group: "agentCapabilities",
-    appConfig: "required",
-    labelEn: "Hooks",
-    labelZh: "Hooks",
-    descriptionEn: "Lifecycle shell and HTTP actions",
-    descriptionZh: "生命周期 shell 与 HTTP 动作",
-    icon: Webhook,
-    searchKeys: ["hook", "lifecycle", "webhook", "钩子"]
-  },
-{
-    id: "gateways",
-    group: "agentCapabilities",
-    appConfig: "required",
-    labelEn: "Gateways",
-    labelZh: "消息网关",
-    descriptionEn: "QQ, Weixin credentials and listen addresses",
-    descriptionZh: "QQ、微信凭据与监听地址",
-    icon: Cable,
-    searchKeys: ["gateway", "qq", "weixin", "微信", "网关"]
-  },
-{
-    id: "memory",
-    group: "agentCapabilities",
-    appConfig: "optional",
-    saveHintEn: "Actions in section",
-    saveHintZh: "操作在本节内完成",
-    labelEn: "Memory",
-    labelZh: "记忆",
-    descriptionEn: "Memory files, scopes, and evicted context",
-    descriptionZh: "记忆文件、作用域与逐出上下文",
-    icon: Brain,
-    searchKeys: ["memory", "note", "fact", "记忆", "笔记"]
-  },
-{
-    id: "session-data",
-    group: "dataAndStats",
-    appConfig: "none",
-    saveHintEn: "Actions in section",
-    saveHintZh: "操作在本节内完成",
-    labelEn: "Session data",
-    labelZh: "会话数据",
-    descriptionEn: "Inspect, clear, and delete workspace sessions",
-    descriptionZh: "查看、清空和删除工作区会话",
-    icon: Database,
-    searchKeys: ["session", "data", "storage", "clear", "delete", "会话", "数据", "清空", "删除"]
-  },
-{
-    id: "usage",
-    group: "dataAndStats",
-    appConfig: "none",
-    saveHintEn: "Read only",
-    saveHintZh: "只读",
-    labelEn: "Usage",
-    labelZh: "用量",
-    descriptionEn: "Token trends, top-consuming sessions, providers, models, and request logs",
-    descriptionZh: "Token 趋势、高消耗会话、供应商、模型与请求日志",
-    icon: BarChart3,
-    searchKeys: ["usage", "token", "stats", "log", "ranking", "用量", "统计", "高消耗", "排行"],
-    subviews: [
-      { id: "overview", labelEn: "Overview", labelZh: "总览" },
-      { id: "providers", labelEn: "By provider", labelZh: "按供应商" },
-      { id: "models", labelEn: "By model", labelZh: "按模型" },
-      { id: "sessions", labelEn: "Top sessions", labelZh: "高消耗会话" },
-      { id: "logs", labelEn: "Request logs", labelZh: "请求日志" }
-    ]
-  },
-{
-    id: "advanced",
-    group: "dataAndStats",
-    appConfig: "required",
-    labelEn: "Advanced JSON",
-    labelZh: "高级 JSON",
-    descriptionEn: "Complete AppConfig JSON",
-    descriptionZh: "完整 AppConfig JSON",
-    icon: Braces,
-    searchKeys: ["json", "advanced", "appconfig", "高级"]
-  }
-];
-
-/**
- * 解析路由 section 参数；未知值回退默认 section。
+ * 解析路由 section 参数；旧地址映射到现分区，未知值回退默认 section。
  *
  * @param value 路由参数
  * @returns 合法 SettingsSectionId
  */
 export function resolveSettingsSectionId(value: string | undefined | null): SettingsSectionId {
   if (!value) return DEFAULT_SETTINGS_SECTION;
-  // 1. 兼容旧版插件设置地址，并统一迁移到 CLI 助手工具语义
-  if (value === "plugins") return "cli-tools";
-  // 2. 旧版 JEV 模型地址并入 Jev 分区
-  if (value === "jev-models") return "jev";
+  const legacy = LEGACY_SECTION_IDS[value];
+  if (legacy) return legacy;
   const match = SETTINGS_SECTIONS.find((item) => item.id === value);
   return match?.id ?? DEFAULT_SETTINGS_SECTION;
 }
@@ -319,8 +45,8 @@ export function getSettingsSection(id: SettingsSectionId): SettingsSectionMeta |
 /**
  * 解析二级子页路由段。
  *
- * 无子页的分区始终返回 undefined；有子页的分区在段非法或缺失时
- * 回落到首个子页，保证 URL 总能归一到显式子页。
+ * 无子页的分区始终返回 undefined；旧子页段按映射表转到新子页；
+ * 有子页的分区在段非法或缺失时回落到首个子页，保证 URL 总能归一到显式子页。
  *
  * @param meta 分区元数据
  * @param value 路由中的子页段
@@ -332,31 +58,31 @@ export function resolveSettingsSubview(
 ): string | undefined {
   const subviews = meta?.subviews;
   if (!subviews || subviews.length === 0) return undefined;
-  return subviews.find((item) => item.id === value)?.id ?? subviews[0].id;
+  const mapped = value ? meta?.legacySubviews?.[value] ?? value : value;
+  return subviews.find((item) => item.id === mapped)?.id ?? subviews[0].id;
 }
 
 /**
  * 判断顶栏是否应展示全局 AppConfig 保存控件。
  *
- * required 面常驻保存；optional 面只在有待保存修改时露出，
- * 平时与 none 面一样显示分区自己的保存提示。
+ * required 面常驻保存；其余分区只在全局草稿有待保存修改时露出，
+ * 避免在别处改了配置后切到只读分区就找不到保存入口。
  *
  * @param use 分区对 AppConfig 的参与方式
  * @param dirty 全局草稿是否有待保存修改
  * @returns 需要全局 Save 时 true
  */
 export function showsAppConfigSave(use: SettingsAppConfigUse, dirty: boolean): boolean {
-  return use === "required" || (use === "optional" && dirty);
+  return use === "required" || dirty;
 }
 
 /**
  * 按关键字过滤 section（标签、描述、searchKeys）。
  *
  * @param query 用户输入
- * @param locale 当前语言（仅影响匹配标签字段优先级，关键字本身中英均可）
  * @returns 过滤后的 section 列表
  */
-export function filterSettingsSections(query: string, locale: "en-US" | "zh-CN" = "en-US"): SettingsSectionMeta[] {
+export function filterSettingsSections(query: string): SettingsSectionMeta[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return SETTINGS_SECTIONS;
   return SETTINGS_SECTIONS.filter((item) => {
@@ -368,8 +94,6 @@ export function filterSettingsSections(query: string, locale: "en-US" | "zh-CN" 
       item.descriptionZh,
       ...item.searchKeys
     ].map((value) => value.toLowerCase());
-    // locale 预留：当前中英关键字一并匹配
-    void locale;
     return haystacks.some((value) => value.includes(needle));
   });
 }
@@ -397,4 +121,39 @@ export function groupSettingsSections(
  */
 export function isSettingsGroupId(value: string): value is SettingsGroupId {
   return SETTINGS_GROUPS.some((group) => group.id === value);
+}
+
+/**
+ * 按点号路径读取配置中的值。
+ *
+ * @param config 配置对象
+ * @param path 点号路径，例如 plugins.web
+ * @returns 路径上的值；中途缺失时 undefined
+ */
+function readConfigPath(config: unknown, path: string): unknown {
+  let current: unknown = config;
+  for (const segment of path.split(".")) {
+    if (!current || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+}
+
+/**
+ * 找出草稿相对服务端快照有修改的分区，用于导航上的未保存标记。
+ *
+ * @param draft 当前草稿
+ * @param baseline 服务端快照
+ * @returns 有修改的分区 id 集合
+ */
+export function dirtySettingsSections(draft: unknown, baseline: unknown): Set<SettingsSectionId> {
+  const dirty = new Set<SettingsSectionId>();
+  if (!draft || !baseline) return dirty;
+  for (const section of SETTINGS_SECTIONS) {
+    const keys = section.configKeys ?? [];
+    // 1. 逐个比较分区声明的配置路径，任一不同即标记
+    const changed = keys.some((key) => JSON.stringify(readConfigPath(draft, key)) !== JSON.stringify(readConfigPath(baseline, key)));
+    if (changed) dirty.add(section.id);
+  }
+  return dirty;
 }

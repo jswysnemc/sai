@@ -1,0 +1,107 @@
+/* 【Web 设置】【输入控件】文本、数字、下拉与密钥输入的统一外观 */
+
+.sk-input,
+.sk-textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--paper-raised);
+  color: var(--ink);
+  font: 400 var(--text-base) / var(--leading-control) var(--font-ui);
+  transition: border-color var(--transition-fast);
+}
+
+.sk-input {
+  height: var(--sk-control-h);
+  padding: 0 var(--space-sm);
+}
+
+.sk-textarea {
+  display: block;
+  min-height: 4.5rem;
+  padding: var(--space-xs) var(--space-sm);
+  line-height: var(--leading-normal);
+  resize: vertical;
+}
+
+.sk-input.is-mono,
+.sk-textarea.is-mono {
+  font-family: var(--font-code);
+  font-size: var(--text-sm);
+}
+
+.sk-input:hover:not(:disabled),
+.sk-textarea:hover:not(:disabled) { border-color: var(--line-strong); }
+
+.sk-input:focus,
+.sk-textarea:focus {
+  border-color: var(--ink-soft);
+  outline: none;
+}
+
+.sk-input[aria-invalid="true"],
+.sk-textarea[aria-invalid="true"] { border-color: color-mix(in srgb, var(--danger) 60%, var(--line)); }
+
+.sk-input:disabled,
+.sk-textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* 数字输入：单位作为输入框内的后缀，数值等宽 */
+.sk-number {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.sk-number .sk-input {
+  font-variant-numeric: tabular-nums;
+}
+
+.sk-number.has-unit .sk-input { padding-right: calc(var(--space-sm) + var(--sk-unit-width, 1.5rem)); }
+
+.sk-number-unit {
+  position: absolute;
+  right: var(--space-sm);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  pointer-events: none;
+}
+
+/* 下拉：沿用共享 Select，只把高度收到设置页档位 */
+.sk-select > button {
+  min-height: var(--sk-control-h);
+  height: var(--sk-control-h);
+  padding: 0 var(--space-sm);
+  background: var(--paper-raised);
+  font-size: var(--text-base);
+}
+
+.sk-select .ui-select-value img,
+.sk-select .ui-select-value svg { flex: none; }
+
+/* 密钥：沿用共享 PasswordField，统一高度与底色 */
+.sk-secret .ui-password-field {
+  height: var(--sk-control-h);
+  border-radius: var(--radius-2);
+  background: var(--paper-raised);
+}
+
+.sk-secret .ui-password-field input {
+  min-height: 0;
+  height: 100%;
+  padding: 0 var(--space-sm);
+  font: 400 var(--text-sm) var(--font-code);
+}
+
+.sk-secret .ui-password-field button {
+  min-width: 1.875rem;
+}
+
+.sk-secret .ui-password-field-saved {
+  font-size: var(--text-xs);
+}

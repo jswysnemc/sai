@@ -85,10 +85,23 @@ export function useConfigDocument<Config, Response>({
     return mutation.mutateAsync(payload);
   };
 
+  /**
+   * 放弃未保存修改，把草稿恢复为服务端快照。
+   *
+   * @returns 无返回值
+   */
+  const discard = () => {
+    if (response.data) setDraft(extract(response.data));
+    setDirty(false);
+    mutation.reset();
+  };
+
   return {
     /** 原始加载查询，路径、sentinel 等响应级字段由调用方读取 */
     response,
     draft,
+    /** 服务端最近一次加载或保存的配置快照 */
+    baseline: response.data ? extract(response.data) : null,
     dirty,
     loading: response.isLoading,
     saving: mutation.isPending,
@@ -98,6 +111,7 @@ export function useConfigDocument<Config, Response>({
     update,
     markDirty,
     saveNow,
+    discard,
     /** 重新拉取配置 */
     retry: () => void response.refetch()
   };

@@ -1,0 +1,97 @@
+/* 【Web 设置】【面板】标题、说明、操作与字段区；面板之间以分隔线区分 */
+
+.sk-panel {
+  min-width: 0;
+  scroll-margin-top: var(--space-lg);
+}
+
+.sk-panel + .sk-panel {
+  margin-top: var(--sk-panel-gap);
+  padding-top: var(--sk-panel-gap);
+  border-top: 1px solid var(--line);
+}
+
+.sk-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-md);
+}
+
+.sk-panel.is-collapsed .sk-panel-head { margin-bottom: 0; }
+
+.sk-panel-copy {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.sk-panel-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: var(--leading-snug);
+}
+
+.sk-panel-title > svg,
+.sk-panel-title > img { flex: none; }
+
+.sk-panel-desc {
+  max-width: 64rem;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
+}
+
+.sk-panel-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+}
+
+/* 可折叠面板：整段标题为展开按钮，箭头对齐标题首行 */
+.sk-panel-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  min-width: 0;
+  margin: -0.25rem -0.375rem;
+  padding: 0.25rem 0.375rem;
+  border: 0;
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.sk-panel-toggle:hover { background: var(--surface-hover); }
+
+.sk-panel-chevron {
+  flex: none;
+  margin-top: 0.1875rem;
+  color: var(--ink-soft);
+  transition: transform var(--duration-base) var(--ease-standard);
+}
+
+.sk-panel.is-open .sk-panel-chevron { transform: rotate(90deg); }
+
+.sk-panel-body {
+  min-width: 0;
+}
+
+.sk-panel-body > * + * { margin-top: var(--sk-row-gap); }
+
+@media (max-width: 48rem) {
+  .sk-panel-head { flex-direction: column; gap: var(--space-sm); }
+  .sk-panel-actions { justify-content: flex-start; }
+}

@@ -1,0 +1,24 @@
+/*
+ * 【Web 设置】【基础组件】设置页尺寸变量
+ *
+ * sk 前缀即 settings kit。变量挂在设置页根节点上，只影响设置页，
+ * 其余页面沿用全局 token。数值全部落在 tokens/ 的阶梯上，
+ * 这里只为设置页选定档位，便于整体调节密度。
+ */
+.settings-page {
+  /* 控件高度 28px：13px 文字加上下各 7px 留白 */
+  --sk-control-h: 1.75rem;
+  /* 字段列间距与行间距 */
+  --sk-col-gap: 1.5rem;
+  --sk-row-gap: 0.875rem;
+  /* 面板之间的留白 */
+  --sk-panel-gap: 1.25rem;
+  /* 对象列表宽度 */
+  --sk-list-width: 15.5rem;
+  /* 表单类页面的内容最大宽度 */
+  --sk-form-max: 80rem;
+  /* 开关尺寸 */
+  --sk-switch-w: 1.75rem;
+  --sk-switch-h: 1rem;
+  --sk-switch-thumb: 0.75rem;
+}

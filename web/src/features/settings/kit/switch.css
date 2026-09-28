@@ -1,0 +1,100 @@
+/* 【Web 设置】【开关】紧凑开关与前置开关字段 */
+
+.sk-switch {
+  position: relative;
+  flex: none;
+  width: var(--sk-switch-w);
+  height: var(--sk-switch-h);
+  margin: 0;
+  border-radius: var(--radius-pill);
+  appearance: none;
+  background: var(--line-strong);
+  cursor: pointer;
+  transition: background var(--transition-base);
+}
+
+.sk-switch::after {
+  content: "";
+  position: absolute;
+  top: calc((var(--sk-switch-h) - var(--sk-switch-thumb)) / 2);
+  left: calc((var(--sk-switch-h) - var(--sk-switch-thumb)) / 2);
+  width: var(--sk-switch-thumb);
+  height: var(--sk-switch-thumb);
+  border-radius: var(--radius-circle);
+  background: var(--paper-raised);
+  box-shadow: var(--elevation-1);
+  transition: transform var(--transition-base);
+}
+
+.sk-switch:checked { background: var(--signal); }
+.sk-switch:checked::after { transform: translateX(calc(var(--sk-switch-w) - var(--sk-switch-h))); }
+
+.sk-switch:focus-visible {
+  outline: 1px solid var(--ink-soft);
+  outline-offset: 2px;
+}
+
+.sk-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* 行内开关：开关后接状态文字，用于详情标题等操作区 */
+.sk-inline-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 1.75rem;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* 前置开关字段：开关与标签相邻，整行可点击 */
+.sk-switch-field {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  min-width: 0;
+  cursor: pointer;
+}
+
+/* 开关 16px，标签行高 13px × 1.4 ≈ 18px，下移 1px 使两者中线对齐 */
+.sk-switch-field > .sk-switch { margin-top: 0.0625rem; }
+
+.sk-switch-copy {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.sk-switch-label {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs);
+  color: var(--ink);
+  font-size: var(--text-base);
+  font-weight: 500;
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
+}
+
+.sk-switch-hint {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
+}
+
+.sk-switch-field.is-disabled {
+  cursor: not-allowed;
+}
+
+.sk-switch-field.is-disabled .sk-switch-copy { opacity: 0.6; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sk-switch,
+  .sk-switch::after { transition: none; }
+}

@@ -70,11 +70,13 @@ export function useSettingsConfig(): SettingsConfigController {
 
   return {
     config: document.draft,
+    baseline: document.baseline,
     secretSentinel: document.response.data?.secret_sentinel ?? "",
     dirty: document.dirty,
     loading: document.loading,
     saving: document.saving,
     error: document.loadError ?? document.saveError,
+    saveError: document.saveError,
     saved: document.saved,
     updateConfig: document.update,
     updateProvider,
@@ -82,6 +84,7 @@ export function useSettingsConfig(): SettingsConfigController {
     saveConfig: async () => {
       await document.saveNow();
     },
+    discard: document.discard,
     retry: document.retry
   };
 }

@@ -3,6 +3,7 @@ import {
   DEFAULT_SETTINGS_SECTION,
   SETTINGS_GROUPS,
   SETTINGS_SECTIONS,
+  dirtySettingsSections,
   filterSettingsSections,
   groupSettingsSections,
   resolveSettingsSectionId,
@@ -47,28 +48,52 @@ describe("settings registry", () => {
   });
 
   it("derives topbar save from the appConfig participation model", () => {
-    // required 常驻保存；optional 仅脏时露出；none 永不展示
+    // required 常驻保存；其余分区只在全局草稿有修改时露出
     expect(showsAppConfigSave("required", false)).toBe(true);
     expect(showsAppConfigSave("required", true)).toBe(true);
     expect(showsAppConfigSave("optional", false)).toBe(false);
     expect(showsAppConfigSave("optional", true)).toBe(true);
     expect(showsAppConfigSave("none", false)).toBe(false);
-    expect(showsAppConfigSave("none", true)).toBe(false);
+    expect(showsAppConfigSave("none", true)).toBe(true);
   });
 
   it("resolves subviews with fallback to the first page", () => {
     const runtime = SETTINGS_SECTIONS.find((item) => item.id === "runtime");
-    expect(resolveSettingsSubview(runtime, "permissions")).toBe("permissions");
-    expect(resolveSettingsSubview(runtime, "notifications")).toBe("engine");
+    expect(resolveSettingsSubview(runtime, "environment")).toBe("environment");
+    expect(resolveSettingsSubview(runtime, "notifications")).toBe("execution");
     // 缺失或非法的子页段回落到首个子页
-    expect(resolveSettingsSubview(runtime, undefined)).toBe("engine");
-    expect(resolveSettingsSubview(runtime, "not-a-subview")).toBe("engine");
+    expect(resolveSettingsSubview(runtime, undefined)).toBe("execution");
+    expect(resolveSettingsSubview(runtime, "not-a-subview")).toBe("execution");
     // 无子页的分区始终返回 undefined
     const git = SETTINGS_SECTIONS.find((item) => item.id === "git");
     expect(resolveSettingsSubview(git, "anything")).toBeUndefined();
     expect(resolveSettingsSubview(undefined, "anything")).toBeUndefined();
     const usage = SETTINGS_SECTIONS.find((item) => item.id === "usage");
-    expect(resolveSettingsSubview(usage, "sessions")).toBe("sessions");
+    expect(resolveSettingsSubview(usage, "logs")).toBe("logs");
+  });
+
+  it("maps legacy subview segments to the merged pages", () => {
+    const runtime = SETTINGS_SECTIONS.find((item) => item.id === "runtime");
+    expect(resolveSettingsSubview(runtime, "engine")).toBe("execution");
+    expect(resolveSettingsSubview(runtime, "permissions")).toBe("environment");
+    expect(resolveSettingsSubview(runtime, "terminal")).toBe("environment");
+    expect(resolveSettingsSubview(runtime, "context")).toBe("tools");
+    const usage = SETTINGS_SECTIONS.find((item) => item.id === "usage");
+    expect(resolveSettingsSubview(usage, "providers")).toBe("breakdown");
+    expect(resolveSettingsSubview(usage, "sessions")).toBe("breakdown");
+    // Jev 合并为单页后旧子页段不再保留
+    const jev = SETTINGS_SECTIONS.find((item) => item.id === "jev");
+    expect(resolveSettingsSubview(jev, "connections")).toBeUndefined();
+  });
+
+  it("marks sections whose config paths differ from the saved snapshot", () => {
+    const baseline = { git: { autofetch: false }, plugins: { web: { enabled: true }, memory: { enabled: true } } };
+    const draft = { git: { autofetch: true }, plugins: { web: { enabled: false }, memory: { enabled: true } } };
+    const dirty = dirtySettingsSections(draft, baseline);
+    expect(dirty.has("git")).toBe(true);
+    expect(dirty.has("web-search")).toBe(true);
+    expect(dirty.has("memory")).toBe(false);
+    expect(dirtySettingsSections(null, baseline).size).toBe(0);
   });
 
   it("gives every non-required section a bilingual save hint", () => {

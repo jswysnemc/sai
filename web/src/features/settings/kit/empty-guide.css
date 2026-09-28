@@ -1,0 +1,90 @@
+/* 【Web 设置】【空状态】紧凑引导条与模板入口 */
+
+.sk-empty {
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-4);
+  background: var(--surface-soft);
+}
+
+.sk-empty-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-md);
+}
+
+.sk-empty-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-3);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+}
+
+.sk-empty-copy {
+  display: grid;
+  flex: 1 1 16rem;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.sk-empty-copy strong {
+  color: var(--ink);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.sk-empty-copy p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
+.sk-empty-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.sk-empty-templates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: var(--space-sm);
+}
+
+.sk-empty-template {
+  display: grid;
+  gap: 0.125rem;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--paper-raised);
+  color: var(--ink);
+  text-align: left;
+  transition: border-color var(--transition-fast);
+}
+
+.sk-empty-template:hover { border-color: var(--line-strong); }
+
+.sk-empty-template:focus-visible {
+  outline: 1px solid var(--ink-soft);
+  outline-offset: 1px;
+}
+
+.sk-empty-template strong {
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.sk-empty-template small {
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+}

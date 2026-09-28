@@ -33,7 +33,7 @@ describe("HistoryTurn", () => {
     expect(html).toContain("工具 1");
   });
 
-  it("shows the Jev preselect inside the work log without schemas", () => {
+  it("shows the Jev preselect after the tool overview without schemas", () => {
     const turn: SessionTimelineTurn = {
       turn_id: "jev-turn",
       seq: 1,
@@ -64,7 +64,7 @@ describe("HistoryTurn", () => {
 
     expect(html).toContain("发送前");
     expect(html).toContain("处理过程 · 工具 1");
-    expect(html.indexOf("发送前")).toBeLessThan(html.indexOf("处理过程"));
+    expect(html.indexOf("处理过程")).toBeLessThan(html.indexOf("发送前"));
     expect(html).toContain("web_search, skill:drawio");
     expect(html).toContain("1 个工具 · 1 个 Skill");
     expect(html).not.toContain("schema_marker_hidden");

@@ -18,6 +18,10 @@ type SelectProps<T extends string> = {
   options: SelectOption<T>[];
   disabled?: boolean;
   ariaLabel?: string;
+  /** 触发按钮的元素标识，供外部 label 的 htmlFor 关联 */
+  id?: string;
+  /** 附加在根节点上的类名，用于在特定容器中调整尺寸 */
+  className?: string;
   menuPreferredWidth?: number;
   menuMinimumWidth?: number;
   menuAlign?: "left" | "right";
@@ -31,7 +35,7 @@ type SelectProps<T extends string> = {
  * @param props 当前值、选项和更新回调
  * @returns 自定义 combobox
  */
-export function Select<T extends string>({ value, options, disabled, ariaLabel, menuPreferredWidth, menuMinimumWidth, menuAlign, menuClassName, onChange }: SelectProps<T>) {
+export function Select<T extends string>({ value, options, disabled, ariaLabel, id, className, menuPreferredWidth, menuMinimumWidth, menuAlign, menuClassName, onChange }: SelectProps<T>) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -74,8 +78,8 @@ export function Select<T extends string>({ value, options, disabled, ariaLabel, 
   };
 
   return (
-    <div className="ui-select" ref={rootRef}>
-      <button ref={triggerRef} type="button" role="combobox" aria-label={ariaLabel} aria-expanded={open} disabled={disabled} onClick={() => setOpen((visible) => !visible)} onKeyDown={handleKeyDown}>
+    <div className={className ? `ui-select ${className}` : "ui-select"} ref={rootRef}>
+      <button ref={triggerRef} id={id} type="button" role="combobox" aria-label={ariaLabel} aria-expanded={open} disabled={disabled} onClick={() => setOpen((visible) => !visible)} onKeyDown={handleKeyDown}>
         <span className="ui-select-value">
           {current?.icon}
           <span>{current?.label ?? value}</span>

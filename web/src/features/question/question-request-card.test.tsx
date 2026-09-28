@@ -47,6 +47,7 @@ describe("QuestionRequestCard", () => {
     expect(html).toContain("确认");
     expect(html).not.toContain("其他回答");
     expect(html).not.toContain("question-steps");
+    expect(html).not.toContain("上一题");
   });
 
   it("shows step dots and checkbox marks for multi-question multi-select prompts", () => {
@@ -54,6 +55,8 @@ describe("QuestionRequestCard", () => {
 
     expect(html.match(/role="tab"/g)).toHaveLength(2);
     expect(html).toContain("1/2");
+    expect(html).toContain("上一题");
+    expect(html).toContain("下一题");
     expect(html).toContain("lucide-square");
     expect(html).toContain("其他回答");
   });

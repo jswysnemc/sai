@@ -1,6 +1,6 @@
-import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
 import type { Session, WorkspaceSessions } from "../../api/contracts";
+import { renderWithProviders } from "../../shared/testing/render-with-providers";
 import { WorkspaceListView } from "./workspace-list-view";
 
 /**
@@ -34,7 +34,8 @@ function workspace(id: string, name: string, title: string): WorkspaceSessions {
 }
 
 it("展开后同时渲染不同工作区里同名 default 会话", () => {
-  const html = renderToStaticMarkup(
+  // 会话列表读取侧栏索引查询，需要 QueryClient 上下文
+  const html = renderWithProviders(
     <WorkspaceListView
       workspaces={[workspace("a", "Alpha", "one"), workspace("b", "Beta", "two")]}
       runningSessions={new Set()}
