@@ -1,13 +1,17 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { CheckSquare, ChevronDown, ChevronRight, Database, Eraser, RefreshCw, Square, Trash2 } from "../../../shared/ui/icons";
+import { Eraser, RefreshCw, Trash2 } from "../../../shared/ui/icons";
 import { api } from "../../../api/client";
 import type { SessionDataSelection, SessionDataSummary } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import { useI18n } from "../../i18n/use-i18n";
-import { formatSessionBytes, formatSessionDate } from "./session-data-format";
-import "./session-data-settings.css";
+import { Modal } from "../../../shared/ui/dialog/modal";
+import { FieldGrid, SettingsField, SettingsPanel, SkSelect, SkTextInput } from "../kit";
+import { filterSessionData, isIdleSession, sessionKey, toSelection } from "./session-data-selection";
+import { SessionDataDetails } from "./session-data-details";
+import { SessionDataTable } from "./session-data-table";
+import { formatSessionBytes } from "./session-data-format";
 
 /**
  * 渲染所有工作区的会话数据查看与清理界面。
@@ -15,9 +19,12 @@ import "./session-data-settings.css";
  * @returns 会话数据设置面板
  */
 export function SessionDataSettings() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const confirm = useConfirm();
   const queryClient = useQueryClient();
+  const [query, setQuery] = useState("");
+  const [workspaceId, setWorkspaceId] = useState("");
+  const [minimum, setMinimum] = useState("0");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set());
   const [deleteWarning, setDeleteWarning] = useState<string | null>(null);
@@ -54,37 +61,13 @@ export function SessionDataSettings() {
     }
   });
   const items = sessions.data ?? [];
-  const groups = useMemo(() => groupByWorkspace(items), [items]);
-  const selectedItems = items.filter((item) => selectedKeys.has(sessionKey(item)));
+  const visible = useMemo(() => filterSessionData(items, query, workspaceId, Number(minimum)), [items, query, workspaceId, minimum]);
+  const workspaces = [...new Map(items.map((item) => [item.workspace_id, { value: item.workspace_id, label: item.workspace_name }])).values()];
+  const idle = visible.filter(isIdleSession);
+  const selectedItems = items.filter((item) => isIdleSession(item) && selectedKeys.has(sessionKey(item)));
   const totalBytes = items.reduce((sum, session) => sum + session.total_bytes, 0);
-  const allSelected = items.length > 0 && selectedItems.length === items.length;
   const busy = clearSession.isPending || deleteSessions.isPending;
   const error = sessions.error ?? clearSession.error ?? deleteSessions.error;
-
-  /**
-   * 切换单个会话的选择状态。
-   *
-   * @param session 目标会话摘要
-   * @returns 无
-   */
-  const toggleSelected = (session: SessionDataSummary) => {
-    const key = sessionKey(session);
-    setSelectedKeys((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  /**
-   * 切换所有工作区会话的选择状态。
-   *
-   * @returns 无
-   */
-  const toggleAll = () => {
-    setSelectedKeys(allSelected ? new Set() : new Set(items.map(sessionKey)));
-  };
 
   /**
    * 确认并清空选中的会话数据。
@@ -154,234 +137,26 @@ export function SessionDataSettings() {
     }
   };
 
-  return (
-    <section className="session-data-settings">
-      <header className="session-data-header">
-        <div>
-          <h2>{t("Session data", "会话数据")}</h2>
-          <div className="session-data-total">
-            <Database size={14} aria-hidden />
-            <span>{t(`${items.length} sessions`, `${items.length} 个会话`)}</span>
-            <span>{formatSessionBytes(totalBytes)}</span>
-            <span>{t(`${groups.length} workspaces`, `${groups.length} 个工作区`)}</span>
-          </div>
-        </div>
-        <div className="session-data-header-actions">
-          <Button onClick={toggleAll} disabled={busy || items.length === 0} title={allSelected ? t("Clear selection", "取消全选") : t("Select all sessions", "全选会话")}>
-            {allSelected ? <CheckSquare size={14} aria-hidden /> : <Square size={14} aria-hidden />}
-            {allSelected ? t("Clear selection", "取消全选") : t("Select all", "全选")}
-          </Button>
-          {selectedItems.length > 0 && (
-            <Button onClick={() => void requestClear(selectedItems)} disabled={busy} title={t("Clear selected session data", "清空选中会话数据")}>
-              <Eraser size={14} aria-hidden />
-              {t(`Clear ${selectedItems.length}`, `清空 ${selectedItems.length} 项`)}
-            </Button>
-          )}
-          {selectedItems.length > 0 && (
-            <Button onClick={() => void requestDeleteMany(selectedItems)} disabled={busy} title={t("Delete selected sessions", "删除选中会话")}>
-              <Trash2 size={14} aria-hidden />
-              {t(`Delete ${selectedItems.length}`, `删除 ${selectedItems.length} 项`)}
-            </Button>
-          )}
-          <Button onClick={() => void sessions.refetch()} disabled={sessions.isFetching || busy} title={t("Refresh session data", "刷新会话数据")}>
-            <RefreshCw size={14} aria-hidden />
-            {t("Refresh", "刷新")}
-          </Button>
-        </div>
-      </header>
-
-      {sessions.isLoading && <div className="session-data-empty">{t("Loading session data", "正在读取会话数据")}</div>}
-      {error && <div className="session-data-error">{error.message}</div>}
-      {deleteWarning && <div className="session-data-notice">{deleteWarning}</div>}
-      {!sessions.isLoading && items.length === 0 && (
-        <div className="session-data-empty">{t("No session data", "暂无会话数据")}</div>
-      )}
-
-      <div className="session-data-list">
-        {groups.map((group) => (
-          <section className="session-data-workspace" key={group.id}>
-            <header className="session-data-workspace-header">
-              <div>
-                <strong>{group.name}</strong>
-                <code title={group.path}>{group.path}</code>
-              </div>
-              <span>{t(`${group.items.length} sessions`, `${group.items.length} 个会话`)}</span>
-            </header>
-            <div className="session-data-workspace-list">
-              {group.items.map((session) => (
-                <SessionDataRow
-                  key={sessionKey(session)}
-                  session={session}
-                  expanded={expandedId === sessionKey(session)}
-                  selected={selectedKeys.has(sessionKey(session))}
-                  busy={busy}
-                  locale={locale}
-                  onToggleExpanded={() => setExpandedId(expandedId === sessionKey(session) ? null : sessionKey(session))}
-                  onToggleSelected={() => toggleSelected(session)}
-                  onClear={() => void requestClear([session])}
-                  onDelete={() => void requestDelete(session)}
-                />
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-type SessionDataRowProps = {
-  session: SessionDataSummary;
-  expanded: boolean;
-  selected: boolean;
-  busy: boolean;
-  locale: string;
-  onToggleExpanded: () => void;
-  onToggleSelected: () => void;
-  onClear: () => void;
-  onDelete: () => void;
-};
-
-/**
- * 渲染单个会话行及其展开详情。
- *
- * @param props 会话行数据与交互回调
- * @returns 会话数据行
- */
-function SessionDataRow({ session, expanded, selected, busy, locale, onToggleExpanded, onToggleSelected, onClear, onDelete }: SessionDataRowProps) {
-  const { t } = useI18n();
-  return (
-    <article className={session.active ? "session-data-row active" : "session-data-row"}>
-      <div className="session-data-row-main">
-        <label className="session-data-select">
-          <input type="checkbox" checked={selected} onChange={onToggleSelected} disabled={busy} aria-label={t(`Select ${session.title}`, `选择 ${session.title}`)} />
-        </label>
-        <Button
-          className="session-data-expand"
-          onClick={onToggleExpanded}
-          aria-label={expanded ? t("Collapse details", "收起详情") : t("Expand details", "展开详情")}
-          title={expanded ? t("Collapse details", "收起详情") : t("Expand details", "展开详情")}
-        >
-          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        </Button>
-        <div className="session-data-identity">
-          <div>
-            <strong>{session.title}</strong>
-            {session.active && <span className="session-data-active">{t("Active", "当前")}</span>}
-          </div>
-          <span>{formatSessionDate(session.updated_at, locale)}</span>
-        </div>
-        <dl className="session-data-metrics">
-          <div><dt>{t("Size", "大小")}</dt><dd>{formatSessionBytes(session.total_bytes)}</dd></div>
-          <div><dt>{t("Turns", "轮次")}</dt><dd>{metricValue(session.turn_count)}</dd></div>
-          <div><dt>{t("Files", "文件")}</dt><dd>{session.file_count}</dd></div>
-        </dl>
-        <div className="session-data-actions">
-          <Button onClick={onClear} disabled={busy} title={t("Clear session data", "清空会话数据")}>
-            <Eraser size={14} aria-hidden />
-            {t("Clear", "清空")}
-          </Button>
-          <Button variant="ghost-danger" onClick={onDelete} disabled={busy} title={t("Delete session", "删除会话")}>
-            <Trash2 size={14} aria-hidden />
-            {t("Delete", "删除")}
-          </Button>
-        </div>
-      </div>
-      {expanded && <SessionDataDetails session={session} />}
-    </article>
-  );
-}
-
-/**
- * 按工作区分组会话摘要。
- *
- * @param items 会话摘要
- * @returns 工作区分组
- */
-function groupByWorkspace(items: SessionDataSummary[]): Array<{ id: string; name: string; path: string; items: SessionDataSummary[] }> {
-  const groups = new Map<string, { id: string; name: string; path: string; items: SessionDataSummary[] }>();
-  for (const item of items) {
-    const current = groups.get(item.workspace_id) ?? { id: item.workspace_id, name: item.workspace_name, path: item.workspace_path, items: [] };
-    current.items.push(item);
-    groups.set(item.workspace_id, current);
-  }
-  return [...groups.values()];
-}
-
-/**
- * 生成跨工作区稳定选择键。
- *
- * @param session 会话摘要
- * @returns 选择键
- */
-function sessionKey(session: SessionDataSummary): string {
-  return `${session.workspace_id}/${session.id}`;
-}
-
-/**
- * 将会话摘要转换为批量清空请求项。
- *
- * @param session 会话摘要
- * @returns 清空请求项
- */
-function toSelection(session: SessionDataSummary): SessionDataSelection {
-  return { workspace_id: session.workspace_id, session_id: session.id };
-}
-
-/**
- * 渲染单个会话的详细状态与文件列表。
- *
- * @param props 会话数据摘要
- * @returns 会话数据详情
- */
-function SessionDataDetails({ session }: { session: SessionDataSummary }) {
-  const { t } = useI18n();
-  return (
-    <div className="session-data-details">
-      <dl className="session-data-detail-metrics">
-        <div><dt>{t("Branches", "分叉")}</dt><dd>{metricValue(session.branch_points)}</dd></div>
-        <div><dt>{t("Loaded tools", "已加载工具")}</dt><dd>{metricValue(session.loaded_tool_count)}</dd></div>
-        <div><dt>{t("Todos", "待办")}</dt><dd>{metricValue(session.todo_count)}</dd></div>
-        <div><dt>{t("Goal", "目标")}</dt><dd>{session.has_goal == null ? "-" : session.has_goal ? t("Present", "存在") : t("None", "无")}</dd></div>
-      </dl>
-      {session.state_error && <div className="session-data-error">{session.state_error}</div>}
-      <div className="session-data-table-wrap">
-        <table className="session-data-table">
-          <thead>
-            <tr>
-              <th>{t("Data item", "数据项")}</th>
-              <th>{t("Type", "类型")}</th>
-              <th>{t("Files", "文件")}</th>
-              <th>{t("Size", "大小")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {session.items.map((item) => (
-              <tr key={item.name}>
-                <td>{item.name}</td>
-                <td>{item.kind === "directory" ? t("Directory", "目录") : item.kind === "file" ? t("File", "文件") : t("Other", "其它")}</td>
-                <td>{item.file_count}</td>
-                <td>{formatSessionBytes(item.bytes)}</td>
-              </tr>
-            ))}
-            {session.items.length === 0 && (
-              <tr><td colSpan={4}>{t("No stored files", "没有已存储文件")}</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-/**
- * 格式化可选指标。
- *
- * @param value 可选数值
- * @returns 数值文本；不可用时返回短横线
- */
-function metricValue(value: number | null | undefined): string {
-  return value == null ? "-" : String(value);
+  const detailed = items.find((item) => sessionKey(item) === expandedId);
+  return <SettingsPanel title={t("Stored sessions", "已存会话")} description={t(`${items.length} sessions · ${formatSessionBytes(totalBytes)}`, `${items.length} 个会话 · ${formatSessionBytes(totalBytes)}`)} actions={<>
+    <Button variant="secondary" disabled={busy || !idle.length} onClick={() => setSelectedKeys(new Set(idle.map(sessionKey)))}>{t("Select displayed idle sessions", "选择展示的空闲会话")}</Button>
+    {selectedItems.length > 0 && <>
+      <Button variant="secondary" disabled={busy} onClick={() => void requestClear(selectedItems)}><Eraser size={14} />{t(`Clear ${selectedItems.length}`, `清空 ${selectedItems.length} 项`)}</Button>
+      <Button variant="ghost-danger" disabled={busy} onClick={() => void requestDeleteMany(selectedItems)}><Trash2 size={14} />{t(`Delete ${selectedItems.length}`, `删除 ${selectedItems.length} 项`)}</Button>
+    </>}
+    <Button variant="secondary" onClick={() => void sessions.refetch()} disabled={busy || sessions.isFetching}><RefreshCw size={14} />{t("Refresh", "刷新")}</Button>
+  </>}>
+    <FieldGrid columns={3}>
+      <SettingsField label={t("Search", "搜索")} anchor="session-data.search"><SkTextInput type="search" value={query} onChange={setQuery} placeholder={t("Workspace, session or date", "工作区、会话或日期")} /></SettingsField>
+      <SettingsField label={t("Workspace", "工作区")} anchor="session-data.workspace"><SkSelect value={workspaceId} onChange={setWorkspaceId} options={[{ value: "", label: t("All workspaces", "全部工作区") }, ...workspaces]} /></SettingsField>
+      <SettingsField label={t("Minimum size", "最小大小")} anchor="session-data.size"><SkSelect value={minimum} onChange={setMinimum} options={[{ value: "0", label: t("Any size", "不限") }, ...[1, 10, 100].map((size) => ({ value: String(size * 1024 * 1024), label: `${size} MB` }))]} /></SettingsField>
+    </FieldGrid>
+    {sessions.isLoading && <p className="text-xs">{t("Loading session data", "正在读取会话数据")}</p>}
+    {error && <div className="settings-inline-error">{error.message}</div>}
+    {deleteWarning && <p className="text-xs">{deleteWarning}</p>}
+    <SessionDataTable rows={visible} selected={selectedKeys} busy={busy} onSelect={setSelectedKeys} onDetails={(session) => setExpandedId(sessionKey(session))} onClear={(session) => void requestClear([session])} onDelete={(session) => void requestDelete(session)} />
+    <Modal open={Boolean(detailed)} title={detailed?.title ?? t("Session details", "会话详情")} onClose={() => setExpandedId(null)}>{detailed && <SessionDataDetails session={detailed} />}</Modal>
+  </SettingsPanel>;
 }
 
 /**

@@ -1,5 +1,5 @@
 import type { UsageRange } from "../../../api/contracts";
-import { Select } from "../../../shared/ui/select/select";
+import { SettingsField, SkSelect, SkTextInput } from "../kit";
 import { rangeLabel, sourceLabel, statusLabel, type Translate } from "./usage-labels";
 
 const RANGES: UsageRange[] = ["today", "1d", "7d", "30d", "90d", "all"];
@@ -28,51 +28,11 @@ type UsageStatsFiltersProps = {
  * @returns 筛选表单
  */
 export function UsageStatsFilters({ value, onChange, t }: UsageStatsFiltersProps) {
-  return (
-    <div className="usage-filters">
-      <div className="settings-field">
-        <span>{t("Range", "时间范围")}</span>
-        <Select
-          value={value.range}
-          options={RANGES.map((item) => ({ value: item, label: rangeLabel(item, t) }))}
-          ariaLabel={t("Range", "时间范围")}
-          onChange={(next) => onChange({ range: next as UsageRange })}
-        />
-      </div>
-      <div className="settings-field">
-        <span>{t("Source", "来源")}</span>
-        <Select
-          value={value.source}
-          options={SOURCES.map((item) => ({ value: item, label: sourceLabel(item, t) }))}
-          ariaLabel={t("Source", "来源")}
-          onChange={(next) => onChange({ source: next })}
-        />
-      </div>
-      <div className="settings-field">
-        <span>{t("Status", "状态")}</span>
-        <Select
-          value={value.status}
-          options={STATUSES.map((item) => ({ value: item, label: statusLabel(item, t) }))}
-          ariaLabel={t("Status", "状态")}
-          onChange={(next) => onChange({ status: next })}
-        />
-      </div>
-      <label className="settings-field">
-        <span>{t("Provider", "供应商")}</span>
-        <input
-          value={value.providerSearch}
-          onChange={(event) => onChange({ providerSearch: event.target.value })}
-          placeholder={t("Search provider", "搜索供应商")}
-        />
-      </label>
-      <label className="settings-field">
-        <span>{t("Model", "模型")}</span>
-        <input
-          value={value.modelSearch}
-          onChange={(event) => onChange({ modelSearch: event.target.value })}
-          placeholder={t("Search model", "搜索模型")}
-        />
-      </label>
-    </div>
-  );
+  return <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
+    <SettingsField label={t("Range", "时间范围")} anchor="usage.range"><SkSelect value={value.range} options={RANGES.map((item) => ({ value: item, label: rangeLabel(item, t) }))} onChange={(range) => onChange({ range })} /></SettingsField>
+    <SettingsField label={t("Source", "来源")} anchor="usage.source"><SkSelect value={value.source} options={SOURCES.map((item) => ({ value: item, label: sourceLabel(item, t) }))} onChange={(source) => onChange({ source })} /></SettingsField>
+    <SettingsField label={t("Status", "状态")} anchor="usage.status"><SkSelect value={value.status} options={STATUSES.map((item) => ({ value: item, label: statusLabel(item, t) }))} onChange={(status) => onChange({ status })} /></SettingsField>
+    <SettingsField label={t("Provider", "供应商")} anchor="usage.provider"><SkTextInput value={value.providerSearch} onChange={(providerSearch) => onChange({ providerSearch })} placeholder={t("Search provider", "搜索供应商")} /></SettingsField>
+    <SettingsField label={t("Model", "模型")} anchor="usage.model"><SkTextInput value={value.modelSearch} onChange={(modelSearch) => onChange({ modelSearch })} placeholder={t("Search model", "搜索模型")} /></SettingsField>
+  </div>;
 }

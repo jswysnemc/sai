@@ -47,7 +47,7 @@ export function UsageSummaryTiles({ summary, t }: UsageSummaryTilesProps) {
         <SummaryTile
           label={t("Avg duration", "平均耗时")}
           value={formatDuration(summary.average_duration_ms)}
-          sub={`${formatCount(summary.missing_usage_requests)} ${t("without usage", "无用量")}`}
+          sub={(summary.average_duration_ms ?? 0) <= 0 ? t("No duration reported", "尚无耗时上报") : summary.missing_usage_requests > 0 ? `${formatCount(summary.missing_usage_requests)} ${t("without usage", "无用量")}` : undefined}
         />
       </div>
       {ratio && (

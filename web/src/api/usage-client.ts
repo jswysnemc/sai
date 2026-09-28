@@ -17,6 +17,8 @@ export const usageApi = {
     if (query.model_search) params.set("model_search", query.model_search);
     if (query.limit != null) params.set("limit", String(query.limit));
     if (query.offset != null) params.set("offset", String(query.offset));
+    if (query.session_id) params.set("session_id", query.session_id);
+    if (query.workspace_id != null) params.set("workspace_id", query.workspace_id);
     if (query.session_sort) params.set("session_sort", query.session_sort);
     if (query.session_limit != null) params.set("session_limit", String(query.session_limit));
     const suffix = params.size > 0 ? `?${params.toString()}` : "";

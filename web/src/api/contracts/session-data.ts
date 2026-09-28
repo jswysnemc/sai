@@ -14,6 +14,8 @@ export type SessionDataSummary = {
   created_at: string;
   updated_at: string;
   active: boolean;
+  /** 正在运行或排队；旧服务不返回时不能据此判定空闲 */
+  busy?: boolean;
   total_bytes: number;
   file_count: number;
   turn_count?: number | null;

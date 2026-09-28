@@ -174,3 +174,31 @@ fn statistics_ranking_shares_filters_but_ignores_log_pagination() {
     let serialized = serde_json::to_value(stats).unwrap();
     assert_eq!(serialized["session_stats"][0]["total_tokens"], 300);
 }
+
+/// 【用量统计】【日志筛选】会话与工作区共同匹配，未知归属不会混入已知工作区。
+/// 参数：无。
+/// 返回：无，作用域错误时断言失败。
+#[test]
+fn session_log_filter_keeps_workspace_identity() {
+    let records = vec![
+        record(Some("default"), Some("first"), 100, 0),
+        record(Some("default"), Some("second"), 200, 0),
+        record(Some("default"), None, 300, 0),
+    ];
+    let query = UsageStatsQuery {
+        range: "all".into(),
+        session_id: Some("default".into()),
+        workspace_id: Some("first".into()),
+        ..Default::default()
+    };
+    let filtered = super::super::query::filter_records(records.clone(), &query);
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].input_tokens, Some(100));
+    let unknown = UsageStatsQuery {
+        workspace_id: Some(String::new()),
+        ..query
+    };
+    let filtered = super::super::query::filter_records(records, &unknown);
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].input_tokens, Some(300));
+}

@@ -35,7 +35,10 @@ pub struct UsageStatsResponse {
 pub fn get_stats(paths: &SaiPaths, query: UsageStatsQuery) -> Result<UsageStatsResponse> {
     // 1. 按范围下界跳过整月过旧的日志文件，再逐条过滤
     let start = range_start(&query.range);
-    let (records, skipped_records) = read_records(&usage_dir(paths), start)?;
+    let (mut records, skipped_records) = read_records(&usage_dir(paths), start)?;
+    if query.workspace_id.is_some() {
+        super::session_ranking::resolve_record_workspaces(paths, &mut records);
+    }
     let filtered = filter_records(records, &query);
     let total_logs = filtered.len();
     // 2. 各维度聚合在同一份过滤结果上计算，保证口径一致

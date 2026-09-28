@@ -96,6 +96,9 @@ export type UsageStatsQuery = {
   offset?: number;
   session_sort?: UsageSessionSort;
   session_limit?: number;
+  session_id?: string;
+  /** 空字符串筛选无法确定工作区的历史记录 */
+  workspace_id?: string;
 };
 
 export type UsageSessionSort = "total_tokens" | "billable_tokens" | "requests";

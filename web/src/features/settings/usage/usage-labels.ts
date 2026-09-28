@@ -2,7 +2,7 @@
 export type Translate = (en: string, zh: string) => string;
 
 /** 用量面板的视图标识。 */
-export type UsageView = "overview" | "providers" | "models" | "sessions" | "logs";
+export type UsageView = "overview" | "breakdown" | "logs";
 
 /**
  * 按标识取双语文案。

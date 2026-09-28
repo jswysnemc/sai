@@ -32,6 +32,8 @@ struct SessionDataSummary {
     created_at: String,
     updated_at: String,
     active: bool,
+    /// 主运行、排队任务或子智能体仍在使用会话
+    busy: bool,
     total_bytes: u64,
     file_count: usize,
     turn_count: Option<usize>,
@@ -124,6 +126,19 @@ async fn list(State(state): State<WebAppState>) -> WebResult<Json<Vec<SessionDat
     todos::fill_counts(&state.paths, &mut summaries)
         .await
         .map_err(WebError::from)?;
+    // 1. 当前选中与正在运行是不同状态，清理界面需要独立的运行标记
+    for summary in &mut summaries {
+        summary.busy = state
+            .runs
+            .is_session_active(&summary.workspace_id, &summary.id)
+            .await
+            || super::session_runtime::reject_running_subagents_for_workspace(
+                &state.paths,
+                FilePath::new(&summary.workspace_path),
+                &summary.id,
+            )
+            .is_err();
+    }
     Ok(Json(summaries))
 }
 
@@ -466,6 +481,7 @@ fn summarize_session_data(
         workspace_name: workspace.name.clone(),
         workspace_path: workspace.path.clone(),
         active: workspace_active && session.id == active_id,
+        busy: true,
         id: session.id,
         title: session.title,
         created_at: session.created_at,

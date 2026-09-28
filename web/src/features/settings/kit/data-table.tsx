@@ -11,6 +11,8 @@ export type { DataColumn, SortState } from "./data-table-state";
 export type TableSelection = {
   selected: ReadonlySet<string>;
   onChange: (next: Set<string>) => void;
+  /** 不可选择的行不参与全选 */
+  isSelectable?: (key: string) => boolean;
 };
 
 type DataTableProps<Row> = {
@@ -50,7 +52,8 @@ export function DataTable<Row>({
   const [sort, setSort] = useState<SortState>(initialSort);
   const sorted = useMemo(() => sortRows(rows, columns, sort), [rows, columns, sort]);
   const keys = sorted.map(rowKey);
-  const allSelected = Boolean(selection) && keys.length > 0 && keys.every((key) => selection?.selected.has(key));
+  const selectableKeys = keys.filter((key) => selection?.isSelectable?.(key) !== false);
+  const allSelected = Boolean(selection) && selectableKeys.length > 0 && selectableKeys.every((key) => selection?.selected.has(key));
 
   /**
    * 切换单行选中状态。
@@ -59,7 +62,7 @@ export function DataTable<Row>({
    * @returns 无返回值
    */
   const toggleRow = (key: string) => {
-    if (!selection) return;
+    if (!selection || selection.isSelectable?.(key) === false) return;
     const next = new Set(selection.selected);
     if (next.has(key)) next.delete(key);
     else next.add(key);
@@ -73,7 +76,12 @@ export function DataTable<Row>({
    */
   const toggleAll = () => {
     if (!selection) return;
-    selection.onChange(allSelected ? new Set() : new Set(keys));
+    const next = new Set(selection.selected);
+    for (const key of selectableKeys) {
+      if (allSelected) next.delete(key);
+      else next.add(key);
+    }
+    selection.onChange(next);
   };
 
   return (
@@ -83,7 +91,7 @@ export function DataTable<Row>({
           <tr>
             {selection && (
               <th className="is-check">
-                <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label={t("Select all", "全选")} />
+                <input type="checkbox" checked={allSelected} disabled={!selectableKeys.length} onChange={toggleAll} aria-label={t("Select all", "全选")} />
               </th>
             )}
             {columns.map((column) => (
@@ -124,7 +132,7 @@ export function DataTable<Row>({
               >
                 {selection && (
                   <td className="is-check" onClick={(event) => event.stopPropagation()}>
-                    <input type="checkbox" checked={selected} onChange={() => toggleRow(key)} aria-label={t("Select row", "选择此行")} />
+                    <input type="checkbox" checked={selected} disabled={selection.isSelectable?.(key) === false} onChange={() => toggleRow(key)} aria-label={t("Select row", "选择此行")} />
                   </td>
                 )}
                 {columns.map((column) => (

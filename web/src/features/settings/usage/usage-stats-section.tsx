@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, RefreshCw, Trash2 } from "../../../shared/ui/icons";
+import { useSearchParams } from "react-router-dom";
+import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
+import { ChoicePills, SettingsPanel, SwitchField } from "../kit";
 import { api } from "../../../api/client";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
@@ -10,10 +13,11 @@ import { UsageLogsTable } from "./usage-logs-table";
 import { UsageOverview } from "./usage-overview";
 import { UsageStatsFilters, type UsageFilterState } from "./usage-stats-filters";
 import { UsageSessionRanking } from "./usage-session-ranking";
-import type { UsageSessionSort } from "../../../api/contracts/usage";
+import { UsageSessionLogDialog } from "./usage-session-log-dialog";
+import type { UsageSessionStats, UsageSessionSort } from "../../../api/contracts/usage";
 import "./usage-stats.css";
 
-const LOG_PAGE_SIZE = 15;
+const LOG_PAGE_SIZE = 25;
 
 const INITIAL_FILTERS: UsageFilterState = {
   range: "7d",
@@ -34,14 +38,20 @@ const INITIAL_FILTERS: UsageFilterState = {
 export function UsageStatsSection({ subview }: { subview?: string }) {
   const { t, locale } = useI18n();
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
+  const [params, setParams] = useSearchParams();
+  const comparison = ["providers", "models", "sessions"].includes(params.get("view") ?? "") ? params.get("view")! : "providers";
+  const [autoRefresh, setAutoRefresh] = useState(false);
   const view = (subview ?? "overview") as UsageView;
   const [filters, setFilters] = useState<UsageFilterState>(INITIAL_FILTERS);
   const [page, setPage] = useState(0);
   const [sessionSort, setSessionSort] = useState<UsageSessionSort>("total_tokens");
   const [sessionLimit, setSessionLimit] = useState(10);
+  const [selectedSession, setSelectedSession] = useState<UsageSessionStats | null>(null);
 
   const stats = useQuery({
     queryKey: ["usage-stats", filters, page, sessionSort, sessionLimit],
+    refetchInterval: autoRefresh && view === "logs" ? 5000 : false,
     queryFn: () =>
       api.usage.stats({
         range: filters.range,
@@ -75,59 +85,29 @@ export function UsageStatsSection({ subview }: { subview?: string }) {
     setPage(0);
   };
 
+  const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list });
   const data = stats.data;
   const totalPages = Math.max(1, Math.ceil((data?.total_logs ?? 0) / LOG_PAGE_SIZE));
 
   return (
     <section className="usage-stats-section">
-      <header className="usage-stats-header">
-        <div>
-          <h2>{t("Usage statistics", "用量统计")}</h2>
-          <p>
-            {t(
-              "Provider-reported tokens across chat and auxiliary calls, with cache-adjusted billable totals.",
-              "汇总 Chat 与辅助调用的 Token 用量，并按缓存计价折算出可与账单对比的口径。"
-            )}
-          </p>
-        </div>
-        <div className="usage-stats-actions">
-          <Button className="settings-secondary" onClick={() => void stats.refetch()} disabled={stats.isFetching}>
-            <RefreshCw size={14} />
-            {t("Refresh", "刷新")}
-          </Button>
-          <Button
-            variant="danger"
-            onClick={() => clear.mutate()}
-            disabled={clear.isPending}
-            title={t("Clear all usage logs", "清空全部用量日志")}
-          >
-            <Trash2 size={14} />
-            {t("Clear", "清空")}
-          </Button>
-        </div>
-      </header>
-
+      <SettingsPanel title={t("Filters", "筛选条件")} description={t("Compare provider-reported and cache-adjusted token usage.", "对比供应商上报用量与缓存折算后的计费用量。")} actions={<>
+        <Button variant="secondary" onClick={() => void stats.refetch()} disabled={stats.isFetching}><RefreshCw size={14} />{t("Refresh", "刷新")}</Button>
+        <Button variant="ghost-danger" disabled={clear.isPending} onClick={() => void confirm({ title: t("Clear all usage logs?", "清空全部用量日志？"), description: t("This removes logs for every time range and cannot be undone.", "将删除全部时间范围的日志，操作无法恢复。"), confirmLabel: t("Clear all", "全部清空"), danger: true }).then((accepted) => { if (accepted) clear.mutate(); })}><Trash2 size={14} />{t("Clear", "清空")}</Button>
+      </>}>
       <UsageStatsFilters value={filters} onChange={applyFilters} t={t} />
+      </SettingsPanel>
 
       {stats.isLoading && <div className="usage-empty">{t("Loading usage", "正在读取用量")}</div>}
       {stats.error && <div className="usage-error">{stats.error.message}</div>}
       {clear.error && <div className="usage-error">{clear.error.message}</div>}
 
-      {data && view === "overview" && <UsageOverview data={data} t={t} locale={locale} />}
-      {data && (view === "overview" || view === "sessions") && (
-        <UsageSessionRanking
-          rows={data.session_stats ?? []}
-          total={data.total_sessions ?? 0}
-          sort={sessionSort}
-          limit={sessionLimit}
-          onSortChange={setSessionSort}
-          onLimitChange={setSessionLimit}
-          t={t}
-          locale={locale}
-        />
-      )}
-      {data && view === "providers" && <UsageGroupTable rows={data.provider_stats} type="provider" t={t} locale={locale} />}
-      {data && view === "models" && <UsageGroupTable rows={data.model_stats} type="model" t={t} locale={locale} />}
+      {view === "breakdown" && <ChoicePills value={comparison} onChange={(next) => setParams((current) => { const updated = new URLSearchParams(current); updated.set("view", next); return updated; }, { replace: true })} ariaLabel={t("Compare by", "对比维度")} options={[{ value: "providers", label: t("Providers", "供应商") }, { value: "models", label: t("Models", "模型") }, { value: "sessions", label: t("Sessions", "会话") }]} />}
+      {view === "logs" && <SwitchField label={t("Refresh every 5 seconds", "每 5 秒刷新")} checked={autoRefresh} onChange={setAutoRefresh} />}
+      {data && view === "overview" && <UsageOverview data={data} t={t} locale={locale} ranking={<UsageSessionRanking rows={data.session_stats ?? []} total={data.total_sessions ?? 0} sort={sessionSort} limit={sessionLimit} onSortChange={setSessionSort} onLimitChange={setSessionLimit} workspaces={workspaces.data?.workspaces} onSelect={setSelectedSession} t={t} locale={locale} compact />} />}
+      {data && view === "breakdown" && comparison === "sessions" && <UsageSessionRanking rows={data.session_stats ?? []} total={data.total_sessions ?? 0} sort={sessionSort} limit={sessionLimit} onSortChange={setSessionSort} onLimitChange={setSessionLimit} workspaces={workspaces.data?.workspaces} onSelect={setSelectedSession} t={t} locale={locale} />}
+      {data && view === "breakdown" && comparison === "providers" && <UsageGroupTable rows={data.provider_stats} type="provider" t={t} locale={locale} />}
+      {data && view === "breakdown" && comparison === "models" && <UsageGroupTable rows={data.model_stats} type="model" t={t} locale={locale} />}
       {data && view === "logs" && (
         <>
           <UsageLogsTable logs={data.logs} t={t} locale={locale} />
@@ -152,6 +132,7 @@ export function UsageStatsSection({ subview }: { subview?: string }) {
           </div>
         </>
       )}
+      <UsageSessionLogDialog session={selectedSession} filters={filters} onClose={() => setSelectedSession(null)} />
     </section>
   );
 }

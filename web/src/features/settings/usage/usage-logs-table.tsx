@@ -1,3 +1,4 @@
+import { DataTable, StatusBadge } from "../kit";
 import type { UsageRecord } from "../../../api/contracts";
 import { formatDuration, formatTime, formatTokens } from "./usage-format";
 import { sourceLabel, statusLabel, type Translate } from "./usage-labels";
@@ -15,46 +16,17 @@ type UsageLogsTableProps = {
  * @returns 日志表格，无数据时返回空态提示
  */
 export function UsageLogsTable({ logs, t, locale }: UsageLogsTableProps) {
-  if (logs.length === 0) {
-    return <div className="usage-empty">{t("No request logs", "暂无请求日志")}</div>;
-  }
-  return (
-    <div className="usage-table-wrap">
-      <table className="usage-table">
-        <thead>
-          <tr>
-            <th>{t("Time", "时间")}</th>
-            <th>{t("Source", "来源")}</th>
-            <th>{t("Provider", "供应商")}</th>
-            <th>{t("Model", "模型")}</th>
-            <th>{t("In", "输入")}</th>
-            <th>{t("Cached", "缓存")}</th>
-            <th>{t("Out", "输出")}</th>
-            <th>{t("Duration", "耗时")}</th>
-            <th>{t("Status", "状态")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {logs.map((record) => (
-            <tr key={record.id}>
-              <td>{formatTime(record.created_at, locale)}</td>
-              <td>
-                <strong>{sourceLabel(record.source, t)}</strong>
-                <small>{record.operation}</small>
-              </td>
-              <td>{record.provider_name || record.provider_id}</td>
-              <td className="mono">{record.model}</td>
-              <td>{formatTokens(record.input_tokens)}</td>
-              <td>{formatCacheDetail(record)}</td>
-              <td>{formatTokens(record.output_tokens)}</td>
-              <td>{formatDuration(record.duration_ms)}</td>
-              <td>{statusLabel(effectiveStatus(record), t)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  return <DataTable label={t("Request logs", "请求日志")} rows={logs} rowKey={(record) => record.id} columns={[
+    { id: "time", header: t("Time", "时间"), render: (record) => formatTime(record.created_at, locale) },
+    { id: "source", header: t("Source", "来源"), render: (record) => <div>{sourceLabel(record.source, t)}<div className="text-xs text-muted">{record.operation}</div></div> },
+    { id: "provider", header: t("Provider", "供应商"), render: (record) => record.provider_name || record.provider_id },
+    { id: "model", header: t("Model", "模型"), render: (record) => record.model },
+    { id: "input", header: t("In", "输入"), numeric: true, render: (record) => formatTokens(record.input_tokens) },
+    { id: "cache", header: t("Cached", "缓存"), numeric: true, render: formatCacheDetail },
+    { id: "output", header: t("Out", "输出"), numeric: true, render: (record) => formatTokens(record.output_tokens) },
+    { id: "duration", header: t("Duration", "耗时"), numeric: true, render: (record) => formatDuration(record.duration_ms) },
+    { id: "status", header: t("Status", "状态"), render: (record) => <div><StatusBadge tone={effectiveStatus(record) === "success" ? "success" : record.status === "error" ? "danger" : "neutral"}>{statusLabel(effectiveStatus(record), t)}</StatusBadge>{record.error_kind && <div className="text-xs">{record.error_kind}</div>}</div> }
+  ]} />;
 }
 
 /**

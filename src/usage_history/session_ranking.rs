@@ -84,3 +84,16 @@ fn sort_value(row: &UsageSessionStats, sort: Option<&str>) -> u64 {
         _ => row.summary.total_tokens,
     }
 }
+
+/// 【用量统计】【历史归属】为旧日志补充能够唯一确定的工作区，不猜测同名会话。
+///
+/// 参数：`paths` 为应用路径，`records` 为待筛选日志。
+/// 返回：无，原地补充工作区标识。
+pub(super) fn resolve_record_workspaces(paths: &SaiPaths, records: &mut [UsageRecord]) {
+    let metadata = metadata::SessionMetadata::load(paths);
+    for record in records {
+        if let Some(session_id) = record.session_id.as_deref() {
+            record.workspace_id = metadata.workspace_id(record, session_id);
+        }
+    }
+}

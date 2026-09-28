@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+import { buildModelDistribution } from "./model-distribution";
 import type { UsageGroupStats } from "../../../api/contracts";
 import { formatTokens } from "./usage-format";
 import type { Translate } from "./usage-labels";
@@ -17,7 +19,6 @@ const SERIES_COLORS = [
   "var(--chart-6)",
 ];
 
-const MAX_SLICES = 6;
 const CENTER = 100;
 const RADIUS_OUTER = 90;
 const RADIUS_INNER = 54;
@@ -29,8 +30,8 @@ const RADIUS_INNER = 54;
  * @returns 环形图与图例，无数据时返回空态提示
  */
 export function UsageModelDonut({ rows, t }: UsageModelDonutProps) {
-  const sliced = rows.filter((row) => row.total_tokens > 0).slice(0, MAX_SLICES);
-  const total = sliced.reduce((sum, row) => sum + row.total_tokens, 0);
+  const otherLabel = t("Other", "其他");
+  const { slices: sliced, total } = useMemo(() => buildModelDistribution(rows, otherLabel), [rows, otherLabel]);
   if (total <= 0) {
     return <div className="usage-empty">{t("No model data", "暂无模型数据")}</div>;
   }

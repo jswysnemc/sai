@@ -26,6 +26,12 @@ pub struct UsageStatsQuery {
     pub session_sort: Option<String>,
     #[serde(default)]
     pub session_limit: Option<usize>,
+    /// 精确会话标识，配合工作区防止同名会话串线
+    #[serde(default)]
+    pub session_id: Option<String>,
+    /// 空字符串表示无法确定归属的历史记录
+    #[serde(default)]
+    pub workspace_id: Option<String>,
 }
 
 fn default_range() -> String {
@@ -50,6 +56,20 @@ pub(crate) fn filter_records(
     let provider_search = normalized_search(query.provider_search.as_deref());
     let model_search = normalized_search(query.model_search.as_deref());
     records.retain(|record| {
+        if query
+            .session_id
+            .as_deref()
+            .is_some_and(|id| record.session_id.as_deref() != Some(id))
+        {
+            return false;
+        }
+        if query
+            .workspace_id
+            .as_deref()
+            .is_some_and(|id| record.workspace_id.as_deref().unwrap_or_default() != id)
+        {
+            return false;
+        }
         if let Some(start) = start {
             if record.created_at < start {
                 return false;
