@@ -10,6 +10,7 @@ export { cx } from "./class-names";
 export { SettingsPanel } from "./settings-panel";
 export { SettingsField, FieldGrid, type ControlSize } from "./settings-field";
 export { SkTextInput, SkTextArea } from "./text-input";
+export { SkListInput } from "./list-input";
 export { SkNumberInput } from "./number-input";
 export { SkSelect, type SelectOption } from "./select-input";
 export { SkSecretInput } from "./secret-input";

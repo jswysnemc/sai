@@ -3,7 +3,7 @@ import type {
   EngineStatusResponse,
   ThinkingLevel
 } from "../../../api/contracts";
-import { Select } from "../../../shared/ui/select/select";
+import { FieldGrid, SettingsField, SkSelect } from "../kit";
 import { THINKING_OPTIONS } from "../../chat/model-thinking-options";
 import {
   buildNewSessionModelChoices,
@@ -118,10 +118,10 @@ export function NewSessionDefaultSettings({
   };
 
   return (
-    <div className="settings-form-grid">
-      <div className="settings-field">
-        <span>{t("New session model", "新会话模型")}</span>
-        <Select
+    <FieldGrid>
+      <SettingsField label={t("New session model", "新会话模型")} configKey="session.new_session_model" anchor="runtime.session.new_session_model" hint={t("Applied only when creating a session.", "仅在创建新会话时应用。")}>
+
+        <SkSelect
           value={modelValue}
           options={modelOptions}
           onChange={updateModel}
@@ -129,14 +129,10 @@ export function NewSessionDefaultSettings({
           menuPreferredWidth={380}
           menuMinimumWidth={280}
         />
-        <small>{t(
-          "Applied only when a session is created; existing session choices stay unchanged.",
-          "仅在创建会话时应用，现有会话的选择保持不变。"
-        )}</small>
-      </div>
-      <div className="settings-field">
-        <span>{t("New session reasoning effort", "新会话思考等级")}</span>
-        <Select
+      </SettingsField>
+      <SettingsField label={t("New session reasoning effort", "新会话思考等级")} configKey="session.new_session_thinking_level" anchor="runtime.session.new_session_thinking_level" hint={t("Auto uses the provider or ACP engine default.", "自动模式使用供应商或 ACP 内核的默认思考行为。")}>
+
+        <SkSelect
           value={thinkingValue}
           options={thinkingOptions}
           onChange={updateThinkingLevel}
@@ -144,12 +140,8 @@ export function NewSessionDefaultSettings({
           menuPreferredWidth={340}
           menuMinimumWidth={260}
         />
-        <small>{t(
-          "Auto lets the provider or ACP agent choose its default reasoning behavior.",
-          "auto 表示由供应商或 ACP 内核采用默认思考行为。"
-        )}</small>
-      </div>
-    </div>
+      </SettingsField>
+    </FieldGrid>
   );
 }
 

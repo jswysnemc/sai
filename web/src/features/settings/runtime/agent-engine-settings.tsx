@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../api/client";
 import type { AgentEngineKind, AppConfig } from "../../../api/contracts";
-import { Select, type SelectOption } from "../../../shared/ui/select/select";
+import { FieldGrid, SettingsField, SkListInput, SkSelect, SkTextInput, type SelectOption } from "../kit";
 import { AgentEngineBrandIcon } from "../../../shared/ui/agent-engine-brand-icon/agent-engine-brand-icon";
 import { useI18n } from "../../i18n/use-i18n";
 import { resetNewSessionEnginePreferences } from "../../sessions/new-session-preferences";
@@ -105,21 +105,14 @@ export function AgentEngineSettings({ config, onConfigChange }: AgentEngineSetti
 
   return (
     <div className="agent-engine-settings">
-      <div className="settings-field">
-        <span>{t("Conversation engine", "对话内核")}</span>
-        <Select
+      <SettingsField label={t("Conversation engine", "对话内核")} configKey="agent.engine" anchor="runtime.agent.engine" size="lg" hint={t("sai manages permissions, sandboxing, auditing, and session history for every engine.", "所有内核均由 sai 管理权限、沙箱、审计与会话历史。")}>
+        <SkSelect
           value={engine}
           options={engineOptions}
           onChange={updateEngine}
           ariaLabel={t("Conversation engine", "对话内核")}
         />
-        <small>
-          {t(
-            "Which engine runs the reasoning loop. sai keeps handling permissions, sandboxing, auditing, and session history either way.",
-            "由哪个内核执行推理循环。无论选哪个，权限、沙箱、审计与会话历史都仍由 sai 负责。"
-          )}
-        </small>
-      </div>
+      </SettingsField>
       {isExternal && (
         <AcpCapabilityPanel
           engine={engine}
@@ -129,40 +122,31 @@ export function AgentEngineSettings({ config, onConfigChange }: AgentEngineSetti
         />
       )}
       {isExternal && (
-        <div className="settings-form-grid">
+        <FieldGrid>
           <AcpConnectionFields acp={acp} runtime={runtime} onChange={updateAcp} />
-          <label className="settings-field">
-            <span>{t("Additional directories", "附加目录")}</span>
-            <input
-              type="text"
-              value={Array.isArray(acp.additional_directories) ? acp.additional_directories.join(", ") : ""}
-              onChange={(event) => updateAcp({ additional_directories: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) })}
+          <SettingsField label={t("Additional directories", "附加目录")} configKey="agent.acp.additional_directories" anchor="runtime.agent.acp.additional_directories" hint={t("One directory path per line; spaces inside a path are preserved.", "每行填写一个目录路径，保留路径中的空格。")}>
+            <SkListInput
+              value={Array.isArray(acp.additional_directories) ? acp.additional_directories as string[] : []}
+              onChange={(value) => updateAcp({ additional_directories: value })}
             />
-          </label>
-        </div>
+          </SettingsField>
+        </FieldGrid>
       )}
       {engine === "custom" && (
-        <div className="settings-field">
-          <span>{t("Launch command", "启动命令")}</span>
-          <input
-            type="text"
+        <FieldGrid>
+        <SettingsField label={t("Launch command", "启动命令")} configKey="agent.acp.command" anchor="runtime.agent.acp.command" hint={t("Executable name or path. Enter startup arguments separately.", "填写可执行文件名称或路径，启动参数单独填写。")}>
+          <SkTextInput
             value={command}
-            placeholder="npx -y @agentclientprotocol/codex-acp"
+            placeholder="npx"
             spellCheck={false}
             autoComplete="off"
-            onChange={(event) => {
-              // 首段是程序，其余作为参数；预置内核留空即用内置命令
-              const parts = event.target.value.split(/\s+/).filter(Boolean);
-              updateAcp({ command: parts[0] ?? "", args: parts.slice(1) });
-            }}
+            onChange={(value) => updateAcp({ command: value })}
           />
-          <small>
-            {t(
-              "Required for the custom engine. Also lets you pin an adapter version for the preset engines.",
-              "自定义内核必填。预置内核也可用它固定适配器版本。"
-            )}
-          </small>
-        </div>
+        </SettingsField>
+        <SettingsField label={t("Startup arguments", "启动参数")} configKey="agent.acp.args" anchor="runtime.agent.acp.args" hint={t("One argument per line; spaces within each argument are preserved.", "每行填写一个参数，保留参数内部的空格。")}>
+          <SkListInput value={Array.isArray(acp.args) ? acp.args as string[] : []} onChange={(value) => updateAcp({ args: value })} />
+        </SettingsField>
+        </FieldGrid>
       )}
       <NewSessionDefaultSettings
         config={config}

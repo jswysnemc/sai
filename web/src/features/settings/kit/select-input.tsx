@@ -14,6 +14,7 @@ type SkSelectProps<T extends string> = {
   ariaLabel?: string;
   menuPreferredWidth?: number;
   menuMinimumWidth?: number;
+  menuClassName?: string;
   className?: string;
 };
 
@@ -32,6 +33,7 @@ export function SkSelect<T extends string>({
   ariaLabel,
   menuPreferredWidth,
   menuMinimumWidth,
+  menuClassName,
   className
 }: SkSelectProps<T>) {
   const field = useFieldContext();
@@ -46,6 +48,7 @@ export function SkSelect<T extends string>({
       ariaLabel={ariaLabel ?? field?.labelText}
       menuPreferredWidth={menuPreferredWidth}
       menuMinimumWidth={menuMinimumWidth}
+      menuClassName={menuClassName}
     />
   );
 }

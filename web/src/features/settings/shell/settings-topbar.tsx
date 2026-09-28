@@ -9,6 +9,7 @@ type SettingsTopbarProps = {
   saving: boolean;
   saveErrorMessage?: string;
   loaded: boolean;
+  validationError?: string | null;
   onSave: () => void;
   onDiscard: () => void;
 };
@@ -21,7 +22,7 @@ type SettingsTopbarProps = {
  * @param props 分区元数据、当前子页与保存状态
  * @returns 顶栏
  */
-export function SettingsTopbar({ meta, subview, dirty, saving, saveErrorMessage, loaded, onSave, onDiscard }: SettingsTopbarProps) {
+export function SettingsTopbar({ meta, subview, dirty, saving, saveErrorMessage, loaded, validationError, onSave, onDiscard }: SettingsTopbarProps) {
   const { t } = useI18n();
   const Icon = meta?.icon;
   const subviewMeta = meta?.subviews?.find((item) => item.id === subview);
@@ -45,6 +46,7 @@ export function SettingsTopbar({ meta, subview, dirty, saving, saveErrorMessage,
             saving={saving}
             saveErrorMessage={saveErrorMessage}
             loaded={loaded}
+            validationError={validationError}
             onSave={onSave}
             onDiscard={onDiscard}
           />

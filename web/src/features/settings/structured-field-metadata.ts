@@ -1,0 +1,136 @@
+import type { SelectOption } from "./kit";
+
+const SECRET_KEYS = ["api_key", "token", "secret", "password", "webhook"];
+
+/**
+ * 返回有限字符串配置对应的统一下拉选项。
+ *
+ * @param name 配置字段名称
+ * @param t 双语文本选择方法
+ * @returns 已知枚举的选项；普通字符串返回 null
+ */
+export function fieldSelectOptions(
+  name: string,
+  t: (en: string, zh: string) => string
+): SelectOption<string>[] | null {
+  if (name === "reasoning" || name === "tool_calls") {
+    return [
+      { value: "hidden", label: t("Hidden", "隐藏") },
+      { value: "summary", label: t("Summary", "摘要") },
+      { value: "full", label: t("Full", "完整") }
+    ];
+  }
+  if (name === "command_filter") {
+    return [
+      { value: "auto", label: t("Automatic", "自动") },
+      { value: "rtk", label: "rtk" },
+      { value: "off", label: t("Disabled", "关闭") }
+    ];
+  }
+  return null;
+}
+
+/**
+ * 判断字段名称是否表示敏感值。
+ *
+ * @param name 配置字段名称
+ * @returns 字段需要隐藏时返回 true
+ */
+export function isSecretField(name: string): boolean {
+  const normalized = name.toLowerCase();
+  return SECRET_KEYS.some((key) => normalized.includes(key));
+}
+
+/**
+ * 将配置字段标识转换为可读标签。
+ *
+ * @param name 配置字段标识
+ * @param t 双语文本选择方法
+ * @returns 可读字段名称
+ */
+export function fieldLabel(name: string, t: (en: string, zh: string) => string): string {
+  const labels: Record<string, string> = {
+    enabled: t("Enabled", "启用"),
+    api_key: t("API key", "接口密钥"),
+    api_keys: t("API keys", "接口密钥"),
+    base_url: t("Base URL", "服务地址"),
+    output_dir: t("Output directory", "输出目录"),
+    model: t("Model", "模型"),
+    provider_type: t("Provider type", "供应商类型"),
+    timeout_seconds: t("Timeout", "超时秒数"),
+    max_results: t("Maximum results", "最大结果数量"),
+    max_download_mb: t("Maximum download size", "最大下载大小"),
+    safe_search: t("Safe search", "安全搜索"),
+    auto_preview: t("Automatic preview", "自动预览"),
+    preview_count: t("Preview count", "预览数量"),
+    vision_screening_enabled: t("Vision screening", "视觉模型审核"),
+    thinking_depth: t("Thinking depth", "思考深度"),
+    max_review_revisions: t("Maximum review revisions", "最大审阅修正次数"),
+    max_tool_steps_per_round: t("Tool steps per round", "每轮工具步数"),
+    max_final_answer_chars: t("Final answer character limit", "最终答案字符上限"),
+    tool_call_timeout_seconds: t("Tool call timeout", "工具调用超时"),
+    max_tool_steps: t("Maximum tool steps", "最大工具步数"),
+    show_progress: t("Show progress", "显示进度"),
+    vision_provider_id: t("Vision provider", "视觉模型供应商"),
+    vision_model: t("Vision model", "视觉模型"),
+    preview_with_chafa: t("Preview with chafa", "使用 chafa 预览"),
+    free_fallback_enabled: t("Free fallback", "免费回退"),
+    default_aspect_ratio: t("Default aspect ratio", "默认宽高比"),
+    default_resolution: t("Default resolution", "默认分辨率"),
+    auto_print: t("Print after generation", "生成后显示"),
+    width_percent: t("Width percentage", "宽度百分比"),
+    height_percent: t("Height percentage", "高度百分比"),
+    data_dir: t("Data directory", "数据目录"),
+    embedding_enabled: t("Embedding retrieval", "启用向量检索"),
+    embedding_provider_id: t("Embedding provider", "向量模型供应商"),
+    embedding_model: t("Embedding model", "向量模型"),
+    backend: t("Backend", "后端"),
+    command_timeout_seconds: t("Command timeout", "命令超时"),
+    max_stdout_chars: t("Standard output limit", "标准输出字符上限"),
+    max_stderr_chars: t("Error output limit", "错误输出字符上限"),
+    max_rounds: t("Maximum tool rounds", "最大工具轮次"),
+    command_shell: t("Command Shell", "命令 Shell"),
+    command_filter: t("Command output filter: auto / rtk / off", "命令输出过滤器：auto / rtk / off"),
+    command_filter_denylist: t(
+      "Commands kept out of rtk, added on top of the builtin list (cat/grep/ls...)",
+      "不走 rtk 的命令，在内置列表（cat/grep/ls 等）之外追加",
+    ),
+    progressive_loading_enabled: t("Progressive loading", "渐进式加载"),
+    background_commands_enabled: t("Allow background commands", "允许后台命令"),
+    background_command_timeout_seconds: t("Background command timeout", "后台命令超时"),
+    background_command_log_max_bytes: t("Background log limit", "后台日志上限"),
+    background_command_stop_grace_seconds: t("Stop grace period", "停止宽限时间"),
+    allow_command_execution: t("Allow skills to run commands", "允许技能执行命令"),
+    reasoning: t("Reasoning display", "思考显示方式"),
+    tool_calls: t("Tool call display", "工具显示方式"),
+    readable_tool_names: t("Readable tool names", "可读工具名称"),
+    wait_show_model: t("Show model while waiting", "等待时显示模型"),
+    wait_show_thinking_level: t("Show thinking level while waiting", "等待时显示思考等级"),
+    repl_transcript_row_cap: t("Terminal transcript row limit", "终端记录行数上限"),
+    default_max_chars: t("Default context tokens", "默认上下文 token 数"),
+    compaction_ratio: t("Auto-compact ratio", "自动压缩比例"),
+    compaction_reserve_tokens: t("Reserved headroom", "压缩预留 token")
+  };
+  return labels[name] ?? humanizeFieldName(name);
+}
+
+/**
+ * 将未知字段名称转换为统一的标题格式。
+ *
+ * @param name 配置字段名称
+ * @returns 首字母大写并保留常见缩写的名称
+ */
+function humanizeFieldName(name: string): string {
+  const acronyms: Record<string, string> = {
+    api: "API",
+    url: "URL",
+    id: "ID",
+    mb: "MB",
+    gif: "GIF",
+    json: "JSON"
+  };
+  return name
+    .split("_")
+    .map((word) => acronyms[word] ?? (word.charAt(0).toUpperCase() + word.slice(1)))
+    .join(" ");
+}

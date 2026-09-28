@@ -1,4 +1,6 @@
 import type { AppConfig, ProviderConfig } from "../../api/contracts";
+import { useState } from "react";
+import { parseSettingsJson } from "./advanced/settings-json";
 import { api } from "../../api/client";
 import { renameNewSessionProviderReference } from "../sessions/new-session-preferences";
 import { useConfigDocument } from "./use-config-document";
@@ -8,12 +10,13 @@ import type { GatewayId, SettingsConfigController } from "./settings-types";
  * 管理全局 AppConfig 的读取、结构化草稿和保存。
  *
  * 文档状态机由 useConfigDocument 承载；本 Hook 补充供应商与网关的
- * 领域更新方法。高级 JSON 文本由 advanced 分区自持，保存路径因此
- * 只有结构化草稿一个真相源。
+ * 领域更新方法。高级 JSON 文本由控制器持有，非法文本跨分区保留，
+ * 只有通过解析的完整配置才允许保存。
  *
  * @returns 设置页配置控制器
  */
 export function useSettingsConfig(): SettingsConfigController {
+  const [jsonDraft, setJsonDraft] = useState<{ text: string; error: string | null } | null>(null);
   const document = useConfigDocument({
     queryKey: ["config"] as const,
     load: api.config.load,
@@ -28,6 +31,28 @@ export function useSettingsConfig(): SettingsConfigController {
       ]);
     }
   });
+
+  /**
+   * 【设置】【结构化编辑】更新配置并同步完整文档的文本表示。
+   * @param config 编辑后的配置
+   * @returns 无返回值
+   */
+  const updateConfig = (config: AppConfig) => {
+    setJsonDraft(null);
+    document.update(config);
+  };
+
+  /**
+   * 【设置】【JSON 编辑】保留原始文本；合法时同步配置，非法时仅标记待保存。
+   * @param text 编辑器中的完整文本
+   * @returns 无返回值
+   */
+  const updateJson = (text: string) => {
+    const parsed = parseSettingsJson(text);
+    setJsonDraft({ text, error: parsed.error });
+    if (parsed.config) document.update(parsed.config);
+    else document.markDirty();
+  };
 
   /**
    * 【设置】【供应商更新】更新指定供应商配置并同步关联引用。
@@ -47,7 +72,7 @@ export function useSettingsConfig(): SettingsConfigController {
     const session = patch.id
       ? renameNewSessionProviderReference(config.session, previousId, patch.id)
       : config.session;
-    document.update({ ...config, active_provider: activeProvider, providers, session });
+    updateConfig({ ...config, active_provider: activeProvider, providers, session });
   };
 
   /**
@@ -59,7 +84,7 @@ export function useSettingsConfig(): SettingsConfigController {
   const updateGateway = (gateway: GatewayId, patch: Record<string, unknown>) => {
     const config = document.draft;
     if (!config) return;
-    document.update({
+    updateConfig({
       ...config,
       gateways: {
         ...config.gateways,
@@ -78,13 +103,18 @@ export function useSettingsConfig(): SettingsConfigController {
     error: document.loadError ?? document.saveError,
     saveError: document.saveError,
     saved: document.saved,
-    updateConfig: document.update,
+    rawJson: jsonDraft?.text ?? JSON.stringify(document.draft, null, 2),
+    jsonError: jsonDraft?.error ?? null,
+    updateJson,
+    updateConfig,
     updateProvider,
     updateGateway,
     saveConfig: async () => {
+      if (jsonDraft?.error) throw new Error(jsonDraft.error);
       await document.saveNow();
+      setJsonDraft(null);
     },
-    discard: document.discard,
+    discard: () => { setJsonDraft(null); document.discard(); },
     retry: document.retry
   };
 }

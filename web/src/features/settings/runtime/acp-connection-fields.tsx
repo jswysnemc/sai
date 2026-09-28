@@ -1,5 +1,5 @@
 import type { EngineStatusResponse } from "../../../api/contracts";
-import { Select } from "../../../shared/ui/select/select";
+import { SettingsField, SkSelect, SkTextInput } from "../kit";
 import { useI18n } from "../../i18n/use-i18n";
 
 type AcpConnectionFieldsProps = {
@@ -24,29 +24,22 @@ export function AcpConnectionFields({ acp, runtime, onChange }: AcpConnectionFie
   const value = typeof acp.auth_method === "string" ? acp.auth_method : "";
 
   return (
-    <div className="settings-field">
-      <span>{t("ACP authentication method", "ACP 认证方式")}</span>
+    <SettingsField label={t("ACP authentication method", "ACP 认证方式")} configKey="agent.acp.auth_method" anchor="runtime.agent.acp.auth_method" hint={t("Authentication methods are reported during the agent handshake.", "认证方式由内核在握手时公布。")}>
+
       {authMethods.length > 0 ? (
-        <Select
+        <SkSelect
           value={value}
           options={[{ value: "", label: t("Not configured", "未配置") }, ...authMethods]}
           onChange={(next) => onChange({ auth_method: next })}
           ariaLabel={t("ACP authentication method", "ACP 认证方式")}
         />
       ) : (
-        <input
-          type="text"
+        <SkTextInput
           value={value}
-          onChange={(event) => onChange({ auth_method: event.target.value })}
+          onChange={(value) => onChange({ auth_method: value })}
         />
       )}
-      <small>
-        {t(
-          "Reported by the agent during the handshake. Model, thinking level, and other runtime options are adjusted from the composer.",
-          "由内核在握手时公布。模型、思考等级等运行参数在输入区调整。"
-        )}
-      </small>
-    </div>
+    </SettingsField>
   );
 }
 

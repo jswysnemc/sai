@@ -50,6 +50,10 @@ export type SettingsConfigController = {
   /** 最近一次保存失败的原因；保存成功或重新编辑后清空 */
   saveError: Error | null;
   saved: boolean;
+  /** 高级 JSON 草稿跨分区保留；非法时禁止保存 */
+  rawJson: string;
+  jsonError: string | null;
+  updateJson: (text: string) => void;
   updateConfig: (config: AppConfig) => void;
   updateProvider: (index: number, patch: Partial<ProviderConfig>) => void;
   updateGateway: (gateway: GatewayId, patch: Record<string, unknown>) => void;

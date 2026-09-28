@@ -1,5 +1,5 @@
 import type { AppConfig, InputConfig, PasteImageKey } from "../../../api/contracts";
-import { Select } from "../../../shared/ui/select/select";
+import { ChoicePills, SettingsField } from "../kit";
 import { useI18n } from "../../i18n/use-i18n";
 
 /** 粘贴键位的可选项与说明。 */
@@ -37,21 +37,19 @@ export function PasteKeySettings({ config, onConfigChange }: PasteKeySettingsPro
     ?? DEFAULT_PASTE_KEY;
 
   return (
-    <label className="settings-field full">
-      <span>{t("TUI clipboard paste key", "TUI 剪贴板粘贴键")}</span>
-      <Select
+    <SettingsField label={t("TUI clipboard paste key", "TUI 剪贴板粘贴键")} configKey="input.paste_image_key" anchor="runtime.input.paste_image_key" hint={t("Reads text and images into the terminal UI. Windows defaults to Alt+V because terminals intercept Ctrl+V.", "将文字和图片粘贴到终端界面。Windows 终端会拦截 Ctrl+V，因此默认使用 Alt+V。")}>
+
+      <ChoicePills
         value={pasteImageKey}
         options={PASTE_KEY_OPTIONS.map((option) => ({
           value: option.value,
           label: t(option.en, option.zh)
         }))}
-        ariaLabel={t("Choose the clipboard paste key", "选择剪贴板粘贴键")}
         onChange={(value) => onConfigChange({
           ...config,
           input: { ...input, paste_image_key: value }
         })}
       />
-      <small>{t("Which key reads the system clipboard into the TUI input, including images. Windows terminals swallow Ctrl+V, so Alt+V is the default there.", "TUI 输入框用哪个键读取系统剪贴板（含图片）。Windows 终端会吞掉 Ctrl+V，因此 Windows 上默认是 Alt+V。")}</small>
-    </label>
+    </SettingsField>
   );
 }

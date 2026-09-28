@@ -11,6 +11,7 @@ type SettingsSaveBarProps = {
   saving: boolean;
   saveErrorMessage?: string;
   loaded: boolean;
+  validationError?: string | null;
   onSave: () => void;
   onDiscard: () => void;
 };
@@ -24,7 +25,7 @@ type SettingsSaveBarProps = {
  * @param props 分区元数据、草稿状态与保存、放弃回调
  * @returns 保存区
  */
-export function SettingsSaveBar({ meta, dirty, saving, saveErrorMessage, loaded, onSave, onDiscard }: SettingsSaveBarProps) {
+export function SettingsSaveBar({ meta, dirty, saving, saveErrorMessage, loaded, validationError, onSave, onDiscard }: SettingsSaveBarProps) {
   const { t } = useI18n();
   const confirm = useConfirm();
   const use = meta?.appConfig ?? "required";
@@ -56,7 +57,7 @@ export function SettingsSaveBar({ meta, dirty, saving, saveErrorMessage, loaded,
 
   return (
     <div className="settings-save-bar">
-      {loaded && <SaveState dirty={dirty} saving={saving} errorMessage={saveErrorMessage} />}
+      {validationError ? <span className="settings-save-state is-failed" title={validationError} role="alert">{t("Fix JSON before saving", "请先修正 JSON")}</span> : loaded && <SaveState dirty={dirty} saving={saving} errorMessage={saveErrorMessage} />}
       {dirty && !saving && (
         <Button variant="ghost" size="small" onClick={() => void discard()}>
           <RotateCcw size={14} />
@@ -68,7 +69,7 @@ export function SettingsSaveBar({ meta, dirty, saving, saveErrorMessage, loaded,
         size="small"
         className="settings-save-button"
         onClick={onSave}
-        disabled={!loaded || !dirty || saving}
+        disabled={!loaded || !dirty || saving || Boolean(validationError)}
         title={t("Save changes (Ctrl+S)", "保存修改（Ctrl+S）")}
       >
         <Save size={14} />

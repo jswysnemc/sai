@@ -38,8 +38,12 @@ export function SettingsPage() {
   const pageRef = useRef<HTMLDivElement | null>(null);
   const onExit = useLeaveGuard(settings.dirty, settings.discard);
   const dirtySections = useMemo(
-    () => dirtySettingsSections(settings.config, settings.baseline),
-    [settings.baseline, settings.config]
+    () => {
+      const changed = dirtySettingsSections(settings.config, settings.baseline);
+      if (settings.jsonError) changed.add("advanced");
+      return changed;
+    },
+    [settings.baseline, settings.config, settings.jsonError]
   );
   const { dirty, saving, saveConfig } = settings;
   useFieldFocus(`${section}/${subview ?? ""}`);
@@ -79,6 +83,7 @@ export function SettingsPage() {
         saving={settings.saving}
         saveErrorMessage={settings.saveError?.message}
         loaded={Boolean(settings.config)}
+        validationError={settings.jsonError}
         onSave={() => void settings.saveConfig().catch(() => undefined)}
         onDiscard={settings.discard}
       />

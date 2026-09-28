@@ -1,83 +1,27 @@
-import { Check } from "../../shared/ui/icons";
-import { Button } from "../../shared/ui/button/button";
-import { EditorHeader } from "./editor-layout";
-import { SettingsGroup } from "./editor-layout";
 import type { ThemeId } from "../theme/theme";
-import { THEME_PRESETS } from "../theme/theme";
 import { useI18n } from "../i18n/use-i18n";
-import { Select } from "../../shared/ui/select/select";
 import { useMarkdownStylePreferences } from "../markdown/markdown-style-store";
+import { ChoicePills, SettingsField, SettingsPanel } from "./kit";
+import { ThemeSettings } from "./appearance/theme-settings";
 import { MarkdownStyleSettings } from "./markdown-style-settings";
-import "./appearance-settings-section.css";
-
-type AppearanceSettingsSectionProps = {
-  theme: ThemeId;
-  onThemeChange: (theme: ThemeId) => void;
-};
 
 /**
- * 渲染主题配色选择区域。
- *
- * @param props 当前主题和更新回调
- * @returns 外观设置区域
+ * 【Web 设置】【界面外观】组合语言、主题和 Markdown 偏好，所有修改即时生效。
+ * @param props 当前主题及切换回调
+ * @returns 当前浏览器的外观设置
  */
-export function AppearanceSettingsSection({ theme, onThemeChange }: AppearanceSettingsSectionProps) {
+export function AppearanceSettingsSection({ theme, onThemeChange }: { theme: ThemeId; onThemeChange: (theme: ThemeId) => void }) {
   const { locale, setLocale, t } = useI18n();
   const markdownStyle = useMarkdownStylePreferences();
-
   return (
-    <section className="settings-editor">
-      <EditorHeader
-        kicker={t("Interface", "界面外观")}
-        title={t("Language and appearance", "语言与外观")}
-        description={t(
-          "Preferences apply immediately and are stored in this browser without changing server configuration.",
-          "界面偏好即时应用并保存在当前浏览器，不修改服务端配置。"
-        )}
-      />
-      <div className="appearance-language">
-        <div>
-          <strong>{t("Interface language", "界面语言")}</strong>
-          <small>{t("Applies immediately in this browser.", "切换后立即生效。")}</small>
-        </div>
-        <Select
-          value={locale}
-          options={[
-            { value: "zh-CN", label: "简体中文", description: t("Chinese (Simplified)", "简体中文") },
-            { value: "en-US", label: "English", description: t("English", "英语") }
-          ]}
-          ariaLabel={t("Interface language", "界面语言")}
-          onChange={setLocale}
-        />
-      </div>
-      <SettingsGroup
-        title={t("Theme and colors", "主题与配色")}
-        description={t("Choose a compact color scheme for the workspace.", "选择适合工作区的紧凑配色方案。")}
-      >
-        <div className="theme-preset-grid">
-          {THEME_PRESETS.map((preset) => (
-            <Button
-              className={preset.id === theme ? "theme-preset active" : "theme-preset"}
-              onClick={() => onThemeChange(preset.id)}
-              aria-pressed={preset.id === theme}
-              key={preset.id}
-            >
-              <span className="theme-swatches">
-                {preset.colors.map((color) => <i style={{ background: color }} key={color} />)}
-              </span>
-              <strong>{t(preset.nameEn, preset.nameZh)}</strong>
-              <Check size={14} className="theme-preset-check" />
-            </Button>
-          ))}
-        </div>
-      </SettingsGroup>
-      <MarkdownStyleSettings
-        preferences={markdownStyle.preferences}
-        onPresetChange={markdownStyle.updatePreset}
-        onTableChange={markdownStyle.updateTable}
-        onCodeBlockChange={markdownStyle.updateCodeBlock}
-        onReset={markdownStyle.reset}
-      />
-    </section>
+    <>
+      <SettingsPanel title={t("Language", "语言")} description={t("Preferences apply immediately and stay in this browser.", "界面偏好即时应用，仅保存在当前浏览器。")}>
+        <SettingsField label={t("Interface language", "界面语言")} anchor="appearance.locale">
+          <ChoicePills value={locale} options={[{ value: "zh-CN", label: "简体中文" }, { value: "en-US", label: "English" }]} onChange={setLocale} />
+        </SettingsField>
+      </SettingsPanel>
+      <ThemeSettings theme={theme} onThemeChange={onThemeChange} />
+      <MarkdownStyleSettings preferences={markdownStyle.preferences} onPresetChange={markdownStyle.updatePreset} onTableChange={markdownStyle.updateTable} onCodeBlockChange={markdownStyle.updateCodeBlock} onReset={markdownStyle.reset} />
+    </>
   );
 }

@@ -1,219 +1,52 @@
 import type { AppConfig, RunMode } from "../../../api/contracts";
-import { Select } from "../../../shared/ui/select/select";
-import { buildChatModelChoices } from "../../chat/chat-model-options";
 import { createRunModeOptions } from "../../permission/run-mode-options";
-import { SettingsGroup } from "../editor-layout";
 import { useI18n } from "../../i18n/use-i18n";
-import { modelSelectOption } from "../model-select-option";
-
-const SESSION_MODEL_VALUE = "";
-
-type PermissionDefaultSettingsProps = {
-  config: AppConfig;
-  onConfigChange: (config: AppConfig) => void;
-};
+import { ModelChoiceSelect } from "../controls/model-choice-select";
+import { FieldGrid, SettingsField, SettingsPanel, SkSelect } from "../kit";
+import type { RuntimeSettingsProps } from "./runtime-settings-types";
 
 /**
- * 渲染 TUI / CLI 默认权限模式，以及自动审核模型配置。
- *
- * @param props 应用配置和更新回调
- * @returns 默认权限模式设置分组
+ * 【Web 设置】【权限默认值】配置终端界面、单次命令的权限模式与审核模型。
+ * @param props 应用配置与更新回调
+ * @returns 权限设置面板
  */
-export function PermissionDefaultSettings({ config, onConfigChange }: PermissionDefaultSettingsProps) {
+export function PermissionDefaultSettings({ config, onConfigChange }: RuntimeSettingsProps) {
   const { t } = useI18n();
-  const tuiValue = config.permission?.tui_mode ?? config.permission?.default_mode ?? "yolo";
-  const cliValue = config.permission?.cli_mode ?? config.permission?.default_mode ?? "yolo";
-  const permissionOptions = createRunModeOptions(t);
-  const autoProvider = config.permission?.auto_audit_provider_id ?? "";
-  const autoModel = config.permission?.auto_audit_model ?? "";
-  const autoAuditValue =
-    autoProvider && autoModel ? encodeModelChoice(autoProvider, autoModel) : SESSION_MODEL_VALUE;
-  const titleProvider = config.session?.auto_title_provider_id ?? "";
-  const titleModel = config.session?.auto_title_model ?? "";
-  const autoTitleValue =
-    titleProvider && titleModel ? encodeModelChoice(titleProvider, titleModel) : SESSION_MODEL_VALUE;
-  const autoTitleEnabled = config.session?.auto_title_enabled ?? true;
-  const autoAuditOptions = [
-    {
-      value: SESSION_MODEL_VALUE,
-      label: t("Session model", "会话模型"),
-      description: t(
-        "Use the model selected by the current conversation for each auto-audit.",
-        "每次自动审核使用当前会话实际选择的模型。"
-      )
-    },
-    ...buildChatModelChoices(config).map((choice) => modelSelectOption(
-      choice,
-      encodeModelChoice(choice.providerId, choice.model),
-      t("Always use this model for automatic permission audits", "始终使用该模型进行自动权限审核")
-    ))
-  ];
+  const permission = config.permission;
+  const tuiMode = permission?.tui_mode ?? permission?.default_mode ?? "yolo";
+  const cliMode = permission?.cli_mode ?? permission?.default_mode ?? "yolo";
+  const options = createRunModeOptions(t);
 
   /**
-   * 更新权限配置局部字段。
-   *
-   * @param patch 局部更新
-   */
-  const patchPermission = (patch: Partial<NonNullable<AppConfig["permission"]>>) => {
-    onConfigChange({
-      ...config,
-      permission: {
-        // 保留界面未展示的字段（如审核插件），避免保存时被清空
-        ...config.permission,
-        default_mode: config.permission?.default_mode ?? "yolo",
-        ...patch
-      }
-    });
-  };
-
-  /** 更新 TUI 默认权限模式。 */
-  const updateTuiMode = (mode: RunMode) => {
-    patchPermission({
-      default_mode: mode,
-      tui_mode: mode,
-      cli_mode: config.permission?.cli_mode ?? config.permission?.default_mode ?? "yolo"
-    });
-  };
-
-  /** 更新 CLI 默认权限模式。 */
-  const updateCliMode = (mode: RunMode) => {
-    patchPermission({
-      default_mode: config.permission?.tui_mode ?? config.permission?.default_mode ?? "yolo",
-      tui_mode: config.permission?.tui_mode ?? config.permission?.default_mode ?? "yolo",
-      cli_mode: mode
-    });
-  };
-
-  /**
-   * 更新自动审核模型（单段 供应商/模型 选择）。
-   *
-   * @param value 选择器编码值；空表示跟随会话模型
-   */
-  const updateAutoAuditModel = (value: string) => {
-    const [providerId = "", model = ""] = value ? value.split("\u0000", 2) : [];
-    patchPermission({
-      auto_audit_provider_id: providerId || undefined,
-      auto_audit_model: model || undefined
-    });
-  };
-
-  /**
-   * 【设置】【会话配置】更新会话自动标题配置并保留新会话默认值。
-   *
-   * @param patch 会话配置局部更新
+   * 合并权限补丁，保留审核插件等未展示字段。
+   * @param patch 修改的权限字段
    * @returns 无返回值
    */
-  const patchSession = (patch: Partial<NonNullable<AppConfig["session"]>>) => {
-    onConfigChange({
-      ...config,
-      session: {
-        ...config.session,
-        ...patch
-      }
-    });
-  };
+  const update = (patch: Partial<NonNullable<AppConfig["permission"]>>) => onConfigChange({
+    ...config,
+    permission: { ...permission, default_mode: tuiMode, ...patch }
+  });
 
   /**
-   * 【设置】【会话标题】更新自动标题模型。
-   *
-   * @param value 选择器编码值；空值表示跟随会话模型
+   * 同步终端界面与旧版默认权限字段。
+   * @param mode 选中的权限模式
    * @returns 无返回值
    */
-  const updateAutoTitleModel = (value: string) => {
-    const [providerId = "", model = ""] = value ? value.split("\u0000", 2) : [];
-    patchSession({
-      auto_title_provider_id: providerId || undefined,
-      auto_title_model: model || undefined
-    });
-  };
+  const updateTuiMode = (mode: RunMode) => update({ default_mode: mode, tui_mode: mode, cli_mode: cliMode });
 
   return (
-    <>
-      <SettingsGroup title={t("Default permissions", "默认权限")} description={t("TUI and CLI can use separate default permission modes; command-line options can still override them temporarily.", "TUI 与 CLI 可分别配置默认权限模式；命令行参数仍可临时覆盖。")}>
-        <div className="settings-form-grid">
-          <div className="settings-field">
-            <span>{t("TUI default mode", "TUI 默认模式")}</span>
-            <Select value={tuiValue} options={permissionOptions} onChange={updateTuiMode} ariaLabel={t("TUI default permission mode", "TUI 默认权限模式")} menuPreferredWidth={330} menuClassName="run-mode-menu" />
-            <small>{t("Used by the interactive REPL and terminal interface when no mode option is provided.", "交互式 REPL / 终端界面未传模式参数时使用。")}</small>
-          </div>
-          <div className="settings-field">
-            <span>{t("CLI default mode", "CLI 默认模式")}</span>
-            <Select value={cliValue} options={permissionOptions} onChange={updateCliMode} ariaLabel={t("CLI default permission mode", "CLI 默认权限模式")} menuPreferredWidth={330} menuClassName="run-mode-menu" />
-            <small>{t("Used by one-shot commands such as ask and tool when mode flags are omitted.", "ask / tool 等一次性命令未传模式参数时使用。")}</small>
-          </div>
-        </div>
-      </SettingsGroup>
-      <SettingsGroup title={t("Auto audit model", "自动审核模型")} description={t("Used only in Auto audit mode. Leave empty to reuse the current session model.", "仅自动审核模式使用。留空则沿用当前会话模型。")}>
-        <div className="settings-form-grid">
-          <label className="settings-field full">
-            <span>{t("Provider / model", "供应商 / 模型")}</span>
-            <Select
-              value={autoAuditValue}
-              options={autoAuditOptions}
-              onChange={updateAutoAuditModel}
-              ariaLabel={t("Auto audit model", "自动审核模型")}
-              menuPreferredWidth={360}
-              menuMinimumWidth={280}
-            />
-            <small>{config.jev?.audit?.enabled
-              ? t("Jev audit is enabled under Settings > Jev, so this model is not used.", "已在“设置 > Jev”开启 Jev 审核，此模型不会被使用。")
-              : t("An empty value follows the current conversation model.", "留空时自动跟随当前会话模型。")}</small>
-          </label>
-        </div>
-      </SettingsGroup>
-      <SettingsGroup title={t("Session title", "会话标题")} description={t("Automatically name a new session once after the first reply. Manual renames are kept.", "新建会话在首次回复后自动命名一次；手动重命名后不再覆盖。")}>
-        <div className="settings-form-grid">
-          <label className="settings-toggle-field">
-            <span>
-              <strong>{t("Auto title on first turn", "首轮自动标题")}</strong>
-              <small>{t(
-                "Generate one title after the first assistant reply.",
-                "首次助手回复后生成一次会话标题。"
-              )}</small>
-            </span>
-            <input
-              type="checkbox"
-              checked={autoTitleEnabled}
-              onChange={(event) => patchSession({ auto_title_enabled: event.target.checked })}
-            />
-          </label>
-          <label className="settings-field full">
-            <span>{t("Title model", "标题模型")}</span>
-            <Select
-              value={autoTitleValue}
-              options={[
-                {
-                  value: SESSION_MODEL_VALUE,
-                  label: t("Session model", "会话模型"),
-                  description: t("Reuse the conversation model for title summarization.", "标题总结复用当前会话模型。")
-                },
-                ...buildChatModelChoices(config).map((choice) => modelSelectOption(
-                  choice,
-                  encodeModelChoice(choice.providerId, choice.model),
-                  t("Always use this model for session titles", "始终使用该模型生成会话标题")
-                ))
-              ]}
-              onChange={updateAutoTitleModel}
-              ariaLabel={t("Title model", "标题模型")}
-              disabled={!autoTitleEnabled}
-              menuPreferredWidth={360}
-              menuMinimumWidth={280}
-            />
-            <small>{t("Leave empty to reuse the current conversation model.", "留空则沿用当前会话模型。")}</small>
-          </label>
-        </div>
-      </SettingsGroup>
-    </>
+    <SettingsPanel title={t("Default permissions", "默认权限")} description={t("TUI and CLI can use separate modes; command-line options can override them for a single run.", "TUI 与 CLI 可分别配置默认权限；命令行参数可临时覆盖。")}>
+      <FieldGrid>
+        <SettingsField label={t("TUI default mode", "TUI 默认模式")} hint={t("Used by the interactive terminal when no mode is specified.", "交互式终端未指定模式时使用。")} anchor="runtime.permission.tui_mode" configKey="permission.tui_mode" size="md">
+          <SkSelect value={tuiMode} options={options} onChange={updateTuiMode} menuPreferredWidth={330} menuClassName="run-mode-menu" />
+        </SettingsField>
+        <SettingsField label={t("CLI default mode", "CLI 默认模式")} hint={t("Used by one-shot ask and tool commands when no mode is specified.", "ask、tool 等单次命令未指定模式时使用。")} anchor="runtime.permission.cli_mode" configKey="permission.cli_mode" size="md">
+          <SkSelect value={cliMode} options={options} onChange={(mode) => update({ tui_mode: tuiMode, cli_mode: mode })} menuPreferredWidth={330} menuClassName="run-mode-menu" />
+        </SettingsField>
+        <SettingsField label={t("Auto audit model", "自动审核模型")} hint={config.jev?.audit?.enabled ? t("Jev audit is enabled, so this model is not used.", "已启用 Jev 审核，此模型不会用于审核。") : t("Used in Auto audit mode. Leave empty to follow the current conversation.", "自动审核模式使用；留空则跟随当前会话模型。")} anchor="runtime.permission.auto_audit_model" configKey="permission.auto_audit_model">
+          <ModelChoiceSelect config={config} providerId={permission?.auto_audit_provider_id} model={permission?.auto_audit_model} inheritLabel={t("Session model", "会话模型")} onChange={(providerId, model) => update({ auto_audit_provider_id: providerId || undefined, auto_audit_model: model || undefined })} />
+        </SettingsField>
+      </FieldGrid>
+    </SettingsPanel>
   );
-}
-
-/**
- * 编码供应商与模型为选择器值。
- *
- * @param providerId 供应商 id
- * @param model 模型 id
- * @returns 选择器内部编码
- */
-function encodeModelChoice(providerId: string, model: string): string {
-  return `${providerId}\u0000${model}`;
 }

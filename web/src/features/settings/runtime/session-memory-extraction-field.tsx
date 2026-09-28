@@ -1,5 +1,5 @@
 import type { AppConfig } from "../../../api/contracts";
-import { Select } from "../../../shared/ui/select/select";
+import { SettingsField, SkSelect } from "../kit";
 import { buildChatModelChoices } from "../../chat/chat-model-options";
 import { useI18n } from "../../i18n/use-i18n";
 import { modelSelectOption } from "../model-select-option";
@@ -69,9 +69,8 @@ export function MemoryExtractionModelField({ config, onConfigChange }: MemoryExt
   };
 
   return (
-    <label className="settings-field">
-      <span>{t("Session memory extraction model", "会话记忆点提取模型")}</span>
-      <Select
+    <SettingsField label={t("Session memory extraction model", "会话记忆点提取模型")} configKey="plugins.memory.extraction_model" anchor="runtime.memory.extraction_model" hint={t("An empty value follows the current conversation model", "留空时自动跟随当前会话模型")}>
+      <SkSelect
         value={current}
         options={options}
         ariaLabel={t("Choose session memory extraction model", "选择会话记忆提取模型")}
@@ -79,8 +78,7 @@ export function MemoryExtractionModelField({ config, onConfigChange }: MemoryExt
         menuMinimumWidth={280}
         onChange={update}
       />
-      <small>{t("An empty value follows the current conversation model", "留空时自动跟随当前会话模型")}</small>
-    </label>
+    </SettingsField>
   );
 }
 

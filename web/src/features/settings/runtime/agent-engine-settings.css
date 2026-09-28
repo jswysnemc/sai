@@ -1,56 +1,6 @@
-/*
- * 对话内核设置
- *
- * 内核配置与运行能力分区排列，保持设置页原有的信息密度。
- */
-
+/* 【Web 设置】【对话内核】连接字段与能力面板的紧凑间距 */
 .agent-engine-settings {
   display: grid;
-  gap: var(--space-2xl);
+  gap: 0.75rem;
   min-width: 0;
-}
-
-.agent-engine-warning {
-  display: grid;
-  gap: var(--space-sm);
-  padding: var(--space-md) var(--space-lg);
-  border: 1px solid color-mix(in srgb, var(--warning) 32%, var(--line));
-  border-radius: var(--radius-2);
-  background: color-mix(in srgb, var(--warning) 6%, transparent);
-}
-
-.agent-engine-warning-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  color: var(--warning);
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.agent-engine-warning-head svg {
-  flex: 0 0 auto;
-}
-
-/* 停用项按两列排布：条目短，单列会拉出一条过长的空白 */
-.agent-engine-warning ul {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
-  gap:var(--space-2xs) var(--space-lg);
-  margin: 0;
-  padding-left: var(--space-2xl);
-  color: var(--ink);
-  font-size: var(--text-xs);
-}
-
-.agent-engine-warning small {
-  color: var(--ink-soft);
-  font-size: var(--text-xs);
-  line-height: 1.5;
-}
-
-@media (max-width: 48rem) {
-  .agent-engine-settings .settings-form-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }

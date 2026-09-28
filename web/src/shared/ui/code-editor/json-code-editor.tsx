@@ -5,12 +5,18 @@ import { isDarkTheme, useTheme } from "../../../features/theme/theme";
 import { configureMonacoEnvironment } from "../../../features/workspace/monaco-environment";
 import "./json-code-editor.css";
 import { useI18n } from "../../../features/i18n/use-i18n";
+import { Button } from "../button/button";
+
+/** 编辑器对外提供的错误位置。 */
+export type JsonEditorDiagnostic = { message: string; line: number; column: number };
 
 type JsonCodeEditorProps = {
   value: string;
   height?: number | string;
   ariaLabel?: string;
   onChange: (value: string) => void;
+  onDiagnostics?: (diagnostics: JsonEditorDiagnostic[]) => void;
+  reveal?: { line: number; column: number; request: number };
 };
 
 /**
@@ -19,7 +25,7 @@ type JsonCodeEditorProps = {
  * @param props JSON 文本、高度和更新回调
  * @returns Monaco JSON 编辑器
  */
-export function JsonCodeEditor({ value, height = 420, ariaLabel, onChange }: JsonCodeEditorProps) {
+export function JsonCodeEditor({ value, height = 420, ariaLabel, onChange, onDiagnostics, reveal }: JsonCodeEditorProps) {
   const { t } = useI18n();
   const resolvedAriaLabel = ariaLabel ?? t("JSON editor", "JSON 编辑器");
   const { theme } = useTheme();
@@ -38,11 +44,18 @@ export function JsonCodeEditor({ value, height = 420, ariaLabel, onChange }: Jso
   }, []);
 
   const dark = isDarkTheme(theme);
+  useEffect(() => {
+    if (!editor || !reveal) return;
+    editor.setPosition({ lineNumber: reveal.line, column: reveal.column });
+    editor.revealLineInCenter(reveal.line);
+    editor.focus();
+  }, [editor, reveal]);
+
   return (
     <div className="json-code-editor" aria-label={resolvedAriaLabel}>
-      <header><span><Braces size={14} />JSON</span><button type="button" onClick={() => void editor?.getAction("editor.action.formatDocument")?.run()} disabled={!editor}><WandSparkles size={14} />{t("Format", "格式化")}</button></header>
+      <header><span><Braces size={14} />JSON</span><Button variant="ghost" size="small" onClick={() => void editor?.getAction("editor.action.formatDocument")?.run()} disabled={!editor}><WandSparkles size={14} />{t("Format", "格式化")}</Button></header>
       <div className="json-editor-surface" style={{ height }}>
-        {ready ? <Editor language="json" value={value} theme={dark ? "vs-dark" : "light"} onChange={(next) => onChange(next ?? "")} onMount={(instance) => setEditor(instance)} options={{ automaticLayout: true, minimap: { enabled: false }, fontFamily: "Fira Code", fontSize: 12, lineHeight: 20, scrollBeyondLastLine: false, folding: true, bracketPairColorization: { enabled: true }, formatOnPaste: true, padding: { top: 10, bottom: 10 }, ariaLabel: resolvedAriaLabel }} /> : <div className="editor-state">{t("Loading JSON editor", "加载 JSON 编辑器")}</div>}
+        {ready ? <Editor language="json" value={value} theme={dark ? "vs-dark" : "light"} onChange={(next) => onChange(next ?? "")} onMount={(instance) => setEditor(instance)} onValidate={(markers) => onDiagnostics?.(markers.filter((marker) => marker.severity >= 8).map((marker) => ({ message: marker.message, line: marker.startLineNumber, column: marker.startColumn })))} options={{ automaticLayout: true, minimap: { enabled: false }, fontFamily: "Fira Code", fontSize: 12, lineHeight: 20, scrollBeyondLastLine: false, folding: true, bracketPairColorization: { enabled: true }, formatOnPaste: true, padding: { top: 10, bottom: 10 }, ariaLabel: resolvedAriaLabel }} /> : <div className="editor-state">{t("Loading JSON editor", "加载 JSON 编辑器")}</div>}
       </div>
     </div>
   );

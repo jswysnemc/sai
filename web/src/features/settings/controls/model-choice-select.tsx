@@ -9,6 +9,7 @@ type ModelChoiceSelectProps = {
   config: AppConfig;
   providerId?: string | null;
   model?: string | null;
+  disabled?: boolean;
   /** 「跟随当前模型」选项的名称 */
   inheritLabel: string;
   /** 「跟随当前模型」选项的说明 */
@@ -30,6 +31,7 @@ export function ModelChoiceSelect({
   config,
   providerId,
   model,
+  disabled,
   inheritLabel,
   inheritDescription,
   optionDescription,
@@ -45,6 +47,7 @@ export function ModelChoiceSelect({
   ], [config, inheritDescription, inheritLabel, optionDescription]);
   return (
     <SkSelect
+      disabled={disabled}
       value={encodeModelChoice(providerId, model)}
       options={options}
       menuPreferredWidth={360}

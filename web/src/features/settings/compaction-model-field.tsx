@@ -1,5 +1,5 @@
 import type { AppConfig } from "../../api/contracts";
-import { Select } from "../../shared/ui/select/select";
+import { SettingsField, SkSelect } from "./kit";
 import { buildChatModelChoices } from "../chat/chat-model-options";
 import { useI18n } from "../i18n/use-i18n";
 import { modelSelectOption } from "./model-select-option";
@@ -50,9 +50,8 @@ export function CompactionModelField({ config, onConfigChange }: CompactionModel
   };
 
   return (
-    <label className="settings-field">
-      <span>{t("Compaction model", "压缩模型")}</span>
-      <Select
+    <SettingsField label={t("Compaction model", "压缩模型")} configKey="context.compaction_model" anchor="runtime.context.compaction_model" hint={t("An empty value follows the current conversation model", "留空时自动跟随当前会话模型")}>
+      <SkSelect
         value={current}
         options={options}
         ariaLabel={t("Choose context compaction model", "选择上下文压缩模型")}
@@ -60,8 +59,7 @@ export function CompactionModelField({ config, onConfigChange }: CompactionModel
         menuMinimumWidth={280}
         onChange={update}
       />
-      <small>{t("An empty value follows the current conversation model", "留空时自动跟随当前会话模型")}</small>
-    </label>
+    </SettingsField>
   );
 }
 

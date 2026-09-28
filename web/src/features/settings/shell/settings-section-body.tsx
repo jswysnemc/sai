@@ -169,8 +169,9 @@ function renderAppConfigSection(
     case "advanced":
       return (
         <AdvancedSettingsSection
-          config={config}
-          onConfigChange={settings.updateConfig}
+          raw={settings.rawJson}
+          parseError={settings.jsonError}
+          onChange={settings.updateJson}
         />
       );
     default:

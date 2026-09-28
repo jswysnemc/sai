@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import type { AppConfig } from "../../api/contracts";
 import { api } from "../../api/client";
-import { Select } from "../../shared/ui/select/select";
+import { ChoicePills, SettingsField, SkTextInput, StatusBadge, InlineNotice } from "./kit";
 import { useI18n } from "../i18n/use-i18n";
 import "./rtk-filter-settings.css";
 
@@ -97,42 +97,21 @@ export function RtkFilterSettings({ config, onConfigChange }: RtkFilterSettingsP
   return (
     <div className="rtk-filter-settings">
       <div className="rtk-filter-status">
-        {status.isLoading ? (
-          <span className="rtk-status-badge unknown">{t("Detecting rtk...", "正在探测 rtk...")}</span>
-        ) : available ? (
-          <span className="rtk-status-badge ok">{t("rtk detected", "已检测到 rtk")}</span>
-        ) : (
-          <span className="rtk-status-badge missing">{t("rtk not installed", "未检测到 rtk")}</span>
-        )}
-        {available === false && (
-          <span className="rtk-status-note">
-            {t(
-              "Install rtk and make it available on PATH, otherwise auto/force modes have no effect.",
-              "安装 rtk 并确保在 PATH 中可用，否则自动/强制档位不会生效。"
-            )}
-          </span>
-        )}
+        <StatusBadge tone={status.isError ? "danger" : available ? "success" : "neutral"} dot>
+          {status.isLoading ? t("Detecting rtk…", "正在探测 rtk…") : status.isError ? t("Detection failed", "探测失败") : available ? t("rtk detected", "已检测到 rtk") : t("rtk not installed", "未检测到 rtk")}
+        </StatusBadge>
+        {status.isError && <button type="button" className="settings-secondary" onClick={() => void status.refetch()}>{t("Retry", "重试")}</button>}
       </div>
-      <div className="settings-field">
-        <span>{t("Filter mode", "过滤档位")}</span>
-        <Select
+      {available === false && <InlineNotice>{t("Install rtk and make it available on PATH before enabling the filter.", "安装 rtk 并将其加入 PATH 后即可启用过滤器。")}</InlineNotice>}
+      <SettingsField label={t("Filter mode", "过滤档位")} configKey="tools.command_filter" anchor="runtime.tools.command_filter" hint={t("Compress command output before it enters the context; commands with pipes or redirects stay unchanged.", "压缩进入上下文的命令输出；含管道或重定向的命令保持原样。")}>
+        <ChoicePills
           value={mode}
           options={modeOptions}
           onChange={(value) => updateTools({ command_filter: value })}
           ariaLabel={t("Command output filter mode", "命令输出过滤器档位")}
         />
-        <small>{t(
-          "Commands are rewritten to \"rtk <command>\" to compress output entering the context. Compound commands with pipes or redirects are always left as-is.",
-          "命令会被改写为 \"rtk <命令>\"，压缩进入上下文的输出。含管道或重定向的复合命令始终保持原样。"
-        )}</small>
-      </div>
-      <div className="settings-field full">
-        <span>
-          {t(
-            `Proxied commands (${proxyCommands.length - denylist.filter((item) => proxyCommands.includes(item)).length}/${proxyCommands.length})`,
-            `已代理的命令（${proxyCommands.length - denylist.filter((item) => proxyCommands.includes(item)).length}/${proxyCommands.length}）`
-          )}
-        </span>
+      </SettingsField>
+      <SettingsField label={t(`Proxied commands (${proxyCommands.filter((name) => !denylist.includes(name)).length}/${proxyCommands.length})`, `已代理的命令（${proxyCommands.filter((name) => !denylist.includes(name)).length}/${proxyCommands.length}）`)} hint={t("Click a command to exclude or restore it. Interactive commands are never rewritten.", "点击命令即可排除或恢复代理；交互式命令保持原样。")}>
         {/* 点击标签即可排除或恢复某个命令，被排除的划掉标灰 */}
         <div className="rtk-command-tags">
           {proxyCommands.map((name) => {
@@ -155,16 +134,9 @@ export function RtkFilterSettings({ config, onConfigChange }: RtkFilterSettingsP
             </span>
           )}
         </div>
-        <small>
-          {t(
-            "Every command rtk supports is proxied by default. Click a tag to exclude it. Commands rtk does not support, compound commands with pipes or redirects, and interactive subcommands are never rewritten.",
-            "rtk 支持的命令默认全部代理。点击标签可排除某一项。rtk 不支持的命令、含管道或重定向的复合命令、交互式子命令都不会被改写。"
-          )}
-        </small>
-      </div>
+      </SettingsField>
       {extraExcluded.length > 0 && (
-        <div className="settings-field full">
-          <span>{t("Excluded but not proxied by rtk", "已排除但 rtk 并不代理")}</span>
+        <SettingsField label={t("Excluded but not proxied by rtk", "已排除但 rtk 并不代理")} hint={t("These commands are outside rtk support. Click to remove the entries.", "这些命令不在 rtk 支持范围内，点击即可移除条目。")}>
           <div className="rtk-command-tags">
             {extraExcluded.map((name) => (
               <button
@@ -178,24 +150,17 @@ export function RtkFilterSettings({ config, onConfigChange }: RtkFilterSettingsP
               </button>
             ))}
           </div>
-          <small>
-            {t(
-              "These are already outside rtk's reach, so the entries have no effect. Click to remove them.",
-              "这些命令本就不在 rtk 的代理范围内，条目不起作用。点击可移除。"
-            )}
-          </small>
-        </div>
+        </SettingsField>
       )}
-      <div className="settings-field full">
-        <span>{t("Exclude a command", "排除命令")}</span>
-        <div className="rtk-denylist-input">
-          <input
-            type="text"
+      <SettingsField label={t("Exclude a command", "排除命令")} configKey="tools.command_filter_denylist" anchor="runtime.tools.command_filter_denylist">
+        <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+          <SkTextInput
+            className="min-w-0 flex-1"
             value={draftItem}
             placeholder={t("Command name, e.g. git", "命令名，如 git")}
             spellCheck={false}
             autoComplete="off"
-            onChange={(event) => setDraftItem(event.target.value)}
+            onChange={setDraftItem}
             onKeyDown={(event) => {
               if (event.key !== "Enter") return;
               event.preventDefault();
@@ -215,7 +180,7 @@ export function RtkFilterSettings({ config, onConfigChange }: RtkFilterSettingsP
             </button>
           )}
         </div>
-      </div>
+      </SettingsField>
     </div>
   );
 }

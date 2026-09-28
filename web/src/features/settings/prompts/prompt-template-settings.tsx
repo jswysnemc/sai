@@ -1,8 +1,10 @@
+import { useState } from "react";
+import { PromptResetPreview } from "./prompt-reset-preview";
 import { RotateCcw } from "../../../shared/ui/icons";
 import type { PromptTemplateConfig, PromptTemplatesConfig } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
-import { EditorHeader, SettingsGroup } from "../editor-layout";
+import { FieldGrid, SettingsField, SettingsPanel, SkTextArea } from "../kit";
 import {
   DEFAULT_PROMPT_TEMPLATES,
   PROMPT_TEMPLATE_DEFINITIONS,
@@ -23,6 +25,7 @@ type PromptTemplateSettingsProps = {
  */
 export function PromptTemplateSettings({ templates, onChange }: PromptTemplateSettingsProps) {
   const { t } = useI18n();
+  const [resetId, setResetId] = useState<PromptTemplateId | null>(null);
 
   /**
    * 更新指定任务的一段提示词。
@@ -53,24 +56,16 @@ export function PromptTemplateSettings({ templates, onChange }: PromptTemplateSe
   };
 
   return (
-    <section className="settings-editor prompt-template-settings">
-      <EditorHeader
-        kicker={t("Prompts", "提示词")}
-        title={t("Internal task prompts", "内部任务提示词")}
-        description={t(
-          "Edit the prompts used for commit messages, session titles, and context compaction. Required variables must remain exactly once.",
-          "编辑提交说明、会话标题和上下文压缩提示词；必要变量必须各保留一次。"
-        )}
-      />
+    <>
       {PROMPT_TEMPLATE_DEFINITIONS.map((definition) => (
-        <SettingsGroup
+        <SettingsPanel
           key={definition.id}
           title={t(definition.labelEn, definition.labelZh)}
           description={t(definition.descriptionEn, definition.descriptionZh)}
           actions={(
             <Button
               className="prompt-template-reset"
-              onClick={() => resetTemplate(definition.id)}
+              onClick={() => setResetId(definition.id)}
               title={t("Restore this prompt", "恢复该提示词")}
             >
               <RotateCcw size={14} />
@@ -78,26 +73,22 @@ export function PromptTemplateSettings({ templates, onChange }: PromptTemplateSe
             </Button>
           )}
         >
-          <div className="prompt-template-grid">
-            <label className="settings-field prompt-template-field">
-              <span>{t("System instruction", "系统指令")}</span>
-              <textarea
+          <FieldGrid>
+            <SettingsField label={t("System instruction", "系统指令")} anchor={`prompts.${definition.id}.system`} configKey={`prompt.templates.${definition.id}.system`} hint={t("Defines the task, output format, and constraints.", "定义任务、输出格式和约束。")}>
+              <SkTextArea mono rows={6}
                 value={templates[definition.id].system}
-                onChange={(event) => updateTemplate(definition.id, "system", event.target.value)}
+                onChange={(value) => updateTemplate(definition.id, "system", value)}
                 spellCheck={false}
               />
-              <small>{t("Defines the task, output format, and constraints.", "定义任务、输出格式和约束。")}</small>
-            </label>
-            <label className="settings-field prompt-template-field">
-              <span>{t("Input template", "输入模板")}</span>
-              <textarea
+            </SettingsField>
+            <SettingsField label={t("Input template", "输入模板")} anchor={`prompts.${definition.id}.user`} configKey={`prompt.templates.${definition.id}.user`} hint={t("Required variables must appear exactly once.", "必要变量必须各保留一次。")}>
+              <SkTextArea mono rows={6}
                 value={templates[definition.id].user}
-                onChange={(event) => updateTemplate(definition.id, "user", event.target.value)}
+                onChange={(value) => updateTemplate(definition.id, "user", value)}
                 spellCheck={false}
               />
-              <small>{t("Variables are replaced immediately before the model request.", "变量会在模型请求前完成替换。")}</small>
-            </label>
-          </div>
+            </SettingsField>
+          </FieldGrid>
           <div className="prompt-template-variables" aria-label={t("Available variables", "可用变量")}>
             <span>{t("Required variables", "必要变量")}</span>
             <div>
@@ -108,8 +99,13 @@ export function PromptTemplateSettings({ templates, onChange }: PromptTemplateSe
               ))}
             </div>
           </div>
-        </SettingsGroup>
+        </SettingsPanel>
       ))}
-    </section>
+      {resetId && <PromptResetPreview
+        name={t(PROMPT_TEMPLATE_DEFINITIONS.find((item) => item.id === resetId)!.labelEn, PROMPT_TEMPLATE_DEFINITIONS.find((item) => item.id === resetId)!.labelZh)}
+        current={templates[resetId]} defaults={DEFAULT_PROMPT_TEMPLATES[resetId]} onClose={() => setResetId(null)}
+        onConfirm={() => { resetTemplate(resetId); setResetId(null); }}
+      />}
+    </>
   );
 }
