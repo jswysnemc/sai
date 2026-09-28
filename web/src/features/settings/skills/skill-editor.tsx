@@ -6,7 +6,7 @@ import { MarkdownEditor } from "../../../shared/ui/markdown-editor/markdown-edit
 import { MarkdownModeToggle } from "../../../shared/ui/markdown-editor/markdown-mode-toggle";
 import { useMarkdownMode } from "../../../shared/ui/markdown-editor/use-markdown-mode";
 import { isDarkTheme, useTheme } from "../../theme/theme";
-import { DetailHeader, InlineSwitch, SettingsField, SkTextInput } from "../kit";
+import { DetailHeader, EmptyGuide, InlineSwitch, SettingsField, SkTextInput } from "../kit";
 import { useI18n } from "../../i18n/use-i18n";
 import { composeSkillDocument, parseSkillDocument } from "./skill-document";
 
@@ -75,10 +75,7 @@ export function SkillEditor(props: SkillEditorProps) {
 
       {error && <div className="settings-inline-error">{error}</div>}
       {!creating && !skill ? (
-        <div className="settings-empty">
-          <BookOpen size={20} />
-          <p>{t("Scan or select a Skill to manage it.", "扫描或选择一个 Skill 进行管理。")}</p>
-        </div>
+        <EmptyGuide icon={<BookOpen size={16} />} title={t("Scan or select a Skill to manage it.", "扫描或选择一个 Skill 进行管理。")} />
       ) : (
         <>
           {creating && (

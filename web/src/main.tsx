@@ -18,7 +18,7 @@ import "./shared/styles/surfaces.css";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { lazy, StrictMode, Suspense, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { queryClient } from "./app/query-client";
 import { bootstrapSession, fetchAuthMode, hasActiveSession } from "./api/client";
 import { PasswordLogin } from "./features/auth/password-login";
@@ -29,6 +29,7 @@ import { ErrorBoundary } from "./shared/ui/error-boundary/error-boundary";
 import { LoadingPanel } from "./shared/ui/loading-panel";
 
 const App = lazy(() => import("./app/app").then((module) => ({ default: module.App })));
+const router = createBrowserRouter([{ path: "*", element: <App /> }]);
 
 /**
  * 按认证状态在登录页与工作台之间切换。
@@ -42,9 +43,7 @@ function Root({ authenticated }: { authenticated: boolean }) {
   return (
     <ErrorBoundary>
       <Suspense fallback={<LoadingPanel />}>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
+        <RouterProvider router={router} />
       </Suspense>
     </ErrorBoundary>
   );

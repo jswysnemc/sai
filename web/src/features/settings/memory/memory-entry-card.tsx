@@ -1,3 +1,4 @@
+import { Button } from "../../../shared/ui/button/button";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, Link2, Pencil, Trash2, X } from "../../../shared/ui/icons";
 import { useEffect, useRef, useState } from "react";
@@ -89,7 +90,7 @@ export function MemoryEntryCard({
   return (
     <article ref={rootRef} className="memory-item" data-type={entry.type}>
       <header className="memory-item-head">
-        <button
+        <Button
           type="button"
           className="memory-item-toggle"
           onClick={() => setExpanded((value) => !value)}
@@ -97,7 +98,7 @@ export function MemoryEntryCard({
         >
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           <code>{entry.name}</code>
-        </button>
+        </Button>
         <span className="memory-type-badge" data-type={entry.type}>
           {t(TYPE_LABELS[entry.type].en, TYPE_LABELS[entry.type].zh)}
         </span>
@@ -105,18 +106,18 @@ export function MemoryEntryCard({
           {t(SCOPE_LABELS[entry.scope].en, SCOPE_LABELS[entry.scope].zh)}
         </span>
         {expanded && !editing && (
-          <button
+          <Button
             type="button"
             onClick={() => setEditing(true)}
             aria-label={t("Edit memory", "编辑记忆")}
             title={t("Edit in place; saving the same identifier updates it", "就地编辑；保存同名标识即更新")}
           >
             <Pencil size={14} />
-          </button>
+          </Button>
         )}
-        <button type="button" onClick={() => onRemove(entry)} aria-label={t("Delete memory", "删除记忆")}>
+        <Button type="button" onClick={() => onRemove(entry)} aria-label={t("Delete memory", "删除记忆")}>
           <Trash2 size={14} />
-        </button>
+        </Button>
       </header>
       <p>{entry.description}</p>
       {expanded && (
@@ -137,7 +138,7 @@ export function MemoryEntryCard({
                 <div className="memory-item-links">
                   <Link2 size={14} />
                   {detail.data.links?.map((link) => (
-                    <button
+                    <Button
                       key={link}
                       type="button"
                       className="memory-link-chip"
@@ -145,7 +146,7 @@ export function MemoryEntryCard({
                       title={t("Jump to this memory", "跳转到这条记忆")}
                     >
                       [[{link}]]
-                    </button>
+                    </Button>
                   ))}
                 </div>
               )}
@@ -250,10 +251,10 @@ function MemoryEditForm({
         </div>
       )}
       <div className="memory-edit-actions">
-        <button type="button" className="settings-secondary" onClick={onCancel} disabled={pending}>
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={pending}>
           <X size={14} /> {t("Cancel", "取消")}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           disabled={pending || nextContent.trim().length === 0 || nextDescription.trim().length === 0}
           onClick={() =>
@@ -269,7 +270,7 @@ function MemoryEditForm({
           }
         >
           <Check size={14} /> {pending ? t("Saving", "保存中") : t("Save changes", "保存修改")}
-        </button>
+        </Button>
       </div>
       {nextDescription.trim().length === 0 && (
         <div className="memory-rationale-hint">

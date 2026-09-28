@@ -1,0 +1,113 @@
+/* 仅列表滚动；搜索条固定在 body 顶部 */
+.ui-modal-body:has(.model-import-dialog) {
+  display: grid;
+  overflow: hidden;
+  padding: 0;
+}
+
+.model-import-dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: min(29.375rem, 70vh);
+  height: min(35rem, calc(100vh - 12.5rem));
+  max-height: min(35rem, calc(100vh - 12.5rem));
+  overflow: hidden;
+}
+
+.model-import-search {
+  display: grid;
+  grid-template-columns: 1.125rem minmax(0, 1fr);
+  align-items: center;
+  gap:var(--space-xs);
+  flex-shrink: 0;
+  padding:var(--space-sm) var(--space-xl);
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink-soft);
+}
+
+.model-import-search:focus-within {
+  color: var(--ink);
+}
+
+.model-import-search:focus-within input {
+}
+
+.model-import-search input {
+  width: 100%;
+  min-height: 1.875rem;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size:var(--text-base);
+}
+
+.model-import-list {
+  display: grid;
+  align-content: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap:var(--space-2xs);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding:var(--space-sm);
+}
+
+.model-import-list button {
+  display: grid;
+  grid-template-columns: 1.125rem minmax(0, 1fr) 1.125rem;
+  align-items: center;
+  gap:var(--space-xs);
+  min-height: 3rem;
+  padding:var(--space-xs) var(--space-sm);
+  border: 1px solid var(--line);
+  border-radius:var(--radius-3);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.model-import-list button:hover:not(:disabled),
+.model-import-list button.active {
+  border-color: var(--line-strong);
+  background: var(--paper-deep);
+}
+
+.model-import-list button:disabled { opacity: 0.52; }
+.model-import-list button > span { display: grid; min-width: 0; gap:var(--space-3xs); }
+
+.model-import-list strong {
+  font:500 var(--text-sm) var(--font-code);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.model-import-list small { color: var(--ink-soft); font-size:var(--text-xs); }
+.model-import-list svg { color: var(--signal); }
+
+.model-import-empty {
+  grid-column: 1 / -1;
+  display: grid;
+  min-height: 3rem;
+  place-content: center;
+  color: var(--ink-soft);
+  font-size:var(--text-sm);
+}
+
+.model-import-count {
+  margin-right: auto;
+  color: var(--ink-soft);
+  font-size:var(--text-sm);
+}
+
+/* ---------- 响应式 ---------- */
+
+@media (max-width: 48rem) {
+  .model-import-list { grid-template-columns: 1fr; }
+  .model-import-dialog {
+    min-height: min(26.25rem, 64vh);
+    height: min(30rem, calc(100vh - 11.25rem));
+    max-height: min(30rem, calc(100vh - 11.25rem));
+  }
+}

@@ -113,7 +113,7 @@ export function UsageStatsSection({ subview }: { subview?: string }) {
           <UsageLogsTable logs={data.logs} t={t} locale={locale} />
           <div className="usage-pager">
             <Button
-              className="settings-secondary"
+              variant="secondary"
               disabled={page <= 0}
               onClick={() => setPage((value) => Math.max(0, value - 1))}
               aria-label={t("Previous page", "上一页")}
@@ -122,7 +122,7 @@ export function UsageStatsSection({ subview }: { subview?: string }) {
             </Button>
             <span>{page + 1} / {totalPages} · {data.total_logs}</span>
             <Button
-              className="settings-secondary"
+              variant="secondary"
               disabled={page + 1 >= totalPages}
               onClick={() => setPage((value) => value + 1)}
               aria-label={t("Next page", "下一页")}

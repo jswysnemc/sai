@@ -46,7 +46,7 @@ export function JevConnectionStatus({ dirty }: JevConnectionStatusProps) {
     <div className="jev-status">
       <div className="jev-status-row">
         <StatusSummary status={status.data} loading={status.isLoading} />
-        <Button className="settings-secondary" disabled={probing || !status.data?.key_ready} onClick={() => void probe()}>
+        <Button variant="secondary" disabled={probing || !status.data?.key_ready} onClick={() => void probe()}>
           {probing ? <Loader2 size={14} className="spin" /> : <PlugZap size={14} />}
           {probing ? t("Testing", "测试中") : t("Test", "测试")}
         </Button>

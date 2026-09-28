@@ -1,3 +1,4 @@
+import { useSettingsDraft } from "../shell/settings-draft-context";
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useSettingsItem } from "../shell/use-settings-item";
@@ -47,11 +48,11 @@ export function useMcpConfig() {
     error: document.saveError,
     isPending: document.saving,
     mutateAsync: async () => {
-      const saved = await document.saveNow(mode === "json" ? parseMcpJson(raw) : undefined);
-      setRaw(JSON.stringify(saved.config, null, 2));
-      setParseError(null);
+      await document.saveNow(mode === "json" ? parseMcpJson(raw) : undefined);
     }
   };
+
+  useSettingsDraft({ scope: "/settings/mcp", dirty: document.dirty, saving: document.saving, discard: document.discard, save: save.mutateAsync });
 
   const scanTools = useMutation({
     mutationFn: (target: McpServerConfig) => api.config.scanMcpTools(target),

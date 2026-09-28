@@ -137,25 +137,6 @@
 
 .settings-main-content[data-layout="wide"] { max-width: none; }
 
-/* ---------- 旧版分区共用样式：分区迁移到 kit 后删除 ---------- */
-
-.settings-objects-layout {
-  display: grid;
-  grid-template-columns: 15rem minmax(0, 1fr);
-  align-items: stretch;
-  gap: 0;
-  min-height: calc(100dvh - 8rem);
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-4);
-  background: var(--paper);
-}
-
-.settings-objects-layout > :not(.object-list) {
-  min-width: 0;
-  padding: var(--space-2xl);
-}
-
 .settings-error,
 .settings-state {
   margin-top: var(--space-2xl);
@@ -187,18 +168,6 @@
 .settings-inline-note a { color: var(--signal); text-decoration: none; }
 .settings-inline-note a:hover { text-decoration: underline; }
 
-.skills-settings-page {
-  display: grid;
-  gap: var(--space-2xl);
-}
-
-.runtime-groups {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  gap: var(--space-2xl) 0;
-}
-
 .sr-only {
   position: absolute;
   width: 1px;
@@ -215,14 +184,6 @@
 
 @media (max-width: 75rem) {
   .settings-main { padding-inline: var(--space-2xl); }
-  .settings-objects-layout { grid-template-columns: minmax(14rem, 16rem) minmax(0, 1fr); }
-}
-
-@media (max-width: 60rem) {
-  .settings-objects-layout {
-    grid-template-columns: 1fr;
-    min-height: 0;
-  }
 }
 
 /* 手机端：顶栏保持单行紧凑，分类导航降级为吸顶横向滚动页签 */

@@ -12,9 +12,12 @@
 | none | 独立接口或浏览器偏好 | 全局草稿有修改时仍显示 | 由分区管理 |
 
 - `useConfigDocument` 管理服务端快照、配置草稿与保存请求。
+  请求期间的新编辑保留为未保存草稿；同一文档不并行发起保存。
 - `useSettingsConfig` 组合供应商、网关和完整 JSON 编辑。非法 JSON 文本跨分区保留，
   禁止保存和保存快捷键，直到修正或放弃；结构化编辑会以新的配置重建 JSON 文本。
-- 顶栏提供保存、放弃及 `Ctrl/Cmd+S`；放弃与返回工作区使用共享确认弹窗。
+- 顶栏提供保存、放弃及 `Ctrl/Cmd+S`；快捷键优先保存当前独立文档。
+  路由守卫覆盖链接及浏览器前进、后退；全局草稿仅在离开设置时确认，
+  MCP 和 Skill 文档在即将卸载时确认，Skill 同路径切换对象也受保护。
 - `configKeys` 定义导航未保存标记所比较的配置路径。非法 JSON 单独标记高级分区。
 - 即时操作和独立文档保存不经过全局 AppConfig，保存说明来自分区元数据。
 
@@ -39,7 +42,7 @@
 | gateways | agentCapabilities | required | api.config；消息网关配置与运行操作 |
 | memory | agentCapabilities | optional | 记忆内容操作即时生效；配置字段通过顶栏保存 |
 | session-data | dataAndStats | none | 会话数据接口；查询与清理 |
-| usage | dataAndStats | none | 用量统计接口，只读 |
+| usage | dataAndStats | none | 用量统计查询；日志清空为确认后即时操作 |
 | advanced | dataAndStats | required | 全局 AppConfig JSON 草稿 |
 
 分组名称依次为“基础”“智能体能力”“数据与统计”。
@@ -56,8 +59,8 @@
   `context` 映射到 `tools`。
 - Jev 不再注册二级子页。
 - 用量子页：`overview`、`breakdown`、`logs`。
-  旧 `providers`、`models`、`sessions` 映射到 `breakdown`。
-- 地址归一化保留查询参数；对象选中项的 `item` 参数随对象分区迁移接入。
+  旧 `providers`、`models`、`sessions` 映射到 `breakdown`，并以 `view` 保留原维度。
+- 地址归一化保留查询参数；对象选择使用 `item`，Agent 详情页签和用量维度使用 `view`。
 
 ## 字段与布局
 
@@ -66,9 +69,9 @@
 - `configKey` 只作为字段提示与检索数据；说明文字可换行。
 - `form` 布局限宽，`wide` 布局用于对象列表和数据页。
 - `search/entries-*.ts` 按领域维护索引。`anchor` 必须匹配字段标识，
-  `focus` 查询参数触发滚动与短暂高亮。
-- 已接入第一批：运行时、Git、内部提示词、外观、高级 JSON。
-  其余分区与移动端搜索仍按 `.doc/status.md` 继续迁移和验收。
+  `focus` 查询参数触发滚动与短暂高亮；条件字段未显示时提供启用或选择提示。
+- 十九个分区均组合共享组件；旧布局、字段行、对象列表和补丁样式已删除。
+  移动端保留搜索输入，分类横向滚动，搜索结果纵向展示。
 
 ## 技能边界
 

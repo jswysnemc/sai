@@ -1,3 +1,5 @@
+import { SkTextInput } from "./kit";
+import { Button } from "../../shared/ui/button/button";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, Trash2 } from "../../shared/ui/icons";
 import { useI18n } from "../i18n/use-i18n";
@@ -69,6 +71,8 @@ export function KeyValueEditor({
     return seeded.length > 0 ? seeded : [{ id: nextRowId++, key: "", value: "" }];
   });
   // 记录上次同步给外部的快照，避免外部回写时覆盖正在编辑的空行
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
   const lastSyncedRef = useRef<string>(JSON.stringify(rowsToRecord(rows)));
 
   // 1. 外部 value 变化时（如保存后服务端回写），同步本地行
@@ -88,17 +92,15 @@ export function KeyValueEditor({
    * @param updater 行数组更新函数
    */
   const updateRows = useCallback((updater: (prev: Row[]) => Row[]) => {
-    setRows((prev) => {
-      const next = updater(prev);
-      const record = rowsToRecord(next);
-      const recordJson = JSON.stringify(record);
-      // 2. 仅在有效键值映射变化时通知父组件
-      if (recordJson !== lastSyncedRef.current) {
-        lastSyncedRef.current = recordJson;
-        onChange(record);
-      }
-      return next;
-    });
+    const next = updater(rowsRef.current);
+    rowsRef.current = next;
+    setRows(next);
+    const record = rowsToRecord(next);
+    const recordJson = JSON.stringify(record);
+    if (recordJson !== lastSyncedRef.current) {
+      lastSyncedRef.current = recordJson;
+      onChange(record);
+    }
   }, [onChange]);
 
   /**
@@ -137,39 +139,39 @@ export function KeyValueEditor({
         const canRemove = rows.length > 1 || row.key.trim() !== "" || row.value.trim() !== "";
         return (
           <div className="key-value-row" key={row.id}>
-            <input
+            <SkTextInput
               value={row.key}
-              onChange={(event) => handleFieldChange(row.id, "key", event.target.value)}
+              onChange={(text) => handleFieldChange(row.id, "key", text)}
               placeholder={keyPlaceholder ?? t("Key", "键")}
               spellCheck={false}
             />
-            <input
+            <SkTextInput
               value={row.value}
-              onChange={(event) => handleFieldChange(row.id, "value", event.target.value)}
+              onChange={(text) => handleFieldChange(row.id, "value", text)}
               placeholder={valuePlaceholder ?? t("Value", "值")}
               spellCheck={false}
             />
             {index === rows.length - 1 ? (
-              <button
+              <Button
                 type="button"
-                className="settings-secondary key-value-add"
+                variant="secondary" className="key-value-add"
                 aria-label={addLabel ?? t("Add entry", "添加条目")}
                 onClick={handleAdd}
               >
                 <Plus size={14} />
-              </button>
+              </Button>
             ) : (
               <span className="key-value-slot" />
             )}
             {canRemove ? (
-              <button
+              <Button
                 type="button"
-                className="settings-secondary"
+                variant="secondary"
                 aria-label={t("Remove entry", "删除条目")}
                 onClick={() => handleRemove(row.id)}
               >
                 <Trash2 size={14} />
-              </button>
+              </Button>
             ) : (
               <span className="key-value-slot" />
             )}

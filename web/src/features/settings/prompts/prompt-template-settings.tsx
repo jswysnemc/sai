@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { PromptResetPreview } from "./prompt-reset-preview";
 import { RotateCcw } from "../../../shared/ui/icons";
 import type { PromptTemplateConfig, PromptTemplatesConfig } from "../../../api/contracts";
@@ -26,6 +26,36 @@ type PromptTemplateSettingsProps = {
 export function PromptTemplateSettings({ templates, onChange }: PromptTemplateSettingsProps) {
   const { t } = useI18n();
   const [resetId, setResetId] = useState<PromptTemplateId | null>(null);
+  const inputs = useRef(new Map<string, HTMLTextAreaElement>());
+  const activeFields = useRef(new Map<PromptTemplateId, keyof PromptTemplateConfig>());
+
+  /**
+   * 【提示词】【变量插入】在最近编辑的位置插入缺少的变量，已有变量则定位并选中。
+   * @param id 模板标识
+   * @param name 变量名
+   * @returns 无返回值
+   */
+  const insertVariable = (id: PromptTemplateId, name: string) => {
+    const token = `{{${name}}}`;
+    const template = templates[id];
+    const existingField = (["system", "user"] as const).find((field) => template[field].includes(token));
+    const field = existingField ?? activeFields.current.get(id) ?? "user";
+    const input = inputs.current.get(`${id}.${field}`);
+    if (!input) return;
+    if (existingField) {
+      const start = template[field].indexOf(token);
+      input.focus();
+      input.setSelectionRange(start, start + token.length);
+      return;
+    }
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    updateTemplate(id, field, template[field].slice(0, start) + token + template[field].slice(end));
+    requestAnimationFrame(() => {
+      input.focus();
+      input.setSelectionRange(start + token.length, start + token.length);
+    });
+  };
 
   /**
    * 更新指定任务的一段提示词。
@@ -76,6 +106,8 @@ export function PromptTemplateSettings({ templates, onChange }: PromptTemplateSe
           <FieldGrid>
             <SettingsField label={t("System instruction", "系统指令")} anchor={`prompts.${definition.id}.system`} configKey={`prompt.templates.${definition.id}.system`} hint={t("Defines the task, output format, and constraints.", "定义任务、输出格式和约束。")}>
               <SkTextArea mono rows={6}
+                ref={(input) => { if (input) inputs.current.set(`${definition.id}.system`, input); else inputs.current.delete(`${definition.id}.system`); }}
+                onFocus={() => activeFields.current.set(definition.id, "system")}
                 value={templates[definition.id].system}
                 onChange={(value) => updateTemplate(definition.id, "system", value)}
                 spellCheck={false}
@@ -83,6 +115,8 @@ export function PromptTemplateSettings({ templates, onChange }: PromptTemplateSe
             </SettingsField>
             <SettingsField label={t("Input template", "输入模板")} anchor={`prompts.${definition.id}.user`} configKey={`prompt.templates.${definition.id}.user`} hint={t("Required variables must appear exactly once.", "必要变量必须各保留一次。")}>
               <SkTextArea mono rows={6}
+                ref={(input) => { if (input) inputs.current.set(`${definition.id}.user`, input); else inputs.current.delete(`${definition.id}.user`); }}
+                onFocus={() => activeFields.current.set(definition.id, "user")}
                 value={templates[definition.id].user}
                 onChange={(value) => updateTemplate(definition.id, "user", value)}
                 spellCheck={false}
@@ -90,12 +124,12 @@ export function PromptTemplateSettings({ templates, onChange }: PromptTemplateSe
             </SettingsField>
           </FieldGrid>
           <div className="prompt-template-variables" aria-label={t("Available variables", "可用变量")}>
-            <span>{t("Required variables", "必要变量")}</span>
+            <span>{t("Required variables · insert missing or locate existing", "必要变量 · 点击插入缺失变量或定位已有变量")}</span>
             <div>
               {definition.variables.map((variable) => (
-                <code key={variable.name} title={t(variable.descriptionEn, variable.descriptionZh)}>
+                <Button size="small" key={variable.name} title={t(variable.descriptionEn, variable.descriptionZh)} onClick={() => insertVariable(definition.id, variable.name)}>
                   {`{{${variable.name}}}`}
-                </code>
+                </Button>
               ))}
             </div>
           </div>

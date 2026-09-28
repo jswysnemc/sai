@@ -56,7 +56,7 @@ export function AgentSettingsSection({ config, onConfigChange }: AgentSettingsSe
       {!loading && error && (
         <div className="agent-settings-load-error">
           <div><strong>{t("Failed to load Agent capabilities", "Agent 能力加载失败")}</strong><small>{error.message}</small></div>
-          <Button className="settings-secondary" onClick={() => void local.refetch()}>
+          <Button variant="secondary" onClick={() => void local.refetch()}>
             <RefreshCw size={14} />{t("Reload", "重新加载")}
           </Button>
         </div>

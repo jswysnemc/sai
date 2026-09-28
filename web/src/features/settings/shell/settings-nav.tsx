@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { ArrowLeft, Search, X } from "../../../shared/ui/icons";
 import { filterSettingsSections, groupSettingsSections } from "../settings-registry";
@@ -15,8 +15,6 @@ type SettingsNavProps = {
   config?: AppConfig | null;
   /** 有未保存修改的分区 */
   dirtySections: ReadonlySet<SettingsSectionId>;
-  /** 返回主界面链接的点击处理，用于未保存修改确认 */
-  onExit: (event: MouseEvent<HTMLAnchorElement>, to: string) => void;
 };
 
 /**
@@ -27,23 +25,27 @@ type SettingsNavProps = {
  * @param props 当前分区、未保存分区与离开处理
  * @returns 侧栏导航；窄屏下为横向分类栏
  */
-export function SettingsNav({ activeSection, config, dirtySections, onExit }: SettingsNavProps) {
+export function SettingsNav({ activeSection, config, dirtySections }: SettingsNavProps) {
   const { t, locale } = useI18n();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const navigationRef = useRef<HTMLElement>(null);
+  const searching = query.trim().length > 0;
+
+  useEffect(() => {
+    if (window.matchMedia("(width < 48rem)").matches) setQuery("");
+  }, [activeSection]);
 
   useEffect(() => {
     const media = window.matchMedia("(width < 48rem)");
     let frame = 0;
     /**
-     * 在横向分类栏中显示当前分类，同时清空已隐藏搜索框中的筛选条件。
+     * 搜索结束后在横向分类栏中显示当前分类。
      *
      * @returns 无返回值
      */
     const revealSelection = () => {
-      if (!media.matches) return;
-      setQuery("");
+      if (!media.matches || searching) return;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => navigationRef.current?.querySelector("a.active")?.scrollIntoView({ block: "nearest", inline: "center" }));
     };
@@ -53,13 +55,12 @@ export function SettingsNav({ activeSection, config, dirtySections, onExit }: Se
       cancelAnimationFrame(frame);
       media.removeEventListener("change", revealSelection);
     };
-  }, [activeSection, locale]);
+  }, [activeSection, locale, searching]);
 
   // 1. 分区按关键字过滤后归组；字段结果单独排序
   const grouped = useMemo(() => groupSettingsSections(filterSettingsSections(query)), [query]);
   const searchIndex = useMemo(() => [...SETTINGS_SEARCH_INDEX, ...buildCliToolSearchEntries(config), ...buildCapabilitySearchEntries(config)], [config]);
   const fieldHits = useMemo(() => searchSettingsFields(query, locale, searchIndex), [locale, query, searchIndex]);
-  const searching = query.trim().length > 0;
 
   /**
    * 回车跳到第一个字段结果；没有字段结果时打开第一个分区。
@@ -84,7 +85,8 @@ export function SettingsNav({ activeSection, config, dirtySections, onExit }: Se
 
   return (
     <nav ref={navigationRef} className="settings-navigation" aria-label={t("Settings categories", "设置分类")}>
-      <Link to="/" className="settings-back" aria-label={t("Back to workspace", "返回主界面")} onClick={(event) => onExit(event, "/")}>
+      <div className="settings-nav-tools">
+      <Link to="/" className="settings-back" aria-label={t("Back to workspace", "返回主界面")}>
         <ArrowLeft size={16} />
         <span>{t("Back to workspace", "返回主界面")}</span>
       </Link>
@@ -104,6 +106,8 @@ export function SettingsNav({ activeSection, config, dirtySections, onExit }: Se
           </button>
         )}
       </label>
+      </div>
+      <div className="settings-nav-links" data-searching={searching || undefined}>
       {searching && fieldHits.length > 0 && (
         <div className="settings-nav-group settings-nav-fields">
           <div className="settings-nav-group-label">{t("Settings", "设置项")}</div>
@@ -138,6 +142,7 @@ export function SettingsNav({ activeSection, config, dirtySections, onExit }: Se
           ))}
         </div>
       ))}
+      </div>
     </nav>
   );
 }

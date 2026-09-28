@@ -24,13 +24,8 @@
   gap:var(--space-xs);
 }
 
-.prompt-template-variables code {
-  padding:var(--space-3xs) var(--space-xs);
-  border:1px solid var(--line);
-  border-radius:var(--radius-2);
-  background:var(--control-surface);
-  color:var(--ink);
-  font-size:var(--text-xs);
+.prompt-template-variables .ui-button {
+  font-family: var(--font-code);
 }
 
 /* 【Web 设置】【恢复对照】以自动换行和局部滚动保持长提示词可读 */

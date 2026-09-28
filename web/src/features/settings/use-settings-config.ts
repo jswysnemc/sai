@@ -112,7 +112,7 @@ export function useSettingsConfig(): SettingsConfigController {
     saveConfig: async () => {
       if (jsonDraft?.error) throw new Error(jsonDraft.error);
       await document.saveNow();
-      setJsonDraft(null);
+      setJsonDraft((current) => current === jsonDraft ? null : current);
     },
     discard: () => { setJsonDraft(null); document.discard(); },
     retry: document.retry

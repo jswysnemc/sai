@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type { InputHTMLAttributes, TextareaHTMLAttributes, Ref } from "react";
 import { cx } from "./class-names";
 import { useFieldContext } from "./field-context";
 import "./inputs.css";
@@ -35,6 +35,7 @@ export function SkTextInput({ value, onChange, mono, className, ...rest }: SkTex
 }
 
 type SkTextAreaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "value" | "onChange"> & {
+  ref?: Ref<HTMLTextAreaElement>;
   value: string;
   onChange: (value: string) => void;
   mono?: boolean;

@@ -2,6 +2,8 @@ import { CircleStop, LoaderCircle, Play } from "../../shared/ui/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api/client";
 import { useI18n } from "../i18n/use-i18n";
+import { Button } from "../../shared/ui/button/button";
+import { StatusBadge, InlineNotice } from "../settings/kit";
 
 type GatewayRuntimeControlProps = {
   gatewayId: "qq" | "weixin";
@@ -24,30 +26,30 @@ export function GatewayRuntimeControl({ gatewayId, enabled, dirty, onSave }: Gat
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ["gateways"] });
   };
-  const start = useMutation({ mutationFn: api.gateways.start, onSuccess: refresh });
+  const start = useMutation({
+    mutationFn: async () => {
+      // 1. 【消息网关】【启动】保存失败时保留错误并阻止启动
+      if (dirty) await onSave();
+      return api.gateways.start(gatewayId);
+    },
+    onSuccess: refresh
+  });
   const stop = useMutation({ mutationFn: api.gateways.stop, onSuccess: refresh });
   const running = status?.status === "running";
   const pending = start.isPending || stop.isPending;
 
-  /** 保存未提交配置并启动当前网关。 */
-  const handleStart = async () => {
-    if (dirty) await onSave();
-    await start.mutateAsync(gatewayId);
-  };
-
   return (
-    <div className="gateway-runtime">
-      <div className={running ? "gateway-runtime-state running" : "gateway-runtime-state"}>
-        <i />
+    <div className="flex flex-wrap items-center gap-2">
+      <StatusBadge tone={running ? "success" : "neutral"} dot>
         <span>{running ? t("Running", "运行中") : enabled ? t("Enabled, not running", "已启用，未运行") : t("Configuration disabled", "配置未启用")}</span>
         {status?.pid && <small>PID {status.pid}</small>}
-      </div>
+      </StatusBadge>
       {running ? (
-        <button type="button" className="gateway-runtime-button stop" onClick={() => stop.mutate(gatewayId)} disabled={pending}>{pending ? <LoaderCircle size={14} className="spin" /> : <CircleStop size={14} />}{t("Stop", "停止")}</button>
+        <Button size="small" onClick={() => stop.mutate(gatewayId)} disabled={pending}>{pending ? <LoaderCircle size={14} className="spin" /> : <CircleStop size={14} />}{t("Stop", "停止")}</Button>
       ) : (
-        <button type="button" className="gateway-runtime-button" onClick={() => void handleStart()} disabled={!enabled || pending}>{pending ? <LoaderCircle size={14} className="spin" /> : <Play size={14} />}{dirty ? t("Save and start", "保存并启动") : t("Start gateway", "启动网关")}</button>
+        <Button size="small" onClick={() => start.mutate()} disabled={!enabled || pending}>{pending ? <LoaderCircle size={14} className="spin" /> : <Play size={14} />}{dirty ? t("Save and start", "保存并启动") : t("Start gateway", "启动网关")}</Button>
       )}
-      {(gateways.error || start.error || stop.error) && <div className="gateway-runtime-error">{(gateways.error ?? start.error ?? stop.error)?.message}</div>}
+      {(gateways.error || start.error || stop.error) && <InlineNotice tone="danger">{(gateways.error ?? start.error ?? stop.error)?.message}</InlineNotice>}
     </div>
   );
 }

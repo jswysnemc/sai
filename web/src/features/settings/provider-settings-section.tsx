@@ -1,10 +1,11 @@
+import { Button } from "../../shared/ui/button/button";
 import { Plus } from "../../shared/ui/icons";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { AppConfig, ProviderApiKey, ProviderConfig } from "../../api/contracts";
-import { DetailHeader, MasterDetail, ObjectList, StatusBadge } from "./kit";
+import { DetailHeader, EmptyGuide, MasterDetail, ObjectList, StatusBadge } from "./kit";
 import { useSettingsItem } from "./shell/use-settings-item";
 import { ModelImportDialog } from "./model-import-dialog";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
@@ -375,22 +376,7 @@ export function ProviderSettingsSection({
     setSelectedId(activeProvider || providers[0]?.id || "");
   };
 
-  if (!provider) {
-    return (
-      <div className="settings-empty">
-        <div className="settings-empty-copy">
-          <strong>{t("No provider configured", "还没有配置供应商")}</strong>
-          <p>
-            {t(
-              "Add a provider to connect a model API, then fill in its endpoint, credentials, and models.",
-              "新增一个供应商即可接入模型接口，随后填写接口地址、凭据和可用模型。"
-            )}
-          </p>
-        </div>
-        <button type="button" className="settings-secondary" onClick={addProvider}><Plus size={14} />{t("Add provider", "新增供应商")}</button>
-      </div>
-    );
-  }
+  if (!provider) return <EmptyGuide title={t("No provider configured", "还没有配置供应商")} description={t("Add a provider, then fill in its endpoint, credentials and models.", "新增供应商后填写接入地址、凭据与模型。")} action={<Button variant="secondary" onClick={addProvider}><Plus size={14} />{t("Add provider", "新增供应商")}</Button>} />;
 
   /**
    * 【设置】【密钥查看】按需读取当前供应商实际使用的 API Key。
@@ -505,7 +491,7 @@ export function ProviderSettingsSection({
         />
         {fetchError && <div className="settings-inline-error">{fetchError.message}</div>}
         {secretError && <div className="settings-inline-error">{secretError.message}</div>}
-        {fetching && <div className="provider-editor-loading">
+        {fetching && <div className="mt-4">
           <SkeletonText lines={6} label={t("Fetching the model list", "正在获取模型列表")} />
         </div>}
         {!fetching && tab === "connection" && (

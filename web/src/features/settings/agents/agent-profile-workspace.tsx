@@ -5,7 +5,7 @@ import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import { DEFAULT_AGENT_ID } from "../../agents/agent-options";
 import type { AgentProfile } from "../../agents/agent-types";
 import { useI18n } from "../../i18n/use-i18n";
-import { MasterDetail, ObjectList } from "../kit";
+import { EmptyGuide, MasterDetail, ObjectList } from "../kit";
 import { useSettingsItem } from "../shell/use-settings-item";
 import { AgentProfileEditor } from "./agent-profile-editor";
 import {
@@ -139,7 +139,7 @@ export function AgentProfileWorkspace({ config, options, onConfigChange }: Agent
           onRemove={() => void removeSelected()}
         />
       ) : (
-        <div className="settings-empty">{t("No editable Agent profiles", "没有可编辑的 Agent 档案")}</div>
+        <EmptyGuide title={t("No editable Agent profiles", "没有可编辑的 Agent 档案")} />
       )}
     </MasterDetail>
   );

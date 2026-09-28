@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { fieldAnchorId } from "../search/field-anchor";
 
@@ -12,14 +12,17 @@ const FOCUS_ATTEMPTS = 40;
  * 并短暂高亮，随后从地址中移除 focus 参数，保留其余参数。
  *
  * @param routeKey 当前分区与子页组合，变化时重新定位
- * @returns 无返回值
+ * @returns 未显示字段的标识，用于展示配置条件提示
  */
-export function useFieldFocus(routeKey: string): void {
+export function useFieldFocus(routeKey: string): string | null {
   const [params, setParams] = useSearchParams();
   const focus = params.get("focus");
+  const [missing, setMissing] = useState<string | null>(null);
+  useEffect(() => setMissing(null), [routeKey]);
 
   useEffect(() => {
     if (!focus) return;
+    setMissing(null);
     let attempts = 0;
     let timer = 0;
 
@@ -44,6 +47,12 @@ export function useFieldFocus(routeKey: string): void {
     const locate = () => {
       const element = document.getElementById(fieldAnchorId(focus));
       if (element) {
+        // 1. 展开包含目标字段的折叠组，再执行滚动
+        let ancestor = element.parentElement;
+        while (ancestor) {
+          if (ancestor instanceof HTMLDetailsElement) ancestor.open = true;
+          ancestor = ancestor.parentElement;
+        }
         // 1. 滚动到视口中部并重新触发高亮动画
         element.scrollIntoView({ block: "center", behavior: "smooth" });
         element.classList.remove("sk-flash");
@@ -56,6 +65,7 @@ export function useFieldFocus(routeKey: string): void {
       // 2. 超过等待上限仍未找到时放弃，避免参数残留
       attempts += 1;
       if (attempts >= FOCUS_ATTEMPTS) {
+        setMissing(focus);
         clearFocusParam();
         return;
       }
@@ -65,4 +75,5 @@ export function useFieldFocus(routeKey: string): void {
     locate();
     return () => window.clearTimeout(timer);
   }, [focus, routeKey, setParams]);
+  return missing;
 }

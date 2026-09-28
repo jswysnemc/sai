@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type ConfigDocumentOptions<Config, Response> = {
   /** React Query 缓存键 */
@@ -34,6 +34,8 @@ export function useConfigDocument<Config, Response>({
   const response = useQuery({ queryKey, queryFn: load });
   const [draft, setDraft] = useState<Config | null>(null);
   const [dirty, setDirty] = useState(false);
+  const revision = useRef(0);
+  const pending = useRef<Promise<Response> | null>(null);
 
   useEffect(() => {
     if (!response.data || dirty) return;
@@ -43,10 +45,13 @@ export function useConfigDocument<Config, Response>({
   }, [response.data, dirty]);
 
   const mutation = useMutation({
-    mutationFn: (config: Config) => save(config),
-    onSuccess: async (saved) => {
-      setDraft(extract(saved));
-      setDirty(false);
+    mutationFn: (submission: { config: Config; revision: number }) => save(submission.config),
+    onSuccess: async (saved, submission) => {
+      // 1. 【设置】【保存回填】仅覆盖本次提交的版本，保留请求期间的新编辑
+      if (revision.current === submission.revision) {
+        setDraft(extract(saved));
+        setDirty(false);
+      }
       queryClient.setQueryData(queryKey, saved);
       await onSaved?.(saved, queryClient);
     }
@@ -58,9 +63,10 @@ export function useConfigDocument<Config, Response>({
    * @param next 新配置对象
    */
   const update = (next: Config) => {
+    revision.current += 1;
     setDraft(next);
     setDirty(true);
-    mutation.reset();
+    if (!pending.current) mutation.reset();
   };
 
   /**
@@ -69,8 +75,9 @@ export function useConfigDocument<Config, Response>({
    * 供文本草稿暂不合法、无法回写结构化对象的编辑路径使用。
    */
   const markDirty = () => {
+    revision.current += 1;
     setDirty(true);
-    mutation.reset();
+    if (!pending.current) mutation.reset();
   };
 
   /**
@@ -80,9 +87,16 @@ export function useConfigDocument<Config, Response>({
    * @returns 服务端保存响应
    */
   const saveNow = async (config?: Config): Promise<Response> => {
+    if (pending.current) return pending.current;
     const payload = config ?? draft;
     if (payload == null) throw new Error("Configuration is not ready to save");
-    return mutation.mutateAsync(payload);
+    const request = mutation.mutateAsync({ config: payload, revision: revision.current });
+    pending.current = request;
+    try {
+      return await request;
+    } finally {
+      pending.current = null;
+    }
   };
 
   /**
@@ -91,9 +105,10 @@ export function useConfigDocument<Config, Response>({
    * @returns 无返回值
    */
   const discard = () => {
+    revision.current += 1;
     if (response.data) setDraft(extract(response.data));
     setDirty(false);
-    mutation.reset();
+    if (!pending.current) mutation.reset();
   };
 
   return {
@@ -105,7 +120,7 @@ export function useConfigDocument<Config, Response>({
     dirty,
     loading: response.isLoading,
     saving: mutation.isPending,
-    saved: mutation.isSuccess,
+    saved: mutation.isSuccess && !dirty,
     loadError: (response.error ?? null) as Error | null,
     saveError: (mutation.error ?? null) as Error | null,
     update,

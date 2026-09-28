@@ -129,24 +129,20 @@ a.settings-back {
 
 .settings-nav-empty { margin: 0.5rem; color: var(--ink-soft); font-size: var(--text-sm); }
 
+.settings-nav-tools { display: flex; flex-direction: column; }
+.settings-nav-links { min-width: 0; }
+
 @media (width < 48rem) {
-  .settings-navigation {
-    flex-direction: row;
-    gap: 0.25rem;
-    padding: 0.375rem 0.75rem;
-    overflow-x: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-    scrollbar-width: none;
-  }
-
-  .settings-nav-search,
-  .settings-nav-group-label,
-  .settings-nav-fields,
-  .settings-navigation .settings-back span { display: none; }
-
-  a.settings-back { width: 2.25rem; height: 2.25rem; margin: 0; padding: 0; justify-content: center; }
+  .settings-navigation { gap: 0.25rem; padding: 0.375rem 0.75rem; overflow: visible; border-right: 0; border-bottom: 1px solid var(--line); }
+  .settings-nav-tools { flex-direction: row; align-items: center; gap: 0.5rem; }
+  .settings-nav-search { flex: 1; margin: 0; }
+  .settings-nav-links { display: flex; overflow-x: auto; scrollbar-width: none; }
+  .settings-nav-links[data-searching] { display: block; max-height: 40vh; overflow-y: auto; }
+  .settings-nav-group-label, .settings-navigation .settings-back span { display: none; }
+  a.settings-back { flex: none; width: 1.75rem; height: 1.75rem; min-height: 0; margin: 0; padding: 0; justify-content: center; }
   .settings-nav-group { display: contents; }
+  .settings-nav-links > .settings-nav-fields { display: grid; }
   .settings-navigation a { flex: none; min-height: 2rem; padding: 0.25rem 0.5rem; white-space: nowrap; }
+  .settings-navigation a.settings-nav-field { white-space: normal; }
   .settings-navigation strong { font-size: var(--text-sm); }
 }

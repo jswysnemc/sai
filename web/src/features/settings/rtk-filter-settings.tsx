@@ -1,3 +1,4 @@
+import { Button } from "../../shared/ui/button/button";
 import { X } from "../../shared/ui/icons";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -25,6 +26,8 @@ export function RtkFilterSettings({ config, onConfigChange }: RtkFilterSettingsP
   const { t } = useI18n();
   const status = useQuery({ queryKey: ["rtk-status"], queryFn: api.config.rtkStatus, staleTime: 60_000 });
   const [draftItem, setDraftItem] = useState("");
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
 
   const tools = (config.tools as Record<string, unknown> | undefined) ?? {};
   const mode = typeof tools.command_filter === "string" ? tools.command_filter : "auto";
@@ -33,6 +36,21 @@ export function RtkFilterSettings({ config, onConfigChange }: RtkFilterSettingsP
     : [];
   const proxyCommands = status.data?.proxy_commands ?? [];
   const available = status.data?.available;
+  const visibleCommands = proxyCommands.filter((name) =>
+    name.toLowerCase().includes(search.trim().toLowerCase())
+    && (filter === "all" || denylist.includes(name) === (filter === "excluded"))
+  );
+
+  /**
+   * 批量更改当前筛选结果，保留其他命令和自定义排除项。
+   * @param excluded 是否排除当前结果
+   * @returns 无返回值
+   */
+  const setVisibleExcluded = (excluded: boolean) => {
+    updateTools({ command_filter_denylist: excluded
+      ? [...new Set([...denylist, ...visibleCommands])]
+      : denylist.filter((name) => !visibleCommands.includes(name)) });
+  };
 
   /**
    * 合并补丁并回写工具配置。
@@ -100,7 +118,7 @@ export function RtkFilterSettings({ config, onConfigChange }: RtkFilterSettingsP
         <StatusBadge tone={status.isError ? "danger" : available ? "success" : "neutral"} dot>
           {status.isLoading ? t("Detecting rtk…", "正在探测 rtk…") : status.isError ? t("Detection failed", "探测失败") : available ? t("rtk detected", "已检测到 rtk") : t("rtk not installed", "未检测到 rtk")}
         </StatusBadge>
-        {status.isError && <button type="button" className="settings-secondary" onClick={() => void status.refetch()}>{t("Retry", "重试")}</button>}
+        {status.isError && <Button type="button" variant="secondary" onClick={() => void status.refetch()}>{t("Retry", "重试")}</Button>}
       </div>
       {available === false && <InlineNotice>{t("Install rtk and make it available on PATH before enabling the filter.", "安装 rtk 并将其加入 PATH 后即可启用过滤器。")}</InlineNotice>}
       <SettingsField label={t("Filter mode", "过滤档位")} configKey="tools.command_filter" anchor="runtime.tools.command_filter" hint={t("Compress command output before it enters the context; commands with pipes or redirects stay unchanged.", "压缩进入上下文的命令输出；含管道或重定向的命令保持原样。")}>
@@ -112,25 +130,36 @@ export function RtkFilterSettings({ config, onConfigChange }: RtkFilterSettingsP
         />
       </SettingsField>
       <SettingsField label={t(`Proxied commands (${proxyCommands.filter((name) => !denylist.includes(name)).length}/${proxyCommands.length})`, `已代理的命令（${proxyCommands.filter((name) => !denylist.includes(name)).length}/${proxyCommands.length}）`)} hint={t("Click a command to exclude or restore it. Interactive commands are never rewritten.", "点击命令即可排除或恢复代理；交互式命令保持原样。")}>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <SkTextInput value={search} onChange={setSearch} aria-label={t("Filter commands", "筛选命令")} placeholder={t("Search command names", "搜索命令名称")} className="max-w-64" />
+          <ChoicePills value={filter} onChange={setFilter} ariaLabel={t("Command status", "命令状态")} options={[
+            { value: "all", label: t("All", "全部") },
+            { value: "proxied", label: t("Proxied", "已代理") },
+            { value: "excluded", label: t("Excluded", "已排除") }
+          ]} />
+          <Button size="small" disabled={!visibleCommands.length} onClick={() => setVisibleExcluded(true)}>{t("Exclude results", "排除筛选结果")}</Button>
+          <Button size="small" disabled={!visibleCommands.length} onClick={() => setVisibleExcluded(false)}>{t("Restore results", "恢复筛选结果")}</Button>
+        </div>
         {/* 点击标签即可排除或恢复某个命令，被排除的划掉标灰 */}
         <div className="rtk-command-tags">
-          {proxyCommands.map((name) => {
+          {visibleCommands.map((name) => {
             const excluded = denylist.includes(name);
             return (
-              <button
+              <Button
                 key={name}
                 type="button"
                 className={excluded ? "rtk-command-tag excluded" : "rtk-command-tag"}
                 title={excluded ? t("Click to proxy again", "点击恢复代理") : t("Click to exclude", "点击排除")}
                 onClick={() => toggleExcluded(name)}
+                aria-pressed={excluded}
               >
                 {name}
-              </button>
+              </Button>
             );
           })}
-          {proxyCommands.length === 0 && (
+          {visibleCommands.length === 0 && (
             <span className="rtk-denylist-empty">
-              {t("Install rtk to see the commands it can proxy.", "安装 rtk 后这里会列出它能代理的命令。")}
+              {proxyCommands.length ? t("No matching commands", "没有匹配的命令") : t("Install rtk to see the commands it can proxy.", "安装 rtk 后这里会列出它能代理的命令。")}
             </span>
           )}
         </div>
@@ -139,7 +168,7 @@ export function RtkFilterSettings({ config, onConfigChange }: RtkFilterSettingsP
         <SettingsField label={t("Excluded but not proxied by rtk", "已排除但 rtk 并不代理")} hint={t("These commands are outside rtk support. Click to remove the entries.", "这些命令不在 rtk 支持范围内，点击即可移除条目。")}>
           <div className="rtk-command-tags">
             {extraExcluded.map((name) => (
-              <button
+              <Button
                 key={name}
                 type="button"
                 className="rtk-command-tag excluded"
@@ -147,7 +176,7 @@ export function RtkFilterSettings({ config, onConfigChange }: RtkFilterSettingsP
                 onClick={() => toggleExcluded(name)}
               >
                 {name}<X size={12} />
-              </button>
+              </Button>
             ))}
           </div>
         </SettingsField>
@@ -167,17 +196,17 @@ export function RtkFilterSettings({ config, onConfigChange }: RtkFilterSettingsP
               addItems();
             }}
           />
-          <button type="button" className="settings-secondary" onClick={addItems} disabled={!draftItem.trim()}>
+          <Button type="button" variant="secondary" onClick={addItems} disabled={!draftItem.trim()}>
             {t("Add", "添加")}
-          </button>
+          </Button>
           {denylist.length > 0 && (
-            <button
+            <Button
               type="button"
-              className="settings-secondary"
+              variant="secondary"
               onClick={() => updateTools({ command_filter_denylist: [] })}
             >
               {t("Proxy all again", "全部恢复代理")}
-            </button>
+            </Button>
           )}
         </div>
       </SettingsField>

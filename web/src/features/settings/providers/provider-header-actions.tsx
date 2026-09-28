@@ -40,7 +40,7 @@ export function ProviderHeaderActions({
     <>
       <InlineSwitch checked={enabled} onChange={onToggleEnabled} label={enabled ? t("Enabled", "已启用") : t("Disabled", "已停用")} />
       {/* 禁用态按钮收不到鼠标事件，说明挂在包裹层上 */}
-      <span className="settings-action-hint" title={importBlockedReason || undefined}>
+      <span className="inline-flex" title={importBlockedReason || undefined}>
         <Button size="small" onClick={onFetchModels} disabled={fetching || !provider.base_url.trim()}>
           <RefreshCw size={14} className={fetching ? "spin" : ""} />
           {fetching ? t("Fetching", "正在获取") : t("Import models", "导入模型")}
@@ -48,7 +48,7 @@ export function ProviderHeaderActions({
       </span>
       <Button
         size="small"
-        className={isCurrent ? "settings-secondary active" : "settings-secondary"}
+        variant="secondary"
         onClick={onSetCurrent}
         disabled={isCurrent || !enabled}
         title={isCurrent

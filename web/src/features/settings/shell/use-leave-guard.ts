@@ -1,55 +1,43 @@
-import { useCallback, useEffect, type MouseEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { useBlocker } from "react-router-dom";
 import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import { useI18n } from "../../i18n/use-i18n";
+import { leavesSettingsDraft, useSettingsDrafts } from "./settings-draft-context";
 
 /**
- * 【Web 设置】【离开确认】有未保存修改时拦截离开设置页。
- *
- * 关闭或刷新标签页由浏览器的 beforeunload 提示拦截；
- * 应用内的离开链接通过返回的点击处理函数弹出统一确认对话框。
- *
- * @param dirty 全局草稿是否有未保存修改
- * @param onDiscard 用户确认离开时放弃草稿
- * @returns 离开链接的点击处理函数，参数为点击事件与目标地址
+ * 【设置】【离开确认】统一保护全局草稿与即将卸载的独立文档。
+ * @param dirty 全局草稿是否未保存
+ * @param onDiscard 放弃全局草稿的操作
+ * @returns 无返回值；导航阻止由路由器统一执行
  */
 export function useLeaveGuard(dirty: boolean, onDiscard: () => void) {
+  const drafts = useSettingsDrafts();
   const confirm = useConfirm();
-  const navigate = useNavigate();
   const { t } = useI18n();
-
+  const pending = useRef(false);
+  const blocker = useBlocker(({ nextLocation }) => {
+    const leavesSettings = !/^\/settings(?:\/|$)/.test(nextLocation.pathname);
+    return (dirty && leavesSettings) || drafts.some((draft) => leavesSettingsDraft(draft, nextLocation));
+  });
   useEffect(() => {
-    if (!dirty) return;
-    /**
-     * 阻止带未保存修改的页面被直接关闭或刷新。
-     *
-     * @param event 卸载前事件
-     * @returns 无返回值
-     */
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [dirty]);
-
-  return useCallback(async (event: MouseEvent<HTMLAnchorElement>, to: string) => {
-    if (!dirty) return;
-    // 1. 有修改时先拦下默认跳转，等待用户确认
-    event.preventDefault();
-    const confirmed = await confirm({
-      title: t("Leave with unsaved changes", "有未保存的修改"),
-      description: t(
-        "Leaving settings discards the changes that have not been saved.",
-        "离开设置页会丢弃尚未保存的修改。"
-      ),
-      confirmLabel: t("Discard and leave", "放弃并离开"),
-      danger: true
+    if (blocker.state !== "blocked") { pending.current = false; return; }
+    if (pending.current) return;
+    pending.current = true;
+    void confirm({ title: t("Leave with unsaved changes", "有未保存的修改"), description: t("Unsaved changes in the document you are leaving will be discarded.", "离开当前文档会丢弃尚未保存的修改。"), confirmLabel: t("Discard and leave", "放弃并离开"), danger: true }).then((accepted) => {
+      if (!accepted) { blocker.reset(); return; }
+      // 1. 仅放弃即将卸载的草稿，分区间切换仍保留全局配置
+      if (!/^\/settings(?:\/|$)/.test(blocker.location.pathname)) onDiscard();
+      for (const draft of drafts) if (leavesSettingsDraft(draft, blocker.location)) draft.discard();
+      blocker.proceed();
     });
-    if (!confirmed) return;
-    // 2. 确认后放弃草稿再跳转
-    onDiscard();
-    navigate(to);
-  }, [confirm, dirty, navigate, onDiscard, t]);
+  }, [blocker, confirm, drafts, onDiscard, t]);
+
+  const anyDirty = dirty || drafts.some((draft) => draft.dirty);
+  useEffect(() => {
+    if (!anyDirty) return;
+    /** 阻止直接刷新或关闭导致草稿丢失；参数为卸载事件，返回无值。 */
+    const beforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [anyDirty]);
 }

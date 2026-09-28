@@ -1,3 +1,5 @@
+import { Button } from "../../shared/ui/button/button";
+import "./model-import-dialog.css";
 import { Check, Search } from "../../shared/ui/icons";
 import { useDeferredValue, useEffect, useState } from "react";
 import { Modal } from "../../shared/ui/dialog/modal";
@@ -64,7 +66,7 @@ export function ModelImportDialog({
       description={t("Fetched results are not written directly to configuration. Only selected models are imported.", "获取结果不会直接写入配置，只导入本次勾选的模型。")}
       size="large"
       onClose={onClose}
-      footer={<><span className="model-import-count">{t(`${selected.length} selected`, `已选择 ${selected.length} 个`)}</span><button type="button" className="ui-button secondary" onClick={onClose}>{t("Cancel", "取消")}</button><button type="button" className="ui-button primary" disabled={selected.length === 0} onClick={() => onImport(selected)}>{t("Import models", "导入模型")}</button></>}
+      footer={<><span className="model-import-count">{t(`${selected.length} selected`, `已选择 ${selected.length} 个`)}</span><Button type="button" variant="secondary" onClick={onClose}>{t("Cancel", "取消")}</Button><Button type="button" variant="primary" disabled={selected.length === 0} onClick={() => onImport(selected)}>{t("Import models", "导入模型")}</Button></>}
     >
       <div className="model-import-dialog">
         <label className="model-import-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("Search model IDs", "搜索模型 ID")} autoFocus /></label>
@@ -75,7 +77,7 @@ export function ModelImportDialog({
             const item = metadata[model] ?? {};
             const summary = formatModelMetadataSummary(item, t);
             return (
-              <button
+              <Button
                 type="button"
                 className={active ? "active" : ""}
                 disabled={existing}
@@ -88,7 +90,7 @@ export function ModelImportDialog({
                   <small>{existing ? t("Already added", "已经添加") : summary || t("Available to import", "可导入")}</small>
                 </span>
                 {(active || existing) && <Check size={14} />}
-              </button>
+              </Button>
             );
           })}
           {filtered.length === 0 && <div className="model-import-empty">{t("No matching models", "没有匹配的模型")}</div>}

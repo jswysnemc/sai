@@ -1,7 +1,7 @@
+import { useSettingsDraft } from "../shell/settings-draft-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import { api } from "../../../api/client";
 import { toDisplayError } from "../../../api/api-error";
 import type { ManagedSkill } from "../../../api/skill-contracts";
@@ -43,7 +43,6 @@ export function SkillsSettingsSection({ config, onConfigChange }: SkillsSettings
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const list = useQuery({ queryKey: ["managed-skills"], queryFn: api.skills.managedList });
-  const confirm = useConfirm();
   const [params, setParams] = useSearchParams();
   const requested = params.get("item");
   const page: SkillLibraryPage = params.get("create") === "1" ? { kind: "create" } : requested ? { kind: "detail", skillId: requested } : { kind: "grid" };
@@ -60,6 +59,11 @@ export function SkillsSettingsSection({ config, onConfigChange }: SkillsSettings
   const [directoryName, setDirectoryName] = useState("");
   const [content, setContent] = useState("");
   const [dirty, setDirty] = useState(false);
+  const revision = useRef(0);
+  const generation = useRef(0);
+  const savedTarget = useRef<string | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const view: SkillsSettingsView = params.get("view") === "behavior" ? "behavior" : "library";
   /** 同步技能库视图；参数为视图名称，返回无值。 */
   const setView = (view: SkillsSettingsView) => setParams((current) => { const next = new URLSearchParams(current); next.set("view", view); return next; }, { replace: true });
@@ -102,18 +106,41 @@ export function SkillsSettingsSection({ config, onConfigChange }: SkillsSettings
   };
 
   const save = useMutation({
-    mutationFn: () => creating
-      ? api.skills.create(directoryName.trim(), content)
-      : api.skills.update(selectedId, content),
-    onSuccess: async (saved) => {
-      setDirty(false);
-      setPage({ kind: "detail", skillId: saved.skill.id });
-      setContent(saved.content);
+    mutationFn: async () => {
+      const submittedRevision = revision.current;
+      const submittedGeneration = generation.current;
+      const saved = await (creating
+        ? api.skills.create(directoryName.trim(), content)
+        : api.skills.update(selectedId, content));
+      return { saved, submittedRevision, submittedGeneration };
+    },
+    onSuccess: async ({ saved, submittedRevision, submittedGeneration }) => {
       cacheManagedSkill(saved.skill);
       queryClient.setQueryData(["managed-skill", saved.skill.id], saved);
+      if (mounted.current && generation.current === submittedGeneration) {
+        // 1. 【技能文档】【保存回填】请求期间的新内容继续作为草稿，创建成功后允许切换到新文档地址
+        if (revision.current === submittedRevision) {
+          setDirty(false);
+          setContent(saved.content);
+        }
+        savedTarget.current = saved.skill.id;
+        setPage({ kind: "detail", skillId: saved.skill.id });
+      }
       await queryClient.invalidateQueries({ queryKey: ["managed-skills"] });
     }
   });
+
+  useSettingsDraft({
+    scope: "/settings/skills", dirty, saving: save.isPending,
+    discard: () => { revision.current += 1; generation.current += 1; setDirty(false); },
+    save: () => save.mutateAsync(),
+    contains: (search) => {
+      const target = new URLSearchParams(search);
+      if (savedTarget.current && target.get("item") === savedTarget.current && !target.has("create")) return true;
+      return (target.get("item") ?? "") === selectedId && (target.get("create") === "1") === creating;
+    }
+  });
+  useEffect(() => { savedTarget.current = null; }, [selectedId, creating]);
 
   const toggle = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => api.skills.setEnabled(id, enabled),
@@ -126,6 +153,7 @@ export function SkillsSettingsSection({ config, onConfigChange }: SkillsSettings
 
   /** 进入新建状态并填充最小有效模板。 */
   const startCreating = () => {
+    generation.current += 1;
     setPage({ kind: "create" });
     setDirectoryName("");
     setContent(SKILL_TEMPLATE);
@@ -141,6 +169,7 @@ export function SkillsSettingsSection({ config, onConfigChange }: SkillsSettings
    * @returns 无返回值
    */
   const selectSkill = (id: string) => {
+    generation.current += 1;
     setPage({ kind: "detail", skillId: id });
     setContent("");
     setDirty(false);
@@ -149,14 +178,9 @@ export function SkillsSettingsSection({ config, onConfigChange }: SkillsSettings
   };
 
   /** 返回技能库网格并清理当前编辑状态。 */
-  const returnToLibrary = async () => {
+  const returnToLibrary = () => {
     if (save.isPending) return;
-    if (dirty && !await confirm({ title: t("Discard Skill changes?", "放弃技能修改？"), description: t("The current document has unsaved changes.", "当前文档存在未保存修改。"), confirmLabel: t("Discard", "放弃修改"), danger: true })) return;
     setPage({ kind: "grid" });
-    setContent("");
-    setDirty(false);
-    save.reset();
-    toggle.reset();
   };
 
   const selectedSkill: ManagedSkill | null = creating
@@ -213,8 +237,14 @@ export function SkillsSettingsSection({ config, onConfigChange }: SkillsSettings
             loading={!creating && document.isLoading}
             error={editorError}
             onBack={returnToLibrary}
-            onDirectoryNameChange={(value) => { setDirectoryName(value); setDirty(true); }}
-            onContentChange={(value) => { setContent(value); setDirty(true); save.reset(); }}
+            onDirectoryNameChange={(value) => { revision.current += 1; setDirectoryName(value); setDirty(true); }}
+            onContentChange={(value) => {
+              if (value === content) return;
+              revision.current += 1;
+              setContent(value);
+              setDirty(true);
+              if (!save.isPending) save.reset();
+            }}
             onEnabledChange={(enabled) => selectedSkill && toggle.mutate({ id: selectedSkill.id, enabled })}
             onSave={() => void save.mutateAsync().catch(() => undefined)}
           />
