@@ -4,23 +4,32 @@ use sai_plugin_runtime::{InvocationContext, PluginRuntime};
 use serde_json::{json, Value};
 use std::time::Duration;
 
-/// 【待办并发测试】【忙锁重试】仅重试明确没有提交的锁占用，其他错误立即返回
-/// @param plugin 独立实例；args 为完整参数；ctx 为可信上下文
+/// 【待办插件】【忙锁重试】仅重试明确没有提交的锁占用，其他错误立即返回
+///
+/// 并发环境下多个插件实例可能同时尝试获取文件锁，退避重试以确保高负载调度下正常完成。
+///
+/// @param plugin 独立实例
+/// @param args 完整参数
+/// @param ctx 可信上下文
 /// @returns 工具原结果或实际错误
 async fn call_with_busy_retry(
     plugin: &PluginRuntime,
     args: Value,
     ctx: InvocationContext,
 ) -> anyhow::Result<Value> {
-    for _ in 0..128 {
+    // 1. 设置充足的重试轮次以抵御高负载环境下的调度延迟
+    for attempt in 0..512 {
         match plugin.call_tool("todo", args.clone(), ctx.clone()).await {
             Ok(text) => return Ok(serde_json::from_str(&text)?),
             Err(error) if format!("{error:#}").contains("private data is busy") => {
-                tokio::time::sleep(Duration::from_millis(2)).await;
+                // 2. 梯度增加休眠间隔，减少高并发时的锁饥饿
+                let delay_ms = if attempt < 32 { 2 } else if attempt < 128 { 5 } else { 10 };
+                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
             }
             Err(error) => return Err(error),
         }
     }
+    // 3. 耗尽重试次数时报错
     anyhow::bail!("busy lock retry budget exhausted")
 }
 

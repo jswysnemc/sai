@@ -29,7 +29,7 @@ export function GitSettingsPanel({ config, onConfigChange }: GitSettingsPanelPro
   const git = config.git ?? DEFAULT_GIT_CONFIG;
 
   /**
-   * 更新源代码��理显示配置。
+   * 更新源代码管理显示配置。
    *
    * @param patch 字段补丁
    * @returns 无返回值
