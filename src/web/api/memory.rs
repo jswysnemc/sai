@@ -16,6 +16,8 @@ use std::path::PathBuf;
 #[derive(Deserialize)]
 struct ListQuery {
     limit: Option<usize>,
+    /// 指定时仅操作该作用域；旧客户端省略时保留原有查找语义
+    scope: Option<MemoryScope>,
     /// 工作区标识；省略时用当前活动工作区
     workspace: Option<String>,
 }
@@ -172,12 +174,20 @@ async fn show(
     let store = store(&state);
     let workspace = workspace_for(&state.workspaces, query.workspace.as_deref());
     let library = store.notes(workspace.as_deref());
-    let found = library.load(&name).map_err(WebError::from)?;
+    let found = match query.scope {
+        Some(scope) => library
+            .load_scoped(&name, scope)
+            .map(|entry| entry.map(|entry| (entry, scope))),
+        None => library.load(&name),
+    }
+    .map_err(WebError::from)?;
     let Some((entry, scope)) = found else {
         return Ok(Json(json!({ "found": false, "name": name })));
     };
     // hook 必须回显：编辑表单拿不到它，保存时留空就会把自定义提示重置成摘要
-    let hook = library.load_hook(&name).map_err(WebError::from)?;
+    let hook = library
+        .load_hook_scoped(&name, scope)
+        .map_err(WebError::from)?;
     Ok(Json(json!({
         "found": true,
         "name": entry.front.name,
@@ -221,7 +231,7 @@ async fn remember(
     let library = store.notes(workspace.as_deref());
     // 必须在 save 之前判断是否已存在：写入同名条目即就地更新
     let updated = library
-        .load(&request.name)
+        .load_scoped(&request.name, scope)
         .map_err(WebError::from)?
         .is_some();
     let links = entry.links();
@@ -248,10 +258,12 @@ async fn remove(
 ) -> WebResult<Json<Value>> {
     let store = store(&state);
     let workspace = workspace_for(&state.workspaces, query.workspace.as_deref());
-    let deleted = store
-        .notes(workspace.as_deref())
-        .delete(&name)
-        .map_err(WebError::from)?;
+    let library = store.notes(workspace.as_deref());
+    let deleted = match query.scope {
+        Some(scope) => library.delete_scoped(&name, scope),
+        None => library.delete(&name),
+    }
+    .map_err(WebError::from)?;
     Ok(Json(json!({ "deleted": deleted })))
 }
 

@@ -71,6 +71,8 @@ export type MemoryIndexResult = {
 /** 记忆接口共用的工作区参数。 */
 export type MemoryQuery = {
   workspace?: string;
+  /** 读取和删除时限制到指定作用域，保留另一作用域的同名条目 */
+  scope?: MemoryScope;
 };
 
 /** 记忆库状态汇总。 */

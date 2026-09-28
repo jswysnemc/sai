@@ -5,8 +5,12 @@ use super::memory_type::MemoryType;
 use anyhow::Result;
 use std::path::Path;
 
+#[path = "scoped_operations.rs"]
+mod scoped_operations;
+
 /// 记忆的作用域。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum MemoryScope {
     /// 跨项目通用
     Global,
