@@ -123,8 +123,8 @@ fn record_and_execution_lock_reject_links_and_fifos() {
     let record_path = paths
         .state_dir
         .join("plugin-jobs")
-        .join(blake3::hash(b"schedule-fixture").to_hex().to_string())
-        .join(blake3::hash(b"").to_hex().to_string())
+        .join(blake3::hash(b"schedule-fixture").to_hex())
+        .join(blake3::hash(b"").to_hex())
         .join(format!("{}.json", task.id));
     symlink(&outsider, &record_path).unwrap();
     assert!(store.get(&task.id).is_err());

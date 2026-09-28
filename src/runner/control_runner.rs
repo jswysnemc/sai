@@ -62,7 +62,7 @@ where
     if submission.show_final_summary {
         let mut snapshot = state.session_snapshot(context_limit_tokens)?;
         snapshot.active_run = Some(active_run.summary());
-        sink.on_runner_event(RunnerEvent::FinalSummary(snapshot))?;
+        sink.on_runner_event(RunnerEvent::FinalSummary(Box::new(snapshot)))?;
     }
     Ok(result)
 }

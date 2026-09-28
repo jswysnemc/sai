@@ -4,7 +4,7 @@ use sai_plugin_runtime::{
     Capabilities,
 };
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncWriteExt;
 
 /// 【归档网络测试】【固定服务】只监听环回地址，发送预先构造的字节报文。
 /// @param responses HTTP 响应列表
@@ -18,8 +18,7 @@ async fn server(responses: Vec<Vec<u8>>) -> (String, tokio::task::JoinHandle<()>
                 .await
                 .unwrap()
                 .unwrap();
-            let mut buffer = [0u8; 4096];
-            stream.read(&mut buffer).await.unwrap();
+            super::http_fixture::read_request_headers(&mut stream).await;
             stream.write_all(&response).await.unwrap();
         }
     });

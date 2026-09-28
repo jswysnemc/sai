@@ -1,3 +1,10 @@
+/// 【恢复记录】【上下文指标】同一次失败的重试次数、请求大小与预算。
+pub(crate) struct RecoveryMetrics {
+    pub retry_count: usize,
+    pub context_chars: usize,
+    pub context_limit_chars: usize,
+}
+
 /// 恢复记录类型。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FailureKind {

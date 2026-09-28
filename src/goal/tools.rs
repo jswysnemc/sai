@@ -65,38 +65,6 @@ pub(crate) fn register(registry: &mut ToolRegistry, goal_file: PathBuf) {
     ).writes());
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn registers_and_executes_goal_tools() {
-        let temp = tempfile::tempdir().unwrap();
-        let goal_file = temp.path().join("goal.json");
-        let mut registry = ToolRegistry::new();
-        register(&mut registry, goal_file.clone());
-
-        assert!(registry.contains("create_goal"));
-        assert!(registry.contains("get_goal"));
-        assert!(registry.contains("update_goal"));
-
-        registry
-            .call(
-                "create_goal",
-                r#"{"objective":"finish validation","token_budget":1000}"#,
-            )
-            .await
-            .unwrap();
-        registry
-            .call("update_goal", r#"{"status":"complete"}"#)
-            .await
-            .unwrap();
-
-        let goal = GoalStore::new(goal_file).get().unwrap().unwrap();
-        assert_eq!(goal.status, GoalStatus::Complete);
-    }
-}
-
 /// 创建模型请求的持续目标。
 ///
 /// 参数:
@@ -200,4 +168,36 @@ fn optional_u64(args: &Value, name: &str) -> Result<Option<u64>> {
         .filter(|value| *value > 0)
         .ok_or_else(|| anyhow::anyhow!("{name} must be a positive integer"))?;
     Ok(Some(value))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn registers_and_executes_goal_tools() {
+        let temp = tempfile::tempdir().unwrap();
+        let goal_file = temp.path().join("goal.json");
+        let mut registry = ToolRegistry::new();
+        register(&mut registry, goal_file.clone());
+
+        assert!(registry.contains("create_goal"));
+        assert!(registry.contains("get_goal"));
+        assert!(registry.contains("update_goal"));
+
+        registry
+            .call(
+                "create_goal",
+                r#"{"objective":"finish validation","token_budget":1000}"#,
+            )
+            .await
+            .unwrap();
+        registry
+            .call("update_goal", r#"{"status":"complete"}"#)
+            .await
+            .unwrap();
+
+        let goal = GoalStore::new(goal_file).get().unwrap().unwrap();
+        assert_eq!(goal.status, GoalStatus::Complete);
+    }
 }

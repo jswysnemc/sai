@@ -11,41 +11,6 @@ pub(super) struct BackgroundLogWatcher {
     next_read: Option<Instant>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// 后台日志无需主 Agent 唤醒或用户按键即可刷新，记录清理后停止轮询。
-    #[test]
-    fn background_command_idle_refresh_has_an_independent_wakeup() {
-        let temp = tempfile::tempdir().unwrap();
-        let paths = SaiPaths::for_tests(temp.path());
-        let mut runtime = ReplRuntime::new(
-            100,
-            crate::render::transcript::TranscriptRenderOptions {
-                reasoning_mode: crate::render::ReasoningDisplayMode::Summary,
-                tool_call_mode: crate::render::ToolCallDisplayMode::Full,
-            },
-        );
-        runtime.bind_background_session(&paths, "test-session");
-        runtime.transcript.push_tool_call(
-            "background_command".into(),
-            r#"{"action":"start","command":"build"}"#.into(),
-        );
-        runtime.transcript.push_tool_result("background_command".into(), true,
-            r#"{"task":{"id":"test-task","status":"running","command":"build"},"stdout":"last log"}"#.into());
-        assert!(runtime.pending_wait().is_some());
-        assert!(runtime.tick_background_logs().unwrap());
-        assert!(runtime.transcript.running_background_task_ids().is_empty());
-        assert!(runtime.pending_wait().is_none());
-        assert!(runtime
-            .transcript
-            .expandable_blocks()
-            .iter()
-            .any(|block| block.body.contains("last log")));
-    }
-}
-
 impl ReplRuntime {
     /// 【终端】【后台日志】绑定当前会话，切换会话时重置刷新时刻。
     ///
@@ -114,5 +79,40 @@ impl ReplRuntime {
             }
         }
         Ok(changed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 后台日志无需主 Agent 唤醒或用户按键即可刷新，记录清理后停止轮询。
+    #[test]
+    fn background_command_idle_refresh_has_an_independent_wakeup() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(temp.path());
+        let mut runtime = ReplRuntime::new(
+            100,
+            crate::render::transcript::TranscriptRenderOptions {
+                reasoning_mode: crate::render::ReasoningDisplayMode::Summary,
+                tool_call_mode: crate::render::ToolCallDisplayMode::Full,
+            },
+        );
+        runtime.bind_background_session(&paths, "test-session");
+        runtime.transcript.push_tool_call(
+            "background_command".into(),
+            r#"{"action":"start","command":"build"}"#.into(),
+        );
+        runtime.transcript.push_tool_result("background_command".into(), true,
+            r#"{"task":{"id":"test-task","status":"running","command":"build"},"stdout":"last log"}"#.into());
+        assert!(runtime.pending_wait().is_some());
+        assert!(runtime.tick_background_logs().unwrap());
+        assert!(runtime.transcript.running_background_task_ids().is_empty());
+        assert!(runtime.pending_wait().is_none());
+        assert!(runtime
+            .transcript
+            .expandable_blocks()
+            .iter()
+            .any(|block| block.body.contains("last log")));
     }
 }

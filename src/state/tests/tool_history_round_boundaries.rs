@@ -20,15 +20,27 @@ fn insert_running_tool_call(
         .record_tool_call_started_with_context(
             turn_id,
             seq,
-            round,
-            None,
+            crate::state::tool_history::ToolAssistantContext {
+                assistant_round: round,
+                assistant_reasoning: None,
+            },
             &call_id,
             "read_file",
             r#"{"path":"a.rs"}"#,
         )
         .unwrap();
     store
-        .record_tool_result_completed(turn_id, &call_id, true, output, None, None, output.len())
+        .record_tool_result_completed(
+            turn_id,
+            &call_id,
+            true,
+            crate::state::tool_history::ToolResultOutput {
+                result_preview: output,
+                result_ref: None,
+                error: None,
+                original_chars: output.len(),
+            },
+        )
         .unwrap();
 }
 

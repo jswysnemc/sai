@@ -464,7 +464,7 @@ fn permission_audit_stays_inside_existing_diff_view() {
         id: "permission".to_string(),
         session_id: "session".to_string(),
         tool: "str_replace".to_string(),
-        arguments: arguments,
+        arguments,
         auto_audit: false,
     });
 

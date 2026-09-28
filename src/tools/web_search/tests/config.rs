@@ -70,8 +70,10 @@ fn web_search_presets_upgrade_only_unchanged_legacy_profiles() {
         let id = profile.id.clone();
         let mut legacy = profile;
         legacy.enabled_tools.retain(|name| name != "web_search");
-        let mut config = AppConfig::default();
-        config.agents = vec![legacy.clone()];
+        let mut config = AppConfig {
+            agents: vec![legacy.clone()],
+            ..AppConfig::default()
+        };
         let resolved = apply_agent_override(config.clone(), Some(&id), AgentSurface::Web).unwrap();
         assert!(resolved
             .agent_runtime

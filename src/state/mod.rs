@@ -308,9 +308,11 @@ impl StateStore {
                 FailureKind::StaleRunningTurn,
                 RecoveryStatus::Resolved,
                 "启动时发现运行中轮次，已按中断语义恢复",
-                0,
-                0,
-                0,
+                crate::state::failure_recovery::RecoveryMetrics {
+                    retry_count: 0,
+                    context_chars: 0,
+                    context_limit_chars: 0,
+                },
             )?;
         }
         if settled_tools > 0 {
@@ -319,9 +321,11 @@ impl StateStore {
                 FailureKind::ToolHistoryPendingStale,
                 RecoveryStatus::Resolved,
                 &format!("启动时发现 {settled_tools} 个未完成工具调用，已标记为中断"),
-                0,
-                0,
-                0,
+                crate::state::failure_recovery::RecoveryMetrics {
+                    retry_count: 0,
+                    context_chars: 0,
+                    context_limit_chars: 0,
+                },
             )?;
         }
         Ok(turn_ids.len())

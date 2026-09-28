@@ -218,7 +218,7 @@ pub(super) async fn list_background_tasks(
                 task.runtime_owner_kind.clone().unwrap_or_default(),
                 task.runtime_owner_id.clone().unwrap_or_default(),
             );
-            if synced.iter().any(|item| *item == key) {
+            if synced.contains(&key) {
                 continue;
             }
             if let Ok(state) = state_for_task(paths, task) {
@@ -527,7 +527,7 @@ fn state_for_task(paths: &SaiPaths, task: &BackgroundCommandTask) -> Result<Stat
 ///
 /// 返回:
 /// - 日志文本
-/// 读取日志文件开头若干行。
+///   读取日志文件开头若干行。
 ///
 /// 参数:
 /// - `path`: 日志路径

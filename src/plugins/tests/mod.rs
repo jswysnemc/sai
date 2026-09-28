@@ -44,6 +44,7 @@ mod hash_codec_reference;
 mod hash_codec_settings;
 mod http;
 mod http_archive;
+mod http_fixture;
 mod http_public_contract;
 mod http_redirects;
 mod image_display;

@@ -220,8 +220,8 @@ fn private_storage_refuses_symlink_records() {
     let record = paths
         .state_dir
         .join("plugin-state")
-        .join(blake3::hash(b"test").to_hex().to_string())
-        .join(blake3::hash(b"a").to_hex().to_string())
+        .join(blake3::hash(b"test").to_hex())
+        .join(blake3::hash(b"a").to_hex())
         .join(format!("{}.json", blake3::hash(b"key").to_hex()));
     let outside = root.path().join("outside.json");
     std::fs::write(&outside, "2").unwrap();

@@ -10,7 +10,7 @@ use std::time::Duration;
 /// 【权限审核】【后端选择】内置 Jev 审核优先，其次为指定的 Lua 插件，最后为聊天模型
 #[derive(Clone)]
 pub(crate) enum AutoAuditBackend {
-    Llm(OpenAiCompatibleClient),
+    Llm(Box<OpenAiCompatibleClient>),
     Plugin(PluginRuntime),
     Jev(super::jev_audit::JevAuditRuntime),
 }
@@ -25,9 +25,9 @@ impl AutoAuditBackend {
             )?));
         }
         if config.permission.auto_audit_plugin_id.trim().is_empty() {
-            Ok(Self::Llm(super::auto_audit::resolve_auto_audit_client(
-                config, paths,
-            )?))
+            Ok(Self::Llm(Box::new(
+                super::auto_audit::resolve_auto_audit_client(config, paths)?,
+            )))
         } else {
             Ok(Self::Plugin(crate::plugins::permission_audit::load(
                 config, paths,

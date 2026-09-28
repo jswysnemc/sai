@@ -40,7 +40,7 @@ fn plugin_storage_grants_preserve_other_capabilities_and_reject_undeclared_updat
             &paths,
             "storage-grants",
             true,
-            GrantUpdate::Changes(GrantChanges {
+            GrantUpdate::changes(GrantChanges {
                 plugin_storage: Some(enabled),
                 ..Default::default()
             }),
@@ -55,7 +55,7 @@ fn plugin_storage_grants_preserve_other_capabilities_and_reject_undeclared_updat
         &paths,
         "storage-grants",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             session_storage: Some(false),
             ..Default::default()
         }),
@@ -71,7 +71,7 @@ fn plugin_storage_grants_preserve_other_capabilities_and_reject_undeclared_updat
         &paths,
         "storage-grants",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             plugin_storage: Some(true),
             ..Default::default()
         })
@@ -86,7 +86,7 @@ fn plugin_storage_grants_preserve_other_capabilities_and_reject_undeclared_updat
         &paths,
         "storage-grants",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             environment: Some(Default::default()),
             ..Default::default()
         }),

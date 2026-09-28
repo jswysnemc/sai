@@ -247,13 +247,13 @@ pub(super) async fn wait_stopped(pid: u32) {
 fn process_running(pid: u32) -> bool {
     #[cfg(target_os = "linux")]
     {
-        return std::fs::read_to_string(format!("/proc/{pid}/stat"))
+        std::fs::read_to_string(format!("/proc/{pid}/stat"))
             .ok()
             .and_then(|text| {
                 text.rsplit_once(") ")
                     .map(|(_, state)| !state.starts_with(['Z', 'X']))
             })
-            .unwrap_or(false);
+            .unwrap_or(false)
     }
     #[cfg(all(unix, not(target_os = "linux")))]
     {
@@ -307,6 +307,10 @@ fn fixture_environment() {
 /// 【进程宿主测试】【后代样本】启动同一测试二进制中的等待进程，模拟组长与后代不同生命周期。
 #[test]
 #[ignore = "仅由进程宿主测试在隔离目录启动"]
+#[expect(
+    clippy::zombie_processes,
+    reason = "测试必须保留退出组长的后代，验证宿主可以回收孤儿进程组"
+)]
 fn fixture_descendants() {
     if !Path::new("plugin-process-fixture").is_file() {
         return;

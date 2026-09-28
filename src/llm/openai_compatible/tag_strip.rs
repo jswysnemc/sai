@@ -2,10 +2,7 @@ fn strip_tagged_sections(mut text: String, tag: &str) -> String {
     let open = format!("<{tag}>");
     let close = format!("</{tag}>");
     let open_prefix = format!("<{tag}");
-    loop {
-        let Some(start) = text.find(&open_prefix) else {
-            break;
-        };
+    while let Some(start) = text.find(&open_prefix) {
         let content_start = text[start..]
             .find('>')
             .map(|offset| start + offset + 1)

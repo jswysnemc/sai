@@ -44,7 +44,7 @@ pub(crate) fn browse(requested: Option<&str>) -> Result<DirectoryListing> {
         .filter_map(Result::ok)
         .filter_map(|entry| directory_entry(entry.path()).ok())
         .collect::<Vec<_>>();
-    entries.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    entries.sort_by_key(|left| left.name.to_lowercase());
     // merged-usr 系统中 /bin、/sbin 等符号链接规范化到同一目标，按路径去重避免重复条目
     entries.dedup_by(|left, right| left.path == right.path);
     let parent = resolve_parent(&current);

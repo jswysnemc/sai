@@ -80,7 +80,7 @@ fn cleanup_snapshot_root_at(snapshot_root: &Path, now: SystemTime) -> Result<Cle
         }
     }
     // 2. 已完成快照按修改时间保留最近若干个，其余淘汰
-    completed.sort_by(|left, right| right.0.cmp(&left.0));
+    completed.sort_by_key(|left| std::cmp::Reverse(left.0));
     for (_, path) in completed.into_iter().skip(MAX_RETAINED_SNAPSHOTS) {
         std::fs::remove_dir_all(&path)?;
         report.evicted += 1;

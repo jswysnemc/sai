@@ -184,7 +184,7 @@ pub struct PromptConfig {
     pub templates: PromptTemplatesConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct GatewayConfig {
     #[serde(default)]
     pub qq: QqGatewayConfig,

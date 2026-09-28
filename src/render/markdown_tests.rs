@@ -653,11 +653,7 @@ fn table_with_mixed_inline_markdown_stays_aligned() {
     );
     for line in output.lines() {
         let width = table::visible_width(line);
-        let next = output
-            .lines()
-            .map(|l| table::visible_width(l))
-            .max()
-            .unwrap_or(0);
+        let next = output.lines().map(table::visible_width).max().unwrap_or(0);
         assert!(
             width <= next,
             "line wider than max: {line} (width={width}, max={next})"

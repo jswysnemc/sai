@@ -10,29 +10,38 @@ pub(super) enum ScrollDragTarget {
     Vertical,
 }
 
+/// 【终端分页】【滚动区域】正文尺寸与进度条位置使用同一帧布局。
+#[derive(Clone, Copy)]
+pub(super) struct ScrollViewport {
+    pub cols: usize,
+    pub view_h: usize,
+    pub total_lines: usize,
+    pub max_scroll: usize,
+    pub progress_row: u16,
+    pub body_top_row: u16,
+}
+
 /// 处理鼠标事件（滚轮、点击/拖动进度条）。
 ///
 /// 参数:
 /// - `mouse`: 鼠标事件
-/// - `cols`: 终端列数
-/// - `view_h`: 可视行数
-/// - `total_lines`: 正文总行数
-/// - `max_scroll`: 最大滚动偏移
-/// - `progress_row`: 横向进度条所在行
-/// - `body_top_row`: 正文首行所在行
+/// - `viewport`: 正文尺寸、滚动范围与进度条位置
 /// - `scroll`: 当前滚动偏移（可写）
 /// - `drag_target`: 当前拖动目标（可写）
 pub(super) fn apply_mouse(
     mouse: MouseEvent,
-    cols: usize,
-    view_h: usize,
-    total_lines: usize,
-    max_scroll: usize,
-    progress_row: u16,
-    body_top_row: u16,
+    viewport: ScrollViewport,
     scroll: &mut usize,
     drag_target: &mut ScrollDragTarget,
 ) {
+    let ScrollViewport {
+        cols,
+        view_h,
+        total_lines,
+        max_scroll,
+        progress_row,
+        body_top_row,
+    } = viewport;
     let body_bottom = body_top_row.saturating_add(view_h as u16);
     let on_horizontal = mouse.row == progress_row
         || mouse.row.saturating_add(1) == progress_row
@@ -175,13 +184,15 @@ pub(super) fn scrollbar_glyphs(view_h: usize, total_lines: usize, scroll: usize)
     let thumb_h = vertical_thumb_height(view_h, total_lines);
     let max_scroll = total_lines.saturating_sub(view_h);
     let travel = view_h.saturating_sub(thumb_h);
-    let thumb_top = if max_scroll == 0 {
-        0
-    } else {
-        (scroll * travel) / max_scroll
-    };
-    for row in thumb_top..thumb_top.saturating_add(thumb_h).min(view_h) {
-        glyphs[row] = '█';
+    let thumb_top = (scroll * travel)
+        .checked_div(max_scroll)
+        .unwrap_or_default();
+    for glyph in glyphs
+        .iter_mut()
+        .take(thumb_top.saturating_add(thumb_h))
+        .skip(thumb_top)
+    {
+        *glyph = '█';
     }
     glyphs
 }
@@ -207,15 +218,18 @@ pub(super) fn horizontal_progress_track(
     }
     let max_scroll = total_lines.saturating_sub(view_h);
     let mut track = vec!['─'; cols];
-    if max_scroll == 0 {
-        track.fill('━');
-    } else {
-        let thumb_w = ((cols * view_h) / total_lines.max(1)).clamp(1, cols);
-        let travel = cols.saturating_sub(thumb_w);
-        let thumb_x = (scroll * travel) / max_scroll;
-        for col in thumb_x..thumb_x.saturating_add(thumb_w).min(cols) {
-            track[col] = '━';
+    let thumb_w = ((cols * view_h) / total_lines.max(1)).clamp(1, cols);
+    let travel = cols.saturating_sub(thumb_w);
+    if let Some(thumb_x) = (scroll * travel).checked_div(max_scroll) {
+        for glyph in track
+            .iter_mut()
+            .take(thumb_x.saturating_add(thumb_w))
+            .skip(thumb_x)
+        {
+            *glyph = '━';
         }
+    } else {
+        track.fill('━');
     }
     format!("\x1b[36m{}\x1b[0m", track.into_iter().collect::<String>())
 }

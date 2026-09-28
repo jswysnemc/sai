@@ -235,18 +235,14 @@ impl StateStore {
         )?;
         let prompt_chars = prompt.total_chars();
         if history.replacement_missing_count > 0 {
-            self.record_recovery_failure(
-                request.compact_turn_ids.last().map(String::as_str),
-                crate::state::FailureKind::ToolHistoryReplacementMissing,
-                crate::state::RecoveryStatus::Observed,
-                &format!(
+            self.record_recovery_failure(request.compact_turn_ids.last().map(String::as_str),
+crate::state::FailureKind::ToolHistoryReplacementMissing,
+crate::state::RecoveryStatus::Observed,
+&format!(
                     "压缩摘要输入发现 {} 个工具输出引用缺少稳定 replacement，已回退使用 result_preview",
                     history.replacement_missing_count
                 ),
-                0,
-                prompt_chars,
-                context_limit_chars,
-            )?;
+crate::state::failure_recovery::RecoveryMetrics { retry_count: 0, context_chars: prompt_chars, context_limit_chars })?;
         }
         if history.result_ref_missing_file_count > 0 {
             self.record_recovery_failure(
@@ -257,9 +253,11 @@ impl StateStore {
                     "压缩摘要输入发现 {} 个工具完整输出引用文件缺失，已回退使用 result_preview",
                     history.result_ref_missing_file_count
                 ),
-                0,
-                prompt_chars,
-                context_limit_chars,
+                crate::state::failure_recovery::RecoveryMetrics {
+                    retry_count: 0,
+                    context_chars: prompt_chars,
+                    context_limit_chars,
+                },
             )?;
         }
         if prompt_chars > context_limit_chars
@@ -360,9 +358,11 @@ impl StateStore {
                 crate::state::FailureKind::CompactionMirrorFailed,
                 crate::state::RecoveryStatus::Observed,
                 &format!("权威 checkpoint 已提交，但旧摘要兼容镜像写入失败: {error:#}"),
-                0,
-                0,
-                0,
+                crate::state::failure_recovery::RecoveryMetrics {
+                    retry_count: 0,
+                    context_chars: 0,
+                    context_limit_chars: 0,
+                },
             )?;
         }
         self.resolve_active_compaction_failures()?;

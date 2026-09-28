@@ -28,7 +28,7 @@ fn capability_updates_preserve_other_grants_and_reject_undeclared_tools() {
         &paths,
         "capabilities",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             http: Some(Default::default()),
             http_read_only_post: Some(Default::default()),
             ..Default::default()
@@ -53,7 +53,7 @@ fn capability_updates_preserve_other_grants_and_reject_undeclared_tools() {
         &paths,
         "capabilities",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             tools: Some(["read_file".into()].into()),
             ..Default::default()
         }),
@@ -67,7 +67,7 @@ fn capability_updates_preserve_other_grants_and_reject_undeclared_tools() {
         &paths,
         "capabilities",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             tools: Some(["run_command".into()].into()),
             ..Default::default()
         })
@@ -82,7 +82,7 @@ fn capability_updates_preserve_other_grants_and_reject_undeclared_tools() {
         &paths,
         "capabilities",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             model: Some(false),
             ..Default::default()
         }),
@@ -95,7 +95,7 @@ fn capability_updates_preserve_other_grants_and_reject_undeclared_tools() {
         &paths,
         "capabilities",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             tools: Some(Default::default()),
             ..Default::default()
         }),
@@ -197,7 +197,7 @@ fn network_grants_are_explicit_and_bounded_by_the_manifest() {
         &paths,
         "network",
         true,
-        GrantUpdate::Changes(crate::plugins::GrantChanges {
+        GrantUpdate::changes(crate::plugins::GrantChanges {
             http: Some(["https://other.test".into()].into()),
             ..Default::default()
         })
@@ -217,7 +217,7 @@ fn network_grants_are_explicit_and_bounded_by_the_manifest() {
         &paths,
         "network",
         true,
-        GrantUpdate::Changes(crate::plugins::GrantChanges {
+        GrantUpdate::changes(crate::plugins::GrantChanges {
             http: Some(Default::default()),
             http_read_only_post: Some(Default::default()),
             ..Default::default()
@@ -258,7 +258,7 @@ fn read_only_post_grants_are_explicit_and_survive_package_updates() {
         &paths,
         "query-api",
         true,
-        GrantUpdate::Changes(crate::plugins::GrantChanges {
+        GrantUpdate::changes(crate::plugins::GrantChanges {
             http: Some(invalid.http),
             http_read_only_post: Some(invalid.http_read_only_post),
             ..Default::default()
@@ -270,7 +270,7 @@ fn read_only_post_grants_are_explicit_and_survive_package_updates() {
         &paths,
         "query-api",
         true,
-        GrantUpdate::Changes(crate::plugins::GrantChanges {
+        GrantUpdate::changes(crate::plugins::GrantChanges {
             http: Some(grants.http.clone()),
             http_read_only_post: Some(grants.http_read_only_post.clone()),
             ..Default::default()
@@ -297,7 +297,7 @@ fn read_only_post_grants_are_explicit_and_survive_package_updates() {
         &paths,
         "query-api",
         true,
-        GrantUpdate::Changes(crate::plugins::GrantChanges {
+        GrantUpdate::changes(crate::plugins::GrantChanges {
             http: Some(Default::default()),
             http_read_only_post: Some(Default::default()),
             ..Default::default()

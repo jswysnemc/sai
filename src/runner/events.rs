@@ -17,7 +17,7 @@ pub(crate) enum RunnerEvent {
     Completed(ChatResult),
     Failed(String),
     LoadedToolsChanged(Vec<String>),
-    FinalSummary(SessionSnapshot),
+    FinalSummary(Box<SessionSnapshot>),
 }
 
 /// runner 输出汇总。

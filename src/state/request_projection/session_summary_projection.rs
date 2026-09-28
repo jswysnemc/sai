@@ -36,7 +36,7 @@ pub(super) fn build_session_summary_projection_parts(
     let recovery = store.recovery_snapshot()?;
     let summary_context_chars = checkpoint
         .as_ref()
-        .map(|checkpoint| checkpoint_context_chars(checkpoint))
+        .map(checkpoint_context_chars)
         .or_else(|| {
             compaction
                 .as_ref()

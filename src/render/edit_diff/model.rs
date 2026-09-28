@@ -355,7 +355,8 @@ fn compress_line_diff(lines: &[LineChange], context: usize) -> Vec<LineChange> {
     lines
         .iter()
         .enumerate()
-        .filter_map(|(index, line)| keep[index].then(|| line.clone()))
+        .filter(|&(index, _line)| keep[index])
+        .map(|(_index, line)| line.clone())
         .collect()
 }
 

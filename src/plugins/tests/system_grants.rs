@@ -37,7 +37,7 @@ fn system_grant_updates_are_independent_and_atomic() {
         &paths,
         "system-grants",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             environment: Some(Default::default()),
             ..Default::default()
         }),
@@ -66,7 +66,7 @@ fn system_grant_updates_are_independent_and_atomic() {
             &paths,
             "system-grants",
             true,
-            GrantUpdate::Changes(change)
+            GrantUpdate::changes(change)
         )
         .is_err());
         assert_eq!(
@@ -79,7 +79,7 @@ fn system_grant_updates_are_independent_and_atomic() {
         &paths,
         "system-grants",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             processes: Some(Default::default()),
             ..Default::default()
         }),
@@ -131,7 +131,7 @@ fn changing_a_process_template_revokes_old_grants_without_blocking_other_updates
         &paths,
         "template-change",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             environment: Some(Default::default()),
             ..Default::default()
         }),
@@ -145,7 +145,7 @@ fn changing_a_process_template_revokes_old_grants_without_blocking_other_updates
         &paths,
         "template-change",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             processes: Some(["sample".into()].into()),
             ..Default::default()
         }),

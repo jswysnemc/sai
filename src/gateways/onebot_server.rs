@@ -217,7 +217,7 @@ fn is_authorized(headers: &HeaderMap, expected_token: Option<&str>) -> bool {
 /// 返回:
 /// - Bearer 令牌
 fn parse_bearer_token(value: &str) -> Option<&str> {
-    let mut parts = value.trim().split_whitespace();
+    let mut parts = value.split_whitespace();
     let scheme = parts.next()?;
     let token = parts.next()?;
     if parts.next().is_some() {

@@ -42,17 +42,31 @@ pub(crate) struct SessionContextPrompt {
     pub sections: Vec<ContextPromptSection>,
 }
 
+/// 【上下文预览】【请求选项】一次预览的档案、模型覆盖与展示语言。
+pub(crate) struct SessionPromptOptions<'a> {
+    pub agent_id: Option<&'a str>,
+    pub provider_id: Option<&'a str>,
+    pub model: Option<&'a str>,
+    pub mode: AgentMode,
+    pub locale: Locale,
+}
+
+/// 【上下文预览】【摘要指标】与同一次投影对应的统计和来源标记。
+struct PromptSummaryMetadata {
+    token_count: usize,
+    tool_count: usize,
+    has_memory: bool,
+    has_dynamic: bool,
+    agent_id: Option<String>,
+}
+
 /// 读取指定会话的完整上下文提示词预览。
 ///
 /// 参数:
 /// - `paths`: Sai 路径
 /// - `session_id`: 会话 ID
 /// - `workspace_path`: 工作区路径（用于加载项目 AGENT.md）
-/// - `agent_id`: 可选 Agent 档案覆盖
-/// - `provider_id`: 可选供应商覆盖
-/// - `model`: 可选模型覆盖
-/// - `mode`: 当前运行模式
-/// - `locale`: 界面语言（仅影响预览标题与说明文案，不改变模型侧稳定正文）
+/// - `options`: Agent/模型覆盖、运行模式及界面语言；语言只影响预览文案
 ///
 /// 返回:
 /// - 与真实请求尽量对齐的系统段 + 工具描述 Markdown
@@ -60,12 +74,15 @@ pub(crate) async fn load_session_context_prompt(
     paths: &SaiPaths,
     session_id: &str,
     workspace_path: &str,
-    agent_id: Option<&str>,
-    provider_id: Option<&str>,
-    model: Option<&str>,
-    mode: AgentMode,
-    locale: Locale,
+    options: SessionPromptOptions<'_>,
 ) -> Result<SessionContextPrompt> {
+    let SessionPromptOptions {
+        agent_id,
+        provider_id,
+        model,
+        mode,
+        locale,
+    } = options;
     let store = StateStore::for_session(paths, session_id)?;
     let workspace = std::path::PathBuf::from(workspace_path);
     let workspace_path_owned = workspace_path.to_string();
@@ -241,16 +258,10 @@ pub(crate) async fn load_session_context_prompt(
         )?
         .total();
 
-        Ok(summarize_prompt(
-            &source,
-            content,
-            token_count,
-            tools_section.tool_count,
-            !dynamic.memory_index.trim().is_empty(),
-            dynamic.has_dynamic(),
-            agent_owned,
-            sections,
-        ))
+        Ok(summarize_prompt(&source,
+content,
+PromptSummaryMetadata { token_count, tool_count: tools_section.tool_count, has_memory: !dynamic.memory_index.trim().is_empty(), has_dynamic: dynamic.has_dynamic(), agent_id: agent_owned },
+sections))
     })
     .await
 }
@@ -369,11 +380,7 @@ fn format_tool_definition_markdown(definition: &ToolDefinition) -> String {
 /// 参数:
 /// - `source`: 数据来源标记
 /// - `content`: 提示词正文
-/// - `token_count`: 与请求分项一致的已加载上下文 token 数
-/// - `tool_count`: 工具数量
-/// - `has_memory`: 是否含记忆索引正文
-/// - `has_dynamic`: 是否含动态系统段
-/// - `agent_id`: 可选 Agent 标识
+/// - `metadata`: 上下文和工具计数、记忆/动态段标记及 Agent 标识
 /// - `sections`: 带稳定 ID 的预览分区
 ///
 /// 返回:
@@ -381,13 +388,16 @@ fn format_tool_definition_markdown(definition: &ToolDefinition) -> String {
 fn summarize_prompt(
     source: &str,
     content: String,
-    token_count: usize,
-    tool_count: usize,
-    has_memory: bool,
-    has_dynamic: bool,
-    agent_id: Option<String>,
+    metadata: PromptSummaryMetadata,
     sections: Vec<ContextPromptSection>,
 ) -> SessionContextPrompt {
+    let PromptSummaryMetadata {
+        token_count,
+        tool_count,
+        has_memory,
+        has_dynamic,
+        agent_id,
+    } = metadata;
     let has_instruction_files = content.contains("<instruction-files>")
         || content.contains("## 指令文件")
         || content.contains("## Instruction files")

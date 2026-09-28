@@ -1,8 +1,7 @@
 use super::*;
 use crate::agent::{AgentEvent, ExternalEventBatch};
 
-#[path = "automatic_test_support.rs"]
-mod support;
+use crate::runner::automatic_test_support as support;
 use support::{AutomaticTestHarness, TestResponse};
 
 const COMPLETION_PROMPT: &str =

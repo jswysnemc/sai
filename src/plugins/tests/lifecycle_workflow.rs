@@ -37,7 +37,10 @@ async fn installed_observer_tracks_real_agent_rounds_and_vetoes_without_rewritin
         result.content,
         "final response stays outside lifecycle data"
     );
-    assert_eq!(*fixture.probes.lock().unwrap(), [arguments.clone()]);
+    assert_eq!(
+        fixture.probes.lock().unwrap().as_slice(),
+        std::slice::from_ref(&arguments)
+    );
     let report = fixture.report_agent(&agent).await;
     fixture.assert_contexts(&report, agent.session_id());
     assert_eq!(

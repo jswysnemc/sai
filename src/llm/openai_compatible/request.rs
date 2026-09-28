@@ -38,7 +38,7 @@ fn stable_request_cache_key(
 ///
 /// 返回:
 /// - 需要 Codex 完整字段时 true
-/// 是否按 Codex 通道形态发 Responses。
+///   是否按 Codex 通道形态发 Responses。
 ///
 /// 参数:
 /// - `model`: 模型名

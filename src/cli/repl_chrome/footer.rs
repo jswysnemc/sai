@@ -76,7 +76,7 @@ impl ReplChrome {
         let pad = CHROME_FOOTER_SIDE_PAD.min(cols.saturating_sub(1) / 2);
         let inner = cols.saturating_sub(pad.saturating_mul(2)).max(1);
         // 1. 在扣除左右外边距后的净宽上裁剪，避免贴边
-        let (left_text, right_text, gap) = fit_status_segments(&left_plain, &right_plain, inner);
+        let (left_text, right_text, gap) = fit_status_segments(left_plain, right_plain, inner);
         // 2. 裁剪后再着色，避免 ANSI 干扰宽度计算
         let left = if custom {
             color_model(&left_text)

@@ -56,8 +56,8 @@ async fn import_plan(paths: &SaiPaths, store: &StateStore, work: &FilePath) -> P
     paths
         .state_dir
         .join("plugin-state")
-        .join(blake3::hash(b"todo").to_hex().to_string())
-        .join(blake3::hash(scope.as_bytes()).to_hex().to_string())
+        .join(blake3::hash(b"todo").to_hex())
+        .join(blake3::hash(scope.as_bytes()).to_hex())
         .join(format!("{}.json", blake3::hash(b"plan").to_hex()))
 }
 
@@ -73,7 +73,8 @@ async fn session_data_todo_counts_follow_native_file_and_preserve_parse_errors()
     crate::runtime_cwd::scope(work.clone(), async {
         let session = crate::state::create_session(&paths, Some("todo")).unwrap();
         let store = StateStore::for_session(&paths, &session.id).unwrap();
-        let mut absent = collect_session_data(&paths, &[info.clone()], &info.id).unwrap();
+        let mut absent =
+            collect_session_data(&paths, std::slice::from_ref(&info), &info.id).unwrap();
         todos::fill_counts(&paths, &mut absent).await.unwrap();
         assert!(absent.iter().all(|summary| summary.todo_count == Some(0)));
         std::fs::write(
@@ -81,7 +82,8 @@ async fn session_data_todo_counts_follow_native_file_and_preserve_parse_errors()
             json!([item()]).to_string(),
         )
         .unwrap();
-        let mut summaries = collect_session_data(&paths, &[info.clone()], &info.id).unwrap();
+        let mut summaries =
+            collect_session_data(&paths, std::slice::from_ref(&info), &info.id).unwrap();
         todos::fill_counts(&paths, &mut summaries).await.unwrap();
         let summary = summaries.iter().find(|item| item.id == session.id).unwrap();
         assert_eq!(summary.todo_count, Some(1));
@@ -91,7 +93,8 @@ async fn session_data_todo_counts_follow_native_file_and_preserve_parse_errors()
             summary.items.iter().map(|item| item.bytes).sum::<u64>()
         );
         std::fs::write(store.state_dir().join("todos.json"), "{broken").unwrap();
-        let mut summaries = collect_session_data(&paths, &[info.clone()], &info.id).unwrap();
+        let mut summaries =
+            collect_session_data(&paths, std::slice::from_ref(&info), &info.id).unwrap();
         todos::fill_counts(&paths, &mut summaries).await.unwrap();
         let summary = summaries.iter().find(|item| item.id == session.id).unwrap();
         assert_eq!(summary.todo_count, None);

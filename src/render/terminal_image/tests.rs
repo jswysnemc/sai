@@ -24,13 +24,15 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let path = temp_dir.path().join("sample.png");
         // 16x32 像素 + 默认 8x16 单元格 => 至少 2 列 2 行
-        let pixels = std::iter::repeat(Rgba {
-            r: 255,
-            g: 0,
-            b: 0,
-            a: 255,
-        })
-        .take(16 * 32)
+        let pixels = std::iter::repeat_n(
+            Rgba {
+                r: 255,
+                g: 0,
+                b: 0,
+                a: 255,
+            },
+            16 * 32,
+        )
         .collect::<Vec<_>>();
         write_test_rgba_png(&path, 16, 32, &pixels);
         let output = render_kitty_image(&path).unwrap();
@@ -258,7 +260,7 @@ mod tests {
         // 100x400，格 10x20，max_rows=4；收 1 列后行高仍不超过上限
         let (cols, rows) = table_image_cell_dimensions(100, 400, 10, 20, 20, 4);
         assert!(rows <= 4);
-        assert!(cols >= 1 && cols <= 20);
+        assert!((1..=20).contains(&cols));
     }
 
     #[test]
@@ -352,13 +354,15 @@ mod tests {
         // 宽短图：模拟甘特图，不应在下方预留远超内容的空白行
         let width = 400u32;
         let height = 120u32;
-        let pixels = std::iter::repeat(Rgba {
-            r: 200,
-            g: 200,
-            b: 220,
-            a: 255,
-        })
-        .take((width * height) as usize)
+        let pixels = std::iter::repeat_n(
+            Rgba {
+                r: 200,
+                g: 200,
+                b: 220,
+                a: 255,
+            },
+            (width * height) as usize,
+        )
         .collect::<Vec<_>>();
         write_test_rgba_png(&path, width, height, &pixels);
         let output = render_kitty_image(&path).unwrap();

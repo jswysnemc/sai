@@ -103,7 +103,7 @@ async fn permission_audit_failure_never_falls_back_to_llm_or_approval() {
             &paths,
             "audit-fixture",
             true,
-            plugins::GrantUpdate::Changes(plugins::GrantChanges {
+            plugins::GrantUpdate::changes(plugins::GrantChanges {
                 permission_audit: Some(false),
                 ..Default::default()
             }),

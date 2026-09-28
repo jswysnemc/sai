@@ -230,7 +230,7 @@ fn upload_media_type(kind: WeixinOutboundMediaKind) -> i64 {
 /// 返回:
 /// - 加密后字节数
 fn aes_ecb_padded_size(raw_size: usize) -> usize {
-    ((raw_size + 1 + 15) / 16) * 16
+    (raw_size + 1).div_ceil(16) * 16
 }
 
 /// 使用 AES-128-ECB PKCS7 加密明文。

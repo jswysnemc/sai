@@ -1,3 +1,4 @@
+use super::turn_request::TurnRequest;
 use super::{Agent, AgentEvent, CompactionError};
 use crate::i18n::text as t;
 use crate::llm::{ChatMessage, ChatStreamEvent, ChatStreamKind};
@@ -17,12 +18,8 @@ impl Agent {
     ///
     /// 参数:
     /// - `tool_round`: 当前工具轮次
-    /// - `turn_id`: 当前运行轮次标识
+    /// - `request`: 当前轮次输入、图片与附加提示
     /// - `messages`: 当前内存消息列表
-    /// - `input`: 当前用户输入
-    /// - `image_urls`: 当前用户图片
-    /// - `memory_index_prompt`: 记忆索引注入文本
-    /// - `plugin_reply_reminder`: 插件回复策略提醒
     /// - `on_event`: 运行事件回调
     /// - `perf`: 性能追踪器
     ///
@@ -31,15 +28,19 @@ impl Agent {
     pub(super) async fn compact_between_tool_rounds(
         &mut self,
         tool_round: usize,
-        turn_id: &str,
+        request: TurnRequest<'_>,
         messages: &mut Vec<ChatMessage>,
-        input: &str,
-        image_urls: &[String],
-        memory_index_prompt: Option<&str>,
-        plugin_reply_reminder: Option<&str>,
         on_event: &mut impl FnMut(super::AgentEvent) -> Result<()>,
         perf: &mut crate::perf_trace::PerfTrace,
     ) -> Result<bool> {
+        let TurnRequest {
+            turn_id,
+            input,
+            image_urls,
+            memory_index_prompt,
+            plugin_reply_reminder,
+            ..
+        } = request;
         if tool_round <= 1
             || !self
                 .compact_conversation_if_needed(turn_id, messages, on_event)
@@ -272,7 +273,7 @@ impl Agent {
         let user_section =
             super::compaction_schema::user_messages_section(&request.compact_turns, budget);
         let pointer = super::compaction_schema::transcript_pointer(
-            &self.state.session_id(),
+            self.state.session_id(),
             self.evicted_context_lookup_available(),
         );
         super::compaction_schema::assemble(summary, &user_section, pointer.as_deref())

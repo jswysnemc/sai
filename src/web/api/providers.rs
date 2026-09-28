@@ -9,15 +9,11 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 enum ProviderProbeMode {
+    #[default]
     Connection,
     Tools,
-}
-
-impl Default for ProviderProbeMode {
-    fn default() -> Self {
-        Self::Connection
-    }
 }
 
 #[derive(Deserialize)]

@@ -25,8 +25,10 @@ impl Agent {
         self.state.record_tool_call_started_with_context(
             turn_id,
             seq,
-            assistant_round,
-            assistant_reasoning,
+            crate::state::tool_history::ToolAssistantContext {
+                assistant_round,
+                assistant_reasoning,
+            },
             &call.id,
             &call.function.name,
             &call.function.arguments,
@@ -82,10 +84,12 @@ impl Agent {
             turn_id,
             &call.id,
             ok,
-            context_output,
-            result_ref.as_deref(),
-            error,
-            raw_output.chars().count(),
+            crate::state::tool_history::ToolResultOutput {
+                result_preview: context_output,
+                result_ref: result_ref.as_deref(),
+                error,
+                original_chars: raw_output.chars().count(),
+            },
         )
     }
 

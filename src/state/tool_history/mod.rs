@@ -18,6 +18,7 @@ pub use maintenance::{ToolResultMaintenanceMode, ToolResultMaintenanceStats};
 pub(in crate::state) use model::{
     NewToolCallRecord, NewToolOutputReplacement, NewToolResultRecord,
 };
+pub(crate) use model::{ToolAssistantContext, ToolResultOutput};
 pub use model::{ToolCallStatus, ToolHistorySummary};
 pub(in crate::state) use projection::project_turn_messages_with_tool_history;
 pub(in crate::state) use repository::load_tool_exchanges_for_turn;

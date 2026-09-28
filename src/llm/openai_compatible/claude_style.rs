@@ -1,12 +1,11 @@
-/// Claude Code 客户端模拟：请求头、URL 与 Messages 请求体形态。
-///
-/// 对标抓包与 Claude CLI 特征：
-/// - `User-Agent: claude-cli/<ver> (external, cli)`
-/// - `anthropic-beta` 含 `claude-code-20250219` 与 `context-1m-2025-08-07`
-/// - `/v1/messages?beta=true`
-/// - `system` 为 text block 数组，并带 Claude Code 身份前缀
-/// - `metadata.user_id` 为设备 / 会话 JSON 字符串
-
+// Claude Code 客户端模拟：请求头、URL 与 Messages 请求体形态。
+//
+// 对标抓包与 Claude CLI 特征：
+// - `User-Agent: claude-cli/<ver> (external, cli)`
+// - `anthropic-beta` 含 `claude-code-20250219` 与 `context-1m-2025-08-07`
+// - `/v1/messages?beta=true`
+// - `system` 为 text block 数组，并带 Claude Code 身份前缀
+// - `metadata.user_id` 为设备 / 会话 JSON 字符串
 
 /// Claude Code 默认 CLI 版本（与抓包 2.1.113 对齐）。
 const CLAUDE_CLI_VERSION: &str = "2.1.113";
@@ -172,14 +171,12 @@ fn apply_claude_code_body_shape(body: &mut Value, session_id: &str, thinking_lev
             Value::Array(items) => {
                 let joined = items
                     .iter()
-                    .filter_map(|item| {
-                        item.get("text")
-                            .and_then(Value::as_str)
-                            .map(str::to_string)
-                    })
+                    .filter_map(|item| item.get("text").and_then(Value::as_str).map(str::to_string))
                     .collect::<Vec<_>>()
-                    .join("
-");
+                    .join(
+                        "
+",
+                    );
                 Some(joined)
             }
             _ => None,

@@ -137,7 +137,17 @@ mod tests {
             .record_tool_call_started("turn", 0, "call", "edit_file", r#"{"path":"a.rs"}"#)
             .unwrap();
         store
-            .record_tool_result_completed("turn", "call", false, "拒绝", None, None, 2)
+            .record_tool_result_completed(
+                "turn",
+                "call",
+                false,
+                crate::state::tool_history::ToolResultOutput {
+                    result_preview: "拒绝",
+                    result_ref: None,
+                    error: None,
+                    original_chars: 2,
+                },
+            )
             .unwrap();
         store.complete_turn("turn", "done", None).unwrap();
         let audit = PermissionAuditLog::new(
@@ -194,7 +204,17 @@ mod tests {
             )
             .unwrap();
         store
-            .record_tool_result_completed("turn", "call", true, "ok", None, None, 2)
+            .record_tool_result_completed(
+                "turn",
+                "call",
+                true,
+                crate::state::tool_history::ToolResultOutput {
+                    result_preview: "ok",
+                    result_ref: None,
+                    error: None,
+                    original_chars: 2,
+                },
+            )
             .unwrap();
         store.complete_turn("turn", "done", None).unwrap();
         let audit = PermissionAuditLog::new(
@@ -247,7 +267,17 @@ mod tests {
             .record_tool_call_started("turn", 0, "call", "edit_file", r#"{"path":"b.rs"}"#)
             .unwrap();
         store
-            .record_tool_result_completed("turn", "call", true, "ok", None, None, 2)
+            .record_tool_result_completed(
+                "turn",
+                "call",
+                true,
+                crate::state::tool_history::ToolResultOutput {
+                    result_preview: "ok",
+                    result_ref: None,
+                    error: None,
+                    original_chars: 2,
+                },
+            )
             .unwrap();
         store.complete_turn("turn", "done", None).unwrap();
         let audit = PermissionAuditLog::new(

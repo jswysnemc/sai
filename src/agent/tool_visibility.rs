@@ -218,10 +218,11 @@ impl ToolVisibility {
             return;
         }
         for name in names {
-            if registry.contains(name) && self.is_loadable_tool(name) {
-                if self.loaded.insert(name.clone()) {
-                    self.loaded_order.push(name.clone());
-                }
+            if registry.contains(name)
+                && self.is_loadable_tool(name)
+                && self.loaded.insert(name.clone())
+            {
+                self.loaded_order.push(name.clone());
             }
         }
     }

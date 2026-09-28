@@ -29,7 +29,7 @@ pub(crate) const BASE_TOOL_NAMES: &[&str] = &[
 /// 返回:
 /// - 是否为渐进式加载启动时默认暴露的基础工具
 pub(crate) fn is_base_tool(name: &str) -> bool {
-    BASE_TOOL_NAMES.iter().any(|tool| *tool == name)
+    BASE_TOOL_NAMES.contains(&name)
 }
 /// 获取工具所属用途分组。
 ///

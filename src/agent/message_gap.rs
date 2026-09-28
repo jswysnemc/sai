@@ -13,7 +13,7 @@ const MESSAGE_GAP_POLL_INTERVAL: Duration = Duration::from_millis(250);
 /// 一条间隙消息成功进入模型请求后需要确认的来源。
 pub(super) enum GapMessageAck {
     None,
-    External(ExternalEventBatch),
+    External(Box<ExternalEventBatch>),
     Source(String),
 }
 

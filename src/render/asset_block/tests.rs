@@ -116,16 +116,16 @@ fn png_has_transparent_pixel(path: &Path) -> bool {
     let bytes = &buffer[..info.buffer_size()];
     match (info.color_type, info.bit_depth) {
         (png::ColorType::Rgba, png::BitDepth::Eight) => {
-            bytes.chunks_exact(4).any(|chunk| chunk[3] == 0)
+            bytes.as_chunks::<4>().0.iter().any(|chunk| chunk[3] == 0)
         }
         (png::ColorType::Rgba, png::BitDepth::Sixteen) => {
-            bytes.chunks_exact(8).any(|chunk| chunk[6] == 0)
+            bytes.as_chunks::<8>().0.iter().any(|chunk| chunk[6] == 0)
         }
         (png::ColorType::GrayscaleAlpha, png::BitDepth::Eight) => {
-            bytes.chunks_exact(2).any(|chunk| chunk[1] == 0)
+            bytes.as_chunks::<2>().0.iter().any(|chunk| chunk[1] == 0)
         }
         (png::ColorType::GrayscaleAlpha, png::BitDepth::Sixteen) => {
-            bytes.chunks_exact(4).any(|chunk| chunk[2] == 0)
+            bytes.as_chunks::<4>().0.iter().any(|chunk| chunk[2] == 0)
         }
         _ => false,
     }

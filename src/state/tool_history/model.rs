@@ -1,3 +1,17 @@
+/// 【工具历史】【模型子轮】工具调用来源及对应思考片段。
+pub(crate) struct ToolAssistantContext<'a> {
+    pub assistant_round: usize,
+    pub assistant_reasoning: Option<&'a str>,
+}
+
+/// 【工具历史】【结果输出】模型可见预览与完整结果、错误的引用信息。
+pub(crate) struct ToolResultOutput<'a> {
+    pub result_preview: &'a str,
+    pub result_ref: Option<&'a str>,
+    pub error: Option<&'a str>,
+    pub original_chars: usize,
+}
+
 /// 工具调用状态。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolCallStatus {

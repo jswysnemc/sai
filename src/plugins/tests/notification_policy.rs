@@ -113,7 +113,7 @@ async fn external_notification_policies_require_explicit_grants() {
     let id = "custom-notice";
     for update in [
         GrantUpdate::Keep,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             http: Some(["https://example.test".into()].into()),
             ..Default::default()
         }),
@@ -130,7 +130,7 @@ async fn external_notification_policies_require_explicit_grants() {
         &paths,
         id,
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             notifications: Some(true),
             ..Default::default()
         }),
@@ -145,7 +145,7 @@ async fn external_notification_policies_require_explicit_grants() {
         &paths,
         id,
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             http: Some(Default::default()),
             ..Default::default()
         }),
@@ -164,7 +164,7 @@ async fn external_notification_policies_require_explicit_grants() {
         &paths,
         id,
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             notifications: Some(false),
             ..Default::default()
         }),
@@ -224,7 +224,7 @@ async fn installed_notification_authorization_is_revocable() {
         &paths,
         ID,
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             notifications: Some(false),
             ..Default::default()
         }),

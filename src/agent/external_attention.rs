@@ -14,8 +14,7 @@ impl ExternalEventMonitor {
         let Some(notice) =
             poll_background_attention(&self.paths, self.state.session_id(), goal_id)?
                 .into_iter()
-                .filter(|notice| self.scope.allows_background(&notice.task_id, goal_id))
-                .next()
+                .find(|notice| self.scope.allows_background(&notice.task_id, goal_id))
         else {
             return Ok(None);
         };

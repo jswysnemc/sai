@@ -101,10 +101,7 @@ pub(super) fn read_sessions_from_base(base_state_dir: &Path) -> Result<Vec<Sessi
     }
     let raw = std::fs::read_to_string(&file)
         .with_context(|| format!("failed to read {}", file.display()))?;
-    Ok(
-        serde_json::from_str(&raw)
-            .with_context(|| format!("invalid JSON in {}", file.display()))?,
-    )
+    serde_json::from_str(&raw).with_context(|| format!("invalid JSON in {}", file.display()))
 }
 
 /// 【会话索引】【写入】保存会话索引。

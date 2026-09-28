@@ -20,15 +20,27 @@ fn persists_and_projects_messages_inside_one_turn() {
         .record_tool_call_started_with_context(
             "turn-1",
             1,
-            1,
-            Some("先执行工具"),
+            crate::state::tool_history::ToolAssistantContext {
+                assistant_round: 1,
+                assistant_reasoning: Some("先执行工具"),
+            },
             "call-1",
             "read_file",
             "{}",
         )
         .unwrap();
     store
-        .record_tool_result_completed("turn-1", "call-1", true, "工具结果", None, None, 4)
+        .record_tool_result_completed(
+            "turn-1",
+            "call-1",
+            true,
+            crate::state::tool_history::ToolResultOutput {
+                result_preview: "工具结果",
+                result_ref: None,
+                error: None,
+                original_chars: 4,
+            },
+        )
         .unwrap();
     store
         .record_turn_message(NewTurnMessage {

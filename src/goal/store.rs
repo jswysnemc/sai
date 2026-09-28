@@ -159,7 +159,7 @@ impl GoalStore {
     ///
     /// 返回:
     /// - 更新后的目标
-    /// 追加一条人类可读的目标进度说明。
+    ///   追加一条人类可读的目标进度说明。
     ///
     /// 参数:
     /// - `message`: 进度摘要
@@ -283,14 +283,6 @@ fn goal_lock() -> Result<std::sync::MutexGuard<'static, ()>> {
         .lock()
         .map_err(|_| anyhow::anyhow!("goal file lock is poisoned"))
 }
-
-/// 读取未加锁目标文件。
-///
-/// 参数:
-/// - `path`: 目标文件路径
-///
-/// 返回:
-/// - 当前目标
 
 /// 向目标写入一条更新记录，并限制历史长度。
 ///

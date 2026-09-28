@@ -152,7 +152,7 @@ async fn reloading_revoked_grants_and_disabled_packages_removes_their_access() {
             &paths,
             "sqlite-files",
             true,
-            GrantUpdate::Changes(grant_changes),
+            GrantUpdate::changes(grant_changes),
         )
         .unwrap();
         let mut current = registered(root.path(), false);

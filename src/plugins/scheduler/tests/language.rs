@@ -134,7 +134,7 @@ fn knowledge_scheduled_language_keeps_configuration_and_grant_revalidation() {
                     &paths,
                     "knowledge-base",
                     true,
-                    GrantUpdate::Changes(GrantChanges {
+                    GrantUpdate::changes(GrantChanges {
                         plugin_storage: Some(false),
                         ..Default::default()
                     }),

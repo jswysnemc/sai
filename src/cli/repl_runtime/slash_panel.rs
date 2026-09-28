@@ -85,7 +85,7 @@ fn format_suggestion(suggestion: ReplCommandSuggestion, cols: usize, selected: b
     // 但此刻用户需要知道的是"为什么选不了它"
     let description = if suggestion.disabled {
         truncate_to_width(
-            &crate::i18n::text("available after this turn", "本轮结束后可用"),
+            crate::i18n::text("available after this turn", "本轮结束后可用"),
             description_width,
         )
     } else {

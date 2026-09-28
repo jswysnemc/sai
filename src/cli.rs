@@ -73,6 +73,7 @@ mod repl_text;
 mod repl_tool_warmup;
 mod repl_transcript_pager;
 mod repl_turn;
+mod repl_turn_context;
 mod repl_turn_failure;
 mod repl_windows_paste;
 mod reset;
@@ -223,7 +224,7 @@ pub async fn run(cli: Cli) -> Result<()> {
         Some(Command::Ask(ref args)) => {
             // 子命令自带的模式标志优先于顶层;都没有时维持 None,
             // 让 resolve_agent_mode 回退到配置默认
-            let mode_override = cli_mode_override(&cli).or_else(|| {
+            let mode_override = cli_mode_override(&cli).or({
                 if args.plan {
                     Some(AgentMode::Plan)
                 } else if args.audited {

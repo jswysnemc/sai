@@ -35,7 +35,7 @@ pub(super) async fn run_compaction(
                 result = &mut compact => break result.map(|_| ()),
                 _ = resize_tick.tick() => {
                     let mut runtime_ref = runtime.borrow_mut();
-                    process_stream_tick(&mut *runtime_ref)?;
+                    process_stream_tick(&mut runtime_ref)?;
                     drop(runtime_ref);
                     if poll_compact_cancel()? {
                         runtime.borrow_mut().record_meta(

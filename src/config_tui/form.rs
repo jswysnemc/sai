@@ -184,7 +184,7 @@ pub(crate) fn add_custom_model_form(stdout: &mut io::Stdout) -> Result<Option<St
     let mut fields = [Field::new(t("Model ID", "模型标识"), String::new())];
     if !run_form(
         stdout,
-        &t(" ADD CUSTOM MODEL ", " 添加自定义模型 "),
+        t(" ADD CUSTOM MODEL ", " 添加自定义模型 "),
         &mut fields,
     )? {
         return Ok(None);

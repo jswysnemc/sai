@@ -35,7 +35,7 @@ fn notification_delivery_grants_do_not_change_presentation_permissions() {
             &paths,
             "notify-grants",
             true,
-            GrantUpdate::Changes(GrantChanges {
+            GrantUpdate::changes(GrantChanges {
                 notify: Some(notify),
                 ..Default::default()
             }),
@@ -53,7 +53,7 @@ fn notification_delivery_grants_do_not_change_presentation_permissions() {
         &paths,
         "notify-grants",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             notify: Some(true),
             ..Default::default()
         })

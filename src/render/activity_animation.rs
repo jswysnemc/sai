@@ -61,7 +61,7 @@ pub(crate) fn activity_started_at() -> Instant {
 ///
 /// 返回:
 /// - 仅保留可见字符的文本
-/// 供测试与调试日志剥离 ANSI；体积极小，非 test 构建也可调用。
+///   供测试与调试日志剥离 ANSI；体积极小，非 test 构建也可调用。
 pub(crate) fn strip_ansi_for_test(text: &str) -> String {
     let mut output = String::new();
     let mut index = 0usize;

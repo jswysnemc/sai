@@ -129,15 +129,13 @@ pub(crate) fn render_inline_with_math_mode(text: &str, math_mode: InlineMathMode
                 continue;
             }
         }
-        if chars[index] == '_' {
-            if is_emphasis_start(&chars, index) {
-                if let Some(end) = find_emphasis_end(&chars, index + 1, '_') {
-                    output.push_str(MD_ITALIC_STYLE);
-                    output.extend(chars[index + 1..end].iter());
-                    output.push_str(RESET);
-                    index = end + 1;
-                    continue;
-                }
+        if chars[index] == '_' && is_emphasis_start(&chars, index) {
+            if let Some(end) = find_emphasis_end(&chars, index + 1, '_') {
+                output.push_str(MD_ITALIC_STYLE);
+                output.extend(chars[index + 1..end].iter());
+                output.push_str(RESET);
+                index = end + 1;
+                continue;
             }
         }
         // 脚注引用 `[^label]`：标记着色，与普通链接区分
@@ -280,15 +278,13 @@ pub(crate) fn render_table_cell(text: &str) -> String {
                 continue;
             }
         }
-        if chars[index] == '_' {
-            if is_emphasis_start(&chars, index) {
-                if let Some(end) = find_emphasis_end(&chars, index + 1, '_') {
-                    output.push_str(MD_ITALIC_STYLE);
-                    output.extend(chars[index + 1..end].iter());
-                    output.push_str(RESET);
-                    index = end + 1;
-                    continue;
-                }
+        if chars[index] == '_' && is_emphasis_start(&chars, index) {
+            if let Some(end) = find_emphasis_end(&chars, index + 1, '_') {
+                output.push_str(MD_ITALIC_STYLE);
+                output.extend(chars[index + 1..end].iter());
+                output.push_str(RESET);
+                index = end + 1;
+                continue;
             }
         }
         if chars[index] == '[' {

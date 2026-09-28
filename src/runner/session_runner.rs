@@ -121,7 +121,7 @@ impl<'paths> SessionRunner<'paths> {
     {
         match &submission.kind {
             RunnerSubmissionKind::UserInput(input) => self
-                .run_user_input(&submission, input.clone(), sink)
+                .run_user_input(&submission, input.as_ref().clone(), sink)
                 .await
                 .map(Some),
             RunnerSubmissionKind::Control(control) => super::control_runner::run_control(
@@ -156,7 +156,7 @@ impl<'paths> SessionRunner<'paths> {
     {
         match &submission.kind {
             RunnerSubmissionKind::UserInput(input) => self
-                .run_user_input_with_agent(&submission, input.clone(), agent, sink)
+                .run_user_input_with_agent(&submission, input.as_ref().clone(), agent, sink)
                 .await
                 .map(Some),
             RunnerSubmissionKind::Control(control) => {
@@ -265,7 +265,7 @@ impl<'paths> SessionRunner<'paths> {
             snapshot.last_turn_duration_ms = result.duration_ms;
             snapshot.last_turn_ttft_ms = result.ttft_ms;
             snapshot.usage.last_conversation_usage = result.usage.clone();
-            sink.on_runner_event(RunnerEvent::FinalSummary(snapshot))?;
+            sink.on_runner_event(RunnerEvent::FinalSummary(Box::new(snapshot)))?;
             perf.mark("final summary event");
         }
         try_auto_title_session(self.paths, &config, &state, &input, &result.content).await;
@@ -333,7 +333,7 @@ impl<'paths> SessionRunner<'paths> {
             snapshot.last_turn_duration_ms = result.duration_ms;
             snapshot.last_turn_ttft_ms = result.ttft_ms;
             snapshot.usage.last_conversation_usage = result.usage.clone();
-            sink.on_runner_event(RunnerEvent::FinalSummary(snapshot))?;
+            sink.on_runner_event(RunnerEvent::FinalSummary(Box::new(snapshot)))?;
             perf.mark("final summary event");
         }
         try_auto_title_session(self.paths, &config, agent.state(), &input, &result.content).await;

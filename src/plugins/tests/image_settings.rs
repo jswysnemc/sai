@@ -159,7 +159,7 @@ fn image_grants_are_separate_and_do_not_follow_new_paths() {
         &paths,
         "image-generation",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             public_downloads: Some(false),
             ..Default::default()
         }),
@@ -189,7 +189,7 @@ fn image_grants_are_separate_and_do_not_follow_new_paths() {
         &paths,
         "image-generation",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             write_paths: Some(["new-output".into()].into()),
             ..Default::default()
         })

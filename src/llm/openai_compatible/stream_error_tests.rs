@@ -25,10 +25,12 @@ mod stream_error_tests {
 
         super::handle_sse_line(
             r#"data: {"choices":[{"delta":{"content":"done"},"finish_reason":"stop"}]}"#,
-            &mut content,
-            &mut content_emitted,
-            &mut reasoning,
-            &mut reasoning_emitted,
+            super::StreamBuffers {
+                content: &mut content,
+                content_emitted: &mut content_emitted,
+                reasoning: &mut reasoning,
+                reasoning_emitted: &mut reasoning_emitted,
+            },
             &mut usage,
             &mut tool_calls,
             &mut finish_reason,
@@ -59,10 +61,12 @@ mod stream_error_tests {
 
         super::handle_sse_line(
             r#"data: {"choices":[{"delta":{"content":"partial"},"finish_reason":null}]}"#,
-            &mut content,
-            &mut content_emitted,
-            &mut reasoning,
-            &mut reasoning_emitted,
+            super::StreamBuffers {
+                content: &mut content,
+                content_emitted: &mut content_emitted,
+                reasoning: &mut reasoning,
+                reasoning_emitted: &mut reasoning_emitted,
+            },
             &mut usage,
             &mut tool_calls,
             &mut finish_reason,

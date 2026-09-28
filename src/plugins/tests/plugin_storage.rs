@@ -22,8 +22,8 @@ pub(super) fn record_path(paths: &SaiPaths, id: &str, key: &str) -> PathBuf {
     paths
         .state_dir
         .join("plugin-storage")
-        .join(blake3::hash(id.as_bytes()).to_hex().to_string())
-        .join(blake3::hash(b"").to_hex().to_string())
+        .join(blake3::hash(id.as_bytes()).to_hex())
+        .join(blake3::hash(b"").to_hex())
         .join(format!("{}.json", blake3::hash(key.as_bytes()).to_hex()))
 }
 

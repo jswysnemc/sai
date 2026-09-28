@@ -252,7 +252,7 @@ async fn send_identify(websocket: &mut QqWebSocket, access_token: &str) -> Resul
         }
     });
     websocket
-        .send(Message::Text(payload.to_string().into()))
+        .send(Message::Text(payload.to_string()))
         .await
         .context(t(
             "failed to send QQ WebSocket identify",
@@ -349,7 +349,7 @@ async fn send_heartbeat(websocket: &mut QqWebSocket, last_sequence: Option<u64>)
         "d": last_sequence,
     });
     websocket
-        .send(Message::Text(payload.to_string().into()))
+        .send(Message::Text(payload.to_string()))
         .await
         .context(t(
             "failed to send QQ WebSocket heartbeat",

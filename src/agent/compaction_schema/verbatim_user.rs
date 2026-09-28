@@ -86,11 +86,10 @@ fn allocate(messages: &[&str], budget: usize) -> Vec<usize> {
     let fair = budget / messages.len();
     let kept: usize = lengths.iter().filter(|length| **length <= fair).sum();
     let long_count = lengths.iter().filter(|length| **length > fair).count();
-    let share = if long_count == 0 {
-        fair
-    } else {
-        (budget.saturating_sub(kept) / long_count).max(floor)
-    };
+    let share = budget
+        .saturating_sub(kept)
+        .checked_div(long_count)
+        .map_or(fair, |share| share.max(floor));
     lengths
         .iter()
         .map(|length| if *length <= fair { *length } else { share })

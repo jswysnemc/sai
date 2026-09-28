@@ -89,7 +89,7 @@ pub(crate) fn list_subagents_for_owner(owner_key: &str) -> Vec<SubagentSnapshot>
         .filter(|record| record.owner_key == owner_key)
         .map(|record| record.snapshot.clone())
         .collect::<Vec<_>>();
-    items.sort_by(|left, right| right.started_at.cmp(&left.started_at));
+    items.sort_by_key(|left| std::cmp::Reverse(left.started_at));
     items
 }
 

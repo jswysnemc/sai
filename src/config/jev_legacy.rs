@@ -98,8 +98,10 @@ impl AppConfig {
 /// 构造只含旧版段的配置，供测试使用。
 #[cfg(test)]
 fn with_legacy(value: Value) -> AppConfig {
-    let mut config = AppConfig::default();
-    config.legacy_jev_routing = Some(value);
+    let mut config = AppConfig {
+        legacy_jev_routing: Some(value),
+        ..AppConfig::default()
+    };
     config.migrate_legacy_jev_routing();
     config
 }
@@ -111,7 +113,9 @@ mod tests {
 
     #[test]
     fn default_legacy_section_only_moves_routing_fields() {
-        let config = with_legacy(json!({"enabled": true, "max_tools": 2, "api_key": "$env:TYPESAFE_API_KEY"}));
+        let config = with_legacy(
+            json!({"enabled": true, "max_tools": 2, "api_key": "$env:TYPESAFE_API_KEY"}),
+        );
         assert!(config.jev.routing.enabled);
         assert_eq!(config.jev.routing.max_tools, 2);
         assert!(config.model_endpoints.is_empty());
@@ -120,7 +124,8 @@ mod tests {
 
     #[test]
     fn custom_connection_becomes_endpoint() {
-        let config = with_legacy(json!({"base_url": "http://localhost:9087/v1/", "api_key": "$env:MY_KEY"}));
+        let config =
+            with_legacy(json!({"base_url": "http://localhost:9087/v1/", "api_key": "$env:MY_KEY"}));
         let endpoint = &config.model_endpoints[0];
         assert_eq!(endpoint.kind, ModelEndpointKind::Jev);
         assert_eq!(endpoint.endpoint, "http://localhost:9087/v1/systemone");

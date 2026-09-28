@@ -222,9 +222,9 @@ impl<'a> ProviderBrowser<'a> {
         // 必须先确认，并在副标题里说明后果
         if !confirm_delete(
             stdout,
-            &t(" DELETE PROVIDER ", " 删除供应商 "),
+            t(" DELETE PROVIDER ", " 删除供应商 "),
             &provider_id,
-            &t(
+            t(
                 "This also clears models, keys and any model references pointing at it.",
                 "同时删除其下的模型与密钥，并清空指向它的模型引用（压缩 / 视觉 / 嵌入 / 子代理）。",
             ),
@@ -406,9 +406,9 @@ impl<'a> ProviderBrowser<'a> {
         };
         if !confirm_delete(
             stdout,
-            &t(" REMOVE MODEL ", " 移除模型 "),
+            t(" REMOVE MODEL ", " 移除模型 "),
             &model,
-            &t(
+            t(
                 "Removes it from this provider's model list.",
                 "从该供应商的模型列表中移除。",
             ),

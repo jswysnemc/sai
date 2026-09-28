@@ -426,7 +426,7 @@ pub(crate) async fn run(
                 || no_image_display
             {
                 let change_http = no_http || !allow_http.is_empty();
-                GrantUpdate::Changes(GrantChanges {
+                GrantUpdate::changes(GrantChanges {
                     public_downloads: (allow_public_downloads || no_public_downloads)
                         .then_some(allow_public_downloads),
                     write_paths: (no_file_write || !allow_write_path.is_empty())

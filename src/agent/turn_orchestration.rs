@@ -1,5 +1,6 @@
 use super::message_context::clean_user_visible_text;
 use super::recovery::is_context_overflow_error;
+use super::turn_request::TurnRequest;
 use super::turn_settlement::settle_step;
 use super::{Agent, AgentEvent, InterMessageSource};
 use crate::llm::ChatResult;
@@ -231,18 +232,21 @@ impl Agent {
             )?;
             perf.mark("rebuild messages after compaction");
         }
+        let request = TurnRequest {
+            turn_id: &turn_id,
+            input: &input,
+            image_urls: &image_urls,
+            memory_index_prompt: memory_index_prompt.as_deref(),
+            plugin_reply_reminder,
+            inter_message_source: inter_message_source.as_deref(),
+            wait_for_external,
+        };
         let mut used_tools = Vec::new();
         let execution = match self
             .chat_with_tools(
-                &turn_id,
+                request,
                 &mut messages,
                 &mut used_tools,
-                &input,
-                &image_urls,
-                memory_index_prompt.as_deref(),
-                plugin_reply_reminder,
-                inter_message_source.as_deref(),
-                wait_for_external,
                 &mut emit_event,
                 &mut perf,
             )
@@ -252,17 +256,8 @@ impl Agent {
             Err(err) if is_context_overflow_error(&err) => {
                 let recovered = settle_step(
                     &mut guard,
-                    self.recover_after_provider_overflow(
-                        &turn_id,
-                        &messages,
-                        &err,
-                        &input,
-                        &image_urls,
-                        memory_index_prompt.as_deref(),
-                        plugin_reply_reminder,
-                        &mut emit_event,
-                    )
-                    .await,
+                    self.recover_after_provider_overflow(request, &messages, &err, &mut emit_event)
+                        .await,
                 )?;
                 if !recovered {
                     // 恢复失败时按失败落库，避免 UI 显示为用户中断
@@ -288,15 +283,9 @@ impl Agent {
                 }
                 match self
                     .chat_with_tools(
-                        &turn_id,
+                        request,
                         &mut messages,
                         &mut used_tools,
-                        &input,
-                        &image_urls,
-                        memory_index_prompt.as_deref(),
-                        plugin_reply_reminder,
-                        inter_message_source.as_deref(),
-                        wait_for_external,
                         &mut emit_event,
                         &mut perf,
                     )

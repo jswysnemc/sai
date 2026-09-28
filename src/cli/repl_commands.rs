@@ -150,7 +150,7 @@ pub(in crate::cli) fn is_stream_command_text(input: &str) -> bool {
 /// 返回:
 /// - 说明该命令需等本轮结束的提示
 pub(super) fn stream_command_disabled_hint(input: &str) -> String {
-    let name = input.trim().split_whitespace().next().unwrap_or_default();
+    let name = input.split_whitespace().next().unwrap_or_default();
     if crate::i18n::is_zh() {
         format!("{name} 需等本轮结束后执行；已保留在输入框，本轮结束后按 Enter 即可")
     } else {

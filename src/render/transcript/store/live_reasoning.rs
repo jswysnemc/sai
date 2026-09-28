@@ -1,4 +1,5 @@
 use super::TranscriptStore;
+#[cfg(test)]
 use crate::llm::ChatStreamKind;
 #[cfg(test)]
 use crate::render::transcript::store::HistoryCell;
@@ -13,6 +14,7 @@ impl TranscriptStore {
     ///
     /// 返回:
     /// - 当前没有可切换思考块时返回 false
+    #[cfg(test)]
     pub(crate) fn toggle_live_reasoning(&mut self) -> bool {
         let Some(tail) = self
             .live_tail

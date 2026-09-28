@@ -65,8 +65,7 @@ impl StateStore {
     /// 参数:
     /// - `turn_id`: 当前轮次标识
     /// - `seq`: 当前轮内工具调用顺序
-    /// - `assistant_round`: 产生该工具调用的模型子轮编号
-    /// - `assistant_reasoning`: 该模型子轮返回的思考内容
+    /// - `context`: 产生工具调用的模型子轮编号及思考内容
     /// - `provider_call_id`: provider 工具调用标识
     /// - `tool_name`: 工具名称
     /// - `arguments`: 工具参数 JSON 文本
@@ -77,12 +76,15 @@ impl StateStore {
         &self,
         turn_id: &str,
         seq: usize,
-        assistant_round: usize,
-        assistant_reasoning: Option<&str>,
+        context: super::ToolAssistantContext<'_>,
         provider_call_id: &str,
         tool_name: &str,
         arguments: &str,
     ) -> Result<()> {
+        let super::ToolAssistantContext {
+            assistant_round,
+            assistant_reasoning,
+        } = context;
         insert_tool_call_with_context(
             &self.conv_db,
             NewToolCallRecord {
@@ -128,10 +130,7 @@ impl StateStore {
     /// - `turn_id`: 当前轮次标识
     /// - `provider_call_id`: provider 工具调用标识
     /// - `ok`: 工具是否成功
-    /// - `result_preview`: 模型可见工具结果
-    /// - `result_ref`: 可选完整结果引用
-    /// - `error`: 可选错误信息
-    /// - `original_chars`: 原始输出字符数
+    /// - `output`: 模型可见预览、完整结果引用、错误信息和原始字符数
     ///
     /// 返回:
     /// - 写入是否成功
@@ -140,11 +139,14 @@ impl StateStore {
         turn_id: &str,
         provider_call_id: &str,
         ok: bool,
-        result_preview: &str,
-        result_ref: Option<&str>,
-        error: Option<&str>,
-        original_chars: usize,
+        output: super::ToolResultOutput<'_>,
     ) -> Result<()> {
+        let super::ToolResultOutput {
+            result_preview,
+            result_ref,
+            error,
+            original_chars,
+        } = output;
         insert_tool_result(
             &self.conv_db,
             NewToolResultRecord {

@@ -8,8 +8,8 @@ pub(crate) mod summary;
 use crate::state::turns::ConversationDb;
 use anyhow::Result;
 
-pub(crate) use model::NewRecoveryRecord;
 pub use model::{FailureKind, RecoverySnapshot, RecoveryStatus};
+pub(crate) use model::{NewRecoveryRecord, RecoveryMetrics};
 pub(crate) use policy::AUTO_COMPACTION_FAILURE_THRESHOLD;
 
 /// 写入恢复记录。

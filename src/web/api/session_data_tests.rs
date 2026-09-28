@@ -124,13 +124,17 @@ async fn deletes_sessions_from_a_non_current_workspace() {
     // 2. 把当前工作区切到 A，此时 B 的会话不在当前作用域的索引里
     let target_b = session_b.id.clone();
     let deleted = crate::runtime_cwd::scope(workspace_a.clone(), async {
-        let stale = crate::state::delete_sessions(&paths, &[target_b.clone()]).unwrap();
+        let stale = crate::state::delete_sessions(&paths, std::slice::from_ref(&target_b)).unwrap();
         assert!(
             stale.is_empty(),
             "按当前工作区删除跨工作区会话本就删不掉，这里固定住该前提"
         );
-        crate::state::delete_sessions_for_workspace(&paths, &workspace_b, &[target_b.clone()])
-            .unwrap()
+        crate::state::delete_sessions_for_workspace(
+            &paths,
+            &workspace_b,
+            std::slice::from_ref(&target_b),
+        )
+        .unwrap()
     })
     .await;
 

@@ -184,7 +184,7 @@ mod tests {
         let (sender, receiver) = mpsc::unbounded_channel();
         events.receiver = Some(receiver);
         sender
-            .send(Ok(Some(ExternalEventWake::Completion(
+            .send(Ok(Some(ExternalEventWake::completion(
                 crate::agent::ExternalEventBatch::for_test("completed", "done"),
             ))))
             .unwrap();

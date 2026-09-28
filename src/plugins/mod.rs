@@ -23,6 +23,7 @@ pub(crate) mod scheduler;
 mod services;
 mod session;
 mod system;
+#[cfg(test)]
 pub(crate) mod todo_view;
 mod tui_status;
 

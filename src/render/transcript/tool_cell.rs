@@ -9,7 +9,7 @@ use crate::render::ToolCallDisplayMode;
 /// REPL 工具历史单元。
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ToolCell {
-    Invocation(ToolView),
+    Invocation(Box<ToolView>),
     Subagent(SubagentCell),
     CompactionStarted {
         turn_count: usize,

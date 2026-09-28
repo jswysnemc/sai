@@ -588,7 +588,7 @@ mod tests {
 
     #[test]
     fn parses_status_records() {
-        let raw = b"# branch.oid abc123\0# branch.head main\0# branch.upstream origin/main\0# branch.ab +1 -0\01 M. N... 100644 100644 100644 111 222 333 src/main.rs\0? notes.md\0";
+        let raw = b"# branch.oid abc123\0# branch.head main\0# branch.upstream origin/main\0# branch.ab +1 -0\x001 M. N... 100644 100644 100644 111 222 333 src/main.rs\0? notes.md\0";
         let (head, has_commits, upstream, ahead, behind, _, files) = parse_status_porcelain_v2(raw);
         assert_eq!(head, "main");
         assert!(has_commits);

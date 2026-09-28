@@ -107,7 +107,7 @@ async fn query_http_revocation_blocks_requests_and_survives_reenabling() {
             &paths,
             id,
             true,
-            GrantUpdate::Changes(GrantChanges {
+            GrantUpdate::changes(GrantChanges {
                 http: Some(BTreeSet::new()),
                 ..Default::default()
             }),
@@ -153,7 +153,7 @@ fn moegirl_redirects_require_explicit_origin_grants() {
         &paths,
         "moegirl",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             http: Some(["https://ja.moegirl.org".into()].into()),
             ..Default::default()
         }),

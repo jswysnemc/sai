@@ -3,13 +3,16 @@ use super::repl_external_events::ReplExternalEvents;
 use super::repl_input::{ReplInputEvent, ReplInputSubmission};
 use super::repl_tool_warmup::ReplToolWarmup;
 use super::repl_turn::{execute_automatic_repl_turn, execute_repl_turn};
+use super::repl_turn_context::ReplTurnContext;
 use super::repl_turn_failure::{interrupted_failure_text, turn_failure_text};
 use super::*;
 use crate::agent::Agent;
 
 mod agent_selection;
 mod compact;
+mod exit_confirmation;
 mod exit_hint;
+use exit_confirmation::confirm_repl_exit;
 mod input_restore;
 mod jev_commands;
 mod mode_commands;
@@ -155,11 +158,13 @@ pub(super) async fn run_repl(
             external_events.resume();
             let owner_key = state.state_dir().display().to_string();
             let exit = drain_submission_queue(
-                paths,
-                &config,
+                ReplTurnContext {
+                    paths,
+                    config: &config,
+                    owner_key: &owner_key,
+                },
                 &mut agent,
                 &mut runtime,
-                &owner_key,
                 &mut mode,
                 &mut input_history,
                 transcript_options.reasoning_mode,
@@ -205,11 +210,13 @@ pub(super) async fn run_repl(
                     apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
                     let owner_key = state.state_dir().display().to_string();
                     let outcome = execute_automatic_repl_turn(
-                        paths,
-                        &config,
+                        ReplTurnContext {
+                            paths,
+                            config: &config,
+                            owner_key: &owner_key,
+                        },
                         &mut agent,
                         &mut runtime,
-                        &owner_key,
                         mode,
                         transcript_options.reasoning_mode,
                         transcript_options.tool_call_mode,
@@ -234,11 +241,13 @@ pub(super) async fn run_repl(
                         external_events.resume();
                     }
                     let exit = drain_submission_queue(
-                        paths,
-                        &config,
+                        ReplTurnContext {
+                            paths,
+                            config: &config,
+                            owner_key: &owner_key,
+                        },
                         &mut agent,
                         &mut runtime,
-                        &owner_key,
                         &mut mode,
                         &mut input_history,
                         transcript_options.reasoning_mode,
@@ -448,10 +457,12 @@ pub(super) async fn run_repl(
                         agent_selection::run_command(
                             paths,
                             selection,
-                            &mut config,
-                            &mut client,
-                            &mut agent,
-                            &mut runtime,
+                            agent_selection::AgentSelectionState {
+                                config: &mut config,
+                                client: &mut client,
+                                agent: &mut agent,
+                                runtime: &mut runtime,
+                            },
                             mode,
                             thinking_override.as_deref(),
                         )?;
@@ -644,11 +655,13 @@ pub(super) async fn run_repl(
             }
             // 中断后仍执行已入队内容
             let exit = drain_submission_queue(
-                paths,
-                &config,
+                ReplTurnContext {
+                    paths,
+                    config: &config,
+                    owner_key: &owner_key,
+                },
                 &mut agent,
                 &mut runtime,
-                &owner_key,
                 &mut mode,
                 &mut input_history,
                 transcript_options.reasoning_mode,
@@ -688,11 +701,13 @@ pub(super) async fn run_repl(
         }
         // 1. 本轮成功后依次执行 Tab 入队的消息
         let exit = drain_submission_queue(
-            paths,
-            &config,
+            ReplTurnContext {
+                paths,
+                config: &config,
+                owner_key: &owner_key,
+            },
             &mut agent,
             &mut runtime,
-            &owner_key,
             &mut mode,
             &mut input_history,
             transcript_options.reasoning_mode,
@@ -714,35 +729,4 @@ pub(super) async fn run_repl(
     // 退出后给出恢复命令，便于下次接续同一会话（对齐 Claude `--resume`）
     print_repl_resume_hint(state.session_id());
     Ok(())
-}
-
-/// 有后台工作时先提示，第二次退出才真正离开。
-///
-/// 参数:
-/// - `paths`: Sai 路径
-/// - `state`: 当前会话状态
-/// - `runtime`: 终端运行期，用于写出提示
-/// - `exit_armed`: 是否已经提示过
-///
-/// 返回:
-/// - 可以退出时返回 true
-fn confirm_repl_exit(
-    paths: &SaiPaths,
-    state: &crate::state::StateStore,
-    runtime: &mut ReplRuntime,
-    exit_armed: &mut bool,
-) -> Result<bool> {
-    if *exit_armed {
-        return Ok(true);
-    }
-    let Some(notice) = super::repl_exit_guard::background_exit_notice(
-        paths,
-        state.session_id(),
-        state.state_dir(),
-    ) else {
-        return Ok(true);
-    };
-    runtime.record_meta(notice)?;
-    *exit_armed = true;
-    Ok(false)
 }

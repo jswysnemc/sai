@@ -236,9 +236,9 @@ impl QqBotProcessor {
             client.send(&message, Some(&event.msg_id)).await?;
             return Ok(());
         }
-        let (prompt, image_url) = self.prepare_agent_input(&event).await?;
+        let (prompt, image_url) = self.prepare_agent_input(event).await?;
         let reply = self
-            .run_agent(client.clone(), &event, &context, prompt, image_url)
+            .run_agent(client.clone(), event, &context, prompt, image_url)
             .await?;
         if reply.trim().is_empty() {
             return Ok(());

@@ -98,12 +98,12 @@ fn push_candidate(candidates: &mut Vec<SshConfigCandidate>, mut candidate: SshCo
 /// 返回:
 /// - 关键字与取值；取值为空时返回 None
 fn split_directive(line: &str) -> Option<(&str, &str)> {
-    let (keyword, value) = match line.find(['=', ' ', '\t']) {
-        Some(index) => (
+    let (keyword, value) = {
+        let index = line.find(['=', ' ', '\t'])?;
+        (
             &line[..index],
             line[index + 1..].trim_start_matches(['=', ' ', '\t']),
-        ),
-        None => return None,
+        )
     };
     let value = value.trim();
     if keyword.is_empty() || value.is_empty() {

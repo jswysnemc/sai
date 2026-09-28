@@ -214,25 +214,25 @@ pub(super) fn char_terminal_width(ch: char) -> usize {
 fn visible_chars(value: &str) -> impl Iterator<Item = char> + '_ {
     let mut in_csi = false;
     let mut pending_escape = false;
-    value.chars().filter_map(move |ch| {
+    value.chars().filter(move |&ch| {
         if in_csi {
             if ('@'..='~').contains(&ch) {
                 in_csi = false;
             }
-            return None;
+            return false;
         }
         if pending_escape {
             pending_escape = false;
             if ch == '[' {
                 in_csi = true;
             }
-            return None;
+            return false;
         }
         if ch == '\x1b' {
             pending_escape = true;
-            return None;
+            return false;
         }
-        Some(ch)
+        true
     })
 }
 

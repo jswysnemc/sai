@@ -2,7 +2,7 @@ use crate::plugins::host::SaiPluginHost;
 use sai_plugin_runtime::host::{HttpRequest, PluginHost};
 use sai_plugin_runtime::Capabilities;
 use std::collections::BTreeMap;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncWriteExt;
 
 /// 【插件测试】【HTTP 端点】启动只接受一次请求的本地端点。
 /// @param response 完整 HTTP 响应字节
@@ -12,8 +12,7 @@ async fn server(response: Vec<u8>) -> (String, tokio::task::JoinHandle<()>) {
     let origin = format!("http://{}", listener.local_addr().unwrap());
     let task = tokio::spawn(async move {
         let (mut stream, _) = listener.accept().await.unwrap();
-        let mut bytes = [0; 4096];
-        stream.read(&mut bytes).await.unwrap();
+        super::http_fixture::read_request_headers(&mut stream).await;
         stream.write_all(&response).await.unwrap();
     });
     (origin, task)

@@ -24,7 +24,7 @@ impl ComposerFrame {
             style_display_lines(&display_lines, &lines, collapsed, &self.clipboard_blocks);
         // 仅输入 `!` 时附上幽灵说明，光标仍停在 `!` 后（不计入 ghost 宽度）
         let ghost = bang_ghost_suffix(&self.input);
-        if let Some(ghost) = ghost.as_deref() {
+        if let Some(ghost) = ghost {
             if let Some(first) = styled_display_lines.first_mut() {
                 first.push_str(&format!("\x1b[2m{ghost}\x1b[0m"));
             }
@@ -32,7 +32,7 @@ impl ComposerFrame {
         // 行数必须按带 ghost 的正文算：ghost 会让首行折行变高，
         // 用不含 ghost 的正文算出的行数偏小，底部状态行会被挤出保留区
         let mut measured_lines = display_lines.clone();
-        if let Some(ghost) = ghost.as_deref() {
+        if let Some(ghost) = ghost {
             if let Some(first) = measured_lines.first_mut() {
                 first.push_str(ghost);
             }

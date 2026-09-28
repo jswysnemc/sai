@@ -73,7 +73,7 @@ async fn knowledge_credentials_use_only_explicit_settings_and_current_granted_en
         &paths,
         "knowledge-base",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             environment: Some(Default::default()),
             ..Default::default()
         }),
@@ -121,7 +121,7 @@ fn knowledge_explicit_grants_do_not_expand_when_paths_or_endpoints_change() {
         &paths,
         "knowledge-base",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             plugin_storage: Some(false),
             ..Default::default()
         }),

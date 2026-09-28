@@ -54,13 +54,14 @@ mod tests {
 
     /// 构造带白名单的运行配置。
     fn config_with_whitelist(tools: &[&str], exclusive: bool) -> AppConfig {
-        let mut config = AppConfig::default();
-        config.agent_runtime = Some(AgentRuntimeOverride {
-            enabled_tools: tools.iter().map(|name| name.to_string()).collect(),
-            exclusive,
-            ..Default::default()
-        });
-        config
+        AppConfig {
+            agent_runtime: Some(AgentRuntimeOverride {
+                enabled_tools: tools.iter().map(|name| name.to_string()).collect(),
+                exclusive,
+                ..Default::default()
+            }),
+            ..AppConfig::default()
+        }
     }
 
     /// 验证没有 Agent 覆盖时一切工具都放行。

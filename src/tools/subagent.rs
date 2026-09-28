@@ -368,7 +368,7 @@ async fn execute_subagent(
     let merge_summary = finalize_worktree(
         &subagent_id,
         worktree.as_ref(),
-        matches!(&result, Ok(_)) && apply_allowed,
+        result.is_ok() && apply_allowed,
     );
     match result {
         Ok((content, stats)) => {

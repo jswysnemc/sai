@@ -16,7 +16,7 @@ fn scheduling_grants_preserve_other_permissions_and_reject_undeclared_access() {
             &paths,
             "schedule-fixture",
             true,
-            GrantUpdate::Changes(GrantChanges {
+            GrantUpdate::changes(GrantChanges {
                 schedule: Some(schedule),
                 ..Default::default()
             }),
@@ -44,7 +44,7 @@ fn scheduling_grants_preserve_other_permissions_and_reject_undeclared_access() {
         &paths,
         "schedule-fixture",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             schedule: Some(true),
             ..Default::default()
         })

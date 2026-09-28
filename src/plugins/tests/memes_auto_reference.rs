@@ -72,13 +72,14 @@ async fn memes_auto_policy_matches_frozen_native_decisions_and_prompts() {
         );
         assert!(host.displays.lock().unwrap().is_empty());
         assert!(!root.path().join("recent").exists());
-        let requests = model.requests.lock().unwrap();
-        let expected = case["model_requests"].as_array().unwrap();
-        assert_eq!(requests.len(), expected.len(), "{}", case["label"]);
-        for (actual, old) in requests.iter().zip(expected) {
-            compare_messages(actual, old);
+        {
+            let requests = model.requests.lock().unwrap();
+            let expected = case["model_requests"].as_array().unwrap();
+            assert_eq!(requests.len(), expected.len(), "{}", case["label"]);
+            for (actual, old) in requests.iter().zip(expected) {
+                compare_messages(actual, old);
+            }
         }
-        drop(requests);
         if plan.has_delivery() {
             runtime.complete_reply(plan, invocation).await.unwrap();
             assert_eq!(

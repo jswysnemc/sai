@@ -74,10 +74,12 @@ fn large_tool_output_reuses_stable_replacement_after_resume() {
                 "turn_1",
                 "call_1",
                 true,
-                "fallback preview",
-                Some(&result_ref),
-                None,
-                raw_output.chars().count(),
+                crate::state::tool_history::ToolResultOutput {
+                    result_preview: "fallback preview",
+                    result_ref: Some(&result_ref),
+                    error: None,
+                    original_chars: raw_output.chars().count(),
+                },
             )
             .unwrap();
         store.complete_turn("turn_1", "done", None).unwrap();
@@ -147,10 +149,12 @@ fn session_snapshot_rebuilds_resume_visible_state_after_store_reopen() {
                 "turn_1",
                 "call_1",
                 true,
-                "fallback log preview",
-                Some(&result_ref),
-                None,
-                raw_output.chars().count(),
+                crate::state::tool_history::ToolResultOutput {
+                    result_preview: "fallback log preview",
+                    result_ref: Some(&result_ref),
+                    error: None,
+                    original_chars: raw_output.chars().count(),
+                },
             )
             .unwrap();
         store.complete_turn("turn_1", "done", None).unwrap();
@@ -212,10 +216,12 @@ fn compaction_prompt_records_missing_tool_replacement() {
             "turn_1",
             "call_1",
             true,
-            "preview",
-            Some("tool-results/call_1.txt"),
-            None,
-            10_000,
+            crate::state::tool_history::ToolResultOutput {
+                result_preview: "preview",
+                result_ref: Some("tool-results/call_1.txt"),
+                error: None,
+                original_chars: 10_000,
+            },
         )
         .unwrap();
     store.complete_turn("turn_1", "done", None).unwrap();
@@ -252,10 +258,12 @@ fn compaction_prompt_records_missing_tool_result_ref_file() {
             "turn_1",
             "call_1",
             true,
-            "preview",
-            Some("tool-results/missing.txt"),
-            None,
-            10_000,
+            crate::state::tool_history::ToolResultOutput {
+                result_preview: "preview",
+                result_ref: Some("tool-results/missing.txt"),
+                error: None,
+                original_chars: 10_000,
+            },
         )
         .unwrap();
     store.complete_turn("turn_1", "done", None).unwrap();
@@ -414,8 +422,10 @@ fn record_running_turn_tool_rounds(store: &StateStore, turn_id: &str, rounds: us
             .record_tool_call_started_with_context(
                 turn_id,
                 round,
-                round,
-                None,
+                crate::state::tool_history::ToolAssistantContext {
+                    assistant_round: round,
+                    assistant_reasoning: None,
+                },
                 &call_id,
                 "read_file",
                 r#"{"path":"src/main.rs"}"#,
@@ -426,10 +436,12 @@ fn record_running_turn_tool_rounds(store: &StateStore, turn_id: &str, rounds: us
                 turn_id,
                 &call_id,
                 true,
-                output,
-                None,
-                None,
-                output.chars().count(),
+                crate::state::tool_history::ToolResultOutput {
+                    result_preview: output,
+                    result_ref: None,
+                    error: None,
+                    original_chars: output.chars().count(),
+                },
             )
             .unwrap();
     }
@@ -504,8 +516,10 @@ fn repeated_running_turn_compaction_advances_the_boundary() {
             .record_tool_call_started_with_context(
                 "turn_1",
                 round,
-                round,
-                None,
+                crate::state::tool_history::ToolAssistantContext {
+                    assistant_round: round,
+                    assistant_reasoning: None,
+                },
                 &call_id,
                 "read_file",
                 "{}",
@@ -516,10 +530,12 @@ fn repeated_running_turn_compaction_advances_the_boundary() {
                 "turn_1",
                 &call_id,
                 true,
-                &bulky,
-                None,
-                None,
-                bulky.chars().count(),
+                crate::state::tool_history::ToolResultOutput {
+                    result_preview: &bulky,
+                    result_ref: None,
+                    error: None,
+                    original_chars: bulky.chars().count(),
+                },
             )
             .unwrap();
     }
@@ -595,10 +611,12 @@ fn compacted_history_projection_keeps_only_user_messages() {
                 &turn_id,
                 &call_id,
                 true,
-                &bulky,
-                None,
-                None,
-                bulky.chars().count(),
+                crate::state::tool_history::ToolResultOutput {
+                    result_preview: &bulky,
+                    result_ref: None,
+                    error: None,
+                    original_chars: bulky.chars().count(),
+                },
             )
             .unwrap();
         store

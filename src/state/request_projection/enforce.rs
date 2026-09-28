@@ -26,9 +26,11 @@ impl StateStore {
             kind,
             RecoveryStatus::Terminal,
             &format!("provider request projection blocked: {}", warning.message),
-            0,
-            projection.estimate.message_chars,
-            projection.estimate.context_limit_chars,
+            crate::state::failure_recovery::RecoveryMetrics {
+                retry_count: 0,
+                context_chars: projection.estimate.message_chars,
+                context_limit_chars: projection.estimate.context_limit_chars,
+            },
         )?;
         bail!("provider request projection blocked: {}", warning.message)
     }

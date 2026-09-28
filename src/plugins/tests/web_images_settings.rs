@@ -93,7 +93,7 @@ fn explicit_grants_do_not_follow_changed_paths_or_origins() {
         &paths,
         "web-images",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             vision: Some(false),
             ..Default::default()
         }),
@@ -130,7 +130,7 @@ fn explicit_grants_do_not_follow_changed_paths_or_origins() {
         &paths,
         "web-images",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             model: Some(true),
             ..Default::default()
         })
@@ -145,7 +145,7 @@ fn explicit_grants_do_not_follow_changed_paths_or_origins() {
         &paths,
         "web-images",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             vision: Some(true),
             ..Default::default()
         }),

@@ -31,7 +31,7 @@ pub(super) fn matches(arguments: &[String], record: &LegacyRecord, state_dir: &P
         return false;
     }
     let mut options = BTreeMap::new();
-    for pair in arguments[2..].chunks_exact(2) {
+    for pair in arguments[2..].as_chunks::<2>().0 {
         if options.insert(pair[0].as_str(), pair[1].as_str()).is_some() {
             return false;
         }

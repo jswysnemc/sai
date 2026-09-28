@@ -18,7 +18,7 @@ fn install(paths: &SaiPaths) -> AppConfig {
         paths,
         "tui-status",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             tui_status: Some(true),
             ..Default::default()
         }),
@@ -118,7 +118,7 @@ async fn tui_status_plugin_configuration_and_grants_follow_public_management() {
         &paths,
         "tui-status",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             tui_status: Some(false),
             ..Default::default()
         }),

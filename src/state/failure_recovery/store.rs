@@ -52,9 +52,11 @@ impl StateStore {
             kind,
             RecoveryStatus::Observed,
             reason,
-            retry_count,
-            context_chars,
-            context_limit_chars,
+            crate::state::failure_recovery::RecoveryMetrics {
+                retry_count,
+                context_chars,
+                context_limit_chars,
+            },
         )?;
         Ok(())
     }
@@ -75,9 +77,11 @@ impl StateStore {
             FailureKind::CompactionLlmFailed,
             RecoveryStatus::Observed,
             &format!("compaction prefix replay fell back to a standalone request: {reason}"),
-            0,
-            0,
-            0,
+            crate::state::failure_recovery::RecoveryMetrics {
+                retry_count: 0,
+                context_chars: 0,
+                context_limit_chars: 0,
+            },
         )
     }
 
@@ -103,9 +107,11 @@ impl StateStore {
             kind,
             RecoveryStatus::Observed,
             reason,
-            0,
-            context_chars,
-            context_limit_chars,
+            crate::state::failure_recovery::RecoveryMetrics {
+                retry_count: 0,
+                context_chars,
+                context_limit_chars,
+            },
         )?;
         Ok(())
     }
@@ -136,9 +142,11 @@ impl StateStore {
             kind,
             status,
             reason,
-            1,
-            context_chars,
-            context_limit_chars,
+            crate::state::failure_recovery::RecoveryMetrics {
+                retry_count: 1,
+                context_chars,
+                context_limit_chars,
+            },
         )?;
         Ok(())
     }
@@ -172,9 +180,11 @@ impl StateStore {
                 FailureKind::ProjectionInvalid,
                 RecoveryStatus::Terminal,
                 &format!("Context Epoch 投影失败: {error}"),
-                0,
-                0,
-                0,
+                crate::state::failure_recovery::RecoveryMetrics {
+                    retry_count: 0,
+                    context_chars: 0,
+                    context_limit_chars: 0,
+                },
             )?;
         }
         Ok(())
@@ -187,9 +197,7 @@ impl StateStore {
     /// - `kind`: 失败类型
     /// - `status`: 恢复状态
     /// - `reason`: 原因
-    /// - `retry_count`: 连续重试次数
-    /// - `context_chars`: 当前上下文字符数
-    /// - `context_limit_chars`: 上下文预算字符数
+    /// - `metrics`: 连续重试次数、当前上下文大小与预算
     ///
     /// 返回:
     /// - 写入是否成功
@@ -199,10 +207,13 @@ impl StateStore {
         kind: FailureKind,
         status: RecoveryStatus,
         reason: &str,
-        retry_count: usize,
-        context_chars: usize,
-        context_limit_chars: usize,
+        metrics: failure_recovery::RecoveryMetrics,
     ) -> Result<()> {
+        let failure_recovery::RecoveryMetrics {
+            retry_count,
+            context_chars,
+            context_limit_chars,
+        } = metrics;
         let checkpoint_id = failure_recovery::latest_checkpoint_id(&self.conv_db)?;
         failure_recovery::record_failure(
             &self.conv_db,

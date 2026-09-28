@@ -2,6 +2,8 @@
 
 mod automatic_input;
 mod automatic_source;
+#[cfg(test)]
+pub(crate) mod automatic_test_support;
 mod continuation;
 mod control_runner;
 mod events;

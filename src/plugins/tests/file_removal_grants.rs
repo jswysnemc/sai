@@ -50,7 +50,7 @@ fn file_removal_grants_update_independently_and_reject_undeclared_paths_atomical
             &paths,
             "removal-grants",
             true,
-            GrantUpdate::Changes(changes),
+            GrantUpdate::changes(changes),
         )
         .unwrap();
         let grants = saved();
@@ -76,7 +76,7 @@ fn file_removal_grants_update_independently_and_reject_undeclared_paths_atomical
             &paths,
             "removal-grants",
             true,
-            GrantUpdate::Changes(changes)
+            GrantUpdate::changes(changes)
         )
         .is_err());
         assert_eq!(
@@ -113,7 +113,7 @@ fn file_removal_manifest_path_changes_revoke_old_grants() {
         &paths,
         "removal-revision",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             read_paths: Some(Default::default()),
             ..Default::default()
         }),
@@ -127,7 +127,7 @@ fn file_removal_manifest_path_changes_revoke_old_grants() {
         &paths,
         "removal-revision",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             trash_paths: Some(["after".into()].into()),
             ..Default::default()
         }),

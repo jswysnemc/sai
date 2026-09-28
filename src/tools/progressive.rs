@@ -125,7 +125,7 @@ fn register_invoker(registry: &mut ToolRegistry) {
 /// 参数:
 /// - `registry`: 完整工具注册表
 /// - `deferred`: 当前 Agent 需要 load 才暴露的工具名，可含通配符
-/// 返回:
+///   返回:
 /// - 非渐进模式返回完整注册表；渐进模式只返回固定网关
 pub(crate) fn visible_tool_names(registry: &ToolRegistry, deferred: &[String]) -> BTreeSet<String> {
     registry
@@ -179,7 +179,7 @@ pub(crate) fn is_deferred_tool(name: &str, deferred: &[String]) -> bool {
 /// 参数:
 /// - `registry`: 当前会话可见/可注册的工具注册表（可已按 agent 配置过滤）
 /// - `deferred`: 当前 Agent 需要 load 才暴露的工具名，可含通配符
-/// 返回:
+///   返回:
 /// - 包含可加载工具名和分组的工具描述
 pub(crate) fn loader_description(registry: &ToolRegistry, deferred: &[String]) -> String {
     let mut groups: BTreeMap<&'static str, Vec<String>> = BTreeMap::new();

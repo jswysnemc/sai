@@ -269,7 +269,7 @@ fn is_claude_client_style(style: &str) -> bool {
 ///
 /// 返回:
 /// - 为空时返回空字符串，否则返回格式化后的 JSON 对象字符串
-/// 规范化自定义请求头 JSON 对象。
+///   规范化自定义请求头 JSON 对象。
 ///
 /// 参数:
 /// - `value`: 表单 JSON 文本
@@ -408,7 +408,8 @@ fn edit_model_general_form(
         }
         // 校验失败时就地提示并重新打开表单，不让非法输入终止 TUI。
         // 先解析全部可失败字段再落地，避免中途报错把 provider 改坏一半
-        let parsed = (|| -> Result<(bool, bool, bool, Option<usize>, Option<u32>)> {
+        type ModelGeneralValues = (bool, bool, bool, Option<usize>, Option<u32>);
+        let parsed = (|| -> Result<ModelGeneralValues> {
             Ok((
                 parse_bool_field(&fields[0].value)?,
                 parse_bool_field(&fields[1].value)?,

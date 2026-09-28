@@ -19,7 +19,7 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 /// 本地模拟服务下一次请求的响应类型。
-pub(super) enum TestResponse {
+pub(crate) enum TestResponse {
     Reply,
     Error,
     ToolCall,
@@ -32,11 +32,11 @@ struct MockProvider {
 }
 
 /// 隔离的真实会话 Runner、后台任务存储和本地模型服务。
-pub(super) struct AutomaticTestHarness {
-    pub(super) paths: SaiPaths,
-    pub(super) config: AppConfig,
-    pub(super) agent: Agent,
-    pub(super) events: Vec<RunnerEvent>,
+pub(crate) struct AutomaticTestHarness {
+    pub(crate) paths: SaiPaths,
+    pub(crate) config: AppConfig,
+    pub(crate) agent: Agent,
+    pub(crate) events: Vec<RunnerEvent>,
     provider: Arc<MockProvider>,
     server: tokio::task::JoinHandle<()>,
     _temp: tempfile::TempDir,
@@ -47,7 +47,7 @@ impl AutomaticTestHarness {
     ///
     /// 参数: 无
     /// 返回: 使用临时目录、真实后台工具和模拟供应商的测试环境
-    pub(super) async fn new() -> Self {
+    pub(crate) async fn new() -> Self {
         let provider = Arc::new(MockProvider::default());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
@@ -60,13 +60,15 @@ impl AutomaticTestHarness {
         let mut provider_config = ProviderConfig::default_openai();
         provider_config.base_url = format!("http://{address}/v1");
         provider_config.api_key = Some("test-key".to_string());
-        let mut config = AppConfig::default();
-        config.active_provider = provider_config.id.clone();
-        config.providers = vec![provider_config];
+        let mut config = AppConfig {
+            active_provider: provider_config.id.clone(),
+            providers: vec![provider_config],
+            load_instruction_files: false,
+            ..AppConfig::default()
+        };
         config.session.auto_title_enabled = false;
         config.skills.enabled = false;
         config.memory.enabled = false;
-        config.load_instruction_files = false;
         config.prompt_sections.state_contract = false;
         config.prompt_sections.mode_reminder = false;
         config.prompt_sections.memory_contract = false;
@@ -111,7 +113,7 @@ impl AutomaticTestHarness {
     ///
     /// 参数: 无
     /// 返回: 无；普通请求失败时终止测试
-    pub(super) async fn prime(&mut self) {
+    pub(crate) async fn prime(&mut self) {
         self.submit(UserInputSubmission::new("处理后台任务", AgentMode::Yolo))
             .await
             .unwrap();
@@ -121,7 +123,7 @@ impl AutomaticTestHarness {
     ///
     /// 参数: input 为本轮输入
     /// 返回: 本轮执行结果；测试超时则失败
-    pub(super) async fn submit(&mut self, input: UserInputSubmission) -> Result<()> {
+    pub(crate) async fn submit(&mut self, input: UserInputSubmission) -> Result<()> {
         self.agent.prepare_for_turn()?;
         self.events.clear();
         let runner = SessionRunner::new(&self.paths).with_config(self.config.clone());
@@ -146,7 +148,7 @@ impl AutomaticTestHarness {
     ///
     /// 参数: 无
     /// 返回: 属于当前会话的后台完成通知
-    pub(super) async fn background_notice(&self) -> ExternalEventBatch {
+    pub(crate) async fn background_notice(&self) -> ExternalEventBatch {
         let store = BackgroundCommandStore::new(self.paths.state_dir.clone());
         store.init().unwrap();
         let stdout = store.logs_dir().join("completed.out");
@@ -168,7 +170,7 @@ impl AutomaticTestHarness {
             .await
             .unwrap()
         {
-            Some(ExternalEventWake::Completion(batch)) => batch,
+            Some(ExternalEventWake::Completion(batch)) => *batch,
             _ => panic!("完成任务应当产生自动唤醒"),
         }
     }
@@ -177,7 +179,7 @@ impl AutomaticTestHarness {
     ///
     /// 参数: responses 为响应类型序列
     /// 返回: 无；序列耗尽后恢复普通回复
-    pub(super) fn respond_with(&self, responses: impl IntoIterator<Item = TestResponse>) {
+    pub(crate) fn respond_with(&self, responses: impl IntoIterator<Item = TestResponse>) {
         self.provider.responses.lock().unwrap().extend(responses);
     }
 
@@ -185,7 +187,7 @@ impl AutomaticTestHarness {
     ///
     /// 参数: 无
     /// 返回: 本地供应商实际收到的请求数
-    pub(super) fn request_count(&self) -> usize {
+    pub(crate) fn request_count(&self) -> usize {
         self.provider.requests.lock().unwrap().len()
     }
 
@@ -193,7 +195,7 @@ impl AutomaticTestHarness {
     ///
     /// 参数: 无
     /// 返回: 请求正文副本
-    pub(super) fn last_request(&self) -> Value {
+    pub(crate) fn last_request(&self) -> Value {
         self.provider
             .requests
             .lock()
@@ -207,7 +209,7 @@ impl AutomaticTestHarness {
     ///
     /// 参数: prompt 为待检查的通知正文
     /// 返回: 用户消息中的匹配数量
-    pub(super) fn prompt_occurrences(&self, prompt: &str) -> usize {
+    pub(crate) fn prompt_occurrences(&self, prompt: &str) -> usize {
         self.last_request()["messages"]
             .as_array()
             .unwrap()

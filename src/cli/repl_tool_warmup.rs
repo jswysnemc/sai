@@ -4,10 +4,13 @@ use anyhow::{anyhow, Result};
 use std::path::PathBuf;
 use std::thread::JoinHandle;
 
+/// 工具预热结果：完整注册表与加载说明。
+type WarmupResult = Result<(ToolRegistry, Vec<String>)>;
+
 /// TUI 启动后的 MCP 工具注册表后台预热任务。
 pub(super) struct ReplToolWarmup {
     mode: AgentMode,
-    task: Option<JoinHandle<Result<(ToolRegistry, Vec<String>)>>>,
+    task: Option<JoinHandle<WarmupResult>>,
 }
 
 impl ReplToolWarmup {

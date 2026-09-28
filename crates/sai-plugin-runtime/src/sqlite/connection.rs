@@ -80,7 +80,7 @@ impl Snapshot {
         connection.authorizer(Some(move |context: AuthContext<'_>| {
             authorize(context, readonly)
         }));
-        validate_schema(&connection)?;
+        validate_schema(connection)?;
         budget(0)?;
         Ok(Self { database, budget })
     }
@@ -119,7 +119,7 @@ fn validate_image(bytes: &[u8], capacity: usize) -> Result<()> {
     let size = u16::from_be_bytes([bytes[16], bytes[17]]);
     let size = if size == 1 { 65536 } else { usize::from(size) };
     ensure!(
-        (512..=65536).contains(&size) && size.is_power_of_two() && bytes.len() % size == 0,
+        (512..=65536).contains(&size) && size.is_power_of_two() && bytes.len().is_multiple_of(size),
         "invalid SQLite snapshot page size"
     );
     Ok(())

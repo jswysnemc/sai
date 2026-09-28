@@ -47,7 +47,16 @@ pub(crate) struct ExternalEventBatch {
 #[derive(Debug)]
 pub(crate) enum ExternalEventWake {
     GoalContinuation,
-    Completion(ExternalEventBatch),
+    Completion(Box<ExternalEventBatch>),
+}
+
+impl ExternalEventWake {
+    /// 【外部事件】【完成通知】将较大的批次放入堆中，缩小监听通道中的枚举。
+    /// @param batch 已聚合的完成事件
+    /// @returns 待投递的完成通知
+    pub(crate) fn completion(batch: ExternalEventBatch) -> Self {
+        Self::Completion(Box::new(batch))
+    }
 }
 
 /// 与主 Agent 解耦的会话外部事件监听上下文。
@@ -243,7 +252,7 @@ impl ExternalEventMonitor {
             if self.scope.allows_goal(&goal.id) {
                 self.poll_goal(&goal.id).await?
             } else if let Some(envelope) = self.next_mesh() {
-                ExternalEventPoll::Ready(ExternalEventWake::Completion(build_mesh_batch(&envelope)))
+                ExternalEventPoll::Ready(ExternalEventWake::completion(build_mesh_batch(&envelope)))
             } else {
                 ExternalEventPoll::Idle
             }
@@ -300,7 +309,7 @@ impl ExternalEventMonitor {
                     self.state
                         .set_goal_status(crate::goal::GoalStatus::Active)?;
                 }
-                return Ok(ExternalEventPoll::Ready(ExternalEventWake::Completion(
+                return Ok(ExternalEventPoll::Ready(ExternalEventWake::completion(
                     take_event_batch(
                         &self.paths,
                         self.state.session_id(),
@@ -312,19 +321,19 @@ impl ExternalEventMonitor {
                 )));
             }
             if let Some(envelope) = self.next_mesh() {
-                return Ok(ExternalEventPoll::Ready(ExternalEventWake::Completion(
+                return Ok(ExternalEventPoll::Ready(ExternalEventWake::completion(
                     build_mesh_batch(&envelope),
                 )));
             }
             return Ok(ExternalEventPoll::Idle);
         }
         if let Some(envelope) = self.next_mesh() {
-            return Ok(ExternalEventPoll::Ready(ExternalEventWake::Completion(
+            return Ok(ExternalEventPoll::Ready(ExternalEventWake::completion(
                 build_mesh_batch(&envelope),
             )));
         }
         if let Some(batch) = self.poll_attention(Some(goal_id))? {
-            return Ok(ExternalEventPoll::Ready(ExternalEventWake::Completion(
+            return Ok(ExternalEventPoll::Ready(ExternalEventWake::completion(
                 batch,
             )));
         }
@@ -369,7 +378,7 @@ impl ExternalEventMonitor {
         )
         .await?;
         if !subagent_notices.is_empty() || !background_notices.is_empty() {
-            return Ok(ExternalEventPoll::Ready(ExternalEventWake::Completion(
+            return Ok(ExternalEventPoll::Ready(ExternalEventWake::completion(
                 take_event_batch(
                     &self.paths,
                     self.state.session_id(),
@@ -381,12 +390,12 @@ impl ExternalEventMonitor {
             )));
         }
         if let Some(envelope) = self.next_mesh() {
-            return Ok(ExternalEventPoll::Ready(ExternalEventWake::Completion(
+            return Ok(ExternalEventPoll::Ready(ExternalEventWake::completion(
                 build_mesh_batch(&envelope),
             )));
         }
         if let Some(batch) = self.poll_attention(None)? {
-            return Ok(ExternalEventPoll::Ready(ExternalEventWake::Completion(
+            return Ok(ExternalEventPoll::Ready(ExternalEventWake::completion(
                 batch,
             )));
         }

@@ -61,9 +61,7 @@ pub(crate) fn parse_unified_diff(text: &str) -> Option<UnifiedFilePatch> {
     let mut in_hunk = false;
     for line in text.lines() {
         if let Some(header) = line.strip_prefix("@@ ") {
-            let Some((old_start, new_start)) = parse_hunk_starts(header) else {
-                return None;
-            };
+            let (old_start, new_start) = parse_hunk_starts(header)?;
             old_cursor = old_start;
             new_cursor = new_start;
             in_hunk = true;

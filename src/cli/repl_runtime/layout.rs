@@ -85,6 +85,7 @@ impl ReplRuntime {
     ///
     /// 参数: `width` 为分页正文可用列数
     /// 返回: 完整会话的 ANSI 显示行
+    #[cfg(test)]
     pub(in crate::cli) fn expanded_transcript_lines(
         &mut self,
         width: usize,

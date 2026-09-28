@@ -148,24 +148,18 @@ async fn usage(
         .await;
     // 【Web主界面】【上下文分项】估算系统提示、工具、对话、MCP、技能占用
     let workspace_path = workspace.path.clone();
-    let breakdown =
-        match crate::runtime_cwd::scope(std::path::PathBuf::from(&workspace_path), async {
-            super::super::services::context_breakdown::estimate_context_breakdown(
-                &config,
-                &state.paths,
-                &store,
-                &workspace_path,
-                mode,
-            )
-            .await
-        })
+    let breakdown = crate::runtime_cwd::scope(std::path::PathBuf::from(&workspace_path), async {
+        super::super::services::context_breakdown::estimate_context_breakdown(
+            &config,
+            &state.paths,
+            &store,
+            &workspace_path,
+            mode,
+        )
         .await
-        {
-            Ok(value) => value,
-            Err(_error) => {
-                super::super::services::context_breakdown::ContextUsageBreakdown::default()
-            }
-        };
+    })
+    .await
+    .unwrap_or_default();
     // 1. 分项估算合计：无最近一次主对话 provider usage 时用作当前占用
     // 2. 压缩会清空 last_conversation_usage；旧会话若仍残留压缩前 usage，也回退到分项估算
     let breakdown_total = breakdown.total();

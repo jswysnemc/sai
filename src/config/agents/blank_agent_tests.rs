@@ -9,9 +9,10 @@ use crate::config::AppConfig;
 /// 返回:
 /// - 已包含该档案的配置
 fn config_with(profile: AgentProfile) -> AppConfig {
-    let mut config = AppConfig::default();
-    config.agents = vec![profile];
-    config
+    AppConfig {
+        agents: vec![profile],
+        ..AppConfig::default()
+    }
 }
 
 /// 构造一个最小可用的自定义档案。

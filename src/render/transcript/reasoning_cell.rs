@@ -436,7 +436,7 @@ mod tests {
         // 1. 用固定 80 列复现「先满宽折行再加 gutter」会溢出的场景
         let cols = 80usize;
         let source = "These completion events are just finish receipts for the background tools/commands I launched during the commit, push, and CI monitoring workflow.";
-        let rendered = render_thinking_body_with_cols(&source, true, true, None, cols);
+        let rendered = render_thinking_body_with_cols(source, true, true, None, cols);
         let plain = strip_ansi_for_test(&rendered);
         let mut body_lines = plain.lines().skip(1);
         let first = body_lines.next().expect("first gutter line");

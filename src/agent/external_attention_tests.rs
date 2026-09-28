@@ -40,7 +40,7 @@ fn quiet_task(paths: &SaiPaths, session: &str) -> (BackgroundCommandTask, Backgr
         timeout_seconds: 0,
         completion_notified: false,
     };
-    store.save(&[task.clone()]).unwrap();
+    store.save(std::slice::from_ref(&task)).unwrap();
     (task, store)
 }
 

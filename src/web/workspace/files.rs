@@ -221,7 +221,7 @@ fn write_file_locked(
     validate_expected_version(root, relative, expected_version)?;
     // 1. 覆盖已有文件时复制原权限，避免临时文件的 0600 覆盖执行位或组权限
     let original_permissions = if path.is_file() {
-        Some(std::fs::metadata(&path)?.permissions())
+        Some(std::fs::metadata(path)?.permissions())
     } else {
         None
     };
@@ -233,7 +233,7 @@ fn write_file_locked(
     }
     // 2. 临时文件准备完成后紧邻替换操作再次校验，覆盖保存期间发生的外部修改
     validate_expected_version(root, relative, expected_version)?;
-    temp.persist(&path)?;
+    temp.persist(path)?;
     read_file(root, relative)
 }
 

@@ -149,9 +149,9 @@ pub(crate) fn edit_knowledge_base(
                     let name = file.name.clone();
                     match super::ui::confirm_delete(
                         stdout,
-                        &t(" DELETE FILE ", " 删除文件 "),
+                        t(" DELETE FILE ", " 删除文件 "),
                         &name,
-                        &t(
+                        t(
                             "Removes the file and its indexed vectors from the knowledge base.",
                             "同时删除文件及其已索引向量，无法恢复。",
                         ),

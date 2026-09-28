@@ -93,10 +93,12 @@ fn clipped_output_writes_reference_and_replacement() {
             "turn_1",
             "call/1",
             true,
-            "preview",
-            Some(&result_ref),
-            None,
-            "full output".chars().count(),
+            crate::state::tool_history::ToolResultOutput {
+                result_preview: "preview",
+                result_ref: Some(&result_ref),
+                error: None,
+                original_chars: "full output".chars().count(),
+            },
         )
         .unwrap();
 

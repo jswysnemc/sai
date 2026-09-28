@@ -343,12 +343,14 @@ impl PagerScreen {
                 Event::Mouse(mouse) => {
                     apply_mouse(
                         mouse,
-                        cols,
-                        view_h,
-                        self.view.display.len(),
-                        max_scroll,
-                        progress_row,
-                        header_rows as u16,
+                        scroll::ScrollViewport {
+                            cols,
+                            view_h,
+                            total_lines: self.view.display.len(),
+                            max_scroll,
+                            progress_row,
+                            body_top_row: header_rows as u16,
+                        },
                         &mut self.state.scroll,
                         &mut self.drag_target,
                     );

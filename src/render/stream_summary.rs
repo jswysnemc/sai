@@ -549,11 +549,10 @@ mod tests {
 
         assert!(output.contains("Thinking for 12s"), "output={output:?}");
         assert!(!output.contains("Thinking(12s)"));
-        assert_eq!(
+        assert!(
             summary
                 .finalized_reasoning_text()
                 .contains("Thought for 12s"),
-            true,
             "finalize must switch to past tense: {}",
             summary.finalized_reasoning_text()
         );

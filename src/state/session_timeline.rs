@@ -420,7 +420,17 @@ mod tests {
             .record_tool_call_started("turn_1", 0, "call_1", "run_command", "{}")
             .unwrap();
         store
-            .record_tool_result_completed("turn_1", "call_1", true, "ok", None, None, 2)
+            .record_tool_result_completed(
+                "turn_1",
+                "call_1",
+                true,
+                crate::state::tool_history::ToolResultOutput {
+                    result_preview: "ok",
+                    result_ref: None,
+                    error: None,
+                    original_chars: 2,
+                },
+            )
             .unwrap();
         store.complete_turn("turn_1", "done", None).unwrap();
 
@@ -457,7 +467,17 @@ mod tests {
             .record_tool_call_display("call_1", "read_file", r#"{"path":"README.md"}"#)
             .unwrap();
         store
-            .record_tool_result_completed("turn_1", "call_1", true, "content", None, None, 7)
+            .record_tool_result_completed(
+                "turn_1",
+                "call_1",
+                true,
+                crate::state::tool_history::ToolResultOutput {
+                    result_preview: "content",
+                    result_ref: None,
+                    error: None,
+                    original_chars: 7,
+                },
+            )
             .unwrap();
 
         let provider_messages = store.project_running_turn_tool_messages("turn_1").unwrap();

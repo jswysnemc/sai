@@ -319,7 +319,8 @@ mod tests {
     /// 验证 POSIX 风格的参数末项是原始脚本。
     #[test]
     fn the_script_is_always_the_final_argument() {
-        for flavor in [ShellFlavor::Posix] {
+        {
+            let flavor = ShellFlavor::Posix;
             let args = script_args(flavor, "echo sai");
 
             assert_eq!(args.last().unwrap(), OsStr::new("echo sai"));
@@ -365,7 +366,9 @@ mod tests {
 
         assert_eq!(bytes.len() % 2, 0);
         let code_units = bytes
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]));
         let code_units = code_units.collect::<Vec<_>>();
         let decoded = String::from_utf16(&code_units).expect("编码命令必须是有效 UTF-16LE");

@@ -116,10 +116,9 @@ pub(super) fn patch_path_from_line(line: &str) -> Option<String> {
         Some(rest.trim())
     } else if let Some(rest) = line.strip_prefix("*** Delete File: ") {
         Some(rest.trim())
-    } else if let Some(rest) = line.strip_prefix("*** Update File: ") {
-        Some(rest.trim())
     } else {
-        None
+        line.strip_prefix("*** Update File: ")
+            .map(|rest| rest.trim())
     }?;
     let source = path
         .split_once(" -> ")

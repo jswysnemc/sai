@@ -1,3 +1,6 @@
+mod dialogs;
+pub(crate) use dialogs::{confirm_delete, confirm_unsaved_exit, message, UnsavedExitChoice};
+
 use crate::i18n::text as t;
 use anyhow::Result;
 use crossterm::cursor::MoveTo;
@@ -9,7 +12,7 @@ use std::io::{self, Write};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use super::input::read_key;
-use super::layout::{full_frame, master_detail_widths, scroll_start};
+use super::layout::{full_frame, master_detail_widths, scroll_start, FrameRect};
 use super::theme::{
     help_line, selection_marks, ACCENT, BOLD, BRAND, CORNER_BOTTOM_LEFT, CORNER_BOTTOM_RIGHT,
     CORNER_TOP_LEFT, CORNER_TOP_RIGHT, DIM, LINE_HORIZONTAL, LINE_VERTICAL, MUTED, RESET,
@@ -295,11 +298,9 @@ pub(super) fn draw_scroll_indicator(
     let track = height as usize;
     let thumb_len = (track * visible / total).max(1);
     let max_start = total.saturating_sub(visible);
-    let thumb_top = if max_start == 0 {
-        0
-    } else {
-        (track.saturating_sub(thumb_len)) * start.min(max_start) / max_start
-    };
+    let thumb_top = (track.saturating_sub(thumb_len) * start.min(max_start))
+        .checked_div(max_start)
+        .unwrap_or_default();
     for row in 0..track {
         let glyph = if row >= thumb_top && row < thumb_top + thumb_len {
             format!("{MUTED}▐{RESET}")
@@ -422,17 +423,22 @@ pub(crate) fn draw_box(
 }
 
 /// 绘制供应商浏览器等场景的列：聚焦列亮标题，选中项用箭头而非反色。
+/// @param stdout 终端输出；area 列的矩形区域；title 标题；items 条目；selected 选中索引；active 是否聚焦
+/// @returns 绘制结果
 pub(crate) fn draw_column(
     stdout: &mut io::Stdout,
-    x: u16,
-    y: u16,
-    width: u16,
-    height: u16,
+    area: FrameRect,
     title: &str,
     items: &[String],
     selected: usize,
     active: bool,
 ) -> Result<()> {
+    let FrameRect {
+        x,
+        y,
+        width,
+        height,
+    } = area;
     queue!(stdout, MoveTo(x, y))?;
     let title_style = if active {
         format!("{ACCENT}{BOLD}")
@@ -481,170 +487,6 @@ pub(crate) fn draw_column(
         )?;
     }
     Ok(())
-}
-
-/// 未保存更改时的退出选择。
-pub(crate) enum UnsavedExitChoice {
-    Save,
-    Discard,
-    Cancel,
-}
-
-/// 破坏性删除操作的确认弹窗。
-///
-/// 默认停在「取消」：删除键往往与目标键相邻（如 s/d、a/d），
-/// 误触后无法撤销，因此默认选项必须是安全项。
-///
-/// 参数:
-/// - `stdout`: 终端输出
-/// - `title`: 顶栏标题
-/// - `target`: 待删除对象名称
-/// - `warning`: 副标题中的后果说明（可为空）
-///
-/// 返回:
-/// - 是否确认删除
-pub(crate) fn confirm_delete(
-    stdout: &mut io::Stdout,
-    title: &str,
-    target: &str,
-    warning: &str,
-) -> Result<bool> {
-    let mut selected = 1usize;
-    loop {
-        let options = [
-            format!("{} {target}", t("Delete", "删除")),
-            t("Cancel", "取消").to_string(),
-        ];
-        draw_menu_with_details(
-            stdout,
-            title,
-            &options,
-            &[],
-            selected,
-            &help_line(&[
-                ("↑↓", t("move", "移动")),
-                ("Enter", t("confirm", "确认")),
-                ("Esc", t("cancel", "取消")),
-            ]),
-            warning,
-        )?;
-        match read_key()? {
-            KeyCode::Esc | KeyCode::Char('q') => return Ok(false),
-            KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
-            KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
-            KeyCode::Enter => return Ok(selected == 0),
-            _ => {}
-        }
-    }
-}
-
-/// 用配置界面的菜单询问如何处理未保存更改。
-///
-/// 参数:
-/// - `stdout`: 终端输出
-///
-/// 返回:
-/// - 保存、放弃或取消
-pub(crate) fn confirm_unsaved_exit(stdout: &mut io::Stdout) -> Result<UnsavedExitChoice> {
-    let mut selected = 0usize;
-    loop {
-        let options = [
-            t("Save and exit", "保存并退出"),
-            t("Discard changes", "放弃更改"),
-            t("Cancel", "取消"),
-        ]
-        .into_iter()
-        .map(str::to_string)
-        .collect::<Vec<_>>();
-        draw_menu(
-            stdout,
-            t(" Unsaved changes ", " 未保存的更改 "),
-            &options,
-            selected,
-            &help_line(&[
-                ("↑↓", t("move", "移动")),
-                ("Enter", t("confirm", "确认")),
-                ("Esc", t("back", "返回")),
-            ]),
-        )?;
-        match read_key()? {
-            KeyCode::Esc | KeyCode::Char('q') => return Ok(UnsavedExitChoice::Cancel),
-            KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
-            KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
-            KeyCode::Enter => {
-                return Ok(match selected {
-                    0 => UnsavedExitChoice::Save,
-                    1 => UnsavedExitChoice::Discard,
-                    _ => UnsavedExitChoice::Cancel,
-                });
-            }
-            _ => {}
-        }
-    }
-}
-
-pub(crate) fn message(stdout: &mut io::Stdout, text: &str) -> Result<()> {
-    let (cols, rows) = terminal::size()?;
-    let frame = full_frame(cols, rows);
-    let lines = wrap_text(text, frame.width.saturating_sub(4) as usize);
-    let page = frame.height.saturating_sub(4) as usize;
-    // 内容超出一屏时可滚动：Skills 详情、校验错误这类长文本原先只取头部，
-    // 直接断在句子中间且无法看到后面
-    let max_offset = lines.len().saturating_sub(page);
-    let mut offset = 0usize;
-    loop {
-        begin_synced_frame(stdout)?;
-        queue!(stdout, Clear(ClearType::All))?;
-        draw_box(
-            stdout,
-            frame.x,
-            frame.y,
-            frame.width,
-            frame.height,
-            t(" Notice ", " 提示 "),
-        )?;
-        for (row, line) in lines.iter().skip(offset).take(page).enumerate() {
-            queue!(
-                stdout,
-                MoveTo(
-                    frame.x.saturating_add(2),
-                    frame.y.saturating_add(2).saturating_add(row as u16)
-                ),
-                Print(line.clone())
-            )?;
-        }
-        let status = if max_offset == 0 {
-            help_line(&[(t("any key", "任意键"), t("continue", "继续"))])
-        } else {
-            // 滚动时把位置一并显示，否则用户不知道下面还有多少
-            format!(
-                "{}  {}/{}",
-                help_line(&[
-                    ("↑↓", t("scroll", "滚动")),
-                    (t("any key", "任意键"), t("continue", "继续")),
-                ]),
-                offset.saturating_add(page).min(lines.len()),
-                lines.len()
-            )
-        };
-        draw_status_bar(stdout, &frame, &status)?;
-        end_synced_frame(stdout)?;
-        let key = read_key()?;
-        let next = match key {
-            KeyCode::Up | KeyCode::Char('k') => offset.saturating_sub(1),
-            KeyCode::Down | KeyCode::Char('j') => (offset + 1).min(max_offset),
-            KeyCode::PageUp => offset.saturating_sub(page),
-            KeyCode::PageDown | KeyCode::Char(' ') => (offset + page).min(max_offset),
-            KeyCode::Home => 0,
-            KeyCode::End => max_offset,
-            _ => return Ok(()),
-        };
-        // 已经到头/到尾时按方向键视为「任意键」直接关闭，避免空按一下没反应
-        if next == offset && max_offset > 0 {
-            return Ok(());
-        }
-        offset = next;
-    }
 }
 
 /// 按显示宽度截断文本，超长时追加省略号。

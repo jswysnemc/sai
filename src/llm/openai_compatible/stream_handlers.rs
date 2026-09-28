@@ -1,3 +1,11 @@
+/// 【模型流】【文本缓冲】共同维护正文、思考文本及各自已发送的字节数。
+struct StreamBuffers<'a> {
+    content: &'a mut String,
+    content_emitted: &'a mut usize,
+    reasoning: &'a mut String,
+    reasoning_emitted: &'a mut usize,
+}
+
 fn clean_response_content(content: String) -> (String, Option<String>) {
     split_tagged_reasoning(clean_plain_text(content))
 }
@@ -33,12 +41,12 @@ fn split_tag_pair(
     ))
 }
 
+/// 【模型流】【协议处理】解析一条 SSE，更新共享文本缓冲与协议状态。
+/// @param line SSE 行；buffers 文本缓冲；其余状态参数记录用量、工具和终止标记；on_event 接收流式事件
+/// @returns 当前协议是否完成，或解析/回调错误
 fn handle_sse_line<F>(
     line: &str,
-    content: &mut String,
-    content_emitted: &mut usize,
-    reasoning: &mut String,
-    reasoning_emitted: &mut usize,
+    buffers: StreamBuffers<'_>,
     usage: &mut Option<Usage>,
     tool_calls: &mut ToolCallAccumulator,
     finish_reason: &mut Option<String>,
@@ -47,6 +55,12 @@ fn handle_sse_line<F>(
 where
     F: FnMut(ChatStreamEvent) -> Result<()>,
 {
+    let StreamBuffers {
+        content,
+        content_emitted,
+        reasoning,
+        reasoning_emitted,
+    } = buffers;
     let Some(data) = line.strip_prefix("data:").map(str::trim) else {
         return Ok(None);
     };
@@ -143,12 +157,12 @@ fn chat_stream_error_message(data: &str) -> Option<String> {
     Some(clean_plain_text(message))
 }
 
+/// 【模型流】【协议处理】解析一条 SSE，更新共享文本缓冲与协议状态。
+/// @param line SSE 行；buffers 文本缓冲；其余状态参数记录用量、工具和终止标记；on_event 接收流式事件
+/// @returns 当前协议是否完成，或解析/回调错误
 fn handle_responses_sse_line<F>(
     line: &str,
-    content: &mut String,
-    content_emitted: &mut usize,
-    reasoning: &mut String,
-    reasoning_emitted: &mut usize,
+    buffers: StreamBuffers<'_>,
     usage: &mut Option<Usage>,
     content_started: &mut bool,
     tool_calls: &mut ResponsesToolAccumulator,
@@ -157,6 +171,12 @@ fn handle_responses_sse_line<F>(
 where
     F: FnMut(ChatStreamEvent) -> Result<()>,
 {
+    let StreamBuffers {
+        content,
+        content_emitted,
+        reasoning,
+        reasoning_emitted,
+    } = buffers;
     let Some(data) = line.strip_prefix("data:").map(str::trim) else {
         return Ok(false);
     };

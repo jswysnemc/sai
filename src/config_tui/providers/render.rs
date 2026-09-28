@@ -1,4 +1,5 @@
 use super::*;
+use crate::config_tui::layout::FrameRect;
 
 impl ProviderBrowser<'_> {
     pub(super) fn draw(&mut self, stdout: &mut io::Stdout) -> Result<()> {
@@ -78,10 +79,12 @@ impl ProviderBrowser<'_> {
         if let Some((left_w, mid_w, right_w)) = three_column_widths(inner_w) {
             draw_column(
                 stdout,
-                inner_x,
-                list_y,
-                left_w,
-                list_h,
+                FrameRect {
+                    x: inner_x,
+                    y: list_y,
+                    width: left_w,
+                    height: list_h,
+                },
                 t(" PROVIDERS ", " 供应商 "),
                 &providers,
                 self.provider_idx,
@@ -89,10 +92,12 @@ impl ProviderBrowser<'_> {
             )?;
             draw_column(
                 stdout,
-                inner_x + left_w + 1,
-                list_y,
-                mid_w,
-                list_h,
+                FrameRect {
+                    x: inner_x + left_w + 1,
+                    y: list_y,
+                    width: mid_w,
+                    height: list_h,
+                },
                 t(" ORG ", " 组织 "),
                 &self.orgs,
                 self.org_idx,
@@ -100,10 +105,12 @@ impl ProviderBrowser<'_> {
             )?;
             draw_column(
                 stdout,
-                inner_x + left_w + mid_w + 2,
-                list_y,
-                right_w,
-                list_h,
+                FrameRect {
+                    x: inner_x + left_w + mid_w + 2,
+                    y: list_y,
+                    width: right_w,
+                    height: list_h,
+                },
                 &models_title,
                 &models,
                 self.model_idx,
@@ -121,7 +128,17 @@ impl ProviderBrowser<'_> {
                 _ => (models_title, &models, self.model_idx),
             };
             draw_column(
-                stdout, inner_x, list_y, inner_w, list_h, &title, items, selected, true,
+                stdout,
+                FrameRect {
+                    x: inner_x,
+                    y: list_y,
+                    width: inner_w,
+                    height: list_h,
+                },
+                &title,
+                items,
+                selected,
+                true,
             )?;
         }
         use crate::config_tui::theme::{help_line, ACCENT, DANGER, MUTED, RESET};

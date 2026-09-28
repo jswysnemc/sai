@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 pub(crate) enum GrantUpdate {
     Keep,
     Declared,
-    Changes(GrantChanges),
+    Changes(Box<GrantChanges>),
 }
 
 /// 【插件】【分项授权】未指定的能力保持原值，空集合或 false 明确撤销授权。
@@ -38,6 +38,13 @@ pub(crate) struct GrantChanges {
 }
 
 impl GrantUpdate {
+    /// 【插件】【分项变更】按需分配较大的变更集合，保持其他授权操作轻量。
+    /// @param changes 需要修改的能力
+    /// @returns 分项授权更新
+    pub(crate) fn changes(changes: GrantChanges) -> Self {
+        Self::Changes(Box::new(changes))
+    }
+
     /// 【插件】【授权合并】在保存前验证完整交集，不允许授权清单之外的能力。
     /// @param current 当前有效授权；declared 为固定清单声明
     /// @returns 更新后的授权；Keep 返回 None 以保留缺省授权语义

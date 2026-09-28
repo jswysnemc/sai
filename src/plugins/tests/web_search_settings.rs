@@ -129,7 +129,7 @@ async fn changing_an_endpoint_cannot_expand_manifest_or_grants() {
         &paths,
         ID,
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             http: Some(["https://new.example.test".into()].into()),
             ..Default::default()
         })

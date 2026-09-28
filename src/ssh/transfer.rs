@@ -115,7 +115,7 @@ pub(crate) async fn upload_file(
         let mut stderr: Vec<u8> = Vec::new();
         while let Some(message) = channel.wait().await {
             match message {
-                ChannelMsg::ExtendedData { data, ext } if ext == 1 => {
+                ChannelMsg::ExtendedData { data, ext: 1 } => {
                     stderr.extend_from_slice(&data);
                 }
                 ChannelMsg::ExitStatus { exit_status: code } => exit_status = Some(code),

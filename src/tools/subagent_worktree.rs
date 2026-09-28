@@ -85,7 +85,7 @@ pub(crate) fn try_create(parent_workdir: &Path, label: &str) -> Result<Option<Su
     let label = sanitize_path_component(label, "agent");
     let target_parent = repo_root
         .parent()
-        .unwrap_or_else(|| repo_root.as_path())
+        .unwrap_or(repo_root.as_path())
         .join(WORKTREE_DIR_MARKER)
         .join(&repo_name);
     fs::create_dir_all(&target_parent).context("failed to create worktree parent")?;
@@ -238,7 +238,7 @@ fn apply_worktree_changes(
         &["diff", "--cached", "--binary", "HEAD", "--"],
     )
     .map_err(|e| anyhow::anyhow!(e))?;
-    let patch_bytes = patch.as_bytes().len();
+    let patch_bytes = patch.len();
     if patch.trim().is_empty() {
         return Ok(SubagentWorktreeApplyResult {
             applied: false,
@@ -268,22 +268,19 @@ fn apply_worktree_changes(
             conflict_files: Vec::new(),
         }),
         Err(apply_error) => match run_git_apply_3way(&parent_repo_root, &patch) {
-            Ok(()) => {
-                return Ok(SubagentWorktreeApplyResult {
-                    applied: true,
-                    changed: true,
-                    status,
-                    patch_bytes,
-                    skipped_reason: None,
-                    apply_method: Some("git_apply_3way".to_string()),
-                    fallback_reason: Some(apply_error),
-                    copied_files: Vec::new(),
-                    deleted_files: Vec::new(),
-                    conflict_files: Vec::new(),
-                });
-            }
+            Ok(()) => Ok(SubagentWorktreeApplyResult {
+                applied: true,
+                changed: true,
+                status,
+                patch_bytes,
+                skipped_reason: None,
+                apply_method: Some("git_apply_3way".to_string()),
+                fallback_reason: Some(apply_error),
+                copied_files: Vec::new(),
+                deleted_files: Vec::new(),
+                conflict_files: Vec::new(),
+            }),
             Err(three_way_error) => {
-                let three_way_error = three_way_error;
                 let fallback = apply_file_copy_fallback(&parent_repo_root, &worktree_root, &apply_paths)
                 .map_err(|fallback_error| {
                     anyhow::anyhow!(

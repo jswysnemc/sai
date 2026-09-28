@@ -224,10 +224,8 @@ fn parse_cq_media_segment(segment: &str) -> Option<OneBotInboundMedia> {
                     }
                 }
             }
-            "name" | "filename" => {
-                if name.is_none() && !value.trim().is_empty() {
-                    name = Some(value);
-                }
+            "name" | "filename" if name.is_none() && !value.trim().is_empty() => {
+                name = Some(value);
             }
             _ => {}
         }

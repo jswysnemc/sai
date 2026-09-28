@@ -17,8 +17,8 @@ fn lock_path(root: &Path, plugin: &str, key: &str) -> PathBuf {
     SaiPaths::for_tests(root)
         .state_dir
         .join("plugin-locks")
-        .join(blake3::hash(plugin.as_bytes()).to_hex().to_string())
-        .join(blake3::hash(b"").to_hex().to_string())
+        .join(blake3::hash(plugin.as_bytes()).to_hex())
+        .join(blake3::hash(b"").to_hex())
         .join(format!("{}.lock", blake3::hash(key.as_bytes()).to_hex()))
 }
 

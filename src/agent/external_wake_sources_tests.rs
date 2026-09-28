@@ -53,7 +53,7 @@ async fn old_child_completion_is_retained_and_new_child_is_delivered() {
     };
     assert_eq!(batch.event_id(), new);
     harness
-        .submit(UserInputSubmission::new("", AgentMode::Yolo).with_external_event_batch(batch))
+        .submit(UserInputSubmission::new("", AgentMode::Yolo).with_external_event_batch(*batch))
         .await
         .unwrap();
     assert_eq!(harness.request_count(), 1);
@@ -186,7 +186,7 @@ async fn old_mailbox_messages_do_not_wake_or_block_new_messages() {
     };
     assert_eq!(batch.event_id(), "new-message");
     harness
-        .submit(UserInputSubmission::new("", AgentMode::Yolo).with_external_event_batch(batch))
+        .submit(UserInputSubmission::new("", AgentMode::Yolo).with_external_event_batch(*batch))
         .await
         .unwrap();
     assert_eq!(harness.request_count(), 1);

@@ -1,3 +1,4 @@
+use super::turn_request::TurnRequest;
 use super::{Agent, AgentEvent};
 use crate::llm::{ChatMessage, OpenAiCompatibleClient};
 use crate::perf_trace::PerfTrace;
@@ -89,28 +90,28 @@ impl Agent {
     /// provider 上下文溢出后尝试一次压缩恢复。
     ///
     /// 参数:
-    /// - `turn_id`: 当前轮次标识
+    /// - `request`: 当前轮次输入、图片与附加提示
     /// - `messages`: 触发溢出的 provider 消息
     /// - `err`: provider 错误
-    /// - `input`: 当前用户输入
-    /// - `image_urls`: 图片 data URL 列表
-    /// - `memory_index_prompt`: 可选记忆索引注入文本
-    /// - `plugin_reply_reminder`: 可选插件回复策略提醒
     /// - `on_event`: 压缩流式事件回调
     ///
     /// 返回:
     /// - 是否已经压缩并允许重试
     pub(super) async fn recover_after_provider_overflow(
         &mut self,
-        turn_id: &str,
+        request: TurnRequest<'_>,
         messages: &[ChatMessage],
         err: &anyhow::Error,
-        input: &str,
-        image_urls: &[String],
-        memory_index_prompt: Option<&str>,
-        plugin_reply_reminder: Option<&str>,
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<bool> {
+        let TurnRequest {
+            turn_id,
+            input,
+            image_urls,
+            memory_index_prompt,
+            plugin_reply_reminder,
+            ..
+        } = request;
         let projection = project_provider_turn_from_messages(messages, 0, self.context_char_budget);
         self.state.record_provider_overflow_recovery(
             Some(turn_id),

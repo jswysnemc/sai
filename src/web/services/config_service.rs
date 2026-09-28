@@ -137,10 +137,12 @@ fn redact_value(value: &mut Value, key: Option<&str>) {
                 redact_value(value, key);
             }
         }
-        Value::String(text) if key.is_some_and(is_sensitive_key) => {
-            if !text.trim().is_empty() && !text.trim_start().starts_with("$env:") {
-                *text = SECRET_SENTINEL.to_string();
-            }
+        Value::String(text)
+            if key.is_some_and(is_sensitive_key)
+                && !text.trim().is_empty()
+                && !text.trim_start().starts_with("$env:") =>
+        {
+            *text = SECRET_SENTINEL.to_string();
         }
         _ => {}
     }

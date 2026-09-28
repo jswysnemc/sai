@@ -105,12 +105,7 @@ impl HistoryCell {
         // - Tool / Shell：自身不加前空行；正文后的工具空行由窗口拼装补上
         let mut spaced = if lines.is_empty() {
             lines
-        } else if matches!(self, Self::Reasoning(_)) {
-            let mut spaced = Vec::with_capacity(lines.len() + 1);
-            spaced.push(AnsiLine::new(String::new()));
-            spaced.extend(lines);
-            spaced
-        } else if matches!(self, Self::Markdown(_) | Self::Meta(_)) {
+        } else if matches!(self, Self::Reasoning(_) | Self::Markdown(_) | Self::Meta(_)) {
             let mut spaced = Vec::with_capacity(lines.len() + 1);
             spaced.push(AnsiLine::new(String::new()));
             spaced.extend(lines);
@@ -216,7 +211,7 @@ impl HistoryCell {
     ///
     /// 返回:
     /// - diff cell
-    /// 构造编辑类 diff cell（写盘前冻结预览）。
+    ///   构造编辑类 diff cell（写盘前冻结预览）。
     ///
     /// 参数:
     /// - `name`: 工具名称

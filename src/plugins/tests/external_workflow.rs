@@ -120,7 +120,7 @@ async fn example_composes_public_services_with_explicit_grants() {
     let denied = fixture.registry();
     assert!(fixture.inspect(&denied, json!({})).await.is_err());
 
-    fixture.enable(GrantUpdate::Changes(GrantChanges {
+    fixture.enable(GrantUpdate::changes(GrantChanges {
         read_paths: Some(["notes".into()].into()),
         ..Default::default()
     }));
@@ -137,7 +137,7 @@ async fn example_composes_public_services_with_explicit_grants() {
     );
     assert!(fixture.command(&mut readonly, "latest").await.is_err());
 
-    fixture.enable(GrantUpdate::Changes(GrantChanges {
+    fixture.enable(GrantUpdate::changes(GrantChanges {
         plugin_storage: Some(true),
         ..Default::default()
     }));
@@ -221,7 +221,7 @@ async fn example_updates_and_reloads_without_builtin_registration() {
     );
     fixture.inspect(&updated, json!({})).await.unwrap();
 
-    fixture.enable(GrantUpdate::Changes(GrantChanges {
+    fixture.enable(GrantUpdate::changes(GrantChanges {
         read_paths: Some(Default::default()),
         ..Default::default()
     }));

@@ -2,6 +2,7 @@ mod anthropic_transport;
 mod provider_routing;
 
 include!("openai_compatible/client.rs");
+include!("openai_compatible/client_anthropic.rs");
 include!("openai_compatible/client_helpers.rs");
 include!("openai_compatible/request.rs");
 include!("openai_compatible/claude_style.rs");

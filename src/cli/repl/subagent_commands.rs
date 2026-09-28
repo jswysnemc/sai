@@ -168,7 +168,7 @@ mod tests {
     fn empty_session_yields_hint_and_message_error() {
         let owner = "/nonexistent-subagent-owner-for-test";
         assert!(format_subagent_list(owner)
-            .contains(&t("no subagents in this session", "当前会话还没有子智能体")));
+            .contains(t("no subagents in this session", "当前会话还没有子智能体")));
         assert!(resolve_message_target(owner, None, None).is_err());
     }
 

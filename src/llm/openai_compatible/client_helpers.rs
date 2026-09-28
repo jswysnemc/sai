@@ -1,4 +1,4 @@
-/// LLM 客户端共享辅助函数：Responses 流、请求头、Anthropic 工具与错误判定。
+// LLM 客户端共享辅助函数：Responses 流、请求头、Anthropic 工具与错误判定。
 
 /// Responses 流空闲超时：正文阶段过久无新字节时收尾。
 ///
@@ -10,7 +10,7 @@
 fn responses_stream_idle_timeout(provider_timeout_seconds: u64) -> Duration {
     // 1. 默认 8 秒足够覆盖网关间歇；不超过供应商超时的一半
     let half = provider_timeout_seconds.saturating_div(2).max(3);
-    Duration::from_secs(half.min(15).max(5))
+    Duration::from_secs(half.clamp(5, 15))
 }
 
 /// 冲刷 Responses 流缓冲中尚未推送的文本。

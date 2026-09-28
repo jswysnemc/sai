@@ -1,9 +1,8 @@
 use crate::agent::{Agent, AgentMode};
 use crate::cli::repl_runtime::ReplRuntime;
 use crate::cli::repl_turn::execute_repl_turn;
+use crate::cli::repl_turn_context::ReplTurnContext;
 use crate::cli::{build_repl_tool_registry, stream_render_options};
-use crate::config::AppConfig;
-use crate::paths::SaiPaths;
 use crate::{clipboard, render};
 use anyhow::Result;
 
@@ -47,11 +46,9 @@ pub(super) fn take_stream_draft_prefill(
 /// 依次执行运行期间 Tab 入队的用户消息。
 ///
 /// 参数:
-/// - `paths`: Sai 路径
-/// - `config`: 应用配置
+/// - `context`: 应用路径、配置和当前会话的所有权键
 /// - `agent`: 复用 Agent
 /// - `runtime`: TUI 运行期
-/// - `owner_key`: 当前会话的子智能体作用域键
 /// - `mode`: 当前模式
 /// - `input_history`: 输入历史
 /// - `reasoning_mode`: 推理显示模式
@@ -60,16 +57,19 @@ pub(super) fn take_stream_draft_prefill(
 /// 返回:
 /// - 队列执行结果，以及是否收到退出请求
 pub(super) async fn drain_submission_queue(
-    paths: &SaiPaths,
-    config: &AppConfig,
+    context: ReplTurnContext<'_>,
     agent: &mut Agent,
     runtime: &mut ReplRuntime,
-    owner_key: &str,
     mode: &mut AgentMode,
     input_history: &mut Vec<crate::state::input_history::InputHistoryEntry>,
     reasoning_mode: render::ReasoningDisplayMode,
     tool_call_mode: render::ToolCallDisplayMode,
 ) -> Result<bool> {
+    let ReplTurnContext {
+        paths,
+        config,
+        owner_key,
+    } = context;
     loop {
         let queued = runtime.take_turn_interval_queue();
         if queued.is_empty() {
@@ -302,10 +302,7 @@ mod tests {
         assert_eq!(submission.source, crate::runner::SubmissionSource::Repl);
         assert!(matches!(
             submission.kind,
-            crate::runner::RunnerSubmissionKind::UserInput(crate::runner::UserInputSubmission {
-                image_urls,
-                ..
-            }) if image_urls.len() == 1
+            crate::runner::RunnerSubmissionKind::UserInput(input) if input.image_urls.len() == 1
         ));
     }
 }

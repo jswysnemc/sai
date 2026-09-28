@@ -232,8 +232,10 @@ fn default_templates_include_official_anthropic_provider() {
 
 #[test]
 fn official_anthropic_uses_family_context_fallback() {
-    let mut config = AppConfig::default();
-    config.active_provider = "anthropic".to_string();
+    let config = AppConfig {
+        active_provider: "anthropic".to_string(),
+        ..AppConfig::default()
+    };
 
     assert_eq!(config.active_context_window_tokens().unwrap(), 200_000);
 }

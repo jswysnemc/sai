@@ -2,6 +2,7 @@ use super::terminal_restore::restore_stream_terminal_modes;
 use super::*;
 use crate::agent::{Agent, AgentEvent, ExternalEventBatch, ExternalEventWake};
 use crate::cli::repl_runtime::{StreamCommandContext, StreamInputAction};
+use crate::cli::repl_turn_context::ReplTurnContext;
 
 /// 自动唤醒对应的 runner submission 与待确认事件批次。
 pub(super) struct AutomaticReplSubmission {
@@ -43,6 +44,7 @@ pub(super) fn automatic_repl_submission(
             None,
         ),
         ExternalEventWake::Completion(batch) => {
+            let batch = *batch;
             let input = crate::runner::UserInputSubmission::new(String::new(), mode)
                 .with_external_event_batch(batch.clone());
             (input, Some(batch))
@@ -62,8 +64,7 @@ pub(super) fn automatic_repl_submission(
 /// 执行一条 TUI 自动唤醒轮次并在成功后确认外部完成事件。
 ///
 /// 参数:
-/// - `paths`: Sai 路径
-/// - `config`: 当前应用配置
+/// - `context`: 应用路径、配置和当前会话的所有权键
 /// - `agent`: 当前复用 Agent
 /// - `runtime`: TUI 运行期
 /// - `mode`: 当前 Agent 模式
@@ -74,16 +75,19 @@ pub(super) fn automatic_repl_submission(
 /// 返回:
 /// - 自动轮次执行结果
 pub(super) async fn execute_automatic_repl_turn(
-    paths: &SaiPaths,
-    config: &AppConfig,
+    context: ReplTurnContext<'_>,
     agent: &mut Agent,
     runtime: &mut ReplRuntime,
-    owner_key: &str,
     mode: AgentMode,
     reasoning_mode: render::ReasoningDisplayMode,
     tool_call_mode: render::ToolCallDisplayMode,
     wake: ExternalEventWake,
 ) -> Result<ReplTurnOutcome> {
+    let ReplTurnContext {
+        paths,
+        config,
+        owner_key,
+    } = context;
     if agent.installed_mode() != mode {
         let registry = build_repl_tool_registry(config, paths, mode)?;
         agent.switch_mode(mode, registry)?;
@@ -386,7 +390,7 @@ mod tests {
             "后台工作已完成",
         );
         let automatic = automatic_repl_submission(
-            ExternalEventWake::Completion(batch),
+            ExternalEventWake::completion(batch),
             AgentMode::Yolo,
             render::ReasoningDisplayMode::Summary,
             render::ToolCallDisplayMode::Summary,
@@ -396,10 +400,7 @@ mod tests {
         assert!(automatic.batch.is_some());
         assert!(matches!(
             automatic.submission.kind,
-            crate::runner::RunnerSubmissionKind::UserInput(crate::runner::UserInputSubmission {
-                automatic_input: Some(_),
-                ..
-            })
+            crate::runner::RunnerSubmissionKind::UserInput(input) if input.automatic_input.is_some()
         ));
     }
 }

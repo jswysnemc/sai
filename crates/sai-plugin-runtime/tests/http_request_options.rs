@@ -34,11 +34,13 @@ async fn redirect_and_error_body_options_are_explicit_and_bounded() {
             .await
             .unwrap();
     }
-    let requests = host.requests.lock().unwrap();
-    let values = requests
-        .iter()
-        .map(|request| serde_json::to_value(request).unwrap())
-        .collect::<Vec<_>>();
+    let values = {
+        let requests = host.requests.lock().unwrap();
+        requests
+            .iter()
+            .map(|request| serde_json::to_value(request).unwrap())
+            .collect::<Vec<_>>()
+    };
     assert_eq!(
         values
             .iter()
@@ -53,7 +55,6 @@ async fn redirect_and_error_body_options_are_explicit_and_bounded() {
             .collect::<Vec<_>>(),
         vec![json!(true), json!(false), json!(true)]
     );
-    drop(requests);
     for redirects in [json!(11), json!(-1), json!(1.5), json!("3")] {
         assert!(plugin
             .call_tool(

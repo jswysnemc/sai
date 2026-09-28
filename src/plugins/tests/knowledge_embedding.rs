@@ -140,7 +140,7 @@ async fn knowledge_reindex_replaces_file_chunks_and_preserves_other_rows() {
     assert_eq!(rows[0].0, "other.md");
     assert_eq!(rows[1].1, "中文正文");
     let vector: Vec<f32> = serde_json::from_str(&rows[1].2).unwrap();
-    assert_eq!(vector, vec![0.1, -0.0, 1.23456789]);
+    assert_eq!(vector, vec![0.1, -0.0, 1.234_567_9]);
     assert!(vector[1].is_sign_negative());
     assert_eq!(
         rows[1].3,
@@ -250,17 +250,18 @@ async fn knowledge_background_jobs_coalesce_scheduled_work_but_follow_running_wo
     )
     .await
     .unwrap();
-    let tasks = host.jobs.tasks.lock().unwrap();
-    assert_eq!(tasks.len(), 2);
-    for task in tasks.iter() {
-        assert_eq!(task.command, "embed-reindex");
-        let args: Value = serde_json::from_str(&task.arguments).unwrap();
-        assert_eq!(args["quiet"], true);
-        assert_eq!(args["background"], true);
-        assert!(args["ticket"].as_str().unwrap().parse::<u64>().is_ok());
-        assert_eq!(args.as_object().unwrap().len(), 3);
+    {
+        let tasks = host.jobs.tasks.lock().unwrap();
+        assert_eq!(tasks.len(), 2);
+        for task in tasks.iter() {
+            assert_eq!(task.command, "embed-reindex");
+            let args: Value = serde_json::from_str(&task.arguments).unwrap();
+            assert_eq!(args["quiet"], true);
+            assert_eq!(args["background"], true);
+            assert!(args["ticket"].as_str().unwrap().parse::<u64>().is_ok());
+            assert_eq!(args.as_object().unwrap().len(), 3);
+        }
     }
-    drop(tasks);
     host.pause_http.store(false, Ordering::SeqCst);
     host.http_release.notify_one();
     running.await.unwrap().unwrap();

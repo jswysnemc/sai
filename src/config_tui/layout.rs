@@ -72,8 +72,7 @@ pub(crate) fn form_label_width(longest_label: usize, left_w: usize) -> usize {
     const ROW_CHROME: usize = 4;
     let max_label = left_w
         .saturating_sub(ROW_CHROME + MIN_VALUE)
-        .min(MAX_LABEL)
-        .max(8);
+        .clamp(8, MAX_LABEL);
     longest_label.min(max_label).max(8)
 }
 

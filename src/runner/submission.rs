@@ -16,7 +16,7 @@ pub(crate) enum SubmissionSource {
 /// runner submission 的具体类型。
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum RunnerSubmissionKind {
-    UserInput(UserInputSubmission),
+    UserInput(Box<UserInputSubmission>),
     Control(ControlSubmission),
 }
 
@@ -293,7 +293,7 @@ impl RunnerSubmission {
             session_id: None,
             source,
             mode: input.mode,
-            kind: RunnerSubmissionKind::UserInput(input),
+            kind: RunnerSubmissionKind::UserInput(Box::new(input)),
             show_final_summary: false,
             render_policy: None,
             channel: None,

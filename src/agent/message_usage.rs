@@ -7,7 +7,7 @@ impl Agent {
     ///
     /// 参数:
     /// - `result`: provider 返回结果
-    /// 返回:
+    ///   返回:
     /// - 持久化是否成功
     pub(super) fn record_message_usage(&self, result: &ChatResult) -> Result<()> {
         let started_at = chrono::Utc::now().timestamp();

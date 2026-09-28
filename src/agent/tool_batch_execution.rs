@@ -18,7 +18,7 @@ enum BatchSlot {
         provider_call: ToolCall,
         call: ToolCall,
         repeat_verdict: RepeatVerdict,
-        hook_context: HookContext,
+        hook_context: Box<HookContext>,
     },
 }
 
@@ -132,7 +132,7 @@ impl Agent {
                 provider_call,
                 call,
                 repeat_verdict,
-                hook_context: tool_hook_context,
+                hook_context: Box::new(tool_hook_context),
             });
         }
 

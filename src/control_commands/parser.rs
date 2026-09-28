@@ -221,7 +221,7 @@ fn parse_subagent_message_command(input: &str) -> Result<ControlCommand> {
 ///
 /// 返回:
 /// - 命令名和参数文本
-/// 解析 `/context` 后的策略参数。
+///   解析 `/context` 后的策略参数。
 ///
 /// 参数:
 /// - `rest`: 命令余下文本
@@ -309,9 +309,7 @@ fn matches_surface_alias(
     english: &str,
     gateway_chinese_aliases: &[&str],
 ) -> bool {
-    name == english
-        || surface == ControlSurface::Gateway
-            && gateway_chinese_aliases.iter().any(|alias| name == *alias)
+    name == english || surface == ControlSurface::Gateway && gateway_chinese_aliases.contains(&name)
 }
 
 /// 解析清空命令参数。

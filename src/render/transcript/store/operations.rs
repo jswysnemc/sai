@@ -380,8 +380,8 @@ impl TranscriptStore {
                 arguments,
             ))));
         } else {
-            self.push_cell(HistoryCell::Tool(ToolCell::Invocation(ToolView::running(
-                name, arguments,
+            self.push_cell(HistoryCell::Tool(ToolCell::Invocation(Box::new(
+                ToolView::running(name, arguments),
             ))));
         }
         self.active_tool_index = Some(index);
@@ -440,7 +440,7 @@ impl TranscriptStore {
         }
         let mut view = ToolView::running(name, String::new());
         view.finish(ok, output);
-        self.push_cell(HistoryCell::Tool(ToolCell::Invocation(view)));
+        self.push_cell(HistoryCell::Tool(ToolCell::Invocation(Box::new(view))));
         self.active_tool_index = None;
     }
 
@@ -464,7 +464,7 @@ impl TranscriptStore {
         }
         let mut view = ToolView::running(name, String::new());
         view.set_progress(message);
-        self.push_cell(HistoryCell::Tool(ToolCell::Invocation(view)));
+        self.push_cell(HistoryCell::Tool(ToolCell::Invocation(Box::new(view))));
     }
 
     /// 记录上下文压缩开始事件。

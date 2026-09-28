@@ -5,9 +5,7 @@ use crate::runner::UserInputSubmission;
 use crate::tools::command::BackgroundCommandStore;
 use crate::tools::ToolRegistry;
 
-#[path = "../runner/automatic_test_support.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::runner::automatic_test_support as support;
 use support::AutomaticTestHarness;
 
 #[path = "external_wake_sources_tests.rs"]
@@ -55,7 +53,7 @@ async fn reopening_does_not_start_from_old_completion() {
         .unwrap()
     {
         harness
-            .submit(UserInputSubmission::new("", AgentMode::Yolo).with_external_event_batch(batch))
+            .submit(UserInputSubmission::new("", AgentMode::Yolo).with_external_event_batch(*batch))
             .await
             .unwrap();
     }

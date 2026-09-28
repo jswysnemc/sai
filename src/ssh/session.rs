@@ -134,7 +134,7 @@ pub(crate) async fn exec_command_with_stdin(
                     append_capped(&mut stdout, &data, max_bytes, &mut stdout_truncated);
                 }
                 // ext == 1 为 SSH 约定的 stderr，其余扩展流忽略
-                ChannelMsg::ExtendedData { data, ext } if ext == 1 => {
+                ChannelMsg::ExtendedData { data, ext: 1 } => {
                     append_capped(&mut stderr, &data, max_bytes, &mut stderr_truncated);
                 }
                 ChannelMsg::ExitStatus { exit_status: code } => {

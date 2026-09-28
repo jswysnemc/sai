@@ -55,10 +55,12 @@ impl ExternalToolHistory {
                     &self.turn_id,
                     id,
                     *ok,
-                    output,
-                    None,
-                    (!ok).then_some(output.as_str()),
-                    output.chars().count(),
+                    crate::state::tool_history::ToolResultOutput {
+                        result_preview: output,
+                        result_ref: None,
+                        error: (!ok).then_some(output.as_str()),
+                        original_chars: output.chars().count(),
+                    },
                 )
             }
             _ => Ok(()),

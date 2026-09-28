@@ -14,8 +14,8 @@ mod external_tool_history;
 mod external_turn;
 mod external_wake_policy;
 mod instruction_files;
-mod jev_routing;
 mod inter_message;
+mod jev_routing;
 mod lifecycle;
 mod load_request;
 mod message_context;
@@ -46,6 +46,7 @@ mod tool_policy;
 mod tool_visibility;
 mod turn_execution;
 mod turn_orchestration;
+mod turn_request;
 mod turn_settlement;
 mod turn_tools;
 

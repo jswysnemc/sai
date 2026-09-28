@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 /// CLI 与 TUI 启动时采用的默认权限模式。
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum DefaultPermissionMode {
+    #[default]
     Yolo,
     Audited,
     AutoAudit,
@@ -38,12 +40,6 @@ impl DefaultPermissionMode {
             "plan" => Self::Plan,
             _ => Self::Yolo,
         }
-    }
-}
-
-impl Default for DefaultPermissionMode {
-    fn default() -> Self {
-        Self::Yolo
     }
 }
 

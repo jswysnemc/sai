@@ -113,11 +113,13 @@ async fn context_prompt(
         &state.paths,
         &id,
         &workspace.path,
-        query.agent_id.as_deref(),
-        query.provider_id.as_deref(),
-        query.model.as_deref(),
-        mode,
-        locale,
+        crate::web::services::context_prompt::SessionPromptOptions {
+            agent_id: query.agent_id.as_deref(),
+            provider_id: query.provider_id.as_deref(),
+            model: query.model.as_deref(),
+            mode,
+            locale,
+        },
     )
     .await
     .map_err(WebError::from)?;

@@ -1,32 +1,32 @@
+use super::turn_request::TurnRequest;
 use super::*;
 
 impl Agent {
     /// 【Agent】【工具轮次】执行模型请求、工具调用及请求间隙消息交付。
     ///
     /// 参数:
-    /// - turn_id 为当前轮次，messages 为可追加上下文，used_tools 记录已执行工具
-    /// - input、image_urls 为本轮输入，memory_index_prompt、plugin_reply_reminder 为附加上下文
-    /// - inter_message_source 为排队消息来源，wait_for_external 控制后台等待
+    /// - request 为当前轮次的输入、附加提示与排队消息来源
+    /// - messages 为可追加上下文，used_tools 记录已执行工具
     /// - on_event 接收流式事件，perf 记录阶段耗时
     ///
     /// 返回: 最终模型回复或请求、工具执行错误
     pub(super) async fn chat_with_tools<F>(
         &mut self,
-        turn_id: &str,
+        request: TurnRequest<'_>,
         messages: &mut Vec<ChatMessage>,
         used_tools: &mut Vec<String>,
-        input: &str,
-        image_urls: &[String],
-        memory_index_prompt: Option<&str>,
-        plugin_reply_reminder: Option<&str>,
-        inter_message_source: Option<&dyn InterMessageSource>,
-        wait_for_external: bool,
         on_event: &mut F,
         perf: &mut PerfTrace,
     ) -> Result<ChatResult>
     where
         F: FnMut(AgentEvent) -> Result<()>,
     {
+        let TurnRequest {
+            turn_id,
+            inter_message_source,
+            wait_for_external,
+            ..
+        } = request;
         let mut tool_round = 0usize;
         // 跨轮累计同一工具调用的重复次数，防止模型对同一参数无限重复
         let mut repeat_guard = repeat_guard::RepeatGuard::default();
@@ -82,18 +82,8 @@ impl Agent {
                 &hook_ctx,
             )
             .await;
-            self.compact_between_tool_rounds(
-                tool_round,
-                turn_id,
-                messages,
-                input,
-                image_urls,
-                memory_index_prompt,
-                plugin_reply_reminder,
-                on_event,
-                perf,
-            )
-            .await?;
+            self.compact_between_tool_rounds(tool_round, request, messages, on_event, perf)
+                .await?;
             let definitions = if self.tools_enabled {
                 self.tool_visibility.definitions(&self.tools)
             } else {
@@ -476,7 +466,7 @@ impl Agent {
                         // 自动审核：与人工审核并行；必须在 on_event（可能阻塞）之前启动
                         let (auto_task, auto_audit_active) = if self.mode() == AgentMode::AutoAudit
                         {
-                            let context = crate::permission::build_audit_context(&messages, 2_500);
+                            let context = crate::permission::build_audit_context(messages, 2_500);
                             match crate::permission::AutoAuditBackend::resolve(
                                 &self.config,
                                 &self.paths,
@@ -732,7 +722,7 @@ impl Agent {
     ///
     /// 参数: messages 为当前模型请求上下文
     /// 返回: 无；替换需要升级的系统消息
-    fn promote_anchor_and_refresh_prompt(&mut self, messages: &mut Vec<ChatMessage>) {
+    fn promote_anchor_and_refresh_prompt(&mut self, messages: &mut [ChatMessage]) {
         if !self.tool_visibility.promote_anchor() {
             return;
         }

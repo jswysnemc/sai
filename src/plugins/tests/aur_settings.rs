@@ -54,7 +54,7 @@ fn aur_plugin_settings_override_legacy_defaults_and_preserve_tool_access() {
         &paths,
         "package-advisor",
         true,
-        GrantUpdate::Changes(GrantChanges {
+        GrantUpdate::changes(GrantChanges {
             workspace: Some(false),
             ..Default::default()
         }),

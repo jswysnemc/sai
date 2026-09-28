@@ -160,7 +160,7 @@ fn private_archive_bounds_pax_metadata_bytes_and_entries() {
 /// 【归档测试】【PAX 后续条目】跳过合法元数据后仍拒绝软链接和硬链接。
 #[test]
 fn private_archive_rejects_links_after_pax_global_metadata() {
-    for kind in [b'1', b'2'] {
+    for kind in *b"12" {
         let root = tempfile::tempdir().unwrap();
         let directory =
             Arc::new(Dir::open_ambient_dir(root.path(), cap_std::ambient_authority()).unwrap());
@@ -208,7 +208,7 @@ fn private_archive_rejects_traversal_links_devices_and_duplicates() {
         );
         assert_eq!(directory.entries().unwrap().count(), 0);
     }
-    for kind in [b'1', b'2', b'3', b'4', b'6', b'S'] {
+    for kind in *b"12346S" {
         let root = tempfile::tempdir().unwrap();
         let directory =
             Arc::new(Dir::open_ambient_dir(root.path(), cap_std::ambient_authority()).unwrap());

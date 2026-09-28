@@ -362,7 +362,7 @@ fn render_context_view(view: &ContextView, styled: bool) -> String {
     lines.push(String::new());
     lines.push(format!(
         "  {}",
-        paint(styled, DIM, &t("MCP tools", "MCP 工具").to_string())
+        paint(styled, DIM, t("MCP tools", "MCP 工具"))
     ));
     if view.mcp_tools.is_empty() {
         lines.push(format!(
@@ -456,7 +456,7 @@ fn paint_grid(categories: &[CategoryUsage], cells: &[usize], styled: bool) -> Ve
         } else {
             FILLED.to_string()
         };
-        grid.extend(std::iter::repeat(glyph).take(*count));
+        grid.extend(std::iter::repeat_n(glyph, *count));
     }
     let empty = if styled {
         format!("{DIM}{EMPTY}{RESET}")
@@ -518,7 +518,7 @@ fn legend_lines(view: &ContextView, used: usize, window: usize, styled: bool) ->
         paint(
             styled,
             &format!("{DIM}{ITALIC}"),
-            &t("Estimated usage by category", "按类别估算用量").to_string(),
+            t("Estimated usage by category", "按类别估算用量"),
         ),
     ];
     for category in &view.categories {

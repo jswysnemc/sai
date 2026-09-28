@@ -85,7 +85,7 @@ mod tests {
     /// 【工作概览】【解析测试】重命名与特殊文件名不影响数值累加；无参数，无返回值。
     #[test]
     fn parses_renames_binary_entries_and_special_paths() {
-        let output = "2\t1\t\0old\tname\0new\nname\0-\t-\timage.bin\05\t3\tfile\tname\0";
+        let output = "2\t1\t\0old\tname\0new\nname\0-\t-\timage.bin\x005\t3\tfile\tname\0";
         assert_eq!(
             parse_numstat(output).unwrap(),
             GitDiffStats {

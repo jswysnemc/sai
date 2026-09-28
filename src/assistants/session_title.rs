@@ -165,7 +165,7 @@ fn sanitize_title(raw: &str) -> String {
                 '"' | '\'' | '“' | '”' | '‘' | '’' | '《' | '》' | '「' | '」' | '【' | '】'
             )
         })
-        .trim_start_matches(|ch: char| matches!(ch, '#' | '-' | '*' | '·' | '•'))
+        .trim_start_matches(['#', '-', '*', '·', '•'])
         .trim();
     let cleaned = line.split_whitespace().collect::<Vec<_>>().join(" ");
     truncate(&cleaned, 48).trim().to_string()

@@ -43,7 +43,7 @@ fn every_extracted_package_uses_the_external_lifecycle() {
             &paths,
             id,
             true,
-            GrantUpdate::Changes(GrantChanges {
+            GrantUpdate::changes(GrantChanges {
                 http: Some(Default::default()),
                 http_read_any: Some(false),
                 http_read_only_post: Some(Default::default()),
@@ -161,7 +161,7 @@ async fn extracted_examples_install_run_update_revoke_and_remove() {
                 &paths,
                 id,
                 true,
-                GrantUpdate::Changes(GrantChanges {
+                GrantUpdate::changes(GrantChanges {
                     http: Some(["https://wttr.in".into()].into()),
                     ..Default::default()
                 }),
@@ -209,7 +209,7 @@ async fn extracted_examples_install_run_update_revoke_and_remove() {
             &paths,
             id,
             true,
-            GrantUpdate::Changes(GrantChanges {
+            GrantUpdate::changes(GrantChanges {
                 http: Some(Default::default()),
                 ..Default::default()
             }),

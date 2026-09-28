@@ -8,6 +8,9 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+/// 工具策略绑定：插件标识、实例标识和本地/公开工具名映射。
+pub(crate) type ToolPolicyBinding = (String, u64, Vec<(String, String)>);
+
 /// 【插件】【实例所有权】源码和注册属于同一实例，克隆仅用于同一 Agent 的工具副本。
 #[derive(Clone)]
 pub(super) struct PluginInstance {
@@ -80,7 +83,7 @@ impl PluginInstance {
 impl PluginSession {
     /// 【工具策略】【有效目录】枚举已授权回调及其本地名称与公开名称映射
     /// @returns 插件标识、实例及工具映射，不包含未授权策略
-    pub(crate) fn tool_policies(&self) -> Vec<(String, u64, Vec<(String, String)>)> {
+    pub(crate) fn tool_policies(&self) -> Vec<ToolPolicyBinding> {
         self.instances
             .iter()
             .filter(|(_, instance)| {

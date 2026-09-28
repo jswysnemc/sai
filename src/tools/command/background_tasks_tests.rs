@@ -245,7 +245,7 @@ async fn owner_session_task_survives_current_pointer_mismatch() {
         timeout_seconds: 0,
         completion_notified: false,
     };
-    store.save(&[task.clone()]).unwrap();
+    store.save(std::slice::from_ref(&task)).unwrap();
     let owner = BackgroundRuntimeOwner::session(&session_a.id);
 
     // list:以 A 的身份列出,任务必须在列

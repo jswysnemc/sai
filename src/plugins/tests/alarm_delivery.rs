@@ -32,17 +32,18 @@ async fn alarm_delivery_uses_one_sound_and_preserves_failures() {
         );
         assert!(!host.notices.lock().unwrap().last().unwrap().desktop);
     }
-    let notices = host.notices.lock().unwrap();
-    assert_eq!(notices.len(), 2);
-    assert_eq!(
-        serde_json::to_value(&notices[0]).unwrap()["sound"],
-        json!({"builtin":"alarm"})
-    );
-    assert_eq!(
-        serde_json::to_value(&notices[1]).unwrap()["sound"],
-        json!({"path":alarm_support::audio_path("audio.wav")})
-    );
-    drop(notices);
+    {
+        let notices = host.notices.lock().unwrap();
+        assert_eq!(notices.len(), 2);
+        assert_eq!(
+            serde_json::to_value(&notices[0]).unwrap()["sound"],
+            json!({"builtin":"alarm"})
+        );
+        assert_eq!(
+            serde_json::to_value(&notices[1]).unwrap()["sound"],
+            json!({"path":alarm_support::audio_path("audio.wav")})
+        );
+    }
     host.fail_notice.store(true, Ordering::SeqCst);
     assert!(format!(
         "{:#}",
