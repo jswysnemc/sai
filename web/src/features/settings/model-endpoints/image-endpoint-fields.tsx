@@ -1,7 +1,7 @@
 import { Loader2, RefreshCw } from "../../../shared/ui/icons";
-import { useState } from "react";
+import { useId } from "react";
 import { api } from "../../../api/client";
-import { toDisplayError } from "../../../api/api-error";
+import { useDraftProbe } from "../model/use-draft-probe";
 import type { ModelEndpointApiKey, ModelEndpointConfig } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
@@ -38,28 +38,24 @@ export function ImageEndpointFields({
   onRevealKey
 }: ImageEndpointFieldsProps) {
   const { t } = useI18n();
-  const [fetching, setFetching] = useState(false);
-  const [fetchError, setFetchError] = useState("");
+  const probeFormId = useId();
+  const target = endpointForProbe(endpoint, keys, selectedKey, secretSentinel);
+  const { running: fetching, error: fetchError, run: fetchCatalog } = useDraftProbe(
+    JSON.stringify(target), () => api.imageModels.models(target),
+    ["Failed to fetch image models", "获取生图模型失败"]
+  );
   const models = endpoint.models ?? [];
   const modelOptions = [...new Set([endpoint.model, ...models].filter(Boolean))].map((model) => ({ value: model, label: model }));
   const activeModel = endpoint.model || models[0] || "";
 
   /**
-   * 用当前草稿拉取模型目录，并写回可选模型。
+   * 用当前草稿获取模型目录，并写回可选模型。
    *
    * @returns 无
    */
   const fetchModels = async () => {
-    setFetching(true);
-    setFetchError("");
-    try {
-      const response = await api.imageModels.models(endpointForProbe(endpoint, keys, selectedKey, secretSentinel));
-      onPatch({ models: response.models, model: endpoint.model || response.models[0] || "" });
-    } catch (cause) {
-      setFetchError(toDisplayError(cause, "Failed to fetch image models", "获取生图模型失败").message);
-    } finally {
-      setFetching(false);
-    }
+    const response = await fetchCatalog("models");
+    if (response) onPatch({ models: response.models, model: endpoint.model || response.models[0] || "" });
   };
 
   return (
@@ -71,6 +67,8 @@ export function ImageEndpointFields({
         <FieldGrid>
           <SettingsField label={t("API address", "API 地址")} anchor="image-models.endpoint" configKey="model_endpoints.endpoint" hint={t("Complete HTTP(S) URL, including any version path and port.", "完整 HTTP(S) 地址，包含版本路径与端口。")}>
             <SkTextInput
+              form={probeFormId}
+              title={t("Press Enter to test connection", "按回车测试连接")}
               value={endpoint.endpoint}
               onChange={(value) => onPatch({ endpoint: value })}
               placeholder="https://example.com/v1/images/generations"
@@ -138,6 +136,7 @@ export function ImageEndpointFields({
       >
         <div className="grid min-w-0 gap-2">
           <ImageConnectionTest
+            formId={probeFormId}
             key={`${endpoint.id}:${endpoint.model}:${selectedKey ?? ""}`}
             endpoint={endpoint}
             keys={keys}

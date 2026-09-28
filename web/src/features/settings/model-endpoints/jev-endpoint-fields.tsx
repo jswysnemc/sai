@@ -1,3 +1,4 @@
+import { useId } from "react";
 import type { ModelEndpointApiKey, ModelEndpointConfig } from "../../../api/contracts";
 import { useI18n } from "../../i18n/use-i18n";
 import { FieldGrid, SettingsField, SettingsPanel, SkSelect, SkTextInput } from "../kit";
@@ -30,6 +31,7 @@ export function JevEndpointFields({
   onRevealKey
 }: JevEndpointFieldsProps) {
   const { t } = useI18n();
+  const probeFormId = useId();
 
   return (
     <>
@@ -40,6 +42,8 @@ export function JevEndpointFields({
         <FieldGrid>
           <SettingsField label={t("API address", "API 地址")} anchor="jev.endpoint" configKey="model_endpoints.endpoint" hint={t("A TypeSafe base URL ending in /v1 is completed to /v1/systemone.", "以 /v1 结尾的 TypeSafe 根地址会自动补全为 /v1/systemone。")}>
             <SkTextInput
+              form={probeFormId}
+              title={t("Press Enter to test connection", "按回车测试连接")}
               value={endpoint.endpoint}
               onChange={(value) => onPatch({ endpoint: value })}
               placeholder="https://api.typesafe.ai/v1/systemone"
@@ -83,6 +87,7 @@ export function JevEndpointFields({
       >
         <div className="grid min-w-0 gap-2">
           <JevConnectionTest
+            formId={probeFormId}
             key={`${endpoint.id}:${endpoint.model}:${selectedKey ?? ""}`}
             endpoint={endpoint}
             keys={keys}

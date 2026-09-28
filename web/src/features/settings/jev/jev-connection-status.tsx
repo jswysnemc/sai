@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
 import { CheckCircle2, CircleAlert, Loader2, PlugZap } from "../../../shared/ui/icons";
 import { api } from "../../../api/client";
-import { toDisplayError } from "../../../api/api-error";
+import { useDraftProbe } from "../model/use-draft-probe";
 import type { JevProbeReport, JevStatus } from "../../../api/contracts/jev";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
@@ -24,31 +23,18 @@ type JevConnectionStatusProps = {
 export function JevConnectionStatus({ dirty }: JevConnectionStatusProps) {
   const { t } = useI18n();
   const status = useQuery({ queryKey: [JEV_STATUS_QUERY_KEY, dirty], queryFn: api.jev.status });
-  const [probing, setProbing] = useState(false);
-  const [report, setReport] = useState<JevProbeReport | null>(null);
-  const [error, setError] = useState("");
-
-  /** 测试已保存的生效接入。 */
-  const probe = async () => {
-    setProbing(true);
-    setError("");
-    setReport(null);
-    try {
-      setReport(await api.jev.test());
-    } catch (cause) {
-      setError(toDisplayError(cause, "Jev connection test failed", "Jev 连接测试失败").message);
-    } finally {
-      setProbing(false);
-    }
-  };
+  const { running: probing, report, error, run } = useDraftProbe<JevProbeReport, "connection">(
+    JSON.stringify([status.data, status.dataUpdatedAt, dirty]), () => api.jev.test(),
+    ["Jev connection test failed", "Jev 连接测试失败"]
+  );
 
   return (
     <div className="jev-status">
       <div className="jev-status-row">
         <StatusSummary status={status.data} loading={status.isLoading} />
-        <Button variant="secondary" disabled={probing || !status.data?.key_ready} onClick={() => void probe()}>
+        <Button variant="secondary" disabled={probing || status.isFetching || !status.data?.key_ready} onClick={() => void run("connection")}>
           {probing ? <Loader2 size={14} className="spin" /> : <PlugZap size={14} />}
-          {probing ? t("Testing", "测试中") : t("Test", "测试")}
+          {probing ? t("Testing", "测试中") : t("Test saved connection", "测试已保存接入")}
         </Button>
       </div>
       {dirty && <small className="jev-status-note">{t("Status reflects the saved configuration. Save to apply changes.", "状态基于已保存的配置，保存后生效。")}</small>}

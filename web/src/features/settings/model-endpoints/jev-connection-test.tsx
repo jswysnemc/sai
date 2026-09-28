@@ -1,7 +1,6 @@
 import { CheckCircle2, Loader2, PlugZap, XCircle } from "../../../shared/ui/icons";
-import { useState } from "react";
 import { api } from "../../../api/client";
-import { toDisplayError } from "../../../api/api-error";
+import { useDraftProbe } from "../model/use-draft-probe";
 import type { ModelEndpointApiKey, ModelEndpointConfig } from "../../../api/contracts";
 import type { JevProbeReport } from "../../../api/contracts/jev";
 import { Button } from "../../../shared/ui/button/button";
@@ -10,6 +9,7 @@ import { endpointForProbe } from "./endpoint-for-probe";
 import "../model/provider-connection-test.css";
 
 type JevConnectionTestProps = {
+  formId?: string;
   endpoint: ModelEndpointConfig;
   keys: ModelEndpointApiKey[];
   selectedKey?: string;
@@ -25,38 +25,22 @@ type JevConnectionTestProps = {
  * @param props 接入草稿、密钥列表与当前选中的测试密钥
  * @returns 测试按钮与结果
  */
-export function JevConnectionTest({ endpoint, keys, selectedKey, secretSentinel }: JevConnectionTestProps) {
+export function JevConnectionTest({ endpoint, keys, selectedKey, secretSentinel, formId }: JevConnectionTestProps) {
   const { t } = useI18n();
-  const [running, setRunning] = useState(false);
-  const [report, setReport] = useState<JevProbeReport | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const target = endpointForProbe(endpoint, keys, selectedKey, secretSentinel);
+  const { running, report, error, run } = useDraftProbe<JevProbeReport, "connection">(
+    JSON.stringify(target), () => api.jev.test(target),
+    ["Connection test failed", "连通性测试失败"]
+  );
   const canTest = endpoint.endpoint.trim().length > 0;
-
-  /**
-   * 用选中的密钥发送一次最小 Noul 请求。
-   *
-   * @returns 无
-   */
-  const runTest = async () => {
-    setRunning(true);
-    setError(null);
-    setReport(null);
-    try {
-      setReport(await api.jev.test(endpointForProbe(endpoint, keys, selectedKey, secretSentinel)));
-    } catch (cause) {
-      setError(toDisplayError(cause, "Jev connection test failed", "Jev 连接测试失败").message);
-    } finally {
-      setRunning(false);
-    }
-  };
 
   const model = report ? (report.served_model ?? report.model) : "";
 
   return (
-    <div className="provider-probe">
+    <form id={formId} className="provider-probe" onSubmit={(event) => { event.preventDefault(); if (!running && canTest) void run("connection"); }}>
       <div className="provider-probe-head">
         <div className="provider-probe-actions">
-          <Button className="provider-probe-run" disabled={running || !canTest} onClick={() => void runTest()}>
+          <Button type="submit" className="provider-probe-run" disabled={running || !canTest}>
             {running ? <Loader2 size={14} className="provider-probe-spin" /> : <PlugZap size={14} />}
             {running ? t("Testing", "测试中") : t("Test connection", "测试连接")}
           </Button>
@@ -93,6 +77,6 @@ export function JevConnectionTest({ endpoint, keys, selectedKey, secretSentinel 
       <p className="provider-probe-note">
         {t("Tests the unsaved draft above, not the last saved connection.", "测试的是上方未保存的草稿，不是上次已保存的接入。")}
       </p>
-    </div>
+    </form>
   );
 }

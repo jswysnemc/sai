@@ -1,7 +1,6 @@
 import { CheckCircle2, Loader2, PlugZap, Wrench, XCircle } from "../../../shared/ui/icons";
-import { useState } from "react";
 import { api } from "../../../api/client";
-import { toDisplayError } from "../../../api/api-error";
+import { useDraftProbe } from "./use-draft-probe";
 import type { ProviderConfig, ProviderProbeReport } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
@@ -9,6 +8,7 @@ import { probeHint, stageLabel } from "./provider-probe-hints";
 import "./provider-connection-test.css";
 
 type ProviderConnectionTestProps = {
+  formId?: string;
   provider: ProviderConfig;
   /** 待测模型；为空时后端取供应商默认模型 */
   model?: string;
@@ -47,40 +47,22 @@ function providerForProbe(provider: ProviderConfig, selectedKeyId?: string): Pro
  * @param props 供应商配置与待测模型
  * @returns 测试按钮与结果面板
  */
-export function ProviderConnectionTest({ provider, model, selectedKeyId }: ProviderConnectionTestProps) {
+export function ProviderConnectionTest({ provider, model, selectedKeyId, formId }: ProviderConnectionTestProps) {
   const { t } = useI18n();
-  const [running, setRunning] = useState(false);
-  const [runningMode, setRunningMode] = useState<ProviderProbeMode | null>(null);
-  const [report, setReport] = useState<ProviderProbeReport | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  /**
-   * 执行一次连通性探测。
-   *
-   * @returns 无
-   */
-  const runTest = async (mode: ProviderProbeMode) => {
-    setRunning(true);
-    setRunningMode(mode);
-    setError(null);
-    setReport(null);
-    try {
-      setReport(await api.providers.test(providerForProbe(provider, selectedKeyId), model, mode));
-    } catch (reason) {
-      setError(toDisplayError(reason, "Connection test failed", "连通性测试失败").message);
-    } finally {
-      setRunning(false);
-      setRunningMode(null);
-    }
-  };
+  const target = providerForProbe(provider, selectedKeyId);
+  const { running, runningMode, report, error, run: runTest } = useDraftProbe<ProviderProbeReport, ProviderProbeMode>(
+    JSON.stringify([target, model]),
+    (mode) => api.providers.test(target, model, mode),
+    ["Connection test failed", "连通性测试失败"]
+  );
 
   const hint = report && !report.ok ? probeHint(report.error_kind, t) : "";
 
   return (
-    <div className="provider-probe">
+    <form id={formId} className="provider-probe" onSubmit={(event) => { event.preventDefault(); if (!running) void runTest("connection"); }}>
       <div className="provider-probe-head">
         <div className="provider-probe-actions">
-          <Button className="provider-probe-run" disabled={running} onClick={() => void runTest("connection")}>
+          <Button type="submit" className="provider-probe-run" disabled={running}>
             {runningMode === "connection" ? <Loader2 size={14} className="provider-probe-spin" /> : <PlugZap size={14} />}
             {runningMode === "connection" ? t("Testing", "测试中") : t("Test connection", "普通连通性测试")}
           </Button>
@@ -128,6 +110,6 @@ export function ProviderConnectionTest({ provider, model, selectedKeyId }: Provi
       </p>
 
       {hint && <p className="provider-probe-note">{hint}</p>}
-    </div>
+    </form>
   );
 }

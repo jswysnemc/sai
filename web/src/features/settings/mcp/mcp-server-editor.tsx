@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from "react";
 import type { UseMutationResult } from "@tanstack/react-query";
 import type { McpServerConfig } from "../../../api/contracts";
 import type { McpToolInfo } from "../../../api/mcp-tool-contracts";
@@ -30,6 +31,12 @@ export function McpServerEditor({ server, selectedIndex, scannedServerId, scanTo
   /** 合并当前服务字段；参数为补丁，返回无值。 */
   const update = (patch: Partial<McpServerConfig>) => onUpdateServer(selectedIndex, patch);
   const ownScan = JSON.stringify(scanTools.variables) === JSON.stringify(server);
+  /** 在端点或启动命令中按回车发现工具；参数为按键事件，返回无值。 */
+  const testOnEnter = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    if (!(ownScan && scanTools.isPending)) scanTools.mutate(server);
+  };
   return <>
     <SettingsPanel title={t("Connection", "连接")}>
       <FieldGrid>
@@ -37,12 +44,12 @@ export function McpServerEditor({ server, selectedIndex, scannedServerId, scanTo
         <SettingsField label={t("Transport", "传输方式")} anchor="mcp.transport"><ChoicePills value={transport} options={[{ value: "stdio", label: "stdio" }, { value: "http", label: "HTTP" }, { value: "sse", label: "SSE" }]} onChange={(value) => update({ transport: value })} /></SettingsField>
         <SettingsField label={t("Timeout", "超时")} anchor="mcp.timeout_ms" size="sm" hint={t("Request or process startup timeout.", "请求或进程启动超时。")}><SkNumberInput value={server.timeout_ms ?? 30000} min={100} max={300000} unit="ms" onChange={(timeout_ms) => update({ timeout_ms })} /></SettingsField>
         {transport === "stdio" ? <>
-          <SettingsField label={t("Command", "命令")} anchor="mcp.command" hint={t("Executable on PATH, such as npx, uvx or node.", "PATH 中的可执行文件，如 npx、uvx 或 node。")}><SkTextInput mono value={server.command ?? ""} onChange={(command) => update({ command })} /></SettingsField>
+          <SettingsField label={t("Command", "命令")} anchor="mcp.command" hint={t("Executable on PATH, such as npx, uvx or node.", "PATH 中的可执行文件，如 npx、uvx 或 node。")}><SkTextInput onKeyDown={testOnEnter} title={t("Press Enter to scan tools", "按回车扫描工具")} mono value={server.command ?? ""} onChange={(command) => update({ command })} /></SettingsField>
           <SettingsField label={t("Working directory", "工作目录")} anchor="mcp.cwd"><SkTextInput mono value={server.cwd ?? ""} onChange={(cwd) => update({ cwd: cwd || null })} /></SettingsField>
           <SettingsField label={t("Arguments", "参数")} anchor="mcp.args" hint={t("One argument per line; spaces within an argument are preserved.", "每行一个参数，保留参数内部空格。")}><SkListInput value={server.args ?? []} onChange={(args) => update({ args })} /></SettingsField>
           <SettingsField label={t("Environment", "环境变量")} anchor="mcp.env" span="full"><KeyValueEditor value={server.env ?? {}} keyPlaceholder={t("Variable name", "变量名")} valuePlaceholder={t("Value", "值")} addLabel={t("Add variable", "添加变量")} onChange={(env) => update({ env })} /></SettingsField>
         </> : <>
-          <SettingsField label="URL" anchor="mcp.url" span="full"><SkTextInput mono value={server.url ?? ""} onChange={(url) => update({ url: url || null })} /></SettingsField>
+          <SettingsField label="URL" anchor="mcp.url" span="full"><SkTextInput onKeyDown={testOnEnter} title={t("Press Enter to scan tools", "按回车扫描工具")} mono value={server.url ?? ""} onChange={(url) => update({ url: url || null })} /></SettingsField>
           {transport === "sse" && <SettingsField label={t("Message address", "消息地址")} anchor="mcp.message_url" span="full" hint={t("Optional; read from the SSE endpoint event when empty.", "可选；留空时从 SSE 端点事件读取。")}><SkTextInput mono value={server.message_url ?? ""} onChange={(message_url) => update({ message_url: message_url || null })} /></SettingsField>}
           <SettingsField label={t("Headers", "请求头")} anchor="mcp.headers" span="full"><KeyValueEditor value={server.headers ?? {}} keyPlaceholder={t("Header name", "请求头名称")} valuePlaceholder={t("Header value", "请求头值")} addLabel={t("Add header", "添加请求头")} onChange={(headers) => update({ headers })} /></SettingsField>
         </>}

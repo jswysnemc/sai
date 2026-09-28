@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, useId } from "react";
 import type { ProviderApiKey, ProviderConfig } from "../../../api/contracts";
 import { ModelIcon } from "../../../shared/ui/model-icon";
 import { useI18n } from "../../i18n/use-i18n";
@@ -34,11 +34,12 @@ type ProviderConnectionTabProps = {
  */
 export function ProviderConnectionTab({ provider, providerKeys, selectedProviderKey, secretSentinel, idDraft, idError, defaultModelOptions, onIdDraftChange, onCommitId, onIdEscape, onDisplayNameChange, onPatch, onRevealKey, onKeysChange }: ProviderConnectionTabProps) {
   const { t } = useI18n();
+  const probeFormId = useId();
   return <>
     <SettingsPanel title={t("Endpoint", "接入点")} description={t("Where requests go and which protocol they use.", "配置请求地址、默认模型与接口协议。")}>
       <FieldGrid>
         <SettingsField label={t("API address", "API 地址")} anchor="providers.connection.base_url" configKey="providers.base_url" span="full" hint={t("Base URL of the compatible API, including its version path.", "兼容接口的基础地址，包含版本路径。")}>
-          <SkTextInput mono value={provider.base_url} onChange={(value) => onPatch({ base_url: value })} />
+          <SkTextInput form={probeFormId} title={t("Press Enter to test connection", "按回车测试连接")} mono value={provider.base_url} onChange={(value) => onPatch({ base_url: value })} />
         </SettingsField>
         <SettingsField label={t("Default model", "默认模型")} anchor="providers.connection.default_model" configKey="providers.default_model" hint={t("Used when no model is selected manually.", "未手动选择模型时使用。")}>
           <SkSelect value={provider.default_model ?? ""} options={defaultModelOptions.length ? defaultModelOptions : [{ value: "", label: t("Add models on the Models tab first", "先在模型页签添加模型") }]} disabled={!defaultModelOptions.length} onChange={(value) => onPatch({ default_model: value })} />
@@ -52,7 +53,7 @@ export function ProviderConnectionTab({ provider, providerKeys, selectedProvider
       <ProviderApiKeysField key={provider.id} providerId={provider.id} keys={providerKeys} selected={selectedProviderKey} balance={provider.api_key_balance === true} secretSentinel={secretSentinel} onRevealKey={onRevealKey} onChange={onKeysChange} />
     </SettingsPanel>
     <SettingsPanel title={t("Connectivity", "连通性")} description={t("Test normal responses or tool calls using the selected key.", "使用所选密钥测试普通响应或工具调用。")}>
-      <ProviderConnectionTest key={`${provider.id}:${provider.default_model ?? ""}:${selectedProviderKey ?? ""}`} provider={provider} model={provider.default_model || undefined} selectedKeyId={selectedProviderKey} />
+      <ProviderConnectionTest formId={probeFormId} key={`${provider.id}:${provider.default_model ?? ""}:${selectedProviderKey ?? ""}`} provider={provider} model={provider.default_model || undefined} selectedKeyId={selectedProviderKey} />
     </SettingsPanel>
     <SettingsPanel title={t("Identity", "身份")}>
       <FieldGrid>
