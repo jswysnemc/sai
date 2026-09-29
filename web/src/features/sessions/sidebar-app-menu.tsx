@@ -31,7 +31,7 @@ export function SidebarAppMenu({ collapsed = false, onOpenDirectory, onAfterNavi
       className={collapsed ? "" : "sidebar-settings-menu"}
       triggerClassName={collapsed ? "sidebar-rail-button" : "sidebar-settings-link"}
       label={t("Settings", "设置")}
-      trigger={<><Settings size={16} />{!collapsed && <span>{t("Settings", "设置")}</span>}</>}
+      trigger={<><Settings size={collapsed ? 16 : 14} />{!collapsed && <span>{t("Settings", "设置")}</span>}</>}
       items={[
         { id: "settings", label: t("Settings", "设置"), icon: <Settings size={16} />, onSelect: () => openPage("/settings") },
         { id: "skills", label: t("Skills", "技能"), icon: <Sparkles size={16} />, onSelect: () => openPage("/settings/skills") },

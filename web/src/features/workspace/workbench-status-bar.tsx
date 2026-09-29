@@ -20,14 +20,14 @@ export function WorkbenchStatusBar({ branch, terminalOpen }: WorkbenchStatusBarP
     <footer className="workbench-status-bar" aria-label={t("Workspace status", "工作区状态")}>
       <div className="workbench-status-project">
         <WorkbenchWorkspacePath />
-        {branch && <Button variant="ghost" size="small" className="workbench-status-branch" title={t(`Git branch: ${branch}`, `Git 分支：${branch}`)} onClick={() => requestWorkbenchCommand("open-changes")}><GitBranch size={12} /><span>{branch}</span></Button>}
+        {branch && <Button variant="ghost" size="small" className="workbench-status-branch" title={t(`Git branch: ${branch}`, `Git 分支：${branch}`)} onClick={() => requestWorkbenchCommand("open-changes")}><GitBranch size={14} /><span>{branch}</span></Button>}
       </div>
       <div className="workbench-status-actions">
         <Button variant="ghost" size="small" className="hidden md:inline-flex" onClick={() => window.dispatchEvent(new Event("sai:open-tasks"))} title={t("Background tasks", "后台任务")}>
-          <Activity size={12} /><span>{t("Tasks", "任务")}</span><span className="workbench-status-count">{activity.runningTasks}</span>
+          <Activity size={14} /><span>{t("Tasks", "任务")}</span><span className={activity.runningTasks > 0 ? "workbench-status-count" : "workbench-status-count is-idle"}>{activity.runningTasks}</span>
         </Button>
-        {activity.runningSubagents > 0 && <Button variant="ghost" size="small" onClick={() => window.dispatchEvent(new Event("sai:open-subagents"))} title={t("Running subagents", "运行中的子智能体")}><Bot size={12} /><span>{activity.runningSubagents}</span></Button>}
-        <Button variant="ghost" size="small" aria-label={t("Toggle terminal", "切换终端")} aria-pressed={terminalOpen} onClick={() => requestWorkbenchCommand("toggle-terminal")}><SquareTerminal size={12} /><span className="hidden sm:inline">{t("Terminal", "终端")}</span></Button>
+        {activity.runningSubagents > 0 && <Button variant="ghost" size="small" onClick={() => window.dispatchEvent(new Event("sai:open-subagents"))} title={t("Running subagents", "运行中的子智能体")}><Bot size={14} /><span>{activity.runningSubagents}</span></Button>}
+        <Button variant="ghost" size="small" aria-label={t("Toggle terminal", "切换终端")} aria-pressed={terminalOpen} onClick={() => requestWorkbenchCommand("toggle-terminal")}><SquareTerminal size={14} /><span className="hidden sm:inline">{t("Terminal", "终端")}</span></Button>
         <Button variant="ghost" size="small" aria-label={t("Open command menu", "打开命令菜单")} title={t("Commands and shortcuts", "命令与快捷键")} onClick={() => requestWorkbenchCommand("search")}><Keyboard size={14} /></Button>
       </div>
     </footer>
