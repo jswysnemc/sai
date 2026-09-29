@@ -251,7 +251,7 @@ async fn web_runner_reopen_skips_old_completions_and_queued_snapshots() {
         UserInputSubmission::new("", AgentMode::Yolo).with_external_event_batch(batch),
     ] {
         tokio::time::timeout(
-            Duration::from_secs(10),
+            support::TEST_TURN_TIMEOUT,
             runner.run_submission(
                 RunnerSubmission::user_input(SubmissionSource::Web, input)
                     .with_session_id(harness.agent.session_id()),

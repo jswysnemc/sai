@@ -8,7 +8,7 @@ use crate::runner::{
 use crate::state::StateStore;
 use crate::tools::command::{BackgroundCommandStore, BackgroundCommandTask};
 use crate::tools::{ToolRegistry, ToolSpec};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use axum::extract::State;
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -17,6 +17,10 @@ use axum::{Json, Router};
 use serde_json::{json, Value};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+/// 【自动续聊】【测试时限】覆盖调试构建首次请求的初始化与慢速 CI 调度，仍限制挂起等待。
+pub(crate) const TEST_TURN_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// 本地模拟服务下一次请求的响应类型。
 pub(crate) enum TestResponse {
@@ -126,21 +130,30 @@ impl AutomaticTestHarness {
     pub(crate) async fn submit(&mut self, input: UserInputSubmission) -> Result<()> {
         self.agent.prepare_for_turn()?;
         self.events.clear();
+        let requests_before = self.request_count();
         let runner = SessionRunner::new(&self.paths).with_config(self.config.clone());
         let events = &mut self.events;
         let mut sink = |event| {
             events.push(event);
             Ok(())
         };
-        tokio::time::timeout(
-            std::time::Duration::from_secs(10),
+        let result = tokio::time::timeout(
+            TEST_TURN_TIMEOUT,
             runner.run_submission_with_agent(
                 RunnerSubmission::user_input(SubmissionSource::Repl, input),
                 &mut self.agent,
                 &mut sink,
             ),
         )
-        .await??;
+        .await;
+        result.with_context(|| {
+            format!(
+                "test submission timed out after {}s ({} new model requests, {} runner events)",
+                TEST_TURN_TIMEOUT.as_secs(),
+                self.request_count().saturating_sub(requests_before),
+                self.events.len(),
+            )
+        })??;
         Ok(())
     }
 
