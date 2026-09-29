@@ -59,6 +59,8 @@ pub(super) struct ComposerFrame {
     panels_dismissed: bool,
     /// 模型是否正在运行；为 true 时斜杠面板把打断类命令置灰
     streaming: bool,
+    /// 空输入时替代默认提示的占位文本（SSH 征询等临时输入场景）
+    placeholder_override: Option<String>,
 }
 
 impl ComposerFrame {
@@ -92,7 +94,19 @@ impl ComposerFrame {
             panel_lines: Vec::new(),
             panels_dismissed: false,
             streaming: false,
+            placeholder_override: None,
         }
+    }
+
+    /// 设置空输入时显示的占位文本。
+    ///
+    /// 参数:
+    /// - `placeholder`: 纯文本占位提示；None 恢复默认提示
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn set_placeholder_override(&mut self, placeholder: Option<String>) {
+        self.placeholder_override = placeholder;
     }
 
     /// 设置模型是否正在运行。

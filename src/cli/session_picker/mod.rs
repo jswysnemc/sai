@@ -1,4 +1,5 @@
 mod model;
+mod rows;
 #[cfg(test)]
 mod tests;
 mod view;

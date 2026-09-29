@@ -12,7 +12,7 @@ use std::io::{self, Write};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use super::input::read_key;
-use super::layout::{full_frame, master_detail_widths, scroll_start, FrameRect};
+use super::layout::{content_frame, master_detail_widths, scroll_start, FrameRect};
 use super::theme::{
     help_line, selection_marks, ACCENT, BOLD, BRAND, CORNER_BOTTOM_LEFT, CORNER_BOTTOM_RIGHT,
     CORNER_TOP_LEFT, CORNER_TOP_RIGHT, DIM, LINE_HORIZONTAL, LINE_VERTICAL, MUTED, RESET,
@@ -75,7 +75,7 @@ pub(crate) fn draw_menu_with_details(
     subtitle: &str,
 ) -> Result<()> {
     let (cols, rows) = terminal::size()?;
-    let frame = full_frame(cols, rows);
+    let frame = menu_frame(cols, rows, options, details, !subtitle.is_empty());
 
     begin_synced_frame(stdout)?;
     queue!(stdout, Clear(ClearType::All))?;
@@ -140,6 +140,55 @@ pub(crate) fn draw_menu_with_details(
 
     draw_status_bar(stdout, &frame, &menu_help(status))?;
     end_synced_frame(stdout)
+}
+
+/// 菜单面板最大宽度：选项与说明两栏在此宽度内已足够舒展。
+const MENU_MAX_WIDTH: u16 = 100;
+/// 说明栏最少保留的行数，切换选项时面板高度不随说明长短跳动。
+const MENU_MIN_DETAIL_ROWS: usize = 4;
+
+/// 按选项数量与最长说明计算菜单外框，条目少时面板随内容收缩。
+///
+/// 参数:
+/// - `cols`: 终端列数
+/// - `rows`: 终端行数
+/// - `options`: 左侧选项
+/// - `details`: 与选项对齐的说明
+/// - `has_subtitle`: 是否有副标题行
+///
+/// 返回:
+/// - 菜单外框矩形
+fn menu_frame(
+    cols: u16,
+    rows: u16,
+    options: &[String],
+    details: &[String],
+    has_subtitle: bool,
+) -> FrameRect {
+    // 1. 先按最大宽度确定两栏宽度，说明折行行数依赖右栏宽度
+    let probe = content_frame(cols, rows, 1, MENU_MAX_WIDTH);
+    let inner_w = probe.width.saturating_sub(4);
+    let right_w = if details.is_empty() {
+        0
+    } else {
+        master_detail_widths(inner_w).1
+    };
+    // 2. 说明栏高度取所有选项中最长者，保证切换选项时外框稳定
+    let detail_rows = if right_w == 0 {
+        0
+    } else {
+        details
+            .iter()
+            .map(|detail| wrap_text(detail, right_w as usize).len() + 2)
+            .max()
+            .unwrap_or(0)
+            .max(MENU_MIN_DETAIL_ROWS)
+    };
+    // 3. 内容行 = 副标题与分隔线 + 列表/说明较高者 + 底部留白
+    let header_rows = if has_subtitle { 2 } else { 0 };
+    let body_rows = options.len().max(detail_rows).max(1);
+    let content_rows = (header_rows + body_rows + 1).min(usize::from(u16::MAX)) as u16;
+    content_frame(cols, rows, content_rows, MENU_MAX_WIDTH)
 }
 
 /// 组装菜单底部帮助条。

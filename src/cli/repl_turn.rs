@@ -369,7 +369,7 @@ fn handle_turn_event(event: crate::runner::RunnerEvent, runtime: &mut ReplRuntim
         if crate::ssh::is_secret_marker(message) {
             if let Some(request) = crate::ssh::decode_progress_marker(message) {
                 runtime.pause_for_permission_prompt()?;
-                prompt_ssh_secret_request_tui(&request, runtime)?;
+                super::ssh_prompt::prompt_ssh_secret_request_tui(&request, runtime)?;
                 restore_stream_terminal_modes()?;
             }
             return Ok(());

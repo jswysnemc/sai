@@ -23,6 +23,7 @@ mod resize_preview;
 mod runner_events;
 mod shell_hint_panel;
 mod slash_panel;
+mod ssh_card;
 mod stream;
 mod stream_commands;
 mod viewport;
@@ -126,6 +127,8 @@ pub(super) struct ReplRuntime {
     overlay_dirty: bool,
     /// 下一次重放强制按当前光标整屏重锚
     force_reanchor: bool,
+    /// SSH 征询期间挂在输入框上方的卡片；存在时输入框改为征询输入
+    ssh_prompt: Option<crate::cli::ssh_prompt::SshPromptView>,
 }
 
 /// 运行期间底部输入框草稿。
@@ -243,6 +246,7 @@ impl ReplRuntime {
             overlay_open: false,
             overlay_dirty: false,
             force_reanchor: false,
+            ssh_prompt: None,
         }
     }
 

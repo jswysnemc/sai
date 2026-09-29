@@ -9,7 +9,10 @@ pub(crate) struct FrameRect {
     pub height: u16,
 }
 
-/// 计算近全屏内容框：只留一列边距，尽量吃满终端。
+/// 面板最大宽度：超宽终端上继续拉伸只会让标签与说明相隔过远。
+pub(crate) const MAX_FRAME_WIDTH: u16 = 120;
+
+/// 计算列表类面板的外框：高度吃满终端，宽度封顶。
 ///
 /// 参数:
 /// - `cols`: 终端列数
@@ -20,13 +23,35 @@ pub(crate) struct FrameRect {
 pub(crate) fn full_frame(cols: u16, rows: u16) -> FrameRect {
     let margin_x: u16 = if cols > 40 { 1 } else { 0 };
     let margin_y: u16 = 0;
-    let width = cols.saturating_sub(margin_x.saturating_mul(2)).max(1);
+    let width = cols
+        .saturating_sub(margin_x.saturating_mul(2))
+        .clamp(1, MAX_FRAME_WIDTH);
     let height = rows.saturating_sub(margin_y.saturating_mul(2)).max(1);
     FrameRect {
         x: margin_x,
         y: margin_y,
         width,
         height,
+    }
+}
+
+/// 计算按内容收缩的外框：条目少时不再撑满整屏。
+///
+/// 参数:
+/// - `cols`: 终端列数
+/// - `rows`: 终端行数
+/// - `content_rows`: 内容区（不含上下边框）需要的行数
+/// - `max_width`: 期望的最大宽度
+///
+/// 返回:
+/// - 高度等于内容加边框、且不超过终端的矩形
+pub(crate) fn content_frame(cols: u16, rows: u16, content_rows: u16, max_width: u16) -> FrameRect {
+    let full = full_frame(cols, rows);
+    let height = content_rows.saturating_add(2).clamp(3, full.height.max(3));
+    FrameRect {
+        width: full.width.min(max_width.max(40)),
+        height: height.min(full.height),
+        ..full
     }
 }
 
@@ -209,6 +234,24 @@ mod tests {
         assert_eq!(frame.width, 118);
         assert_eq!(frame.height, 40);
         assert!(frame.width * 100 / 120 >= 95);
+    }
+
+    /// 超宽终端上宽度封顶，避免标签与说明相隔过远。
+    #[test]
+    fn full_frame_caps_width_on_wide_terminals() {
+        assert_eq!(full_frame(240, 40).width, MAX_FRAME_WIDTH);
+    }
+
+    /// 内容少时外框只包住内容；内容超出时退回终端高度。
+    #[test]
+    fn content_frame_shrinks_to_content() {
+        let small = content_frame(120, 40, 10, 96);
+        assert_eq!(small.height, 12);
+        assert_eq!(small.width, 96);
+        let tall = content_frame(120, 20, 50, 96);
+        assert_eq!(tall.height, 20);
+        let narrow = content_frame(50, 20, 4, 96);
+        assert_eq!(narrow.width, 48);
     }
 
     /// 验证主从布局在宽终端分栏、窄终端合并。

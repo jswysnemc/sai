@@ -67,6 +67,22 @@ impl Picker {
             .unwrap_or(0);
     }
 
+    /// 【会话选择】【面板高度】计算全部会话展开后的行数（会话行 + 工作区标题行）。
+    ///
+    /// 面板高度据此固定，切换范围或输入搜索时外框不会跳动。
+    ///
+    /// 返回:
+    /// - 全量列表的视觉行数
+    pub fn max_rows(&self) -> usize {
+        let workspaces = self
+            .targets
+            .iter()
+            .map(|target| target.session.workspace_id.as_str())
+            .collect::<std::collections::HashSet<_>>()
+            .len();
+        self.targets.len() + workspaces
+    }
+
     /// 【会话选择】【当前目标】返回完整工作区与会话身份，空列表不可确认。
     /// 参数: 无；返回: 当前目标或空
     pub fn target(&self) -> Option<&ResumeTarget> {

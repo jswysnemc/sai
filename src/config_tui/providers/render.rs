@@ -1,10 +1,29 @@
 use super::*;
 use crate::config_tui::layout::FrameRect;
 
+/// 列表区最少行数。
+const MIN_LIST_ROWS: usize = 6;
+/// 列表区最多行数，更长的模型列表在栏内滚动。
+const MAX_LIST_ROWS: usize = 16;
+
 impl ProviderBrowser<'_> {
     pub(super) fn draw(&mut self, stdout: &mut io::Stdout) -> Result<()> {
         let (cols, rows) = terminal::size()?;
-        let frame = crate::config_tui::layout::full_frame(cols, rows);
+        // 高度按三栏中最长者计算并封顶，条目少时不再撑满整屏
+        let longest = self
+            .config
+            .providers
+            .len()
+            .max(self.orgs.len())
+            .max(self.models.len())
+            .clamp(MIN_LIST_ROWS, MAX_LIST_ROWS);
+        // 框内：过滤行 + 空行 + 栏标题 + 列表 + 两行留白 + 状态行
+        let frame = crate::config_tui::layout::content_frame(
+            cols,
+            rows,
+            (longest + 6) as u16,
+            crate::config_tui::layout::MAX_FRAME_WIDTH,
+        );
         // 外框内缩：左右各留边框 + 一格边距，底部留状态行与嵌入式帮助条
         let inner_x = frame.x.saturating_add(2);
         let inner_y = frame.y.saturating_add(1);
@@ -169,7 +188,10 @@ impl ProviderBrowser<'_> {
         // 状态行放在框内底部，弱化显示，不与内容抢视线
         queue!(
             stdout,
-            MoveTo(inner_x, rows.saturating_sub(2)),
+            MoveTo(
+                inner_x,
+                frame.y.saturating_add(frame.height.saturating_sub(2))
+            ),
             Print(format!(
                 "{MUTED}{}{RESET}",
                 truncate(&self.status, inner_w as usize)

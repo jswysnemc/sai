@@ -14,7 +14,10 @@ impl ComposerFrame {
         let content_cols = chrome_input_content_cols(cols);
         let lines = repl_input_lines(&self.input);
         let display_lines = if self.input.is_empty() {
-            vec![placeholder_text()]
+            match &self.placeholder_override {
+                Some(text) => vec![format!("\x1b[2m{text}\x1b[0m")],
+                None => vec![placeholder_text()],
+            }
         } else {
             lines.clone()
         };

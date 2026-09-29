@@ -1,5 +1,10 @@
 use super::{choice_label, parse_bool_field, take_chars, Field};
-use crate::config_tui::layout::{form_column_widths, form_label_width, full_frame, scroll_start};
+use crate::config_tui::layout::{
+    content_frame, form_column_widths, form_label_width, scroll_start, MAX_FRAME_WIDTH,
+};
+
+/// 表单字段区最少保留的行数，右侧字段说明需要足够的折行空间。
+const MIN_FORM_BODY_ROWS: usize = 6;
 use crate::config_tui::theme::{selection_marks, ACCENT, BOLD, BRAND, DIM, MUTED, RESET};
 use crate::config_tui::ui::{display_width, draw_box, pad, truncate};
 use crate::i18n::text as t;
@@ -23,7 +28,14 @@ pub(super) fn draw_form(
     revealed_secrets: &[bool],
 ) -> Result<()> {
     let (cols, rows) = terminal::size()?;
-    let frame = full_frame(cols, rows);
+    // 内容行 = 顶部留白 + 字段 + 按钮前留白 + 按钮行；字段少时面板随内容收缩
+    let content_rows = fields.len().saturating_add(3).max(MIN_FORM_BODY_ROWS + 3);
+    let frame = content_frame(
+        cols,
+        rows,
+        content_rows.min(usize::from(u16::MAX)) as u16,
+        MAX_FRAME_WIDTH,
+    );
     let x = frame.x;
     let y = frame.y;
     let width = frame.width;

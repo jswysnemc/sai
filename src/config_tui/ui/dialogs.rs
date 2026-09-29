@@ -1,5 +1,8 @@
 use super::*;
 
+/// 提示弹窗最大宽度：短提示不需要横跨整屏。
+const MESSAGE_MAX_WIDTH: u16 = 88;
+
 /// 未保存更改时的退出选择。
 pub(crate) enum UnsavedExitChoice {
     Save,
@@ -102,8 +105,11 @@ pub(crate) fn confirm_unsaved_exit(stdout: &mut io::Stdout) -> Result<UnsavedExi
 
 pub(crate) fn message(stdout: &mut io::Stdout, text: &str) -> Result<()> {
     let (cols, rows) = terminal::size()?;
-    let frame = full_frame(cols, rows);
-    let lines = wrap_text(text, frame.width.saturating_sub(4) as usize);
+    // 1. 先按最大宽度折行，再让外框高度贴合正文（上下各留一行）
+    let probe = content_frame(cols, rows, 1, MESSAGE_MAX_WIDTH);
+    let lines = wrap_text(text, probe.width.saturating_sub(4) as usize);
+    let content_rows = lines.len().saturating_add(2).min(usize::from(u16::MAX)) as u16;
+    let frame = content_frame(cols, rows, content_rows.max(3), MESSAGE_MAX_WIDTH);
     let page = frame.height.saturating_sub(4) as usize;
     // 内容超出一屏时可滚动：Skills 详情、校验错误这类长文本原先只取头部，
     // 直接断在句子中间且无法看到后面

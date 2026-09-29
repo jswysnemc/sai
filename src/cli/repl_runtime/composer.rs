@@ -106,7 +106,7 @@ impl ReplRuntime {
                 .map(|line| line.as_str().to_string()),
             );
         }
-        super::bottom_panel::render_panel_lines(
+        let mut lines = super::bottom_panel::render_panel_lines(
             self.transcript.latest_todo_items(),
             &queue_lines,
             &self.queued_control_commands(),
@@ -114,7 +114,10 @@ impl ReplRuntime {
             cols,
             self.todo_panel_compact,
             self.transcript.live_animation_frame(),
-        )
+        );
+        // SSH 征询卡片紧贴输入框，视线从说明直接落到输入行
+        lines.extend(self.ssh_card_lines(cols));
+        lines
     }
 
     /// 在内容尾部与屏幕底部之间为 composer 腾出足够行数。
@@ -446,6 +449,12 @@ impl ReplRuntime {
         chrome.set_activity(Some(
             crate::i18n::text("Ctrl+C stop", "Ctrl+C 停止").to_string(),
         ));
+        // SSH 征询期间输入框只显示占位提示，草稿保留到征询结束后恢复
+        if self.ssh_prompt.is_some() {
+            self.update_composer(&chrome, "", 0, false, Vec::new(), 0)?;
+            self.apply_ssh_placeholder();
+            return self.draw_composer();
+        }
         let draft = self.stream_draft.clone();
         self.update_composer(
             &chrome,

@@ -1,4 +1,4 @@
-use super::{model::Picker, view};
+use super::{model::Picker, rows};
 use crate::{paths::SaiPaths, state};
 
 /// 【会话恢复】【测试数据】创建不同工作区的同名会话。
@@ -31,7 +31,7 @@ fn scope_search_and_grouping_keep_workspace_identity() {
     assert_eq!(picker.target().unwrap().workspace_path.as_ref(), Some(&a));
     picker.toggle();
     assert_eq!(picker.visible.len(), 2);
-    let (lines, _) = view::body(&picker);
+    let (lines, _) = rows::body(&picker, 80);
     assert_eq!(lines.len(), 4);
     assert!(lines[0].contains("workspace-a"));
     assert!(lines[2].contains("workspace-b"));

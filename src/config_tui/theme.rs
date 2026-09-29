@@ -2,41 +2,43 @@
 ///
 /// 与 TUI 会话界面共用同一套色板基调：品牌绿松用于标题与主按钮，
 /// 亮青用于选中与键位提示，弱化灰蓝用于边框与说明。
-/// 品牌色（与 Web --signal 同色）
-pub(super) const BRAND: &str = "\x1b[38;2;58;114;100m";
+/// 所有前景色都取中高亮度：终端背景可能是纯黑、深灰或半透明浅灰，
+/// 低于约 45% 亮度的颜色在浅灰背景上会与底色混在一起。
+/// 品牌色（与 Web --signal 同色系，提亮一档保证浅灰背景可读）
+pub(crate) const BRAND: &str = "\x1b[38;2;94;196;168m";
 /// 选中项高亮色
-pub(super) const ACCENT: &str = "\x1b[38;2;190;246;255m";
-/// 边框与提示的弱化色
-pub(super) const MUTED: &str = "\x1b[38;2;77;116;125m";
-/// 次级弱化色（分隔点、占位说明）
-pub(super) const DIM: &str = "\x1b[38;2;58;82;90m";
+pub(crate) const ACCENT: &str = "\x1b[38;2;170;232;246m";
+/// 说明文字与未选中项
+pub(crate) const MUTED: &str = "\x1b[38;2;160;180;186m";
+/// 边框、分隔点与占位说明
+pub(crate) const DIM: &str = "\x1b[38;2;118;138;146m";
 /// 字段值的强调色：值比标签更值得被看到
-pub(super) const VALUE: &str = "\x1b[38;2;152;216;200m";
+pub(crate) const VALUE: &str = "\x1b[38;2;152;216;200m";
 /// 开启 / 成功状态
-pub(super) const OK: &str = "\x1b[38;2;140;196;116m";
+pub(crate) const OK: &str = "\x1b[38;2;140;206;116m";
 /// 关闭 / 中性状态沿用 MUTED；危险状态色
-pub(super) const DANGER: &str = "\x1b[38;2;224;120;125m";
-/// 选中行整行底色（深青灰，抬升一档）
-pub(super) const SELECT_BG: &str = "\x1b[48;2;33;46;51m";
+pub(crate) const DANGER: &str = "\x1b[38;2;236;128;132m";
+/// 选中行整行底色（深青灰，与任意背景都能拉开层次）
+pub(crate) const SELECT_BG: &str = "\x1b[48;2;36;62;70m";
 /// 主按钮实心底（品牌绿松）
-pub(super) const BUTTON_BG: &str = "\x1b[48;2;58;114;100m";
+pub(crate) const BUTTON_BG: &str = "\x1b[48;2;46;120;102m";
 /// 主按钮前景（近白）
-pub(super) const BUTTON_FG: &str = "\x1b[38;2;226;240;236m";
+pub(crate) const BUTTON_FG: &str = "\x1b[38;2;236;246;242m";
 /// 样式复位
-pub(super) const RESET: &str = "\x1b[0m";
+pub(crate) const RESET: &str = "\x1b[0m";
 /// 加粗
-pub(super) const BOLD: &str = "\x1b[1m";
+pub(crate) const BOLD: &str = "\x1b[1m";
 
 /// 圆角边框字符：左上、右上、左下、右下、横线、竖线
-pub(super) const CORNER_TOP_LEFT: char = '╭';
-pub(super) const CORNER_TOP_RIGHT: char = '╮';
-pub(super) const CORNER_BOTTOM_LEFT: char = '╰';
-pub(super) const CORNER_BOTTOM_RIGHT: char = '╯';
-pub(super) const LINE_HORIZONTAL: char = '─';
-pub(super) const LINE_VERTICAL: char = '│';
+pub(crate) const CORNER_TOP_LEFT: char = '╭';
+pub(crate) const CORNER_TOP_RIGHT: char = '╮';
+pub(crate) const CORNER_BOTTOM_LEFT: char = '╰';
+pub(crate) const CORNER_BOTTOM_RIGHT: char = '╯';
+pub(crate) const LINE_HORIZONTAL: char = '─';
+pub(crate) const LINE_VERTICAL: char = '│';
 
 /// 选中项左侧的指示条
-pub(super) const SELECTION_BAR: char = '▏';
+pub(crate) const SELECTION_BAR: char = '▏';
 
 /// 【配置界面】【视觉】构造选中项的样式前缀。
 ///
@@ -48,7 +50,7 @@ pub(super) const SELECTION_BAR: char = '▏';
 ///
 /// 返回:
 /// - `(左侧指示条, 文本样式前缀)`
-pub(super) fn selection_marks(selected: bool) -> (String, &'static str) {
+pub(crate) fn selection_marks(selected: bool) -> (String, &'static str) {
     if selected {
         (
             format!("{SELECT_BG}{ACCENT}{SELECTION_BAR}{RESET}"),
@@ -59,8 +61,8 @@ pub(super) fn selection_marks(selected: bool) -> (String, &'static str) {
     }
 }
 
-/// 选中行文本样式：深底 + 亮青。
-const SELECTED_TEXT_STYLE: &str = "\x1b[48;2;33;46;51m\x1b[38;2;190;246;255m";
+/// 选中行文本样式：深底 + 亮青，底色与 SELECT_BG 保持一致。
+const SELECTED_TEXT_STYLE: &str = "\x1b[48;2;36;62;70m\x1b[38;2;190;246;255m";
 
 /// 【配置界面】【视觉】渲染分段式快捷键帮助条。
 ///
@@ -78,11 +80,11 @@ const SELECTED_TEXT_STYLE: &str = "\x1b[48;2;33;46;51m\x1b[38;2;190;246;255m";
 ///
 /// 返回:
 /// - 带样式的分隔符文本
-pub(super) fn help_separator() -> String {
+pub(crate) fn help_separator() -> String {
     format!("{DIM} · {RESET}")
 }
 
-pub(super) fn help_line(pairs: &[(&str, &str)]) -> String {
+pub(crate) fn help_line(pairs: &[(&str, &str)]) -> String {
     pairs
         .iter()
         .map(|(key, description)| format!("{ACCENT}{key}{RESET} {MUTED}{description}{RESET}"))
