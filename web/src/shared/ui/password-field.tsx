@@ -1,5 +1,6 @@
-import { Check, Copy, Eye, EyeOff, Loader2, X } from "./icons";
-import { useCallback, useEffect, useState } from "react";
+import { Check, Copy, Eye, EyeOff, Loader2, Pencil, X } from "./icons";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Button } from "./button/button";
 import "./password-field.css";
 import { useI18n } from "../../features/i18n/use-i18n";
 
@@ -14,6 +15,8 @@ type PasswordFieldProps = {
   ariaLabel?: string;
   placeholder?: string;
   disabled?: boolean;
+  /** 设置密钥需先主动编辑，默认不向浏览器暴露密码输入框 */
+  requireExplicitEdit?: boolean;
   /** 已保存敏感值的标记文案，非空时在框内显示以区分「已保存」与「未设置」 */
   savedValueHint?: string;
   /** 清除已保存敏感值的回调，提供时标记上带一个清除按钮 */
@@ -73,6 +76,7 @@ export function PasswordField({
   ariaLabel,
   placeholder,
   disabled,
+  requireExplicitEdit = false,
   savedValueHint,
   onClearSavedValue,
   onReveal,
@@ -83,13 +87,19 @@ export function PasswordField({
   const [revealing, setRevealing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [sync, setSync] = useState<PasswordValueSync>({ value, emitted: null });
+  const [editing, setEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const editable = !requireExplicitEdit || editing;
 
   // 外部取值被改写（例如切到另一个供应商）时丢弃已读取的明文：
   // 列表按 key.id 复用同一输入框，明文会跟着组件活下来并直接露给下一个供应商。
   if (sync.value !== value) {
     const external = isExternalValueChange(value, sync.value, sync.emitted);
     setSync({ value, emitted: null });
-    if (external) setState(MASKED_SECRET_STATE);
+    if (external) {
+      setState(MASKED_SECRET_STATE);
+      setEditing(false);
+    }
   }
 
   /** 收起明文并丢弃已读取的真实值。 */
@@ -102,6 +112,19 @@ export function PasswordField({
     const timer = window.setTimeout(() => setCopied(false), COPIED_HINT_DELAY);
     return () => window.clearTimeout(timer);
   }, [copied]);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  /**
+   * 【设置密钥】【主动编辑】切换输入状态，进入时清除仅供查看的明文。
+   * @returns 无；不改变配置草稿，实际输入才触发更新
+   */
+  const toggleEditing = (): void => {
+    mask();
+    setEditing((current) => !current);
+  };
 
   /**
    * 切换密码可见状态，需要时先从服务端读取真实值。
@@ -138,6 +161,7 @@ export function PasswordField({
    * @returns 无返回值
    */
   const updateValue = (nextValue: string): void => {
+    if (!editable) return;
     // 自己发出的编辑会被父级原样回传，不能被当成"换了供应商"而收起明文
     setSync((current) => ({ ...current, emitted: nextValue }));
     setState((current) => (current.visible
@@ -162,7 +186,8 @@ export function PasswordField({
 
   return (
     <div className="ui-password-field">
-      <input
+      {editable ? <input
+        ref={inputRef}
         id={id}
         aria-label={ariaLabel}
         type={state.visible ? "text" : "password"}
@@ -170,9 +195,26 @@ export function PasswordField({
         placeholder={placeholder}
         disabled={disabled || revealing}
         onChange={(event) => updateValue(event.target.value)}
-        autoComplete="off"
+        autoComplete={requireExplicitEdit ? "new-password" : "off"}
+        data-lpignore={requireExplicitEdit ? "true" : undefined}
+        data-1p-ignore={requireExplicitEdit ? "true" : undefined}
         spellCheck={false}
-      />
+      /> : <span
+        id={id}
+        className="ui-password-field-value"
+        aria-label={ariaLabel}
+        tabIndex={0}
+      >{state.visible ? displayed : value ? "••••••••" : savedValueHint
+          ? t("Edit to replace", "点击编辑以替换")
+          : t("Not configured", "未设置")}</span>}
+      {requireExplicitEdit && <Button
+        variant="ghost"
+        size="icon"
+        onClick={toggleEditing}
+        disabled={disabled || revealing}
+        aria-label={editing ? t("Finish editing", "完成编辑") : t("Edit secret", "编辑密钥")}
+        title={editing ? t("Finish editing", "完成编辑") : t("Edit secret", "编辑密钥")}
+      >{editing ? <Check size={16} /> : <Pencil size={16} />}</Button>}
       {savedValueHint && (
         <span className="ui-password-field-saved">
           {savedValueHint}

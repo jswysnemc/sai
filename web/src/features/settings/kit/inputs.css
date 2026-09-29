@@ -91,7 +91,8 @@
   background: var(--paper-raised);
 }
 
-.sk-secret .ui-password-field input {
+.sk-secret .ui-password-field input,
+.sk-secret .ui-password-field-value {
   min-height: 0;
   height: 100%;
   padding: 0 var(--space-sm);

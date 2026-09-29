@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { isExternalValueChange, PasswordField } from "./password-field";
+import { SkSecretInput } from "../../features/settings/kit/secret-input";
 
 /*
  * 覆盖范围的说明，避免把这里当成完整的行为测试：
@@ -14,6 +15,24 @@ import { isExternalValueChange, PasswordField } from "./password-field";
  */
 
 describe("PasswordField", () => {
+  it("设置页的已保存密钥默认不挂载可被自动填充的输入框", () => {
+    const onChange = vi.fn();
+    const html = renderToStaticMarkup(
+      <SkSecretInput value="saved-sentinel" secretSentinel="saved-sentinel" onChange={onChange} onReveal={async () => "fixture-secret"} />
+    );
+    expect(html).not.toContain("<input");
+    expect(html).toContain("已保存");
+    expect(html).toContain("编辑");
+    expect(html).not.toContain("fixture-secret");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("设置页未配置密钥也须先主动编辑，避免被识别为登录密码", () => {
+    const html = renderToStaticMarkup(<SkSecretInput value="" onChange={vi.fn()} />);
+    expect(html).not.toContain("<input");
+    expect(html).toContain("编辑");
+  });
+
   it("默认以掩码态渲染", () => {
     const html = renderToStaticMarkup(<PasswordField value="sk-provider-a" onChange={vi.fn()} />);
 

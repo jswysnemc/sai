@@ -19,8 +19,8 @@ type SkSecretInputProps = {
 /**
  * 渲染设置页密钥输入。
  *
- * 已保存的敏感值在框内显示「已保存」标记与清除按钮，输入新值即替换；
- * 空输入框因此能区分「已保存」与「未设置」。
+ * 默认展示已保存或未配置状态，明确点击编辑后才挂载输入框。
+ * 防止浏览器将设置项识别为登录密码并把自动填充值写入草稿。
  *
  * @param props 当前值、脱敏占位符、更新与读取回调
  * @returns 密钥输入框
@@ -40,6 +40,7 @@ export function SkSecretInput({
   return (
     <div className="sk-secret">
       <PasswordField
+        requireExplicitEdit
         id={field?.controlId}
         ariaLabel={ariaLabel ?? field?.labelText}
         value={saved ? "" : value}
