@@ -73,7 +73,11 @@ impl Agent {
         } else {
             &base_system_prompt
         };
-        prepare_session_context(&state, initial_system_prompt, config.jev_routing_active())?;
+        prepare_session_context(
+            &state,
+            initial_system_prompt,
+            config.jev_prompt_segments_active(),
+        )?;
         let context_char_budget = config.active_context_window_tokens()?;
         let compaction_runtime = compaction_model::resolve_compaction_runtime(&config, paths)?;
         crate::goal::register_tools_for_config(&mut tools, state.goal_file(), &config)?;
@@ -334,7 +338,7 @@ impl Agent {
         prepare_session_context(
             &self.state,
             &system_prompt,
-            self.config.jev_routing_active(),
+            self.config.jev_prompt_segments_active(),
         )?;
         self.context_char_budget = self.config.active_context_window_tokens()?;
         Ok(())
@@ -458,7 +462,7 @@ impl Agent {
         prepare_session_context(
             &self.state,
             &system_prompt,
-            self.config.jev_routing_active(),
+            self.config.jev_prompt_segments_active(),
         )?;
         Ok(())
     }
@@ -573,7 +577,7 @@ fn deepseek_anchor_available(
 /// 参数:
 /// - `state`: 当前会话状态
 /// - `base_system_prompt`: 不含模式说明的基础系统提示
-/// - `jev_routing`: 是否过滤旧 baseline 中尚未路由的标签正文
+/// - `jev_routing`: 标签片段是否由 Jev 加载（是则过滤旧 baseline 中的标签正文）
 ///
 /// 返回:
 /// - 上下文同步与恢复结果

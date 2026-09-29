@@ -5,7 +5,7 @@ import { useI18n } from "../../i18n/use-i18n";
 import { FieldGrid, SettingsField, SettingsPanel, SkSelect, SwitchField } from "../kit";
 import { JevConnectionStatus } from "./jev-connection-status";
 import { JevNumberField } from "./jev-number-field";
-import { jevEndpoints, patchJevAudit, patchJevRouting, readJevConfig, selectJevEndpoint } from "./jev-config";
+import { jevEndpoints, patchJevAudit, patchJevMemoryInjection, patchJevRouting, readJevConfig, readJevMemoryInjection, selectJevEndpoint } from "./jev-config";
 
 type JevFeatureSettingsProps = {
   config: AppConfig;
@@ -23,6 +23,7 @@ export function JevFeatureSettings({ config, dirty, onConfigChange }: JevFeature
   const jev = readJevConfig(config);
   const endpoints = jevEndpoints(config);
   const pluginAudit = (config.permission?.auto_audit_plugin_id ?? "").trim();
+  const memoryInjection = readJevMemoryInjection(config);
   const endpointOptions: SelectOption<string>[] = [
     {
       value: "",
@@ -48,6 +49,8 @@ export function JevFeatureSettings({ config, dirty, onConfigChange }: JevFeature
         description={t("Before each request Jev picks which tools and skills to expose. The model can ask for more with request_capability. Basic tools stay exposed.", "每次请求前由 Jev 决定暴露哪些工具与 Skills，模型可通过 request_capability 追加申请；基础工具始终暴露。")}
       >
         <SwitchField label={t("Enable routing", "启用暴露决策")} hint={t("Applies to new turns in Web and TUI sessions. DeepSeek anchored mode takes precedence when both are on.", "对 Web 与 TUI 会话的新一轮生效；与 DeepSeek 锚定模式同时开启时以锚定模式为准。")} anchor="jev.routing.enabled" configKey="jev.routing.enabled" checked={jev.routing.enabled} onChange={(enabled) => onConfigChange(patchJevRouting(config, { enabled }))} />
+        <SwitchField label={t("Load tagged prompt segments", "按需加载标签提示词片段")} hint={t("<jev> segments in system prompts and AGENT.md / CLAUDE.md are injected only when Jev selects them. When off, the segments stay in the static prompt.", "系统提示与 AGENT.md / CLAUDE.md 中的 <jev> 片段仅在 Jev 判定适用时注入；关闭后片段原文留在静态提示中。")} anchor="jev.routing.prompt_segments" configKey="jev.routing.prompt_segments" disabled={!jev.routing.enabled} checked={jev.routing.prompt_segments} onChange={(prompt_segments) => onConfigChange(patchJevRouting(config, { prompt_segments }))} />
+        <SwitchField label={t("Inject memory on demand", "按需注入记忆")} hint={t("The memory index and usage guidance are sent only when Jev selects them. When off, they stay in every request as before. Requires memory to be enabled.", "记忆索引与使用说明仅在 Jev 判定需要时发送；关闭时按原方式每轮携带。需同时启用记忆。")} anchor="jev.routing.memory_injection" configKey="plugins.memory.jev_injection" disabled={!jev.routing.enabled} checked={memoryInjection} onChange={(enabled) => onConfigChange(patchJevMemoryInjection(config, enabled))} />
         <FieldGrid>
             <JevNumberField label={t("Minimum probability", "最低概率")} hint={t("Candidates below this Noul probability are not exposed.", "Noul 概率低于该值的候选不暴露。")} value={jev.routing.threshold} anchor="jev.routing.threshold" disabled={!jev.routing.enabled} min={0} max={1} step={0.05} onChange={(threshold) => onConfigChange(patchJevRouting(config, { threshold }))} />
             <JevNumberField label={t("Max tools per decision", "单次最多工具数")} value={jev.routing.max_tools} anchor="jev.routing.max_tools" disabled={!jev.routing.enabled} min={0} max={50} integer onChange={(max_tools) => onConfigChange(patchJevRouting(config, { max_tools }))} />

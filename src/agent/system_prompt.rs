@@ -97,11 +97,12 @@ pub(crate) fn build_base_system_prompt_for_phase(
         base_system_prompt.push_str("\n\n");
         base_system_prompt.push_str(prompt);
     }
-    Ok(
-        crate::jev::prompt_segments::baseline(&base_system_prompt, config.jev_routing_active())?
-            .trim()
-            .to_string(),
-    )
+    Ok(crate::jev::prompt_segments::baseline(
+        &base_system_prompt,
+        config.jev_prompt_segments_active(),
+    )?
+    .trim()
+    .to_string())
 }
 
 /// 判断记忆工具是否真的会出现在模型可见的工具列表里。

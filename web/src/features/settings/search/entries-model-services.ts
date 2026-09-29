@@ -309,6 +309,28 @@ export const MODEL_SERVICE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     ]
   },
   {
+    "anchor": "jev.routing.prompt_segments",
+    "section": "jev",
+    "labelEn": "Load tagged prompt segments",
+    "labelZh": "按需加载标签提示词片段",
+    "keywords": [
+      "jev.routing.prompt_segments",
+      "<jev>",
+      "标签片段"
+    ]
+  },
+  {
+    "anchor": "jev.routing.memory_injection",
+    "section": "jev",
+    "labelEn": "Inject memory on demand",
+    "labelZh": "按需注入记忆",
+    "keywords": [
+      "memory.jev_injection",
+      "plugins.memory.jev_injection",
+      "记忆注入"
+    ]
+  },
+  {
     "anchor": "jev.routing.threshold",
     "section": "jev",
     "labelEn": "Minimum probability",

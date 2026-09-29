@@ -40,6 +40,8 @@ pub struct JevRoutingConfig {
     pub timeout_seconds: u64,
     /// 作为判断依据的近期对话最大字符数
     pub context_chars: usize,
+    /// 是否由 Jev 判断 `<jev>` 标签提示词片段；关闭时标签原文随静态提示发送
+    pub prompt_segments: bool,
 }
 
 impl Default for JevRoutingConfig {
@@ -51,6 +53,7 @@ impl Default for JevRoutingConfig {
             max_skills: 3,
             timeout_seconds: 20,
             context_chars: 2_000,
+            prompt_segments: true,
         }
     }
 }
@@ -149,6 +152,35 @@ impl AppConfig {
         self.jev_routing_active()
             && self.memory_config().enabled
             && self.memory_config().jev_injection
+    }
+
+    /// 【Jev路由】【标签片段】无参数；返回 `<jev>` 标签片段是否交由 Jev 按需加载。
+    pub fn jev_prompt_segments_active(&self) -> bool {
+        self.jev_routing_active() && self.jev.routing.prompt_segments
+    }
+
+    /// 【Jev路由】【记忆注入】当前生效的记忆配置中是否开启按需注入。
+    ///
+    /// 返回:
+    /// - 生效配置中的 `jev_injection`
+    pub fn jev_memory_injection_enabled(&self) -> bool {
+        self.memory_config().jev_injection
+    }
+
+    /// 【Jev路由】【记忆注入】写入按需注入开关。
+    ///
+    /// 顶层 `memory` 非默认时优先生效，两处都写，避免界面改了但运行时读另一处。
+    ///
+    /// 参数:
+    /// - `enabled`: 是否开启
+    ///
+    /// 返回:
+    /// - 无
+    pub fn set_jev_memory_injection(&mut self, enabled: bool) {
+        if self.memory != super::MemoryConfig::default() {
+            self.memory.jev_injection = enabled;
+        }
+        self.plugins.memory.jev_injection = enabled;
     }
 
     /// 判断 Jev 暴露决策在当前会话是否生效。

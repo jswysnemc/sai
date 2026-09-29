@@ -13,6 +13,6 @@ describe("Jev settings workbench", () => {
     const html = renderToStaticMarkup(<MemoryRouter><QueryClientProvider client={client}><DialogProvider>
       <JevSettingsSection config={config} secretSentinel="hidden" dirty={false} onConfigChange={() => undefined} />
     </DialogProvider></QueryClientProvider></MemoryRouter>);
-    for (const label of ["启用暴露决策", "启用 Jev 审核", "管理接入", "新增模型接入", "最低概率", "最低置信度"]) expect(html).toContain(label);
+    for (const label of ["启用暴露决策", "按需加载标签提示词片段", "按需注入记忆", "启用 Jev 审核", "管理接入", "新增模型接入", "最低概率", "最低置信度"]) expect(html).toContain(label);
   });
 });

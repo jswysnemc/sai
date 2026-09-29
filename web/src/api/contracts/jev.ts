@@ -8,6 +8,8 @@ export type JevRoutingConfig = {
   timeout_seconds: number;
   /** 作为判断依据的近期对话最大字符数 */
   context_chars: number;
+  /** 是否由 Jev 判断 `<jev>` 标签提示词片段；关闭时标签原文随静态提示发送 */
+  prompt_segments: boolean;
 };
 
 /** Jev 权限自动审核配置。 */

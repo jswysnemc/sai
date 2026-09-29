@@ -121,7 +121,7 @@ fn connection_detail(config: &AppConfig) -> String {
 fn routing_detail(config: &AppConfig) -> String {
     let routing = &config.jev.routing;
     let mut text = format!(
-        "{}\n\n{}: {} · {}: {:.2} · {}: {}/{}",
+        "{}\n\n{}: {} · {}: {:.2} · {}: {}/{}\n{}: {} · {}: {}",
         t(
             "Before each request Jev picks the tools and skills to expose; the model can ask for more with request_capability. Basic tools are always exposed.",
             "每次请求前由 Jev 选择需要暴露的工具与 Skills，模型可通过 request_capability 追加申请；基础工具始终暴露。",
@@ -133,6 +133,10 @@ fn routing_detail(config: &AppConfig) -> String {
         t("Limits", "上限"),
         routing.max_tools,
         routing.max_skills,
+        t("Tagged segments", "标签片段"),
+        on_off(routing.prompt_segments),
+        t("Memory", "记忆"),
+        on_off(config.jev_memory_injection_enabled()),
     );
     if routing.enabled && !config.jev_routing_active() {
         text.push_str(t(
@@ -185,6 +189,14 @@ fn edit_routing(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
             t("Context characters", "判断所用对话字符数"),
             routing.context_chars.to_string(),
         ),
+        Field::boolean(
+            t("Load tagged prompt segments", "按需加载标签提示词片段"),
+            routing.prompt_segments,
+        ),
+        Field::boolean(
+            t("Inject memory on demand", "按需注入记忆"),
+            config.jev_memory_injection_enabled(),
+        ),
     ];
     loop {
         if !run_form(stdout, t(" JEV ROUTING ", " JEV 暴露决策 "), &mut fields)? {
@@ -210,9 +222,12 @@ fn apply_routing(config: &mut AppConfig, fields: &[Field]) -> Result<()> {
     next.routing.max_skills = parse_number_field(fields[3].label, &fields[3].value)?;
     next.routing.timeout_seconds = parse_number_field(fields[4].label, &fields[4].value)?;
     next.routing.context_chars = parse_number_field(fields[5].label, &fields[5].value)?;
+    next.routing.prompt_segments = parse_bool_field(&fields[6].value)?;
+    let memory_injection = parse_bool_field(&fields[7].value)?;
     next.validate(&config.model_endpoints)?;
-    // 2. 全部通过后整体替换
+    // 2. 全部通过后整体替换；记忆开关写在 memory 配置段
     config.jev = next;
+    config.set_jev_memory_injection(memory_injection);
     Ok(())
 }
 
@@ -283,9 +298,26 @@ mod tests {
     #[test]
     fn invalid_routing_input_keeps_previous_config() {
         let mut config = AppConfig::default();
-        let fields = ["true", "1.5", "4", "2", "20", "2000"].map(field);
+        let fields = ["true", "1.5", "4", "2", "20", "2000", "true", "true"].map(field);
         assert!(apply_routing(&mut config, &fields).is_err());
         assert!(!config.jev.routing.enabled);
+        assert!(!config.jev_memory_injection_enabled());
+    }
+
+    /// 标签片段与记忆开关写入各自配置段，记忆开关跟随生效的 memory 配置。
+    #[test]
+    fn routing_form_writes_segment_and_memory_switches() {
+        let mut config = AppConfig::default();
+        let fields = ["true", "0.5", "4", "2", "20", "2000", "false", "true"].map(field);
+        apply_routing(&mut config, &fields).unwrap();
+        assert!(!config.jev.routing.prompt_segments);
+        assert!(config.plugins.memory.jev_injection);
+        assert!(config.jev_memory_injection_enabled());
+        // 顶层 memory 非默认时它才是生效来源，开关必须同步写入
+        config.memory.snippet_chars += 1;
+        config.set_jev_memory_injection(false);
+        assert!(!config.memory.jev_injection);
+        assert!(!config.jev_memory_injection_enabled());
     }
 
     #[test]

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AppConfig } from "../../../api/contracts";
-import { clampNumber, patchJevAudit, patchJevRouting, readJevConfig, releaseJevEndpoint, selectJevEndpoint } from "./jev-config";
+import { clampNumber, patchJevAudit, patchJevMemoryInjection, patchJevRouting, readJevConfig, readJevMemoryInjection, releaseJevEndpoint, selectJevEndpoint } from "./jev-config";
 
 const base = { active_provider: "p", providers: [] } as unknown as AppConfig;
 
@@ -11,6 +11,17 @@ describe("jev config helpers", () => {
     expect(jev.routing.max_tools).toBe(6);
     expect(jev.audit.minimum_probability).toBe(0.9);
     expect(jev.endpoint_id).toBe("");
+    expect(jev.routing.prompt_segments).toBe(true);
+  });
+
+  it("writes memory injection to plugins.memory and keeps an existing root mirror in sync", () => {
+    const plain = patchJevMemoryInjection({ ...base, plugins: { memory: { enabled: false } } } as unknown as AppConfig, true);
+    expect(plain.plugins?.memory).toEqual({ enabled: false, jev_injection: true });
+    expect(plain.memory).toBeUndefined();
+    expect(readJevMemoryInjection(plain)).toBe(true);
+    const mirrored = patchJevMemoryInjection({ ...plain, memory: { jev_injection: true } } as unknown as AppConfig, false);
+    expect(readJevMemoryInjection(mirrored)).toBe(false);
+    expect((mirrored.plugins?.memory as { jev_injection: boolean }).jev_injection).toBe(false);
   });
 
   it("patches routing and audit independently", () => {

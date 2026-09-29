@@ -23,17 +23,20 @@ impl Agent {
     /// 【Jev路由】【候选收集】参数为本轮可用索引；返回配置、指令与记忆候选快照。
     pub(super) fn jev_prompt_context(&self, memory_index: Option<&str>) -> Result<PromptContext> {
         let mut context = PromptContext::default();
-        context.add_source("system", &self.config.system_prompt(&self.paths)?)?;
-        if self.config.load_instruction_files {
-            context.add_source(
-                "instructions",
-                &super::instruction_files::load_instruction_prompt(&self.paths),
-            )?;
+        // 1. 标签片段开关关闭时片段原文留在静态提示里，这里不再生成候选
+        if self.config.jev_prompt_segments_active() {
+            context.add_source("system", &self.config.system_prompt(&self.paths)?)?;
+            if self.config.load_instruction_files {
+                context.add_source(
+                    "instructions",
+                    &super::instruction_files::load_instruction_prompt(&self.paths),
+                )?;
+            }
+            if let Some(extra) = self.extra_system_prompt.as_deref() {
+                context.add_source("extra", extra)?;
+            }
         }
-        if let Some(extra) = self.extra_system_prompt.as_deref() {
-            context.add_source("extra", extra)?;
-        }
-        // 1. 记忆索引和契约共用一次判断，避免只提供索引而缺少使用说明
+        // 2. 记忆索引和契约共用一次判断，避免只提供索引而缺少使用说明
         if self.config.jev_memory_injection_active() && self.config.prompt_sections.memory_contract
         {
             let contract = if self.tools_enabled

@@ -4,7 +4,7 @@ import type { JevAuditConfig, JevConfig, JevRoutingConfig } from "../../../api/c
 /** 与后端 JevConfig 默认值保持一致。 */
 export const DEFAULT_JEV_CONFIG: JevConfig = {
   endpoint_id: "",
-  routing: { enabled: false, threshold: 0.5, max_tools: 6, max_skills: 3, timeout_seconds: 20, context_chars: 2000 },
+  routing: { enabled: false, threshold: 0.5, max_tools: 6, max_skills: 3, timeout_seconds: 20, context_chars: 2000, prompt_segments: true },
   audit: { enabled: false, minimum_probability: 0.9, minimum_confidence: 0.8, timeout_seconds: 10 }
 };
 
@@ -45,6 +45,36 @@ export function patchJevRouting(config: AppConfig, patch: Partial<JevRoutingConf
 export function patchJevAudit(config: AppConfig, patch: Partial<JevAuditConfig>): AppConfig {
   const jev = readJevConfig(config);
   return { ...config, jev: { ...jev, audit: { ...jev.audit, ...patch } } };
+}
+
+type MemorySection = { jev_injection?: boolean; [key: string]: unknown };
+
+/**
+ * 读取记忆按需注入开关；顶层 memory 镜像优先，与后端生效规则一致。
+ * @param config 应用配置
+ * @returns 是否开启
+ */
+export function readJevMemoryInjection(config: AppConfig): boolean {
+  const root = config.memory as MemorySection | undefined;
+  const plugin = config.plugins?.memory as MemorySection | undefined;
+  return root?.jev_injection ?? plugin?.jev_injection ?? false;
+}
+
+/**
+ * 写入记忆按需注入开关：持久化到 plugins.memory，已有顶层镜像时同步更新。
+ * @param config 应用配置
+ * @param enabled 是否开启
+ * @returns 新配置
+ */
+export function patchJevMemoryInjection(config: AppConfig, enabled: boolean): AppConfig {
+  const plugins = config.plugins ?? {};
+  const plugin = (plugins.memory as MemorySection | undefined) ?? {};
+  const root = config.memory as MemorySection | undefined;
+  return {
+    ...config,
+    plugins: { ...plugins, memory: { ...plugin, jev_injection: enabled } },
+    ...(root ? { memory: { ...root, jev_injection: enabled } } : {})
+  };
 }
 
 /**

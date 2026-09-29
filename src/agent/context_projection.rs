@@ -111,7 +111,7 @@ impl Agent {
             Some(baseline) => {
                 let baseline = crate::jev::prompt_segments::baseline(
                     &baseline,
-                    self.config.jev_routing_active(),
+                    self.config.jev_prompt_segments_active(),
                 )?;
                 super::instruction_files::freeze_instruction_files(live_system_prompt, &baseline)
             }
@@ -124,7 +124,7 @@ impl Agent {
                     "instruction_files",
                     &crate::jev::prompt_segments::baseline(
                         &super::instruction_files::load_instruction_prompt(&self.paths),
-                        self.config.jev_routing_active(),
+                        self.config.jev_prompt_segments_active(),
                     )?,
                     &super::instruction_files::extract_instruction_files(&epoch.baseline),
                     compaction_summary_context.as_deref(),

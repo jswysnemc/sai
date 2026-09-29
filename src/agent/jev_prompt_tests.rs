@@ -256,3 +256,21 @@ fn enabling_routing_filters_a_preexisting_instruction_baseline() {
         .unwrap()
         .contains("旧基线隐藏内容"));
 }
+
+/// 关闭标签片段时原文随静态提示发送且不生成片段候选，记忆候选不受影响；无参数、无返回值。
+#[test]
+fn disabled_prompt_segments_keep_tags_static_but_allow_memory() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(temp.path());
+    let mut config = AppConfig::default();
+    config.jev.routing.enabled = true;
+    config.jev.routing.prompt_segments = false;
+    config.system_prompt = Some("配置静态<jev description=\"配置场景\">配置正文</jev>".into());
+    config.plugins.memory.jev_injection = true;
+    let agent = agent(config, &paths);
+    assert!(agent.base_system_prompt.contains("配置正文"));
+    assert!(agent.base_system_prompt.contains("附加隐藏"));
+    let context = agent.jev_prompt_context(Some("记忆索引内容")).unwrap();
+    assert_eq!(context.candidates.len(), 1);
+    assert_eq!(context.candidates[0].name, "memory_context");
+}
