@@ -191,12 +191,6 @@ mod tests {
             let (batch, pending) = collect_text(first, || Ok(events.pop_front())).unwrap();
             actual.push_str(&batch);
             redraws += 1;
-            std::hint::black_box(crate::cli::repl_input_render::repl_visible_input_lines(
-                "",
-                &[actual.clone()],
-                crate::cli::REPL_MAX_VISIBLE_INPUT_ROWS,
-                false,
-            ));
             if let Some(pending) = pending {
                 events.push_front(pending);
             }

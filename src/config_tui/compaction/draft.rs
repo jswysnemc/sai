@@ -10,6 +10,8 @@ pub(super) struct Draft {
     pub defaults: CompactionBudgetPolicy,
     pub selected: usize,
     pub input: Option<String>,
+    pub input_cursor: usize,
+    pub input_selected: bool,
     pub error: Option<String>,
     pub reset: bool,
 }
@@ -31,6 +33,8 @@ impl Draft {
             defaults,
             selected: 0,
             input: None,
+            input_cursor: 0,
+            input_selected: false,
             error: None,
             reset: false,
         }
@@ -67,28 +71,13 @@ impl Draft {
         self.error = None;
         // 1. 【上下文】【策略编辑】输入时只修改草稿，回车校验，Esc 撤销本次输入
         if self.input.is_some() {
-            match key {
-                KeyCode::Esc => self.input = None,
-                KeyCode::Enter => match self.preview() {
-                    Ok(policy) => {
-                        self.policy = policy;
-                        self.input = None;
-                        self.reset = false;
-                    }
-                    Err(error) => self.error = Some(error.to_string()),
-                },
-                KeyCode::Backspace => {
-                    self.input.as_mut().unwrap().pop();
-                }
-                KeyCode::Delete => self.input = Some(String::new()),
-                KeyCode::Char(ch) if ch.is_ascii() => self.input.as_mut().unwrap().push(ch),
-                _ => {}
-            }
+            self.edit_input(key);
             return None;
         }
         // 2. 【上下文】【策略编辑】导航、数值微调与快捷档均只更新内存草稿
         match key {
             KeyCode::Esc | KeyCode::Char('q') => return Some(Outcome::Cancel),
+            KeyCode::BackTab => self.selected = (self.selected + 4) % 5,
             KeyCode::Up | KeyCode::Char('k') => self.selected = self.selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab => {
                 self.selected = (self.selected + 1) % 5
@@ -114,8 +103,8 @@ impl Draft {
             KeyCode::Char('r') => self.restore_defaults(),
             KeyCode::Char('s') => return Some(self.outcome()),
             KeyCode::Enter => match self.selected {
-                0 => self.input = Some(format_percent(self.policy.ratio)),
-                1 => self.input = Some(self.policy.reserve_tokens.to_string()),
+                0 => self.begin_input(format_percent(self.policy.ratio)),
+                1 => self.begin_input(self.policy.reserve_tokens.to_string()),
                 2 => self.restore_defaults(),
                 3 => return Some(self.outcome()),
                 _ => return Some(Outcome::Cancel),

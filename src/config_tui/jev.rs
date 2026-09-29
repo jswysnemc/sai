@@ -69,7 +69,17 @@ pub(crate) fn edit_jev(stdout: &mut io::Stdout, config: &mut AppConfig) -> Resul
                 3 => edit_audit(stdout, config)?,
                 4 => {
                     let text = match config.jev_connection() {
-                        Ok(connection) => probe_blocking(connection).summary(),
+                        Ok(connection) => {
+                            let result = super::background::run(
+                                stdout,
+                                t(" JEV TEST ", " JEV 测试 "),
+                                move || Ok(probe_blocking(connection).summary()),
+                            )?;
+                            let Some(result) = result else {
+                                continue;
+                            };
+                            result.unwrap_or_else(|error| error)
+                        }
                         Err(error) => format!("{error:#}"),
                     };
                     message(stdout, &text)?;
@@ -92,7 +102,9 @@ fn connection_detail(config: &AppConfig) -> String {
             let info = crate::config::jev_connection_info_for(endpoint);
             let source = match info.source {
                 JevConnectionSource::Endpoint => info.name,
-                JevConnectionSource::Official => t("Official TypeSafe", "TypeSafe 官方").to_string(),
+                JevConnectionSource::Official => {
+                    t("Official TypeSafe", "TypeSafe 官方").to_string()
+                }
             };
             let key = match crate::config::jev_connection_for(endpoint) {
                 Ok(_) => t("key ready", "密钥可用").to_string(),
@@ -153,11 +165,26 @@ fn edit_routing(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
     let routing = &config.jev.routing;
     let mut fields = vec![
         Field::boolean(t("Enabled", "启用"), routing.enabled),
-        Field::new(t("Minimum probability (0-1)", "最低概率（0-1）"), routing.threshold.to_string()),
-        Field::new(t("Max tools per decision", "单次最多暴露工具数"), routing.max_tools.to_string()),
-        Field::new(t("Max skills per decision", "单次最多暴露 Skills 数"), routing.max_skills.to_string()),
-        Field::new(t("Timeout seconds (1-60)", "超时秒数（1-60）"), routing.timeout_seconds.to_string()),
-        Field::new(t("Context characters", "判断所用对话字符数"), routing.context_chars.to_string()),
+        Field::new(
+            t("Minimum probability (0-1)", "最低概率（0-1）"),
+            routing.threshold.to_string(),
+        ),
+        Field::new(
+            t("Max tools per decision", "单次最多暴露工具数"),
+            routing.max_tools.to_string(),
+        ),
+        Field::new(
+            t("Max skills per decision", "单次最多暴露 Skills 数"),
+            routing.max_skills.to_string(),
+        ),
+        Field::new(
+            t("Timeout seconds (1-60)", "超时秒数（1-60）"),
+            routing.timeout_seconds.to_string(),
+        ),
+        Field::new(
+            t("Context characters", "判断所用对话字符数"),
+            routing.context_chars.to_string(),
+        ),
     ];
     loop {
         if !run_form(stdout, t(" JEV ROUTING ", " JEV 暴露决策 "), &mut fields)? {
@@ -165,7 +192,10 @@ fn edit_routing(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
         }
         match apply_routing(config, &fields) {
             Ok(()) => return Ok(()),
-            Err(error) => message(stdout, &format!("{}: {error}", t("Invalid input", "输入无效")))?,
+            Err(error) => message(
+                stdout,
+                &format!("{}: {error}", t("Invalid input", "输入无效")),
+            )?,
         }
     }
 }
@@ -191,9 +221,21 @@ fn edit_audit(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
     let audit = &config.jev.audit;
     let mut fields = vec![
         Field::boolean(t("Enabled", "启用"), audit.enabled),
-        Field::new(t("Minimum choice probability (0.5-1)", "最低选项概率（0.5-1）"), audit.minimum_probability.to_string()),
-        Field::new(t("Minimum confidence (0.5-1)", "最低置信度（0.5-1）"), audit.minimum_confidence.to_string()),
-        Field::new(t("Timeout seconds (1-30)", "超时秒数（1-30）"), audit.timeout_seconds.to_string()),
+        Field::new(
+            t(
+                "Minimum choice probability (0.5-1)",
+                "最低选项概率（0.5-1）",
+            ),
+            audit.minimum_probability.to_string(),
+        ),
+        Field::new(
+            t("Minimum confidence (0.5-1)", "最低置信度（0.5-1）"),
+            audit.minimum_confidence.to_string(),
+        ),
+        Field::new(
+            t("Timeout seconds (1-30)", "超时秒数（1-30）"),
+            audit.timeout_seconds.to_string(),
+        ),
     ];
     loop {
         if !run_form(stdout, t(" JEV AUDIT ", " JEV 权限审核 "), &mut fields)? {
@@ -201,7 +243,10 @@ fn edit_audit(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
         }
         match apply_audit(config, &fields) {
             Ok(()) => return Ok(()),
-            Err(error) => message(stdout, &format!("{}: {error}", t("Invalid input", "输入无效")))?,
+            Err(error) => message(
+                stdout,
+                &format!("{}: {error}", t("Invalid input", "输入无效")),
+            )?,
         }
     }
 }

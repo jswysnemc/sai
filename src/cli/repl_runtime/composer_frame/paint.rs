@@ -1,4 +1,3 @@
-use super::styled_line::wrap_styled_line;
 use super::*;
 use crate::render::terminal_rows::paint_changed_rows;
 
@@ -16,19 +15,34 @@ impl ComposerFrame {
         let cols = usize::from(viewport.size().cols);
         let top = viewport.composer_top();
         let height = viewport.composer_height();
-        let layout = self.layout(cols);
+        let mut layout = self.layout(cols);
+        // 1. 【终端】【输入视口】小窗口优先保留光标周围正文，再裁剪辅助区域
+        let overhead = self
+            .visual_lines(&layout, cols)
+            .len()
+            .saturating_sub(layout.styled_display_lines.len());
+        let available = usize::from(height).saturating_sub(overhead).max(1);
+        let (visible, cursor) = super::input_viewport::select_rows(
+            &layout.styled_display_lines,
+            usize::from(layout.cursor_row_offset),
+            available,
+        );
+        layout.styled_display_lines = visible;
+        layout.cursor_row_offset = cursor;
         let mut lines = self.visual_lines(&layout, cols);
-        // 1. 小窗口只保留区域内的末尾行，禁止越界绘制覆盖底栏
-        let hidden_rows = lines.len().saturating_sub(usize::from(height));
+        let cursor_offset = self.panel_lines.len()
+            + usize::from(CHROME_INPUT_PAD_ROWS + CHROME_INPUT_INNER_PAD_ROWS)
+            + usize::from(layout.cursor_row_offset);
+        let hidden_rows = lines
+            .len()
+            .saturating_sub(usize::from(height))
+            .min(cursor_offset);
         lines.drain(..hidden_rows);
         lines.resize(usize::from(height), String::new());
         let cursor_col = layout
             .cursor_col
             .saturating_add(CHROME_INPUT_PREFIX_COLS as u16)
             .min(cols.saturating_sub(1) as u16);
-        let cursor_offset = self.panel_lines.len()
-            + usize::from(CHROME_INPUT_PAD_ROWS + CHROME_INPUT_INNER_PAD_ROWS)
-            + usize::from(layout.cursor_row_offset);
         let cursor_row = top.saturating_add(
             cursor_offset
                 .saturating_sub(hidden_rows)
@@ -72,16 +86,14 @@ impl ComposerFrame {
             ChromeInputPrefix::Message
         };
         let mut first = true;
-        for line in &layout.styled_display_lines {
-            for segment in wrap_styled_line(line, chrome_input_content_cols(cols)) {
-                let prefix = if first {
-                    first_prefix
-                } else {
-                    ChromeInputPrefix::Continuation
-                };
-                lines.push(chrome_input_row(prefix, &segment, cols));
-                first = false;
-            }
+        for segment in &layout.styled_display_lines {
+            let prefix = if first {
+                first_prefix
+            } else {
+                ChromeInputPrefix::Continuation
+            };
+            lines.push(chrome_input_row(prefix, segment, cols));
+            first = false;
         }
         lines.extend((0..CHROME_INPUT_INNER_PAD_ROWS).map(|_| chrome_input_pad_row(cols)));
         if layout.mention_panel.is_visible() {

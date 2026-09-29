@@ -1,7 +1,19 @@
 use super::*;
 
 impl ProviderBrowser<'_> {
-    /// 刷新当前供应商的本地与远程模型，无参数，返回值为空。
+    /// 【服务商配置】【目录缓存】生成包含接入配置的缓存键，仅存于内存且不输出日志。
+    /// @returns 当前供应商配置指纹，避免修改密钥或地址后复用旧结果
+    pub(super) fn catalog_key(&self) -> String {
+        self.config
+            .providers
+            .get(self.provider_idx)
+            .and_then(|provider| serde_json::to_string(provider).ok())
+            .map(|json| blake3::hash(json.as_bytes()).to_hex().to_string())
+            .unwrap_or_default()
+    }
+
+    /// 【服务商配置】【目录切换】立即显示本地模型，并复用相同配置的缓存或在途请求。
+    /// @returns 无；网络请求始终在后台执行
     pub(super) fn refresh_models(&mut self) {
         self.provider_idx = self
             .provider_idx
@@ -12,65 +24,73 @@ impl ProviderBrowser<'_> {
             .get(self.provider_idx)
             .map(local_provider_models)
             .unwrap_or_default();
-        self.orgs = vec!["All".to_string()];
-        self.models.clear();
-        self.rebuild_models();
-        self.fetch_seq += 1;
-        if let Some(provider) = self.config.providers.get(self.provider_idx).cloned() {
-            let seq = self.fetch_seq;
-            let (tx, rx) = mpsc::channel();
-            self.fetch_rx = Some(rx);
-            self.loading = true;
-            self.status = t("Fetching model list...", "正在获取模型列表...").to_string();
-            std::thread::spawn(move || {
-                let result = fetch_models(&provider).map_err(|err| err.to_string());
-                let _ = tx.send((seq, result));
-            });
-        } else {
-            self.fetch_rx = None;
-            self.loading = false;
-            self.status.clear();
-        }
+        self.remote_metadata.clear();
         self.org_idx = 0;
         self.model_idx = 0;
+        self.rebuild_models();
+        self.loading = !self.config.providers.is_empty();
+        self.status = if self.loading {
+            t("Fetching model list...", "正在获取模型列表...").into()
+        } else {
+            String::new()
+        };
+        self.poll_fetch_result();
     }
 
-    /// 合并本次远程获取结果并重建候选，无参数，返回值为空。
+    /// 【服务商配置】【异步目录】收集完成的请求，只将当前供应商结果应用到画面。
+    /// @returns 无；最多四个并发请求，切换或按刷新不重复启动相同配置请求
     pub(super) fn poll_fetch_result(&mut self) {
-        let Some(rx) = &self.fetch_rx else {
-            return;
-        };
-        let Ok((seq, result)) = rx.try_recv() else {
-            return;
-        };
-        if seq != self.fetch_seq {
+        let completed = self
+            .pending_fetches
+            .iter()
+            .filter_map(|(key, receiver)| match receiver.try_recv() {
+                Ok(result) => Some((key.clone(), result)),
+                Err(mpsc::TryRecvError::Disconnected) => Some((
+                    key.clone(),
+                    Err(t("Model request stopped", "模型请求已中断").into()),
+                )),
+                Err(mpsc::TryRecvError::Empty) => None,
+            })
+            .collect::<Vec<_>>();
+        for (key, result) in completed {
+            self.pending_fetches.remove(&key);
+            self.model_cache.insert(key, result);
+        }
+        if !self.loading {
             return;
         }
-        self.loading = false;
-        self.fetch_rx = None;
-        match result {
-            Ok(result) => {
-                self.status = format!(
-                    "{} {} {}",
-                    t("Fetched", "已获取"),
-                    result.models.len(),
-                    t("models", "个模型")
-                );
-                for model in result.models {
-                    if !self.raw_models.iter().any(|item| item == &model) {
-                        self.raw_models.push(model);
-                    }
+        let key = self.catalog_key();
+        if let Some(result) = self.model_cache.get(&key).cloned() {
+            self.loading = false;
+            match result {
+                Ok(result) => {
+                    self.status = format!(
+                        "{} {} · r {}",
+                        result.models.len(),
+                        t("models", "个模型"),
+                        t("refresh", "刷新")
+                    );
+                    self.raw_models.extend(result.models);
+                    self.remote_metadata = result.metadata;
+                    self.rebuild_models();
                 }
-                self.remote_metadata = result.metadata;
+                Err(error) => {
+                    self.status = format_status_line(&format!(
+                        "{}: {error}",
+                        t("Failed to fetch models", "获取模型失败")
+                    ))
+                }
             }
-            Err(err) => {
-                self.status = format_status_line(&format!(
-                    "{}: {err}",
-                    t("Failed to fetch models", "获取模型失败")
-                ));
+        } else if !self.pending_fetches.contains_key(&key) && self.pending_fetches.len() < 4 {
+            if let Some(provider) = self.config.providers.get(self.provider_idx).cloned() {
+                let (sender, receiver) = mpsc::channel();
+                self.pending_fetches.insert(key, receiver);
+                std::thread::spawn(move || {
+                    let result = fetch_models(&provider).map_err(|error| error.to_string());
+                    let _ = sender.send(result);
+                });
             }
         }
-        self.rebuild_models();
     }
 
     /// 按过滤词和组织重建模型候选，无参数，返回值为空。

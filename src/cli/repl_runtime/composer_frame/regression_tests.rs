@@ -1,6 +1,7 @@
 use super::styled_line::wrap_styled_line;
 use super::*;
 use crate::agent::AgentMode;
+use crate::cli::repl_input_render::repl_prompt_rows_for_cols;
 use crate::cli::repl_runtime::viewport::TerminalSize;
 
 /// 【终端】【绘制回归】构造用于检查局部重绘的输入框。
@@ -72,4 +73,59 @@ fn regression_activity_update_does_not_repaint_input() {
         "状态变化不应重写输入正文: {output:?}"
     );
     assert!(!output.contains("test-model"), "状态变化不应重写底栏");
+}
+
+/// 【终端】【输入回归】长输入首尾、中文软换行和小窗口始终显示光标对应行。
+/// 参数: 无；返回: 无
+#[test]
+fn cursor_content_survives_scrolling_and_resize() {
+    for (cols, rows) in [(50, 24), (20, 8), (12, 4)] {
+        let mut frame = frame();
+        frame.set_panel_lines(Vec::new());
+        frame.input = format!("BEGIN {} END", "中文 abc\n".repeat(40));
+        for cursor in [
+            0,
+            4,
+            frame.input.chars().count() / 2,
+            frame.input.chars().count(),
+        ] {
+            frame.cursor = cursor;
+            let layout = frame.layout(cols);
+            assert!(layout.cursor_row_offset < layout.input_rows);
+            assert!(layout.input_rows <= REPL_MAX_VISIBLE_INPUT_ROWS);
+            let mut viewport = InlineViewport::new();
+            viewport.update(
+                TerminalSize {
+                    cols: cols as u16,
+                    rows,
+                },
+                frame.height(cols),
+                100,
+            );
+            let (_, signature) = frame.draw_lines(&mut Vec::new(), &viewport, None).unwrap();
+            let row = usize::from(signature.cursor_row - signature.top);
+            assert!(row < signature.lines.len());
+            if cursor == 0 {
+                assert!(signature.lines[row].contains("BEGIN"));
+            }
+            if cursor == frame.input.chars().count() {
+                assert!(signature.lines[row].contains("END"));
+            }
+        }
+    }
+}
+
+/// 【终端】【输入回归】满行与显式换行不重复折行，保持光标和正文一致。
+/// 参数: 无；返回: 无
+#[test]
+fn exact_width_and_newline_share_cursor_coordinates() {
+    let mut frame = frame();
+    frame.set_panel_lines(Vec::new());
+    for input in ["abcd\nEND", "ab中文\nEND", "a\tb\nEND"] {
+        frame.input = input.into();
+        frame.cursor = input.chars().count();
+        let cols = 4 + crate::cli::repl_chrome::CHROME_INPUT_PREFIX_COLS;
+        let layout = frame.layout(cols);
+        assert!(layout.styled_display_lines[usize::from(layout.cursor_row_offset)].contains("END"));
+    }
 }

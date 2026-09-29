@@ -99,3 +99,25 @@ fn preview_wraps_for_narrow_terminals() {
         assert!(lines.join("").contains("950,000"));
     }
 }
+
+/// 【上下文】【输入回归】数值支持全选替换、局部修改和取消，保存前不影响原策略。
+/// 参数: 无；返回: 无
+#[test]
+fn numeric_edit_supports_selection_cursor_and_undo() {
+    let policy = CompactionBudgetPolicy::DEFAULT;
+    let mut draft = Draft::new(policy, policy);
+    draft.handle(KeyCode::Enter);
+    draft.handle(KeyCode::Char('8'));
+    draft.handle(KeyCode::Char('5'));
+    assert_eq!(draft.preview().unwrap().ratio, 0.85);
+    draft.handle(KeyCode::Home);
+    draft.handle(KeyCode::Right);
+    draft.handle(KeyCode::Delete);
+    draft.handle(KeyCode::Char('6'));
+    assert_eq!(draft.preview().unwrap().ratio, 0.86);
+    assert_eq!(draft.policy, policy);
+    draft.handle(KeyCode::Esc);
+    assert_eq!(draft.policy, policy);
+    draft.handle(KeyCode::BackTab);
+    assert_eq!(draft.selected, 4);
+}

@@ -277,7 +277,7 @@ fn command_description(command: &str) -> &'static str {
             "run a plugin command in this session",
             "在当前会话执行插件命令",
         ),
-        "/context" => t(
+        "/context" | "/content" => t(
             "show context usage; /context edit opens compaction settings",
             "查看上下文占用；/context edit 打开压缩设置",
         ),

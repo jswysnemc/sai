@@ -1,4 +1,6 @@
 mod catalog;
+#[cfg(test)]
+mod catalog_tests;
 mod render;
 
 use crate::config::{AppConfig, ModelMetadata, ProviderConfig};
@@ -35,8 +37,9 @@ pub(crate) struct ProviderBrowser<'a> {
     models: Vec<ModelEntry>,
     status: String,
     loading: bool,
-    fetch_seq: u64,
-    fetch_rx: Option<Receiver<FetchResult>>,
+    pending_fetches: BTreeMap<String, Receiver<Result<FetchModelsResult, String>>>,
+    /// 按供应商配置指纹缓存结果，切回相同配置时复用目录
+    model_cache: BTreeMap<String, Result<FetchModelsResult, String>>,
     /// 光标是否已处于显示态；避免逐帧重发 Show/Hide 放大闪烁
     cursor_visible: bool,
 }
@@ -57,8 +60,8 @@ impl<'a> ProviderBrowser<'a> {
             models: Vec::new(),
             status: String::new(),
             loading: false,
-            fetch_seq: 0,
-            fetch_rx: None,
+            pending_fetches: BTreeMap::new(),
+            model_cache: BTreeMap::new(),
             cursor_visible: false,
         }
     }
@@ -69,17 +72,16 @@ impl<'a> ProviderBrowser<'a> {
         // 10Hz 清屏重画造成的整屏闪烁
         let mut last_frame: Option<String> = None;
         loop {
-            let before = self.frame_signature();
             self.poll_fetch_result();
-            let changed = before != self.frame_signature();
-            if changed || last_frame.is_none() {
+            let signature = self.frame_signature();
+            if last_frame.as_ref() != Some(&signature) {
                 self.draw(stdout)?;
-                last_frame = Some(self.frame_signature());
+                last_frame = Some(signature);
             }
             match read_key_with_timeout(if self.loading {
                 Some(Duration::from_millis(100))
             } else {
-                None
+                Some(Duration::from_millis(150))
             })? {
                 None => continue,
                 Some(key) => match key {
@@ -93,7 +95,10 @@ impl<'a> ProviderBrowser<'a> {
                         self.filter_mode = true;
                         self.active_col = 2;
                     }
-                    KeyCode::Char('r') => self.refresh_models(),
+                    KeyCode::Char('r') => {
+                        self.model_cache.remove(&self.catalog_key());
+                        self.refresh_models();
+                    }
                     KeyCode::Char('a') if self.active_col == 2 => self.add_custom_model(stdout)?,
                     KeyCode::Char('a') => self.add_provider(stdout)?,
                     KeyCode::Char('d') if self.active_col == 2 => self.delete_model(stdout)?,
@@ -103,6 +108,8 @@ impl<'a> ProviderBrowser<'a> {
                     _ => {}
                 },
             }
+            // 1. 【服务商配置】【交互重绘】子表单退出后即使数据未改变，也需恢复列表画面
+            last_frame = None;
         }
     }
 
@@ -118,7 +125,7 @@ impl<'a> ProviderBrowser<'a> {
     /// - 内容签名
     fn frame_signature(&self) -> String {
         format!(
-            "{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+            "{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{:?}",
             self.active_col,
             self.provider_idx,
             self.org_idx,
@@ -130,6 +137,7 @@ impl<'a> ProviderBrowser<'a> {
             self.orgs.len(),
             self.models.len(),
             self.config.providers.len(),
+            terminal::size().ok(),
         )
     }
 
@@ -204,8 +212,24 @@ impl<'a> ProviderBrowser<'a> {
     }
 
     fn add_provider(&mut self, stdout: &mut io::Stdout) -> Result<()> {
-        if let Some(provider) = edit_provider_form(stdout, ProviderConfig::new_openai_compatible())?
-        {
+        let mut draft = ProviderConfig::new_openai_compatible();
+        draft.id = (1..)
+            .map(|index| format!("custom-{index}"))
+            .find(|id| self.config.providers.iter().all(|item| &item.id != id))
+            .unwrap();
+        if let Some(provider) = edit_provider_form(stdout, draft, true)? {
+            if self
+                .config
+                .providers
+                .iter()
+                .any(|item| item.id == provider.id)
+            {
+                message(
+                    stdout,
+                    t("Provider ID already exists", "供应商配置 ID 已存在"),
+                )?;
+                return Ok(());
+            }
             self.config.upsert_provider(provider);
             self.provider_idx = self.config.providers.len().saturating_sub(1);
             self.refresh_models();
@@ -248,7 +272,7 @@ impl<'a> ProviderBrowser<'a> {
         match self.active_col {
             0 => {
                 if let Some(provider) = self.config.providers.get(self.provider_idx).cloned() {
-                    if let Some(provider) = edit_provider_form(stdout, provider)? {
+                    if let Some(provider) = edit_provider_form(stdout, provider, false)? {
                         let old_id = self.config.providers[self.provider_idx].id.clone();
                         self.config.providers[self.provider_idx] = provider.clone();
                         if self.config.active_provider == old_id {
@@ -427,8 +451,6 @@ impl<'a> ProviderBrowser<'a> {
         Ok(())
     }
 }
-
-type FetchResult = (u64, Result<FetchModelsResult, String>);
 
 fn format_status_line(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join(" ")

@@ -1,7 +1,7 @@
 use super::super::app_state::WebAppState;
 use super::super::error::{WebError, WebResult};
 use crate::config::{ModelEndpointConfig, ModelEndpointKind};
-use crate::tools::image_generation::request::{model_catalog_url, ImageAuth};
+use crate::web::services::model_endpoint_models::request_models;
 use axum::extract::State;
 use axum::routing::post;
 use axum::{Json, Router};
@@ -164,58 +164,4 @@ fn restore_endpoint(
         submitted,
         ModelEndpointKind::ImageGeneration,
     )
-}
-
-/// 请求 OpenAI 兼容接口的模型目录，兼容带版本路径和完整生图路径的地址。
-async fn request_models(endpoint: &ModelEndpointConfig) -> anyhow::Result<Vec<String>> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(20))
-        .build()?;
-    let key = endpoint.resolved_api_key()?;
-    let (url, auth) = model_catalog_url(endpoint);
-    let mut last_error = String::from("model endpoint returned no result");
-    for candidate in [url] {
-        let mut request = client.get(&candidate).header("Accept", "application/json");
-        if !key.is_empty() {
-            request = match auth {
-                ImageAuth::Bearer => request.bearer_auth(&key),
-                ImageAuth::GeminiQueryKey => request.query(&[("key", key.as_str())]),
-            };
-        }
-        let response = request.send().await?;
-        let status = response.status();
-        let body = response.text().await?;
-        if status.is_success() {
-            return Ok(parse_models(&body));
-        }
-        last_error = format!("{status}: {body}");
-        if status.as_u16() != 404 {
-            break;
-        }
-    }
-    anyhow::bail!(last_error)
-}
-
-/// 从常见模型目录响应中提取模型标识。
-fn parse_models(body: &str) -> Vec<String> {
-    let value = serde_json::from_str::<Value>(body).ok();
-    let values = value
-        .as_ref()
-        .and_then(|value| value.get("data").or_else(|| value.get("models")))
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let mut models = values
-        .iter()
-        .filter_map(|item| {
-            item.as_str()
-                .or_else(|| item.get("id").and_then(Value::as_str))
-        })
-        .map(str::trim)
-        .filter(|item| !item.is_empty())
-        .map(str::to_string)
-        .collect::<Vec<_>>();
-    models.sort();
-    models.dedup();
-    models
 }

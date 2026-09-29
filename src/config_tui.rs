@@ -1,4 +1,5 @@
 mod agents;
+mod background;
 pub(crate) mod compaction;
 mod form;
 mod gateways;
@@ -8,6 +9,7 @@ mod jev;
 mod jev_connection;
 mod knowledge;
 mod layout;
+mod model_endpoints;
 mod model_metadata_form;
 mod multi_select;
 mod plugin_fields;

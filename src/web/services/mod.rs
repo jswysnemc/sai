@@ -10,3 +10,5 @@ pub(super) mod prompt_service;
 pub(crate) mod provider_models;
 pub(super) mod provider_probe;
 pub(crate) mod weixin_login;
+
+pub(crate) mod model_endpoint_models;

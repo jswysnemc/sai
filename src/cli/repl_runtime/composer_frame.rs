@@ -1,3 +1,4 @@
+mod input_viewport;
 mod layout;
 mod paint;
 #[cfg(test)]
@@ -15,9 +16,7 @@ use crate::cli::repl_chrome::{
     ReplChrome, CHROME_INPUT_INNER_PAD_ROWS, CHROME_INPUT_PAD_ROWS, CHROME_INPUT_PREFIX_COLS,
 };
 use crate::cli::repl_clipboard::ReplClipboardBlockSpan;
-use crate::cli::repl_input_render::{
-    repl_cursor_position_for_cols, repl_prompt_rows_for_cols, repl_visible_input_lines,
-};
+use crate::cli::repl_input_render::repl_cursor_position_for_cols;
 use crate::cli::repl_mentions::MentionSuggestion;
 use crate::cli::repl_text::repl_input_lines;
 use crate::cli::REPL_MAX_VISIBLE_INPUT_ROWS;
@@ -47,7 +46,6 @@ pub(super) struct ComposerFrame {
     chrome: ReplChrome,
     input: String,
     cursor: usize,
-    is_pasted: bool,
     clipboard_blocks: Vec<ReplClipboardBlockSpan>,
     slash_selection: usize,
     /// 与输入快照一致的引用候选，绘制期间不访问文件系统
@@ -80,7 +78,7 @@ impl ComposerFrame {
         chrome: ReplChrome,
         input: String,
         cursor: usize,
-        is_pasted: bool,
+        _is_pasted: bool,
         clipboard_blocks: Vec<ReplClipboardBlockSpan>,
         slash_selection: usize,
     ) -> Self {
@@ -88,7 +86,6 @@ impl ComposerFrame {
             chrome,
             input,
             cursor,
-            is_pasted,
             clipboard_blocks,
             slash_selection,
             mention_candidates: Vec::new(),

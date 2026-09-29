@@ -45,21 +45,35 @@ pub(super) fn run(
 
     let mut draft = Draft::new(policy, defaults);
     let mut stdout = io::stdout();
-    let frame_rows = frame_rows();
+    let mut frame_rows = frame_rows();
     execute!(stdout, Hide)?;
     reserve_frame_space(frame_rows)?;
     let (_, cursor_y) = crossterm::cursor::position().unwrap_or((0, frame_rows.saturating_sub(1)));
-    let anchor_y = cursor_y.saturating_sub(frame_rows.saturating_sub(1));
+    let mut anchor_y = cursor_y.saturating_sub(frame_rows.saturating_sub(1));
 
+    let mut previous = Vec::new();
+    let mut size = terminal::size()?;
     let outcome = loop {
-        let lines = frame_lines(&draft, context, frame_rows);
-        if let Err(error) = draw_at(&mut stdout, anchor_y, frame_rows, &lines) {
-            let _ = clear_frame(&mut stdout, anchor_y, frame_rows);
-            return Err(error);
+        let next_size = terminal::size()?;
+        if next_size != size {
+            size = next_size;
+            frame_rows = FRAME_ROWS.min(size.1).max(1);
+            anchor_y = anchor_y.min(size.1.saturating_sub(frame_rows));
+            previous.clear();
         }
-        match crate::config_tui::input::read_key_event_with_timeout(None) {
+        let lines = frame_lines(&draft, context, frame_rows);
+        if lines != previous {
+            if let Err(error) = draw_at(&mut stdout, anchor_y, frame_rows, &lines) {
+                let _ = clear_frame(&mut stdout, anchor_y, frame_rows);
+                return Err(error);
+            }
+            previous = lines;
+        }
+        match crate::config_tui::input::read_key_event_with_timeout(Some(
+            std::time::Duration::from_millis(100),
+        )) {
             Ok(Some(key)) => {
-                if let Some(outcome) = draft.handle(key.code) {
+                if let Some(outcome) = draft.handle_event(key) {
                     break outcome;
                 }
             }
@@ -125,12 +139,23 @@ fn frame_lines(draft: &Draft, context: &PreviewContext, rows: u16) -> Vec<String
     while lines.len() + 1 < rows as usize {
         lines.push(String::new());
     }
-    lines.push(theme::help_line(&[
-        ("↑↓", t("select", "选择")),
-        ("Enter", t("edit", "编辑")),
-        ("s", t("save", "保存")),
-        ("Esc", t("cancel", "取消")),
-    ]));
+    let help = if draft.input.is_some() {
+        theme::help_line(&[
+            ("←→", t("cursor", "光标")),
+            ("Enter", t("apply", "确认")),
+            ("Esc", t("undo", "撤销")),
+            ("Ctrl+U", t("clear", "清空")),
+        ])
+    } else {
+        theme::help_line(&[
+            ("↑↓", t("select", "选择")),
+            ("←→", t("adjust", "调整")),
+            ("Enter", t("edit", "编辑")),
+            ("s", t("save", "保存")),
+            ("Esc", t("cancel", "取消")),
+        ])
+    };
+    lines.push(ui::truncate(&help, width));
     lines.truncate(rows as usize);
     lines
 }

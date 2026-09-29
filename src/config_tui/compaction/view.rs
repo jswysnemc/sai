@@ -110,14 +110,14 @@ pub(super) fn content(
     } else {
         None
     }
-    .map(|value| format!("{value}_"))
+    .map(|_| draft.input_display())
     .unwrap_or_else(|| format!("{}%", format_percent(policy.ratio)));
     let reserve_value = if draft.selected == 1 {
         draft.input.as_deref()
     } else {
         None
     }
-    .map(|value| format!("{value}_"))
+    .map(|_| draft.input_display())
     .unwrap_or_else(|| format!("{} tokens", format_tokens(policy.reserve_tokens)));
     let mut selected_block = 0;
     // 1. 【上下文】【策略预览】两个条件都显示换算值，并标记实际决定阈值的条件
@@ -308,7 +308,8 @@ pub(super) fn draw(stdout: &mut io::Stdout, draft: &Draft, context: &PreviewCont
         theme::help_line(&[
             ("Enter", t("apply", "确认")),
             ("Esc", t("undo", "撤销")),
-            ("Del", t("clear", "清空")),
+            ("←→", t("cursor", "光标")),
+            ("Ctrl+U", t("clear", "清空")),
         ])
     } else if width < 60 {
         format!(

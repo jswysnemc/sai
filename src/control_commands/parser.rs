@@ -85,7 +85,9 @@ pub fn parse_control_command(
     if matches_surface_alias(&name, surface, "help", &["帮助"]) {
         return Ok(Some(ControlCommand::Help));
     }
-    if matches_surface_alias(&name, surface, "context", &["上下文"]) {
+    if matches_surface_alias(&name, surface, "context", &["上下文"])
+        || (surface == ControlSurface::Repl && name == "content")
+    {
         if rest.trim().eq_ignore_ascii_case("edit") {
             if surface != ControlSurface::Repl {
                 bail!(t(
@@ -368,6 +370,10 @@ mod tests {
             })
         );
         assert!(parse_control_command("/context edit", ControlSurface::Gateway).is_err());
+        assert_eq!(
+            parse_control_command("/content edit", ControlSurface::Repl).unwrap(),
+            parse_control_command("/context edit", ControlSurface::Repl).unwrap()
+        );
         assert_eq!(
             parse_control_command("/context", ControlSurface::Repl).unwrap(),
             Some(ControlCommand::Context { update: None })

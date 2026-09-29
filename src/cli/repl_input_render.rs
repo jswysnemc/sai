@@ -50,100 +50,6 @@ pub(super) fn render_repl_input(
     Ok(())
 }
 
-/// 输入框可见行的计算结果。
-pub(super) struct VisibleInputLines {
-    pub(super) lines: Vec<String>,
-    /// 是否已收缩；布局层依赖该标志判定光标走原文还是折叠路径，
-    /// 不能再用显示行数与原始行数相等来猜测（恰好 3 行时会误判）
-    pub(super) collapsed: bool,
-}
-
-pub(super) fn repl_visible_input_lines(
-    prefix: &str,
-    lines: &[String],
-    max_rows: u16,
-    is_pasted: bool,
-) -> VisibleInputLines {
-    const LONG_PASTE_VISIBLE_CHARS: usize = 240;
-    // 收缩后保留的首尾行最大字符数，保证收缩结果本身不会再撑高 composer
-    const COLLAPSED_EDGE_CHARS: usize = 160;
-    let total_rows = repl_prompt_rows(prefix, lines);
-    let total_chars: usize = lines.iter().map(|line| line.chars().count()).sum();
-    // 超过可见行数上限时无论内容来源一律收缩，否则手动多行输入会把
-    // composer 顶出屏幕、底部区域相互覆盖；粘贴内容额外按字符阈值提前收缩
-    let should_collapse = !lines.is_empty()
-        && (total_rows > max_rows
-            || (is_pasted
-                && (total_chars > LONG_PASTE_VISIBLE_CHARS
-                    || lines.iter().any(|line| line.chars().count() > 160))));
-    if !should_collapse {
-        return VisibleInputLines {
-            lines: lines.to_vec(),
-            collapsed: false,
-        };
-    }
-
-    if lines.len() == 1 {
-        let line = &lines[0];
-        let chars = line.chars().count();
-        let tail_chars = 160.min(chars);
-        let tail: String = line
-            .chars()
-            .skip(chars.saturating_sub(tail_chars))
-            .collect();
-        let omitted = chars.saturating_sub(tail_chars);
-        let description = if is_zh() {
-            format!("已隐藏 {omitted} 字符输入内容")
-        } else {
-            format!("{omitted} input chars hidden")
-        };
-        let note = crate::render::omitted_line::render_fold_hint(&description, None);
-        return VisibleInputLines {
-            lines: vec![format!("…{tail}"), note],
-            collapsed: true,
-        };
-    }
-
-    // 从顶部开始折叠，保留光标所在的最新输入行，避免用户看不到刚输入的内容
-    let tail_count = usize::from(max_rows.max(2))
-        .saturating_sub(1)
-        .min(lines.len());
-    let omitted_lines = lines.len().saturating_sub(tail_count);
-    let description = if is_zh() {
-        format!("已隐藏 {omitted_lines} 行输入内容")
-    } else {
-        format!("{omitted_lines} input lines hidden")
-    };
-    let omitted = crate::render::omitted_line::render_fold_hint(&description, None);
-    let mut visible = Vec::with_capacity(tail_count + 1);
-    visible.push(omitted);
-    visible.extend(
-        lines[lines.len() - tail_count..]
-            .iter()
-            .map(|line| clip_collapsed_edge(line, COLLAPSED_EDGE_CHARS)),
-    );
-    VisibleInputLines {
-        lines: visible,
-        collapsed: true,
-    }
-}
-
-/// 截断收缩后保留的首尾行。
-///
-/// 参数:
-/// - `line`: 原始行文本
-/// - `max_chars`: 保留的最大字符数
-///
-/// 返回:
-/// - 截断后的行；超长时以省略号结尾
-fn clip_collapsed_edge(line: &str, max_chars: usize) -> String {
-    if line.chars().count() <= max_chars {
-        return line.to_string();
-    }
-    let head: String = line.chars().take(max_chars).collect();
-    format!("{head}…")
-}
-
 /// 清除 REPL 可编辑输入区。
 ///
 /// 参数:
@@ -175,17 +81,6 @@ pub(super) fn repl_render_rows(prefix: &str, lines: &[String], has_suggestions: 
     chrome_fixed_rows()
         + repl_prompt_rows_for_cols(prefix, lines, terminal_cols())
         + u16::from(has_suggestions)
-}
-
-pub(super) fn repl_prompt_rows(prefix: &str, lines: &[String]) -> u16 {
-    // 用 composer 实际绘制的内容宽（整宽去掉 "> " 边距），而不是终端整宽。
-    // 折叠判定与渲染必须同宽，否则在临界长度上两者会差一行，
-    // composer 会悄悄长过 REPL_MAX_VISIBLE_INPUT_ROWS 上限
-    repl_prompt_rows_for_cols(
-        prefix,
-        lines,
-        crate::cli::repl_chrome::chrome_input_content_cols(terminal_cols()),
-    )
 }
 
 /// 为剪贴板原子块插入特殊颜色，保持原始文本和字符区间不变。

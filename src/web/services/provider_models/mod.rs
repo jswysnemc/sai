@@ -14,7 +14,6 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-pub(crate) use catalog::fetch_catalog_metadata;
 use catalog::{fetch_litellm_catalog, fetch_models_dev_catalog, fetch_openrouter_catalog};
 use response::parse_models_response;
 use transport_error::describe_transport_error;

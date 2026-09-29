@@ -97,6 +97,7 @@ fn run_main_menu(
             t("Tools", "工具"),
             "Skills",
             t("Advanced settings", "高级设置"),
+            t("Jev and image models", "Jev 与生图模型"),
             if dirty {
                 t("Save and exit", "保存并退出")
             } else {
@@ -142,6 +143,7 @@ fn run_main_menu(
                 "低频配置：知识库、渠道接入、全局参数与 Jev。",
             )
             .to_string(),
+            t("Manage Jev and image generation endpoints, credentials and default models.", "管理 Jev 与生图接入、密钥和默认模型。").to_string(),
             if dirty {
                 t(
                     "Configuration has unsaved edits. Confirm whether to write them before leaving.",
@@ -167,7 +169,7 @@ fn run_main_menu(
         };
         let status = super::theme::help_line(&[
             ("↑↓", t("move", "移动")),
-            ("1-7", t("jump", "跳转")),
+            ("1-8", t("jump", "跳转")),
             ("Enter", t("open", "打开")),
             ("q", t("quit", "退出")),
         ]);
@@ -202,7 +204,8 @@ fn run_main_menu(
                 3 => edit_cli_tools(stdout, config)?,
                 4 => edit_skills(stdout, paths, config)?,
                 5 => run_advanced_menu(stdout, paths, config)?,
-                6 => {
+                6 => super::model_endpoints::menu(stdout, config)?,
+                7 => {
                     if dirty {
                         if let Some(saved) = confirm_and_leave(stdout, paths, config, true)? {
                             return Ok(saved);

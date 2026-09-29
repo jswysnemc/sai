@@ -1,5 +1,6 @@
 mod draft;
 mod inline;
+mod input_edit;
 #[cfg(test)]
 mod tests;
 mod view;
@@ -123,7 +124,7 @@ fn edit(
         if let Some(key) =
             super::input::read_key_event_with_timeout(Some(Duration::from_millis(200)))?
         {
-            if let Some(outcome) = draft.handle(key.code) {
+            if let Some(outcome) = draft.handle_event(key) {
                 return Ok(outcome);
             }
             redraw = true;

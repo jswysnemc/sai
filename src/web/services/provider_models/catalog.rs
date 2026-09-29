@@ -6,20 +6,6 @@ use serde_json::Value;
 use std::sync::OnceLock;
 use std::time::Duration;
 
-/// 兼容旧调用：从公开目录补充模型元数据。
-///
-/// 参数:
-/// - `models`: 需要补全的模型 ID 列表
-///
-/// 返回:
-/// - 目录匹配到的模型元数据
-pub(crate) fn fetch_catalog_metadata(models: &[String]) -> Vec<(String, CatalogMetadata)> {
-    let mut catalog = fetch_models_dev_catalog(models);
-    catalog.extend(fetch_openrouter_catalog(models));
-    catalog.extend(fetch_litellm_catalog(models));
-    catalog
-}
-
 /// 从 models.dev 目录补充模型元数据。
 ///
 /// 参数:
