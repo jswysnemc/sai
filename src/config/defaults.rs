@@ -166,6 +166,7 @@ impl Default for SkillsConfig {
 impl Default for MemoryConfig {
     fn default() -> Self {
         Self {
+            jev_injection: false,
             enabled: default_true(),
             evicted_context_enabled: default_true(),
             association_enabled: default_true(),

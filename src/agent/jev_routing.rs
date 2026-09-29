@@ -1,9 +1,10 @@
+use super::jev_prompt_context::Preselection;
 use super::*;
 use crate::jev::{self, Candidate, JevClient, Selection, SelectionLimits};
 use crate::llm::ToolCall;
 
 impl Agent {
-    /// 【Jev路由】【请求前预选】在用户消息发往模型前，由 Jev 判断需要暴露的工具与 skill。
+    /// 【Jev路由】【请求前预选】在用户消息发往模型前，由 Jev 判断需要暴露的能力、提示词与记忆。
     ///
     /// 结果作为本轮注入文本并入用户消息，随轮次持久化并在后续回放；
     /// 不伪造 assistant 工具调用，避免思考型模型因缺少 reasoning 拒绝请求。
@@ -12,22 +13,23 @@ impl Agent {
     /// 参数:
     /// - `turn_id`: 当前轮次标识，用于排除运行中轮次读取近期历史
     /// - `input`: 用户本轮输入
+    /// - `memory_index`: 本轮可用记忆索引，仅供路由判断
     /// - `on_event`: 界面事件回调；判断开始和结束都会通知，不写入工具调用
     ///
     /// 返回:
-    /// - 需要注入用户消息的暴露结果块；未启用、未选中或失败时为空
+    /// - 需要注入用户消息的暴露结果及记忆命中标记；失败时不新增上下文
     pub(super) async fn jev_preselect<F>(
         &mut self,
         turn_id: &str,
         input: &str,
+        memory_index: Option<&str>,
         on_event: &mut F,
-    ) -> Result<Option<String>>
+    ) -> Result<Preselection>
     where
         F: FnMut(AgentEvent) -> Result<()>,
     {
-        if !self.tools_enabled || !self.tool_visibility.is_jev_routing() || input.trim().is_empty()
-        {
-            return Ok(None);
+        if !self.config.jev_routing_active() || input.trim().is_empty() {
+            return Ok(Preselection::default());
         }
         // 1. 先告诉界面正在判断，再读取近期历史作为背景
         on_event(AgentEvent::JevPreselect {
@@ -42,24 +44,36 @@ impl Agent {
             }
         };
         // 2. 请求 Jev 判断，失败或未选中时退回基础工具，不阻断对话
-        let selection = match self.jev_decide(input, &history).await {
+        let prompt_context = self.jev_prompt_context(memory_index)?;
+        let selection = match self
+            .jev_decide(input, &history, &prompt_context.candidates)
+            .await
+        {
             Ok(selection) if !selection.is_empty() => selection,
             Ok(_) => {
                 on_event(AgentEvent::JevPreselect {
                     phase: "empty".to_string(),
                     detail: String::new(),
                 })?;
-                return Ok(None);
+                return Ok(Preselection::default());
             }
             Err(error) => {
-                eprintln!("【Jev路由】【请求前预选】判断失败，本轮仅暴露基础工具: {error:#}");
+                eprintln!("【Jev路由】【请求前预选】判断失败，本轮不新增能力或上下文: {error:#}");
                 on_event(AgentEvent::JevPreselect {
                     phase: "failed".to_string(),
                     detail: error.to_string(),
                 })?;
-                return Ok(None);
+                return Ok(Preselection::default());
             }
         };
+        let mut result = prompt_context.render(&selection);
+        if selection.tools.is_empty() && selection.skills.is_empty() {
+            on_event(AgentEvent::JevPreselect {
+                phase: "ready".to_string(),
+                detail: result.block.clone().unwrap_or_default(),
+            })?;
+            return Ok(result);
+        }
         // 3. 工具带上 Schema，skill 只宣布名称和描述
         match self.tool_visibility.announce_selection(
             &self.tools,
@@ -72,7 +86,14 @@ impl Agent {
                     phase: "ready".to_string(),
                     detail: output.clone(),
                 })?;
-                Ok(Some(preselect_block(&output)))
+                result.block = Some(
+                    [Some(preselect_block(&output)), result.block]
+                        .into_iter()
+                        .flatten()
+                        .collect::<Vec<_>>()
+                        .join("\n\n"),
+                );
+                Ok(result)
             }
             Err(error) => {
                 eprintln!("【Jev路由】【请求前预选】暴露资源失败: {error:#}");
@@ -80,7 +101,7 @@ impl Agent {
                     phase: "failed".to_string(),
                     detail: error.to_string(),
                 })?;
-                Ok(None)
+                Ok(result)
             }
         }
     }
@@ -150,7 +171,7 @@ impl Agent {
         }
         // 1. 解析需求并请求 Jev 判断
         let request = tools::jev_request::CapabilityRequest::parse(arguments)?;
-        let selection = self.jev_decide(&request.need, messages).await?;
+        let selection = self.jev_decide(&request.need, messages, &[]).await?;
         // 2. 标记暴露；未选中时同样返回说明，便于模型调整描述
         self.tool_visibility
             .expose_selection(&self.tools, &selection, &self.config, &self.paths)
@@ -161,15 +182,25 @@ impl Agent {
     /// 参数:
     /// - `need`: 用户请求或模型描述的能力需求
     /// - `messages`: 当前请求上下文
+    /// - `prompts`: 本轮提示词和记忆候选，不受工具暴露状态影响
     ///
     /// 返回:
     /// - Jev 选中的资源；没有候选时返回空选择
-    async fn jev_decide(&self, need: &str, messages: &[ChatMessage]) -> Result<Selection> {
+    async fn jev_decide(
+        &self,
+        need: &str,
+        messages: &[ChatMessage],
+        prompts: &[Candidate],
+    ) -> Result<Selection> {
         let settings = &self.config.jev.routing;
         // 1. 收集候选，已暴露的资源不再参与判断
-        let candidates: Vec<Candidate> =
+        let mut candidates = if self.tools_enabled && self.external_engine.is_none() {
             self.tool_visibility
-                .jev_candidates(&self.tools, &self.config, &self.paths);
+                .jev_candidates(&self.tools, &self.config, &self.paths)
+        } else {
+            Vec::new()
+        };
+        candidates.extend_from_slice(prompts);
         if candidates.is_empty() {
             return Ok(Selection::default());
         }

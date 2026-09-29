@@ -144,6 +144,13 @@ impl JevConfig {
 }
 
 impl AppConfig {
+    /// 【Jev路由】【记忆注入】无参数；返回记忆是否交由当前有效路由按需暴露。
+    pub fn jev_memory_injection_active(&self) -> bool {
+        self.jev_routing_active()
+            && self.memory_config().enabled
+            && self.memory_config().jev_injection
+    }
+
     /// 判断 Jev 暴露决策在当前会话是否生效。
     ///
     /// DeepSeek Anchored Standard 自带工具目录控制，两者同时开启时以锚定模式为准。
@@ -207,7 +214,11 @@ pub fn jev_connection_for(endpoint: Option<&ModelEndpointConfig>) -> Result<JevC
     let api_key = if own_key.is_empty() {
         JEV_KEY_ENV_NAMES
             .iter()
-            .find_map(|name| std::env::var(name).ok().filter(|value| !value.trim().is_empty()))
+            .find_map(|name| {
+                std::env::var(name)
+                    .ok()
+                    .filter(|value| !value.trim().is_empty())
+            })
             .map(|value| value.trim().to_string())
             .with_context(|| {
                 format!(
@@ -264,7 +275,10 @@ fn systemone_url(raw: &str) -> String {
 }
 
 /// 按 id 查找 JEV 接入。
-fn find_endpoint<'a>(endpoints: &'a [ModelEndpointConfig], id: &str) -> Option<&'a ModelEndpointConfig> {
+fn find_endpoint<'a>(
+    endpoints: &'a [ModelEndpointConfig],
+    id: &str,
+) -> Option<&'a ModelEndpointConfig> {
     endpoints
         .iter()
         .find(|item| item.kind == ModelEndpointKind::Jev && item.id == id)

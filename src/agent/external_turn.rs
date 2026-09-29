@@ -66,7 +66,9 @@ impl Agent {
         let cwd = crate::runtime_cwd::current_dir()?;
         let worktree_undo =
             crate::state::worktree_undo::WorktreeUndoGuard::begin(&self.state, &cwd, &turn_id)?;
-        let contexts = self.external_prompt_contexts(input)?;
+        let contexts = self
+            .external_prompt_contexts(input, &turn_id, &mut on_event)
+            .await?;
         let request = TurnRequest {
             input: input.to_string(),
             image_urls,
@@ -128,14 +130,36 @@ impl Agent {
     /// - `input`: 当前用户输入
     ///
     /// 返回:
-    /// - 可作为 ACP 嵌入资源发送的记忆与目标上下文
-    fn external_prompt_contexts(&self, input: &str) -> Result<Vec<AcpPromptContext>> {
+    /// - 可作为 ACP 嵌入资源发送的记忆、Jev 片段与目标上下文
+    async fn external_prompt_contexts(
+        &mut self,
+        input: &str,
+        turn_id: &str,
+        on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
+    ) -> Result<Vec<AcpPromptContext>> {
         let mut contexts = Vec::new();
         // 【Sai/ACP】【上下文注入】1. 注入记忆索引，与内置引擎走同一条渲染
         let workspace = crate::runtime_cwd::current_dir()
             .ok()
             .map(|path| path.display().to_string());
-        if let Some(memory) = self.memory.recall_for_turn(input, workspace.as_deref())? {
+        let mut memory = if self.config.prompt_sections.memory_contract {
+            self.memory.recall_for_turn(input, workspace.as_deref())?
+        } else {
+            None
+        };
+        let selection = self
+            .jev_preselect(turn_id, input, memory.as_deref(), on_event)
+            .await?;
+        if self.config.jev_memory_injection_active() && !selection.memory_selected {
+            memory = None;
+        }
+        if let Some(block) = selection.block {
+            contexts.push(AcpPromptContext {
+                uri: "sai://jev/context".into(),
+                text: block,
+            });
+        }
+        if let Some(memory) = memory {
             contexts.push(AcpPromptContext {
                 uri: "sai://memory/index".to_string(),
                 text: memory,
@@ -216,7 +240,7 @@ mod tests {
                 .replace_goal("Complete the Codex ACP integration", Some(10_000), false)
                 .unwrap();
             let client = OpenAiCompatibleClient::from_config(&config, &paths).unwrap();
-            let agent = Agent::new(
+            let mut agent = Agent::new(
                 config,
                 &paths,
                 state,
@@ -244,7 +268,8 @@ mod tests {
                 .unwrap();
 
             let contexts = agent
-                .external_prompt_contexts("Codex ACP resources")
+                .external_prompt_contexts("Codex ACP resources", "test", &mut |_| Ok(()))
+                .await
                 .unwrap();
 
             assert!(contexts.iter().any(|context| {
@@ -254,6 +279,26 @@ mod tests {
                 context.uri == "sai://goal/active"
                     && context.text.contains("Complete the Codex ACP integration")
             }));
+            // 【Sai/ACP】【上下文测试】2. 路由失败时保持目标上下文，但不旁路注入记忆
+            agent.config.jev.routing.enabled = true;
+            agent.config.plugins.memory.jev_injection = true;
+            agent.config.model_endpoints.push(
+                serde_json::from_value(serde_json::json!({
+                    "id": "unavailable", "kind": "jev", "name": "Unavailable",
+                    "endpoint": "http://127.0.0.1:0/jev", "api_key": "test"
+                }))
+                .unwrap(),
+            );
+            let contexts = agent
+                .external_prompt_contexts("memory", "test", &mut |_| Ok(()))
+                .await
+                .unwrap();
+            assert!(!contexts
+                .iter()
+                .any(|context| context.uri == "sai://memory/index"));
+            assert!(contexts
+                .iter()
+                .any(|context| context.uri == "sai://goal/active"));
         })
         .await;
     }

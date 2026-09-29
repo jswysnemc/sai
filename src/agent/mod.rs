@@ -15,6 +15,11 @@ mod external_turn;
 mod external_wake_policy;
 mod instruction_files;
 mod inter_message;
+mod jev_prompt_context;
+#[cfg(test)]
+mod jev_prompt_tests;
+#[cfg(test)]
+mod jev_prompt_turn_tests;
 mod jev_routing;
 mod lifecycle;
 mod load_request;

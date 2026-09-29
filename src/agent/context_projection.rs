@@ -109,6 +109,10 @@ impl Agent {
         let live_system_prompt = self.active_system_prompt();
         let epoch_prompt = match self.state.context_epoch_baseline()? {
             Some(baseline) => {
+                let baseline = crate::jev::prompt_segments::baseline(
+                    &baseline,
+                    self.config.jev_routing_active(),
+                )?;
                 super::instruction_files::freeze_instruction_files(live_system_prompt, &baseline)
             }
             None => live_system_prompt.to_string(),
@@ -118,7 +122,10 @@ impl Agent {
             if self.config.load_instruction_files && !self.tool_visibility.is_anchor_bootstrap() {
                 context_resources::context_resource_update_against_baseline(
                     "instruction_files",
-                    &super::instruction_files::load_instruction_prompt(&self.paths),
+                    &crate::jev::prompt_segments::baseline(
+                        &super::instruction_files::load_instruction_prompt(&self.paths),
+                        self.config.jev_routing_active(),
+                    )?,
                     &super::instruction_files::extract_instruction_files(&epoch.baseline),
                     compaction_summary_context.as_deref(),
                     &projected_history.messages,

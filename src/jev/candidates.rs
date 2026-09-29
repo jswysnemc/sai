@@ -5,6 +5,8 @@ pub(crate) enum CandidateKind {
     Tool,
     /// 已安装的 skill
     Skill,
+    /// 按需暴露的提示词或记忆上下文
+    Prompt,
 }
 
 impl CandidateKind {
@@ -13,6 +15,7 @@ impl CandidateKind {
         match self {
             Self::Tool => "tool",
             Self::Skill => "skill",
+            Self::Prompt => "prompt",
         }
     }
 }

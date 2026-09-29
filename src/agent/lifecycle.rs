@@ -73,7 +73,7 @@ impl Agent {
         } else {
             &base_system_prompt
         };
-        prepare_session_context(&state, initial_system_prompt)?;
+        prepare_session_context(&state, initial_system_prompt, config.jev_routing_active())?;
         let context_char_budget = config.active_context_window_tokens()?;
         let compaction_runtime = compaction_model::resolve_compaction_runtime(&config, paths)?;
         crate::goal::register_tools_for_config(&mut tools, state.goal_file(), &config)?;
@@ -124,6 +124,7 @@ impl Agent {
             compaction_client: compaction_runtime.client,
             compaction_model_label: compaction_runtime.label,
             base_system_prompt,
+            extra_system_prompt: extra_system_prompt.map(str::to_string),
             anchor_bootstrap_system_prompt,
             context_char_budget,
             tools_enabled,
@@ -310,8 +311,12 @@ impl Agent {
     pub fn prepare_for_turn(&mut self) -> Result<()> {
         self.tools_enabled =
             self.config.tools.enabled && self.config.active_model_tools_enabled()?;
-        self.base_system_prompt =
-            build_base_system_prompt(&self.config, &self.paths, self.tools_enabled, None)?;
+        self.base_system_prompt = build_base_system_prompt(
+            &self.config,
+            &self.paths,
+            self.tools_enabled,
+            self.extra_system_prompt.as_deref(),
+        )?;
         self.anchor_bootstrap_system_prompt = self
             .tool_visibility
             .is_anchor_bootstrap()
@@ -320,13 +325,17 @@ impl Agent {
                     &self.config,
                     &self.paths,
                     self.tools_enabled,
-                    None,
+                    self.extra_system_prompt.as_deref(),
                     true,
                 )
             })
             .transpose()?;
         let system_prompt = self.active_system_prompt().to_string();
-        prepare_session_context(&self.state, &system_prompt)?;
+        prepare_session_context(
+            &self.state,
+            &system_prompt,
+            self.config.jev_routing_active(),
+        )?;
         self.context_char_budget = self.config.active_context_window_tokens()?;
         Ok(())
     }
@@ -440,13 +449,17 @@ impl Agent {
                     &self.config,
                     &self.paths,
                     self.tools_enabled,
-                    None,
+                    self.extra_system_prompt.as_deref(),
                     true,
                 )
             })
             .transpose()?;
         let system_prompt = self.active_system_prompt().to_string();
-        prepare_session_context(&self.state, &system_prompt)?;
+        prepare_session_context(
+            &self.state,
+            &system_prompt,
+            self.config.jev_routing_active(),
+        )?;
         Ok(())
     }
 
@@ -560,10 +573,15 @@ fn deepseek_anchor_available(
 /// 参数:
 /// - `state`: 当前会话状态
 /// - `base_system_prompt`: 不含模式说明的基础系统提示
+/// - `jev_routing`: 是否过滤旧 baseline 中尚未路由的标签正文
 ///
 /// 返回:
 /// - 上下文同步与恢复结果
-fn prepare_session_context(state: &StateStore, base_system_prompt: &str) -> Result<()> {
+fn prepare_session_context(
+    state: &StateStore,
+    base_system_prompt: &str,
+    jev_routing: bool,
+) -> Result<()> {
     // 【会话执行】【并发打开】另一个进程正在执行时只读取历史，不把其轮次当作崩溃恢复
     if crate::runner::active_run(state.state_dir()).is_some_and(|run| run.pid != std::process::id())
     {
@@ -571,6 +589,7 @@ fn prepare_session_context(state: &StateStore, base_system_prompt: &str) -> Resu
     }
     let prompt = match state.context_epoch_baseline()? {
         Some(baseline) => {
+            let baseline = crate::jev::prompt_segments::baseline(&baseline, jev_routing)?;
             super::instruction_files::freeze_instruction_files(base_system_prompt, &baseline)
         }
         None => base_system_prompt.to_string(),

@@ -82,6 +82,7 @@ pub(crate) fn build_base_system_prompt_for_phase(
     if tools_enabled
         && config.memory_config().enabled
         && config.prompt_sections.memory_contract
+        && !config.jev_memory_injection_active()
         && memory_tools_reach_model(config)
     {
         base_system_prompt.push_str("\n\n");
@@ -96,7 +97,11 @@ pub(crate) fn build_base_system_prompt_for_phase(
         base_system_prompt.push_str("\n\n");
         base_system_prompt.push_str(prompt);
     }
-    Ok(base_system_prompt.trim().to_string())
+    Ok(
+        crate::jev::prompt_segments::baseline(&base_system_prompt, config.jev_routing_active())?
+            .trim()
+            .to_string(),
+    )
 }
 
 /// 判断记忆工具是否真的会出现在模型可见的工具列表里。
@@ -109,7 +114,7 @@ pub(crate) fn build_base_system_prompt_for_phase(
 ///
 /// 返回:
 /// - 至少一个记忆工具能到达模型时为 true
-fn memory_tools_reach_model(config: &AppConfig) -> bool {
+pub(super) fn memory_tools_reach_model(config: &AppConfig) -> bool {
     ["write_memory", "read_memory"]
         .iter()
         .any(|name| crate::config::whitelist_allows_tool(config, name))

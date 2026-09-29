@@ -173,7 +173,7 @@ impl Agent {
         let workspace = crate::runtime_cwd::current_dir()
             .ok()
             .map(|path| path.display().to_string());
-        let memory_index_prompt = if self.config.prompt_sections.memory_contract {
+        let mut memory_index_prompt = if self.config.prompt_sections.memory_contract {
             settle_step(
                 &mut guard,
                 self.memory.recall_for_turn(&input, workspace.as_deref()),
@@ -183,10 +183,20 @@ impl Agent {
         };
         perf.mark("memory association");
         // Jev 暴露决策：请求模型前预先暴露相关工具与 skill，结果与插件提醒一起并入用户消息
-        let jev_block = settle_step(
+        let jev_selection = settle_step(
             &mut guard,
-            self.jev_preselect(&turn_id, &input, &mut on_event).await,
+            self.jev_preselect(
+                &turn_id,
+                &input,
+                memory_index_prompt.as_deref(),
+                &mut on_event,
+            )
+            .await,
         )?;
+        if self.config.jev_memory_injection_active() && !jev_selection.memory_selected {
+            memory_index_prompt = None;
+        }
+        let jev_block = jev_selection.block;
         perf.mark("jev preselect");
         let turn_reminder = [plugin_reply_plan.reminder.as_deref(), jev_block.as_deref()]
             .into_iter()

@@ -584,6 +584,9 @@ pub struct SkillsConfig {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MemoryConfig {
+    /// Jev 路由开启时按需注入记忆索引与使用契约；默认保持静态行为
+    #[serde(default)]
+    pub jev_injection: bool,
     #[serde(default = "default_true")]
     pub enabled: bool,
     #[serde(default = "default_true")]

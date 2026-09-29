@@ -72,6 +72,7 @@ impl ToolVisibility {
         }
         // 3. 剔除已暴露的资源
         crate::jev::pending_candidates(all, |candidate| match candidate.kind {
+            CandidateKind::Prompt => false,
             CandidateKind::Tool => {
                 self.is_tool_exposed(&candidate.name)
                     || self.announced_tools.contains(&candidate.name)
@@ -272,6 +273,7 @@ mod tests {
         assert_eq!(names, ["analyze_image", "web_search"]);
 
         let selection = Selection {
+            prompts: Vec::new(),
             tools: vec!["web_search".to_string()],
             skills: Vec::new(),
         };
@@ -316,6 +318,7 @@ mod tests {
         };
         assert!(has_skill(&visibility));
         let selection = Selection {
+            prompts: Vec::new(),
             tools: Vec::new(),
             skills: vec!["drawio".to_string()],
         };
@@ -358,6 +361,7 @@ mod tests {
         let config = AppConfig::default();
         let mut visibility = ToolVisibility::with_jev_routing(&[]);
         let selection = Selection {
+            prompts: Vec::new(),
             tools: vec!["web_search".to_string()],
             skills: vec!["design-taste-frontend".to_string()],
         };
@@ -378,11 +382,7 @@ mod tests {
             .any(|item| item.name == "design-taste-frontend" || item.name == "web_search"));
 
         let loaded = visibility
-            .load_skills(
-                &["design-taste-frontend".to_string()],
-                &config,
-                &paths,
-            )
+            .load_skills(&["design-taste-frontend".to_string()], &config, &paths)
             .unwrap();
         assert!(loaded.contains("FULL SKILL BODY"));
     }

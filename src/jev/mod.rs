@@ -8,6 +8,7 @@ mod candidates;
 mod choice;
 mod client;
 pub(crate) mod probe;
+pub(crate) mod prompt_segments;
 mod selection;
 
 pub(crate) use candidates::{pending_candidates, Candidate, CandidateKind};
