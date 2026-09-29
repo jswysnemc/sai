@@ -77,6 +77,8 @@ mod repl_turn_context;
 mod repl_turn_failure;
 mod repl_windows_paste;
 mod reset;
+mod session_picker;
+mod session_resume;
 mod sessions;
 mod skills_commands;
 mod terminal_restore;

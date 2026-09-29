@@ -19,10 +19,11 @@ import pyte
 class TerminalSession:
     """提供按键输入、尺寸变化和完整屏幕断言所需的伪终端。"""
 
-    def __init__(self, config=None, columns=80, rows=24):
-        """config 为合成配置，columns/rows 为初始尺寸；创建隔离会话。"""
+    def __init__(self, config=None, columns=80, rows=24, prepare=None, arguments=None, workspace=None, ready=None):
+        """config 为配置，columns/rows 为尺寸；prepare 初始化数据，arguments/workspace 指定启动参数与目录，ready 指定就绪条件。"""
         self.directory = tempfile.TemporaryDirectory(prefix="sai-terminal-test-")
         self.root = Path(self.directory.name)
+        self.ready = ready
         self.raw = bytearray()
         self.screen = pyte.HistoryScreen(columns, rows, history=20000)
         self.stream = pyte.Stream(self.screen)
@@ -44,16 +45,22 @@ class TerminalSession:
         binary = Path(os.environ.get("SAI_TEST_BINARY", Path(__file__).resolve().parents[2] / "target/debug/sai")).resolve()
         if not binary.is_file():
             raise FileNotFoundError(f"Build sai first: {binary}")
+        self.environment = environment
+        self.binary = binary
+        if prepare is not None:
+            prepare(self.root, environment, binary)
+        start_directory = self.root / workspace if workspace else self.root
+        start_directory.mkdir(parents=True, exist_ok=True)
         self.pid, self.fd = pty.fork()
         if self.pid == 0:
-            os.chdir(self.root)
-            os.execve(str(binary), [str(binary)], environment)
+            os.chdir(start_directory)
+            os.execve(str(binary), [str(binary)] + list(arguments or []), environment)
         self.resize(columns, rows)
 
     def __enter__(self):
         """等待输入提示就绪；返回会话本身。"""
         try:
-            self.wait_for(lambda: "auto" in self.text().lower(), timeout=15)
+            self.wait_for(lambda: self.ready(self) if self.ready else "auto" in self.text().lower(), timeout=15)
         except Exception as error:
             self.__exit__(type(error), error, error.__traceback__)
             raise

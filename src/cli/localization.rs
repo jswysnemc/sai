@@ -376,12 +376,19 @@ fn localize_sessions_command(mut command: clap::Command) -> clap::Command {
 /// 返回:
 /// - 已本地化的子命令
 fn localize_resume_command(command: clap::Command) -> clap::Command {
-    command.mut_arg("id", |arg| {
-        arg.help(t(
-            "Session ID; omit to choose interactively",
-            "会话 ID；省略则进入交互选择",
-        ))
-    })
+    command
+        .mut_arg("all", |arg| {
+            arg.help(t("Show all workspaces", "显示全部工作区"))
+        })
+        .mut_arg("workspace", |arg| {
+            arg.help(t("Target workspace path", "目标工作区路径"))
+        })
+        .mut_arg("id", |arg| {
+            arg.help(t(
+                "Session ID; omit to choose interactively",
+                "会话 ID；省略则进入交互选择",
+            ))
+        })
 }
 
 /// 本地化顶层微信登录命令参数。

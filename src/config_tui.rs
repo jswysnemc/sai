@@ -1,7 +1,7 @@
 mod agents;
 mod background;
 pub(crate) mod compaction;
-mod form;
+pub(crate) mod form;
 mod gateways;
 mod ime;
 mod input;

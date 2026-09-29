@@ -15,6 +15,7 @@ impl StateStore {
     /// 返回:
     /// - 状态存储
     pub fn new(paths: &SaiPaths) -> Result<Self> {
+        sessions::record_current_workspace(paths)?;
         let session = sessions::ensure_active_session(paths)?;
         let base_state_dir = sessions::session_scope_dir(paths)?;
         let state_dir = base_state_dir.join("data").join(&session.id);

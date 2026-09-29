@@ -44,19 +44,16 @@ pub(super) async fn run_resume(
     mode: AgentMode,
     thinking_override: Option<String>,
 ) -> Result<()> {
-    let session_id = match args
+    let target = match args
         .id
         .as_deref()
         .map(str::trim)
         .filter(|id| !id.is_empty())
     {
-        Some(id) => id.to_string(),
-        None => select_session_id_interactively(paths)?,
+        Some(id) => crate::state::resolve_resume_target(paths, id, args.workspace.as_deref())?,
+        None => select_session_interactively(paths, args.workspace.as_deref(), args.all)?,
     };
-    println!(
-        "{}",
-        crate::control_commands::resume_session(paths, &session_id)?
-    );
+    println!("{}", super::session_resume::activate(paths, &target)?);
     // 管道或重定向下没有可交互终端，切换本身已经生效，直接返回
     if !(io::stdin().is_terminal() && io::stdout().is_terminal()) {
         return Ok(());
@@ -64,36 +61,32 @@ pub(super) async fn run_resume(
     crate::cli::repl::run_repl(paths, mode, thinking_override).await
 }
 
-/// 交互式模糊选择会话 ID。
+/// 【会话恢复】【交互选择】按工作区分组并选择完整会话目标。
 ///
 /// 参数:
 /// - `paths`: Sai 路径
 ///
 /// 返回:
-/// - 选中的会话 ID；取消时返回错误说明已取消
-pub(super) fn select_session_id_interactively(paths: &SaiPaths) -> Result<String> {
-    // 模糊选择器需要真实终端；管道或重定向下直接给出可操作错误
+/// - 携带工作区路径的会话目标；取消时返回说明
+pub(super) fn select_session_interactively(
+    paths: &SaiPaths,
+    workspace: Option<&std::path::Path>,
+    all: bool,
+) -> Result<crate::state::ResumeTarget> {
     if !(io::stdin().is_terminal() && io::stdout().is_terminal()) {
         bail!(
             "{}",
             t(
-                "session picker needs an interactive terminal; pass an id instead: sai resume <id>",
-                "会话选择器需要交互终端；请直接指定会话：sai resume <id>"
+                "session picker needs an interactive terminal; pass sai resume <id>",
+                "会话选择器需要交互终端，请指定 sai resume <id>"
             )
         );
     }
-    let choices = crate::control_commands::session_resume_choices(paths)?;
-    let labels = choices
-        .iter()
-        .map(|(_, label)| label.clone())
-        .collect::<Vec<_>>();
-    let Some(index) = inline_fuzzy_select(&labels)? else {
-        bail!("{}", t("session selection cancelled", "已取消会话选择"));
-    };
-    choices
-        .get(index)
-        .map(|(id, _)| id.clone())
-        .ok_or_else(|| anyhow::anyhow!("{}", t("invalid session selection", "无效的会话选择")))
+    let directory = workspace
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or(crate::runtime_cwd::current_dir()?);
+    super::session_picker::select(paths, &directory, all)?
+        .ok_or_else(|| anyhow::anyhow!("{}", t("Session selection cancelled", "已取消会话选择")))
 }
 
 /// 输出会话列表。

@@ -635,3 +635,7 @@ impl StateStore {
 
 #[cfg(test)]
 mod tests;
+
+pub(crate) use sessions::{
+    resolve_resume_target, resume_catalog, switch_workspace_session, ResumeTarget,
+};

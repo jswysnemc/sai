@@ -88,6 +88,7 @@ fn create_session_record(
     title: Option<&str>,
     activate: bool,
 ) -> Result<SessionInfo> {
+    super::workspace_metadata::record(scope)?;
     let now = Utc::now().to_rfc3339();
     let session = SessionInfo {
         id: new_session_id(),
@@ -147,7 +148,10 @@ pub fn switch_session_located(paths: &SaiPaths, session_id: &str) -> Result<Sess
 ///
 /// 返回:
 /// - 切换后的会话信息
-fn switch_session_in_base(base_state_dir: &Path, session_id: &str) -> Result<SessionInfo> {
+pub(super) fn switch_session_in_base(
+    base_state_dir: &Path,
+    session_id: &str,
+) -> Result<SessionInfo> {
     let session_id = session_id.trim();
     let session = read_sorted_sessions(base_state_dir)?
         .into_iter()

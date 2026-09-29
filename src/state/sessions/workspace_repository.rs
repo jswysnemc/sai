@@ -83,6 +83,7 @@ pub fn ensure_workspace_session(
         bail!("session title cannot be empty");
     }
     let scope = workspace_scope_for_path(paths, workspace_path);
+    super::workspace_metadata::record(&scope)?;
     let mut sessions = read_sorted_sessions(&scope.state_dir)?;
     if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
         if session.title != title {
@@ -153,4 +154,22 @@ pub fn state_dir_for_workspace_session(
     let state_dir = session_state_dir(&scope.state_dir, session_id);
     std::fs::create_dir_all(&state_dir)?;
     Ok((scope.state_dir, state_dir))
+}
+
+/// 【会话恢复】【工作区指针】仅更新明确指定的工作区，不改变调用方工作目录。
+/// 参数: paths 为应用路径，workspace 为目录，id 为会话标识；返回: 已切换会话
+pub(crate) fn switch_workspace_session(
+    paths: &SaiPaths,
+    workspace: &Path,
+    id: &str,
+) -> Result<SessionInfo> {
+    let scope = workspace_scope_for_path(paths, workspace);
+    super::workspace_metadata::record(&scope)?;
+    super::repository::switch_session_in_base(&scope.state_dir, id)
+}
+
+/// 【会话工作区】【路径补录】在打开已有会话时补录当前工作区路径。
+/// 参数: paths 为应用路径；返回: 保存结果
+pub(crate) fn record_current_workspace(paths: &SaiPaths) -> Result<()> {
+    super::workspace_metadata::record(&current_session_scope(paths)?)
 }

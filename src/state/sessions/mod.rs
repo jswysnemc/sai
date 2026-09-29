@@ -36,3 +36,8 @@ pub use workspace_repository::{
     active_session_id_for_workspace, delete_sessions_for_workspace, ensure_workspace_session,
     list_sessions, list_sessions_for_workspace, state_dir_for_workspace_session,
 };
+
+mod resume_catalog;
+mod workspace_metadata;
+pub(crate) use resume_catalog::{resolve_resume_target, resume_catalog, ResumeTarget};
+pub(crate) use workspace_repository::{record_current_workspace, switch_workspace_session};

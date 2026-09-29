@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone)]
 pub struct WorkspaceScope {
     pub state_dir: PathBuf,
+    pub workspace_path: PathBuf,
 }
 
 /// 返回当前工作区会话作用域。
@@ -30,7 +31,10 @@ pub fn current_workspace_scope(paths: &SaiPaths) -> Result<WorkspaceScope> {
 /// - 工作区作用域
 pub fn workspace_scope_for_path(paths: &SaiPaths, workspace_path: &Path) -> WorkspaceScope {
     let workspace_id = workspace_id_for_directory(workspace_path);
+    let workspace_path = crate::platform::windows_path::canonicalize(workspace_path)
+        .unwrap_or_else(|_| workspace_path.to_path_buf());
     WorkspaceScope {
+        workspace_path,
         state_dir: paths
             .state_dir
             .join("sessions")

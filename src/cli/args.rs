@@ -294,6 +294,12 @@ pub struct SessionDeleteArgs {
 pub struct ResumeArgs {
     /// 可选会话 ID；省略时进入交互选择
     pub id: Option<String>,
+    /// 直接打开全部工作区视图
+    #[arg(long)]
+    pub all: bool,
+    /// 明确指定目标工作区，区分跨工作区同名会话
+    #[arg(long, value_name = "PATH", conflicts_with = "all")]
+    pub workspace: Option<std::path::PathBuf>,
 }
 
 #[derive(Debug, Args)]

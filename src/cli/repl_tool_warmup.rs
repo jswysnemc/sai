@@ -48,14 +48,17 @@ impl ReplToolWarmup {
         session_id: String,
         state_dir: PathBuf,
     ) -> Self {
+        let directory = crate::runtime_cwd::current_dir();
         let task = std::thread::spawn(move || {
-            build_repl_tool_registry_for_session_with_notices(
-                &config,
-                &paths,
-                mode,
-                &session_id,
-                &state_dir,
-            )
+            crate::runtime_cwd::with_directory(directory?, || {
+                build_repl_tool_registry_for_session_with_notices(
+                    &config,
+                    &paths,
+                    mode,
+                    &session_id,
+                    &state_dir,
+                )
+            })
         });
         Self {
             mode,

@@ -19,6 +19,7 @@ mod mode_commands;
 mod model_selection;
 mod navigation;
 mod plugin_commands;
+mod session_resume;
 mod session_support;
 mod settings_commands;
 pub(super) mod subagent_commands;
@@ -362,29 +363,30 @@ pub(super) async fn run_repl(
                         }
                     }
                     crate::control_commands::ControlCommand::Resume { id } => {
-                        let session_id = match id {
-                            Some(id) => id,
+                        let target = match id {
+                            Some(id) => crate::state::resolve_resume_target(paths, &id, None),
                             None => {
-                                let picked = sessions::select_session_id_interactively(paths);
-                                // 内联选择 UI 退出后全量重放，清除其占用行的残留
+                                let picked =
+                                    sessions::select_session_interactively(paths, None, false);
                                 runtime.redraw()?;
-                                match picked {
-                                    Ok(id) => id,
-                                    Err(err) => {
-                                        runtime.record_meta(err.to_string())?;
-                                        continue;
-                                    }
-                                }
+                                picked
                             }
                         };
-                        match crate::control_commands::resume_session(paths, &session_id) {
-                            Ok(message) => {
-                                state = StateStore::new(paths)?;
-                                state.init_files()?;
-                                agent.replace_state(state.clone())?;
+                        match target.and_then(|target| {
+                            let next =
+                                session_resume::prepare(paths, &config, &client, mode, &target)?;
+                            Ok((target, next))
+                        }) {
+                            Ok((target, next)) => {
+                                external_events.cancel();
+                                state = next.state;
+                                agent = next.agent;
+                                tool_warmup = next.warmup;
                                 prefill = None;
+                                prefill_clipboard = None;
                                 runtime.clear()?;
-                                runtime.record_meta(message)?;
+                                runtime
+                                    .record_meta(crate::cli::session_resume::message(&target))?;
                                 record_repl_history(&mut runtime, &state)?;
                             }
                             Err(err) => runtime.record_meta(err.to_string())?,
