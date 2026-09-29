@@ -78,7 +78,7 @@ pub(super) async fn run_repl(
         crate::runtime_cwd::current_dir()
             .map(|path| super::repl_chrome::compress_home_prefix(&path.display().to_string()))
             .unwrap_or_else(|_| "~".to_string()),
-        format!("{} mode", mode.label()),
+        mode.label().to_string(),
     )?;
     runtime.record_meta(
         t(

@@ -1,9 +1,7 @@
 use super::line::AnsiLine;
-use crate::render::brand_logo::{logo_lines, LOGO_HEIGHT, LOGO_WIDTH};
+use crate::render::brand_logo::{logo_lines, LOGO_HEIGHT, LOGO_WIDTH, MARK_STYLE};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-/// 品牌字标的线条颜色（与 Web 端 --signal 同色）。
-const LOGO_STYLE: &str = "\x1b[38;2;58;114;100m";
 /// 标志与右侧信息列之间的间隔列数。
 const LOGO_CONTENT_GAP: usize = 2;
 /// 面板内部左右各保留的留白列数。
@@ -16,8 +14,12 @@ const MAX_CONTENT_WIDTH: usize = 48;
 const BORDER_STYLE: &str = "\x1b[2m";
 /// 字段标签样式
 const LABEL_STYLE: &str = "\x1b[2m";
-/// 提示文本样式
-const HINT_STYLE: &str = "\x1b[2m";
+/// 标题版本号样式
+const VERSION_STYLE: &str = "\x1b[2m";
+/// 字段标签：等宽对齐，值列从同一列开始
+const FIELD_LABELS: [&str; 3] = ["model", "dir", "mode"];
+/// 标签列宽度（最长标签 + 两格间隔）
+const LABEL_COLUMN: usize = 7;
 const RESET: &str = "\x1b[0m";
 
 /// REPL 启动时显示的会话基础信息。
@@ -47,7 +49,7 @@ pub(crate) fn display_lines(cell: &WelcomeCell, width: usize) -> Vec<AnsiLine> {
     let show_logo = max_inner_width >= PANEL_SIDE_PADDING * 2 + logo_reserved + MIN_CONTENT_WIDTH;
     let desired_content_width =
         natural_content_width(cell).clamp(MIN_CONTENT_WIDTH, MAX_CONTENT_WIDTH);
-    let title_width = UnicodeWidthStr::width(format!("Sai (v{})", cell.version).as_str()) + 3;
+    let title_width = UnicodeWidthStr::width(title_text(&cell.version).as_str()) + 3;
     let desired_inner_width =
         PANEL_SIDE_PADDING * 2 + desired_content_width + if show_logo { logo_reserved } else { 0 };
     let inner_width = desired_inner_width.max(title_width).min(max_inner_width);
@@ -62,7 +64,7 @@ pub(crate) fn display_lines(cell: &WelcomeCell, width: usize) -> Vec<AnsiLine> {
     // 3. 逐行拼装边框、标志与信息列
     let mut lines = vec![AnsiLine::new(top_border(&cell.version, inner_width))];
     let logo = if show_logo {
-        logo_lines(LOGO_STYLE)
+        logo_lines(MARK_STYLE)
     } else {
         Vec::new()
     };
@@ -99,13 +101,28 @@ pub(crate) fn display_lines(cell: &WelcomeCell, width: usize) -> Vec<AnsiLine> {
 /// 返回:
 /// - 顶部边框行
 fn top_border(version: &str, inner_width: usize) -> String {
-    let title = format!("Sai (v{version})");
-    let title = truncate_to_width(&title, inner_width.saturating_sub(4));
-    let padding = inner_width.saturating_sub(UnicodeWidthStr::width(title.as_str()) + 3);
+    let plain = truncate_to_width(&title_text(version), inner_width.saturating_sub(4));
+    let padding = inner_width.saturating_sub(UnicodeWidthStr::width(plain.as_str()) + 3);
+    // 名称加粗、版本弱化；截断后无法再拆分时整体加粗
+    let title = match plain.split_once(' ') {
+        Some((name, rest)) => format!("\x1b[1m{name}{RESET} {VERSION_STYLE}{rest}{RESET}"),
+        None => format!("\x1b[1m{plain}{RESET}"),
+    };
     format!(
-        "{BORDER_STYLE}╭─{RESET} \x1b[1m{title}{RESET} {BORDER_STYLE}{}╮{RESET}",
+        "{BORDER_STYLE}╭─{RESET} {title} {BORDER_STYLE}{}╮{RESET}",
         "─".repeat(padding)
     )
+}
+
+/// 生成标题纯文本：小写名称 + 版本号。
+///
+/// 参数:
+/// - `version`: 当前版本号
+///
+/// 返回:
+/// - 形如 `sai 0.2.1` 的标题
+fn title_text(version: &str) -> String {
+    format!("sai {version}")
 }
 
 /// 构造底部边框。
@@ -150,8 +167,8 @@ fn body_line(logo_cell: &str, content: &str, inner_width: usize) -> String {
 /// - 已截断到可用宽度的信息行
 fn content_rows(cell: &WelcomeCell, width: usize) -> Vec<String> {
     vec![
-        field_row("model:", &cell.model, Some("/model to change"), width),
-        field_row("directory:", &cell.directory, None, width),
+        field_row(FIELD_LABELS[0], &cell.model, width),
+        field_row(FIELD_LABELS[1], &cell.directory, width),
         permission_row(&cell.permissions, width),
     ]
 }
@@ -164,57 +181,37 @@ fn content_rows(cell: &WelcomeCell, width: usize) -> Vec<String> {
 /// 返回:
 /// - 模型、目录和权限各行中的最大显示宽度
 fn natural_content_width(cell: &WelcomeCell) -> usize {
-    [
-        field_natural_width("model:", &cell.model, Some("/model to change")),
-        field_natural_width("directory:", &cell.directory, None),
-        field_natural_width("permissions:", &cell.permissions, None),
-    ]
-    .into_iter()
-    .max()
-    .unwrap_or(MIN_CONTENT_WIDTH)
+    [&cell.model, &cell.directory, &cell.permissions]
+        .into_iter()
+        .map(|value| LABEL_COLUMN + UnicodeWidthStr::width(value.as_str()))
+        .max()
+        .unwrap_or(MIN_CONTENT_WIDTH)
 }
 
-/// 计算单行字段在不截断时占用的显示宽度。
+/// 渲染一行普通字段：标签弱化并补齐到固定列宽，值从同一列开始。
 ///
 /// 参数:
 /// - `label`: 字段标签
 /// - `value`: 字段值
-/// - `hint`: 可选提示
-///
-/// 返回:
-/// - 标签、值和提示合计的显示宽度
-fn field_natural_width(label: &str, value: &str, hint: Option<&str>) -> usize {
-    UnicodeWidthStr::width(label)
-        + 1
-        + UnicodeWidthStr::width(value)
-        + hint
-            .map(|text| UnicodeWidthStr::width(text) + 2)
-            .unwrap_or(0)
-}
-
-/// 渲染一行普通字段。
-///
-/// 参数:
-/// - `label`: 字段标签
-/// - `value`: 字段值
-/// - `hint`: 可选提示
 /// - `width`: 可用宽度
 ///
 /// 返回:
-/// - 标签弱化、值正常的信息行
-fn field_row(label: &str, value: &str, hint: Option<&str>, width: usize) -> String {
-    let label_width = UnicodeWidthStr::width(label);
-    let hint_width = hint.map(UnicodeWidthStr::width).unwrap_or(0);
-    let value_width = width
-        .saturating_sub(label_width + 1)
-        .saturating_sub(if hint_width > 0 { hint_width + 2 } else { 0 });
-    let value = truncate_to_width(value, value_width);
-    match hint {
-        Some(hint) if hint_width > 0 => {
-            format!("{LABEL_STYLE}{label}{RESET} {value}  {HINT_STYLE}{hint}{RESET}")
-        }
-        _ => format!("{LABEL_STYLE}{label}{RESET} {value}"),
-    }
+/// - 对齐后的信息行
+fn field_row(label: &str, value: &str, width: usize) -> String {
+    let value = truncate_to_width(value, width.saturating_sub(LABEL_COLUMN));
+    format!("{}{value}", label_cell(label))
+}
+
+/// 生成补齐到标签列宽的弱化标签。
+///
+/// 参数:
+/// - `label`: 字段标签
+///
+/// 返回:
+/// - 带样式、固定显示宽度的标签
+fn label_cell(label: &str) -> String {
+    let padding = LABEL_COLUMN.saturating_sub(UnicodeWidthStr::width(label));
+    format!("{LABEL_STYLE}{label}{RESET}{}", " ".repeat(padding))
 }
 
 /// 渲染权限模式行。
@@ -229,11 +226,9 @@ fn field_row(label: &str, value: &str, hint: Option<&str>, width: usize) -> Stri
 /// 返回:
 /// - 已着色的权限行
 fn permission_row(permissions: &str, width: usize) -> String {
-    let label = "permissions:";
-    let value_width = width.saturating_sub(UnicodeWidthStr::width(label) + 1);
-    let value = truncate_to_width(permissions, value_width);
+    let value = truncate_to_width(permissions, width.saturating_sub(LABEL_COLUMN));
     let style = permission_style(&value);
-    format!("{LABEL_STYLE}{label}{RESET} {style}{value}{RESET}")
+    format!("{}{style}{value}{RESET}", label_cell(FIELD_LABELS[2]))
 }
 
 /// 按权限模式选择着色。
@@ -340,7 +335,7 @@ mod tests {
     /// - 无
     #[test]
     fn welcome_panel_contains_runtime_details() {
-        let lines = display_lines(&sample("YOLO mode"), 80);
+        let lines = display_lines(&sample("YOLO"), 80);
         let joined = lines
             .iter()
             .map(|line| line.as_str())
@@ -348,8 +343,10 @@ mod tests {
             .join("\n");
 
         assert!(joined.contains("gpt-5"));
-        assert!(joined.contains("permissions:"));
-        assert!(joined.contains("Sai (v0.1.4)"));
+        assert!(joined.contains("mode"));
+        assert!(joined.contains("sai"));
+        assert!(joined.contains("0.1.4"));
+        assert!(!joined.contains("/model to change"));
     }
 
     /// 【终端】【启动面板】验证边框按内容收紧且不重复展示快捷键。
@@ -361,8 +358,8 @@ mod tests {
     /// - 无
     #[test]
     fn welcome_panel_fits_content_without_duplicate_shortcuts() {
-        let wide = display_lines(&sample("YOLO mode"), 120);
-        let narrow = display_lines(&sample("YOLO mode"), 40);
+        let wide = display_lines(&sample("YOLO"), 120);
+        let narrow = display_lines(&sample("YOLO"), 30);
         let joined = wide
             .iter()
             .map(|line| line.as_str())
@@ -374,13 +371,15 @@ mod tests {
         assert!(!joined.contains("keys:"));
         assert!(!joined.contains("Shift+Tab"));
         assert!(!joined.contains("Ctrl+O"));
-        assert!(narrow.len() < wide.len(), "无标志时高度应随内容收紧");
+        // 标志与信息同为三行：有无标志面板都只占五行
+        assert_eq!(wide.len(), 5);
+        assert_eq!(narrow.len(), 5);
     }
 
-    /// 【终端】【启动面板】验证三行状态在四行标志高度内顶对齐排布。
+    /// 【终端】【启动面板】验证三行状态与三行标志逐行对齐，值列从同一列开始。
     #[test]
-    fn runtime_details_are_vertically_centered_with_the_logo() {
-        let lines = display_lines(&sample("YOLO mode"), 80);
+    fn runtime_details_align_with_the_logo_rows() {
+        let lines = display_lines(&sample("YOLO"), 80);
         let visible = lines
             .iter()
             .map(|line| {
@@ -403,11 +402,17 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        assert!(visible[1].contains("model:"));
-        assert!(visible[2].contains("directory:"));
-        assert!(visible[3].contains("permissions:"));
-        // 信息列共三行，末行只剩标志的 S 底弧与 a/i 基座
-        assert!(visible[4].contains("╶────╯") && !visible[4].contains("permissions:"));
+        assert!(visible[1].contains("╭──╴") && visible[1].contains("model"));
+        assert!(visible[2].contains("╰──╮") && visible[2].contains("dir"));
+        assert!(visible[3].contains("╶──╯") && visible[3].contains("mode"));
+        let columns = [("gpt-5", 1), ("/workspace", 2), ("YOLO", 3)].map(|(value, row)| {
+            let prefix = &visible[row][..visible[row].find(value).unwrap()];
+            unicode_width::UnicodeWidthStr::width(prefix)
+        });
+        assert!(
+            columns.windows(2).all(|pair| pair[0] == pair[1]),
+            "值列必须对齐: {columns:?}"
+        );
     }
 
     /// 【终端】【品牌标志】验证标志渲染在边框内部且每行宽度一致。
@@ -419,12 +424,12 @@ mod tests {
     /// - 无
     #[test]
     fn logo_renders_inside_the_border() {
-        let lines = display_lines(&sample("YOLO mode"), 80);
+        let lines = display_lines(&sample("YOLO"), 80);
 
         // 标志块必须出现在带边框的正文行内，而不是边框之外
         let logo_rows = lines
             .iter()
-            .filter(|line| line.as_str().contains("├────┤"))
+            .filter(|line| line.as_str().contains("╰──╮"))
             .collect::<Vec<_>>();
         assert!(!logo_rows.is_empty(), "宽终端应渲染标志");
         for line in &logo_rows {
@@ -452,14 +457,14 @@ mod tests {
     /// - 无
     #[test]
     fn narrow_terminal_drops_the_logo() {
-        let lines = display_lines(&sample("YOLO mode"), 40);
+        let lines = display_lines(&sample("YOLO"), 30);
         let joined = lines
             .iter()
             .map(|line| line.as_str())
             .collect::<Vec<_>>()
             .join("\n");
 
-        assert!(!joined.contains("╭────╴"), "窄终端不应渲染标志");
+        assert!(!joined.contains("╭──╴"), "窄终端不应渲染标志");
         assert!(joined.contains("gpt-5"));
     }
 

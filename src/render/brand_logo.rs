@@ -1,28 +1,42 @@
-/// 终端原生 SAI 字标：等宽细线与圆角连接，四行内保持清晰轮廓。
-/// 每行固定 21 列，使用标准箱线字符，无需图片协议或特殊图标字体。
-const LOGO_LINES: [&str; 4] = [
-    "╭────╴  ╭────╮  ╶─┬─╴",
-    "╰────╮  │    │    │  ",
-    "     │  ├────┤    │  ",
-    "╶────╯  ╵    ╵  ╶─┴─╴",
-];
+/// 终端原生 Sai 标志：单笔画圆角 S，右上方品牌绿圆点，与 Web 图标同形。
+/// 每行固定 6 列、共 3 行，只用标准箱线字符与圆点，无需图片协议或图标字体。
+const MARK_LINES: [&str; 3] = ["╭──╴ ", "╰──╮ ", "╶──╯ "];
+/// 圆点所在行与列（相对标志左上角）。
+const DOT_ROW: usize = 0;
+const DOT: &str = "●";
+
+/// 标志笔画颜色：比 Web --signal 提亮一档，浅灰与深色背景均可辨认。
+pub(crate) const MARK_STYLE: &str = "\x1b[1m\x1b[38;2;94;196;168m";
+/// 圆点颜色：品牌绿的高亮色。
+const DOT_STYLE: &str = "\x1b[38;2;94;196;168m";
 
 /// 标志渲染所需的字符列数。
-pub(crate) const LOGO_WIDTH: usize = 21;
+pub(crate) const LOGO_WIDTH: usize = 6;
 /// 标志渲染所需的字符行数。
-pub(crate) const LOGO_HEIGHT: usize = LOGO_LINES.len();
+pub(crate) const LOGO_HEIGHT: usize = MARK_LINES.len();
 
 /// 【终端】【品牌标志】按行渲染 Sai 标志。
 ///
 /// 参数:
-/// - `style`: 字标线条使用的 ANSI 样式前缀
+/// - `style`: S 笔画使用的 ANSI 样式前缀
 ///
 /// 返回:
 /// - 每行等宽的 ANSI 文本，行数为 `LOGO_HEIGHT`
 pub(crate) fn logo_lines(style: &str) -> Vec<String> {
-    LOGO_LINES
+    MARK_LINES
         .iter()
-        .map(|line| format!("{style}{line}\x1b[0m"))
+        .enumerate()
+        .map(|(row, line)| {
+            let stroke = line.trim_end();
+            let padding = " ".repeat(LOGO_WIDTH - 1 - stroke.chars().count());
+            // 1. 圆点只在首行最右列出现，其余行以空格补齐到固定宽度
+            let tail = if row == DOT_ROW {
+                format!("{DOT_STYLE}{DOT}\x1b[0m")
+            } else {
+                " ".to_string()
+            };
+            format!("{style}{stroke}\x1b[0m{padding}{tail}")
+        })
         .collect()
 }
 
@@ -40,7 +54,7 @@ mod tests {
     /// - 无
     #[test]
     fn logo_lines_have_stable_shape_and_width() {
-        let lines = logo_lines("\x1b[38;2;58;114;100m");
+        let lines = logo_lines(MARK_STYLE);
 
         assert_eq!(lines.len(), LOGO_HEIGHT);
         for line in &lines {
@@ -51,10 +65,12 @@ mod tests {
                 "标志每行必须等宽"
             );
         }
-        // 1. 圆角轮廓与同宽细线保持完整，避免退回断裂的半块字符
-        assert!(strip_ansi(&lines[0]).contains("╭────╴"));
-        assert!(strip_ansi(&lines[2]).contains("├────┤"));
-        assert!(strip_ansi(&lines[3]).ends_with("╶─┴─╴"));
+        // 1. S 笔画上下两弧完整，圆点只在首行右端
+        assert!(strip_ansi(&lines[0]).starts_with("╭──╴"));
+        assert!(strip_ansi(&lines[0]).ends_with('●'));
+        assert!(strip_ansi(&lines[1]).starts_with("╰──╮"));
+        assert!(strip_ansi(&lines[2]).starts_with("╶──╯"));
+        assert!(!strip_ansi(&lines[2]).contains('●'));
     }
 
     /// 【终端】【品牌标志】验证样式在每行结束后复位，不污染后续输出。
@@ -69,12 +85,18 @@ mod tests {
         let lines = logo_lines("\x1b[36m");
 
         for line in &lines {
-            // 每个样式起始都必须有配对的复位序列
+            // 每行以复位结尾或以空格补齐，样式不会延续到后续输出
             assert_eq!(
                 line.matches("\x1b[36m").count(),
-                line.matches("\x1b[0m").count(),
-                "样式与复位序列必须配对: {line:?}"
+                1,
+                "每行只使用一次笔画样式: {line:?}"
             );
+            assert!(line.matches("\x1b[0m").count() >= 1);
+            let last_reset = line.rfind("\x1b[0m").unwrap();
+            assert!(line[last_reset..]
+                .trim_start_matches("\x1b[0m")
+                .trim()
+                .is_empty());
         }
     }
 

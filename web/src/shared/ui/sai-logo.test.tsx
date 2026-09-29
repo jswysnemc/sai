@@ -19,4 +19,12 @@ describe("SaiLogo", () => {
     expect(html).toContain('width="20" height="20"');
     expect(renderToStaticMarkup(<SaiLogo size={48} trim />)).toContain('width="48" height="24"');
   });
+
+  it("pairs the theme-colored S stroke with a single brand dot", () => {
+    for (const html of [renderLogo(), renderToStaticMarkup(<SaiLogo size={48} trim />)]) {
+      expect(html).toContain('stroke="currentColor"');
+      expect(html.match(/<circle/g)).toHaveLength(1);
+      expect(html).toContain("var(--signal");
+    }
+  });
 });

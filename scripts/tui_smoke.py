@@ -134,7 +134,7 @@ def scenario_bottom_start():
         session.boot()
         text = session.text()
         assert "╭" in text and "╰" in text, f"welcome 面板不完整:\n{text}"
-        assert "permissions" in text or "权限" in text, f"welcome 字段缺失:\n{text}"
+        assert "mode" in text or "权限" in text, f"welcome 字段缺失:\n{text}"
         # 贴底时 footer 不能被下方清理逻辑误清
         assert "auto" in text, f"底栏缺失:\n{text}"
         combined = text + session.scrollback()
