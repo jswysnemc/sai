@@ -1,7 +1,7 @@
 use super::repl_chrome::{chrome_input_content_cols, ReplChrome};
 use super::repl_clipboard::{is_paste_key, paste_image_first, ReplClipboardState};
 use super::repl_external_events::ReplExternalEvents;
-use super::repl_runtime::{QueuePanelIdleResult, ReplRuntime};
+use super::repl_runtime::{FullscreenEvent, QueuePanelIdleResult, ReplRuntime};
 use super::repl_windows_paste::WindowsPasteState;
 use super::*;
 
@@ -120,6 +120,10 @@ pub(super) fn read_repl_input(
             }
         }
         let event = queued_event.map(Ok).unwrap_or_else(event::read)?;
+        // 全屏视图先处理鼠标与浏览键，其余按键仍交给输入框
+        if runtime.handle_fullscreen_event(&event)? == FullscreenEvent::Consumed {
+            continue;
+        }
         match event {
             Event::Resize(cols, rows) => runtime.observe_input_resize(cols, rows)?,
             Event::Paste(text) => {
@@ -533,6 +537,8 @@ pub(super) fn read_repl_input(
                         redraw_input!()?;
                     }
                     KeyCode::Char('g') if modifiers.contains(KeyModifiers::CONTROL) => {
+                        // 外部编辑器接管主屏，先退出全屏视图再清理输入区
+                        runtime.leave_fullscreen()?;
                         clear_repl_input(&mut stdout, input_row, rendered_rows)?;
                         runtime.end_composer()?;
                         terminal_guard.finish(&mut stdout)?;
@@ -597,22 +603,11 @@ pub(super) fn read_repl_input(
                         redraw_input!()?;
                     }
                     KeyCode::Char('o') if modifiers.contains(KeyModifiers::CONTROL) => {
-                        if runtime.toggle_command_output()? {
-                            // pager 返回后重新打开增强输入，并重绘输入框
-                            input_row = 0;
-                            rendered_rows = 0;
-                            redraw_input!()?;
-                        } else {
-                            // 提示语里主动宣传了 Ctrl+O，按下去却毫无反应会让人以为键位坏了
-                            runtime.record_meta(
-                                t(
-                                    "Ctrl+O: no expandable command output or diff yet",
-                                    "Ctrl+O：当前还没有可展开的命令输出或 diff",
-                                )
-                                .to_string(),
-                            )?;
-                            redraw_input!()?;
-                        }
+                        // Ctrl+O：进入或退出全屏会话视图，输入框随之迁移
+                        runtime.toggle_fullscreen()?;
+                        input_row = 0;
+                        rendered_rows = 0;
+                        redraw_input!()?;
                     }
                     KeyCode::Char('t') if modifiers.contains(KeyModifiers::CONTROL) => {
                         // Ctrl+T：沉底 todo 单行 / 多行切换

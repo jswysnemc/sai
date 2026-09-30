@@ -1,0 +1,234 @@
+//! 全屏会话视图的正文文档：按显式展开集合渲染完整 transcript。
+//!
+//! 与内联视图共用同一套 cell 渲染和区块空行规则；额外记录每个可折叠段落
+//! 的行范围（供鼠标点击展开/收起）和每条用户消息的位置（供概览跳转与浮动标题）。
+
+use super::cell::HistoryCell;
+use super::line::AnsiLine;
+use super::spacing;
+use super::store::{TranscriptRenderOptions, TranscriptStore, TranscriptView};
+use crate::llm::ChatStreamKind;
+use crate::render::render_expand::{with_force_collapse, with_force_expand};
+use std::collections::HashSet;
+
+/// 流式思考尾部的段落键：定稿前没有稳定的 cell 下标。
+pub(crate) const LIVE_PARAGRAPH_KEY: usize = usize::MAX;
+/// 概览摘要最多保留的字符数。
+const SUMMARY_CHARS: usize = 120;
+
+/// 一个可点击展开/收起的段落在文档中的位置。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ParagraphSpan {
+    /// 段落键：cell 下标，流式思考尾部为 [`LIVE_PARAGRAPH_KEY`]
+    pub(crate) key: usize,
+    /// 首行（段落标题行）在文档中的行号
+    pub(crate) start: usize,
+    /// 末行之后的行号
+    pub(crate) end: usize,
+    /// 当前是否展开
+    pub(crate) expanded: bool,
+}
+
+/// 一条用户消息在文档中的位置与摘要。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct UserAnchor {
+    /// 消息首行在文档中的行号
+    pub(crate) row: usize,
+    /// 单行摘要（已折叠空白）
+    pub(crate) summary: String,
+}
+
+/// 全屏视图一帧的完整正文。
+#[derive(Clone, Debug, Default)]
+pub(crate) struct FullscreenDocument {
+    pub(crate) lines: Vec<AnsiLine>,
+    pub(crate) paragraphs: Vec<ParagraphSpan>,
+    pub(crate) anchors: Vec<UserAnchor>,
+}
+
+impl FullscreenDocument {
+    /// 查找包含指定行的可折叠段落。
+    ///
+    /// 参数:
+    /// - `row`: 文档行号
+    ///
+    /// 返回:
+    /// - 命中的段落
+    pub(crate) fn paragraph_at(&self, row: usize) -> Option<&ParagraphSpan> {
+        self.paragraphs
+            .iter()
+            .find(|span| row >= span.start && row < span.end)
+    }
+
+    /// 返回指定行所属的用户消息序号（该行之前最近的一条）。
+    ///
+    /// 参数:
+    /// - `row`: 文档行号
+    ///
+    /// 返回:
+    /// - 用户消息下标；首条消息之前为 None
+    pub(crate) fn anchor_index_at(&self, row: usize) -> Option<usize> {
+        self.anchors.iter().rposition(|anchor| anchor.row <= row)
+    }
+}
+
+impl TranscriptStore {
+    /// 【全屏视图】【正文文档】按宽度与展开集合渲染完整会话。
+    ///
+    /// 参数:
+    /// - `width`: 正文列数
+    /// - `options`: transcript 渲染选项
+    /// - `expanded`: 需要展开的段落键
+    ///
+    /// 返回:
+    /// - 完整正文、可折叠段落与用户消息位置
+    pub(crate) fn render_fullscreen(
+        &mut self,
+        width: usize,
+        options: &TranscriptRenderOptions,
+        expanded: &HashSet<usize>,
+    ) -> FullscreenDocument {
+        let width = width.max(1);
+        let frame = self.live_animation_frame();
+        // 1. 子智能体视图整体替换正文，没有可折叠段落和用户锚点
+        if let TranscriptView::Subagent { id, label } = self.view.clone() {
+            return FullscreenDocument {
+                lines: super::subagent_view::render_view_lines(&id, &label, width, frame),
+                ..FullscreenDocument::default()
+            };
+        }
+        let mut document = FullscreenDocument::default();
+        // 展开段一律按完整模式渲染：摘要模式下展开也要能看到正文
+        let full = expanded_options();
+        for index in 0..self.cells.len() {
+            // 2. 区块空行与内联视图保持一致
+            if index > 0 && spacing::needs_section_gap(&self.cells[index - 1], &self.cells[index]) {
+                document.lines.push(AnsiLine::new(String::new()));
+            }
+            let start = document.lines.len();
+            let expandable = TranscriptStore::is_expandable_cell(&self.cells[index]);
+            let open = expandable && expanded.contains(&index);
+            let lines = if open {
+                let cell = &self.cells[index];
+                with_force_expand(|| cell.display_lines_framed(width, &full, frame))
+            } else if expandable {
+                let cell = &self.cells[index];
+                with_force_collapse(|| cell.display_lines_framed(width, options, frame))
+            } else {
+                self.cache
+                    .lines_for(index, &self.cells[index], width, options, frame)
+            };
+            document.lines.extend(lines);
+            if let HistoryCell::UserEcho(cell) = &self.cells[index] {
+                document.anchors.push(UserAnchor {
+                    row: first_content_row(&document.lines, start),
+                    summary: summarize(&cell.text),
+                });
+            }
+            if expandable && document.lines.len() > start {
+                document.paragraphs.push(ParagraphSpan {
+                    key: index,
+                    start: first_content_row(&document.lines, start),
+                    end: document.lines.len(),
+                    expanded: open,
+                });
+            }
+        }
+        self.append_live_tail(&mut document, width, options, expanded);
+        document
+    }
+
+    /// 追加流式尾部；进行中的思考段同样可以点击展开。
+    ///
+    /// 参数:
+    /// - `document`: 正在组装的文档
+    /// - `width`: 正文列数
+    /// - `options`: transcript 渲染选项
+    /// - `expanded`: 需要展开的段落键
+    ///
+    /// 返回:
+    /// - 无
+    fn append_live_tail(
+        &mut self,
+        document: &mut FullscreenDocument,
+        width: usize,
+        options: &TranscriptRenderOptions,
+        expanded: &HashSet<usize>,
+    ) {
+        let reasoning = self.live_tail.as_ref().is_some_and(|tail| {
+            tail.kind == ChatStreamKind::Reasoning && !tail.source.trim().is_empty()
+        });
+        let open = reasoning && expanded.contains(&LIVE_PARAGRAPH_KEY);
+        let mut live = if open {
+            let full = expanded_options();
+            with_force_expand(|| self.render_live_tail(width, &full, usize::MAX))
+        } else {
+            self.render_live_tail(width, options, usize::MAX)
+        };
+        // 定稿区末行已是空行时去掉 live 的前空行，与内联视图一致
+        spacing::drop_duplicate_leading_blank(&mut live, document.lines.last());
+        spacing::ensure_live_tool_gap(&mut live, self.cells.last());
+        let start = document.lines.len();
+        document.lines.extend(live);
+        if reasoning && document.lines.len() > start {
+            document.paragraphs.push(ParagraphSpan {
+                key: LIVE_PARAGRAPH_KEY,
+                start: first_content_row(&document.lines, start),
+                end: document.lines.len(),
+                expanded: open,
+            });
+        }
+    }
+}
+
+/// 展开段使用的渲染选项：思考与工具都按完整模式输出。
+///
+/// 返回:
+/// - 完整模式渲染选项
+fn expanded_options() -> TranscriptRenderOptions {
+    TranscriptRenderOptions {
+        reasoning_mode: crate::render::ReasoningDisplayMode::Full,
+        tool_call_mode: crate::render::ToolCallDisplayMode::Full,
+    }
+}
+
+/// 跳过段落开头的空行，返回首个有内容的行号。
+///
+/// 参数:
+/// - `lines`: 文档行
+/// - `start`: 段落起始行
+///
+/// 返回:
+/// - 首个非空行；整段为空时返回起始行
+fn first_content_row(lines: &[AnsiLine], start: usize) -> usize {
+    lines[start..]
+        .iter()
+        .position(|line| {
+            !crate::render::activity_animation::strip_ansi_for_test(line.as_str())
+                .trim()
+                .is_empty()
+        })
+        .map(|offset| start + offset)
+        .unwrap_or(start)
+}
+
+/// 把用户消息压成单行摘要。
+///
+/// 参数:
+/// - `text`: 用户原始输入
+///
+/// 返回:
+/// - 折叠空白并截断后的摘要
+pub(crate) fn summarize(text: &str) -> String {
+    let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.chars().count() <= SUMMARY_CHARS {
+        return collapsed;
+    }
+    let mut summary = collapsed.chars().take(SUMMARY_CHARS).collect::<String>();
+    summary.push('…');
+    summary
+}
+
+#[cfg(test)]
+#[path = "fullscreen_view_tests.rs"]
+mod tests;

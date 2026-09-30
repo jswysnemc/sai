@@ -2,6 +2,7 @@ mod assistant_body;
 mod cell;
 pub(crate) mod command_output;
 mod diff_cell;
+mod fullscreen_view;
 mod line;
 mod markdown_cell;
 mod markdown_stream_cache;
@@ -38,6 +39,9 @@ mod work_status_tests;
 
 pub(crate) use cell::TranscriptMode;
 pub(crate) use command_output::{ExpandableBlock, ExpandableBlockKind};
+pub(crate) use fullscreen_view::FullscreenDocument;
+#[cfg(test)]
+pub(crate) use fullscreen_view::{ParagraphSpan, UserAnchor};
 pub(crate) use line::AnsiLine;
 pub(crate) use pager_view::PagerView;
 pub(crate) use store::{

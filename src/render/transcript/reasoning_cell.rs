@@ -39,6 +39,7 @@ impl ReasoningCell {
         }
     }
 
+    #[cfg(test)]
     /// 切换展开/折叠状态。
     ///
     /// 返回:

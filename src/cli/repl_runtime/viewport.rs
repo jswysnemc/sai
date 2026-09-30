@@ -64,6 +64,24 @@ impl InlineViewport {
         }
     }
 
+    /// 全屏视图使用的固定视口：输入框位置由整屏分区给出，没有历史区。
+    ///
+    /// 参数:
+    /// - `size`: 终端尺寸
+    /// - `composer_top`: 输入框首行
+    /// - `composer_height`: 输入框行数
+    ///
+    /// 返回:
+    /// - 固定视口
+    pub(super) fn fixed(size: TerminalSize, composer_top: u16, composer_height: u16) -> Self {
+        Self {
+            size,
+            origin_row: composer_top,
+            composer_height,
+            history_height: 0,
+        }
+    }
+
     /// 更新终端尺寸与 composer 高度。
     ///
     /// 参数:

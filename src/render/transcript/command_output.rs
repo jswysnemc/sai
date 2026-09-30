@@ -166,6 +166,7 @@ impl TranscriptStore {
         self.expandable_blocks().into_iter().next_back()
     }
 
+    #[cfg(test)]
     /// 切换最近一个可折叠块的展开状态（兼容测试；TUI 优先走 pager）。
     ///
     /// 返回:

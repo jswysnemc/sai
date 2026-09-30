@@ -57,6 +57,10 @@ impl ReplRuntime {
         frame.set_panels_dismissed(self.panels_dismissed.is_some());
         self.last_chrome = Some(chrome.clone());
         self.composer = Some(frame);
+        // 全屏视图：输入框固定在底部，不参与主屏腾行与重排
+        if self.fullscreen.is_some() {
+            return self.update_fullscreen_composer(size);
+        }
         // 【终端】【尺寸预览】输入立即适配新尺寸，源码重排仍等待 debounce
         if size != self.viewport.size() || self.resize_preview.is_some() {
             self.reflow.observe(size, self.stream_active);
@@ -85,7 +89,7 @@ impl ReplRuntime {
     ///
     /// 返回:
     /// - 面板 ANSI 行；无内容时为空
-    fn bottom_panel_lines(&self, cols: usize) -> Vec<String> {
+    pub(super) fn bottom_panel_lines(&self, cols: usize) -> Vec<String> {
         let queued = self.queued_items();
         let queue_lines = self.queue_panel.panel_lines(&queued, self.stream_active);
         let mut agent_lines = self.agent_panel.panel_lines(
@@ -190,6 +194,10 @@ impl ReplRuntime {
         }
         let rows_changed = composer.panel_lines().len() != lines.len();
         composer.set_panel_lines(lines);
+        // 全屏视图的分区在整屏绘制时统一计算
+        if self.fullscreen.is_some() {
+            return Ok(());
+        }
         // 行数变化时 composer 高度随之变化，需要重新腾行并更新 viewport
         if rows_changed {
             let height = self.composer_height_for(size);
@@ -475,6 +483,10 @@ impl ReplRuntime {
         self.composer = None;
         // composer 已撤下，下次出现时必须实绘
         self.last_composer_signature = None;
+        // 全屏视图：正文区扩展到输入框原位置
+        if self.fullscreen.is_some() {
+            return self.paint_fullscreen();
+        }
         let size = TerminalSize::current();
         // 尺寸已变化：交给 replay 重锚，不能先污染 viewport 记账
         if size != self.viewport.size() {

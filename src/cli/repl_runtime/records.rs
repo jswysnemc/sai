@@ -149,6 +149,8 @@ impl ReplRuntime {
     /// 返回:
     /// - transcript 同步结果
     pub(in crate::cli) fn pause_for_permission_prompt(&mut self) -> Result<()> {
+        // 全屏视图回到底部，保证审批控件在可见区域
+        self.follow_fullscreen_bottom();
         self.next_live_refresh = None;
         self.live_sync_pending = false;
         self.transcript.clear_work_status();

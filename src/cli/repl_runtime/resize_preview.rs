@@ -5,6 +5,10 @@ impl ReplRuntime {
     /// 【终端】【尺寸预览】即时调整可见区域，延后源码重排与滚动记账
     /// 参数: size 为新尺寸；返回绘制结果，不修改稳定历史快照
     pub(super) fn preview_resize(&mut self, size: TerminalSize) -> Result<()> {
+        // 全屏视图按新尺寸整屏重排，没有主屏滚动记账需要保护
+        if self.fullscreen.is_some() {
+            return self.repaint_fullscreen();
+        }
         let height = self.composer_height_for(size);
         let lines = self
             .stream

@@ -279,6 +279,10 @@ pub(super) async fn run_repl(
         external_events.resume();
         apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
         let input = submission.raw_input.trim();
+        // 斜杠命令可能打开选择器、配置界面等独占终端的界面，先退出全屏视图
+        if input.starts_with('/') {
+            runtime.leave_fullscreen()?;
+        }
         if !input.eq_ignore_ascii_case("/undo") {
             pending_undo = false;
         }

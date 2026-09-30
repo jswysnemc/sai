@@ -134,17 +134,6 @@ impl TranscriptStore {
         let focus = focus.min(paragraph.saturating_sub(1));
         assemble(segments, focus, paragraph, width)
     }
-
-    /// 副屏有没有东西可看。
-    pub(crate) fn has_pager_content(&self) -> bool {
-        !self.cells.is_empty()
-            || self
-                .live_tail
-                .as_ref()
-                .is_some_and(|tail| !tail.source.is_empty())
-            || self.live_tool_call.is_some()
-            || self.work_status.is_some()
-    }
 }
 
 fn segment_with_gap(

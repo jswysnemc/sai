@@ -131,6 +131,8 @@ impl ReplRuntime {
             | AgentEvent::ToolProgressIdentified { name, message, .. } => {
                 // 工具声明将直接写终端时，下一次同步前从光标处重启受管区域
                 if message == "__external_output__" {
+                    // 外部程序直接写主屏，全屏视图先退出
+                    self.leave_fullscreen()?;
                     self.transcript.finalize_live_tail();
                     self.transcript.clear_work_status();
                     self.sync_transcript(true)?;
@@ -211,7 +213,9 @@ impl ReplRuntime {
                 self.sync_transcript(true)
             }
             AgentEvent::JevPreselect { phase, detail } => {
-                if let Some(line) = crate::render::format_jev_preselect(phase.as_str(), detail.as_str()) {
+                if let Some(line) =
+                    crate::render::format_jev_preselect(phase.as_str(), detail.as_str())
+                {
                     self.transcript.push_meta(line);
                     self.sync_transcript(true)
                 } else {
@@ -224,6 +228,7 @@ impl ReplRuntime {
             }
             AgentEvent::ExternalOutput => {
                 // 先冲刷既有内容，再标记失步等待外部程序写完
+                self.leave_fullscreen()?;
                 self.transcript.finalize_live_tail();
                 self.sync_transcript(true)?;
                 self.mark_desynced();

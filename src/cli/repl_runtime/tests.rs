@@ -194,7 +194,7 @@ fn command_progress_renders_head_tail_preview_and_toggles_expansion() {
     assert!(collapsed.contains("one"));
     assert!(collapsed.contains("twelve"));
 
-    assert!(runtime.toggle_command_output().unwrap());
+    assert!(runtime.transcript.toggle_latest_command_output());
     let expanded = runtime
         .transcript
         .display_tail(120, &options())

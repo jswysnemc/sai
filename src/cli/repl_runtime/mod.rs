@@ -1,9 +1,11 @@
 mod agent_panel;
+mod anchoring;
 mod background_logs;
 mod bottom_panel;
 mod composer;
 mod composer_frame;
 mod event_loop;
+mod fullscreen;
 mod history;
 mod history_insert;
 mod history_replay;
@@ -28,6 +30,7 @@ mod stream;
 mod stream_commands;
 mod viewport;
 
+pub(in crate::cli) use fullscreen::FullscreenEvent;
 pub(in crate::cli) use queue_panel::QueuePanelIdleResult;
 
 #[cfg(test)]
@@ -44,13 +47,12 @@ use crate::cli::repl_windows_paste::WindowsPasteState;
 use crate::config::PasteImageKey;
 use crate::render::activity_animation::ACTIVITY_FRAME_INTERVAL;
 use crate::render::terminal_frame::TerminalFrame;
-use crate::render::terminal_paint::paint_lock;
 use crate::render::transcript::{TranscriptRenderOptions, TranscriptStore, WelcomeCell};
 use crate::state::{SessionTimelineCompaction, SessionTimelineTurn};
 use anyhow::Result;
 use crossterm::event::Event;
 use std::collections::VecDeque;
-use std::io::{self, Write};
+use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -129,6 +131,8 @@ pub(super) struct ReplRuntime {
     force_reanchor: bool,
     /// SSH 征询期间挂在输入框上方的卡片；存在时输入框改为征询输入
     ssh_prompt: Option<crate::cli::ssh_prompt::SshPromptView>,
+    /// Ctrl+O 全屏会话视图；存在时所有绘制改走整屏布局
+    fullscreen: Option<fullscreen::FullscreenSession>,
 }
 
 /// 运行期间底部输入框草稿。
@@ -247,6 +251,7 @@ impl ReplRuntime {
             overlay_dirty: false,
             force_reanchor: false,
             ssh_prompt: None,
+            fullscreen: None,
         }
     }
 
@@ -521,6 +526,10 @@ impl ReplRuntime {
     /// 稳定前缀不触碰；变化行按行修补；新增行走真实滚动进入原生
     /// scrollback；行数收缩时清理尾部。resize 未收敛期间冻结增量。
     fn sync_transcript(&mut self, streaming: bool) -> Result<()> {
+        // 全屏视图自管整屏布局，不走主屏增量协调
+        if self.fullscreen.is_some() {
+            return self.paint_fullscreen();
+        }
         if self.overlay_open {
             let first = !self.overlay_dirty;
             self.overlay_dirty = true;
@@ -620,6 +629,13 @@ impl ReplRuntime {
 
     /// 清屏范围内从 source 重新铺设当前宽度的可视历史。
     fn replay(&mut self, streaming: bool) -> Result<()> {
+        // 全屏视图：丢弃差异基线后整屏重画，主屏记账留到退出时重锚
+        if self.fullscreen.is_some() {
+            self.reflow.clear_pending();
+            self.reflow
+                .mark_reflowed(TerminalSize::current(), streaming);
+            return self.repaint_fullscreen();
+        }
         // 重锚要读终端的真实光标位置，腾行等已入帧的绘制必须先送达
         self.commit_frame()?;
         let size = TerminalSize::current();
@@ -668,67 +684,6 @@ impl ReplRuntime {
         self.stream.reset(&window, painted);
         self.reflow.clear_pending();
         self.reflow.mark_reflowed(size, streaming);
-        Ok(())
-    }
-
-    /// 仅高度变化时按光标位移修正锚点记账。
-    ///
-    /// 终端缩放会保持光标可见：变矮把内容上滚（顶部行进入 scrollback），
-    /// 变高可能把 scrollback 行拉回屏幕。比较上次绘制的光标行与当前实际
-    /// 光标行即可得到内容位移量，同步 origin 与 offscreen 记账。
-    ///
-    /// 参数:
-    /// - `size`: 新终端尺寸
-    ///
-    /// 返回:
-    /// - 是否成功重锚（失败时调用方退回全量重建）
-    fn reanchor_for_height_change(&mut self, size: TerminalSize) -> bool {
-        // 测试环境无真实终端，光标查询会阻塞
-        if cfg!(test) {
-            return false;
-        }
-        let Some(expected) = self.last_cursor_row else {
-            return false;
-        };
-        let Ok((_, actual)) = crossterm::cursor::position() else {
-            return false;
-        };
-        let delta = i32::from(expected) - i32::from(actual);
-        if delta > 0 {
-            // 1. 变矮：内容上移 delta 行；越过 origin 的部分已滚入 scrollback
-            let delta = delta.min(i32::from(u16::MAX)) as u16;
-            let absorbed = delta.min(self.viewport.origin_row());
-            self.viewport.apply_terminal_scroll(delta);
-            self.stream.note_scrolled(delta.saturating_sub(absorbed));
-        } else if delta < 0 {
-            // 2. 变高：scrollback 行被拉回，受管区起点下移且拉回行重新可修补
-            let rise = (-delta).min(i32::from(u16::MAX)) as u16;
-            self.viewport.shift_origin_down(rise, size);
-            self.stream.note_unscrolled(usize::from(rise));
-        }
-        true
-    }
-
-    /// 外部程序写过终端后，从当前光标行重启受管区域。
-    ///
-    /// 已有输出全部视作 scrollback 保留原样，后续内容从光标处追加。
-    fn restart_after_external(&mut self) -> Result<()> {
-        self.desynced = false;
-        // 光标查询要读终端的真实位置，未提交的绘制必须先送达
-        self.commit_frame()?;
-        let _paint = paint_lock();
-        let mut stdout = io::stdout();
-        let position = crossterm::cursor::position().unwrap_or((0, 0));
-        if position.0 != 0 {
-            write!(stdout, "\r\n")?;
-            stdout.flush()?;
-        }
-        let size = TerminalSize::current();
-        let origin = crossterm::cursor::position()
-            .map(|(_, row)| row)
-            .unwrap_or(position.1);
-        self.viewport.restart_at(size, origin);
-        self.stream.mark_all_offscreen();
         Ok(())
     }
 }

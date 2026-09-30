@@ -139,6 +139,7 @@ impl ToolView {
         target.append(bytes, omitted_bytes);
     }
 
+    #[cfg(test)]
     /// 切换命令输出展开状态。
     ///
     /// 参数:

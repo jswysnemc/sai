@@ -1,7 +1,9 @@
 use super::keyboard_enhancement::KeyboardEnhancementState;
 use anyhow::Result;
 use crossterm::cursor::Show;
-use crossterm::event::{DisableBracketedPaste, EnableBracketedPaste, PopKeyboardEnhancementFlags};
+use crossterm::event::{
+    DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, PopKeyboardEnhancementFlags,
+};
 use crossterm::terminal::{self, LeaveAlternateScreen};
 use crossterm::{execute, queue};
 use std::io::{self, Write};
@@ -125,6 +127,7 @@ pub(crate) fn emergency_restore() {
         stdout,
         PopKeyboardEnhancementFlags,
         DisableBracketedPaste,
+        DisableMouseCapture,
         LeaveAlternateScreen,
         Show
     );

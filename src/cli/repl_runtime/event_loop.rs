@@ -13,7 +13,6 @@ use crate::cli::repl_commands::{
 use crate::cli::repl_input::event_batch::{next_ready_event, take_text_batch, windows_paste_key};
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
-use std::io::IsTerminal;
 use std::time::Duration;
 
 impl ReplRuntime {
@@ -55,48 +54,6 @@ impl ReplRuntime {
         self.pending_input_events.push_front(event);
     }
 
-    /// 切换最近命令输出或思考段落的展开状态并重绘 TUI。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 是否找到可切换的命令输出
-    pub(in crate::cli) fn toggle_command_output(&mut self) -> Result<bool> {
-        // 1. 测试：只切换 transcript 状态，避免 replay 触碰真实终端
-        if cfg!(test) {
-            return Ok(self.transcript.toggle_latest_command_output());
-        }
-        // 2. 交互终端：备用屏 pager 展示全部折叠块，左右切换
-        if std::io::stdout().is_terminal() && std::io::stdin().is_terminal() {
-            if !self.pager_has_content() {
-                return Ok(false);
-            }
-            let paragraphs = self.transcript.expandable_blocks().len();
-            let start = paragraphs.saturating_sub(1);
-            super::super::repl_pager::open_blocks_pager(start, paragraphs, |focus, width| {
-                self.pager_view(focus, width)
-            })?;
-            // 备用屏返回后强制重同步 viewport 与 composer，避免输入框错位
-            self.resync_after_overlay()?;
-            return Ok(true);
-        }
-        // 3. 非交互：内联展开/折叠
-        if !self.transcript.toggle_latest_command_output() {
-            return Ok(false);
-        }
-        self.replay(false)?;
-        self.redraw_stream_composer()?;
-        Ok(true)
-    }
-
-    /// 当前可以在副屏里展开的段落。
-    pub(in crate::cli) fn expandable_blocks(
-        &self,
-    ) -> Vec<crate::render::transcript::ExpandableBlock> {
-        self.transcript.expandable_blocks()
-    }
-
     /// 按前台同一套渲染画出副屏的一帧。
     pub(in crate::cli) fn pager_view(
         &mut self,
@@ -105,16 +62,6 @@ impl ReplRuntime {
     ) -> crate::render::transcript::PagerView {
         self.transcript
             .render_pager_view(width, &self.options, focus)
-    }
-
-    /// 副屏有没有可显示的会话内容。
-    pub(in crate::cli) fn pager_has_content(&self) -> bool {
-        self.transcript.has_pager_content()
-    }
-
-    /// 标记副屏已打开，主缓冲暂停绘制。
-    pub(in crate::cli) fn begin_overlay(&mut self) {
-        self.overlay_open = true;
     }
 
     /// 副屏是否还占着备用屏。
@@ -163,6 +110,10 @@ pub(crate) fn process_stream_input(
         let Some(input) = next_ready_event(runtime)? else {
             break;
         };
+        // 全屏视图先处理鼠标与浏览键，其余按键仍交给输入框
+        if runtime.handle_fullscreen_event(&input)? == super::FullscreenEvent::Consumed {
+            continue;
+        }
         match input {
             Event::Resize(cols, rows) => {
                 runtime.observe_stream_resize(cols, rows)?;
@@ -215,7 +166,7 @@ pub(crate) fn process_stream_input(
                         "{\"cancel\":false}",
                     );
                     // #endregion
-                    return Ok(StreamInputAction::OpenPager);
+                    return Ok(StreamInputAction::ToggleFullscreen);
                 }
                 if runtime.handle_queue_panel_key(key.code, key.modifiers)? {
                     continue;

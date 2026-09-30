@@ -187,7 +187,7 @@ fn draw_view(
 ///
 /// 返回:
 /// - 不超宽的行
-fn clip_to_width(line: &str, cols: usize) -> String {
+pub(super) fn clip_to_width(line: &str, cols: usize) -> String {
     let mut out = String::new();
     let mut width = 0usize;
     let mut chars = line.chars().peekable();

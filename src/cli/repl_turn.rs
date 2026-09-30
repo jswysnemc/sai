@@ -205,37 +205,9 @@ pub(super) async fn execute_repl_turn(
                     }
                     process_stream_tick(runtime)?;
                     let action = process_stream_input(runtime, &stream_ctx)?;
-                    if action == StreamInputAction::OpenPager {
-                        if !runtime.pager_has_content() {
-                            runtime.record_meta(
-                                crate::i18n::text(
-                                    "Ctrl+O: nothing to expand yet",
-                                    "Ctrl+O：当前还没有可展开的段落",
-                                )
-                                .to_string(),
-                            )?;
-                        } else {
-                            runtime.begin_overlay();
-                            let paragraphs = runtime.expandable_blocks().len();
-                            let start = paragraphs.saturating_sub(1);
-                            let mut screen =
-                                crate::cli::repl_pager::PagerScreen::enter(start, paragraphs)?;
-                            let _ = screen.poll(Some(Duration::from_millis(0)), |focus, width| {
-                                runtime.pager_view(focus, width)
-                            })?;
-                            pager = Some(screen);
-                        }
-                        // #region agent log
-                        crate::cli::repl_pager::debug_agent_log(
-                            "A",
-                            "repl_turn.rs:open_pager",
-                            "pager requested without interrupting the turn",
-                            &format!(
-                                "{{\"blocks\":{},\"interrupted\":false}}",
-                                runtime.expandable_blocks().len()
-                            ),
-                        );
-                        // #endregion
+                    if action == StreamInputAction::ToggleFullscreen {
+                        // Ctrl+O：切换全屏会话视图，不中断当前轮次
+                        runtime.toggle_fullscreen()?;
                         continue;
                     }
                     if action != StreamInputAction::Continue {

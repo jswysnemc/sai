@@ -106,7 +106,8 @@ pub(super) fn handle_agent_event(
             Ok(())
         }
         AgentEvent::JevPreselect { phase, detail } => {
-            if let Some(line) = crate::render::format_jev_preselect(phase.as_str(), detail.as_str()) {
+            if let Some(line) = crate::render::format_jev_preselect(phase.as_str(), detail.as_str())
+            {
                 println!("\x1b[2m{line}\x1b[0m");
             }
             Ok(())
@@ -259,6 +260,8 @@ pub(super) fn prompt_question_request_tui(
     pending: &crate::question::PendingQuestion,
     runtime: &mut ReplRuntime,
 ) -> Result<()> {
+    // 提问面板在主屏光标处绘制，全屏视图必须先退出
+    runtime.leave_fullscreen()?;
     let mut stdout = io::stdout();
     // 1. 独占 raw 输入，避免与主循环输入框事件竞争
     let mut terminal_guard = terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
