@@ -2,6 +2,7 @@
 
 use super::overview::{mark_at_row, rail_marks};
 use super::paint::scroll_for_track_row;
+use super::selection;
 use super::state::WHEEL_STEP;
 use crate::cli::repl_runtime::ReplRuntime;
 use anyhow::Result;
@@ -48,6 +49,16 @@ impl ReplRuntime {
             Event::Key(key) if key.kind != KeyEventKind::Release => self.fullscreen_key(*key),
             _ => Effect::Pass,
         };
+        // 1. 选区复制经 OSC 52 写入终端剪贴板，随下一帧一起送出
+        if let Some(text) = self
+            .fullscreen
+            .as_mut()
+            .and_then(|session| session.pending_copy.take())
+        {
+            use std::io::Write as _;
+            write!(self.frame, "{}", super::selection::osc52_copy(&text))?;
+            self.commit_frame()?;
+        }
         match effect {
             Effect::Repaint => {
                 self.paint_fullscreen()?;
@@ -131,11 +142,75 @@ impl ReplRuntime {
                 let target = scroll_for_track_row(state, body_row, height);
                 state.scroll_to(target, height)
             }
+            // 2. 正文拖动：扩展选区，拖到上下边缘时顺带滚动
+            MouseEventKind::Drag(MouseButton::Left) => match state.press {
+                Some(anchor) => {
+                    let mut scrolled = false;
+                    if mouse.row <= layout.body_top {
+                        scrolled = state.scroll_by(-1, height);
+                    } else if usize::from(mouse.row - layout.body_top) + 1 >= height {
+                        scrolled = state.scroll_by(1, height);
+                    }
+                    let row = usize::from(mouse.row.saturating_sub(layout.body_top))
+                        .min(height.saturating_sub(1));
+                    let head = selection::TextPoint {
+                        row: state.scroll + row,
+                        col: usize::from(mouse.column).min(usize::from(layout.content_width)),
+                    };
+                    let next = Some(selection::Selection { anchor, head });
+                    let changed = next != state.selection;
+                    state.selection = next;
+                    changed || scrolled
+                }
+                None => false,
+            },
+            // 3. 松开：有选区则复制，否则按点击展开或收起段落
             MouseEventKind::Up(MouseButton::Left) => {
                 state.dragging = false;
-                false
+                let Some(press) = state.press.take() else {
+                    return Effect::Nothing;
+                };
+                match state.selection.filter(|selection| !selection.is_empty()) {
+                    Some(selection) => {
+                        let lines = state
+                            .document
+                            .lines
+                            .iter()
+                            .map(|line| {
+                                crate::render::activity_animation::strip_ansi_for_test(
+                                    line.as_str(),
+                                )
+                            })
+                            .collect::<Vec<_>>();
+                        let text = selection::selected_text(
+                            &lines,
+                            &selection,
+                            usize::from(layout.content_width),
+                        );
+                        if text.is_empty() {
+                            state.selection = None;
+                        } else {
+                            state.copied = Some(text.chars().count());
+                            session.pending_copy = Some(text);
+                        }
+                        true
+                    }
+                    None => {
+                        state.selection = None;
+                        match state.toggle_at(press.row) {
+                            Some(anchor) => {
+                                session.pending_toggle = Some(anchor);
+                                true
+                            }
+                            None => false,
+                        }
+                    }
+                }
             }
             MouseEventKind::Down(MouseButton::Left) => {
+                // 新的按下清掉上一次选区与复制提示
+                let cleared = state.selection.take().is_some() | state.copied.take().is_some();
+                let handled = {
                 // 2. 标题：点“新输出”到底，点其余位置回到当前消息开头
                 if mouse.row < layout.body_top {
                     let on_unseen = session
@@ -164,17 +239,17 @@ impl ReplRuntime {
                         None => false,
                     }
                 } else if mouse.column < layout.content_width {
-                    // 5. 正文：点击可折叠段落展开或收起
-                    match state.toggle_at(state.scroll + body_row) {
-                        Some(anchor) => {
-                            session.pending_toggle = Some(anchor);
-                            true
-                        }
-                        None => false,
-                    }
+                    // 5. 正文：先记下按下位置，松开时再区分点击与拖选
+                    state.press = Some(selection::TextPoint {
+                        row: state.scroll + body_row,
+                        col: usize::from(mouse.column),
+                    });
+                    false
                 } else {
                     false
                 }
+                };
+                handled || cleared
             }
             _ => false,
         };

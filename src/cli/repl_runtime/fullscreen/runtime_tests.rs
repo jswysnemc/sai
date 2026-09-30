@@ -68,6 +68,16 @@ fn mouse(kind: MouseEventKind, column: u16, row: u16) -> Event {
     })
 }
 
+/// 在指定位置按下并松开左键。
+fn click(runtime: &mut ReplRuntime, column: u16, row: u16) {
+    runtime
+        .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), column, row))
+        .unwrap();
+    runtime
+        .handle_fullscreen_event(&mouse(MouseEventKind::Up(MouseButton::Left), column, row))
+        .unwrap();
+}
+
 /// 进入全屏后输入框固定在底部，正文区在其上方；退出后恢复主屏布局。
 #[test]
 fn composer_is_pinned_to_the_bottom() {
@@ -133,9 +143,7 @@ fn clicking_a_paragraph_toggles_it() {
     let span = session.state.document.paragraphs[0].clone();
     let layout = session.state.layout.unwrap();
     let row = layout.body_top + (span.start - session.state.scroll) as u16;
-    runtime
-        .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 4, row))
-        .unwrap();
+    click(&mut runtime, 4, row);
     let session = runtime.fullscreen.as_ref().unwrap();
     assert!(session.state.expanded.contains(&span.key));
     let text = session
@@ -162,13 +170,7 @@ fn clicking_a_paragraph_toggles_it() {
         .expect("展开后应有思考正文");
     assert!(body_row > reopened.start && body_row < reopened.end);
     let screen_row = layout.body_top + (body_row - session.state.scroll) as u16;
-    runtime
-        .handle_fullscreen_event(&mouse(
-            MouseEventKind::Down(MouseButton::Left),
-            4,
-            screen_row,
-        ))
-        .unwrap();
+    click(&mut runtime, 4, screen_row);
     assert!(runtime
         .fullscreen
         .as_ref()
@@ -312,4 +314,86 @@ fn fullscreen_keeps_formula_image_placements_intact() {
     }
     let inline_row = rows.iter().find(|row| row.contains("行内")).unwrap();
     assert!(inline_row.contains("尾巴"), "{inline_row:?}");
+}
+
+
+/// 直接拖动即可选中正文并复制，不展开段落；松开后标题提示已复制。
+#[test]
+fn dragging_selects_and_copies_without_toggling() {
+    let mut runtime = runtime(2);
+    runtime.enter_fullscreen().unwrap();
+    let session = runtime.fullscreen.as_ref().unwrap();
+    let layout = session.state.layout.unwrap();
+    let answer_row = session
+        .state
+        .document
+        .lines
+        .iter()
+        .rposition(|line| line.as_str().contains("turn-1-answer-2"))
+        .expect("answer line");
+    let screen_row = layout.body_top + (answer_row - session.state.scroll) as u16;
+    let line = crate::render::activity_animation::strip_ansi_for_test(
+        session.state.document.lines[answer_row].as_str(),
+    );
+    let start = line.find("turn-1").unwrap() as u16;
+    runtime
+        .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), start, screen_row))
+        .unwrap();
+    runtime
+        .handle_fullscreen_event(&mouse(
+            MouseEventKind::Drag(MouseButton::Left),
+            start + 6,
+            screen_row,
+        ))
+        .unwrap();
+    // 拖动中选区以反色绘制
+    let painted = runtime.fullscreen.as_ref().unwrap().state.previous.clone().unwrap();
+    assert!(painted[usize::from(screen_row)].contains("\x1b[7m"));
+    runtime
+        .handle_fullscreen_event(&mouse(
+            MouseEventKind::Up(MouseButton::Left),
+            start + 6,
+            screen_row,
+        ))
+        .unwrap();
+    let session = runtime.fullscreen.as_ref().unwrap();
+    assert_eq!(session.state.copied, Some(6));
+    assert!(session.state.expanded.is_empty(), "拖选不应触发展开");
+    assert!(session.pending_copy.is_none(), "复制内容应已写出");
+    let header = crate::render::activity_animation::strip_ansi_for_test(
+        &session.state.previous.as_ref().unwrap()[0],
+    );
+    assert!(
+        header.contains("已复制 6 个字符") || header.contains("Copied 6 characters"),
+        "{header}"
+    );
+    // 下一次按下清掉选区与提示
+    click(&mut runtime, start, screen_row);
+    let state = &runtime.fullscreen.as_ref().unwrap().state;
+    assert!(state.selection.is_none());
+    assert!(state.copied.is_none());
+}
+
+/// 拖到正文顶部边缘时向上滚动，选区随之延伸。
+#[test]
+fn dragging_past_the_top_edge_scrolls() {
+    let mut runtime = runtime(4);
+    runtime.enter_fullscreen().unwrap();
+    let layout = runtime.fullscreen.as_ref().unwrap().state.layout.unwrap();
+    let before = runtime.fullscreen.as_ref().unwrap().state.scroll;
+    let middle = layout.body_top + layout.body_height / 2;
+    runtime
+        .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 2, middle))
+        .unwrap();
+    runtime
+        .handle_fullscreen_event(&mouse(
+            MouseEventKind::Drag(MouseButton::Left),
+            2,
+            layout.body_top,
+        ))
+        .unwrap();
+    let state = &runtime.fullscreen.as_ref().unwrap().state;
+    assert_eq!(state.scroll, before - 1);
+    let selection = state.selection.expect("selection");
+    assert_eq!(selection.head.row, state.scroll);
 }

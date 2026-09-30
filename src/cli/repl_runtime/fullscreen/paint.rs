@@ -90,6 +90,14 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
             }
             _ => fit(line, content_width),
         };
+        // 4. 拖动选区以反色标出
+        let body = match state
+            .selection
+            .and_then(|selection| selection.cols_on_row(state.scroll + row, content_width))
+        {
+            Some((from, to)) => super::selection::highlight_cols(&body, from, to),
+            None => body,
+        };
         let mut output = body;
         if layout.rail_col.is_some() {
             let mark = marks.iter().position(|mark| mark.row == row);
@@ -127,7 +135,16 @@ fn header_line(state: &FullscreenState, layout: &FullscreenLayout) -> (String, O
         None => format!("{HEADER_TEXT}{}", t("Conversation", "会话")),
     };
     // 2. 右侧：离开底部且有新输出时提示，否则给出快捷键
-    let (right, clickable) = if state.unseen {
+    let (right, clickable) = if let Some(count) = state.copied {
+        (
+            if crate::i18n::is_zh() {
+                format!("{HEADER_UNSEEN}已复制 {count} 个字符")
+            } else {
+                format!("{HEADER_UNSEEN}Copied {count} characters")
+            },
+            false,
+        )
+    } else if state.unseen {
         (
             format!("{HEADER_UNSEEN}{}", t("↓ New output", "↓ 有新输出")),
             true,
@@ -137,8 +154,8 @@ fn header_line(state: &FullscreenState, layout: &FullscreenLayout) -> (String, O
             format!(
                 "{HEADER_HINT}{}",
                 t(
-                    "Click to fold · Alt+↑↓ messages · Shift+drag selects · Ctrl+O exit",
-                    "点击展开/收起 · Alt+↑↓ 切换消息 · Shift+拖动选择 · Ctrl+O 退出"
+                    "Click to fold · Drag to copy · Alt+↑↓ messages · Ctrl+O exit",
+                    "点击展开/收起 · 拖动复制 · Alt+↑↓ 切换消息 · Ctrl+O 退出"
                 )
             ),
             false,

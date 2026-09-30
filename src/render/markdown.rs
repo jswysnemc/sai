@@ -325,15 +325,16 @@ impl MarkdownLineRenderer {
         match classify_display_math_line(line, self.in_math_block) {
             // 1. 独占一行的 `$$…$$`：按块级样式出图，不再走行内图片
             DisplayMathLine::Single(formula) => {
-                let pending = self.flush();
+                let pending = self.flush_with_display_gap();
                 self.asset_block.reset();
                 let raw = self.asset_block.push_line(line);
                 let rendered = asset_block::render_math_block(&[formula]);
+                self.pending_blank_lines = self.pending_blank_lines.max(1);
                 Some(pending + &raw + &self.asset_block.finish(rendered))
             }
             // 2. 开启块级公式，同行内容计入公式
             DisplayMathLine::Open(first) => {
-                let pending = self.flush();
+                let pending = self.flush_with_display_gap();
                 self.in_math_block = true;
                 self.math_buffer.clear();
                 self.math_buffer.extend(first);
@@ -347,6 +348,7 @@ impl MarkdownLineRenderer {
                 let raw_close = self.asset_block.push_line(line);
                 let rendered = asset_block::render_math_block(&self.math_buffer);
                 self.math_buffer.clear();
+                self.pending_blank_lines = self.pending_blank_lines.max(1);
                 Some(raw_close + &self.asset_block.finish(rendered))
             }
             DisplayMathLine::Other if self.in_math_block => {
@@ -355,6 +357,22 @@ impl MarkdownLineRenderer {
             }
             DisplayMathLine::Other => None,
         }
+    }
+
+    /// 刷新缓冲，并保证块级公式与上方正文之间隔一行。
+    ///
+    /// 块级公式常紧跟在说明文字下一行书写；不加间隔时，公式图片贴着上一行
+    /// 的行内公式与文字，两者难以区分。下方间隔由闭合时登记的待输出空行提供。
+    ///
+    /// 返回:
+    /// - 刷新输出与必要的空行
+    fn flush_with_display_gap(&mut self) -> String {
+        let had_gap = self.pending_blank_lines > 0;
+        let mut output = self.flush();
+        if !had_gap && self.has_emitted_content {
+            output.push('\n');
+        }
+        output
     }
 
     /// 把一行写入裸 SVG 块；遇到结束标签时出图。

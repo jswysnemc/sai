@@ -76,3 +76,19 @@ fn kitty_inline_formulas_stay_inline_with_distinct_placements() {
     assert_eq!(placements.len(), 3, "{output:?}");
     assert_ne!(placements[0], placements[2], "{output:?}");
 }
+
+/// 验证块级公式与上下正文各隔一行，已有空行时不重复叠加。
+#[test]
+fn display_math_is_separated_from_surrounding_text() {
+    let tight = render_stable("说明 $a$：\n$$ x=1 $$\n下一段\n");
+    assert!(
+        tight.contains("说明 [inline math rendering skipped]：\n\n"),
+        "{tight:?}"
+    );
+    assert!(tight.contains("\n\n下一段"), "{tight:?}");
+    let spaced = render_stable("说明\n\n$$ x=1 $$\n\n下一段\n");
+    assert!(!spaced.contains("\n\n\n"), "{spaced:?}");
+    let multi = render_stable("说明\n$$\\begin{aligned}\na&=1\n\\end{aligned}$$\n下一段\n");
+    assert!(multi.contains("说明\n\n"), "{multi:?}");
+    assert!(multi.contains("\n\n下一段"), "{multi:?}");
+}

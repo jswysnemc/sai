@@ -6,6 +6,7 @@
 mod image_window;
 mod input;
 mod layout;
+mod selection;
 mod overview;
 mod paint;
 mod state;
@@ -33,6 +34,8 @@ pub(super) struct FullscreenSession {
     pending_toggle: Option<(usize, isize)>,
     /// 上一帧的图片放置签名
     images: Vec<(usize, String)>,
+    /// 松开鼠标后待写入剪贴板的文本
+    pending_copy: Option<String>,
 }
 
 impl FullscreenSession {
@@ -58,6 +61,7 @@ impl FullscreenSession {
             unseen_cols: None,
             pending_toggle: None,
             images: Vec::new(),
+            pending_copy: None,
         })
     }
 }
