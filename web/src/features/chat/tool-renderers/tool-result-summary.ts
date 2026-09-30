@@ -1,5 +1,6 @@
 import { parseImageReadNote, parseReadTextPages } from "./read-result-parser";
 import { jevCapabilityStatusLabel, parseJevCapability } from "./jev-capability-data";
+import { parseLoadResult } from "./load-tool-data";
 import { parseJsonRecord } from "./tool-data";
 import { text, type Locale } from "../../i18n/locale";
 
@@ -40,6 +41,7 @@ export function toolResultSummary(
   if (!output) return null;
 
   if (name === "request_capability") return capabilitySummary(output, locale);
+  if (name === "load") return loadSummary(output, locale);
   if (name === "read_file") return readSummary(output, locale);
   if (name === "grep" || name === "search_text") return matchSummary(output, locale);
   if (name === "glob" || name === "find_files" || name === "list_dir") return fileSummary(output, locale);
@@ -88,6 +90,23 @@ function capabilitySummary(output: string, locale: Locale): ToolResultSummary | 
   const exposure = parseJevCapability(output);
   if (!exposure) return null;
   return { label: jevCapabilityStatusLabel(exposure, locale), tone: "neutral" };
+}
+
+/**
+ * 汇总 load 读取的 Skill 文档或工具 Schema 数量。
+ *
+ * @param output load 结果 JSON
+ * @param locale 界面语言
+ * @returns 数量摘要；不是 load 成功结果时返回空
+ */
+function loadSummary(output: string, locale: Locale): ToolResultSummary | null {
+  const result = parseLoadResult(output);
+  if (!result || result.items.length === 0) return null;
+  const count = result.items.length;
+  const label = result.kind === "skill"
+    ? text(locale, count === 1 ? "1 skill doc" : `${count} skill docs`, `${count} 份 Skill 文档`)
+    : text(locale, count === 1 ? "1 tool schema" : `${count} tool schemas`, `${count} 个工具 Schema`);
+  return { label, tone: "neutral" };
 }
 
 function readSummary(output: string, locale: Locale): ToolResultSummary | null {

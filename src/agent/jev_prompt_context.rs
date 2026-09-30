@@ -5,11 +5,48 @@ use anyhow::Result;
 
 const MEMORY_ID: &str = "memory_context";
 
+/// 注入片段的种类，界面据此区分提示词片段与记忆。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum FragmentKind {
+    /// 系统提示或指令文件里的 `<jev>` 片段
+    Prompt,
+    /// 记忆索引与使用契约
+    Memory,
+}
+
+impl FragmentKind {
+    /// 注入标签与界面使用的种类标识。
+    ///
+    /// 返回:
+    /// - prompt 或 memory
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            Self::Prompt => "prompt",
+            Self::Memory => "memory",
+        }
+    }
+}
+
+/// 一个可注入片段及其来源信息。
+pub(super) struct Fragment {
+    /// 候选标识
+    pub id: String,
+    pub kind: FragmentKind,
+    /// 来源：system、instructions、extra 或 memory
+    pub source: String,
+    /// 界面展示用的简短说明
+    pub description: String,
+    /// 命中后注入的正文
+    pub content: String,
+    /// 记忆候选附带的索引，只用于界面预览
+    pub preview: Option<String>,
+}
+
 /// 本轮提示词候选与正文快照，保证判断和注入使用同一份内容。
 #[derive(Default)]
 pub(super) struct PromptContext {
     pub candidates: Vec<Candidate>,
-    fragments: Vec<(String, String)>,
+    fragments: Vec<Fragment>,
 }
 
 /// 请求前路由结果，明确区分记忆命中与能力暴露文本。
@@ -56,9 +93,14 @@ impl Agent {
                     MEMORY_ID,
                     &description,
                 ));
-                context
-                    .fragments
-                    .push((MEMORY_ID.to_string(), contract.to_string()));
+                context.fragments.push(Fragment {
+                    id: MEMORY_ID.to_string(),
+                    kind: FragmentKind::Memory,
+                    source: "memory".to_string(),
+                    description: memory_label(memory_index).to_string(),
+                    content: contract.to_string(),
+                    preview: memory_index.map(str::to_string),
+                });
             }
         }
         Ok(context)
@@ -73,7 +115,7 @@ impl PromptContext {
                 format!("{source}\n{}\n{}", segment.description, segment.content).as_bytes(),
             );
             let id = format!("prompt_{}", &hash.to_hex()[..24]);
-            if self.fragments.iter().any(|(known, _)| known == &id) {
+            if self.fragments.iter().any(|fragment| fragment.id == id) {
                 continue;
             }
             self.candidates.push(Candidate::new(
@@ -81,7 +123,14 @@ impl PromptContext {
                 &id,
                 &segment.description,
             ));
-            self.fragments.push((id, segment.content));
+            self.fragments.push(Fragment {
+                id,
+                kind: FragmentKind::Prompt,
+                source: source.to_string(),
+                description: segment.description,
+                content: segment.content,
+                preview: None,
+            });
         }
         Ok(())
     }
@@ -89,12 +138,19 @@ impl PromptContext {
     /// 【Jev路由】【正文注入】参数为本轮选择；返回按来源顺序排列的命中正文及记忆开关。
     pub(super) fn render(&self, selection: &Selection) -> Preselection {
         let mut blocks = Vec::new();
-        for (id, content) in &self.fragments {
-            if selection.prompts.contains(id) && !content.is_empty() {
-                blocks.push(format!(
-                    "<jev-context id=\"{id}\">\n{content}\n</jev-context>"
-                ));
+        for fragment in self.selected(selection) {
+            if fragment.content.is_empty() {
+                continue;
             }
+            // 种类、来源与说明写进标签，历史回放时界面无需再查候选表
+            blocks.push(format!(
+                "<jev-context id=\"{}\" kind=\"{}\" source=\"{}\" description=\"{}\">\n{}\n</jev-context>",
+                fragment.id,
+                fragment.kind.as_str(),
+                fragment.source,
+                escape_attribute(&fragment.description),
+                fragment.content
+            ));
         }
         Preselection {
             block: (!blocks.is_empty()).then(|| format!(
@@ -104,4 +160,53 @@ impl PromptContext {
             memory_selected: selection.prompts.iter().any(|id| id == MEMORY_ID),
         }
     }
+
+    /// 本轮命中的片段，按来源顺序排列。
+    ///
+    /// 参数:
+    /// - `selection`: Jev 选择结果
+    ///
+    /// 返回:
+    /// - 命中片段
+    pub(super) fn selected<'a>(
+        &'a self,
+        selection: &'a Selection,
+    ) -> impl Iterator<Item = &'a Fragment> + 'a {
+        self.fragments
+            .iter()
+            .filter(move |fragment| selection.prompts.contains(&fragment.id))
+    }
+}
+
+/// 记忆候选的界面说明：有索引时说明可用记忆，没有时说明只提供使用契约。
+///
+/// 参数:
+/// - `memory_index`: 本轮可用记忆索引
+///
+/// 返回:
+/// - 简短说明
+fn memory_label(memory_index: Option<&str>) -> &'static str {
+    if memory_index.is_some() {
+        "Memory index and read/write guidance"
+    } else {
+        "Memory read/write guidance"
+    }
+}
+
+/// 转义标签属性值中的引号、尖括号与换行。
+///
+/// 参数:
+/// - `value`: 属性原文
+///
+/// 返回:
+/// - 可放进双引号属性的单行文本
+fn escape_attribute(value: &str) -> String {
+    value
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }

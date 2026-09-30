@@ -40,9 +40,32 @@ describe("JevCapabilityView", () => {
     const html = renderToStaticMarkup(
       <JevCapabilityView
         argumentsText={JSON.stringify({ need: "invent a language" })}
-        exposure={{ tools: [], skills: [] }}
+        exposure={{ tools: [], skills: [], contexts: [] }}
       />
     );
     expect(html).toContain("Jev 没有再暴露工具或 Skill。");
+  });
+
+  it("按工具、片段、记忆分区，片段与记忆可展开预览", () => {
+    const html = renderToStaticMarkup(
+      <JevCapabilityView
+        argumentsText="{}"
+        exposure={{
+          tools: [{ kind: "tool", name: "web_search", detail: "Search the web." }],
+          skills: [],
+          contexts: [
+            { kind: "prompt", id: "prompt_1", source: "instructions", description: "编写迁移时使用", preview: "迁移必须可回退" },
+            { kind: "memory", id: "memory_context", source: "memory", description: "", preview: "项目记忆：\n- [偏好](a.md)\n- [规范](b.md)" }
+          ]
+        }}
+      />
+    );
+    expect(html).toContain("提示词片段");
+    expect(html).toContain("编写迁移时使用");
+    expect(html).toContain("指令文件");
+    expect(html).toContain("记忆上下文");
+    expect(html).toContain("2 条记忆索引");
+    expect(html).toContain("迁移必须可回退");
+    expect(html).toContain('aria-expanded="false"');
   });
 });

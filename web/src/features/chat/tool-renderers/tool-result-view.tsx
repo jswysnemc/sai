@@ -3,6 +3,8 @@ import { EditToolView } from "./edit-tool-view";
 import { GenericToolView } from "./generic-tool-view";
 import { JevCapabilityView } from "./jev-capability-view";
 import { parseJevCapability } from "./jev-capability-data";
+import { parseLoadResult } from "./load-tool-data";
+import { LoadToolView } from "./load-tool-view";
 import { ReadToolView } from "./read-tool-view";
 import { ShellToolView } from "./shell-tool-view";
 import { ImageGenerationToolView } from "./image-generation-tool-view";
@@ -31,6 +33,10 @@ export function ToolResultView({ name, argumentsText, output, headerPath, worksp
   if (name === "request_capability") {
     const exposure = parseJevCapability(output);
     if (exposure) return <JevCapabilityView argumentsText={argumentsText} exposure={exposure} />;
+  }
+  if (name === "load") {
+    const result = parseLoadResult(output);
+    if (result) return <LoadToolView result={result} />;
   }
   if (name === "generate_image") {
     return <ImageGenerationToolView output={output} />;

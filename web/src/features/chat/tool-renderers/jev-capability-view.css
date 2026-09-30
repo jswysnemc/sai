@@ -61,3 +61,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* 可展开的片段与记忆条目自带行布局，不套用名单的两列网格 */
+.jev-capability li.disclosure-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+}

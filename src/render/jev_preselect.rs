@@ -1,5 +1,8 @@
 use super::terminal_text;
 
+/// 行内展示提示词片段说明的最大字符数。
+const PROMPT_LABEL_CHARS: usize = 24;
+
 /// 把发送前的 Jev 判断收成一行终端提示。
 ///
 /// running 阶段不落行：TUI 不能替换已写出的提示，等判断结束再显示结论。
@@ -13,7 +16,9 @@ use super::terminal_text;
 pub(crate) fn format_jev_preselect(phase: &str, detail: &str) -> Option<String> {
     let body = match phase {
         "running" => return None,
-        "empty" => terminal_text("no new tools or skills", "没有新的工具或 Skill").to_string(),
+        "empty" => {
+            terminal_text("nothing new selected", "没有新的工具、Skill 或上下文").to_string()
+        }
         "failed" => {
             let summary = terminal_text(
                 "judgment failed; base tools only",
@@ -27,7 +32,7 @@ pub(crate) fn format_jev_preselect(phase: &str, detail: &str) -> Option<String> 
             }
         }
         _ => jev_exposure_names(detail).unwrap_or_else(|| {
-            terminal_text("no new tools or skills", "没有新的工具或 Skill").to_string()
+            terminal_text("nothing new selected", "没有新的工具、Skill 或上下文").to_string()
         }),
     };
     Some(format!(
@@ -36,10 +41,10 @@ pub(crate) fn format_jev_preselect(phase: &str, detail: &str) -> Option<String> 
     ))
 }
 
-/// 从预选 JSON 取出工具名和 skill 名。
+/// 从预选 JSON 取出工具名、skill 名、提示词片段说明与记忆标记。
 ///
 /// 参数:
-/// - `detail`: announce_selection 返回的 JSON
+/// - `detail`: 预选结果 JSON（tools、skills、contexts）
 ///
 /// 返回:
 /// - 逗号分隔的名单；解析失败或名单为空时为空
@@ -75,11 +80,53 @@ fn jev_exposure_names(detail: &str) -> Option<String> {
             }
         }
     }
+    // 注入片段：提示词片段显示说明，记忆只显示一个标记
+    for item in value
+        .get("contexts")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        match item.get("kind").and_then(serde_json::Value::as_str) {
+            Some("memory") => names.push(terminal_text("memory", "记忆").to_string()),
+            Some("prompt") => {
+                let description = item
+                    .get("description")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default();
+                names.push(prompt_label(description));
+            }
+            _ => {}
+        }
+    }
     if names.is_empty() {
         None
     } else {
         Some(names.join(", "))
     }
+}
+
+/// 提示词片段的行内标签：说明折叠空白并截断，没有说明时只显示种类。
+///
+/// 参数:
+/// - `description`: 片段说明
+///
+/// 返回:
+/// - 形如 `prompt:编写迁移时使用` 的标签
+fn prompt_label(description: &str) -> String {
+    let prefix = terminal_text("prompt", "片段");
+    let collapsed = description.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.is_empty() {
+        return prefix.to_string();
+    }
+    let mut label = collapsed
+        .chars()
+        .take(PROMPT_LABEL_CHARS)
+        .collect::<String>();
+    if collapsed.chars().count() > PROMPT_LABEL_CHARS {
+        label.push('…');
+    }
+    format!("{prefix}:{label}")
 }
 
 #[cfg(test)]
@@ -95,6 +142,28 @@ mod tests {
         );
     }
 
+    /// 只命中片段与记忆时不再误报“没有新的工具”。
+    #[test]
+    fn ready_lists_prompt_segments_and_memory() {
+        let detail = r#"{"ok":true,"router":"jev","tools":[],"skills":[],"contexts":[{"kind":"prompt","description":"编写或修改数据库迁移时使用的规范"},{"kind":"memory","description":"Memory index"}]}"#;
+        assert_eq!(
+            format_jev_preselect("ready", detail).as_deref(),
+            Some("Jev before send · prompt:编写或修改数据库迁移时使用的规范, memory")
+        );
+    }
+
+    /// 工具、Skill 与片段同时命中时全部列出。
+    #[test]
+    fn ready_lists_every_kind_together() {
+        let detail = r#"{"ok":true,"router":"jev","tools":[{"name":"web_search"}],"skills":[{"name":"drawio"}],"contexts":[{"kind":"prompt","description":"一段超过二十四个字符上限的非常长的片段说明文字需要截断"}]}"#;
+        let line = format_jev_preselect("ready", detail).unwrap();
+        assert!(
+            line.starts_with("Jev before send · web_search, skill:drawio, prompt:"),
+            "{line}"
+        );
+        assert!(line.ends_with('…'), "{line}");
+    }
+
     #[test]
     fn running_stays_silent_until_the_judgment_finishes() {
         assert_eq!(format_jev_preselect("running", ""), None);
@@ -104,7 +173,7 @@ mod tests {
     fn empty_and_failed_stay_visible() {
         assert_eq!(
             format_jev_preselect("empty", "").as_deref(),
-            Some("Jev before send · no new tools or skills")
+            Some("Jev before send · nothing new selected")
         );
         assert_eq!(
             format_jev_preselect("failed", "timeout").as_deref(),

@@ -1,4 +1,5 @@
 import { text, type Locale } from "../../i18n/locale";
+import { contextsOf, parseJevSelectedContext, type JevInjectedContext } from "./jev-context-data";
 import { parseJsonRecord, type JsonRecord } from "./tool-data";
 
 /** Jev 本次新暴露的一项工具或 Skill。 */
@@ -9,50 +10,84 @@ export type JevExposedResource = {
   detail: string;
 };
 
-/** `request_capability` 成功结果里实际暴露的资源。 */
+/** Jev 本轮暴露的资源与按需注入的上下文。 */
 export type JevCapabilityExposure = {
   tools: JevExposedResource[];
   skills: JevExposedResource[];
+  /** 命中的提示词片段与记忆；`request_capability` 结果中为空 */
+  contexts: JevInjectedContext[];
 };
 
+/** 没有任何结果的暴露名单。 */
+export const EMPTY_JEV_EXPOSURE: JevCapabilityExposure = { tools: [], skills: [], contexts: [] };
+
 /**
- * 从 `request_capability` 的结果 JSON 中提取暴露名单。
+ * 判断暴露名单是否为空。
  *
- * 只保留名称与一句说明。工具 Schema 和 Skill 全文留给模型，不进入界面。
- *
- * @param output 工具输出
- * @returns 暴露名单；不是 Jev 成功结果时返回空
+ * @param exposure 暴露名单
+ * @returns 四类都为空时为 true
  */
+export function isEmptyJevExposure(exposure: JevCapabilityExposure): boolean {
+  return exposure.tools.length === 0 && exposure.skills.length === 0 && exposure.contexts.length === 0;
+}
+
 /**
  * 从用户消息注入前缀里取出本轮 Jev 预选结果。
  *
- * 标签存在就表示 Jev 被调用过。JSON 解析失败时仍返回空名单，
- * 让界面能标出这次调用，而不是把它藏进原文。
+ * 工具与 Skill 在 `<jev-exposed-capabilities>`，提示词片段与记忆在
+ * `<jev-selected-context>`，两块各自可选。任一标签存在就表示 Jev 被调用过；
+ * JSON 解析失败时仍返回空名单，让界面能标出这次调用。
  *
  * @param content 供应商用户消息的注入前缀
- * @returns 暴露名单；没有预选标签时返回空
+ * @returns 暴露名单；两块都不存在时返回 null
  */
 export function parseJevExposureBlock(content: string): JevCapabilityExposure | null {
   const match = /<jev-exposed-capabilities>([\s\S]*?)<\/jev-exposed-capabilities>/u.exec(content);
-  if (!match) return null;
-  const body = match[1] ?? "";
+  const contexts = parseJevSelectedContext(content);
+  if (!match && !contexts) return null;
+  const body = match?.[1] ?? "";
   const jsonStart = body.indexOf("{");
   const jsonEnd = body.lastIndexOf("}");
-  if (jsonStart < 0 || jsonEnd < jsonStart) return { tools: [], skills: [] };
-  return parseJevCapability(body.slice(jsonStart, jsonEnd + 1)) ?? { tools: [], skills: [] };
+  // 标签本身已说明来源，注入块里的 JSON 不要求 router 字段
+  const resources = jsonStart >= 0 && jsonEnd > jsonStart
+    ? parseExposureRecord(body.slice(jsonStart, jsonEnd + 1), false) ?? EMPTY_JEV_EXPOSURE
+    : EMPTY_JEV_EXPOSURE;
+  return { ...resources, contexts: contexts ?? [] };
 }
 
+/**
+ * 从 `request_capability` 结果或预选 detail 中提取暴露名单。
+ *
+ * 只保留名称与一句说明。工具 Schema 和 Skill 全文留给模型，不进入界面；
+ * 提示词片段与记忆只保留截断后的预览。
+ *
+ * @param output 工具输出或预选 detail
+ * @returns 暴露名单；不是 Jev 成功结果时返回空
+ */
 export function parseJevCapability(output: string): JevCapabilityExposure | null {
+  return parseExposureRecord(output, true);
+}
+
+/**
+ * 解析暴露结果 JSON。
+ *
+ * @param output JSON 文本
+ * @param requireRouter 是否要求 router 为 jev；工具结果需要据此与其它 JSON 区分
+ * @returns 暴露名单；不是成功结果时返回空
+ */
+function parseExposureRecord(output: string, requireRouter: boolean): JevCapabilityExposure | null {
   const record = parseJsonRecord(output);
-  if (!record || record.ok !== true || record.router !== "jev") return null;
+  if (!record || record.ok !== true) return null;
+  if (requireRouter && record.router !== "jev") return null;
   return {
     tools: resourcesOf(record.tools, "tool"),
-    skills: resourcesOf(record.skills, "skill")
+    skills: resourcesOf(record.skills, "skill"),
+    contexts: contextsOf(record.contexts)
   };
 }
 
 /**
- * 折叠行右侧的暴露计数。
+ * 折叠行右侧的暴露计数：工具、Skill、片段数量与记忆标记。
  *
  * @param exposure 已解析的暴露名单
  * @param locale 界面语言
@@ -67,6 +102,13 @@ export function jevCapabilityStatusLabel(exposure: JevCapabilityExposure, locale
   if (exposure.skills.length > 0) {
     const count = exposure.skills.length;
     parts.push(text(locale, count === 1 ? "1 skill" : `${count} skills`, `${count} 个 Skill`));
+  }
+  const prompts = exposure.contexts.filter((item) => item.kind === "prompt").length;
+  if (prompts > 0) {
+    parts.push(text(locale, prompts === 1 ? "1 prompt" : `${prompts} prompts`, `${prompts} 个片段`));
+  }
+  if (exposure.contexts.some((item) => item.kind === "memory")) {
+    parts.push(text(locale, "memory", "记忆"));
   }
   if (parts.length === 0) return text(locale, "no match", "未匹配");
   return parts.join(" · ");

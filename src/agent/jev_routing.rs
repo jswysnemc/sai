@@ -1,3 +1,4 @@
+use super::jev_preselect_detail::preselect_detail;
 use super::jev_prompt_context::Preselection;
 use super::*;
 use crate::jev::{self, Candidate, JevClient, Selection, SelectionLimits};
@@ -68,9 +69,10 @@ impl Agent {
         };
         let mut result = prompt_context.render(&selection);
         if selection.tools.is_empty() && selection.skills.is_empty() {
+            // 只命中提示词片段或记忆：界面同样收到结构化结果
             on_event(AgentEvent::JevPreselect {
                 phase: "ready".to_string(),
-                detail: result.block.clone().unwrap_or_default(),
+                detail: preselect_detail(None, prompt_context.selected(&selection)),
             })?;
             return Ok(result);
         }
@@ -84,7 +86,7 @@ impl Agent {
             Ok(output) => {
                 on_event(AgentEvent::JevPreselect {
                     phase: "ready".to_string(),
-                    detail: output.clone(),
+                    detail: preselect_detail(Some(&output), prompt_context.selected(&selection)),
                 })?;
                 result.block = Some(
                     [Some(preselect_block(&output)), result.block]

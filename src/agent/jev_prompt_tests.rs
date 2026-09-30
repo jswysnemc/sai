@@ -162,10 +162,22 @@ async fn http_routing_controls_prompt_and_memory_exposure_each_turn() {
             let turn = format!("route-{index}");
             agent.state.start_turn(&turn, need).unwrap();
             let mut phases = Vec::new();
+            let mut ready = None;
             let result = agent.jev_preselect(&turn, need, Some("<memory-index>索引</memory-index>"), &mut |event| {
-                if let AgentEvent::JevPreselect { phase, .. } = event { phases.push(phase); }
+                if let AgentEvent::JevPreselect { phase, detail } = event {
+                    if phase == "ready" { ready = Some(detail); }
+                    phases.push(phase);
+                }
                 Ok(())
             }).await.unwrap();
+            // 界面收到的 ready 结果按种类列出命中的片段与记忆
+            if prompt_expected || memory_expected {
+                let detail: serde_json::Value = serde_json::from_str(ready.as_deref().unwrap()).unwrap();
+                let kinds = detail["contexts"].as_array().unwrap().iter().map(|entry| entry["kind"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+                assert_eq!(kinds.contains(&"prompt".to_string()), prompt_expected, "{need}");
+                assert_eq!(kinds.contains(&"memory".to_string()), memory_expected, "{need}");
+                assert!(detail.to_string().contains("配置场景"), "{need}");
+            }
             assert_eq!(result.memory_selected, memory_expected, "{need}");
             assert_eq!(result.block.as_deref().is_some_and(|block| block.contains("条件正文")), prompt_expected, "{need}");
             let memory = result.memory_selected.then_some("<memory-index>索引</memory-index>");

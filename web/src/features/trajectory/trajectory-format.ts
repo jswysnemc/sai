@@ -1,3 +1,5 @@
+import { parseJevExposureBlock } from "../chat/tool-renderers/jev-capability-data";
+
 /** 单行摘要的最大字符数；超出部分由 CSS 省略号收尾。 */
 const SUMMARY_LIMIT = 220;
 
@@ -13,43 +15,22 @@ export function summarizeContent(content: string): string {
 }
 
 /**
- * 从 Jev 预选注入块中提取暴露的工具与 Skill 名称。
+ * 从 Jev 预选注入块中提取暴露的工具、Skill、提示词片段与记忆。
  *
- * 注入正文带有完整 Schema，轨迹摘要只需要名单。
+ * 注入正文带有完整 Schema 与片段全文，轨迹摘要只需要名单。
  *
  * @param content 供应商用户消息的注入前缀
  * @returns 名称摘要；不是 Jev 预选块时返回空
  */
 export function summarizeJevExposure(content: string): string | null {
-  const match = /<jev-exposed-capabilities>([\s\S]*?)<\/jev-exposed-capabilities>/u.exec(content);
-  if (!match) return null;
-  const body = match[1] ?? "";
-  const jsonStart = body.indexOf("{");
-  if (jsonStart < 0) return "Jev";
-  try {
-    const value = JSON.parse(body.slice(jsonStart)) as { tools?: unknown; skills?: unknown };
-    const tools = resourceNames(value.tools);
-    const skills = resourceNames(value.skills).map((name) => `skill:${name}`);
-    const names = [...tools, ...skills];
-    return names.length > 0 ? names.join(", ") : "Jev";
-  } catch {
-    return "Jev";
-  }
-}
-
-/**
- * 读取暴露结果里的名称字段。
- *
- * @param value tools 或 skills 数组
- * @returns 非空名称
- */
-function resourceNames(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((item) => {
-    if (!item || typeof item !== "object" || !("name" in item)) return [];
-    const name = item.name;
-    return typeof name === "string" && name.trim() ? [name.trim()] : [];
-  });
+  const exposure = parseJevExposureBlock(content);
+  if (!exposure) return null;
+  const names = [
+    ...exposure.tools.map((item) => item.name),
+    ...exposure.skills.map((item) => `skill:${item.name}`),
+    ...exposure.contexts.map((item) => item.kind === "memory" ? "memory" : `prompt:${item.description || item.id}`)
+  ];
+  return names.length > 0 ? names.join(", ") : "Jev";
 }
 
 /**

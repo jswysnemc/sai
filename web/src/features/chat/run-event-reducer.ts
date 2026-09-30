@@ -1,6 +1,6 @@
 import type { PendingQuestion, PermissionDecision, PermissionRequest, QueueInsertAt, QuestionResponse, SshSecretRequest, TurnUsage, WebEvent } from "../../api/contracts";
 import { text, type Locale } from "../i18n/locale";
-import { parseJevCapability, type JevCapabilityExposure } from "./tool-renderers/jev-capability-data";
+import { EMPTY_JEV_EXPOSURE, parseJevCapability, type JevCapabilityExposure } from "./tool-renderers/jev-capability-data";
 
 /** 用户消息发往模型前的 Jev 预选阶段。 */
 export type JevPreselectPhase = "running" | "ready" | "empty" | "failed";
@@ -391,8 +391,8 @@ function applyJevPreselect(state: LiveRunState, payload: Record<string, unknown>
   const phase = jevPreselectPhase(payload.phase);
   const detail = typeof payload.detail === "string" ? payload.detail : "";
   const exposure = phase === "ready"
-    ? parseJevCapability(detail) ?? { tools: [], skills: [] }
-    : { tools: [], skills: [] };
+    ? parseJevCapability(detail) ?? EMPTY_JEV_EXPOSURE
+    : EMPTY_JEV_EXPOSURE;
   const part: LiveMessagePart = { id: "jev-preselect", type: "jev", phase, exposure, detail };
   return { ...state, parts: [part, ...state.parts.filter((item) => item.type !== "jev")] };
 }

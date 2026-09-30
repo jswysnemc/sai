@@ -1,0 +1,73 @@
+.load-tool {
+  display: grid;
+  gap: var(--space-2xs);
+  padding: var(--space-sm) var(--space-md);
+  color: var(--ink);
+  font-family: var(--font-ui);
+}
+
+.load-tool h3,
+.load-tool ul,
+.load-tool-empty {
+  margin: 0;
+  padding: 0;
+}
+
+.load-tool h3,
+.load-tool-empty {
+  color: var(--ink-soft);
+  font: 400 var(--text-2xs)/1.4 var(--font-ui);
+}
+
+.load-tool ul {
+  display: grid;
+  gap: var(--space-2xs);
+  list-style: none;
+}
+
+/* Skill 正文在折叠面板内限高滚动，不把整份文档铺进对话 */
+.load-tool-markdown {
+  max-height: 22rem;
+  overflow-y: auto;
+  font-size: var(--text-sm);
+}
+
+.load-tool-params {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+
+.load-tool-params th,
+.load-tool-params td {
+  padding: var(--space-2xs) var(--space-xs);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.load-tool-params th {
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+
+.load-tool-params code {
+  font: 400 var(--text-xs)/1.4 var(--font-code);
+}
+
+.load-tool-required {
+  margin-left: 0.125rem;
+  color: var(--danger);
+}
+
+@media (max-width: 40rem) {
+  .load-tool {
+    padding: var(--space-xs) var(--space-sm);
+  }
+
+  /* 窄屏只保留参数名与说明，类型并入参数名下方 */
+  .load-tool-params th:nth-child(2),
+  .load-tool-params td:nth-child(2) {
+    display: none;
+  }
+}

@@ -8,10 +8,17 @@ import { summarizeContent, summarizeJevExposure } from "./trajectory-format";
  */
 export function trajectoryInjections(content: string) {
   const exposure = parseJevExposureBlock(content);
-  const match = /<jev-exposed-capabilities>[\s\S]*?<\/jev-exposed-capabilities>/u.exec(content);
-  const context = match ? content.replace(match[0], "").trim() : content.trim();
+  // 工具/Skill 暴露块与片段/记忆注入块都归入 Jev 记录，其余动态上下文单独列出
+  const blocks = [
+    /<jev-exposed-capabilities>[\s\S]*?<\/jev-exposed-capabilities>/u.exec(content)?.[0],
+    /<jev-selected-context>[\s\S]*?<\/jev-selected-context>/u.exec(content)?.[0]
+  ].filter((block): block is string => Boolean(block));
+  const context = blocks.reduce((rest, block) => rest.replace(block, ""), content).trim();
   const entries = [];
-  if (exposure && match) entries.push({ id: "jev", label: "Jev", content: match[0], summary: summarizeJevExposure(match[0]) ?? "Jev", exposure });
+  if (exposure && blocks.length > 0) {
+    const jevContent = blocks.join("\n\n");
+    entries.push({ id: "jev", label: "Jev", content: jevContent, summary: summarizeJevExposure(jevContent) ?? "Jev", exposure });
+  }
   if (context) entries.push({ id: "injected", label: injectedLabel(context), content: context, summary: summarizeContent(context), exposure: undefined });
   return entries;
 }

@@ -102,7 +102,7 @@ describe("groupActivityParts", () => {
 
   it("keeps the pre-send Jev judgment before the tool overview", () => {
     const segments = groupActivityParts([
-      { id: "jev", type: "jev", phase: "ready", exposure: { tools: [], skills: [] }, detail: "" },
+      { id: "jev", type: "jev", phase: "ready", exposure: { tools: [], skills: [], contexts: [] }, detail: "" },
       tool("t1"),
       text("body")
     ]);
