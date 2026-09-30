@@ -1,6 +1,19 @@
 use super::{model::Picker, rows};
 use crate::{paths::SaiPaths, state};
 
+/// 【会话恢复】【测试目录】创建规范化后的临时根目录。
+///
+/// 会话存储按规范路径登记工作区：macOS 临时目录经 /var -> /private/var 软链接，
+/// Windows 可能给出 8.3 短名，不规范化时断言会拿别名与存储路径比较。
+///
+/// 返回:
+/// - 临时目录守卫与规范根路径
+fn temp_root() -> (tempfile::TempDir, std::path::PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let root = crate::platform::windows_path::canonicalize(dir.path()).unwrap();
+    (dir, root)
+}
+
 /// 【会话恢复】【测试数据】创建不同工作区的同名会话。
 /// 参数: paths 为隔离存储，root 为测试根目录；返回: 两个工作区目录
 fn workspaces(
@@ -20,9 +33,9 @@ fn workspaces(
 /// 参数: 无；返回: 无
 #[test]
 fn scope_search_and_grouping_keep_workspace_identity() {
-    let root = tempfile::tempdir().unwrap();
-    let paths = SaiPaths::for_tests(root.path());
-    let (a, b) = workspaces(&paths, root.path());
+    let (_guard, root) = temp_root();
+    let paths = SaiPaths::for_tests(&root);
+    let (a, b) = workspaces(&paths, &root);
     let targets = state::resume_catalog(&paths, &a, true).unwrap();
     let current =
         state::workspace_id_for_path(&crate::platform::windows_path::canonicalize(&a).unwrap());
@@ -48,9 +61,9 @@ fn scope_search_and_grouping_keep_workspace_identity() {
 /// 参数: 无；返回: 无
 #[tokio::test]
 async fn explicit_workspace_and_missing_directory_are_validated() {
-    let root = tempfile::tempdir().unwrap();
-    let paths = SaiPaths::for_tests(root.path());
-    let (a, b) = workspaces(&paths, root.path());
+    let (_guard, root) = temp_root();
+    let paths = SaiPaths::for_tests(&root);
+    let (a, b) = workspaces(&paths, &root);
     crate::runtime_cwd::scope(a.clone(), async {
         let local = state::resolve_resume_target(&paths, "shared", None).unwrap();
         assert_eq!(local.workspace_path, Some(a));
@@ -66,9 +79,9 @@ async fn explicit_workspace_and_missing_directory_are_validated() {
 /// 参数: 无；返回: 无
 #[test]
 fn legacy_web_workspace_paths_are_resolved_without_writes() {
-    let root = tempfile::tempdir().unwrap();
-    let paths = SaiPaths::for_tests(root.path());
-    let (a, b) = workspaces(&paths, root.path());
+    let (_guard, root) = temp_root();
+    let paths = SaiPaths::for_tests(&root);
+    let (a, b) = workspaces(&paths, &root);
     let foreign = state::resume_catalog(&paths, &a, true)
         .unwrap()
         .into_iter()
@@ -99,15 +112,15 @@ fn legacy_web_workspace_paths_are_resolved_without_writes() {
 /// 参数: 无；返回: 无
 #[tokio::test]
 async fn ambiguous_foreign_ids_require_a_workspace() {
-    let root = tempfile::tempdir().unwrap();
-    let paths = SaiPaths::for_tests(root.path());
-    workspaces(&paths, root.path());
-    crate::runtime_cwd::scope(root.path().into(), async {
+    let (_guard, root) = temp_root();
+    let paths = SaiPaths::for_tests(&root);
+    workspaces(&paths, &root);
+    crate::runtime_cwd::scope(root.clone(), async {
         assert!(state::resolve_resume_target(&paths, "shared", None)
             .unwrap_err()
             .to_string()
             .contains("ambiguous"));
-        assert!(state::resume_catalog(&paths, root.path(), false)
+        assert!(state::resume_catalog(&paths, &root, false)
             .unwrap()
             .is_empty());
     })
@@ -119,10 +132,10 @@ async fn ambiguous_foreign_ids_require_a_workspace() {
 #[cfg(unix)]
 #[test]
 fn symbolic_link_uses_the_same_workspace_scope() {
-    let root = tempfile::tempdir().unwrap();
-    let paths = SaiPaths::for_tests(root.path());
-    let (a, _) = workspaces(&paths, root.path());
-    let alias = root.path().join("alias");
+    let (_guard, root) = temp_root();
+    let paths = SaiPaths::for_tests(&root);
+    let (a, _) = workspaces(&paths, &root);
+    let alias = root.join("alias");
     std::os::unix::fs::symlink(&a, &alias).unwrap();
     let targets = state::resume_catalog(&paths, &alias, false).unwrap();
     assert_eq!(targets.len(), 1);

@@ -6,6 +6,27 @@ use std::sync::{Arc, Mutex};
 
 type Requests = Arc<Mutex<Vec<Value>>>;
 
+/// 会话记忆提取后台任务的系统提示标记；它与主对话共用聊天接口。
+const EXTRACTION_WORKER: &str = "session memory extraction worker";
+
+/// 取本轮主对话发出的最后一次聊天请求，排除轮次结束后异步发起的会话记忆提取。
+///
+/// 参数:
+/// - `requests`: 已记录的聊天请求
+///
+/// 返回:
+/// - 主对话请求
+fn last_turn_request(requests: &Requests) -> Value {
+    requests
+        .lock()
+        .unwrap()
+        .iter()
+        .rev()
+        .find(|request| !request["messages"].to_string().contains(EXTRACTION_WORKER))
+        .cloned()
+        .expect("本轮应发出主对话请求")
+}
+
 /// 记录聊天请求并返回最小回复；参数为共享记录和请求，返回流式或普通 HTTP 响应。
 async fn chat_response(
     State(requests): State<Requests>,
@@ -48,6 +69,8 @@ async fn full_turn_sends_only_selected_memory_and_prompt_context() {
         ("none", false, true),
     ] {
         let temp = tempfile::tempdir().unwrap();
+        // 上一轮的后台提取可能晚到，每轮开始前清空记录
+        requests.lock().unwrap().clear();
         crate::runtime_cwd::scope(temp.path().to_path_buf(), async {
             let paths = SaiPaths::for_tests(temp.path());
             let mut config = AppConfig::default();
@@ -75,7 +98,7 @@ async fn full_turn_sends_only_selected_memory_and_prompt_context() {
             }, "记忆回归标记").unwrap();
             let result = agent.chat_stream_with_image(need, None, |_| Ok(())).await.unwrap();
             assert_eq!(result.content, "answer");
-            let request = requests.lock().unwrap().last().cloned().unwrap();
+            let request = last_turn_request(&requests);
             let text = serde_json::to_string(&request["messages"]).unwrap();
             assert_eq!(text.contains("轮次条件正文"), expected, "{need}/{routing}");
             assert_eq!(text.contains("记忆回归标记"), expected, "{need}/{routing}");

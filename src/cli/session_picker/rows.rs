@@ -79,7 +79,8 @@ fn group_line(target: &crate::state::ResumeTarget, current: bool, width: usize) 
     } else {
         0
     };
-    let path = truncate(&path, width.saturating_sub(tag_width).max(8));
+    // 路径保留末尾：区分工作区靠最后几级目录，开头的公共前缀可以省略
+    let path = truncate_head(&path, width.saturating_sub(tag_width).max(8));
     format!("{BOLD}{path}{RESET}{tag}")
 }
 
@@ -198,6 +199,31 @@ pub(super) fn detail_lines(picker: &Picker, width: usize) -> [String; 2] {
     ]
 }
 
+/// 按显示宽度截掉文本开头，超长时以省略号开头保留末尾。
+///
+/// 参数:
+/// - `value`: 原文
+/// - `max`: 最大显示宽度
+///
+/// 返回:
+/// - 不超过最大宽度的文本
+fn truncate_head(value: &str, max: usize) -> String {
+    if display_width(value) <= max {
+        return value.to_string();
+    }
+    let mut kept = Vec::new();
+    let mut width = 1usize;
+    for ch in value.chars().rev() {
+        let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+        if width + ch_width > max {
+            break;
+        }
+        kept.push(ch);
+        width += ch_width;
+    }
+    format!("…{}", kept.into_iter().rev().collect::<String>())
+}
+
 /// 将 RFC 3339 时间转为本地 `YYYY-MM-DD HH:MM`，无法解析时原样返回。
 ///
 /// 参数:
@@ -231,5 +257,22 @@ fn home_relative(path: &Path) -> String {
             .map(|rest| format!("~/{}", rest.display()))
             .unwrap_or_else(|_| path.display().to_string()),
         None => path.display().to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 长路径截掉开头，保留能区分工作区的末级目录。
+    #[test]
+    fn long_paths_keep_their_tail() {
+        let path =
+            "/private/var/folders/36/tjdph2t965j8snz9_vkdnw0r0000gn/T/.tmpvG7VP8/workspace-a";
+        let clipped = truncate_head(path, 30);
+        assert!(clipped.starts_with('…'));
+        assert!(clipped.ends_with("workspace-a"));
+        assert_eq!(display_width(&clipped), 30);
+        assert_eq!(truncate_head("short", 30), "short");
     }
 }
