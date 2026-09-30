@@ -93,6 +93,26 @@ class InteractionTests(unittest.TestCase):
             terminal.send(b"!echo SANDBOX-AFTER\r")
             terminal.wait_for(lambda: "SANDBOX-AFTER" in terminal.text())
 
+    def test_key_hint_row_follows_state(self):
+        """输入框下方常驻按键提示；第一次 Ctrl+C 只在提示行提醒，不写入会话记录；返回无。"""
+
+        def hint_row(terminal):
+            """返回 composer 最后一行，即按键提示行。"""
+            rows = [row for row in terminal.screen.display if row.strip()]
+            return rows[-1] if rows else ""
+
+        with TerminalSession() as terminal:
+            terminal.wait_for(lambda: "Ctrl+O" in hint_row(terminal))
+            self.assertTrue(any(key in hint_row(terminal) for key in ("Enter 发送", "Enter send")))
+            terminal.send(b"/")
+            terminal.wait_for(lambda: "↑↓" in hint_row(terminal))
+            terminal.send(b"\x7f")
+            terminal.wait_for(lambda: "Ctrl+O" in hint_row(terminal))
+            terminal.send(b"\x03")
+            terminal.wait_for(lambda: "再按一次" in hint_row(terminal) or "again" in hint_row(terminal))
+            history = "\n".join(terminal.screen.display)
+            self.assertEqual(history.count("再按一次 Ctrl+C 退出") + history.count("Press Ctrl+C again to exit"), 1)
+
     def test_overlay_restores_input_and_cursor(self):
         """打开并取消配置面板后可执行命令，返回无。"""
         with TerminalSession() as terminal:

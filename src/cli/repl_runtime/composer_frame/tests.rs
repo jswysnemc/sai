@@ -318,10 +318,10 @@ fn floating_composer_clears_stale_rows_below() {
     frame.draw_lines(&mut output, &viewport, None).unwrap();
 
     let output = String::from_utf8(output).unwrap();
-    // 上空白 1 + 内上边距 1 + 输入 1 + 内下边距 1 + 状态 1 = 5；
-    // 顶部行 4（0 起）时，末行后为行 9 → 1 起第 10 行
+    // 上空白 1 + 内上边距 1 + 输入 1 + 内下边距 1 + 状态 1 + 按键提示 1 = 6；
+    // 顶部行 4（0 起）时，末行后为行 10 → 1 起第 11 行
     assert!(
-        output.contains("\x1b[10;1H\x1b[J"),
+        output.contains("\x1b[11;1H\x1b[J"),
         "expected clear below floating composer, got {output:?}"
     );
 }

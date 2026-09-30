@@ -369,7 +369,7 @@ pub(super) const CHROME_INPUT_PAD_ROWS: u16 = 1;
 /// 输入条内部上下各留的背景内边距行数（增加输入框视觉厚度）。
 pub(super) const CHROME_INPUT_INNER_PAD_ROWS: u16 = 1;
 /// 底栏状态左右外边距：与输入条的文字起点对齐。
-pub(super) const CHROME_FOOTER_SIDE_PAD: usize = CHROME_INPUT_PREFIX_COLS;
+pub(in crate::cli) const CHROME_FOOTER_SIDE_PAD: usize = CHROME_INPUT_PREFIX_COLS;
 
 /// 输入行：深色背景通栏 + 按行形态渲染提示符。
 pub(super) fn chrome_input_row(prefix: ChromeInputPrefix, content: &str, cols: usize) -> String {

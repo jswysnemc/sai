@@ -133,6 +133,8 @@ pub(super) struct ReplRuntime {
     ssh_prompt: Option<crate::cli::ssh_prompt::SshPromptView>,
     /// Ctrl+O 全屏会话视图；存在时所有绘制改走整屏布局
     fullscreen: Option<fullscreen::FullscreenSession>,
+    /// 第一次 Ctrl+C 后退出提示的截止时间
+    exit_hint_until: Option<Instant>,
 }
 
 /// 运行期间底部输入框草稿。
@@ -252,6 +254,7 @@ impl ReplRuntime {
             force_reanchor: false,
             ssh_prompt: None,
             fullscreen: None,
+            exit_hint_until: None,
         }
     }
 
@@ -390,7 +393,17 @@ impl ReplRuntime {
         let completion_wait = self
             .mention_completion_pending()
             .then_some(Duration::from_millis(20));
-        [reflow_wait, subagent_wait, animation_wait, completion_wait]
+        // 退出提示到期时唤醒一次，按键提示行恢复常规内容
+        let exit_hint_wait = self
+            .exit_hint_until
+            .map(|deadline| deadline.saturating_duration_since(Instant::now()));
+        [
+            reflow_wait,
+            subagent_wait,
+            animation_wait,
+            completion_wait,
+            exit_hint_wait,
+        ]
             .into_iter()
             .flatten()
             .min()

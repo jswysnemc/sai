@@ -81,13 +81,7 @@ pub(super) async fn run_repl(
             .unwrap_or_else(|_| "~".to_string()),
         sandbox_commands::welcome_mode_label(mode),
     )?;
-    runtime.record_meta(
-        t(
-            "Shift+Tab cycles mode · Tab/Enter queue while working · Ctrl+C stop · Enter send when idle",
-            "Shift+Tab 切模式 · 工作时 Tab/Enter 入队 · Ctrl+C 停止 · 空闲 Enter 发送",
-        )
-        .to_string(),
-    )?;
+    // 按键说明由输入框下方的按键提示行常驻展示，启动时不再单独打印一行
     // 使用外部内核时明确告知：对话交给了谁、哪些 sai 功能因此停用，
     // 否则压缩与记忆静默失效，用起来像是出了故障
     if let Some(notice) = crate::render::engine_notice(&config.agent) {

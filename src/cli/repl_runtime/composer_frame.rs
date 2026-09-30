@@ -1,4 +1,5 @@
 mod input_viewport;
+mod key_hints;
 mod layout;
 mod paint;
 #[cfg(test)]
@@ -61,6 +62,8 @@ pub(super) struct ComposerFrame {
     streaming: bool,
     /// 空输入时替代默认提示的占位文本（SSH 征询等临时输入场景）
     placeholder_override: Option<String>,
+    /// 状态栏下方按键提示所需的界面状态
+    key_hints: key_hints::KeyHintContext,
 }
 
 impl ComposerFrame {
@@ -95,6 +98,7 @@ impl ComposerFrame {
             panels_dismissed: false,
             streaming: false,
             placeholder_override: None,
+            key_hints: key_hints::KeyHintContext::default(),
         }
     }
 
@@ -118,6 +122,17 @@ impl ComposerFrame {
     /// - 无
     pub(super) fn set_streaming(&mut self, streaming: bool) {
         self.streaming = streaming;
+    }
+
+    /// 设置按键提示行使用的界面状态。
+    ///
+    /// 参数:
+    /// - `context`: 运行、全屏与退出确认状态
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn set_key_hints(&mut self, context: key_hints::KeyHintContext) {
+        self.key_hints = context;
     }
 
     /// 设置是否已用 Esc 收起补全面板。
@@ -188,26 +203,35 @@ impl ComposerFrame {
             return panel_rows
                 .saturating_add(CHROME_INPUT_PAD_ROWS)
                 .saturating_add(input_block)
-                .saturating_add(layout.mention_panel.height());
+                .saturating_add(layout.mention_panel.height())
+                .saturating_add(KEY_HINT_ROWS);
         }
         if layout.slash_panel.is_visible() {
             return panel_rows
                 .saturating_add(CHROME_INPUT_PAD_ROWS)
                 .saturating_add(input_block)
-                .saturating_add(layout.slash_panel.height());
+                .saturating_add(layout.slash_panel.height())
+                .saturating_add(KEY_HINT_ROWS);
         }
         if layout.shell_hint.is_visible() {
             return panel_rows
                 .saturating_add(CHROME_INPUT_PAD_ROWS)
                 .saturating_add(input_block)
-                .saturating_add(layout.shell_hint.height());
+                .saturating_add(layout.shell_hint.height())
+                .saturating_add(KEY_HINT_ROWS);
         }
         panel_rows
             .saturating_add(CHROME_INPUT_PAD_ROWS)
             .saturating_add(input_block)
             .saturating_add(1)
+            .saturating_add(KEY_HINT_ROWS)
     }
 }
+
+/// 状态栏下方按键提示占用的行数。
+const KEY_HINT_ROWS: u16 = 1;
+
+pub(super) use key_hints::KeyHintContext;
 
 /// composer 在单一终端宽度下的计算结果。
 struct ComposerLayout {
