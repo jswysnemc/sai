@@ -102,12 +102,15 @@ class InteractionTests(unittest.TestCase):
             return rows[-1] if rows else ""
 
         with TerminalSession() as terminal:
-            terminal.wait_for(lambda: "Ctrl+O" in hint_row(terminal))
-            self.assertTrue(any(key in hint_row(terminal) for key in ("Enter 发送", "Enter send")))
-            terminal.send(b"/")
-            terminal.wait_for(lambda: "↑↓" in hint_row(terminal))
-            terminal.send(b"\x7f")
-            terminal.wait_for(lambda: "Ctrl+O" in hint_row(terminal))
+            terminal.wait_for(lambda: "Enter" in hint_row(terminal))
+            row = hint_row(terminal)
+            self.assertNotIn("技巧", row)
+            self.assertNotIn("Ctrl+O", row)
+            # 开始输入后提示行让位
+            terminal.send(b"hello")
+            terminal.wait_for(lambda: "hello" in terminal.text() and "Enter" not in hint_row(terminal))
+            terminal.send(b"\x7f" * 5)
+            terminal.wait_for(lambda: "Enter" in hint_row(terminal))
             terminal.send(b"\x03")
             terminal.wait_for(lambda: "再按一次" in hint_row(terminal) or "again" in hint_row(terminal))
             history = "\n".join(terminal.screen.display)

@@ -96,24 +96,19 @@ impl ComposerFrame {
             first = false;
         }
         lines.extend((0..CHROME_INPUT_INNER_PAD_ROWS).map(|_| chrome_input_pad_row(cols)));
-        let panel = if layout.mention_panel.is_visible() {
+        if layout.mention_panel.is_visible() {
             lines.extend(layout.mention_panel.rendered_lines(cols));
-            super::key_hints::HintPanel::Completion
         } else if layout.slash_panel.is_visible() {
             lines.extend(layout.slash_panel.rendered_lines(cols));
-            super::key_hints::HintPanel::Completion
         } else if layout.shell_hint.is_visible() {
             lines.extend(layout.shell_hint.rendered_lines(cols));
-            super::key_hints::HintPanel::Shell
         } else {
             lines.push(self.chrome.footer_line(cols));
-            super::key_hints::HintPanel::None
-        };
-        // 最后一行固定为按键提示，随场景切换内容
+        }
+        // 最后一行固定为按键提示；有输入时留空行，输入框高度不随打字跳动
         lines.push(super::key_hints::render_key_hints(
             self.key_hints,
-            panel,
-            self.input.trim().is_empty(),
+            self.input.is_empty(),
             cols,
         ));
         lines
