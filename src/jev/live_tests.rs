@@ -89,6 +89,7 @@ async fn live_jev_audit_allows_requested_operation() {
         context: "[user] Print hello using echo hello in the workspace.",
         workdir: "/workspace",
         policy: crate::prompts::AUTO_AUDIT_SYSTEM_PROMPT,
+        sandbox: None,
     };
     let verdict = audit::review(&client, &facts, &JevAuditConfig::default())
         .await

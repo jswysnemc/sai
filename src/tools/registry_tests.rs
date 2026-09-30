@@ -48,6 +48,45 @@ async fn approved_network_command_reaches_handler_without_sandbox_marker() {
         .is_some_and(|arguments| arguments.get("_sai_sandbox").is_none()));
 }
 
+/// 验证模型传入的 `_sai_` 内部字段在执行前被丢弃，无法指定 Shell 或伪造沙箱标记。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[tokio::test]
+async fn model_supplied_internal_arguments_are_dropped() {
+    let received = Arc::new(Mutex::new(None));
+    let handler_received = Arc::clone(&received);
+    let mut registry = ToolRegistry::new();
+    registry.register(ToolSpec::new(
+        "run_command",
+        "test",
+        empty_parameters(),
+        move |arguments| {
+            let handler_received = Arc::clone(&handler_received);
+            async move {
+                *handler_received.lock().unwrap() = Some(arguments);
+                Ok("ok".to_string())
+            }
+        },
+    ));
+    registry
+        .call(
+            "run_command",
+            r#"{"command":"ls","_sai_command_shell":"/tmp/evil","_sai_sandbox":false}"#,
+        )
+        .await
+        .unwrap();
+
+    let received = received.lock().unwrap();
+    let arguments = received.as_ref().unwrap();
+    assert_eq!(arguments["command"], "ls");
+    assert!(arguments.get("_sai_command_shell").is_none());
+    assert!(arguments.get("_sai_sandbox").is_none());
+}
+
 /// 验证 resolves 判断工具是否可解析。
 #[test]
 fn resolves_accepts_registered_tools() {

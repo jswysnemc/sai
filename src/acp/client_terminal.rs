@@ -109,6 +109,14 @@ impl TerminalRegistry {
         // 1. 先过审核与权限：被拒或越界时直接失败，命令不会被启动
         //    审核针对用户看得懂的原始命令，而不是改写后的 rtk 形式
         let sandboxed = governance.authorize_command(&command, &cwd, events).await?;
+        let sandbox = sandboxed.then(|| {
+            crate::sandbox::SandboxPolicy::resolve(
+                &crate::sandbox::current_settings(),
+                crate::sandbox::FileAccess::WorkspaceWrite,
+                governance.workspace(),
+                Some(&cwd),
+            )
+        });
         // 2. 再套用输出压缩，与自带 run_command 同一套判定
         let filtered_command = governance.apply_output_filter(&command);
         // 3. 复用 sai 的 shell 构造，沙箱与自带 run_command 完全一致；
@@ -117,14 +125,14 @@ impl TerminalRegistry {
             crate::tools::command::build_shell_commands(
                 &filtered_command,
                 governance.command_shell(),
-                sandboxed,
+                sandbox.as_ref(),
             )?
         } else {
             crate::tools::command::build_shell_commands_for_args(
                 &command_name,
                 &command_args,
                 governance.command_shell(),
-                sandboxed,
+                sandbox.as_ref(),
             )?
         };
         let env = env_pairs(params);
@@ -498,11 +506,54 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn sandboxed_commands_go_through_bwrap() {
-        let sandboxed = crate::tools::command::build_shell_commands("ls", "", true).unwrap();
+        if !crate::sandbox::backend_availability().available {
+            return;
+        }
+        let policy = test_policy();
+        let sandboxed =
+            crate::tools::command::build_shell_commands("ls", "", Some(&policy)).unwrap();
         assert_eq!(sandboxed[0].0, "bwrap");
 
-        let plain = crate::tools::command::build_shell_commands("ls", "", false).unwrap();
+        let plain = crate::tools::command::build_shell_commands("ls", "", None).unwrap();
         assert_ne!(plain[0].0, "bwrap");
+    }
+
+    /// 参数数组形式同样必须进入沙箱。
+    ///
+    /// 外部内核的 terminal/create 多数走这条路径；此前它丢弃了沙箱标记。
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn argument_form_commands_keep_the_sandbox() {
+        if !crate::sandbox::backend_availability().available {
+            return;
+        }
+        let policy = test_policy();
+        let candidates = crate::tools::command::build_shell_commands_for_args(
+            "ls",
+            &["-la".to_string()],
+            "",
+            Some(&policy),
+        )
+        .unwrap();
+        assert_eq!(candidates[0].0, "bwrap");
+        let program = candidates[0]
+            .1
+            .as_std()
+            .get_program()
+            .to_string_lossy()
+            .into_owned();
+        assert_eq!(program, "bwrap");
+    }
+
+    /// 构造以临时目录为工作区的沙箱策略。
+    #[cfg(target_os = "linux")]
+    fn test_policy() -> crate::sandbox::SandboxPolicy {
+        crate::sandbox::SandboxPolicy::resolve(
+            &crate::sandbox::SandboxSettings::default(),
+            crate::sandbox::FileAccess::WorkspaceWrite,
+            &std::env::temp_dir(),
+            None,
+        )
     }
 
     /// 候选列表必须非空，且在 Windows 上提供多个回退项。
@@ -511,7 +562,7 @@ mod tests {
     /// 「sai 自带命令能跑、外部内核跑不了」的割裂。
     #[test]
     fn shell_candidates_are_never_empty() {
-        let candidates = crate::tools::command::build_shell_commands("echo hi", "", false).unwrap();
+        let candidates = crate::tools::command::build_shell_commands("echo hi", "", None).unwrap();
         assert!(!candidates.is_empty());
         #[cfg(windows)]
         assert!(candidates.len() > 1, "Windows 需要提供回退候选");

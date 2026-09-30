@@ -1,8 +1,8 @@
 use super::background_tasks::{spawn_managed_task, BackgroundRuntimeOwner};
 use super::exit_status::{exit_status_path, read_exit_code, remove_exit_status_file};
+use super::process::process_exists;
 #[cfg(test)]
 use super::process::terminate_process;
-use super::process::{process_exists, run_shell_command};
 use super::progress::{encode_command_output, CommandOutputStream};
 use super::store::{BackgroundCommandStore, BackgroundCommandTask};
 use crate::config::AppConfig;
@@ -210,15 +210,19 @@ async fn run_command(
                 )
             );
         }
-        let output = super::process::run_shell_command_with_progress(
+        let cwd = args
+            .get("cwd")
+            .and_then(Value::as_str)
+            .map(std::path::PathBuf::from);
+        return super::sandboxed_run::run_workspace_sandboxed(
             &command,
+            cwd.as_deref(),
             wait_seconds,
             shell.as_str(),
-            true,
             progress,
         )
-        .await?;
-        return foreground_output(output).map(|result| finalize_filtered(result, filtered));
+        .await
+        .map(|result| finalize_filtered(result, filtered));
     }
 
     // 2. 后台命令未启用时保持同步管道执行
@@ -236,7 +240,7 @@ async fn run_command(
             &command,
             wait_seconds,
             shell.as_str(),
-            false,
+            None,
             progress,
         )
         .await?;
@@ -432,7 +436,7 @@ fn background_result(
 ///
 /// 返回:
 /// - JSON 字符串
-fn foreground_output(output: std::process::Output) -> Result<String> {
+pub(super) fn foreground_output(output: std::process::Output) -> Result<String> {
     let stdout = clip_output(&crate::platform::output_encoding::decode_output(
         &output.stdout,
     ));
@@ -461,8 +465,7 @@ async fn run_readonly_command(args: Value, shell: String) -> Result<String> {
     let command = required(&args, "command")?;
     ensure_readonly_command(&command)?;
     let timeout = readonly_timeout(&args);
-    let output = run_shell_command(&command, timeout, shell.as_str(), false).await?;
-    foreground_output(output)
+    super::sandboxed_run::run_plan_command(&command, timeout, shell.as_str()).await
 }
 
 /// 读取前台等待超时参数。

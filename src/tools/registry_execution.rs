@@ -74,6 +74,8 @@ impl ToolRegistry {
         progress: ToolProgress,
         use_dsh_bash: bool,
     ) -> Result<ToolOutput> {
+        // 1. 【工具】【内部参数】`_sai_` 前缀只能由注册表注入，丢弃模型或外部调用方传入的同名字段
+        strip_internal_arguments(args);
         let original_args = args.clone();
         if let Some(profile) = &self.permission_profile {
             // 网格工具按目标地址判定归属：投给别人的会话默认直接拒绝
@@ -160,5 +162,18 @@ impl ToolRegistry {
             );
         }
         result
+    }
+}
+
+/// 删除参数对象顶层的 `_sai_` 内部字段。
+///
+/// 参数:
+/// - `args`: 工具参数
+///
+/// 返回:
+/// - 无
+fn strip_internal_arguments(args: &mut Value) {
+    if let Some(object) = args.as_object_mut() {
+        object.retain(|key, _| !key.starts_with("_sai_"));
     }
 }

@@ -5,6 +5,8 @@ import { ShellCommandLine } from "./shell-command-line";
 import { lenientStringField, parseJsonRecord, stringField } from "./tool-data";
 import { looksLikeJsonFragment } from "./tool-display-summary";
 import { useI18n } from "../../i18n/use-i18n";
+import { SandboxDenialNote } from "../../sandbox/sandbox-denial-note";
+import { sandboxDenialOf } from "../../sandbox/sandbox-labels";
 
 type ShellToolViewProps = {
   argumentsText: string;
@@ -35,6 +37,7 @@ export function ShellToolView({ argumentsText, output }: ShellToolViewProps) {
   const exitCode = typeof result?.exit_code === "number" ? result.exit_code : null;
   const success = background || (typeof result?.success === "boolean" ? result.success : exitCode === 0);
   const diffOutput = isDiffCommand(command, stdout);
+  const denial = sandboxDenialOf(result);
   const hasBody = Boolean(stdout || stderr || background || (!result && output));
   return (
     <ToolPanel className="shell-tool-view">
@@ -50,6 +53,7 @@ export function ShellToolView({ argumentsText, output }: ShellToolViewProps) {
           {t(`exit ${exitCode ?? "unknown"}`, `退出码 ${exitCode ?? "未知"}`)}
         </div>
       )}
+      {denial && <SandboxDenialNote denial={denial} />}
       {stdout && (diffOutput ? <DiffView source={stdout} /> : <CollapsibleOutput source={stdout} />)}
       {stderr && <CollapsibleOutput source={stderr} className="shell-output stderr" />}
       {!result && output && <CollapsibleOutput source={output} />}

@@ -1,5 +1,6 @@
 import type { JevConfig } from "./jev";
 import type { NotificationConfig, PermissionConfig, SessionConfig } from "./permissions";
+import type { SandboxConfig } from "./sandbox";
 
 export type ProviderApiKey = {
   id: string;
@@ -197,6 +198,8 @@ export type AppConfig = {
   /** 内置 Jev 功能：工具与 skills 暴露决策、权限自动审核 */
   jev?: JevConfig;
   permission?: PermissionConfig;
+  /** 审核与计划模式的命令沙箱 */
+  sandbox?: SandboxConfig;
   /** 执行对话轮次的内核 */
   agent?: AgentEngineConfig;
   session?: SessionConfig;

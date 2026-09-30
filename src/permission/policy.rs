@@ -394,7 +394,7 @@ impl PermissionProfile {
             self.current_mode(),
             PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
         ) && tool == "run_command"
-            && cfg!(target_os = "linux")
+            && crate::sandbox::sandbox_requested()
             && !(approved && escape_sandbox))
     }
 

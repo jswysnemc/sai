@@ -15,6 +15,7 @@ impl Default for AppConfig {
             model_endpoints: Vec::new(),
             agent: crate::config::AgentEngineConfig::default(),
             permission: PermissionConfig::default(),
+            sandbox: super::SandboxConfig::default(),
             session: SessionConfig::default(),
             context: ContextConfig::default(),
             retry: RetryConfig::default(),

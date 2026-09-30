@@ -318,8 +318,17 @@ pub(super) fn render_permission(permission: Option<&PermissionAuditView>) -> Str
     let Some(permission) = permission else {
         return String::new();
     };
+    // 沙箱范围在审批前后都保留，事后回看也能知道命令是否离开了沙箱
+    let sandbox = permission
+        .sandbox
+        .as_ref()
+        .map(|scope| format!("\n{}", crate::render::render_sandbox_scope(scope)))
+        .unwrap_or_default();
     match &permission.decision {
-        Some(decision) => format!("\n{}", crate::render::render_permission_decision(decision)),
+        Some(decision) => format!(
+            "{sandbox}\n{}",
+            crate::render::render_permission_decision(decision)
+        ),
         None => {
             let status = crate::render::render_auto_audit_status(permission.auto_audit);
             let controls = crate::render::render_permission_controls(
@@ -327,9 +336,9 @@ pub(super) fn render_permission(permission: Option<&PermissionAuditView>) -> Str
                 permission.reply_draft.as_deref(),
             );
             if status.is_empty() {
-                format!("\n{controls}")
+                format!("{sandbox}\n{controls}")
             } else {
-                format!("\n{status}\n{controls}")
+                format!("{sandbox}\n{status}\n{controls}")
             }
         }
     }

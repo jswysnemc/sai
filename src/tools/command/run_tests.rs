@@ -212,3 +212,34 @@ async fn writable_command_reports_nonzero_exit_code() {
     assert_eq!(data["success"], false);
     assert_eq!(data["exit_code"], 7);
 }
+
+/// 验证计划模式的只读沙箱拦住拒绝名单漏掉的写入，并在结果中说明原因。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn plan_mode_sandbox_blocks_interpreter_writes() {
+    if !crate::sandbox::backend_availability().available {
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let workspace = root.path().canonicalize().unwrap();
+    let result = crate::runtime_cwd::scope(workspace.clone(), async {
+        run_readonly_command(
+            // 拒绝名单只看重定向与常见写命令，find -fprint 可以绕过它写文件
+            json!({"command": "find . -maxdepth 0 -fprint planned.txt"}),
+            "sh".to_string(),
+        )
+        .await
+        .unwrap()
+    })
+    .await;
+    let data: Value = serde_json::from_str(&result).unwrap();
+    assert_eq!(data["success"], false);
+    assert!(!workspace.join("planned.txt").exists());
+    assert_eq!(data["sandbox_denial"]["kind"], "filesystem");
+}

@@ -1,4 +1,5 @@
 import type { ThinkingLevel } from "./sessions";
+import type { SandboxScope } from "./sandbox";
 
 export type RunMode = "plan" | "audited" | "auto_audit" | "yolo";
 
@@ -43,6 +44,8 @@ export type PermissionRequest = {
   arguments: string;
   /** 是否并行自动审核 */
   auto_audit?: boolean;
+  /** 命令类工具获批后的沙箱范围 */
+  sandbox?: SandboxScope;
 };
 
 export type PermissionAllowSource = "human" | "auto_audit";

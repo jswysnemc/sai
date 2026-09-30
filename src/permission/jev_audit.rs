@@ -48,12 +48,17 @@ impl JevAuditRuntime {
     ) -> Result<bool> {
         // 1. 组装审核事实，参数保留宿主原文，避免数值精度丢失
         let workdir = workdir.to_string_lossy();
+        let sandbox = request
+            .sandbox
+            .as_ref()
+            .map(super::SandboxScope::audit_note);
         let facts = AuditFacts {
             tool: &request.tool,
             arguments_json: &request.arguments,
             context,
             workdir: &workdir,
             policy: crate::prompts::AUTO_AUDIT_SYSTEM_PROMPT,
+            sandbox: sandbox.as_deref(),
         };
         // 2. 请求 Jev 并映射为权限决定
         let decision = match audit::review(&self.client, &facts, &self.settings).await? {

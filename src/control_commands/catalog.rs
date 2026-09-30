@@ -23,6 +23,7 @@ pub const REPL_COMMANDS: &[&str] = &[
     "/auto",
     "/auto-audit",
     "/jev",
+    "/sandbox",
     "/tree",
     "/undo",
     "/exit",

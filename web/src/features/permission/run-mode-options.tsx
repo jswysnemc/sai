@@ -16,8 +16,8 @@ export function createRunModeOptions(t: Translate): SelectOption<RunMode>[] {
       value: "audited",
       label: t("Confirm changes", "变更前确认"),
       description: t(
-        "Ask before changing files.",
-        "改文件前先问我。"
+        "Ask before changing files; commands run in the sandbox.",
+        "改文件前先问我；命令在沙箱内执行。"
       ),
       icon: <span className="run-mode-icon audit"><Hand size={16} /></span>
     },
@@ -25,8 +25,8 @@ export function createRunModeOptions(t: Translate): SelectOption<RunMode>[] {
       value: "auto_audit",
       label: t("Auto audit", "自动审核"),
       description: t(
-        "Automatically audit file changes.",
-        "自动审核文件变更。"
+        "Auto-review changes; sandbox escapes are judged strictly.",
+        "自动审核变更；离开沙箱的命令从严判断。"
       ),
       icon: <span className="run-mode-icon auto"><ShieldCheck size={16} /></span>
     },
@@ -34,8 +34,8 @@ export function createRunModeOptions(t: Translate): SelectOption<RunMode>[] {
       value: "plan",
       label: t("Plan mode", "计划模式"),
       description: t(
-        "Make a plan before editing.",
-        "编辑前先出计划。"
+        "Plan first; commands run read-only.",
+        "编辑前先出计划；命令只读执行。"
       ),
       icon: <span className="run-mode-icon plan"><NotepadText size={16} /></span>
     },
@@ -43,8 +43,8 @@ export function createRunModeOptions(t: Translate): SelectOption<RunMode>[] {
       value: "yolo",
       label: t("Full access", "完全访问"),
       description: t(
-        "Minimize confirmation prompts.",
-        "减少确认次数。"
+        "Minimize prompts; no sandbox.",
+        "减少确认次数；不经过沙箱。"
       ),
       icon: <span className="run-mode-icon yolo"><ShieldAlert size={16} /></span>
     }

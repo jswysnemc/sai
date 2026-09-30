@@ -25,6 +25,7 @@ pub(crate) mod omitted_line;
 mod permission;
 pub(crate) mod render_expand;
 pub(crate) mod render_width;
+mod sandbox_notice;
 pub(crate) mod session_summary;
 #[cfg(test)]
 mod session_summary_tests;
@@ -55,6 +56,7 @@ mod wait_spinner;
 pub(crate) mod work_status;
 
 pub(crate) use command_result_block::command_result_streams;
+pub(crate) use sandbox_notice::{render_sandbox_denial, render_sandbox_scope};
 pub(crate) use engine_notice::engine_notice;
 pub(crate) use jev_preselect::format_jev_preselect;
 pub(crate) use error::write_chat_error;

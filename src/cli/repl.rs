@@ -19,6 +19,7 @@ mod mode_commands;
 mod model_selection;
 mod navigation;
 mod plugin_commands;
+mod sandbox_commands;
 mod session_resume;
 mod session_support;
 mod settings_commands;
@@ -78,7 +79,7 @@ pub(super) async fn run_repl(
         crate::runtime_cwd::current_dir()
             .map(|path| super::repl_chrome::compress_home_prefix(&path.display().to_string()))
             .unwrap_or_else(|_| "~".to_string()),
-        mode.label().to_string(),
+        sandbox_commands::welcome_mode_label(mode),
     )?;
     runtime.record_meta(
         t(
@@ -561,6 +562,9 @@ pub(super) async fn run_repl(
         )
         .await?
         {
+            continue;
+        }
+        if sandbox_commands::handle(input, &mut runtime, mode)? {
             continue;
         }
         if input.eq_ignore_ascii_case("/ps") {

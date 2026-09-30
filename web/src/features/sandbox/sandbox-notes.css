@@ -1,0 +1,55 @@
+/* 沙箱范围与拦截提示：权限卡与命令结果共用 */
+
+.sandbox-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  min-width: 0;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-2);
+  background: color-mix(in srgb, var(--ink-soft) 7%, transparent);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.sandbox-note > svg {
+  flex: none;
+  margin-top: 0.125rem;
+}
+
+.sandbox-note.is-emphasis {
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  color: var(--ink);
+}
+
+.sandbox-note.is-emphasis > svg {
+  color: var(--warning);
+}
+
+.sandbox-note-body {
+  display: grid;
+  gap: var(--space-3xs);
+  min-width: 0;
+}
+
+.sandbox-note-detail {
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.sandbox-note code {
+  overflow-wrap: anywhere;
+  color: var(--ink-soft);
+  font: 400 var(--text-2xs)/var(--leading-control) var(--font-code);
+}
+
+.sandbox-denial-note {
+  margin: var(--space-sm) var(--space-lg) 0;
+}
+
+@media (max-width: 40rem) {
+  .sandbox-denial-note {
+    margin-inline: var(--space-sm);
+  }
+}

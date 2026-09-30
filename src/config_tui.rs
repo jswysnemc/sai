@@ -17,6 +17,7 @@ mod plugins;
 mod provider_fetch;
 mod provider_forms;
 mod providers;
+mod sandbox_settings;
 mod search;
 mod session;
 mod settings;

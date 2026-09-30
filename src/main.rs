@@ -31,6 +31,7 @@ mod render;
 mod runner;
 mod runtime_cwd;
 mod runtime_recovery;
+mod sandbox;
 mod shell;
 mod ssh;
 mod state;

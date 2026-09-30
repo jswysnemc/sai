@@ -34,4 +34,21 @@ describe("PermissionRequestCard", () => {
     expect(html).toContain("保留该文件");
     expect(html).not.toContain("允许一次");
   });
+
+  it("shows whether an approved command leaves the sandbox", () => {
+    const html = renderToStaticMarkup(
+      <PermissionRequestCard request={{
+        id: "permission",
+        session_id: "session",
+        tool: "run_command",
+        arguments: "{\"command\":\"curl https://x.dev\"}",
+        sandbox: { kind: "escalated", backend: "bwrap", network: false, reasons: ["network"], justification: "拉取接口定义" }
+      }} active />
+    );
+
+    expect(html).toContain("批准后在沙箱外执行");
+    expect(html).toContain("原因：联网");
+    expect(html).toContain("理由：拉取接口定义");
+    expect(html).toContain('data-sandbox-kind="escalated"');
+  });
 });

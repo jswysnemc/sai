@@ -614,6 +614,7 @@ impl TranscriptStore {
         let attached = match self.cells.get_mut(index) {
             Some(HistoryCell::Tool(ToolCell::Invocation(view))) if view.name == request.tool => {
                 view.request_permission_with_auto_audit(request.id.clone(), request.auto_audit);
+                view.set_permission_sandbox(request.sandbox.clone());
                 true
             }
             Some(HistoryCell::Diff(cell))

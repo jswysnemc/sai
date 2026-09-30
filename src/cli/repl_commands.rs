@@ -56,6 +56,7 @@ const EXTRA_REPL_COMMANDS: &[&str] = &[
     "/plugins",
     "/plugin",
     "/jev",
+    "/sandbox",
 ];
 
 /// 其中只切换权限模式的命令：等价于 Shift+Tab 热切换，可立即生效。
@@ -313,6 +314,10 @@ fn command_description(command: &str) -> &'static str {
         "/jev" => t(
             "Jev routing and permission audit status and switches",
             "Jev 暴露决策与权限审核的状态和开关",
+        ),
+        "/sandbox" => t(
+            "show sandbox backend and isolation policy",
+            "查看沙箱后端与隔离策略",
         ),
         "/goal" => t("manage long-running goals", "管理长期目标"),
         "/tree" => t(

@@ -19,6 +19,9 @@ pub struct AppConfig {
     pub agent: crate::config::AgentEngineConfig,
     #[serde(default)]
     pub permission: PermissionConfig,
+    /// 审核与计划模式下 Shell 命令的操作系统沙箱
+    #[serde(default)]
+    pub sandbox: super::SandboxConfig,
     #[serde(default)]
     pub session: SessionConfig,
     #[serde(default)]

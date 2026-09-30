@@ -15,6 +15,9 @@ pub(crate) struct PermissionRequest {
     /// 是否并行自动审核（供 UI 展示状态）
     #[serde(default)]
     pub(crate) auto_audit: bool,
+    /// 命令类工具获批后的沙箱范围
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) sandbox: Option<super::SandboxScope>,
 }
 
 /// 允许决定的来源。
@@ -163,6 +166,8 @@ pub(crate) fn request_permission_with_auto_audit(
         tool: tool.to_string(),
         arguments: arguments.to_string(),
         auto_audit,
+        // 【权限】【沙箱范围】审批卡与自动审核都要知道命令获批后是否离开沙箱
+        sandbox: super::SandboxScope::for_request(tool, arguments),
     };
     let (sender, receiver) = oneshot::channel();
     // 2. 请求进入共享等待表，供 CLI、TUI 或 Web 查询和处理

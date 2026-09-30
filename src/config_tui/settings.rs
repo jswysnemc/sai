@@ -28,6 +28,7 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
     loop {
         let options = vec![
             t("Permissions", "权限").to_string(),
+            t("Sandbox", "沙箱").to_string(),
             t("Terminal & context", "终端与上下文").to_string(),
             t("Tools & background commands", "工具与后台命令").to_string(),
             t("Display", "显示偏好").to_string(),
@@ -44,6 +45,7 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
                 config.permission.tui_mode().as_str(),
                 config.permission.cli_mode().as_str(),
             ),
+            super::sandbox_settings::sandbox_details(config),
             format!(
                 "{}\n\n{}: {} · {}: {}",
                 t(
@@ -114,16 +116,17 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
             KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
-            KeyCode::Char(digit @ '1'..='6') => {
+            KeyCode::Char(digit @ '1'..='7') => {
                 selected = digit as usize - '1' as usize;
             }
             KeyCode::Enter => match selected {
                 0 => edit_permission_settings(stdout, config)?,
-                1 => edit_context_settings(stdout, config)?,
-                2 => edit_tool_settings(stdout, config)?,
-                3 => edit_display_settings(stdout, config)?,
-                4 => edit_mesh_settings(stdout, config)?,
-                5 => super::compaction::edit_defaults(stdout, config)?,
+                1 => super::sandbox_settings::edit_sandbox_settings(stdout, config)?,
+                2 => edit_context_settings(stdout, config)?,
+                3 => edit_tool_settings(stdout, config)?,
+                4 => edit_display_settings(stdout, config)?,
+                5 => edit_mesh_settings(stdout, config)?,
+                6 => super::compaction::edit_defaults(stdout, config)?,
                 _ => {}
             },
             _ => {}
@@ -160,12 +163,12 @@ fn edit_permission_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
             t("TUI default permission mode", "TUI 默认权限模式"),
             config.permission.tui_mode().as_str().to_string(),
         )
-        .choices(&["yolo", "audited", "plan"]),
+        .choices(&["yolo", "audited", "auto_audit", "plan"]),
         Field::new(
             t("CLI default permission mode", "CLI 默认权限模式"),
             config.permission.cli_mode().as_str().to_string(),
         )
-        .choices(&["yolo", "audited", "plan"]),
+        .choices(&["yolo", "audited", "auto_audit", "plan"]),
     ];
     if !run_form(stdout, t(" PERMISSIONS ", " 权限 "), &mut fields)? {
         return Ok(());

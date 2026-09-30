@@ -88,6 +88,7 @@ fn permission_audit_stays_inside_existing_command_view() {
         tool: "run_command".to_string(),
         arguments: r#"{"command":"cargo test","cwd":"/workspace"}"#.to_string(),
         auto_audit: false,
+        sandbox: None,
     });
     let pending = store
         .display_tail(100, &options())
@@ -147,4 +148,56 @@ fn run_command_success_keeps_growing_output_in_summary() {
         "result should not shrink the view"
     );
     assert!(after.contains("hi") || after.contains("output") || after.contains("echo"));
+}
+
+/// 验证审批卡在决定前后都展示沙箱范围，命令结果展示沙箱拦截说明。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn sandbox_scope_and_denial_render_in_command_view() {
+    let mut store = TranscriptStore::new(100);
+    let arguments = r#"{"command":"curl https://x.dev","justification":"fetch schema"}"#;
+    store.push_tool_call("run_command".to_string(), arguments.to_string());
+    store.push_permission_request(crate::permission::PermissionRequest {
+        id: "permission".to_string(),
+        session_id: "session".to_string(),
+        tool: "run_command".to_string(),
+        arguments: arguments.to_string(),
+        auto_audit: false,
+        sandbox: Some(crate::permission::SandboxScope {
+            kind: crate::permission::SandboxScopeKind::Escalated,
+            backend: "bwrap".to_string(),
+            network: false,
+            reasons: vec!["network".to_string()],
+            justification: Some("fetch schema".to_string()),
+        }),
+    });
+    let text = |store: &mut TranscriptStore| {
+        store
+            .display_tail(100, &options())
+            .iter()
+            .map(|line| line.as_str())
+            .collect::<String>()
+    };
+    let pending = text(&mut store);
+    assert!(pending.contains("Leaves the sandbox") || pending.contains("批准后在沙箱外执行"));
+    assert!(pending.contains("fetch schema"));
+    assert!(store.resolve_permission(
+        "permission",
+        crate::permission::PermissionDecision::allow_once()
+    ));
+    assert!(text(&mut store).contains("fetch schema"));
+
+    store.push_tool_result(
+        "run_command".to_string(),
+        false,
+        r#"{"mode":"foreground","completed":true,"success":false,"exit_code":6,"stdout":"","stderr":"curl: (6) Could not resolve host","sandbox_denial":{"kind":"network","evidence":"curl","hint":"rerun escalated"}}"#.to_string(),
+    );
+    let finished = text(&mut store);
+    assert!(finished.contains("Blocked by sandbox") || finished.contains("沙箱拦截"));
+    assert!(finished.contains("rerun escalated"));
 }

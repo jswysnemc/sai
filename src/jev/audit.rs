@@ -22,6 +22,8 @@ pub(crate) struct AuditFacts<'a> {
     pub workdir: &'a str,
     /// 宿主自动审核规则
     pub policy: &'a str,
+    /// 命令获批后的沙箱范围说明；非命令工具为空
+    pub sandbox: Option<&'a str>,
 }
 
 /// Jev 审核结论。
@@ -62,12 +64,16 @@ pub(crate) async fn review(
 /// 返回:
 /// - systemone `state` 与问题集合
 fn request_parts(facts: &AuditFacts<'_>) -> (Value, Map<String, Value>) {
-    let state = json!({
+    let mut state = json!({
         "tool": facts.tool,
         "arguments_json": facts.arguments_json,
         "recent_context": facts.context,
         "workdir": facts.workdir,
     });
+    // 【Jev审核】【沙箱联动】提升出沙箱的命令需要更严格的授权判断
+    if let Some(sandbox) = facts.sandbox {
+        state["sandbox"] = json!(sandbox);
+    }
     let question = json!({
         "type": "choice",
         "instructions": {
@@ -158,9 +164,16 @@ mod tests {
             context: "[user] print",
             workdir: "/workspace",
             policy: "policy text",
+            sandbox: Some("Escalation: runs OUTSIDE the sandbox"),
         };
         let (state, questions) = request_parts(&facts);
         assert_eq!(state["arguments_json"], facts.arguments_json);
+        assert_eq!(state["sandbox"], "Escalation: runs OUTSIDE the sandbox");
+        let plain = AuditFacts {
+            sandbox: None,
+            ..facts.clone()
+        };
+        assert!(request_parts(&plain).0.get("sandbox").is_none());
         assert_eq!(questions[QUESTION_ID]["instructions"]["policy"], "policy text");
         assert!(questions[QUESTION_ID]["criteria"]["abstain"].is_string());
     }

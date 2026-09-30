@@ -511,6 +511,8 @@ export const api = {
       }),
     loadMcp: () => apiRequest<McpConfigResponse>("/api/config/mcp"),
     rtkStatus: () => apiRequest<import("./contracts").RtkStatusResponse>("/api/config/rtk-status"),
+    /** 读取沙箱后端探测结果与当前工作区的隔离路径 */
+    sandboxStatus: () => apiRequest<import("./contracts").SandboxStatusResponse>("/api/config/sandbox-status"),
     /** 读取当前对话内核状态，供界面标注失效信息 */
     engineStatus: () =>
       apiRequest<import("./contracts").EngineStatusResponse>("/api/config/engine-status"),

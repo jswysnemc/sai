@@ -187,7 +187,14 @@ pub(crate) fn render_command_error_view_for_cli(output: &str) -> String {
     } else {
         result.stderr.as_str()
     };
-    render_output_block_limited_with_hint(&label, message, Some(COMMAND_PREVIEW_LINES), false)
+    let rendered =
+        render_output_block_limited_with_hint(&label, message, Some(COMMAND_PREVIEW_LINES), false);
+    let denial = crate::render::render_sandbox_denial(output);
+    if denial.is_empty() {
+        rendered
+    } else {
+        format!("{denial}\n{rendered}")
+    }
 }
 
 /// 按可选行数和展开提示配置渲染命令结果。
@@ -212,6 +219,7 @@ fn render_command_result_view_with_options(
             show_expand_hint,
         );
     };
+    let denial = crate::render::render_sandbox_denial(output);
     let mut blocks = Vec::new();
     let stdout_empty = result.stdout.trim().is_empty();
     if !stdout_empty {
@@ -236,7 +244,13 @@ fn render_command_result_view_with_options(
             t("no output", "无输出").to_string(),
         ));
     }
-    render_output_blocks_with_hint(blocks, line_limit, show_expand_hint)
+    let rendered = render_output_blocks_with_hint(blocks, line_limit, show_expand_hint);
+    // 沙箱拦截说明放在输出之前，折叠预览时也能看到
+    if denial.is_empty() {
+        rendered
+    } else {
+        format!("{denial}\n{rendered}")
+    }
 }
 
 /// 渲染命令运行中的 stdout/stderr 预览。

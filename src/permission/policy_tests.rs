@@ -158,7 +158,7 @@ fn audited_profile_skips_todo_audit() {
     ));
 }
 
-/// 验证审计模式仅在 Linux 请求命令沙箱。
+/// 验证审计模式在有沙箱实现的平台（Linux、macOS）请求命令沙箱。
 ///
 /// 参数:
 /// - 无
@@ -181,7 +181,11 @@ fn audited_run_command_only_requests_linux_sandbox() {
         )
         .unwrap();
 
-    assert_eq!(sandboxed, cfg!(target_os = "linux"));
+    assert_eq!(sandboxed, crate::sandbox::sandbox_requested());
+    assert_eq!(
+        crate::sandbox::sandbox_requested(),
+        cfg!(any(target_os = "linux", target_os = "macos"))
+    );
 }
 
 /// 验证用户批准网络命令后不再隔离网络命名空间。

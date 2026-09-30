@@ -68,6 +68,7 @@ pub(super) fn routes() -> Router<WebAppState> {
             post(model_endpoint_secret),
         )
         .route("/api/config/rtk-status", get(rtk_status))
+        .route("/api/config/sandbox-status", get(sandbox_status))
         .route("/api/config/engine-status", get(engine_status))
 }
 
@@ -159,6 +160,26 @@ async fn rtk_status() -> Json<RtkStatusResponse> {
             .cloned()
             .collect(),
     })
+}
+
+/// 【Web 设置】【沙箱状态】返回后端探测结果与当前工作区解析出的沙箱路径。
+///
+/// 参数:
+/// - `state`: Web 应用状态，用于先按磁盘配置刷新快照
+///
+/// 返回:
+/// - 沙箱状态
+async fn sandbox_status(
+    State(state): State<WebAppState>,
+) -> WebResult<Json<crate::sandbox::SandboxStatus>> {
+    // 1. 状态页可能早于任何运行打开，先按磁盘配置安装快照
+    let config = crate::config::AppConfig::load_or_default(&state.paths).map_err(WebError::from)?;
+    crate::sandbox::install(&config.sandbox, &state.paths);
+    // 2. 探测会同步启动一次空命令，放到阻塞线程执行
+    let status = tokio::task::spawn_blocking(crate::sandbox::sandbox_status)
+        .await
+        .map_err(|error| WebError::from(anyhow::anyhow!(error)))?;
+    Ok(Json(status))
 }
 
 /// 读取脱敏配置。

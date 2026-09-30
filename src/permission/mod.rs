@@ -9,6 +9,7 @@ mod interaction;
 mod jev_audit;
 mod path_policy;
 mod policy;
+mod sandbox_scope;
 
 pub(crate) use audit::{AuditDecision, PermissionAuditLog};
 pub(crate) use broker::{
@@ -20,6 +21,7 @@ pub(crate) use broker::{
 pub(crate) use interaction::{PermissionInteractionState, PermissionTransition};
 #[allow(unused_imports)]
 pub(crate) use policy::{PermissionProfile, PermissionProfileMode, SessionScope};
+pub(crate) use sandbox_scope::{SandboxScope, SandboxScopeKind};
 
 pub(crate) use audit_backend::AutoAuditBackend;
 pub(crate) use auto_audit::build_audit_context;

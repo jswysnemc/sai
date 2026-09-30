@@ -1,6 +1,7 @@
 use super::progress::{CommandOutputBatch, CommandOutputStream};
 #[cfg(windows)]
 use crate::platform::shell_selection::ShellFlavor;
+use crate::sandbox::SandboxPolicy;
 use crate::tools::ToolProgress;
 use anyhow::{bail, Result};
 use std::io::ErrorKind;
@@ -19,6 +20,7 @@ const PROGRESS_INTERVAL: Duration = Duration::from_millis(50);
 /// - `command`: shell 命令文本
 /// - `timeout_seconds`: 超时时间，单位秒
 /// - `configured_shell`: 配置指定的 shell，空值表示使用用户环境
+/// - `sandbox`: 可选沙箱策略
 ///
 /// 返回:
 /// - 命令输出
@@ -26,13 +28,13 @@ pub(crate) async fn run_shell_command(
     command: &str,
     timeout_seconds: u64,
     configured_shell: &str,
-    sandboxed: bool,
+    sandbox: Option<&SandboxPolicy>,
 ) -> Result<Output> {
     run_shell_command_with_optional_progress(
         command,
         timeout_seconds,
         configured_shell,
-        sandboxed,
+        sandbox,
         None,
     )
     .await
@@ -44,7 +46,7 @@ pub(crate) async fn run_shell_command(
 /// - `command`: shell 命令文本
 /// - `timeout_seconds`: 超时时间，单位秒
 /// - `configured_shell`: 配置指定的 shell，空值表示使用用户环境
-/// - `sandboxed`: 是否使用只读沙盒
+/// - `sandbox`: 可选沙箱策略
 /// - `progress`: 工具进度通道
 ///
 /// 返回:
@@ -53,14 +55,14 @@ pub(crate) async fn run_shell_command_with_progress(
     command: &str,
     timeout_seconds: u64,
     configured_shell: &str,
-    sandboxed: bool,
+    sandbox: Option<&SandboxPolicy>,
     progress: ToolProgress,
 ) -> Result<Output> {
     run_shell_command_with_optional_progress(
         command,
         timeout_seconds,
         configured_shell,
-        sandboxed,
+        sandbox,
         Some(progress),
     )
     .await
@@ -72,7 +74,7 @@ pub(crate) async fn run_shell_command_with_progress(
 /// - `command`: shell 命令文本
 /// - `timeout_seconds`: 超时时间，单位秒
 /// - `configured_shell`: 配置指定的 shell
-/// - `sandboxed`: 是否启用只读沙盒
+/// - `sandbox`: 可选沙箱策略
 /// - `progress`: 可选工具进度通道
 ///
 /// 返回:
@@ -81,12 +83,12 @@ async fn run_shell_command_with_optional_progress(
     command: &str,
     timeout_seconds: u64,
     configured_shell: &str,
-    sandboxed: bool,
+    sandbox: Option<&SandboxPolicy>,
     progress: Option<ToolProgress>,
 ) -> Result<Output> {
     let duration = Duration::from_secs(timeout_seconds.max(1));
     let mut missing = Vec::new();
-    for (program, mut shell) in shell_commands(command, configured_shell, sandboxed)? {
+    for (program, mut shell) in shell_commands(command, configured_shell, sandbox)? {
         match run_command_with_timeout(&mut shell, duration, progress.clone()).await {
             Ok(output) => return Ok(output),
             Err(CommandRunError::NotFound) => missing.push(program),
@@ -294,68 +296,13 @@ fn append_captured_output(buffer: &mut Vec<u8>, chunk: &[u8]) {
     buffer.extend_from_slice(&chunk[..chunk.len().min(remaining)]);
 }
 
-#[cfg(test)]
-mod output_capture_tests {
-    use super::*;
-
-    #[cfg(windows)]
-    #[test]
-    fn background_shell_matches_powershell_first_default() {
-        let command = shell_command("Write-Output $PSVersionTable", "");
-        let program = command
-            .as_std()
-            .get_program()
-            .to_string_lossy()
-            .to_ascii_lowercase();
-        let expected = if executable_in_path("pwsh.exe") {
-            "pwsh.exe"
-        } else if executable_in_path("powershell.exe") {
-            "powershell.exe"
-        } else {
-            "cmd.exe"
-        };
-
-        assert_eq!(program, expected);
-    }
-
-    #[test]
-    fn captured_output_does_not_exceed_memory_limit() {
-        let mut buffer = vec![b'a'; MAX_CAPTURED_OUTPUT_BYTES - 2];
-        append_captured_output(&mut buffer, b"bcdef");
-
-        assert_eq!(buffer.len(), MAX_CAPTURED_OUTPUT_BYTES);
-        assert!(buffer.ends_with(b"bc"));
-    }
-
-    #[tokio::test]
-    async fn timeout_flushes_pending_progress_output() {
-        #[cfg(windows)]
-        let command = "Write-Output before-timeout; Start-Sleep -Seconds 2";
-        #[cfg(not(windows))]
-        let command = "printf before-timeout; sleep 2";
-        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-
-        let error =
-            run_shell_command_with_progress(command, 1, "", false, ToolProgress::new(sender))
-                .await
-                .unwrap_err();
-        let output = std::iter::from_fn(|| receiver.try_recv().ok())
-            .filter_map(|message| super::super::progress::decode_command_output(&message))
-            .flat_map(|chunk| chunk.bytes)
-            .collect::<Vec<_>>();
-
-        assert!(error.to_string().contains("timed out"));
-        assert!(String::from_utf8_lossy(&output).contains("before-timeout"));
-    }
-}
-
 #[cfg(windows)]
 fn shell_commands(
     command: &str,
     configured_shell: &str,
-    sandboxed: bool,
+    sandbox: Option<&SandboxPolicy>,
 ) -> Result<Vec<(String, Command)>> {
-    if sandboxed {
+    if sandbox.is_some() {
         bail!("audited sandbox mode is not supported on Windows")
     }
     if let Some(shell) = configured_shell_path(configured_shell) {
@@ -396,16 +343,16 @@ fn shell_commands(
 /// 参数:
 /// - `command`: 待执行命令
 /// - `configured_shell`: 配置的 shell
-/// - `sandboxed`: 是否启用沙箱
+/// - `sandbox`: 可选沙箱策略
 ///
 /// 返回:
 /// - 按优先级排列的 `(程序名, 命令)` 列表
 pub(crate) fn build_shell_commands(
     command: &str,
     configured_shell: &str,
-    sandboxed: bool,
+    sandbox: Option<&SandboxPolicy>,
 ) -> Result<Vec<(String, Command)>> {
-    let candidates = shell_commands(command, configured_shell, sandboxed)?;
+    let candidates = shell_commands(command, configured_shell, sandbox)?;
     if candidates.is_empty() {
         bail!("no shell command candidate was produced")
     }
@@ -418,7 +365,7 @@ pub(crate) fn build_shell_commands(
 /// - `command`: ACP 的命令名
 /// - `args`: ACP 的独立参数
 /// - `configured_shell`: 配置指定的 Shell
-/// - `sandboxed`: 是否启用沙箱
+/// - `sandbox`: 可选沙箱策略
 ///
 /// 返回:
 /// - 按优先级排列的 `(程序名, 命令)` 列表
@@ -429,11 +376,11 @@ pub(crate) fn build_shell_commands_for_args(
     command: &str,
     args: &[String],
     configured_shell: &str,
-    sandboxed: bool,
+    sandbox: Option<&SandboxPolicy>,
 ) -> Result<Vec<(String, Command)>> {
     #[cfg(windows)]
     {
-        if sandboxed {
+        if sandbox.is_some() {
             bail!("audited sandbox mode is not supported on Windows")
         }
         let candidates = if let Some(shell) = configured_shell_path(configured_shell) {
@@ -455,9 +402,9 @@ pub(crate) fn build_shell_commands_for_args(
     }
     #[cfg(not(windows))]
     {
-        let _ = sandboxed;
+        // 沙箱策略必须随参数形式一起传下去；此前这里丢弃了它，外部内核的命令绕过了沙箱
         let line = command_line_for_flavor(command, args);
-        build_shell_commands(&line, configured_shell, false)
+        build_shell_commands(&line, configured_shell, sandbox)
     }
 }
 
@@ -496,103 +443,33 @@ fn command_line_for_flavor(command: &str, args: &[String]) -> String {
     line
 }
 
-#[cfg(target_os = "linux")]
+/// 构造 Unix 平台的 shell 命令候选。
+///
+/// 参数:
+/// - `command`: shell 命令文本
+/// - `configured_shell`: 配置指定的 shell
+/// - `sandbox`: 可选沙箱策略
+///
+/// 返回:
+/// - 单个 `(程序名, 命令)` 候选
+#[cfg(not(windows))]
 fn shell_commands(
     command: &str,
     configured_shell: &str,
-    sandboxed: bool,
+    sandbox: Option<&SandboxPolicy>,
 ) -> Result<Vec<(String, Command)>> {
     let shell = configured_shell_path(configured_shell)
         .or_else(|| std::env::var("SHELL").ok())
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| "sh".to_string());
-    if sandboxed {
+    if let Some(policy) = sandbox {
+        let backend = crate::sandbox::backend_availability().backend.to_string();
         return Ok(vec![(
-            "bwrap".to_string(),
-            sandboxed_shell_command(command, &shell)?,
+            backend,
+            crate::sandbox::wrap_shell(policy, &shell, command)?,
         )]);
     }
     Ok(vec![shell_command_entry(command, &shell)])
-}
-
-#[cfg(all(not(windows), not(target_os = "linux")))]
-fn shell_commands(
-    command: &str,
-    configured_shell: &str,
-    sandboxed: bool,
-) -> Result<Vec<(String, Command)>> {
-    if sandboxed {
-        bail!("audited sandbox mode is only supported on Linux")
-    }
-    let shell = configured_shell_path(configured_shell)
-        .or_else(|| std::env::var("SHELL").ok())
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| "sh".to_string());
-    Ok(vec![shell_command_entry(command, &shell)])
-}
-
-/// 构造 Linux 工作区写入沙盒命令。
-///
-/// 参数:
-/// - `command`: Shell 命令文本
-/// - `shell`: 沙盒内使用的 Shell
-///
-/// 返回:
-/// - bubblewrap 命令
-#[cfg(target_os = "linux")]
-fn sandboxed_shell_command(command: &str, shell: &str) -> Result<Command> {
-    let workspace = crate::runtime_cwd::current_dir()?;
-    let mut process = Command::new("bwrap");
-    process
-        .arg("--die-with-parent")
-        .arg("--new-session")
-        .arg("--unshare-net")
-        .arg("--ro-bind")
-        .arg("/")
-        .arg("/")
-        .arg("--bind")
-        .arg(&workspace)
-        .arg(&workspace)
-        .arg("--proc")
-        .arg("/proc")
-        .arg("--dev")
-        .arg("/dev")
-        .arg("--chdir")
-        .arg(&workspace)
-        .arg("--")
-        .arg(shell)
-        .arg("-lc")
-        .arg(command);
-    Ok(inherit_env(process))
-}
-
-#[cfg(all(test, target_os = "linux"))]
-mod sandbox_tests {
-    use super::*;
-
-    /// 验证审计沙盒只允许写入当前工作区。
-    #[tokio::test]
-    async fn audited_sandbox_blocks_parent_directory_writes() {
-        if std::process::Command::new("bwrap")
-            .arg("--version")
-            .output()
-            .is_err()
-        {
-            return;
-        }
-        let root = tempfile::tempdir().unwrap();
-        let workspace = root.path().join("workspace");
-        std::fs::create_dir_all(&workspace).unwrap();
-        let output = crate::runtime_cwd::scope(workspace.clone(), async {
-            run_shell_command("touch allowed && touch ../blocked", 10, "sh", true)
-                .await
-                .unwrap()
-        })
-        .await;
-        assert!(!output.status.success());
-        assert!(workspace.join("allowed").exists());
-        assert!(!root.path().join("blocked").exists());
-    }
 }
 
 #[cfg(windows)]
@@ -781,5 +658,60 @@ pub(crate) async fn terminate_process(pid: u32, pgid: Option<i32>, force: bool) 
         let _ = pid;
         let _ = pgid;
         let _ = force;
+    }
+}
+
+#[cfg(test)]
+mod output_capture_tests {
+    use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn background_shell_matches_powershell_first_default() {
+        let command = shell_command("Write-Output $PSVersionTable", "");
+        let program = command
+            .as_std()
+            .get_program()
+            .to_string_lossy()
+            .to_ascii_lowercase();
+        let expected = if executable_in_path("pwsh.exe") {
+            "pwsh.exe"
+        } else if executable_in_path("powershell.exe") {
+            "powershell.exe"
+        } else {
+            "cmd.exe"
+        };
+
+        assert_eq!(program, expected);
+    }
+
+    #[test]
+    fn captured_output_does_not_exceed_memory_limit() {
+        let mut buffer = vec![b'a'; MAX_CAPTURED_OUTPUT_BYTES - 2];
+        append_captured_output(&mut buffer, b"bcdef");
+
+        assert_eq!(buffer.len(), MAX_CAPTURED_OUTPUT_BYTES);
+        assert!(buffer.ends_with(b"bc"));
+    }
+
+    #[tokio::test]
+    async fn timeout_flushes_pending_progress_output() {
+        #[cfg(windows)]
+        let command = "Write-Output before-timeout; Start-Sleep -Seconds 2";
+        #[cfg(not(windows))]
+        let command = "printf before-timeout; sleep 2";
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        let error =
+            run_shell_command_with_progress(command, 1, "", None, ToolProgress::new(sender))
+                .await
+                .unwrap_err();
+        let output = std::iter::from_fn(|| receiver.try_recv().ok())
+            .filter_map(|message| super::super::progress::decode_command_output(&message))
+            .flat_map(|chunk| chunk.bytes)
+            .collect::<Vec<_>>();
+
+        assert!(error.to_string().contains("timed out"));
+        assert!(String::from_utf8_lossy(&output).contains("before-timeout"));
     }
 }

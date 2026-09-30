@@ -46,12 +46,13 @@ impl AutoAuditBackend {
         match self {
             Self::Jev(runtime) => runtime.run(request, context, workdir).await,
             Self::Llm(client) => {
+                let context = with_sandbox_note(request, context);
                 super::auto_audit::run_auto_audit(
                     client,
                     &request.id,
                     &request.tool,
                     &request.arguments,
-                    context,
+                    &context,
                 )
                 .await
             }
@@ -59,7 +60,7 @@ impl AutoAuditBackend {
                 let input = PermissionAuditInput {
                     tool: request.tool.clone(),
                     arguments: serde_json::from_str(&request.arguments)?,
-                    context: context.into(),
+                    context: with_sandbox_note(request, context),
                     policy: crate::prompts::AUTO_AUDIT_SYSTEM_PROMPT.into(),
                 };
                 let invocation = InvocationContext {
@@ -101,5 +102,20 @@ pub(super) fn submit(request_id: &str, decision: PermissionDecision) -> Result<b
                 Err(error)
             }
         }
+    }
+}
+
+/// 【自动审核】【沙箱联动】在上下文前附加沙箱范围说明；插件输入结构来自外部 crate，只能借上下文传递。
+///
+/// 参数:
+/// - `request`: 权限请求
+/// - `context`: 近期上下文摘要
+///
+/// 返回:
+/// - 附加说明后的上下文；非命令工具保持原样
+fn with_sandbox_note(request: &PermissionRequest, context: &str) -> String {
+    match &request.sandbox {
+        Some(scope) => format!("[sandbox] {}\n\n{context}", scope.audit_note()),
+        None => context.to_string(),
     }
 }

@@ -27,6 +27,7 @@ mod prompt_templates;
 mod provider;
 mod provider_choices;
 mod provider_keys;
+mod sandbox;
 mod secrets;
 mod session;
 mod ssh;
@@ -54,8 +55,8 @@ pub use git::*;
 #[allow(unused_imports)]
 pub use jev::{
     jev_connection_for, jev_connection_info_for, JevAuditConfig, JevConfig, JevConnection,
-    JevConnectionInfo, JevConnectionSource, JevRoutingConfig, JEV_DEFAULT_MODEL,
-    JEV_KEY_ENV_NAMES, JEV_OFFICIAL_ENDPOINT,
+    JevConnectionInfo, JevConnectionSource, JevRoutingConfig, JEV_DEFAULT_MODEL, JEV_KEY_ENV_NAMES,
+    JEV_OFFICIAL_ENDPOINT,
 };
 #[allow(unused_imports)]
 pub use mcp_file::{
@@ -71,6 +72,7 @@ pub use permission::*;
 pub use prompt_sections::{PromptSectionToggles, PROMPT_SECTIONS};
 pub use prompt_templates::{PromptTemplateConfig, PromptTemplatesConfig};
 pub use provider_keys::*;
+pub use sandbox::{SandboxConfig, SandboxNetworkMode};
 #[allow(unused_imports)]
 pub use session::SessionConfig;
 #[allow(unused_imports)]

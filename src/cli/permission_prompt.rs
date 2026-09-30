@@ -162,6 +162,21 @@ pub(super) fn is_interrupt(event: &Event) -> bool {
     )
 }
 
+/// 返回标题下方的沙箱范围行，前置换行；无范围时为空。
+///
+/// 参数:
+/// - `request`: 权限请求
+///
+/// 返回:
+/// - 沙箱范围文本
+fn sandbox_lines(request: &PermissionRequest) -> String {
+    request
+        .sandbox
+        .as_ref()
+        .map(|scope| format!("\n{}", crate::render::render_sandbox_scope(scope)))
+        .unwrap_or_default()
+}
+
 /// 计算当前菜单占用的视觉行数。
 ///
 /// 参数:
@@ -172,20 +187,20 @@ pub(super) fn is_interrupt(event: &Event) -> bool {
 /// - 菜单视觉行数
 fn menu_rows(request: &PermissionRequest, state: &PermissionInteractionState) -> u16 {
     let status = crate::render::render_auto_audit_status(request.auto_audit);
-    let logical = if status.is_empty() {
-        format!(
-            "{}\n{}",
-            render_permission_title(&request.tool, Some(&request.arguments)),
-            render_permission_controls(state.selected(), state.reply_draft())
-        )
-    } else {
-        format!(
-            "{}\n{}\n{}",
-            render_permission_title(&request.tool, Some(&request.arguments)),
-            status,
-            render_permission_controls(state.selected(), state.reply_draft())
-        )
-    };
+    let mut logical = format!(
+        "{}{}",
+        render_permission_title(&request.tool, Some(&request.arguments)),
+        sandbox_lines(request)
+    );
+    if !status.is_empty() {
+        logical.push('\n');
+        logical.push_str(&status);
+    }
+    logical.push('\n');
+    logical.push_str(&render_permission_controls(
+        state.selected(),
+        state.reply_draft(),
+    ));
     rendered_visual_rows(&logical, terminal_width())
         .max(1)
         .min(usize::from(u16::MAX)) as u16
@@ -256,7 +271,11 @@ fn paint_menu_at(
     state: &PermissionInteractionState,
     show_auto_audit: bool,
 ) -> Result<()> {
-    let title = render_permission_title(&request.tool, Some(&request.arguments));
+    let title = format!(
+        "{}{}",
+        render_permission_title(&request.tool, Some(&request.arguments)),
+        sandbox_lines(request)
+    );
     let controls = render_permission_controls(state.selected(), state.reply_draft());
     // raw mode 下必须 \r\n，否则会阶梯缩进
     let body = if show_auto_audit {
@@ -297,8 +316,9 @@ fn erase_menu_at(stdout: &mut io::Stdout, anchor: u16) -> Result<()> {
 /// - 用户提交的权限决定
 fn read_line_decision(request: &PermissionRequest) -> Result<PermissionDecision> {
     println!(
-        "{}",
-        render_permission_title(&request.tool, Some(&request.arguments))
+        "{}{}",
+        render_permission_title(&request.tool, Some(&request.arguments)),
+        sandbox_lines(request)
     );
     println!(
         "1. {}\n2. {}\n3. {}",
@@ -388,9 +408,32 @@ mod tests {
             tool: "run_command".to_string(),
             arguments: r#"{"command":"date"}"#.to_string(),
             auto_audit: false,
+            sandbox: None,
         };
         let state = PermissionInteractionState::new();
         // 标题 + 三个选项 + 提示行
         assert!(menu_rows(&request, &state) >= 5);
+    }
+
+    #[test]
+    fn menu_rows_include_sandbox_scope_lines() {
+        let mut request = PermissionRequest {
+            id: "id".to_string(),
+            session_id: "session".to_string(),
+            tool: "run_command".to_string(),
+            arguments: r#"{"command":"curl https://x.dev"}"#.to_string(),
+            auto_audit: false,
+            sandbox: None,
+        };
+        let state = PermissionInteractionState::new();
+        let without = menu_rows(&request, &state);
+        request.sandbox = Some(crate::permission::SandboxScope {
+            kind: crate::permission::SandboxScopeKind::Escalated,
+            backend: "bwrap".into(),
+            network: false,
+            reasons: vec!["network".into()],
+            justification: Some("fetch".into()),
+        });
+        assert_eq!(menu_rows(&request, &state), without + 2);
     }
 }

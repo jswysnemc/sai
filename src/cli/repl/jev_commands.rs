@@ -141,11 +141,14 @@ fn status_text(config: &AppConfig, mode: AgentMode) -> String {
         (true, true) => t("on", "开启").to_string(),
         (true, false) => t("on, applies after /auto", "开启，切换 /auto 后生效").to_string(),
     };
+    // 4. 沙箱联动：审核时附带命令获批后的沙箱范围，离开沙箱的请求从严判断
+    let sandbox = crate::sandbox::sandbox_status().headline();
     format!(
-        "Jev\n  {}: {connection}\n  {}: {routing}\n  {}: {audit}",
+        "Jev\n  {}: {connection}\n  {}: {routing}\n  {}: {audit}\n  {}: {sandbox}",
         t("connection", "接入"),
         t("tool & skill routing", "工具与 Skills 暴露决策"),
         t("permission audit", "权限自动审核"),
+        t("audit sandbox context", "审核沙箱上下文"),
     )
 }
 
@@ -175,5 +178,9 @@ mod tests {
         config.jev.audit.enabled = true;
         let text = status_text(&config, AgentMode::Yolo);
         assert!(text.contains("/auto"), "{text}");
+        assert!(
+            text.contains("audit sandbox context") || text.contains("审核沙箱上下文"),
+            "{text}"
+        );
     }
 }

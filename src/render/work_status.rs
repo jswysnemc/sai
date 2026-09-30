@@ -297,6 +297,7 @@ mod tests {
             tool: "edit_file".into(),
             arguments: "{}".into(),
             auto_audit: false,
+            sandbox: None,
         });
         assert_eq!(WorkStatus::from_agent_event(&event), None);
     }

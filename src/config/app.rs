@@ -35,6 +35,8 @@ impl AppConfig {
         config.normalize_builtin_providers();
         config.migrate_legacy_jev_routing();
         config.validate()?;
+        // 4. 【沙箱】【配置快照】权限层与命令执行读取进程级快照
+        crate::sandbox::install(&config.sandbox, paths);
         Ok(config)
     }
 
@@ -104,6 +106,7 @@ impl AppConfig {
         }
         let raw = serde_json::to_string_pretty(&config)?;
         write_private_file(&paths.config_file, format!("{raw}\n").as_bytes())?;
+        crate::sandbox::install(&config.sandbox, paths);
         Ok(())
     }
 

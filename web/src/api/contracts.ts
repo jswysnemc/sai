@@ -17,6 +17,8 @@ export type {
   SshSecretSubmit,
 } from "./contracts/permissions";
 
+export type { SandboxConfig, SandboxDenial, SandboxNetworkMode, SandboxScope, SandboxScopeKind, SandboxStatusResponse } from "./contracts/sandbox";
+
 export type {
   Session,
   WorkspaceSessions,

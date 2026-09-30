@@ -83,6 +83,16 @@ class InteractionTests(unittest.TestCase):
             terminal.pump(.15)
             self.assertIn("/context reset", terminal.screen.display[terminal.screen.cursor.y])
 
+    def test_sandbox_command_reports_status(self):
+        """/sandbox 在转写区展示后端与可写目录，输入框保持可用；返回无。"""
+        with TerminalSession() as terminal:
+            terminal.send(b"/sandbox\r")
+            terminal.wait_for(lambda: "Sandbox:" in terminal.text() or "沙箱：" in terminal.text())
+            text = terminal.text()
+            self.assertTrue("writable" in text or "可写" in text, text)
+            terminal.send(b"!echo SANDBOX-AFTER\r")
+            terminal.wait_for(lambda: "SANDBOX-AFTER" in terminal.text())
+
     def test_overlay_restores_input_and_cursor(self):
         """打开并取消配置面板后可执行命令，返回无。"""
         with TerminalSession() as terminal:

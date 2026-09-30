@@ -29,10 +29,10 @@ describe("createRunModeOptions", () => {
     const options = createRunModeOptions((_en, zh) => zh);
 
     expect(options.map(({ label, description }) => ({ label, description }))).toEqual([
-      { label: "变更前确认", description: "改文件前先问我。" },
-      { label: "自动审核", description: "自动审核文件变更。" },
-      { label: "计划模式", description: "编辑前先出计划。" },
-      { label: "完全访问", description: "减少确认次数。" }
+      { label: "变更前确认", description: "改文件前先问我；命令在沙箱内执行。" },
+      { label: "自动审核", description: "自动审核变更；离开沙箱的命令从严判断。" },
+      { label: "计划模式", description: "编辑前先出计划；命令只读执行。" },
+      { label: "完全访问", description: "减少确认次数；不经过沙箱。" }
     ]);
   });
 });

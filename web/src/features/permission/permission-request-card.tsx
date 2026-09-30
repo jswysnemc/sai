@@ -7,6 +7,7 @@ import { Button } from "../../shared/ui/button/button";
 import { TextArea } from "../../shared/ui/form/text-area";
 import { toolCardSummary } from "../chat/tool-renderers/tool-card-summary";
 import { PermissionArgumentDetails } from "./permission-argument-details";
+import { SandboxScopeNote } from "../sandbox/sandbox-scope-note";
 import { ToolCardShell } from "../chat/tool-renderers/tool-card-shell";
 import { ToolStatusMark, toneOfState, type ToolCardState } from "../chat/tool-renderers/tool-icon";
 import "./permission-request-card.css";
@@ -96,6 +97,8 @@ export function PermissionRequestCard({ request, decision, active = true }: Perm
           {status === "pending" && request.auto_audit ? (
             <div className="permission-auto-audit-hint">{t("LLM auto-audit is running in parallel. Your decision wins if submitted first; auto-audit timeout falls back to human review silently.", "LLM 自动审核并行进行中。人工先提交则优先生效；自动审核超时将静默回退人工审核。")}</div>
           ) : null}
+          {/* 获批后是否离开沙箱直接决定风险，放在参数之前 */}
+          {request.sandbox && <SandboxScopeNote scope={request.sandbox} />}
           <PermissionArgumentDetails tool={request.tool} argumentsText={request.arguments} />
           {interactive && (
             <div className="permission-request-actions">

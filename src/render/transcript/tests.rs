@@ -466,6 +466,7 @@ fn permission_audit_stays_inside_existing_diff_view() {
         tool: "str_replace".to_string(),
         arguments,
         auto_audit: false,
+        sandbox: None,
     });
 
     let rendered = store

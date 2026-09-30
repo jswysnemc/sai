@@ -88,4 +88,22 @@ describe("ShellToolView", () => {
     expect(html).not.toContain("shell-exit");
     expect(html).not.toContain("退出码");
   });
+
+  it("沙箱拦截时在输出前给出类型与下一步提示", () => {
+    const html = render("curl https://x.dev", {
+      success: false,
+      exit_code: 6,
+      stdout: "",
+      stderr: "curl: (6) Could not resolve host",
+      sandbox_denial: { kind: "network", evidence: "curl: (6) Could not resolve host", hint: "使用 require_escalated 重新执行" }
+    });
+    expect(html).toContain("沙箱拦截 · 网络");
+    expect(html).toContain("使用 require_escalated 重新执行");
+    expect(html.indexOf("沙箱拦截")).toBeLessThan(html.indexOf("shell-output stderr"));
+  });
+
+  it("普通失败不显示沙箱提示", () => {
+    const html = render("cargo test", { success: false, exit_code: 101, stdout: "", stderr: "test failed" });
+    expect(html).not.toContain("沙箱拦截");
+  });
 });

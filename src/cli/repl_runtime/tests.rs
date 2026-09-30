@@ -90,6 +90,7 @@ fn full_stream_event_sequence_drives_reconcile_pipeline() {
             tool: "run_command".to_string(),
             arguments: r#"{"command":"cargo test"}"#.to_string(),
             auto_audit: false,
+            sandbox: None,
         })
         .unwrap();
     runtime

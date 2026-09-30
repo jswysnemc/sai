@@ -31,6 +31,8 @@ pub(crate) struct PermissionAuditView {
     pub(crate) decision: Option<PermissionDecision>,
     /// 是否正在并行自动审核（用于 UI 状态行）
     pub(crate) auto_audit: bool,
+    /// 命令获批后的沙箱范围
+    pub(crate) sandbox: Option<crate::permission::SandboxScope>,
 }
 
 impl PermissionAuditView {
@@ -61,6 +63,7 @@ impl PermissionAuditView {
             reply_draft: None,
             decision: None,
             auto_audit,
+            sandbox: None,
         }
     }
 
@@ -201,6 +204,22 @@ impl ToolView {
     #[allow(dead_code)]
     pub(crate) fn request_permission(&mut self, request_id: String) {
         self.request_permission_with_auto_audit(request_id, false);
+    }
+
+    /// 为已附着的权限请求记录沙箱范围。
+    ///
+    /// 参数:
+    /// - `sandbox`: 权限请求附带的沙箱范围
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn set_permission_sandbox(
+        &mut self,
+        sandbox: Option<crate::permission::SandboxScope>,
+    ) {
+        if let Some(permission) = self.permission.as_mut() {
+            permission.sandbox = sandbox;
+        }
     }
 
     /// 将权限请求附着到当前工具视图，并标记自动审核。

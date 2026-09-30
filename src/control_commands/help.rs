@@ -219,6 +219,13 @@ fn repl_only_help_lines() -> Vec<String> {
             )
         ),
         format!(
+            "  /sandbox    {}",
+            t(
+                "show sandbox backend, writable roots and hidden paths",
+                "查看沙箱后端、可写目录与隐藏路径"
+            )
+        ),
+        format!(
             "  /goal [text]  {}",
             t("create or update a persistent goal", "创建或更新持久目标")
         ),
