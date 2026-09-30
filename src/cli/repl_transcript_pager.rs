@@ -190,26 +190,27 @@ fn draw_view(
 pub(super) fn clip_to_width(line: &str, cols: usize) -> String {
     let mut out = String::new();
     let mut width = 0usize;
-    let mut chars = line.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '\u{1b}' {
-            out.push(ch);
-            if chars.peek() == Some(&'[') {
-                for next in chars.by_ref() {
-                    out.push(next);
-                    if next.is_ascii_alphabetic() {
-                        break;
-                    }
-                }
-            }
+    let mut index = 0usize;
+    while index < line.len() {
+        // 1. 转义序列整段保留且不计宽：公式图片的 Kitty 载荷被截断后整张图不显示
+        if line.as_bytes()[index] == 0x1b {
+            let end = crate::render::terminal_image::escape_sequence_end(line, index)
+                .max(index + 1)
+                .min(line.len());
+            out.push_str(&line[index..end]);
+            index = end;
             continue;
         }
+        let Some(ch) = line[index..].chars().next() else {
+            break;
+        };
         let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
         if width + ch_width > cols {
             break;
         }
         out.push(ch);
         width += ch_width;
+        index += ch.len_utf8();
     }
     out.push_str("\x1b[0m");
     out
@@ -219,6 +220,16 @@ pub(super) fn clip_to_width(line: &str, cols: usize) -> String {
 mod tests {
     use super::{clip_to_width, is_jump_to_output_bottom_key};
     use crossterm::event::{KeyCode, KeyModifiers};
+
+    #[test]
+    fn clip_keeps_image_payloads_whole_and_zero_width() {
+        let kitty = "\x1b_Ga=p,q=2,C=1,i=7,p=3,c=12,r=1\x1b\\";
+        let line = format!("E {kitty}            = mc2 tail");
+        let clipped = clip_to_width(&line, 10);
+        assert!(clipped.contains(kitty));
+        assert!(clipped.starts_with("E "));
+        assert!(!clipped.contains("tail"));
+    }
 
     #[test]
     fn clip_preserves_ansi_and_limits_width() {

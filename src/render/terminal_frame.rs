@@ -49,7 +49,17 @@ impl TerminalFrame {
         if self.buffer.is_empty() {
             return Ok(());
         }
-        let payload = framed(&self.buffer);
+        // 【终端图片】【按需补传】帧内引用了当前屏幕缺失的 Kitty 图片时先补传数据
+        let missing = std::str::from_utf8(&self.buffer)
+            .map(crate::render::terminal_image::kitty_missing_transmissions)
+            .unwrap_or_default();
+        let payload = if missing.is_empty() {
+            framed(&self.buffer)
+        } else {
+            let mut body = missing.into_bytes();
+            body.extend_from_slice(&self.buffer);
+            framed(&body)
+        };
         let _paint = paint_lock();
         let mut stdout = io::stdout().lock();
         stdout.write_all(&payload)?;

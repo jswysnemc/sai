@@ -158,7 +158,7 @@ fn parse_cell_count(value: &str) -> Option<usize> {
 /// `remove_var("KITTY_WINDOW_ID")` 会让并发运行的图片渲染测试误判终端
 /// 不支持图形协议，从而随机失败。线程局部覆盖天然按测试隔离。
 #[cfg(test)]
-pub(super) mod test_override {
+pub(crate) mod test_override {
     use std::cell::Cell;
 
     thread_local! {
@@ -353,8 +353,10 @@ fn encode_kitty_png(path: &Path, cols: Option<usize>, rows: Option<usize>) -> Re
     // 1. 传输与放置分离：图像数据（大 payload）每个 image_id 只直写终端
     //    一次；产物字符串只含轻量放置序列。live 重绘 / transcript 重打
     //    重放的都是缓存字符串，分离后不再反复重传几百 KB 的 base64
-    if register_kitty_transmission(image_id) {
-        transmit_kitty_data_now(&kitty_transmission_payload(image_id, &bytes));
+    // 2. 登记到分屏传输记录：切到另一块屏幕时由帧提交按需补传
+    let payload = kitty_transmission_payload(image_id, &bytes);
+    if register_kitty_payload(image_id, &payload) {
+        transmit_kitty_data_now(&payload);
     }
     Ok(kitty_placement_payload(image_id, placement_id, cols, rows))
 }
@@ -407,24 +409,6 @@ fn kitty_transmission_payload(image_id: u32, bytes: &[u8]) -> String {
         ));
     }
     output
-}
-
-/// 首次见到该图像 ID 时登记并返回 true（需要传输数据）。
-///
-/// 参数:
-/// - `image_id`: 图像 ID
-///
-/// 返回:
-/// - 本进程内是否为首次传输
-fn register_kitty_transmission(image_id: u32) -> bool {
-    use std::collections::HashSet;
-    use std::sync::{LazyLock, Mutex};
-    static TRANSMITTED: LazyLock<Mutex<HashSet<u32>>> =
-        LazyLock::new(|| Mutex::new(HashSet::new()));
-    TRANSMITTED
-        .lock()
-        .map(|mut set| set.insert(image_id))
-        .unwrap_or(true)
 }
 
 /// 将传输载荷立即直写终端。

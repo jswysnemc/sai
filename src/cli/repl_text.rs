@@ -204,7 +204,10 @@ pub(super) fn char_terminal_width(ch: char) -> usize {
     ch.width().unwrap_or(0)
 }
 
-/// 迭代文本中的可见字符，跳过 ANSI 转义序列。
+/// 迭代文本中的可见字符，跳过完整的终端转义序列。
+///
+/// 除 CSI 样式外还要跳过 APC / OSC / DCS：Kitty、iTerm2 与 Sixel 图片
+/// 载荷都是这类序列，按字符计宽会把公式图片算成几千列。
 ///
 /// 参数:
 /// - `value`: 原始文本
@@ -212,27 +215,19 @@ pub(super) fn char_terminal_width(ch: char) -> usize {
 /// 返回:
 /// - 可见字符迭代器
 fn visible_chars(value: &str) -> impl Iterator<Item = char> + '_ {
-    let mut in_csi = false;
-    let mut pending_escape = false;
-    value.chars().filter(move |&ch| {
-        if in_csi {
-            if ('@'..='~').contains(&ch) {
-                in_csi = false;
+    let mut index = 0usize;
+    std::iter::from_fn(move || {
+        while index < value.len() {
+            if value.as_bytes()[index] == 0x1b {
+                index = crate::render::terminal_image::escape_sequence_end(value, index)
+                    .max(index + 1);
+                continue;
             }
-            return false;
+            let ch = value[index..].chars().next()?;
+            index += ch.len_utf8();
+            return Some(ch);
         }
-        if pending_escape {
-            pending_escape = false;
-            if ch == '[' {
-                in_csi = true;
-            }
-            return false;
-        }
-        if ch == '\x1b' {
-            pending_escape = true;
-            return false;
-        }
-        true
+        None
     })
 }
 

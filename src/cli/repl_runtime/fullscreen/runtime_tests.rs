@@ -280,3 +280,36 @@ fn fullscreen_fold_hints_do_not_mention_ctrl_o() {
     let inline = plain(&runtime.transcript.display_tail(80, &runtime.options));
     assert!(inline.contains("Ctrl+O"), "{inline}");
 }
+
+/// 全屏正文保留完整的公式图片放置序列：块级与行内公式都不被按字符宽度截断。
+#[test]
+fn fullscreen_keeps_formula_image_placements_intact() {
+    crate::render::terminal_image::test_override::set(Some(true), Some(false), Some(false));
+    let mut runtime = ReplRuntime::new(10_000, options());
+    runtime.transcript.push_chunk(&ChatStreamChunk {
+        kind: ChatStreamKind::Content,
+        text: "行内 $E=mc^2$ 尾巴\n\n$$ e^{i\\pi}+1=0 $$\n\nafter\n".into(),
+    });
+    runtime.transcript.finalize_live_tail();
+    runtime.enter_fullscreen().unwrap();
+    crate::render::terminal_image::test_override::set(None, None, None);
+    let rows = runtime
+        .fullscreen
+        .as_ref()
+        .unwrap()
+        .state
+        .previous
+        .clone()
+        .unwrap();
+    let placements = rows
+        .iter()
+        .flat_map(|row| row.match_indices("\x1b_Ga=p").map(move |(at, _)| &row[at..]))
+        .collect::<Vec<_>>();
+    assert_eq!(placements.len(), 2, "{rows:#?}");
+    for placement in placements {
+        // 序列必须以 ST 完整闭合
+        assert!(placement.contains("\x1b\\"), "{placement:?}");
+    }
+    let inline_row = rows.iter().find(|row| row.contains("行内")).unwrap();
+    assert!(inline_row.contains("尾巴"), "{inline_row:?}");
+}

@@ -75,13 +75,15 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
             preview_text(marks[index], anchor.summary.as_str(), state),
         ))
     });
-    for row in 0..body_height {
-        let line = state
-            .document
-            .lines
-            .get(state.scroll + row)
-            .map(|line| line.as_str())
-            .unwrap_or("");
+    // 3. 跨行公式图片按窗口边界裁剪，滚动时不会整张消失
+    let window = super::image_window::window_lines(
+        &state.document.lines,
+        state.scroll,
+        body_height,
+        crate::render::terminal_image::kitty_cell_pixel_height(),
+    );
+    for (row, line) in window.iter().enumerate() {
+        let line = line.as_str();
         let body = match &preview {
             Some((preview_row, text)) if *preview_row == row => {
                 overlay_preview(line, text, content_width)

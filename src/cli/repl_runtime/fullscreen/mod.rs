@@ -3,6 +3,7 @@
 //! 所有绘制仍经过 `ReplRuntime` 的既有入口（`sync_transcript`、`replay`、
 //! `queue_composer`），全屏时这些入口改走本模块的整屏绘制；输入编辑逻辑不变。
 
+mod image_window;
 mod input;
 mod layout;
 mod overview;
@@ -30,6 +31,8 @@ pub(super) struct FullscreenSession {
     unseen_cols: Option<(u16, u16)>,
     /// 待应用的段落切换锚点：段落键与切换前的屏幕偏移
     pending_toggle: Option<(usize, isize)>,
+    /// 上一帧的图片放置签名
+    images: Vec<(usize, String)>,
 }
 
 impl FullscreenSession {
@@ -39,6 +42,8 @@ impl FullscreenSession {
     /// - 新会话
     fn enter() -> Result<Self> {
         if !cfg!(test) {
+            // 备用屏有独立的 Kitty 图片存储，进入时从空记录开始
+            crate::render::terminal_image::set_kitty_alternate_screen(true);
             let mut stdout = io::stdout();
             execute!(
                 stdout,
@@ -52,6 +57,7 @@ impl FullscreenSession {
             state: FullscreenState::new(),
             unseen_cols: None,
             pending_toggle: None,
+            images: Vec::new(),
         })
     }
 }
@@ -65,6 +71,7 @@ impl Drop for FullscreenSession {
         let mut stdout = io::stdout();
         let _ = execute!(stdout, DisableMouseCapture, LeaveAlternateScreen);
         let _ = stdout.flush();
+        crate::render::terminal_image::set_kitty_alternate_screen(false);
     }
 }
 
@@ -154,6 +161,12 @@ impl ReplRuntime {
         }
         // 3. 组装标题与正文，只重写变化的行
         let painted = paint::compose(&session.state, &layout);
+        // 图片位置变化时先删除旧放置并整屏重画，未变化的行也要重新落下图片
+        let images = image_window::placement_signature(&painted.rows);
+        if session.images != images {
+            session.state.previous = None;
+            session.images = images;
+        }
         if session.state.previous.is_none() {
             write!(
                 self.frame,
