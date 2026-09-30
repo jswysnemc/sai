@@ -8,6 +8,7 @@ use super::line::AnsiLine;
 use super::spacing;
 use super::store::{TranscriptRenderOptions, TranscriptStore, TranscriptView};
 use crate::llm::ChatStreamKind;
+use crate::render::omitted_line::{rewrite_fold_hint_for_fullscreen, with_fullscreen_hints};
 use crate::render::render_expand::{with_force_collapse, with_force_expand};
 use std::collections::HashSet;
 
@@ -88,6 +89,32 @@ impl TranscriptStore {
         options: &TranscriptRenderOptions,
         expanded: &HashSet<usize>,
     ) -> FullscreenDocument {
+        // 全屏中 Ctrl+O 是退出键：折叠提示统一改为点击展开。
+        // 渲染缓存与内联视图共用，缓存行在渲染上下文之外生成，最后统一改写
+        let mut document = self.render_document(width, options, expanded);
+        for line in &mut document.lines {
+            if let Some(rewritten) = rewrite_fold_hint_for_fullscreen(line.as_str()) {
+                *line = AnsiLine::new(rewritten);
+            }
+        }
+        document
+    }
+
+    /// 渲染全屏正文；调用方负责设置折叠提示上下文。
+    ///
+    /// 参数:
+    /// - `width`: 正文列数
+    /// - `options`: transcript 渲染选项
+    /// - `expanded`: 需要展开的段落键
+    ///
+    /// 返回:
+    /// - 完整正文、可折叠段落与用户消息位置
+    fn render_document(
+        &mut self,
+        width: usize,
+        options: &TranscriptRenderOptions,
+        expanded: &HashSet<usize>,
+    ) -> FullscreenDocument {
         let width = width.max(1);
         let frame = self.live_animation_frame();
         // 1. 子智能体视图整体替换正文，没有可折叠段落和用户锚点
@@ -108,12 +135,17 @@ impl TranscriptStore {
             let start = document.lines.len();
             let expandable = TranscriptStore::is_expandable_cell(&self.cells[index]);
             let open = expandable && expanded.contains(&index);
+            // 强制展开/折叠绕过缓存，可以直接在全屏提示上下文里渲染
             let lines = if open {
                 let cell = &self.cells[index];
-                with_force_expand(|| cell.display_lines_framed(width, &full, frame))
+                with_fullscreen_hints(|| {
+                    with_force_expand(|| cell.display_lines_framed(width, &full, frame))
+                })
             } else if expandable {
                 let cell = &self.cells[index];
-                with_force_collapse(|| cell.display_lines_framed(width, options, frame))
+                with_fullscreen_hints(|| {
+                    with_force_collapse(|| cell.display_lines_framed(width, options, frame))
+                })
             } else {
                 self.cache
                     .lines_for(index, &self.cells[index], width, options, frame)
@@ -159,12 +191,14 @@ impl TranscriptStore {
             tail.kind == ChatStreamKind::Reasoning && !tail.source.trim().is_empty()
         });
         let open = reasoning && expanded.contains(&LIVE_PARAGRAPH_KEY);
-        let mut live = if open {
-            let full = expanded_options();
-            with_force_expand(|| self.render_live_tail(width, &full, usize::MAX))
-        } else {
-            self.render_live_tail(width, options, usize::MAX)
-        };
+        let mut live = with_fullscreen_hints(|| {
+            if open {
+                let full = expanded_options();
+                with_force_expand(|| self.render_live_tail(width, &full, usize::MAX))
+            } else {
+                self.render_live_tail(width, options, usize::MAX)
+            }
+        });
         // 定稿区末行已是空行时去掉 live 的前空行，与内联视图一致
         spacing::drop_duplicate_leading_blank(&mut live, document.lines.last());
         spacing::ensure_live_tool_gap(&mut live, self.cells.last());

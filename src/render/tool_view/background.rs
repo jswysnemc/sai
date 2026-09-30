@@ -143,7 +143,7 @@ pub(super) fn render(view: &ToolView, frame: usize) -> Option<String> {
                     "\n  {}",
                     crate::render::omitted_line::render_fold_hint(
                         &format!("{} {}", tasks.len() - 5, t("tasks hidden", "项任务已折叠")),
-                        Some("Ctrl+O")
+                        Some(crate::render::omitted_line::FOLD_SHORTCUT)
                     )
                 ));
             }

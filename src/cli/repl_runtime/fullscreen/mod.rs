@@ -122,8 +122,11 @@ impl ReplRuntime {
             return Ok(());
         }
         let size = TerminalSize::current();
-        // 1. 沉底面板可能随实时状态变化，先刷新再计算输入框高度
-        let panel = self.bottom_panel_lines(usize::from(size.cols));
+        // 1. 沉底面板可能随实时状态变化，先刷新再计算输入框高度；
+        //    面板里的折叠提示同样不能引导用户按 Ctrl+O
+        let panel = crate::render::omitted_line::with_fullscreen_hints(|| {
+            self.bottom_panel_lines(usize::from(size.cols))
+        });
         if let Some(composer) = self.composer.as_mut() {
             composer.set_panel_lines(panel);
         }
@@ -198,7 +201,9 @@ impl ReplRuntime {
     /// 返回:
     /// - 输入框顶部行与高度
     pub(super) fn update_fullscreen_composer(&mut self, size: TerminalSize) -> Result<(u16, u16)> {
-        let panel = self.bottom_panel_lines(usize::from(size.cols));
+        let panel = crate::render::omitted_line::with_fullscreen_hints(|| {
+            self.bottom_panel_lines(usize::from(size.cols))
+        });
         if let Some(composer) = self.composer.as_mut() {
             composer.set_panel_lines(panel);
         }

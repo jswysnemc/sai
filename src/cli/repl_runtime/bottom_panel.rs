@@ -162,7 +162,7 @@ fn render_todo_section(
                 "  {}",
                 crate::render::omitted_line::render_fold_hint(
                     &format!("{hidden} {}", t("items hidden", "条已折叠")),
-                    Some("Ctrl+O"),
+                    Some(crate::render::omitted_line::FOLD_SHORTCUT),
                 )
             ),
             cols,

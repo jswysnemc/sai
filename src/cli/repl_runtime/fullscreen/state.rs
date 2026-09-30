@@ -179,19 +179,17 @@ impl FullscreenState {
         }
     }
 
-    /// 切换段落展开状态，并记录点击行相对正文顶部的位置用于重排后锚定。
+    /// 切换段落展开状态，并记录段落标题相对正文顶部的位置用于重排后锚定。
+    ///
+    /// 展开与收起都只需点击段落范围内的任意一行。
     ///
     /// 参数:
     /// - `row`: 被点击的文档行
     ///
     /// 返回:
-    /// - 被切换的段落首行与点击时它在屏幕上的偏移；未命中为 None
+    /// - 被切换的段落键与点击时标题行在屏幕上的偏移；未命中为 None
     pub(super) fn toggle_at(&mut self, row: usize) -> Option<(usize, isize)> {
         let span = self.document.paragraph_at(row)?.clone();
-        // 已展开段只在标题行收起，避免阅读长输出时误触
-        if span.expanded && row != span.start {
-            return None;
-        }
         if !self.expanded.remove(&span.key) {
             self.expanded.insert(span.key);
         }
@@ -201,6 +199,9 @@ impl FullscreenState {
     }
 
     /// 重排后让被切换段落的标题行停在原来的屏幕位置。
+    ///
+    /// 在长段正文中间点击收起时，标题行可能已滚出正文顶部；此时把收起后的段落
+    /// 放到正文顶部，而不是让它停在视野之外。
     ///
     /// 参数:
     /// - `key`: 被切换的段落键
@@ -218,7 +219,7 @@ impl FullscreenState {
         let Some(span) = self.document.paragraphs.iter().find(|span| span.key == key) else {
             return;
         };
-        let target = (span.start as isize - screen_offset).max(0) as usize;
+        let target = (span.start as isize - screen_offset.max(0)).max(0) as usize;
         let max = self.max_scroll(body_height);
         self.scroll = target.min(max);
         self.follow = self.scroll == max && !span.expanded;

@@ -62,7 +62,7 @@ fn relative_jumps_walk_user_messages() {
     assert!(state.follow);
 }
 
-/// 点击折叠段任意行展开；展开后只有标题行能收起，重排后标题行停在原屏幕位置。
+/// 点击折叠段任意行展开，重排后标题行停在原屏幕位置；展开段正文任意行都能收起。
 #[test]
 fn toggling_keeps_the_paragraph_header_in_place() {
     let mut state = FullscreenState::new();
@@ -82,9 +82,32 @@ fn toggling_keeps_the_paragraph_header_in_place() {
     state.apply_document(next, 20);
     state.restore_toggle_anchor(key, offset, 20);
     assert_eq!(state.scroll, 18);
-    assert!(state.toggle_at(30).is_none(), "展开段正文不应收起");
-    assert!(state.toggle_at(23).is_some());
+    assert!(state.toggle_at(30).is_some(), "展开段正文任意行都应能收起");
     assert!(!state.expanded.contains(&7));
+    assert!(state.toggle_at(23).is_some(), "再次点击标题行重新展开");
+    assert!(state.expanded.contains(&7));
+    assert!(state.toggle_at(99).is_none(), "段落范围外的行不触发切换");
+}
+
+/// 在长段正文中部收起时标题已在视野上方，收起后段落回到正文顶部。
+#[test]
+fn collapsing_from_the_middle_keeps_the_paragraph_visible() {
+    let mut state = FullscreenState::new();
+    let mut open = document(30);
+    open.paragraphs[0] = crate::render::transcript::ParagraphSpan {
+        key: 7,
+        start: 20,
+        end: 55,
+        expanded: true,
+    };
+    state.expanded.insert(7);
+    state.apply_document(open, 20);
+    state.scroll_to(40, 20);
+    let (key, offset) = state.toggle_at(45).expect("展开段正文应能收起");
+    assert!(offset < 0, "标题行已滚出正文顶部");
+    state.apply_document(document(0), 20);
+    state.restore_toggle_anchor(key, offset, 20);
+    assert_eq!(state.scroll, 20, "收起后的段落标题停在正文顶部");
 }
 
 /// 文档里已不存在的展开键被清理。

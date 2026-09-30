@@ -117,7 +117,7 @@ fn wheel_scrolls_and_new_output_is_flagged() {
     assert!(state.unseen);
 }
 
-/// 点击折叠的思考段展开，再点标题行收起。
+/// 点击折叠的思考段展开，再点展开段正文中任意一行收起。
 #[test]
 fn clicking_a_paragraph_toggles_it() {
     let mut runtime = runtime(2);
@@ -147,14 +147,27 @@ fn clicking_a_paragraph_toggles_it() {
         .collect::<Vec<_>>()
         .join("\n");
     assert!(text.contains("turn-0-think-10"), "{text}");
-    // 标题行停在原来的屏幕位置，再次点击收起
+    // 标题行停在原来的屏幕位置；点击展开段正文中的一行即可收起
     let reopened = session.state.document.paragraphs[0].clone();
     assert_eq!(
         layout.body_top + (reopened.start - session.state.scroll) as u16,
         row
     );
+    let body_row = session
+        .state
+        .document
+        .lines
+        .iter()
+        .position(|line| line.as_str().contains("turn-0-think-3"))
+        .expect("展开后应有思考正文");
+    assert!(body_row > reopened.start && body_row < reopened.end);
+    let screen_row = layout.body_top + (body_row - session.state.scroll) as u16;
     runtime
-        .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 4, row))
+        .handle_fullscreen_event(&mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            4,
+            screen_row,
+        ))
         .unwrap();
     assert!(runtime
         .fullscreen
@@ -223,4 +236,47 @@ fn typing_passes_through_to_the_composer() {
         .handle_fullscreen_event(&mouse(MouseEventKind::ScrollUp, 1, 1))
         .unwrap();
     assert_eq!(outcome, FullscreenEvent::Pass);
+}
+
+/// 全屏中的折叠提示不再引导按 Ctrl+O，内联视图的提示不受影响。
+#[test]
+fn fullscreen_fold_hints_do_not_mention_ctrl_o() {
+    let mut runtime = ReplRuntime::new(
+        10_000,
+        TranscriptRenderOptions {
+            reasoning_mode: ReasoningDisplayMode::Full,
+            tool_call_mode: ToolCallDisplayMode::Full,
+        },
+    );
+    runtime.transcript.push_user_echo(
+        crate::render::transcript::TranscriptMode::Yolo,
+        "question".into(),
+    );
+    runtime.transcript.push_chunk(&ChatStreamChunk {
+        kind: ChatStreamKind::Reasoning,
+        text: (0..30).map(|i| format!("long-think-{i}\n")).collect(),
+    });
+    runtime.transcript.finalize_live_tail();
+    let plain = |lines: &[crate::render::transcript::AnsiLine]| {
+        lines
+            .iter()
+            .map(|line| crate::render::activity_animation::strip_ansi_for_test(line.as_str()))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    // 1. 内联视图先渲染并写入缓存，提示为 Ctrl+O
+    let inline = plain(&runtime.transcript.display_tail(80, &runtime.options));
+    assert!(inline.contains("Ctrl+O"), "{inline}");
+    // 2. 全屏正文不出现 Ctrl+O，改为点击展开
+    runtime.enter_fullscreen().unwrap();
+    let screen = plain(&runtime.fullscreen.as_ref().unwrap().state.document.lines);
+    assert!(!screen.contains("Ctrl+O"), "{screen}");
+    assert!(
+        screen.contains("click to expand") || screen.contains("点击展开"),
+        "{screen}"
+    );
+    // 3. 退出后内联视图仍是 Ctrl+O，缓存没有被全屏文案污染
+    runtime.leave_fullscreen().unwrap();
+    let inline = plain(&runtime.transcript.display_tail(80, &runtime.options));
+    assert!(inline.contains("Ctrl+O"), "{inline}");
 }
