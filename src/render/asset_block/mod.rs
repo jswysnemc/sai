@@ -84,15 +84,20 @@ pub(crate) fn render_math_block(lines: &[String]) -> String {
     })
 }
 
-/// 渲染行内数学公式。
+/// 渲染行内数学公式，并以出现位置区分缓存。
+///
+/// Kitty 放置 ID 随渲染产物缓存；同一公式在一段文字中出现两次时若共用
+/// 缓存，第二处放置会把第一处的图片挪走。
 ///
 /// 参数:
 /// - `source`: 数学公式源码
+/// - `occurrence`: 公式所在行与序号组成的位置标识
 ///
 /// 返回:
-/// - 终端图片协议文本或错误提示
-pub(crate) fn render_inline_math(source: &str) -> String {
-    render_cached("math-inline", source, || {
+/// - 行内图片放置序列或带样式源码
+pub(crate) fn render_inline_math_at(source: &str, occurrence: &str) -> String {
+    let key = format!("{source}\u{0}{occurrence}");
+    render_cached("math-inline", &key, || {
         math::render_source(source, MathRenderMode::Inline)
     })
 }

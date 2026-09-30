@@ -37,6 +37,17 @@ fn ratex_renders_common_formulas_to_png() {
     }
 }
 
+/// 验证截图中的麦克斯韦方程组（aligned 环境与多行）能由 RaTeX 直接出图。
+#[test]
+fn ratex_renders_multiline_aligned_block() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let formula = "\\begin{aligned}\n\\nabla \\cdot \\mathbf{E} &= \\frac{\\rho}{\\varepsilon_0} \\\\\n\\nabla \\cdot \\mathbf{B} &= 0 \\\\\n\\nabla \\times \\mathbf{E} &= -\\frac{\\partial \\mathbf{B}}{\\partial t}\n\\end{aligned}";
+    let output = math::try_render_ratex(formula, &temp_dir, MathRenderMode::Block)
+        .unwrap()
+        .expect("aligned block should render");
+    assert!(output.is_file());
+}
+
 #[test]
 fn ratex_renders_inline_formula_to_png() {
     let temp_dir = tempfile::tempdir().unwrap();

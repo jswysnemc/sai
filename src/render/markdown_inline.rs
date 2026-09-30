@@ -35,6 +35,8 @@ pub(crate) fn render_inline_with_math_mode(text: &str, math_mode: InlineMathMode
     let mut output = String::new();
     let chars = text.chars().collect::<Vec<_>>();
     let mut index = 0;
+    // 同一行里重复出现的公式各自占一个图片放置，按出现序号区分缓存
+    let mut formula_seen = 0usize;
     while index < chars.len() {
         if index + 1 < chars.len() && chars[index] == '!' && chars[index + 1] == '[' {
             if let Some(label_end) = find_marker(&chars, index + 2, ']') {
@@ -77,11 +79,17 @@ pub(crate) fn render_inline_with_math_mode(text: &str, math_mode: InlineMathMode
             continue;
         }
         if index + 1 < chars.len() && chars[index] == '$' && chars[index + 1] == '$' {
-            if let Some(end) = find_double_marker(&chars, index + 2, '$') {
+            if let Some(end) = find_double_marker(&chars, index + 2, '$')
+                .filter(|end| is_formula(&chars[index + 2..*end]))
+            {
                 let formula = chars[index + 2..end].iter().collect::<String>();
                 match math_mode {
                     InlineMathMode::TerminalImage => {
-                        output.push_str(&asset_block::render_inline_math(&formula));
+                        formula_seen += 1;
+                        output.push_str(&asset_block::render_inline_math_at(
+                            &formula,
+                            &format!("{text}\u{0}{formula_seen}"),
+                        ));
                     }
                     InlineMathMode::Source => output.extend(chars[index..end + 2].iter()),
                 }
@@ -90,11 +98,18 @@ pub(crate) fn render_inline_with_math_mode(text: &str, math_mode: InlineMathMode
             }
         }
         if chars[index] == '$' {
-            if let Some(end) = find_marker(&chars, index + 1, '$') {
+            // 空公式（如成对的 `$$` 定界符被拆开时）不是公式，按原文输出
+            if let Some(end) = find_marker(&chars, index + 1, '$')
+                .filter(|end| is_formula(&chars[index + 1..*end]))
+            {
                 let formula = chars[index + 1..end].iter().collect::<String>();
                 match math_mode {
                     InlineMathMode::TerminalImage => {
-                        output.push_str(&asset_block::render_inline_math(&formula));
+                        formula_seen += 1;
+                        output.push_str(&asset_block::render_inline_math_at(
+                            &formula,
+                            &format!("{text}\u{0}{formula_seen}"),
+                        ));
                     }
                     InlineMathMode::Source => output.extend(chars[index..=end].iter()),
                 }
@@ -639,6 +654,17 @@ fn is_emphasis_end(chars: &[char], index: usize) -> bool {
 /// - 是否为英文单词字符
 fn is_word_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric()
+}
+
+/// 判断定界符之间是否有公式内容。
+///
+/// 参数:
+/// - `inner`: 定界符之间的字符
+///
+/// 返回:
+/// - 含非空白字符时返回 `true`
+fn is_formula(inner: &[char]) -> bool {
+    inner.iter().any(|character| !character.is_whitespace())
 }
 
 #[cfg(test)]

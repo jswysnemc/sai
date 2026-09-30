@@ -19,6 +19,7 @@ pub(crate) mod input_atom;
 mod live_tool_status;
 mod markdown;
 mod markdown_blocks;
+mod markdown_display_math;
 mod markdown_inline;
 mod markdown_quote;
 pub(crate) mod omitted_line;

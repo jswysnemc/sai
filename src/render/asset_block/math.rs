@@ -1,5 +1,6 @@
 use super::commands::{command_available, ensure_file_exists, run_command};
 use super::{render_error, render_success, test_stub_enabled, MathRenderMode};
+use crate::render::style::{MD_INLINE_CODE_STYLE, RESET};
 use crate::render::terminal_image;
 use anyhow::{Context, Result};
 use ratex_layout::{layout, to_display_list, LayoutOptions};
@@ -21,25 +22,48 @@ use tempfile::TempDir;
 /// 返回:
 /// - 终端图片协议文本或错误提示
 pub(super) fn render_source(source: &str, mode: MathRenderMode) -> String {
+    if matches!(mode, MathRenderMode::Inline) {
+        return render_inline_source(source);
+    }
     if source.trim().is_empty() {
         return render_error("math", "content is empty");
     }
     if test_stub_enabled() {
-        let placeholder = match mode {
-            MathRenderMode::Block => "[asset rendering skipped]\n".to_string(),
-            MathRenderMode::Inline => "[inline math rendering skipped]\n".to_string(),
-        };
-        return match mode {
-            MathRenderMode::Block => render_success(placeholder),
-            MathRenderMode::Inline => placeholder,
-        };
+        return render_success("[asset rendering skipped]\n".to_string());
     }
     match render_terminal(source, mode) {
-        Ok(rendered) => match mode {
-            MathRenderMode::Block => render_success(rendered),
-            MathRenderMode::Inline => rendered,
-        },
+        Ok(rendered) => render_success(rendered),
         Err(error) => render_error("math", &error.to_string()),
+    }
+}
+
+/// 【终端】【行内公式】在当前文本行内放置公式图片，不换行、不留空行。
+///
+/// 终端不支持行内图片或渲染失败时显示带样式的公式源码：行内报错会把一句话
+/// 截断成多行红字，源码至少保持句子完整可读。
+///
+/// 参数:
+/// - `source`: 公式源码
+///
+/// 返回:
+/// - 行内图片放置序列，或带样式的公式源码
+fn render_inline_source(source: &str) -> String {
+    let formula = source.trim();
+    if formula.is_empty() {
+        return String::new();
+    }
+    if test_stub_enabled() {
+        return "[inline math rendering skipped]".to_string();
+    }
+    let rendered = tempfile::tempdir()
+        .context("failed to create temporary render directory")
+        .and_then(|dir| {
+            let image = render_image(formula, &dir, MathRenderMode::Inline)?;
+            terminal_image::render_inline_line_image(&image)
+        });
+    match rendered {
+        Ok(Some(line)) => line,
+        _ => format!("{MD_INLINE_CODE_STYLE}{formula}{RESET}"),
     }
 }
 

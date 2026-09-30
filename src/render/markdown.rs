@@ -1,6 +1,7 @@
 use crate::render::asset_block;
 use crate::render::code_block::{highlight_code_line, render_code_footer, render_code_header};
 use crate::render::markdown_blocks;
+use crate::render::markdown_display_math::{classify_display_math_line, DisplayMathLine};
 pub(crate) use crate::render::markdown_inline::render_inline;
 #[cfg(test)]
 pub(crate) use crate::render::markdown_inline::render_table_cell;
@@ -294,23 +295,8 @@ impl MarkdownLineRenderer {
             };
             self.pending_blank_lines += 1;
             output
-        } else if line.trim() == "$$" {
-            if self.in_math_block {
-                self.in_math_block = false;
-                let raw_close = self.asset_block.push_line(line);
-                let rendered = asset_block::render_math_block(&self.math_buffer);
-                self.math_buffer.clear();
-                raw_close + &self.asset_block.finish(rendered)
-            } else {
-                let pending = self.flush();
-                self.in_math_block = true;
-                self.math_buffer.clear();
-                self.asset_block.reset();
-                pending + &self.asset_block.push_line(line)
-            }
-        } else if self.in_math_block {
-            self.math_buffer.push(line.to_string());
-            self.asset_block.push_line(line)
+        } else if let Some(output) = self.render_display_math_line(line) {
+            output
         } else if table::looks_like_table_row(line) {
             let gap = self.take_pending_blank_lines();
             gap + &self.table.push_line(line)
@@ -325,6 +311,49 @@ impl MarkdownLineRenderer {
             output.push_str(&rendered);
             output.push('\n');
             output
+        }
+    }
+
+    /// 【终端】【块级公式】处理 `$$` 开合行、块内公式行与单行块级公式。
+    ///
+    /// 参数:
+    /// - `line`: 当前行
+    ///
+    /// 返回:
+    /// - 本行属于块级公式时返回输出；否则为 `None`，交给后续分支
+    fn render_display_math_line(&mut self, line: &str) -> Option<String> {
+        match classify_display_math_line(line, self.in_math_block) {
+            // 1. 独占一行的 `$$…$$`：按块级样式出图，不再走行内图片
+            DisplayMathLine::Single(formula) => {
+                let pending = self.flush();
+                self.asset_block.reset();
+                let raw = self.asset_block.push_line(line);
+                let rendered = asset_block::render_math_block(&[formula]);
+                Some(pending + &raw + &self.asset_block.finish(rendered))
+            }
+            // 2. 开启块级公式，同行内容计入公式
+            DisplayMathLine::Open(first) => {
+                let pending = self.flush();
+                self.in_math_block = true;
+                self.math_buffer.clear();
+                self.math_buffer.extend(first);
+                self.asset_block.reset();
+                Some(pending + &self.asset_block.push_line(line))
+            }
+            // 3. 闭合块级公式，同行内容计入公式后出图
+            DisplayMathLine::Close(last) => {
+                self.in_math_block = false;
+                self.math_buffer.extend(last);
+                let raw_close = self.asset_block.push_line(line);
+                let rendered = asset_block::render_math_block(&self.math_buffer);
+                self.math_buffer.clear();
+                Some(raw_close + &self.asset_block.finish(rendered))
+            }
+            DisplayMathLine::Other if self.in_math_block => {
+                self.math_buffer.push(line.to_string());
+                Some(self.asset_block.push_line(line))
+            }
+            DisplayMathLine::Other => None,
         }
     }
 
@@ -559,3 +588,7 @@ fn render_header(line: &str, math_mode: InlineMathMode) -> Option<String> {
 #[cfg(test)]
 #[path = "markdown_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "markdown_math_tests.rs"]
+mod math_tests;
