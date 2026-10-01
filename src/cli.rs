@@ -37,6 +37,8 @@ mod init;
 mod input_flags;
 mod interaction;
 mod kb_commands;
+pub(crate) mod alternate_screen;
+mod terminal_signals;
 mod keyboard_enhancement;
 mod localization;
 mod memory_commands;

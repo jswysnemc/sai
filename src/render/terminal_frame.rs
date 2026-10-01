@@ -49,16 +49,14 @@ impl TerminalFrame {
         if self.buffer.is_empty() {
             return Ok(());
         }
-        // 【终端图片】【按需补传】帧内引用了当前屏幕缺失的 Kitty 图片时先补传数据
+        // 【终端图片】【按需补传】帧内引用了当前屏幕缺失的 Kitty 图片时补传数据
         let missing = std::str::from_utf8(&self.buffer)
             .map(crate::render::terminal_image::kitty_missing_transmissions)
             .unwrap_or_default();
         let payload = if missing.is_empty() {
             framed(&self.buffer)
         } else {
-            let mut body = missing.into_bytes();
-            body.extend_from_slice(&self.buffer);
-            framed(&body)
+            framed(&with_transmissions(&self.buffer, missing.as_bytes()))
         };
         let _paint = paint_lock();
         let mut stdout = io::stdout().lock();
@@ -67,6 +65,30 @@ impl TerminalFrame {
         self.buffer.clear();
         Ok(())
     }
+}
+
+/// 把图片数据插入帧内容：放在最后一次删除全部放置之后。
+///
+/// 删除全部放置会释放没有放置的图片数据，补传若排在删除之前会被立即回收。
+///
+/// 参数:
+/// - `buffer`: 本帧绘制字节
+/// - `transmissions`: 需补传的图片数据
+///
+/// 返回:
+/// - 插入后的帧内容
+fn with_transmissions(buffer: &[u8], transmissions: &[u8]) -> Vec<u8> {
+    let delete = crate::render::terminal_image::KITTY_DELETE_PLACEMENTS.as_bytes();
+    let at = buffer
+        .windows(delete.len())
+        .rposition(|window| window == delete)
+        .map(|index| index + delete.len())
+        .unwrap_or(0);
+    let mut body = Vec::with_capacity(buffer.len() + transmissions.len());
+    body.extend_from_slice(&buffer[..at]);
+    body.extend_from_slice(transmissions);
+    body.extend_from_slice(&buffer[at..]);
+    body
 }
 
 /// 用同步更新序列包裹一帧内容。
@@ -129,6 +151,17 @@ mod tests {
         frame.commit().unwrap();
 
         assert!(frame.buffer.is_empty());
+    }
+
+    /// 【终端】【帧缓冲】验证补传数据排在删除全部放置之后、放置之前。
+    #[test]
+    fn transmissions_follow_the_last_full_delete() {
+        let delete = crate::render::terminal_image::KITTY_DELETE_PLACEMENTS;
+        let buffer = format!("a{delete}b{delete}PLACE");
+        let body = String::from_utf8(with_transmissions(buffer.as_bytes(), b"DATA")).unwrap();
+        assert_eq!(body, format!("a{delete}b{delete}DATAPLACE"));
+        let plain = String::from_utf8(with_transmissions(b"PLACE", b"DATA")).unwrap();
+        assert_eq!(plain, "DATAPLACE");
     }
 
     /// 【终端】【帧缓冲】验证整帧被同步更新序列完整包裹。

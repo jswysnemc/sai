@@ -5,7 +5,7 @@ use anyhow::Result;
 use crossterm::cursor::{Hide, Show};
 use crossterm::event::KeyCode;
 use crossterm::execute;
-use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::terminal;
 use std::io;
 
 use super::agents::edit_agents;
@@ -42,7 +42,7 @@ impl TerminalSession {
         terminal::enable_raw_mode()?;
         let mut stdout = io::stdout();
         // 2. 进入备用屏失败时 Self 未构造、Drop 不会执行，须手工回滚 raw mode
-        if let Err(err) = execute!(stdout, EnterAlternateScreen, Hide) {
+        if let Err(err) = crate::cli::alternate_screen::enter_alternate_screen(&mut stdout).and_then(|_| execute!(stdout, Hide)) {
             let _ = terminal::disable_raw_mode();
             return Err(err.into());
         }
@@ -55,7 +55,8 @@ impl TerminalSession {
 
     fn run(mut self, paths: &SaiPaths, mut config: AppConfig) -> Result<()> {
         let result = run_main_menu(&mut self.stdout, paths, &mut config);
-        execute!(self.stdout, Show, LeaveAlternateScreen)?;
+        execute!(self.stdout, Show)?;
+        crate::cli::alternate_screen::leave_alternate_screen(&mut self.stdout)?;
         terminal::disable_raw_mode()?;
         match result {
             Ok(_) => Ok(()),
@@ -68,12 +69,9 @@ impl TerminalSession {
 
 impl Drop for TerminalSession {
     fn drop(&mut self) {
-        let _ = execute!(
-            self.stdout,
-            Show,
-            LeaveAlternateScreen,
-            crossterm::style::Print("\u{1b}[?2026l")
-        );
+        let _ = execute!(self.stdout, Show);
+        let _ = crate::cli::alternate_screen::leave_alternate_screen(&mut self.stdout);
+        let _ = execute!(self.stdout, crossterm::style::Print("\u{1b}[?2026l"));
         let _ = terminal::disable_raw_mode();
     }
 }

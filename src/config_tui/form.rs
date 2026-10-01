@@ -11,7 +11,7 @@ use anyhow::{bail, Result};
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::execute;
-use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::terminal::{self, Clear, ClearType};
 use std::io::{self, Write};
 
 use super::input::{read_key, read_key_event};
@@ -314,13 +314,9 @@ pub(crate) fn parse_bool_field(value: &str) -> Result<bool> {
 
 /// 临时离开备用屏，用 $EDITOR 编辑多行文本后返回。
 pub(super) fn edit_textarea(stdout: &mut io::Stdout, value: &mut String) -> Result<()> {
-    execute!(
-        stdout,
-        Show,
-        LeaveAlternateScreen,
-        Clear(ClearType::All),
-        MoveTo(0, 0)
-    )?;
+    execute!(stdout, Show)?;
+    crate::cli::alternate_screen::leave_alternate_screen(stdout)?;
+    execute!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
     stdout.flush()?;
     terminal::disable_raw_mode()?;
     super::ime::enable_for_edit();
@@ -329,7 +325,8 @@ pub(super) fn edit_textarea(stdout: &mut io::Stdout, value: &mut String) -> Resu
     // 无论成败都要先回到备用屏：错误提示得画在界面里才看得见，
     // 之前 eprintln 写 stderr，而备用屏占着显示，用户只会看到「什么都没发生」
     terminal::enable_raw_mode()?;
-    execute!(stdout, EnterAlternateScreen, Clear(ClearType::All), Hide)?;
+    crate::cli::alternate_screen::enter_alternate_screen(stdout)?;
+    execute!(stdout, Clear(ClearType::All), Hide)?;
     match result {
         Ok(Some(edited)) => *value = edited,
         // 编辑器以非零码退出（如 vim 的 :cq）视为取消，保留原值

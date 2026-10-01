@@ -9,7 +9,7 @@ use anyhow::Result;
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::style::Print;
-use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::terminal::{self, Clear, ClearType};
 use crossterm::{execute, queue};
 use serde::Deserialize;
 use std::io::{self, Write};
@@ -52,14 +52,16 @@ impl ReplBackgroundScreen {
     fn start() -> Result<Self> {
         let mut stdout = io::stdout();
         terminal::enable_raw_mode()?;
-        execute!(stdout, EnterAlternateScreen, Hide)?;
+        crate::cli::alternate_screen::enter_alternate_screen(&mut stdout)?;
+        execute!(stdout, Hide)?;
         Ok(Self { stdout })
     }
 }
 
 impl Drop for ReplBackgroundScreen {
     fn drop(&mut self) {
-        let _ = execute!(self.stdout, Show, LeaveAlternateScreen);
+        let _ = execute!(self.stdout, Show);
+        let _ = crate::cli::alternate_screen::leave_alternate_screen(&mut self.stdout);
         let _ = terminal::disable_raw_mode();
     }
 }
@@ -167,7 +169,7 @@ fn draw_task_list(
     write!(
         stdout,
         "{}",
-        crate::render::terminal_image::KITTY_DELETE_PLACEMENTS
+        crate::render::terminal_image::kitty_delete_placements()
     )?;
     draw_line(stdout, t("background tasks", "后台任务"))?;
     draw_line(
@@ -258,7 +260,7 @@ async fn show_task_output(
         write!(
             stdout,
             "{}",
-            crate::render::terminal_image::KITTY_DELETE_PLACEMENTS
+            crate::render::terminal_image::kitty_delete_placements()
         )?;
         draw_line(
             stdout,

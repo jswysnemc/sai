@@ -1,11 +1,9 @@
 use super::keyboard_enhancement::KeyboardEnhancementState;
 use anyhow::Result;
 use crossterm::cursor::Show;
-use crossterm::event::{
-    DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, PopKeyboardEnhancementFlags,
-};
-use crossterm::terminal::{self, LeaveAlternateScreen};
-use crossterm::{execute, queue};
+use crossterm::event::{DisableBracketedPaste, EnableBracketedPaste};
+use crossterm::terminal;
+use crossterm::execute;
 use std::io::{self, Write};
 
 /// REPL 终端输入模式的 RAII 守卫。
@@ -28,6 +26,8 @@ impl TerminalInputGuard {
     /// 返回:
     /// - 输入模式守卫；启用失败时已回滚 raw mode
     pub(super) fn enable(stdout: &mut io::Stdout, show_cursor: bool) -> Result<Self> {
+        // 进入 raw mode 前装好终止信号监听，被 kill 时同样能恢复终端
+        super::terminal_signals::install();
         terminal::enable_raw_mode()?;
         let mode_result = if show_cursor {
             execute!(stdout, Show, EnableBracketedPaste)
@@ -113,25 +113,36 @@ pub(crate) fn install_panic_hook() {
     }));
 }
 
-/// 尽力恢复终端到可用状态。
+/// 【终端】【恢复序列】返回把终端从 sai 的各种模式中恢复出来的完整序列。
 ///
-/// 不追踪当前处于哪种模式，全部恢复序列无条件发出：
-/// 多余的恢复序列会被终端忽略，漏发才是不可挽回的。
+/// 不追踪当前处于哪种模式，全部恢复序列无条件发出：多余的会被终端忽略，漏发才不可挽回。
+/// 先在当前屏幕弹掉本进程压入的键盘增强层，再退出备用屏。
+///
+/// 返回:
+/// - 恢复序列
+pub(crate) fn restore_sequence() -> String {
+    format!(
+        "{}{}",
+        super::alternate_screen::take_pop_all_sequence(),
+        concat!(
+            // 括号粘贴、鼠标捕获（按钮、拖动、任意移动、SGR 编码）
+            "\x1b[?2004l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l",
+            // 退出备用屏并显示光标
+            "\x1b[?1049l\x1b[?25h",
+            // 结束可能未闭合的同步更新并恢复自动换行
+            "\x1b[?2026l\x1b[?7h",
+        )
+    )
+}
+
+/// 尽力恢复终端到可用状态（panic 钩子使用）。
 ///
 /// 返回:
 /// - 无
 pub(crate) fn emergency_restore() {
     let mut stdout = io::stdout();
-    // 1. 退出备用屏与键盘增强，恢复粘贴模式与光标
-    let _ = queue!(
-        stdout,
-        PopKeyboardEnhancementFlags,
-        DisableBracketedPaste,
-        DisableMouseCapture,
-        LeaveAlternateScreen,
-        Show
-    );
+    let _ = stdout.write_all(restore_sequence().as_bytes());
     let _ = stdout.flush();
-    // 2. 关闭 raw mode，让后续输出恢复正常换行
+    // 关闭 raw mode，让后续输出恢复正常换行
     let _ = terminal::disable_raw_mode();
 }

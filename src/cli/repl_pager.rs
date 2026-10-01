@@ -11,7 +11,7 @@ use crossterm::event::{
     Event, KeyEvent, KeyEventKind,
 };
 use crossterm::execute;
-use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::terminal;
 use std::io::{self, Write};
 use std::time::Duration;
 
@@ -51,16 +51,11 @@ impl PagerScreen {
         if !was_raw {
             terminal::enable_raw_mode()?;
         }
+        crate::cli::alternate_screen::enter_alternate_screen(&mut stdout)?;
         if was_raw {
-            execute!(stdout, EnterAlternateScreen, Hide, EnableMouseCapture)?;
+            execute!(stdout, Hide, EnableMouseCapture)?;
         } else {
-            execute!(
-                stdout,
-                EnterAlternateScreen,
-                Hide,
-                EnableBracketedPaste,
-                EnableMouseCapture
-            )?;
+            execute!(stdout, Hide, EnableBracketedPaste, EnableMouseCapture)?;
         }
         let keyboard = if was_raw {
             KeyboardEnhancementState::default()
@@ -113,11 +108,13 @@ impl PagerScreen {
         self.active = false;
         let _ = execute!(self.stdout, DisableMouseCapture);
         if self.was_raw {
-            let _ = execute!(self.stdout, Show, LeaveAlternateScreen);
+            let _ = execute!(self.stdout, Show);
+            let _ = crate::cli::alternate_screen::leave_alternate_screen(&mut self.stdout);
         } else {
             let _ = execute!(self.stdout, DisableBracketedPaste);
             self.keyboard.disable(&mut self.stdout);
-            let _ = execute!(self.stdout, Show, LeaveAlternateScreen);
+            let _ = execute!(self.stdout, Show);
+            let _ = crate::cli::alternate_screen::leave_alternate_screen(&mut self.stdout);
             let _ = terminal::disable_raw_mode();
         }
         let _ = self.stdout.flush();
@@ -232,7 +229,7 @@ impl PagerScreen {
             write!(
                 self.frame,
                 "{}",
-                crate::render::terminal_image::KITTY_DELETE_PLACEMENTS
+                crate::render::terminal_image::kitty_delete_placements()
             )?;
         }
         if header_rows > 0 {

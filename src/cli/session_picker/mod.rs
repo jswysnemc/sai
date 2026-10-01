@@ -11,7 +11,7 @@ use crossterm::{
     cursor::{Hide, Show},
     event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
     execute,
-    terminal::{self, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal,
 };
 use std::{io, path::Path, time::Duration};
 
@@ -95,7 +95,8 @@ impl TerminalGuard {
         let was_raw = terminal::is_raw_mode_enabled()?;
         terminal::enable_raw_mode()?;
         let guard = Self { was_raw };
-        execute!(io::stdout(), EnterAlternateScreen, Hide)?;
+        crate::cli::alternate_screen::enter_alternate_screen(&mut io::stdout())?;
+        execute!(io::stdout(), Hide)?;
         Ok(guard)
     }
 }
@@ -103,7 +104,8 @@ impl Drop for TerminalGuard {
     /// 【会话选择】【终端保护】退出或错误时恢复屏幕与光标。
     /// 参数: 无；返回: 无
     fn drop(&mut self) {
-        let _ = execute!(io::stdout(), Show, LeaveAlternateScreen);
+        let _ = execute!(io::stdout(), Show);
+        let _ = crate::cli::alternate_screen::leave_alternate_screen(&mut io::stdout());
         if !self.was_raw {
             let _ = terminal::disable_raw_mode();
         }

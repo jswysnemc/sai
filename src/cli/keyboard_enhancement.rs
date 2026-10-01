@@ -1,7 +1,3 @@
-use crossterm::event::{
-    KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
-};
-use crossterm::execute;
 use std::io::Write;
 
 /// 键盘增强协议的平台执行策略。
@@ -62,11 +58,8 @@ impl KeyboardEnhancementState {
         if !terminal_supports_enhancement() {
             return Self::default();
         }
-        let active = execute!(
-            writer,
-            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
-        )
-        .is_ok();
+        // 经切屏管理计数：切到备用屏时这一层随之迁移，出栈落在同一块屏幕上
+        let active = super::alternate_screen::push_enhancement(writer).is_ok();
         Self { active }
     }
 
@@ -79,7 +72,7 @@ impl KeyboardEnhancementState {
     /// - 无
     pub(super) fn disable<W: Write>(&mut self, writer: &mut W) {
         if self.active {
-            let _ = execute!(writer, PopKeyboardEnhancementFlags);
+            let _ = super::alternate_screen::pop_enhancement(writer);
             self.active = false;
         }
     }

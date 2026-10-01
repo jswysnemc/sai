@@ -96,6 +96,21 @@ pub(crate) fn set_kitty_alternate_screen(alternate: bool) {
     }
 }
 
+/// 【终端图片】【整屏删除】返回删除全部放置的序列，并清空当前屏幕的传输记录。
+///
+/// 整屏重绘前会删除全部放置；Kitty 会顺带回收不再有放置的图片数据，
+/// 之后只发放置序列会引用到已释放的数据，缩放终端后公式整片消失。
+/// 清空记录后，下一帧提交时按引用重新补传。
+///
+/// 返回:
+/// - 删除全部放置的转义序列
+pub(crate) fn kitty_delete_placements() -> &'static str {
+    if let Ok(mut state) = kitty_screens().lock() {
+        state.sent_mut().clear();
+    }
+    KITTY_DELETE_PLACEMENTS
+}
+
 /// 【终端图片】【按需补传】返回即将写出文本所引用、当前屏幕缺失的图片数据。
 ///
 /// 参数:
@@ -204,6 +219,17 @@ mod kitty_screen_tests {
             screens.missing_for("\x1b_Ga=p,q=2,C=1,i=11,p=4\x1b\\"),
             "<data-11>"
         );
+    }
+
+    /// 验证整屏删除后，同一屏幕再次引用的图片会重新补传。
+    #[test]
+    fn full_delete_forces_retransmission() {
+        let mut screens = KittyScreens::default();
+        assert!(screens.register(21, "<data-21>"));
+        let frame = "\x1b_Ga=p,q=2,C=1,i=21,p=9\x1b\\";
+        assert!(screens.missing_for(frame).is_empty());
+        screens.sent_mut().clear();
+        assert_eq!(screens.missing_for(frame), "<data-21>");
     }
 
     /// 验证超出上限时淘汰最早登记的载荷。

@@ -19,8 +19,9 @@ import pyte
 class TerminalSession:
     """提供按键输入、尺寸变化和完整屏幕断言所需的伪终端。"""
 
-    def __init__(self, config=None, columns=80, rows=24, prepare=None, arguments=None, workspace=None, ready=None):
-        """config 为配置，columns/rows 为尺寸；prepare 初始化数据，arguments/workspace 指定启动参数与目录，ready 指定就绪条件。"""
+    def __init__(self, config=None, columns=80, rows=24, prepare=None, arguments=None, workspace=None, ready=None, kitty_keyboard=False):
+        """config 为配置，columns/rows 为尺寸；prepare 初始化数据，arguments/workspace 指定启动参数与目录，ready 指定就绪条件；kitty_keyboard 为真时应答键盘增强协议查询。"""
+        self.kitty_keyboard = kitty_keyboard
         self.directory = tempfile.TemporaryDirectory(prefix="sai-terminal-test-")
         self.root = Path(self.directory.name)
         self.ready = ready
@@ -78,8 +79,16 @@ class TerminalSession:
             os.kill(self.pid, signal.SIGTERM)
         except ProcessLookupError:
             pass
-        os.close(self.fd)
-        os.waitpid(self.pid, 0)
+        try:
+            os.close(self.fd)
+        except OSError:
+            # 测试已经主动关闭了主端（模拟关闭终端窗口）
+            pass
+        try:
+            os.waitpid(self.pid, 0)
+        except ChildProcessError:
+            # 测试已经主动回收了进程（例如检查信号退出码）
+            pass
         self.directory.cleanup()
 
     def pump(self, seconds=0.1):
@@ -101,6 +110,9 @@ class TerminalSession:
                 self.send(f"\x1b[{self.screen.cursor.y + 1};{self.screen.cursor.x + 1}R".encode())
             if b"\x1b]11;?" in data:
                 self.send(b"\x1b]11;rgb:0000/0000/0000\x1b\\")
+            if self.kitty_keyboard and b"\x1b[?u" in data:
+                # 应答键盘增强协议查询与主设备属性，让 sai 真正启用协议
+                self.send(b"\x1b[?0u\x1b[?62;22c")
 
     def wait_for(self, predicate, timeout=10):
         """等待 predicate 成立，timeout 为秒数；超时包含屏幕证据。"""
