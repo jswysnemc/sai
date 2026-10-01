@@ -263,8 +263,8 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
     historyRef.current = { index: null, draft: "" };
     const editor = event.currentTarget;
     const previous = lastSnapshotRef.current;
-    const next = serializeComposerAtomEditor(editor);
     syncEditorTrailingBreak(editor);
+    const next = serializeComposerAtomEditor(editor);
     const selection = readEditorTextSelection(editor) ?? { start: next.length, end: next.length };
     // 1. 记录用户输入产生的变更，供 Ctrl+Z / Ctrl+Y 使用
     editHistoryRef.current.record(previous, { value: next, selection });

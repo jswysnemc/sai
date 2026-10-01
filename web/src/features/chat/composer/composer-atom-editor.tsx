@@ -198,15 +198,23 @@ export function insertEditorPlainText(editor: HTMLElement, text: string): boolea
  * @returns 无；占位节点不参与文本序列化
  */
 export function syncEditorTrailingBreak(editor: HTMLElement): void {
-  const existing = editor.querySelector("[data-composer-trailing-break]");
+  // 1. 【聊天输入】【换行归一】浏览器删除末行文字后补出的末尾 BR 只承载光标，不是新换行
+  const lastContent = Array.from(editor.childNodes).reverse().find((node) => (
+    !(node instanceof HTMLElement && node.hasAttribute("data-composer-trailing-break"))
+    && !(node.nodeType === Node.TEXT_NODE && !node.nodeValue)
+  ));
+  if (lastContent instanceof HTMLBRElement) {
+    lastContent.setAttribute("data-composer-trailing-break", "true");
+  }
+  const placeholders = Array.from(editor.querySelectorAll("[data-composer-trailing-break]"));
+  // 2. 只保留一个位于末尾的光标占位，用户输入的文本换行继续参与序列化
   if (serializeComposerAtomEditor(editor).endsWith("\n")) {
-    if (!existing) {
-      const placeholder = document.createElement("br");
-      placeholder.setAttribute("data-composer-trailing-break", "true");
-      editor.append(placeholder);
-    }
+    const placeholder = placeholders.pop() ?? document.createElement("br");
+    placeholder.setAttribute("data-composer-trailing-break", "true");
+    placeholders.forEach((node) => node.remove());
+    if (editor.lastChild !== placeholder) editor.append(placeholder);
   } else {
-    existing?.remove();
+    placeholders.forEach((node) => node.remove());
   }
 }
 

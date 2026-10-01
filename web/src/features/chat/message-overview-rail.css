@@ -1,8 +1,25 @@
+@reference "../../shared/styles/tailwind.css";
+
+.message-scroll-region {
+  --message-overview-left: 0.4375rem;
+  --message-overview-width: 1.375rem;
+  --message-overview-clearance: 0.5rem;
+}
+
+/* 【消息导航】【内容避让】导航可见时为消息和输入区统一留白，宽屏仍保持内容居中 */
+@variant md {
+  @container (width > 45rem) {
+    .message-scroll-region:has(> .message-overview-rail:not(.is-hidden)) > .message-scroll {
+      padding-inline: max(0rem, calc(var(--message-overview-left) + var(--message-overview-width) + var(--message-overview-clearance) - var(--chat-column-gutter)));
+    }
+  }
+}
+
 .message-overview-rail {
   position: absolute;
   top: 50%;
-  left: 7px;
-  width: 22px;
+  left: var(--message-overview-left);
+  width: var(--message-overview-width);
   height: min(148px, calc(100% - 96px));
   transform: translateY(-50%);
   z-index: 6;
@@ -151,13 +168,13 @@
   white-space: nowrap;
 }
 
-@media (max-width: 48rem) {
+@media (width < 48rem) {
   .message-overview-rail {
     display: none;
   }
 }
 
-@container (max-width: 720px) {
+@container (width <= 45rem) {
   .message-overview-rail {
     display: none;
   }
