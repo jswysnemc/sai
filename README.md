@@ -240,11 +240,11 @@ Pushing a `v*` tag runs the **Release** workflow and publishes assets on [Releas
 - matching `.sha256` checksums
 
 ```bash
-git tag v0.2.3
-git push origin v0.2.3
+git tag v0.2.4
+git push origin v0.2.4
 ```
 
-You can also run the **Release** workflow manually from Actions and supply an existing tag. See the [v0.2.3 release notes](docs/releases/v0.2.3.md) for changes and upgrade details.
+You can also run the **Release** workflow manually from Actions and supply an existing tag. See the [v0.2.4 release notes](docs/releases/v0.2.4.md) for changes and upgrade details.
 
 ### Docker image
 
@@ -255,7 +255,7 @@ Images are published to GitHub Container Registry:
 docker pull ghcr.io/jswysnemc/sai:latest
 
 # version tag
-docker pull ghcr.io/jswysnemc/sai:0.2.3
+docker pull ghcr.io/jswysnemc/sai:0.2.4
 ```
 
 Build locally:
