@@ -137,7 +137,6 @@ pub(super) fn launch_args(profile: &Path, headed: bool) -> Vec<String> {
     ];
     if !headed {
         args.push("--headless=new".to_string());
-        args.push("--hide-scrollbars".to_string());
     }
     // root 用户下 Chromium 拒绝启用沙箱，只能显式关闭
     if running_as_root() {

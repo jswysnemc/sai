@@ -89,12 +89,12 @@ pub(super) fn element_expression(reference: &str) -> Result<String> {
         || !reference.starts_with('e')
         || !reference[1..].chars().all(|c| c.is_ascii_digit())
     {
-        bail!("invalid ref {reference:?}; use a ref like e12 from browser_snapshot");
+        bail!("invalid ref {reference:?}; use a ref like e12 from browser with action=snapshot");
     }
     Ok(format!(
         "(() => {{ const el = globalThis.__saiRefs && globalThis.__saiRefs.get({ref}); \
-         if (!el) throw new Error('ref {raw} not found; take a new browser_snapshot'); \
-         if (!el.isConnected) throw new Error('ref {raw} is no longer on the page; take a new browser_snapshot'); \
+         if (!el) throw new Error('ref {raw} not found; take a new browser with action=snapshot'); \
+         if (!el.isConnected) throw new Error('ref {raw} is no longer on the page; take a new browser with action=snapshot'); \
          return el; }})()",
         ref = serde_json::to_string(reference)?,
         raw = reference

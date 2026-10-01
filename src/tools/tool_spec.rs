@@ -89,6 +89,7 @@ pub struct ToolSpec {
     pub parameters: Value,
     pub permission: ToolPermission,
     handler: ToolBackend,
+    call_permission: Option<fn(&Value) -> ToolPermission>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -126,6 +127,7 @@ impl ToolSpec {
             description,
             parameters,
             permission: ToolPermission::ReadOnly,
+            call_permission: None,
             handler: ToolBackend::Native(Arc::new(move |args, _progress| {
                 let future = handler(args);
                 Box::pin(async move { future.await.map(ToolOutput::text) })
@@ -161,6 +163,7 @@ impl ToolSpec {
             description,
             parameters,
             permission: ToolPermission::ReadOnly,
+            call_permission: None,
             handler: ToolBackend::Native(Arc::new(move |args, _progress| Box::pin(handler(args)))),
         }
     }
@@ -186,6 +189,7 @@ impl ToolSpec {
             description,
             parameters,
             permission: ToolPermission::ReadOnly,
+            call_permission: None,
             handler: ToolBackend::Native(Arc::new(move |args, progress| {
                 let future = handler(args, progress);
                 Box::pin(async move { future.await.map(ToolOutput::text) })
@@ -198,6 +202,22 @@ impl ToolSpec {
     pub fn writes(mut self) -> Self {
         self.permission = ToolPermission::Writes;
         self
+    }
+
+    /// 【工具】【动作权限】设置依赖调用参数的权限判定，静态权限仍用于目录展示。
+    /// @param resolver 为接收参数并返回权限的函数
+    /// @returns 更新后的工具定义
+    pub(crate) fn with_call_permission(mut self, resolver: fn(&Value) -> ToolPermission) -> Self {
+        self.call_permission = Some(resolver);
+        self
+    }
+
+    /// 【工具】【调用权限】取得本次调用的实际权限；未配置时沿用静态声明。
+    /// @param arguments 为本次调用参数
+    /// @returns 本次调用的只读或写入权限
+    pub(crate) fn permission_for(&self, arguments: &Value) -> ToolPermission {
+        self.call_permission
+            .map_or(self.permission, |resolve| resolve(arguments))
     }
 
     /// 【工具】【模型契约】复制供模型请求使用的工具名称、说明和参数。
@@ -226,6 +246,7 @@ impl ToolSpec {
             description: definition.description.clone(),
             parameters: definition.parameters.clone(),
             permission: plugin_permission(definition.access),
+            call_permission: None,
             handler: ToolBackend::LuaTool {
                 plugin_id: id.to_string(),
                 name: definition.name.clone(),
@@ -242,6 +263,7 @@ impl ToolSpec {
             description: definition.description.clone(),
             parameters: serde_json::json!({"type":"object","properties":{"arguments":{"type":"string"}},"required":["arguments"],"additionalProperties":false}),
             permission: plugin_permission(definition.access),
+            call_permission: None,
             handler: ToolBackend::LuaCommand {
                 plugin_id: id.to_string(),
                 name: definition.name.clone(),

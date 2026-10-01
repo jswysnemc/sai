@@ -85,7 +85,8 @@ impl ToolRegistry {
                 &self.session_key,
                 &self.session_id,
             );
-            let sandboxed = profile.authorize_scoped(name, tool.permission, args, scope)?;
+            let sandboxed =
+                profile.authorize_scoped(name, tool.permission_for(args), args, scope)?;
             if sandboxed {
                 args.as_object_mut()
                     .context("tool arguments must be a JSON object")?
@@ -107,8 +108,10 @@ impl ToolRegistry {
         let plugins = self
             .plugins
             .fork_active(&PluginServices::active_instances())?;
-        let mut context =
-            self.plugin_context(progress.clone(), tool.permission == ToolPermission::Writes);
+        let mut context = self.plugin_context(
+            progress.clone(),
+            tool.permission_for(&original_args) == ToolPermission::Writes,
+        );
         let operation_id = context.operation_id.clone();
         let result = crate::plugins::operation::scope(&operation_id, async {
             plugins.check_tool(name, &original_args, &context).await?;

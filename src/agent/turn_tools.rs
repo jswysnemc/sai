@@ -371,7 +371,10 @@ impl Agent {
                         continue;
                     }
                     if self.mode() == AgentMode::Plan
-                        && self.tools.permission(&call.function.name)? != ToolPermission::ReadOnly
+                        && self
+                            .tools
+                            .permission_for_call(&call.function.name, &call.function.arguments)?
+                            != ToolPermission::ReadOnly
                     {
                         let output = format!(
                             "tool error: Plan mode blocked non-read-only tool: {}",

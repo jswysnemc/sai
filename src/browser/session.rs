@@ -156,7 +156,7 @@ impl BrowserSession {
 
     /// 【内置浏览器】【脚本求值】在当前页面主世界执行表达式并按值返回结果。
     ///
-    /// 主世界与页面脚本共享全局对象，只用于读取页面自身状态与 browser_evaluate；
+    /// 主世界与页面脚本共享全局对象，只用于读取页面自身状态与 browser action=evaluate；
     /// 快照与 ref 定位走隔离世界，见 `evaluate_isolated`。
     ///
     /// @param expression 为 JavaScript 表达式，可返回 Promise

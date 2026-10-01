@@ -86,7 +86,7 @@ impl ActionOutcome {
     /// @returns 操作说明与页面概况
     pub(crate) fn describe(&self) -> String {
         format!(
-            "{}\n{}\nCall browser_snapshot to see the updated page.",
+            "{}\n{}\nCall browser with action=snapshot to see the updated page.",
             self.message,
             self.page.describe()
         )

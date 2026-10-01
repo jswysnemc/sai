@@ -49,19 +49,20 @@ describe("browser panel reveal", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("每轮运行首次调用浏览器工具时只打开一次面板", () => {
-    expect(revealBrowserPanelForEvent(toolStarted("browser_navigate"))).toBe(true);
-    expect(revealBrowserPanelForEvent(toolStarted("browser_click"))).toBe(false);
-    expect(revealBrowserPanelForEvent(toolStarted("browser_click", "run-2"))).toBe(true);
+    expect(revealBrowserPanelForEvent(toolStarted("browser"))).toBe(true);
+    expect(revealBrowserPanelForEvent(toolStarted("browser"))).toBe(false);
+    expect(revealBrowserPanelForEvent(toolStarted("browser", "run-2"))).toBe(true);
     expect(dispatched).toEqual(["browser", "browser"]);
   });
 
   it("忽略历史补发、非浏览器工具与移动端布局", () => {
-    expect(revealBrowserPanelForEvent(toolStarted("browser_navigate", "run-1", true))).toBe(false);
+    expect(revealBrowserPanelForEvent(toolStarted("browser", "run-1", true))).toBe(false);
     expect(revealBrowserPanelForEvent(toolStarted("web_search"))).toBe(false);
     mobile = true;
-    expect(revealBrowserPanelForEvent(toolStarted("browser_navigate"))).toBe(false);
+    expect(revealBrowserPanelForEvent(toolStarted("browser"))).toBe(false);
     expect(dispatched).toEqual([]);
-    expect(isBrowserToolName("browser_snapshot")).toBe(true);
+    expect(isBrowserToolName("browser")).toBe(true);
+    expect(isBrowserToolName("browser_snapshot")).toBe(false);
     expect(isBrowserToolName(42)).toBe(false);
   });
 });

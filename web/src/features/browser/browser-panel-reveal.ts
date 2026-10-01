@@ -14,7 +14,7 @@ const MAX_REMEMBERED_RUNS = 64;
  * @returns 浏览器工具时为 true
  */
 export function isBrowserToolName(name: unknown): boolean {
-  return typeof name === "string" && name.startsWith("browser_");
+  return typeof name === "string" && name === "browser";
 }
 
 /**

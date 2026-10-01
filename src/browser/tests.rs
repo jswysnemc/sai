@@ -69,6 +69,7 @@ fn launch_args_bind_loopback_and_isolate_profile() {
     assert!(args.contains(&"--remote-debugging-address=127.0.0.1".to_string()));
     assert!(args.contains(&"--remote-debugging-port=0".to_string()));
     assert!(args.contains(&"--headless=new".to_string()));
+    assert!(!args.contains(&"--hide-scrollbars".to_string()));
     assert!(args
         .iter()
         .any(|arg| arg == "--user-data-dir=/tmp/sai-browser-test"));
@@ -170,7 +171,7 @@ async fn real_browser_round_trip_when_enabled() {
         .await
         .unwrap_err();
     assert!(
-        format!("{stale:#}").contains("browser_snapshot"),
+        format!("{stale:#}").contains("browser with action=snapshot"),
         "{stale:#}"
     );
     let (jpeg, _) = session.screenshot(false, None).await.unwrap();

@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import { toolCardSummary } from "./tool-card-summary";
 
 describe("tool card summary", () => {
+  it("统一浏览器入口展示具体动作和目标", () => {
+    expect(toolCardSummary("browser", JSON.stringify({ action: "navigate", url: "https://example.com" }))).toBe("打开网页 example.com");
+    expect(toolCardSummary("browser", JSON.stringify({ action: "click", ref: "e3" }))).toBe("点击 e3");
+    expect(toolCardSummary("browser", JSON.stringify({ action: "snapshot" }))).toBe("读取快照");
+    expect(toolCardSummary("browser", JSON.stringify({ action: "screenshot" }), "en-US")).toBe("Screenshot");
+  });
+
   it("展示简化后的 Shell 命令和加载目标", () => {
     expect(toolCardSummary("run_command", JSON.stringify({ command: "git status --short" }))).toBe("git status --short");
     expect(toolCardSummary("run_command", JSON.stringify({ command: "semble search foo bar" }))).toBe("semble search foo");

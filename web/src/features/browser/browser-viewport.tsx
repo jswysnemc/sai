@@ -3,6 +3,7 @@ import { useI18n } from "../i18n/use-i18n";
 import { isNativePasteShortcut, keyMessage, mouseMessage, type ViewportGeometry } from "./browser-input";
 import type { BrowserClientMessage } from "./browser-protocol";
 import type { BrowserFrameHandler } from "./use-browser-session";
+import { useBrowserResize } from "./use-browser-resize";
 
 type BrowserViewportProps = {
   /** 页面视口宽度（CSS 像素） */
@@ -13,9 +14,6 @@ type BrowserViewportProps = {
   onSend: (message: BrowserClientMessage) => void;
   onFrameHandler: (handler: BrowserFrameHandler | null) => void;
 };
-
-/** 视口尺寸变化后发送 resize 的防抖时长。 */
-const RESIZE_DEBOUNCE_MS = 200;
 
 /**
  * 浏览器画面视口：绘制服务端推送的 JPEG 帧，并把鼠标、滚轮与键盘输入转发给页面。
@@ -37,6 +35,8 @@ export function BrowserViewport({ pageWidth, pageHeight, disabled, onSend, onFra
   sendRef.current = onSend;
   const pageRef = useRef({ width: pageWidth, height: pageHeight });
   pageRef.current = { width: pageWidth, height: pageHeight };
+
+  useBrowserResize(hostRef, !disabled, onSend);
 
   // 1. 注册画面回调：解码中到达的帧只保留最新一张，避免积压
   useEffect(() => {
@@ -74,31 +74,7 @@ export function BrowserViewport({ pageWidth, pageHeight, disabled, onSend, onFra
     };
   }, [onFrameHandler]);
 
-  // 2. 视口尺寸跟随面板大小，防抖后通知服务端调整页面视口
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return;
-    let timer: number | undefined;
-    let last = { width: 0, height: 0 };
-    const observer = new ResizeObserver(([entry]) => {
-      const width = Math.floor(entry.contentRect.width);
-      const height = Math.floor(entry.contentRect.height);
-      if (width < 50 || height < 50) return;
-      if (Math.abs(width - last.width) < 2 && Math.abs(height - last.height) < 2) return;
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        last = { width, height };
-        sendRef.current({ type: "resize", width, height });
-      }, RESIZE_DEBOUNCE_MS);
-    });
-    observer.observe(host);
-    return () => {
-      window.clearTimeout(timer);
-      observer.disconnect();
-    };
-  }, []);
-
-  // 3. 指针与滚轮转发；滚轮需要非 passive 监听才能阻止面板自身滚动
+  // 2. 指针与滚轮转发；滚轮需要非 passive 监听才能阻止面板自身滚动
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || disabled) return;
@@ -115,23 +91,35 @@ export function BrowserViewport({ pageWidth, pageHeight, disabled, onSend, onFra
     };
     let moveFrame = 0;
     let lastMove: MouseEvent | null = null;
+    /**
+     * 【浏览器面板】【移动提交】在点击边界前发送最后一次移动，避免延迟回调打乱顺序。
+     * @returns 无
+     */
+    const flushMove = () => {
+      cancelAnimationFrame(moveFrame);
+      moveFrame = 0;
+      if (lastMove) sendRef.current(mouseMessage("move", lastMove, geometry()));
+      lastMove = null;
+    };
     const onDown = (event: MouseEvent) => {
+      flushMove();
       event.preventDefault();
       inputRef.current?.focus({ preventScroll: true });
       sendRef.current(mouseMessage("down", event, geometry()));
     };
-    const onUp = (event: MouseEvent) => sendRef.current(mouseMessage("up", event, geometry()));
+    const onUp = (event: MouseEvent) => {
+      flushMove();
+      sendRef.current(mouseMessage("up", event, geometry()));
+    };
     // 鼠标移动按动画帧合并，避免高频事件占满连接
     const onMove = (event: MouseEvent) => {
       lastMove = event;
       if (moveFrame) return;
-      moveFrame = requestAnimationFrame(() => {
-        moveFrame = 0;
-        if (lastMove) sendRef.current(mouseMessage("move", lastMove, geometry()));
-      });
+      moveFrame = requestAnimationFrame(flushMove);
     };
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
+      flushMove();
       sendRef.current(mouseMessage("wheel", event, geometry()));
     };
     const onContextMenu = (event: MouseEvent) => event.preventDefault();
@@ -166,7 +154,7 @@ export function BrowserViewport({ pageWidth, pageHeight, disabled, onSend, onFra
       <canvas
         ref={canvasRef}
         className="browser-canvas"
-        style={{ aspectRatio: `${pageWidth} / ${pageHeight}` }}
+        style={{ width: pageWidth, height: pageHeight }}
         aria-label={t("Browser page", "浏览器页面")}
         role="img"
       />

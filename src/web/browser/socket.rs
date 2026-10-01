@@ -1,20 +1,22 @@
-//! 浏览器面板 WebSocket：推送画面与状态，转发用户输入与导航操作。
+//! 浏览器面板连接：独立接收输入、执行命令与发送最新画面。
 
+use super::commands;
+use super::frame_delivery::{self, text};
+use super::input_queue::InputQueue;
 use super::protocol::{ClientMessage, ServerMessage};
-use crate::browser::{normalize_url, BrowserEvent, BrowserSession};
+use crate::browser::BrowserEvent;
 use crate::web::server_logging;
-use anyhow::Result;
 use axum::extract::ws::{Message, WebSocket};
 use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, watch};
 
-/// 【浏览器面板】【连接服务】启动或复用共享浏览器，并在连接期间双向转发。
+/// 【浏览器面板】【连接服务】启动或复用共享浏览器，并管理连接期间的收发任务。
 /// @param socket 为面板 WebSocket
-/// @returns 无
+/// @returns 无；断开时取消输入和导航任务并注销录屏订阅
 pub(crate) async fn serve_socket(socket: WebSocket) {
     let (mut sender, mut receiver) = socket.split();
-    // 1. 获取共享会话；浏览器缺失或启动失败时把原因告诉面板后关闭
+    // 1. 【浏览器面板】【连接服务】获取共享会话；浏览器缺失或启动失败时返回原因
     let session = match crate::browser::shared().await {
         Ok(session) => session,
         Err(error) => {
@@ -28,128 +30,66 @@ pub(crate) async fn serve_socket(socket: WebSocket) {
         }
     };
     server_logging::write("浏览器面板", "面板已连接", false);
-    // 2. 先订阅再登记面板，保证首帧截图与当前状态不会漏掉
     let mut events = session.subscribe();
-    let (errors_tx, mut errors_rx) = mpsc::unbounded_channel::<String>();
     session.attach_viewer().await;
-    let state = match session.current_state().await {
-        Ok(state) => state,
-        Err(_) => session.last_state(),
-    };
-    if sender
-        .send(text(&ServerMessage::State { state: &state }))
+    let state = session
+        .current_state()
         .await
-        .is_err()
-    {
-        session.detach_viewer().await;
-        return;
-    }
-    // 3. 主循环：面板消息、会话事件与异步操作错误三路并发
+        .unwrap_or_else(|_| session.last_state());
+
+    // 2. 【浏览器面板】【任务分离】写端独立执行；画面槽位覆盖旧帧，输入执行期间仍可接收新事件
+    let (frames_tx, frames_rx) = watch::channel(None);
+    let (outgoing, messages) = mpsc::unbounded_channel();
+    let _ = outgoing.send(text(&ServerMessage::State { state: &state }));
+    let mut delivery = tokio::spawn(frame_delivery::deliver(sender, frames_rx, messages));
+    let queue = Arc::new(InputQueue::default());
+    let mut input = tokio::spawn(commands::run(
+        session.clone(),
+        queue.clone(),
+        outgoing.clone(),
+    ));
+
+    // 3. 【浏览器面板】【消息接收】收集输入和浏览器事件，不在接收循环中等待 CDP 或网络写入
     loop {
         tokio::select! {
+            _ = &mut delivery => break,
+            _ = &mut input => break,
             message = receiver.next() => {
                 let Some(Ok(message)) = message else { break };
                 match message {
-                    Message::Text(raw) => handle_client(&session, &raw, &errors_tx).await,
+                    Message::Text(raw) => match serde_json::from_str::<ClientMessage>(&raw) {
+                        Ok(message) => {
+                            if let Err(error) = queue.push(message) {
+                                server_logging::write("浏览器面板", error, true);
+                                break;
+                            }
+                        }
+                        Err(error) => {
+                            let message = format!("invalid browser message: {error}");
+                            let _ = outgoing.send(text(&ServerMessage::Error { message: &message }));
+                        }
+                    },
                     Message::Close(_) => break,
-                    Message::Ping(bytes) => {
-                        if sender.send(Message::Pong(bytes)).await.is_err() { break; }
-                    }
+                    Message::Ping(bytes) => { let _ = outgoing.send(Message::Pong(bytes)); }
                     Message::Binary(_) | Message::Pong(_) => {}
                 }
             }
-            event = events.recv() => {
-                let outgoing = match event {
-                    Ok(BrowserEvent::Frame(bytes)) => Message::Binary(bytes.as_ref().clone()),
-                    Ok(BrowserEvent::State(state)) => text(&ServerMessage::State { state: &state }),
-                    Ok(BrowserEvent::Activity(message)) => text(&ServerMessage::Activity { message: &message }),
-                    // 网络慢时丢弃积压的旧画面，下一帧会覆盖
-                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
-                    Err(broadcast::error::RecvError::Closed) => break,
-                };
-                if sender.send(outgoing).await.is_err() { break; }
-            }
-            Some(message) = errors_rx.recv() => {
-                if sender.send(text(&ServerMessage::Error { message: &message })).await.is_err() { break; }
+            event = events.recv() => match event {
+                Ok(BrowserEvent::Frame(bytes)) => { frames_tx.send_replace(Some(bytes)); }
+                Ok(BrowserEvent::State(state)) => {
+                    let _ = outgoing.send(text(&ServerMessage::State { state: &state }));
+                }
+                Ok(BrowserEvent::Activity(message)) => {
+                    let _ = outgoing.send(text(&ServerMessage::Activity { message: &message }));
+                }
+                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Closed) => break,
             }
         }
     }
-    // 4. 面板断开后注销，最后一个面板离开时停止录屏
+    // 4. 【浏览器面板】【断开清理】取消当前连接的任务，避免断开后继续处理积压操作
+    delivery.abort();
+    input.abort();
     session.detach_viewer().await;
     server_logging::write("浏览器面板", "面板已断开", false);
-}
-
-/// 【浏览器面板】【消息处理】解析并执行一条面板消息，导航类操作放到后台任务。
-/// @param session 为浏览器会话；raw 为消息文本；errors 为错误回传通道
-/// @returns 无
-async fn handle_client(
-    session: &Arc<BrowserSession>,
-    raw: &str,
-    errors: &mpsc::UnboundedSender<String>,
-) {
-    let message = match serde_json::from_str::<ClientMessage>(raw) {
-        Ok(message) => message,
-        Err(error) => {
-            let _ = errors.send(format!("invalid browser message: {error}"));
-            return;
-        }
-    };
-    if message.is_slow() {
-        let session = session.clone();
-        let errors = errors.clone();
-        tokio::spawn(async move {
-            if let Err(error) = execute(&session, message).await {
-                let _ = errors.send(format!("{error:#}"));
-            }
-        });
-        return;
-    }
-    // 输入事件按顺序同步执行，保证按下与抬起的先后关系
-    if let Err(error) = execute(session, message).await {
-        let _ = errors.send(format!("{error:#}"));
-    }
-}
-
-/// 【浏览器面板】【操作执行】把面板消息映射到浏览器会话操作。
-/// @param session 为浏览器会话；message 为面板消息
-/// @returns 操作结果
-async fn execute(session: &BrowserSession, message: ClientMessage) -> Result<()> {
-    match message {
-        ClientMessage::Navigate { url } => {
-            // 地址栏允许输入搜索词，协议限制与 Agent 工具一致
-            let url = normalize_url(&url, true)?;
-            session.navigate(&url).await?;
-        }
-        ClientMessage::Back => {
-            session
-                .go_history(crate::browser::navigation::HistoryStep::Back)
-                .await?;
-        }
-        ClientMessage::Forward => {
-            session
-                .go_history(crate::browser::navigation::HistoryStep::Forward)
-                .await?;
-        }
-        ClientMessage::Reload => {
-            session.reload().await?;
-        }
-        ClientMessage::Stop => session.stop_loading().await?,
-        ClientMessage::Mouse(input) => session.dispatch_mouse_input(&input).await?,
-        ClientMessage::Key(input) => session.dispatch_key_input(&input).await?,
-        ClientMessage::InsertText { text } => session.insert_text(&text).await?,
-        ClientMessage::Resize { width, height } => session.resize(width, height).await?,
-        ClientMessage::NewTab => {
-            session.new_tab("about:blank").await?;
-        }
-        ClientMessage::SwitchTab { id } => session.switch_tab(&id).await?,
-        ClientMessage::CloseTab { id } => session.close_tab(Some(&id)).await?,
-    }
-    Ok(())
-}
-
-/// 【浏览器面板】【文本消息】把服务端消息序列化为 WebSocket 文本帧。
-/// @param message 为服务端消息
-/// @returns WebSocket 消息
-fn text(message: &ServerMessage<'_>) -> Message {
-    Message::Text(serde_json::to_string(message).unwrap_or_else(|_| "{}".to_string()))
 }

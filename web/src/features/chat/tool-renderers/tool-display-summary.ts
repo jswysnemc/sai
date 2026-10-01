@@ -136,14 +136,15 @@ export function toolDisplaySummary(
     return text(locale, "page", "页面");
   }
 
-  if (name.startsWith("browser_")) {
+  if (name === "browser" || name.startsWith("browser_")) {
+    const action = stringField(args, "action");
+    const label = name === "browser" ? browserActionLabel(action, locale) : "";
     const url = stringField(args, "url");
-    if (url) return compactText(url.replace(/^https?:\/\//, ""));
-    for (const field of ["key", "option", "text", "selector", "ref", "action", "direction"] as const) {
-      const value = stringField(args, field);
-      if (value) return compactText(value);
+    let detail = url ? url.replace(/^https?:\/\//, "") : "";
+    for (const field of ["ref", "id", "key", "option", "text", "selector", "direction"] as const) {
+      if (!detail) detail = stringField(args, field);
     }
-    return "";
+    return compactText([label, detail].filter(Boolean).join(" ") || action);
   }
 
   // 通用字段：路径优先，复杂 pattern 再做人话处理
@@ -446,4 +447,24 @@ function isNoiseToken(token: string): boolean {
  */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * 【浏览器工具】【动作展示】为统一入口生成具体操作名称。
+ * @param action 浏览器动作
+ * @param locale 界面语言
+ * @returns 本地化动作名称，未知动作保留原文
+ */
+function browserActionLabel(action: string, locale: Locale): string {
+  const labels: Record<string, [string, string]> = {
+    navigate: ["Navigate", "打开网页"], back: ["Back", "后退"], forward: ["Forward", "前进"],
+    reload: ["Reload", "刷新"], tabs: ["List tabs", "查看标签页"], new_tab: ["New tab", "新建标签页"],
+    switch_tab: ["Switch tab", "切换标签页"], close_tab: ["Close tab", "关闭标签页"],
+    wait: ["Wait", "等待"], snapshot: ["Snapshot", "读取快照"], screenshot: ["Screenshot", "截图"],
+    click: ["Click", "点击"], double_click: ["Double click", "双击"], right_click: ["Right click", "右键点击"],
+    hover: ["Hover", "悬停"], type: ["Type", "输入"], select_option: ["Select option", "选择选项"],
+    press_key: ["Press key", "按键"], scroll: ["Scroll", "滚动"], evaluate: ["Evaluate", "执行页面脚本"]
+  };
+  const label = labels[action];
+  return label ? text(locale, label[0], label[1]) : action;
 }

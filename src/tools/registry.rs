@@ -347,6 +347,22 @@ impl ToolRegistry {
         Ok(tool.permission)
     }
 
+    /// 【工具】【调用权限】解析参数并查询动作对应的权限。
+    /// @param name 为工具名称；arguments 为 JSON 参数
+    /// @returns 本次调用的权限，解析失败或工具不存在时返回错误
+    pub(crate) fn permission_for_call(
+        &self,
+        name: &str,
+        arguments: &str,
+    ) -> Result<ToolPermission> {
+        let name = local_tool_name(name);
+        let tool = self
+            .tools
+            .get(name)
+            .with_context(|| format!("unknown tool: {name}"))?;
+        Ok(tool.permission_for(&parse_arguments(arguments)?))
+    }
+
     /// 判断工具执行前是否需要交互式权限审计。
     ///
     /// 参数:
@@ -362,7 +378,7 @@ impl ToolRegistry {
         };
         let arguments = parse_arguments(arguments)?;
         Ok(self.permission_profile.as_ref().is_some_and(|profile| {
-            profile.requires_interactive_audit(name, tool.permission, &arguments)
+            profile.requires_interactive_audit(name, tool.permission_for(&arguments), &arguments)
         }))
     }
 

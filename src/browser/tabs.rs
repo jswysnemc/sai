@@ -107,7 +107,7 @@ impl BrowserSession {
             .collect();
         match matches.as_slice() {
             [single] => Ok(single.clone()),
-            [] => bail!("no browser tab matches id {id}; call browser_tabs to list tabs"),
+            [] => bail!("no browser tab matches id {id}; call browser with action=tabs to list tabs"),
             _ => bail!("tab id {id} is ambiguous; use more characters"),
         }
     }
