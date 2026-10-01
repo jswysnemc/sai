@@ -80,7 +80,7 @@ Weather, exchange-rate, and image tools require the corresponding [Lua example p
 
 ### Agent and progressive tool system
 
-- **Three permission modes** - `Yolo` free tool use, `Audited` (sandbox + audit log + per-call confirm), `Plan` read-only
+- **Four permission modes** - `Yolo` free tool use, `Audited` (sandbox + audit log + per-call confirm), `Auto-audit` (LLM / Jev auto-audit alongside user approval), `Plan` read-only (commands run in a read-only sandbox)
 - **Progressive tool loading** - Only `load` and base tools are exposed at start; the model calls `load` to pull in tool groups or skills on demand. Tool groups persist to `loaded-tools.json`. Each skill is loaded once per session: later `load` calls return `already_loaded` without the body, and the name list lives in a suffix `<context-resource>` so the system-prompt prefix stays cacheable. Compaction clears `loaded-skills.json` so the next load can return the full document.
 - **Core tools and optional features** - The host provides file, command, web search, session, permission, and extension services. All 25 Lua business packages, including search, investigations, images, todo, knowledge base, memes, and alarms, are standalone examples with explicit installation and grants.
 - **Subagents** - The `subagent` tool starts an independent LLM loop with a `max_steps` budget and timeout; writable tasks auto-create a `.sai-subagents` git worktree for isolation, then apply back and clean up on success. Persistent agents can idle and take follow-ups (REPL `/subagents`, `/msg`)
@@ -111,7 +111,7 @@ Weather, exchange-rate, and image tools require the corresponding [Lua example p
 
 ### Permission, audit, and sandbox
 
-- **Three tiers** - Yolo / Audited / Plan; TUI and CLI can set independent defaults
+- **Four tiers** - Yolo / Audited / Auto-audit / Plan; TUI and CLI can set independent defaults
 - **Workspace sandbox** - Linux uses `bubblewrap` and macOS uses `Seatbelt` (`sandbox-exec`) to confine write operations to the workspace; Plan mode executes shell commands in a read-only sandbox; Windows preserves permission approval and path audits without process isolation
 - **Sensitive path & credential protection** - Reads of sensitive paths (SSH keys, credential files, `.git/hooks`) are strictly blocked or prompted; private temporary directories and environment scrubbing prevent secret leakage
 - **Surfaced sandbox scopes** - Permission requests detail the active sandbox policy and escalation reasons on TUI, CLI, and Web approval cards; `/sandbox` inspects live backend availability and writable roots
@@ -155,15 +155,16 @@ The Web workbench includes a Source Control panel backed by the system `git`. It
 
 ### Config TUI
 
-Run `sai config` for the terminal configurator. The 7-item main menu is layered by frequency; number keys jump directly:
+Run `sai config` for the terminal configurator. The 8-item main menu is layered by frequency; number keys jump directly:
 
 1. **Active configuration** - Pick the default provider and model for new chats
-2. **Providers and models** - Browse, add, delete, or refresh the catalog
-3. **Agent configuration** - Sectioned editor for basics, system prompt, tool capabilities, and Skills; tools / Skills use a multi-select list (hidden / enabled / deferred) instead of typing names
-4. **Tools** - Toggle assistant tools; web search lives in the same list
-5. **Skills** - List installed skills, Space to enable/disable; global switches live on the same page
-6. **Advanced settings** - Knowledge base, gateway channels, and global parameters (permissions / terminal & context / tools & background commands / display)
-7. **Save and exit** - Persist in-memory changes to disk
+2. **Providers and models** - Browse providers, organizations, and models; add, delete, or refresh the catalog
+3. **Agent configuration** - Create and edit agent profiles: models, system prompts, tool capabilities, and Skills checklists
+4. **Tools** - Toggle and configure assistant tools; web search lives in the same list
+5. **Skills** - Enable or disable installed skills and global skill switches
+6. **Advanced settings** - Permissions, sandbox, terminal & context, tools & background commands, display, session mesh, auto-compaction, knowledge base, and gateway channels
+7. **Jev and image models** - Manage Jev and image generation endpoints, credentials, and default models
+8. **Save and exit** - Persist in-memory changes to disk (shows exit when unchanged)
 
 The native read-only `web_search` tool works without Lua plugins or Python. Terminal configuration under Tools → Web search and Web Settings → Web search share `plugins.web` in `config.jsonc`. Auto mode tries enabled providers in this order: TinyFish, Tavily, Firecrawl, AnySearch, SearXNG, DuckDuckGo. Defaults are 5 results and a 20-second timeout per request; DuckDuckGo requires no API key. Credentials support `<provider>_api_keys` arrays, `$env:VARIABLE` references, and provider-specific `*_API_KEY` environment variables. Existing `plugins.web` settings remain supported. The optional Lua example retains its independent `plugins.jsonc` settings and `lua__web-search__web_search` tool name.
 
@@ -327,7 +328,7 @@ sai
 
 The REPL supports multi-line input, image paste (`-c` reads from clipboard), `!` prefix for shell, `/` prefix for control commands (such as `/sandbox` to inspect backend status), fuzzy history search, and streaming render of reasoning and body text. Press `?` on empty input to open the two-column shortcut sheet (`?` or `Esc` closes); press `Esc` once with draft input to show the double-escape clear notice; hint rows adapt to show `Shift+Enter` for newlines and `Enter` to send. Idle `Ctrl+O` opens the fullscreen transcript view with scrollable history, folding, drag-to-copy, and a floating back-to-bottom button; while streaming it toggles live reasoning. Work status stays in the live tail (`Working` / `Thinking`, then waiting to run, write, or respond). Finalized reasoning uses the past-tense `Thought` label. Terminal raw mode, alternate screen, and keyboard enhancement layers safely restore on exit and termination signals.
 
-In the pager, `a` switches between individual segments and the fully expanded transcript. Use `/` to search, `Enter` to finish editing the search, and `n` / `N` to move between matches. Full view includes messages, reasoning, tool inputs and results, and pasted text beyond the main view's line limit. Submitted image, text, file, and skill atoms retain distinct label styles.
+In the fullscreen transcript view, use arrow keys and `PageUp` / `PageDown` to scroll smoothly, `Alt+↑` / `Alt+↓` to jump between user messages, and `Ctrl+Home` / `Ctrl+End` (or `Ctrl+↓`) to reach the top or newest output. Click to fold or unfold blocks, and drag mouse across text to automatically copy via OSC 52. Math formulas and images render with inline fidelity throughout the fullscreen canvas.
 
 Press `Tab` in `/model` to configure shared subagent defaults or override the model and thinking level for an individual task type. The Web chat's “Subagent models & thinking” button uses the same configuration; changes apply to newly started subagents. Select “Session start” in `/tree`, or use `/tree root`, to create another starting message. Each branch keeps its own conversation context.
 
@@ -393,6 +394,7 @@ Edit the `gateways` section of `config.jsonc`, or use `sai gateway` subcommands 
 | `sai kb add/list/search/find/read/remove/reindex/stats/embed` | Local knowledge base |
 | `sai memory stats/reset/search/remember` | Memory management |
 | `sai skills list/show/enable/disable/remove/stats/prune` | Skills management |
+| `sai plugins list/info/init/check/pack/install/enable/disable/remove` | Lua plugin and capability grant management |
 | `sai ps` | Background command management |
 | `sai gateway start` | Start all enabled channels from config |
 | `sai gateway qq-bot` / `qq-bot-webhook` / `qq-official` | QQ channels |
@@ -401,7 +403,7 @@ Edit the `gateways` section of `config.jsonc`, or use `sai gateway` subcommands 
 | `sai clear [--memory] [scope]` | Clear conversation or memory |
 | `sai compact` | Manually trigger context compaction |
 
-Global flags: `--lang en-US|zh-CN` (language), `--plan` / `--audited` / `--yolo` (permission mode), `--thinking LEVEL` (thinking chain), `-c` (clipboard), `-w` (web search).
+Global flags: `--lang en-US|zh-CN` (language), `--plan` / `--audited` / `--auto-audit` / `--yolo` (permission mode), `--thinking LEVEL` (thinking chain), `-c` (clipboard), `-w` (web search).
 
 Common REPL commands: `/sandbox` (inspect sandbox backend and writable roots), `/model` (switch models), `/tree` (session branch tree), `/subagents` (subagent manager).
 

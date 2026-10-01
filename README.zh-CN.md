@@ -82,7 +82,7 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 
 ### Agent 与渐进式工具系统
 
-- **三种权限模式** - `Yolo` 自由调用工具、`Audited` 审计模式(沙盒 + 审计日志 + 逐次确认)、`Plan` 只读模式(仅允许只读工具)
+- **四种权限模式** - `Yolo` 自由调用工具、`Audited` 审计模式(沙盒 + 审计日志 + 逐次确认)、`Auto-audit` 自动审核模式(LLM / Jev 规则自检与人工确认并行)、`Plan` 只读模式(命令在只读沙盒运行,仅允许只读工具)
 - **渐进式工具加载** - 启动仅暴露 `load` 与基础工具,模型按需调用 `load` 加载工具组或 skill。工具组持久化到 `loaded-tools.json`。每个 skill 在本会话只完整加载一次：再次 `load` 只返回 `already_loaded`，名称列表写在后缀 `<context-resource>`，系统提示前缀可走缓存。压缩后会清空 `loaded-skills.json`，之后可以重新拉取正文。
 - **核心工具与可选业务** - 宿主提供文件、命令、网页搜索、会话、权限及公共扩展机制；查询、调查、图片、待办、知识库、图库与闹钟等 25 个 Lua 业务包作为独立示例，按需安装、显式授权和卸载。
 - **子代理** - `subagent` 工具启动独立 LLM 循环,带 `max_steps` 预算与超时;可写任务在 git 仓库内自动创建 `.sai-subagents` worktree 隔离,完成后自动 apply 回父工作区并清理。支持 persistent 待命复用与留言通道(REPL `/subagents`、`/msg`)
@@ -113,7 +113,7 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 
 ### 权限审计与沙盒
 
-- **三级权限** - Yolo / Audited / Plan 三种模式，TUI 与 CLI 可分别配置默认模式
+- **四级权限** - Yolo / Audited / Auto-audit / Plan 四种模式，TUI 与 CLI 可分别配置默认模式
 - **工作区沙盒** - Linux 使用 `bubblewrap`，macOS 使用 `Seatbelt`（sandbox-exec）隔离命令执行，限制写操作仅在工作区内生效；Plan 模式支持只读沙盒运行命令；Windows 环境不提供命令隔离，由权限审批兜底
 - **敏感路径与凭证保护** - 隐藏与拦截敏感路径（如 SSH 私钥、认证凭据、`.git/hooks` 等），使用独立临时目录并清理敏感环境变量
 - **沙盒作用域透出** - 权限请求携带沙盒策略与提升原因，在 TUI / CLI 与 Web 确认卡片完整展示；支持 `/sandbox` 查看当前后端状态与可写路径
@@ -157,15 +157,16 @@ Web 工作台内置源代码管理面板，底层调用系统 `git`。支持变�
 
 ### 配置 TUI
 
-运行 `sai config` 打开终端配置界面。主菜单 7 项按使用频率分层,数字键直达:
+运行 `sai config` 打开终端配置界面。主菜单 8 项按使用频率分层,数字键直达:
 
-1. **激活配置** - 选择新对话默认供应商与模型
-2. **供应商和模型** - 浏览、添加、删除或刷新目录
-3. **Agent 配置** - 分区编辑基本信息、系统提示词、工具能力与 Skills;工具 / Skills 用勾选清单(隐藏 / 启用 / 延迟),不再手写名称
-4. **工具** - 启停助手工具,Web 搜索并入同一列表
-5. **Skills** - 列出已安装技能,Space 启停;全局开关收在同一页
-6. **高级设置** - 知识库、渠道接入、全局参数(权限 / 终端与上下文 / 工具与后台命令 / 显示偏好)
-7. **保存并退出** - 将内存中的更改写入磁盘
+1. **激活配置** - 选择新对话默认使用的供应商与模型
+2. **供应商和模型** - 浏览供应商、组织与模型，添加、删除或刷新目录
+3. **Agent 配置** - 创建与编辑 Agent 档案（模型、提示词、工具能力与 Skills 勾选清单）
+4. **工具** - 启停助手工具，Web 搜索并入同一列表
+5. **Skills** - 启停已安装 Skill 与全局开关
+6. **高级设置** - 权限、沙箱、终端与上下文、工具与后台命令、显示偏好、会话网格、自动压缩、知识库与渠道接入等
+7. **Jev 与生图模型** - 管理 Jev 与生图接入端点、密钥和默认模型
+8. **保存并退出** - 将内存中的修改写入磁盘（未修改时显示退出）
 
 网页搜索通过原生只读工具 `web_search` 提供，无需安装 Lua 插件或 Python。终端配置中的「工具 → 网页搜索」与 Web 设置中的「网页搜索」共用 `config.jsonc` 的 `plugins.web` 配置。自动模式按 TinyFish、Tavily、Firecrawl、AnySearch、SearXNG、DuckDuckGo 顺序尝试已启用服务，默认返回 5 条结果、每次请求超时 20 秒；DuckDuckGo 无需密钥。密钥支持 `<provider>_api_keys` 数组、`$env:VARIABLE` 引用及对应供应商的 `*_API_KEY` 环境变量。旧版 `plugins.web` 配置可继续使用；Lua `web-search` 示例仍使用独立的 `plugins.jsonc` 配置与 `lua__web-search__web_search` 名称。
 
@@ -329,7 +330,7 @@ sai
 
 REPL 内支持多行输入、图片粘贴（`-c` 从剪贴板读图）、`!` 前缀执行 shell、`/` 前缀执行控制命令（如 `/sandbox` 查看沙盒状态）、模糊搜索历史、流式渲染推理与正文。空输入时按 `?` 打开双列快捷键速查面板，按 `?` 或 `Esc` 收起；有输入时按一次 `Esc` 提示再次按 `Esc` 清空输入；输入中状态行自适应显示换行（`Shift+Enter`）与发送提示。空闲时 `Ctrl+O` 打开全屏会话视图，支持整屏浏览、历史滚动、折叠展开、鼠标拖选复制与回到底部浮动按钮；流式期间只切换实时思考。工作状态留在 live tail（`Working` / `Thinking`，以及等待执行、写入或回复）。思考定稿后标题改为过去式 `Thought`。退出时自动恢复终端屏幕、键盘增强协议与光标状态。
 
-展开面板中，按 `a` 切换分段与全文视图，按 `/` 输入搜索词，按 `Enter` 确认后使用 `n` / `N` 跳转到下一处或上一处匹配。全文视图展开消息、思考、工具参数与结果、粘贴文本，不受主视图行数上限限制。图片、长文本、文件和技能原子块在提交后保留专用标签样式。
+全屏会话视图支持使用方向键与 `PageUp` / `PageDown` 连续滚动浏览，按 `Alt+↑` / `Alt+↓` 跳转上一条或下一条消息，按 `Ctrl+Home` / `Ctrl+End`（或 `Ctrl+↓`）直达顶部与最新输出；支持点击折叠或展开消息与工具块，鼠标拖选文字自动复制到系统剪贴板。消息中的数学公式与图片在全屏视图中保持高清排版。
 
 在 `/model` 中按 `Tab` 打开子任务模型设置，可调整共享默认值或单个任务类型的模型与思考等级。Web 对话区的“子任务模型与思考”按钮使用同一配置；保存后对新启动的子任务生效。`/tree` 的“会话起点”允许创建并列的起始消息，也可直接输入 `/tree root` 返回起点，各分支独立保留上下文。
 
@@ -395,6 +396,7 @@ $ nonexist-cmd --flag
 | `sai kb add/list/search/find/read/remove/reindex/stats/embed` | 本地知识库管理 |
 | `sai memory stats/reset/search/remember` | 记忆管理 |
 | `sai skills list/show/enable/disable/remove/stats/prune` | Skills 技能包管理 |
+| `sai plugins list/info/init/check/pack/install/enable/disable/remove` | Lua 插件与能力授权管理 |
 | `sai ps` | 后台命令管理 |
 | `sai gateway start` | 启动配置中所有已启用渠道 |
 | `sai gateway qq-bot` / `qq-bot-webhook` / `qq-official` | QQ 渠道 |
@@ -403,7 +405,7 @@ $ nonexist-cmd --flag
 | `sai clear [--memory] [scope]` | 清空对话或记忆 |
 | `sai compact` | 手动触发上下文压缩 |
 
-全局参数:`--lang en-US|zh-CN`(语言)、`--plan` / `--audited` / `--yolo`(权限模式)、`--thinking LEVEL`(思维链)、`-c`(剪贴板)、`-w`(联网搜索)。
+全局参数:`--lang en-US|zh-CN`(语言)、`--plan` / `--audited` / `--auto-audit` / `--yolo`(权限模式)、`--thinking LEVEL`(思维链)、`-c`(剪贴板)、`-w`(联网搜索)。
 
 REPL 常用内置命令: `/sandbox` (查看沙盒后端状态与可写范围)、`/model` (切换模型)、`/tree` (会话分支树)、`/subagents` (子代理管理)。
 
