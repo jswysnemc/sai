@@ -20,6 +20,7 @@ mod model_selection;
 mod navigation;
 mod plugin_commands;
 mod sandbox_commands;
+mod session_commands;
 mod session_resume;
 mod session_support;
 mod settings_commands;
@@ -167,7 +168,9 @@ pub(super) async fn run_repl(
                 transcript_options.tool_call_mode,
             )
             .await?;
-            if exit && !confirm_repl_exit(paths, &state, &mut runtime, &mut exit_armed)? {
+            if exit
+                && !confirm_repl_exit(paths, &config, &state, &mut runtime, &mut exit_armed).await?
+            {
                 continue;
             }
             if exit {
@@ -219,7 +222,11 @@ pub(super) async fn run_repl(
                         wake,
                     )
                     .await?;
-                    if outcome.exit_requested {
+                    // 运行中输入 exit 同样要确认后台工作；取消时按普通中断收尾，保留草稿与队列
+                    if outcome.exit_requested
+                        && confirm_repl_exit(paths, &config, &state, &mut runtime, &mut exit_armed)
+                            .await?
+                    {
                         break;
                     }
                     if outcome.interrupted {
@@ -254,7 +261,10 @@ pub(super) async fn run_repl(
                         prefill = Some(draft);
                         prefill_clipboard = Some(clipboard);
                     }
-                    if exit && !confirm_repl_exit(paths, &state, &mut runtime, &mut exit_armed)? {
+                    if exit
+                        && !confirm_repl_exit(paths, &config, &state, &mut runtime, &mut exit_armed)
+                            .await?
+                    {
                         continue;
                     }
                     if exit {
@@ -263,7 +273,9 @@ pub(super) async fn run_repl(
                     continue;
                 }
                 None => {
-                    if !confirm_repl_exit(paths, &state, &mut runtime, &mut exit_armed)? {
+                    if !confirm_repl_exit(paths, &config, &state, &mut runtime, &mut exit_armed)
+                        .await?
+                    {
                         continue;
                     }
                     break;
@@ -283,7 +295,7 @@ pub(super) async fn run_repl(
         }
         let mut submitted_input = input.to_string();
         if super::repl_commands::is_repl_exit_command(input) {
-            if !confirm_repl_exit(paths, &state, &mut runtime, &mut exit_armed)? {
+            if !confirm_repl_exit(paths, &config, &state, &mut runtime, &mut exit_armed).await? {
                 continue;
             }
             break;
@@ -331,20 +343,8 @@ pub(super) async fn run_repl(
                         runtime.redraw()?;
                     }
                     crate::control_commands::ControlCommand::Context { update } => {
-                        runtime.record_user(mode, input.to_string(), false)?;
-                        if update == Some(crate::control_commands::ContextPolicyUpdate::Edit) {
-                            let result = crate::config_tui::compaction::run_session(paths);
-                            runtime.redraw()?;
-                            runtime
-                                .record_meta(result.unwrap_or_else(|error| error.to_string()))?;
-                            continue;
-                        }
-                        match crate::control_commands::context_info_for_mode_with_update(
-                            paths, mode, update,
-                        ) {
-                            Ok(info) => runtime.record_meta(info)?,
-                            Err(err) => runtime.record_meta(err.to_string())?,
-                        }
+                        session_commands::handle_context(paths, mode, update, input, &mut runtime)?;
+                        continue;
                     }
                     crate::control_commands::ControlCommand::New { title } => {
                         let message = crate::control_commands::create_new_session(paths, &title)?;
@@ -488,18 +488,12 @@ pub(super) async fn run_repl(
                         target,
                         message,
                     } => {
-                        // 用户留言直接进入子智能体消息队列,不经过主 Agent 轮次
-                        let owner_key = state.state_dir().display().to_string();
-                        let viewing = runtime.viewing_subagent_id();
-                        match subagent_commands::deliver_subagent_message(
-                            &owner_key,
+                        session_commands::deliver_subagent_message(
+                            &state,
+                            &mut runtime,
                             target.as_deref(),
                             &message,
-                            viewing.as_deref(),
-                        ) {
-                            Ok(notice) => runtime.record_meta(notice)?,
-                            Err(error) => runtime.record_meta(error.to_string())?,
-                        }
+                        )?;
                     }
                 }
                 if !goal_continuation {
@@ -642,9 +636,11 @@ pub(super) async fn run_repl(
         )
         .await?;
         apply_stream_mode(&runtime, &mut mode);
-        // 退出请求在中断处理之前：/exit 走的就是中断路径，
-        // 不必再记录中断提示，直接落到循环外的收尾
-        if outcome.exit_requested {
+        // 退出请求在中断处理之前：/exit 走的就是中断路径，确认通过后直接落到循环外的收尾；
+        // 用户取消退出时按普通中断处理，恢复草稿并继续执行已入队内容
+        if outcome.exit_requested
+            && confirm_repl_exit(paths, &config, &state, &mut runtime, &mut exit_armed).await?
+        {
             break;
         }
         if outcome.interrupted {
@@ -676,7 +672,9 @@ pub(super) async fn run_repl(
                 prefill = Some(draft);
                 prefill_clipboard = Some(clipboard);
             }
-            if exit && !confirm_repl_exit(paths, &state, &mut runtime, &mut exit_armed)? {
+            if exit
+                && !confirm_repl_exit(paths, &config, &state, &mut runtime, &mut exit_armed).await?
+            {
                 continue;
             }
             if exit {
@@ -722,7 +720,8 @@ pub(super) async fn run_repl(
             prefill = Some(draft);
             prefill_clipboard = Some(clipboard);
         }
-        if exit && !confirm_repl_exit(paths, &state, &mut runtime, &mut exit_armed)? {
+        if exit && !confirm_repl_exit(paths, &config, &state, &mut runtime, &mut exit_armed).await?
+        {
             continue;
         }
         if exit {

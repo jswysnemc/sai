@@ -1,55 +1,77 @@
+//! 退出 REPL 前清点当前会话仍在运行的子智能体与后台命令，并按用户选择停止。
+
+use crate::config::AppConfig;
 use crate::paths::SaiPaths;
-use crate::tools::command::{BackgroundCommandStore, BackgroundCommandTask};
-use crate::tools::subagent_state::list_subagents_for_owner;
+use crate::question::{QuestionOption, QuestionPrompt, QuestionRequest, QuestionResponse};
+use crate::tools::command::{process_exists, BackgroundCommandStore, BackgroundCommandTask};
+use crate::tools::subagent_state::{cancel_subagent_for_owner, list_subagents_for_owner};
 use std::path::Path;
 
+/// 选项值：停止全部后台工作后退出。
+const CHOICE_STOP: &str = "stop";
+/// 选项值：直接退出，后台命令继续运行。
+const CHOICE_LEAVE: &str = "leave";
+/// 选项值：取消退出。
+const CHOICE_STAY: &str = "stay";
+/// 提示中最多列出的工作名称。
+const SHOWN_NAMES: usize = 4;
+
+/// 一项仍在运行的后台工作。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct WorkItem {
+    pub(super) id: String,
+    pub(super) label: String,
+}
+
 /// 仍在运行、关闭会话前需要告诉用户的后台工作。
-struct RunningWork {
-    subagents: Vec<String>,
-    commands: Vec<String>,
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(super) struct RunningWork {
+    /// 运行中或空闲待命的子智能体；随 REPL 进程一起结束
+    pub(super) subagents: Vec<WorkItem>,
+    /// 进程仍存活的后台命令；独立进程组，REPL 退出后会继续运行
+    pub(super) commands: Vec<WorkItem>,
 }
 
-/// 退出前检查当前会话的后台子智能体和后台命令。
-///
-/// 参数:
-/// - `paths`: Sai 路径
-/// - `session_id`: 当前会话标识
-/// - `state_dir`: 会话状态目录，用作子智能体归属键
-///
-/// 返回:
-/// - 有运行中的工作时返回提示文本；没有时返回空
-pub(super) fn background_exit_notice(
-    paths: &SaiPaths,
-    session_id: &str,
-    state_dir: &Path,
-) -> Option<String> {
-    let work = running_work(paths, session_id, state_dir);
-    if work.subagents.is_empty() && work.commands.is_empty() {
-        return None;
+impl RunningWork {
+    /// 【退出确认】【空判断】判断是否没有任何后台工作。
+    /// @returns 没有工作时为 true
+    pub(super) fn is_empty(&self) -> bool {
+        self.subagents.is_empty() && self.commands.is_empty()
     }
-    Some(format_notice(&work))
 }
 
-/// 收集当前会话仍在运行的后台工作名称。
+/// 用户在退出确认中的选择。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ExitChoice {
+    /// 停止全部后台工作后退出
+    StopAndExit,
+    /// 直接退出，后台命令继续运行
+    LeaveRunning,
+    /// 留在会话里
+    Stay,
+}
+
+/// 【退出确认】【工作清点】收集当前会话仍在运行的子智能体与后台命令。
 ///
-/// 参数:
-/// - `paths`: Sai 路径
-/// - `session_id`: 会话标识
-/// - `state_dir`: 子智能体归属目录
+/// 空闲待命的持久子智能体同样会随退出结束，一并列出；
+/// 记录为运行中但进程已经不在的后台命令不计入。
 ///
-/// 返回:
-/// - 子智能体描述和后台命令标签
-fn running_work(paths: &SaiPaths, session_id: &str, state_dir: &Path) -> RunningWork {
+/// @param paths 为 Sai 路径；session_id 为会话标识；state_dir 为子智能体归属目录
+/// @returns 仍在运行的工作
+pub(super) fn running_work(paths: &SaiPaths, session_id: &str, state_dir: &Path) -> RunningWork {
     let owner_key = state_dir.display().to_string();
     let subagents = list_subagents_for_owner(&owner_key)
         .into_iter()
-        .filter(|snapshot| snapshot.status == "running")
+        .filter(|snapshot| matches!(snapshot.status.as_str(), "running" | "idle"))
         .map(|snapshot| {
             let label = snapshot.description.trim();
-            if label.is_empty() {
-                snapshot.subagent_type
-            } else {
-                label.to_string()
+            WorkItem {
+                label: if label.is_empty() {
+                    snapshot.subagent_type.clone()
+                } else {
+                    label.to_string()
+                },
+                id: snapshot.id,
             }
         })
         .collect();
@@ -58,7 +80,11 @@ fn running_work(paths: &SaiPaths, session_id: &str, state_dir: &Path) -> Running
         .unwrap_or_default()
         .into_iter()
         .filter(|task| task.owned_by_session(session_id) && task.status == "running")
-        .map(command_label)
+        .filter(|task| task.pid == 0 || process_exists(task.pid))
+        .map(|task| WorkItem {
+            id: task.id.clone(),
+            label: command_label(&task),
+        })
         .collect();
     RunningWork {
         subagents,
@@ -66,14 +92,10 @@ fn running_work(paths: &SaiPaths, session_id: &str, state_dir: &Path) -> Running
     }
 }
 
-/// 取后台命令的短标签。
-///
-/// 参数:
-/// - `task`: 后台命令
-///
-/// 返回:
-/// - 优先使用标签，否则使用命令前 48 个字符
-fn command_label(task: BackgroundCommandTask) -> String {
+/// 【退出确认】【命令标签】取后台命令的短标签。
+/// @param task 为后台命令
+/// @returns 优先使用标签，否则使用命令前 48 个字符
+fn command_label(task: &BackgroundCommandTask) -> String {
     let label = task.label.trim();
     if !label.is_empty() {
         return label.to_string();
@@ -81,65 +103,175 @@ fn command_label(task: BackgroundCommandTask) -> String {
     task.command.chars().take(48).collect()
 }
 
-/// 拼出退出确认提示。
+/// 【退出确认】【工作摘要】列出前几项工作名称。
+/// @param work 为仍在运行的工作
+/// @returns 用顿号或逗号连接的名称，超出部分写明数量
+fn work_names(work: &RunningWork) -> String {
+    let names: Vec<&str> = work
+        .subagents
+        .iter()
+        .chain(&work.commands)
+        .map(|item| item.label.as_str())
+        .collect();
+    let separator = crate::i18n::text(", ", "、");
+    let mut text = names
+        .iter()
+        .take(SHOWN_NAMES)
+        .copied()
+        .collect::<Vec<_>>()
+        .join(separator);
+    let extra = names.len().saturating_sub(SHOWN_NAMES);
+    if extra > 0 {
+        text.push_str(&if crate::i18n::is_zh() {
+            format!(" 等 {} 项", names.len())
+        } else {
+            format!(", plus {extra} more")
+        });
+    }
+    text
+}
+
+/// 【退出确认】【问题构造】生成停止、保留、取消三选一的退出确认。
 ///
-/// 参数:
-/// - `work`: 仍在运行的工作
+/// 子智能体运行在 REPL 进程内，任何退出都会结束它们；只有后台命令可以保留。
+/// 没有后台命令时不提供“保留后台命令”选项，避免给出做不到的承诺。
 ///
-/// 返回:
-/// - 给用户看的一行提示
-fn format_notice(work: &RunningWork) -> String {
-    let mut names = work.subagents.clone();
-    names.extend(work.commands.clone());
-    let shown = names.iter().take(4).cloned().collect::<Vec<_>>().join("、");
-    let extra = names.len().saturating_sub(4);
-    let suffix = if extra > 0 {
-        format!("，另有 {extra} 项")
-    } else {
-        String::new()
-    };
-    if crate::i18n::is_zh() {
+/// @param work 为仍在运行的工作
+/// @returns 结构化提问
+pub(super) fn exit_question(work: &RunningWork) -> QuestionRequest {
+    let t = crate::i18n::text;
+    let question = if crate::i18n::is_zh() {
         format!(
-            "还有 {} 个子智能体、{} 个后台命令在运行（{}{}）。再输入 exit 或再按一次 Ctrl+D 才会关闭，取消则留在会话里。",
+            "还有 {} 个子智能体、{} 个后台命令在运行：{}。退出前要怎么处理？",
             work.subagents.len(),
             work.commands.len(),
-            shown,
-            suffix
+            work_names(work)
         )
     } else {
         format!(
-            "{} subagent(s) and {} background command(s) are still running ({}{}). Type exit or press Ctrl+D again to close; otherwise stay in the session.",
+            "{} subagent(s) and {} background command(s) are still running: {}. What should happen before exit?",
             work.subagents.len(),
             work.commands.len(),
-            shown,
-            if extra > 0 { format!(", plus {extra} more") } else { String::new() }
+            work_names(work)
+        )
+    };
+    let mut options = vec![QuestionOption {
+        label: t("Stop all and exit", "全部停止并退出").to_string(),
+        description: t(
+            "Cancel subagents and stop background commands, then exit.",
+            "取消子智能体并停止后台命令，然后退出。",
+        )
+        .to_string(),
+        value: Some(CHOICE_STOP.to_string()),
+    }];
+    if !work.commands.is_empty() {
+        options.push(QuestionOption {
+            label: t("Exit, keep commands running", "退出，保留后台命令").to_string(),
+            description: if work.subagents.is_empty() {
+                t(
+                    "Background commands keep running; manage them with sai ps.",
+                    "后台命令继续运行，可用 sai ps 管理。",
+                )
+            } else {
+                t(
+                    "Background commands keep running; subagents still end with the session.",
+                    "后台命令继续运行；子智能体仍会随会话结束。",
+                )
+            }
+            .to_string(),
+            value: Some(CHOICE_LEAVE.to_string()),
+        });
+    }
+    options.push(QuestionOption {
+        label: t("Cancel", "取消，留在会话").to_string(),
+        description: t("Do not exit.", "不退出。").to_string(),
+        value: Some(CHOICE_STAY.to_string()),
+    });
+    QuestionRequest {
+        questions: vec![QuestionPrompt {
+            header: t("Background work running", "后台工作仍在运行").to_string(),
+            question,
+            options,
+            multiple: false,
+            custom: false,
+            required: true,
+            default_answers: vec![CHOICE_STOP.to_string()],
+            validation: None,
+        }],
+    }
+}
+
+/// 【退出确认】【选择解析】把提问回答转换成退出选择；取消或无法提问时留在会话。
+/// @param response 为提问结果
+/// @returns 退出选择
+pub(super) fn exit_choice(response: &QuestionResponse) -> ExitChoice {
+    let answers = match response {
+        QuestionResponse::Answered(answers) => answers,
+        QuestionResponse::AnsweredWithImages { answers, .. } => answers,
+        QuestionResponse::Cancelled | QuestionResponse::Unavailable(_) => return ExitChoice::Stay,
+    };
+    match answers
+        .first()
+        .and_then(|answer| answer.first())
+        .map(String::as_str)
+    {
+        Some(CHOICE_STOP) => ExitChoice::StopAndExit,
+        Some(CHOICE_LEAVE) => ExitChoice::LeaveRunning,
+        _ => ExitChoice::Stay,
+    }
+}
+
+/// 【退出确认】【停止工作】取消子智能体并停止后台命令，返回停止失败的项目。
+///
+/// @param paths 为 Sai 路径；config 为应用配置；state_dir 为子智能体归属目录；work 为待停止的工作
+/// @returns 停止失败的说明，全部成功时为空
+pub(super) async fn stop_work(
+    paths: &SaiPaths,
+    config: &AppConfig,
+    state_dir: &Path,
+    work: &RunningWork,
+) -> Vec<String> {
+    let owner_key = state_dir.display().to_string();
+    let mut failures = Vec::new();
+    // 1. 子智能体只需撤销任务，不涉及外部进程
+    for item in &work.subagents {
+        if let Err(error) = cancel_subagent_for_owner(&owner_key, &item.id) {
+            failures.push(format!("{}: {error:#}", item.label));
+        }
+    }
+    // 2. 后台命令先发终止信号，宽限期后仍未退出再强制结束
+    for item in &work.commands {
+        if let Err(error) =
+            crate::tools::command::stop_background_task_for_user(paths, config, &item.id, false)
+                .await
+        {
+            failures.push(format!("{}: {error:#}", item.label));
+        }
+    }
+    failures
+}
+
+/// 【退出确认】【文本提示】终端无法弹出选择时的提示：再执行一次退出才关闭。
+/// @param work 为仍在运行的工作
+/// @returns 给用户看的一行提示
+pub(super) fn fallback_notice(work: &RunningWork) -> String {
+    if crate::i18n::is_zh() {
+        format!(
+            "还有 {} 个子智能体、{} 个后台命令在运行（{}）。再执行一次退出将停止它们并关闭会话。",
+            work.subagents.len(),
+            work.commands.len(),
+            work_names(work)
+        )
+    } else {
+        format!(
+            "{} subagent(s) and {} background command(s) are still running ({}). Exit again to stop them and close the session.",
+            work.subagents.len(),
+            work.commands.len(),
+            work_names(work)
         )
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::background_exit_notice;
-    use crate::tools::subagent_state::{create_subagent_for_owner, finish_subagent};
-
-    /// 关闭当前会话时，不能把另一个并行会话的子智能体算进来。
-    #[test]
-    fn exit_notice_stays_inside_the_current_session() {
-        let temp = tempfile::tempdir().unwrap();
-        let paths = crate::paths::SaiPaths::for_tests(temp.path());
-        paths.create_dirs().unwrap();
-        let current = temp.path().join("session-current");
-        let other = temp.path().join("session-other");
-        std::fs::create_dir_all(&current).unwrap();
-        std::fs::create_dir_all(&other).unwrap();
-        let (subagent, _cancel) = create_subagent_for_owner(
-            &other.display().to_string(),
-            "other session task".to_string(),
-            "general".to_string(),
-            4,
-        );
-        assert!(background_exit_notice(&paths, "current", &current).is_none());
-        assert!(background_exit_notice(&paths, "other", &other).is_some());
-        finish_subagent(&subagent.id, "completed", None, None, None);
-    }
-}
+#[path = "repl_exit_guard_tests.rs"]
+mod tests;
