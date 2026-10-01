@@ -528,6 +528,7 @@ mod tests {
         recorder.append_stream_line(r#"data: {"choices":[{"delta":{"content":"你好"}}]}"#);
         recorder.append_stream_line("data: [DONE]");
         let result = ChatResult {
+            provider_content: None,
             content: "你好".to_string(),
             reasoning: None,
             usage: Some(Usage {

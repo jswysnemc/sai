@@ -10,6 +10,7 @@ pub(super) fn run_history(paths: &SaiPaths, args: HistoryArgs) -> Result<()> {
         println!("{} {}", entry.timestamp, entry.role);
         if entry.role == "assistant" {
             let response = crate::llm::ChatResult {
+                provider_content: None,
                 content: entry.content,
                 reasoning: if args.no_thinking {
                     None

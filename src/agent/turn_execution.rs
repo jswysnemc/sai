@@ -8,8 +8,7 @@ use crate::llm::{ChatMessage, ChatResult};
 /// 返回:
 /// - 包含正文、工具调用和思考内容的 assistant 消息
 pub fn assistant_tool_message(result: &ChatResult) -> ChatMessage {
-    ChatMessage::assistant(result.content.clone(), Some(result.tool_calls.clone()))
-        .with_reasoning(result.reasoning.clone())
+    result.assistant_message()
 }
 
 #[cfg(test)]
@@ -26,6 +25,7 @@ mod tests {
     #[test]
     fn assistant_tool_message_preserves_reasoning() {
         let result = ChatResult {
+            provider_content: None,
             content: "准备调用工具".to_string(),
             reasoning: Some("先查询日期".to_string()),
             usage: None,

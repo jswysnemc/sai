@@ -35,6 +35,7 @@ impl OpenAiCompatibleClient {
         if claude {
             apply_claude_code_body_shape(&mut request, &session_id, &self.provider.thinking_level);
         }
+        apply_default_cache_control(&mut request);
         let mut url = format!("{}/messages", self.provider.base_url.trim_end_matches('/'));
         if claude {
             url = claude_code_messages_url(&url);
@@ -146,12 +147,7 @@ impl OpenAiCompatibleClient {
                     debug.append_stream_line("");
                 }
                 if handle_anthropic_sse_data(&data, &mut state, &mut *on_event)? {
-                    let result = finalize_stream_result(
-                        state.content,
-                        state.reasoning,
-                        state.usage,
-                        state.tool_calls.finish(),
-                    )?;
+                    let result = finalize_anthropic_result(state)?;
                     if let Some(debug) = debug.as_ref() {
                         let _ = debug.finish_ok(&result);
                     }
@@ -168,15 +164,20 @@ impl OpenAiCompatibleClient {
             completed |= handle_anthropic_sse_data(&data, &mut state, &mut *on_event)?;
         }
         require_completion("Anthropic Messages", completed)?;
-        let result = finalize_stream_result(
-            state.content,
-            state.reasoning,
-            state.usage,
-            state.tool_calls.finish(),
-        )?;
+        let result = finalize_anthropic_result(state)?;
         if let Some(debug) = debug.as_ref() {
             let _ = debug.finish_ok(&result);
         }
         Ok(result)
     }
+}
+
+/// 【Anthropic】【结果组装】同时保留展示文本与协议原始块；参数为流状态，返回完整结果。
+fn finalize_anthropic_result(state: AnthropicStreamState) -> Result<ChatResult> {
+    let blocks = state.original_content.finish()?;
+    let mut result = finalize_stream_result(state.content, state.reasoning, state.usage, state.tool_calls.finish())?;
+    if !blocks.is_empty() {
+        result.provider_content = Some(crate::llm::ProviderAssistantContent::Anthropic(blocks));
+    }
+    Ok(result)
 }

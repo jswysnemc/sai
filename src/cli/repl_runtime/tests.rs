@@ -112,6 +112,7 @@ fn full_stream_event_sequence_drives_reconcile_pipeline() {
     // 4. 流结束收敛
     runtime
         .record_runner_event(&RunnerEvent::Completed(crate::llm::ChatResult {
+            provider_content: None,
             content: "done".to_string(),
             reasoning: None,
             usage: None,

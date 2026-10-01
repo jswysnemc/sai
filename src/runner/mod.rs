@@ -165,6 +165,7 @@ mod tests {
     fn runner_output_records_completion_text() {
         let mut output = RunnerOutput::default();
         output.push_event(RunnerEvent::Completed(crate::llm::ChatResult {
+            provider_content: None,
             content: "回复正文".to_string(),
             reasoning: None,
             usage: None,

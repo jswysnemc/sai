@@ -181,9 +181,11 @@ impl Agent {
                 if was_anchor_bootstrap {
                     self.promote_anchor_and_refresh_prompt(messages);
                 }
+                self.state.save_assistant_message(turn_id, crate::state::tool_history::AssistantMessageKey::Final, &result)?;
                 result.usage = turn_usage;
                 return Ok(result);
             }
+            self.state.save_assistant_message(turn_id, crate::state::tool_history::AssistantMessageKey::Tool(&result.tool_calls[0].id), &result)?;
             messages.push(assistant_tool_message(&result));
             let prepared_calls = tool_invocation::prepare_tool_calls(
                 &self.tool_visibility,
@@ -193,6 +195,7 @@ impl Agent {
             let (question_call_count, question_round_allowed, defer_sibling_tools) =
                 prepared_calls.question_policy(&mut question_rounds);
             let mut round_model_attachments = Vec::new();
+            let mut round_reminders = Vec::new();
             let assistant_round = tool_event_seq.saturating_add(1);
             let groups = prepared_calls.into_execution_groups(
                 &self.tools,
@@ -633,7 +636,7 @@ impl Agent {
                         &call.function.name,
                         &call.function.arguments,
                         !execution.failed && !output.starts_with("tool error:"),
-                        messages,
+                        &mut round_reminders,
                     )
                     .await;
                     if let Some(reminder) = todo_reminder.as_mut() {
@@ -642,12 +645,13 @@ impl Agent {
                             && !output.starts_with("tool error:")
                             && tools::todo::is_mutating_call(&call.function.arguments);
                         if let Some(content) = reminder.after_tool_round(todo_updated)? {
-                            messages.push(ChatMessage::system(content));
+                            round_reminders.push(content);
                         }
                     }
                 }
             }
             tool_attachments::append_model_attachments(messages, round_model_attachments);
+            self.persist_tool_reminders(turn_id, tool_event_seq, round_reminders, messages)?;
             if was_anchor_bootstrap {
                 self.promote_anchor_and_refresh_prompt(messages);
             }

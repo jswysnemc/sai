@@ -1,4 +1,5 @@
 use super::repository::load_tool_exchanges_for_turn;
+use super::assistant_messages::{self, AssistantMessageKey, SavedAssistantMessages};
 use crate::llm::{ChatMessage, ToolCall, ToolCallFunction};
 use crate::state::tool_history::project_legacy_tool_report_messages;
 use crate::state::turn_messages::{load_turn_messages_for_turn, TurnMessageRecord};
@@ -121,6 +122,7 @@ fn append_turn_messages(
         ChatMessage::user_with_images(provider_user_content, turn.user_image_urls.clone())
     };
     messages.push(user_message);
+    let saved = assistant_messages::load(db, &turn.turn_id)?;
     let exchanges = load_tool_exchanges_for_turn(db, session_id, &turn.turn_id)?;
     let mut inter_messages = load_turn_messages_for_turn(db, &turn.turn_id)?;
     // 跳过已压缩部分时必须落在 assistant 子轮边界上，否则会留下孤立的 tool 结果
@@ -129,15 +131,15 @@ fn append_turn_messages(
         inter_messages.retain(|message| message.after_tool_seq > skip_calls);
     }
     if exchanges.is_empty() {
-        append_turn_inter_messages(&inter_messages, messages);
-        append_assistant_context_messages(turn, messages);
+        append_turn_inter_messages(&inter_messages, &saved, messages);
+        append_assistant_context_messages(turn, &saved, messages);
         append_interrupted_turn_marker(turn, messages);
         return Ok(());
     }
     let images =
         super::attachments::load_tool_result_images_for_turn(db, session_id, &turn.turn_id)?;
-    append_tool_exchange_messages(exchanges, &inter_messages, &images, messages);
-    append_assistant_context_messages(turn, messages);
+    append_tool_exchange_messages(exchanges, &inter_messages, &images, &saved, messages);
+    append_assistant_context_messages(turn, &saved, messages);
     append_interrupted_turn_marker(turn, messages);
     Ok(())
 }
@@ -194,10 +196,11 @@ fn append_tool_exchange_messages(
     exchanges: &[super::model::ToolExchangeRecord],
     inter_messages: &[TurnMessageRecord],
     images: &HashMap<String, Vec<ToolModelAttachment>>,
+    saved: &SavedAssistantMessages,
     messages: &mut Vec<ChatMessage>,
 ) {
     let mut message_index = 0usize;
-    append_inter_messages_through(inter_messages, &mut message_index, 0, messages);
+    append_inter_messages_through(inter_messages, &mut message_index, 0, saved, messages);
     let mut start = 0usize;
     while start < exchanges.len() {
         let assistant_round = exchanges[start].call.assistant_round;
@@ -220,7 +223,10 @@ fn append_tool_exchange_messages(
             })
             .collect::<Vec<_>>();
         let reasoning = round[0].call.assistant_reasoning.clone();
-        messages.push(ChatMessage::assistant("", Some(tool_calls)).with_reasoning(reasoning));
+        messages.push(saved.restore(
+            AssistantMessageKey::Tool(&round[0].call.provider_call_id),
+            ChatMessage::assistant("", Some(tool_calls)).with_reasoning(reasoning),
+        ));
         // 2. assistant 工具调用后紧跟同一子轮的全部工具结果
         for exchange in round {
             messages.push(ChatMessage::tool(
@@ -242,10 +248,10 @@ fn append_tool_exchange_messages(
             .last()
             .map(|exchange| exchange.call.seq)
             .unwrap_or_default();
-        append_inter_messages_through(inter_messages, &mut message_index, boundary, messages);
+        append_inter_messages_through(inter_messages, &mut message_index, boundary, saved, messages);
         start = end;
     }
-    append_turn_inter_messages(&inter_messages[message_index..], messages);
+    append_turn_inter_messages(&inter_messages[message_index..], saved, messages);
 }
 
 /// 追加不晚于指定工具序号的轮次内消息。
@@ -262,6 +268,7 @@ fn append_inter_messages_through(
     inter_messages: &[TurnMessageRecord],
     message_index: &mut usize,
     tool_seq: usize,
+    saved: &SavedAssistantMessages,
     messages: &mut Vec<ChatMessage>,
 ) {
     let start = *message_index;
@@ -270,7 +277,7 @@ fn append_inter_messages_through(
     {
         *message_index += 1;
     }
-    append_turn_inter_messages(&inter_messages[start..*message_index], messages);
+    append_turn_inter_messages(&inter_messages[start..*message_index], saved, messages);
 }
 
 /// 把持久化的轮次内消息转换为 provider 消息。
@@ -283,6 +290,7 @@ fn append_inter_messages_through(
 /// - 无
 fn append_turn_inter_messages(
     inter_messages: &[TurnMessageRecord],
+    saved: &SavedAssistantMessages,
     messages: &mut Vec<ChatMessage>,
 ) {
     for message in inter_messages {
@@ -292,7 +300,7 @@ fn append_turn_inter_messages(
             ChatMessage::plain(message.kind.role(), message.model_content.clone())
         }
         .with_reasoning(message.reasoning.clone());
-        messages.push(projected);
+        messages.push(saved.restore(AssistantMessageKey::Intermediate(&message.id), projected));
     }
 }
 
@@ -304,12 +312,13 @@ fn append_turn_inter_messages(
 ///
 /// 返回:
 /// - 无
-fn append_assistant_context_messages(turn: &Turn, messages: &mut Vec<ChatMessage>) {
+fn append_assistant_context_messages(turn: &Turn, saved: &SavedAssistantMessages, messages: &mut Vec<ChatMessage>) {
     // 1. 最终回复必须带上本轮思考，DeepSeek 带 tools 的后续请求不能缺这个字段
     if !turn.assistant_content.trim().is_empty() || turn.assistant_reasoning.is_some() {
         messages.push(
-            ChatMessage::plain("assistant", turn.assistant_content.clone())
-                .with_reasoning(turn.assistant_reasoning.clone()),
+            saved.restore(AssistantMessageKey::Final,
+                ChatMessage::plain("assistant", turn.assistant_content.clone())
+                    .with_reasoning(turn.assistant_reasoning.clone())),
         );
     }
     messages.extend(project_legacy_tool_report_messages(&turn.tool_reports));

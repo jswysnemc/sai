@@ -97,6 +97,7 @@ impl<'agent> TurnRunner<'agent> {
             )?
             else {
                 let result = ChatResult {
+                    provider_content: None,
                     content: String::new(),
                     reasoning: None,
                     usage: None,

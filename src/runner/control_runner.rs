@@ -137,6 +137,7 @@ where
 /// - 空聊天结果
 fn empty_result() -> ChatResult {
     ChatResult {
+        provider_content: None,
         content: String::new(),
         reasoning: None,
         usage: None,

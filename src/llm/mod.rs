@@ -5,6 +5,9 @@ mod thinking;
 mod tool_argument_stats;
 mod tool_call_stream;
 mod transport_retry;
+mod assistant_content;
+
+pub(crate) use assistant_content::ProviderAssistantContent;
 
 pub use http_debug::RequestContextGuard as HttpDebugRequestContextGuard;
 pub use http_debug::SessionGuard as HttpDebugSessionGuard;
@@ -30,6 +33,9 @@ pub struct ChatMessage {
     /// `reasoning_content`，否则 kimi-k2.7-code 一类模型会报错。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_content: Option<String>,
+    /// 供应商原始助手内容仅交给对应协议转换器，不进入 OpenAI Chat 请求。
+    #[serde(skip)]
+    pub provider_content: Option<ProviderAssistantContent>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,6 +88,11 @@ pub struct FunctionDefinition {
 }
 
 impl ChatMessage {
+    /// 【模型接口】【助手原文】附加供应商内容块；参数为原始块，返回当前消息。
+    pub(crate) fn with_provider_content(mut self, content: Option<ProviderAssistantContent>) -> Self {
+        self.provider_content = content;
+        self
+    }
     pub fn system(content: impl Into<String>) -> Self {
         Self {
             role: "system".to_string(),
@@ -89,6 +100,7 @@ impl ChatMessage {
             tool_call_id: None,
             tool_calls: None,
             reasoning_content: None,
+            provider_content: None,
         }
     }
 
@@ -99,6 +111,7 @@ impl ChatMessage {
             tool_call_id: None,
             tool_calls,
             reasoning_content: None,
+            provider_content: None,
         }
     }
 
@@ -121,6 +134,7 @@ impl ChatMessage {
             tool_call_id: Some(tool_call_id.into()),
             tool_calls: None,
             reasoning_content: None,
+            provider_content: None,
         }
     }
 
@@ -131,6 +145,7 @@ impl ChatMessage {
             tool_call_id: None,
             tool_calls: None,
             reasoning_content: None,
+            provider_content: None,
         }
     }
 
@@ -160,6 +175,7 @@ impl ChatMessage {
             tool_call_id: None,
             tool_calls: None,
             reasoning_content: None,
+            provider_content: None,
         }
     }
 }
@@ -190,12 +206,24 @@ pub struct Usage {
 pub struct ChatResult {
     pub content: String,
     pub reasoning: Option<String>,
+    /// 工具续轮需要原样回传的供应商内容块。
+    pub provider_content: Option<ProviderAssistantContent>,
     pub usage: Option<Usage>,
     pub tool_calls: Vec<ToolCall>,
     /// 本轮从首次思考/正文输出到结束的耗时（毫秒）
     pub duration_ms: u64,
     /// 从发请求到首个思考/正文 token 的延迟（毫秒）；未观测到首字时为 0
     pub ttft_ms: u64,
+}
+
+impl ChatResult {
+    /// 【模型接口】【助手消息】为后续请求构造完整助手消息，包含原始协议块。
+    /// @returns 正文、思考及工具调用；无额外参数
+    pub(crate) fn assistant_message(&self) -> ChatMessage {
+        ChatMessage::assistant(self.content.clone(), (!self.tool_calls.is_empty()).then(|| self.tool_calls.clone()))
+            .with_reasoning(self.reasoning.clone())
+            .with_provider_content(self.provider_content.clone())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

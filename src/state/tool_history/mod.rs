@@ -1,6 +1,8 @@
 pub(crate) mod schema;
 
 mod attachments;
+mod assistant_messages;
+pub(crate) use assistant_messages::AssistantMessageKey;
 mod budget;
 mod legacy_reports;
 mod maintenance;

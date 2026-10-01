@@ -58,9 +58,13 @@ async fn todo_agent_reminds_once_per_loop_and_resets_after_updates() {
         let requests = model.requests();
         assert_eq!(requests.len(), 14);
         for (number, request) in requests.iter().enumerate() {
-            let expected = usize::from((6..=9).contains(&number) || number == 13);
+            // 【待办 Agent 测试】【缓存前缀】旧提醒保留在历史中，新循环只追加一次
+            let expected = usize::from(number >= 6) + usize::from(number == 13);
             assert_eq!(reminder_count(request), expected, "request {number}");
         }
+        let previous = requests[9]["messages"].as_array().unwrap();
+        let next = requests[10]["messages"].as_array().unwrap();
+        assert_eq!(&next[..previous.len()], previous.as_slice());
         assert!(requests[6]["messages"]
             .to_string()
             .contains("todo item not found: missing"));

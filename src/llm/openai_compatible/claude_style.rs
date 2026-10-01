@@ -164,24 +164,11 @@ fn claude_code_messages_url(url: &str) -> String {
 /// - 无；原地修改 body
 fn apply_claude_code_body_shape(body: &mut Value, session_id: &str, thinking_level: &str) {
     // 1. system 改为 text block 数组，并注入 billing / 身份前缀
-    let original_system = body
-        .get("system")
-        .and_then(|value| match value {
-            Value::String(text) => Some(text.clone()),
-            Value::Array(items) => {
-                let joined = items
-                    .iter()
-                    .filter_map(|item| item.get("text").and_then(Value::as_str).map(str::to_string))
-                    .collect::<Vec<_>>()
-                    .join(
-                        "
-",
-                    );
-                Some(joined)
-            }
-            _ => None,
-        })
-        .unwrap_or_default();
+    let original_blocks = match body.get("system") {
+        Some(Value::String(text)) if !text.trim().is_empty() => vec![json!({"type": "text", "text": text})],
+        Some(Value::Array(blocks)) => blocks.clone(),
+        _ => Vec::new(),
+    };
     let mut system_blocks = vec![
         json!({
             "type": "text",
@@ -192,12 +179,8 @@ fn apply_claude_code_body_shape(body: &mut Value, session_id: &str, thinking_lev
             "text": CLAUDE_CODE_IDENTITY,
         }),
     ];
-    if !original_system.trim().is_empty() {
-        system_blocks.push(json!({
-            "type": "text",
-            "text": original_system,
-        }));
-    }
+    // 【Anthropic】【提示缓存】保留调用方指定的块顺序和缓存断点
+    system_blocks.extend(original_blocks);
     body["system"] = Value::Array(system_blocks);
 
     // 2. metadata.user_id：设备指纹 + 会话 id

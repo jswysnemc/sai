@@ -629,6 +629,7 @@ impl ExternalTurnEngine for AcpEngine {
         let session_id = self.ensure_session(&request.cwd).await?;
         let outcome = self.drive_prompt(&session_id, &request, &events).await?;
         Ok(ChatResult {
+            provider_content: None,
             content: outcome.content,
             reasoning: (!outcome.reasoning.is_empty()).then_some(outcome.reasoning),
             usage: outcome.usage,

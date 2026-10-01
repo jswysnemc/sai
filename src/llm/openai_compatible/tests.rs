@@ -5,4 +5,5 @@ mod tests {
     include!("tests_stream_buffer.rs");
     include!("tests_deepseek.rs");
     include!("tests_anthropic.rs");
+    include!("tests_assistant_roundtrip.rs");
 }

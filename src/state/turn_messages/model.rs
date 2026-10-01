@@ -5,6 +5,7 @@ pub(crate) enum TurnMessageKind {
     ExternalCompletion,
     GoalContinuation,
     QueuedUser,
+    ContextReminder,
 }
 
 impl TurnMessageKind {
@@ -18,6 +19,7 @@ impl TurnMessageKind {
             Self::ExternalCompletion => "external_completion",
             Self::GoalContinuation => "goal_continuation",
             Self::QueuedUser => "queued_user",
+            Self::ContextReminder => "context_reminder",
         }
     }
 
@@ -33,6 +35,7 @@ impl TurnMessageKind {
             "external_completion" => Self::ExternalCompletion,
             "goal_continuation" => Self::GoalContinuation,
             "queued_user" => Self::QueuedUser,
+            "context_reminder" => Self::ContextReminder,
             _ => Self::Assistant,
         }
     }
@@ -44,7 +47,7 @@ impl TurnMessageKind {
     pub(crate) fn role(self) -> &'static str {
         match self {
             Self::Assistant => "assistant",
-            Self::ExternalCompletion | Self::GoalContinuation | Self::QueuedUser => "user",
+            Self::ExternalCompletion | Self::GoalContinuation | Self::QueuedUser | Self::ContextReminder => "user",
         }
     }
 }

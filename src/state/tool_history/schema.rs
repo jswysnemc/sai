@@ -62,6 +62,7 @@ pub(in crate::state) fn create_tool_history_tables(conn: &Connection) -> Result<
             ON tool_output_replacements(session_id);",
     )?;
     super::attachments::create_tool_image_table(conn)?;
+    super::assistant_messages::create_table(conn)?;
     ensure_tool_call_metadata_columns(conn)?;
     Ok(())
 }

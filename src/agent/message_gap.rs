@@ -197,7 +197,7 @@ impl Agent {
         result: &ChatResult,
         messages: &mut Vec<ChatMessage>,
     ) -> Result<()> {
-        self.state.record_turn_message(NewTurnMessage {
+        let message = self.state.record_turn_message(NewTurnMessage {
             turn_id: turn_id.to_string(),
             after_tool_seq,
             kind: TurnMessageKind::Assistant,
@@ -206,10 +206,8 @@ impl Agent {
             reasoning: result.reasoning.clone(),
             image_urls: Vec::new(),
         })?;
-        messages.push(
-            ChatMessage::assistant(result.content.clone(), None)
-                .with_reasoning(result.reasoning.clone()),
-        );
+        self.state.save_assistant_message(turn_id, crate::state::tool_history::AssistantMessageKey::Intermediate(&message.id), result)?;
+        messages.push(result.assistant_message());
         Ok(())
     }
 

@@ -290,6 +290,7 @@ fn begin_run_resets_status_and_tool_pairing() {
         arguments: "{}".to_string(),
     }));
     assembler.map(RunnerEvent::Completed(crate::llm::ChatResult {
+        provider_content: None,
         content: "done".to_string(),
         reasoning: None,
         usage: None,

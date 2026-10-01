@@ -202,6 +202,8 @@ enum AnthropicContentBlock {
         tool_use_id: String,
         content: String,
     },
+    #[serde(untagged)]
+    Original(Value),
 }
 
 #[derive(Debug, Serialize)]
@@ -444,6 +446,9 @@ fn lower_anthropic_image_url(url: &str) -> Option<AnthropicContentBlock> {
 }
 
 fn lower_anthropic_assistant_content(message: ChatMessage) -> Vec<AnthropicContentBlock> {
+    if let Some(crate::llm::ProviderAssistantContent::Anthropic(blocks)) = message.provider_content {
+        return blocks.into_iter().map(AnthropicContentBlock::Original).collect();
+    }
     let mut content = Vec::new();
     let text = chat_content_text(message.content);
     if !text.trim().is_empty() {

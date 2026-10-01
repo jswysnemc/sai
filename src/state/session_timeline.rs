@@ -142,6 +142,7 @@ impl StateStore {
                 let messages = self
                     .turn_messages(&turn.turn_id)?
                     .into_iter()
+                    .filter(|message| message.kind != crate::state::turn_messages::TurnMessageKind::ContextReminder)
                     .map(|message| TimelineTurnMessage {
                         id: message.id,
                         seq: message.seq,

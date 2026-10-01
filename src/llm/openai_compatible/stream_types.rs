@@ -271,6 +271,7 @@ struct AnthropicStreamError {
 
 #[derive(Default)]
 struct AnthropicStreamState {
+    original_content: AnthropicContentAccumulator,
     content: String,
     content_emitted: usize,
     reasoning: String,

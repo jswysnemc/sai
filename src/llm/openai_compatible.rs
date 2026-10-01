@@ -1,8 +1,10 @@
 mod anthropic_transport;
 mod provider_routing;
 mod stream_completion;
+mod anthropic_content;
 
 use stream_completion::require_completion;
+use anthropic_content::{AnthropicContentAccumulator, apply_default_cache_control};
 
 #[cfg(test)]
 mod tests_transport_lifecycle;

@@ -315,7 +315,7 @@ where
         flush_anthropic_state(state, on_event)?;
         return Ok(true);
     }
-    let event: AnthropicStreamEvent = serde_json::from_str(data).with_context(|| {
+    let raw_event: Value = serde_json::from_str(data).with_context(|| {
         format!(
             "{}: {}",
             t(
@@ -325,6 +325,8 @@ where
             clean_plain_text(data.to_string())
         )
     })?;
+    state.original_content.observe(&raw_event)?;
+    let event: AnthropicStreamEvent = serde_json::from_value(raw_event)?;
     match event.kind.as_str() {
         "message_start" => {
             if let Some(usage) = event.message.and_then(|message| message.usage) {
@@ -614,6 +616,7 @@ fn finalize_stream_result(
         );
     }
     Ok(ChatResult {
+        provider_content: None,
         content,
         reasoning: reasoning.filter(|text| !text.trim().is_empty()),
         usage,
