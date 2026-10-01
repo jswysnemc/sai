@@ -4,6 +4,7 @@
 //! 的行范围（供鼠标点击展开/收起）和每条用户消息的位置（供概览跳转与浮动标题）。
 
 use super::cell::HistoryCell;
+use super::fullscreen_parts::{is_segmented, render_segmented, ParagraphKey};
 use super::line::AnsiLine;
 use super::spacing;
 use super::store::{TranscriptRenderOptions, TranscriptStore, TranscriptView};
@@ -13,15 +14,18 @@ use crate::render::render_expand::{with_force_collapse, with_force_expand};
 use std::collections::HashSet;
 
 /// 流式思考尾部的段落键：定稿前没有稳定的 cell 下标。
-pub(crate) const LIVE_PARAGRAPH_KEY: usize = usize::MAX;
+pub(crate) const LIVE_PARAGRAPH_KEY: ParagraphKey = ParagraphKey {
+    cell: usize::MAX,
+    part: super::fullscreen_parts::ParagraphPart::Whole,
+};
 /// 概览摘要最多保留的字符数。
 const SUMMARY_CHARS: usize = 120;
 
 /// 一个可点击展开/收起的段落在文档中的位置。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ParagraphSpan {
-    /// 段落键：cell 下标，流式思考尾部为 [`LIVE_PARAGRAPH_KEY`]
-    pub(crate) key: usize,
+    /// 段落键：cell 下标与段落位置，流式思考尾部为 [`LIVE_PARAGRAPH_KEY`]
+    pub(crate) key: ParagraphKey,
     /// 首行（段落标题行）在文档中的行号
     pub(crate) start: usize,
     /// 末行之后的行号
@@ -87,7 +91,7 @@ impl TranscriptStore {
         &mut self,
         width: usize,
         options: &TranscriptRenderOptions,
-        expanded: &HashSet<usize>,
+        expanded: &HashSet<ParagraphKey>,
     ) -> FullscreenDocument {
         // 全屏中 Ctrl+O 是退出键：折叠提示统一改为点击展开。
         // 渲染缓存与内联视图共用，缓存行在渲染上下文之外生成，最后统一改写
@@ -113,7 +117,7 @@ impl TranscriptStore {
         &mut self,
         width: usize,
         options: &TranscriptRenderOptions,
-        expanded: &HashSet<usize>,
+        expanded: &HashSet<ParagraphKey>,
     ) -> FullscreenDocument {
         let width = width.max(1);
         let frame = self.live_animation_frame();
@@ -133,8 +137,28 @@ impl TranscriptStore {
                 document.lines.push(AnsiLine::new(String::new()));
             }
             let start = document.lines.len();
+            // 2. 命令卡片按命令行与输出分段，两段各自点击展开
+            if is_segmented(&self.cells[index]) {
+                let parts =
+                    render_segmented(&self.cells[index], index, width, options, frame, |key| {
+                        expanded.contains(&key)
+                    });
+                if let Some(parts) = parts {
+                    document.lines.extend(parts.lines);
+                    for (key, from, to, open) in parts.spans {
+                        document.paragraphs.push(ParagraphSpan {
+                            key,
+                            start: first_content_row(&document.lines, start + from),
+                            end: start + to,
+                            expanded: open,
+                        });
+                    }
+                    continue;
+                }
+            }
+            let key = ParagraphKey::whole(index);
             let expandable = TranscriptStore::is_expandable_cell(&self.cells[index]);
-            let open = expandable && expanded.contains(&index);
+            let open = expandable && expanded.contains(&key);
             // 强制展开/折叠绕过缓存，可以直接在全屏提示上下文里渲染
             let lines = if open {
                 let cell = &self.cells[index];
@@ -159,7 +183,7 @@ impl TranscriptStore {
             }
             if expandable && document.lines.len() > start {
                 document.paragraphs.push(ParagraphSpan {
-                    key: index,
+                    key,
                     start: first_content_row(&document.lines, start),
                     end: document.lines.len(),
                     expanded: open,
@@ -185,7 +209,7 @@ impl TranscriptStore {
         document: &mut FullscreenDocument,
         width: usize,
         options: &TranscriptRenderOptions,
-        expanded: &HashSet<usize>,
+        expanded: &HashSet<ParagraphKey>,
     ) {
         let reasoning = self.live_tail.as_ref().is_some_and(|tail| {
             tail.kind == ChatStreamKind::Reasoning && !tail.source.trim().is_empty()

@@ -32,7 +32,7 @@ fn chrome() -> ReplChrome {
 }
 
 /// 构造多轮会话：每轮用户消息 + 可折叠的长思考 + 多行回复。
-fn runtime(turns: usize) -> ReplRuntime {
+pub(super) fn runtime(turns: usize) -> ReplRuntime {
     let mut runtime = ReplRuntime::new(10_000, options());
     for turn in 0..turns {
         runtime.transcript.push_user_echo(
@@ -58,7 +58,7 @@ fn runtime(turns: usize) -> ReplRuntime {
 }
 
 /// 鼠标事件。
-fn mouse(kind: MouseEventKind, column: u16, row: u16) -> Event {
+pub(super) fn mouse(kind: MouseEventKind, column: u16, row: u16) -> Event {
     Event::Mouse(MouseEvent {
         kind,
         column,

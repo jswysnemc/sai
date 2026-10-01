@@ -1,5 +1,11 @@
 use super::*;
-use crate::render::transcript::{AnsiLine, FullscreenDocument};
+use crate::render::transcript::{AnsiLine, FullscreenDocument, ParagraphKey};
+
+/// 测试折叠段的段落键。
+const K7: ParagraphKey = ParagraphKey {
+    cell: 7,
+    part: crate::render::transcript::ParagraphPart::Whole,
+};
 
 /// 构造 100 行文档：第 10、50、80 行是用户消息，第 20 行起有一段 5 行的折叠段。
 fn document(extra: usize) -> FullscreenDocument {
@@ -20,7 +26,7 @@ fn document(extra: usize) -> FullscreenDocument {
     document
         .paragraphs
         .push(crate::render::transcript::ParagraphSpan {
-            key: 7,
+            key: K7,
             start: 20,
             end: 25,
             expanded: false,
@@ -69,12 +75,12 @@ fn toggling_keeps_the_paragraph_header_in_place() {
     state.apply_document(document(0), 20);
     state.scroll_to(15, 20);
     let (key, offset) = state.toggle_at(22).expect("折叠段应可展开");
-    assert_eq!((key, offset), (7, 5));
-    assert!(state.expanded.contains(&7));
+    assert_eq!((key, offset), (K7, 5));
+    assert!(state.expanded.contains(&K7));
     // 模拟重排：展开后段落变长，前面插入了 3 行
     let mut next = document(30);
     next.paragraphs[0] = crate::render::transcript::ParagraphSpan {
-        key: 7,
+        key: K7,
         start: 23,
         end: 55,
         expanded: true,
@@ -83,9 +89,9 @@ fn toggling_keeps_the_paragraph_header_in_place() {
     state.restore_toggle_anchor(key, offset, 20);
     assert_eq!(state.scroll, 18);
     assert!(state.toggle_at(30).is_some(), "展开段正文任意行都应能收起");
-    assert!(!state.expanded.contains(&7));
+    assert!(!state.expanded.contains(&K7));
     assert!(state.toggle_at(23).is_some(), "再次点击标题行重新展开");
-    assert!(state.expanded.contains(&7));
+    assert!(state.expanded.contains(&K7));
     assert!(state.toggle_at(99).is_none(), "段落范围外的行不触发切换");
 }
 
@@ -95,12 +101,12 @@ fn collapsing_from_the_middle_keeps_the_paragraph_visible() {
     let mut state = FullscreenState::new();
     let mut open = document(30);
     open.paragraphs[0] = crate::render::transcript::ParagraphSpan {
-        key: 7,
+        key: K7,
         start: 20,
         end: 55,
         expanded: true,
     };
-    state.expanded.insert(7);
+    state.expanded.insert(K7);
     state.apply_document(open, 20);
     state.scroll_to(40, 20);
     let (key, offset) = state.toggle_at(45).expect("展开段正文应能收起");
@@ -114,7 +120,25 @@ fn collapsing_from_the_middle_keeps_the_paragraph_visible() {
 #[test]
 fn stale_expanded_keys_are_dropped() {
     let mut state = FullscreenState::new();
-    state.expanded.insert(99);
+    state.expanded.insert(ParagraphKey::whole(99));
     state.apply_document(document(0), 20);
     assert!(state.expanded.is_empty());
+}
+
+/// 鼠标停在折叠段上时报告悬停段落；滚动后按新位置重新判断，拖选时不显示悬停。
+#[test]
+fn hovered_paragraph_follows_pointer_and_scroll() {
+    let mut state = FullscreenState::new();
+    state.apply_document(document(0), 20);
+    state.scroll_to(15, 20);
+    state.pointer_row = Some(6);
+    assert_eq!(state.hovered_paragraph().map(|span| span.key), Some(K7));
+    state.scroll_to(30, 20);
+    assert!(
+        state.hovered_paragraph().is_none(),
+        "滚动后指针下已不是折叠段"
+    );
+    state.scroll_to(15, 20);
+    state.press = Some(super::super::selection::TextPoint { row: 21, col: 0 });
+    assert!(state.hovered_paragraph().is_none(), "按下拖选时不显示悬停");
 }

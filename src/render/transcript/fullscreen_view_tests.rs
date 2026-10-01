@@ -1,6 +1,7 @@
 use super::*;
 use crate::llm::ChatStreamChunk;
 use crate::render::activity_animation::strip_ansi_for_test;
+use crate::render::transcript::ParagraphPart;
 use crate::render::transcript::TranscriptMode;
 use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
 
@@ -120,4 +121,94 @@ fn summary_is_single_line_and_bounded() {
     assert!(summary.starts_with("a b "));
     assert!(summary.ends_with('…'));
     assert_eq!(summary.chars().count(), SUMMARY_CHARS + 1);
+}
+
+/// 构造一条命令很长、输出也很长的 run_command 卡片。
+fn command_store() -> TranscriptStore {
+    let mut store = TranscriptStore::new(1_000);
+    let command = (0..12)
+        .map(|index| format!("echo step-{index}"))
+        .collect::<Vec<_>>()
+        .join(" && \\\n");
+    store.push_tool_call(
+        "run_command".to_string(),
+        serde_json::json!({ "command": command }).to_string(),
+    );
+    let stdout = (0..30)
+        .map(|index| format!("out-{index}\n"))
+        .collect::<String>();
+    store.push_tool_result(
+        "run_command".to_string(),
+        true,
+        serde_json::json!({ "success": true, "exit_code": 0, "stdout": stdout, "stderr": "" })
+            .to_string(),
+    );
+    store
+}
+
+/// 命令卡片拆成命令行与输出两段，两段互不重叠，分界标记不进正文。
+#[test]
+fn command_card_splits_into_command_and_output_paragraphs() {
+    use crate::render::render_expand::{ExpandPart, PART_BOUNDARY};
+    let mut store = command_store();
+    let document = store.render_fullscreen(80, &options(), &HashSet::new());
+    let keys = document
+        .paragraphs
+        .iter()
+        .map(|span| span.key.part)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        keys,
+        vec![
+            ParagraphPart::Segment(ExpandPart::Command),
+            ParagraphPart::Segment(ExpandPart::Output)
+        ]
+    );
+    let (command, output) = (&document.paragraphs[0], &document.paragraphs[1]);
+    assert!(command.end <= output.start, "两段不应重叠");
+    let text = plain(&document);
+    assert!(text[command.start].contains("$ echo step-0"), "{text:?}");
+    assert!(text.iter().all(|line| !line.contains(PART_BOUNDARY)));
+}
+
+/// 点击命令行只展开命令，输出仍折叠；反之亦然。
+#[test]
+fn command_and_output_expand_independently() {
+    use crate::render::render_expand::ExpandPart;
+    let mut store = command_store();
+    let collapsed = plain(&store.render_fullscreen(80, &options(), &HashSet::new())).join("\n");
+    assert!(
+        !collapsed.contains("step-6") && !collapsed.contains("out-15"),
+        "{collapsed}"
+    );
+    let command_key = ParagraphKey::segment(0, ExpandPart::Command);
+    let output_key = ParagraphKey::segment(0, ExpandPart::Output);
+    let command_open = store.render_fullscreen(80, &options(), &HashSet::from([command_key]));
+    let joined = plain(&command_open).join("\n");
+    assert!(joined.contains("step-6"), "命令应展开: {joined}");
+    assert!(!joined.contains("out-15"), "输出应保持折叠: {joined}");
+    assert!(command_open.paragraphs[0].expanded && !command_open.paragraphs[1].expanded);
+    let output_open = store.render_fullscreen(80, &options(), &HashSet::from([output_key]));
+    let joined = plain(&output_open).join("\n");
+    assert!(joined.contains("out-15"), "输出应展开: {joined}");
+    assert!(!joined.contains("step-6"), "命令应保持折叠: {joined}");
+}
+
+/// 命令很短时没有可展开的命令段，只登记输出段，点击命令行不会白点。
+#[test]
+fn short_command_registers_only_the_output_paragraph() {
+    use crate::render::render_expand::ExpandPart;
+    let mut store = TranscriptStore::new(1_000);
+    store.push_shell(
+        "ls".to_string(),
+        (0..30).map(|index| format!("file-{index}\n")).collect(),
+        Some(0),
+    );
+    let document = store.render_fullscreen(80, &options(), &HashSet::new());
+    let parts = document
+        .paragraphs
+        .iter()
+        .map(|span| span.key.part)
+        .collect::<Vec<_>>();
+    assert_eq!(parts, vec![ParagraphPart::Segment(ExpandPart::Output)]);
 }

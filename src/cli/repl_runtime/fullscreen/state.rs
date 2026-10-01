@@ -1,7 +1,7 @@
 //! 全屏会话视图的交互状态：滚动位置、跟随底部、段落展开与用户消息跳转。
 
 use super::layout::FullscreenLayout;
-use crate::render::transcript::FullscreenDocument;
+use crate::render::transcript::{FullscreenDocument, ParagraphKey, ParagraphSpan};
 use std::collections::HashSet;
 
 /// 鼠标滚轮每格滚动的行数。
@@ -19,7 +19,7 @@ pub(super) struct FullscreenState {
     /// 离开底部后出现了新输出
     pub(super) unseen: bool,
     /// 用户展开的段落键
-    pub(super) expanded: HashSet<usize>,
+    pub(super) expanded: HashSet<ParagraphKey>,
     /// 最近一次渲染的正文
     pub(super) document: FullscreenDocument,
     /// 最近一次绘制的屏幕分区
@@ -28,6 +28,8 @@ pub(super) struct FullscreenState {
     pub(super) previous: Option<Vec<String>>,
     /// 鼠标悬停的概览标记对应的用户消息
     pub(super) hover: Option<usize>,
+    /// 鼠标在正文区的位置（相对正文顶部的行）；滚动后据此重新判断悬停段落
+    pub(super) pointer_row: Option<usize>,
     /// 是否正在拖动滚动条
     pub(super) dragging: bool,
     /// 正文按下位置；松开时没有拖动则按点击处理
@@ -133,6 +135,18 @@ impl FullscreenState {
         changed
     }
 
+    /// 鼠标当前悬停的可展开段落；拖选进行中不显示悬停。
+    ///
+    /// 返回:
+    /// - 被悬停的段落
+    pub(super) fn hovered_paragraph(&self) -> Option<&ParagraphSpan> {
+        if self.press.is_some() || self.selection.is_some() || self.dragging {
+            return None;
+        }
+        let row = self.pointer_row?;
+        self.document.paragraph_at(self.scroll + row)
+    }
+
     /// 当前浮动标题对应的用户消息：正文首行之前最近的一条。
     ///
     /// 返回:
@@ -194,7 +208,7 @@ impl FullscreenState {
     ///
     /// 返回:
     /// - 被切换的段落键与点击时标题行在屏幕上的偏移；未命中为 None
-    pub(super) fn toggle_at(&mut self, row: usize) -> Option<(usize, isize)> {
+    pub(super) fn toggle_at(&mut self, row: usize) -> Option<(ParagraphKey, isize)> {
         let span = self.document.paragraph_at(row)?.clone();
         if !self.expanded.remove(&span.key) {
             self.expanded.insert(span.key);
@@ -218,7 +232,7 @@ impl FullscreenState {
     /// - 无
     pub(super) fn restore_toggle_anchor(
         &mut self,
-        key: usize,
+        key: ParagraphKey,
         screen_offset: isize,
         body_height: usize,
     ) {

@@ -17,8 +17,8 @@ const HEADER_INDEX: &str = "\x1b[38;2;94;196;168m";
 const HEADER_TEXT: &str = "\x1b[38;5;252m";
 /// 标题右侧提示。
 const HEADER_HINT: &str = "\x1b[38;5;244m";
-/// 新输出提示。
-const HEADER_UNSEEN: &str = "\x1b[1m\x1b[38;2;94;196;168m";
+/// 复制结果提示。
+const HEADER_COPIED: &str = "\x1b[1m\x1b[38;2;94;196;168m";
 /// 轨道普通标记。
 const RAIL_IDLE: &str = "\x1b[38;5;240m";
 /// 轨道当前标记。
@@ -35,13 +35,11 @@ const RESET: &str = "\x1b[0m";
 /// 悬停预览最大宽度。
 const PREVIEW_MAX_WIDTH: usize = 48;
 
-/// 组装结果：屏幕行与标题上可点击的“新输出”区域。
+/// 组装结果：屏幕行与可点击的“回到底部”按钮区域。
 pub(super) struct PaintedRows {
     /// 从第 0 行到正文末行的屏幕行（不含输入框）
     pub(super) rows: Vec<String>,
-    /// “新输出”提示所在列范围 [start, end)
-    pub(super) unseen_cols: Option<(u16, u16)>,
-    /// 正文末行“回到底部”按钮所在列范围 [start, end)
+    /// 输入框正上方“回到底部”按钮所在列范围 [start, end)
     pub(super) bottom_button: Option<(u16, u16)>,
 }
 
@@ -52,9 +50,9 @@ pub(super) struct PaintedRows {
 /// - `layout`: 屏幕分区
 ///
 /// 返回:
-/// - 逐行 ANSI 文本与标题点击区域
+/// - 逐行 ANSI 文本与按钮点击区域
 pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> PaintedRows {
-    let (header, unseen_cols) = header_line(state, layout);
+    let header = header_line(state, layout);
     let mut rows = vec![header];
     let body_height = usize::from(layout.body_height);
     let content_width = usize::from(layout.content_width);
@@ -85,6 +83,8 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
         crate::render::terminal_image::kitty_cell_pixel_height(),
     );
     let mut bottom_button = None;
+    // 4. 悬停在可展开段落上时，整段铺浅色底提示可点击
+    let hovered_rows = state.hovered_paragraph().map(|span| (span.start, span.end));
     for (row, line) in window.iter().enumerate() {
         let line = line.as_str();
         let body = match &preview {
@@ -93,7 +93,14 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
             }
             _ => fit(line, content_width),
         };
-        // 4. 拖动选区以反色标出
+        let document_row = state.scroll + row;
+        let body = match hovered_rows {
+            Some((start, end)) if document_row >= start && document_row < end => {
+                super::hover::tint_line(&body)
+            }
+            _ => body,
+        };
+        // 5. 拖动选区以反色标出
         let body = match state
             .selection
             .and_then(|selection| selection.cols_on_row(state.scroll + row, content_width))
@@ -101,7 +108,7 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
             Some((from, to)) => super::selection::highlight_cols(&body, from, to),
             None => body,
         };
-        // 5. 离开底部时在正文末行右侧叠加“回到底部”按钮；悬停预览所在行不叠加
+        // 6. 离开底部时在紧贴输入框的正文末行居中叠加“回到底部”按钮；悬停预览所在行不叠加
         let is_last = row + 1 == body_height;
         let hovered_here = matches!(&preview, Some((preview_row, _)) if *preview_row == row);
         let body = if is_last && !hovered_here {
@@ -122,20 +129,21 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
     }
     PaintedRows {
         rows,
-        unseen_cols,
         bottom_button,
     }
 }
 
-/// 生成浮动标题：当前用户消息序号与摘要，右侧为新输出提示或快捷键。
+/// 生成浮动标题：当前用户消息序号与摘要，右侧为复制结果或快捷键。
+///
+/// 新输出提示只由输入框上方的悬浮按钮承担，标题不再重复显示。
 ///
 /// 参数:
 /// - `state`: 全屏状态
 /// - `layout`: 屏幕分区
 ///
 /// 返回:
-/// - 标题行与“新输出”区域
-fn header_line(state: &FullscreenState, layout: &FullscreenLayout) -> (String, Option<(u16, u16)>) {
+/// - 标题行
+fn header_line(state: &FullscreenState, layout: &FullscreenLayout) -> String {
     let cols = usize::from(layout.cols);
     let total = state.document.anchors.len();
     // 1. 左侧：当前所在用户消息
@@ -151,37 +159,23 @@ fn header_line(state: &FullscreenState, layout: &FullscreenLayout) -> (String, O
         ),
         None => format!("{HEADER_TEXT}{}", t("Conversation", "会话")),
     };
-    // 2. 右侧：离开底部且有新输出时提示，否则给出快捷键
-    let (right, clickable) = if let Some(count) = state.copied {
-        (
-            if crate::i18n::is_zh() {
-                format!("{HEADER_UNSEEN}已复制 {count} 个字符")
-            } else {
-                format!("{HEADER_UNSEEN}Copied {count} characters")
-            },
-            false,
-        )
-    } else if state.unseen {
-        (
-            format!("{HEADER_UNSEEN}{}", t("↓ New output", "↓ 有新输出")),
-            true,
-        )
+    // 2. 右侧：刚复制时显示字数，否则给出快捷键
+    let right = if let Some(count) = state.copied {
+        if crate::i18n::is_zh() {
+            format!("{HEADER_COPIED}已复制 {count} 个字符")
+        } else {
+            format!("{HEADER_COPIED}Copied {count} characters")
+        }
     } else if cols >= 100 {
-        (
-            format!(
-                "{HEADER_HINT}{}",
-                t(
-                    "Click to fold · Drag to copy · Alt+↑↓ messages · Ctrl+O exit",
-                    "点击展开/收起 · 拖动复制 · Alt+↑↓ 切换消息 · Ctrl+O 退出"
-                )
-            ),
-            false,
+        format!(
+            "{HEADER_HINT}{}",
+            t(
+                "Click to fold · Drag to copy · Alt+↑↓ messages · Ctrl+O exit",
+                "点击展开/收起 · 拖动复制 · Alt+↑↓ 切换消息 · Ctrl+O 退出"
+            )
         )
     } else {
-        (
-            format!("{HEADER_HINT}{}", t("Ctrl+O exit", "Ctrl+O 退出")),
-            false,
-        )
+        format!("{HEADER_HINT}{}", t("Ctrl+O exit", "Ctrl+O 退出"))
     };
     let right_width = visible_width(&right);
     let left_budget = cols.saturating_sub(right_width + 3).max(1);
@@ -191,9 +185,7 @@ fn header_line(state: &FullscreenState, layout: &FullscreenLayout) -> (String, O
         "{left}{HEADER_BG}{}{right}{HEADER_BG} {RESET}",
         " ".repeat(gap)
     );
-    let start = (cols - right_width - 1) as u16;
-    let unseen_cols = clickable.then_some((start, start + right_width as u16));
-    (clip_to_width(&line, cols), unseen_cols)
+    clip_to_width(&line, cols)
 }
 
 /// 生成悬停预览文本：消息序号与摘要。

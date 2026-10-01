@@ -4,6 +4,7 @@
 //! `queue_composer`），全屏时这些入口改走本模块的整屏绘制；输入编辑逻辑不变。
 
 mod bottom_button;
+mod hover;
 mod image_window;
 mod input;
 mod layout;
@@ -29,12 +30,10 @@ use std::io::{self, Write};
 /// 全屏会话：持有备用屏与鼠标捕获，销毁时恢复主屏。
 pub(super) struct FullscreenSession {
     state: FullscreenState,
-    /// 标题上“新输出”提示的点击范围
-    unseen_cols: Option<(u16, u16)>,
-    /// 正文末行“回到底部”按钮的点击范围
+    /// 输入框正上方“回到底部”按钮的点击范围
     bottom_button: Option<(u16, u16)>,
     /// 待应用的段落切换锚点：段落键与切换前的屏幕偏移
-    pending_toggle: Option<(usize, isize)>,
+    pending_toggle: Option<(crate::render::transcript::ParagraphKey, isize)>,
     /// 上一帧的图片放置签名
     images: Vec<(usize, String)>,
     /// 松开鼠标后待写入剪贴板的文本
@@ -56,7 +55,6 @@ impl FullscreenSession {
         }
         Ok(Self {
             state: FullscreenState::new(),
-            unseen_cols: None,
             bottom_button: None,
             pending_toggle: None,
             images: Vec::new(),
@@ -188,7 +186,6 @@ impl ReplRuntime {
         )?;
         session.state.previous = Some(painted.rows);
         session.state.layout = Some(layout);
-        session.unseen_cols = painted.unseen_cols;
         session.bottom_button = painted.bottom_button;
         // 4. 输入框画在固定底部；没有输入框时光标保持隐藏
         self.viewport = InlineViewport::fixed(size, layout.composer_top, layout.composer_height);
@@ -251,6 +248,9 @@ impl ReplRuntime {
     }
 }
 
+#[cfg(test)]
+#[path = "hover_tests.rs"]
+mod hover_tests;
 #[cfg(test)]
 #[path = "runtime_tests.rs"]
 mod runtime_tests;

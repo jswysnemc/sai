@@ -195,6 +195,8 @@ fn render_command_tool(view: &ToolView, mode: ToolCallDisplayMode) -> String {
     let mut output = render_command_block_with_action(&view.arguments, action, health)
         .trim_end()
         .to_string();
+    // 全屏分段渲染时标出命令与输出的分界，命令行与输出可以分别点击展开
+    output.push_str(&crate::render::render_expand::part_boundary());
     if let Some(progress) = visible_progress(view.progress.as_deref()) {
         output.push_str(&render_progress_note(progress));
     }

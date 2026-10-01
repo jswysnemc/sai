@@ -172,7 +172,10 @@ fn fold_shell_command_lines(
     // 命令行预览：前 2 后 4，过长时收缩
     let wrap = command_wrap_width_for_title(title);
     let wrapped = wrap_display_lines(command, wrap);
-    fold_display_lines_tracked(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded)
+    crate::render::render_expand::within_part(
+        crate::render::render_expand::ExpandPart::Command,
+        || fold_display_lines_tracked(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded),
+    )
 }
 
 /// 追加一行命令显示（省略行 dim，普通行 shell 着色）。

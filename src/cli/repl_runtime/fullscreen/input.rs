@@ -126,7 +126,7 @@ impl ReplRuntime {
         let changed = match mouse.kind {
             MouseEventKind::ScrollUp => state.scroll_by(-(WHEEL_STEP as isize), height),
             MouseEventKind::ScrollDown => state.scroll_by(WHEEL_STEP as isize, height),
-            // 1. 悬停：只在指向的概览标记变化时重绘
+            // 1. 悬停：只在指向的概览标记或可展开段落变化时重绘
             MouseEventKind::Moved => {
                 let hover = if layout.in_body(mouse.row) && layout.in_rail(mouse.column) {
                     let marks = rail_marks(state.document.anchors.len(), height);
@@ -134,7 +134,12 @@ impl ReplRuntime {
                 } else {
                     None
                 };
-                let changed = hover != state.hover;
+                let before = state.hovered_paragraph().map(|span| span.key);
+                state.pointer_row = (layout.in_body(mouse.row)
+                    && mouse.column < layout.content_width)
+                    .then_some(body_row);
+                let after = state.hovered_paragraph().map(|span| span.key);
+                let changed = hover != state.hover || before != after;
                 state.hover = hover;
                 changed
             }
@@ -211,17 +216,11 @@ impl ReplRuntime {
                 // 新的按下清掉上一次选区与复制提示
                 let cleared = state.selection.take().is_some() | state.copied.take().is_some();
                 let handled = {
-                // 2. 标题：点“新输出”到底，点其余位置回到当前消息开头
+                // 2. 标题：回到当前消息开头
                 if mouse.row < layout.body_top {
-                    let on_unseen = session
-                        .unseen_cols
-                        .is_some_and(|(start, end)| mouse.column >= start && mouse.column < end);
-                    if on_unseen {
-                        state.scroll_to(usize::MAX, height)
-                    } else if let Some(index) = state.current_anchor() {
-                        state.jump_to_anchor(index, height)
-                    } else {
-                        false
+                    match state.current_anchor() {
+                        Some(index) => state.jump_to_anchor(index, height),
+                        None => false,
                     }
                 } else if layout.in_body(mouse.row)
                     && usize::from(mouse.row - layout.body_top) + 1 == height
@@ -229,7 +228,7 @@ impl ReplRuntime {
                         .bottom_button
                         .is_some_and(|(start, end)| mouse.column >= start && mouse.column < end)
                 {
-                    // 正文末行的“回到底部”按钮：直接跳到最新输出，不开始拖选
+                    // 输入框正上方的“回到底部”按钮：直接跳到最新输出，不开始拖选
                     state.scroll_to(usize::MAX, height)
                 } else if !layout.in_body(mouse.row) {
                     // 输入框区域：交回终端，不做处理
