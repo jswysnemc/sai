@@ -397,3 +397,28 @@ fn dragging_past_the_top_edge_scrolls() {
     let selection = state.selection.expect("selection");
     assert_eq!(selection.head.row, state.scroll);
 }
+
+/// 离开底部后正文末行出现“回到底部”按钮，点击后回到最新输出并隐藏按钮。
+#[test]
+fn bottom_button_returns_to_latest_output() {
+    let mut runtime = runtime(4);
+    runtime.enter_fullscreen().unwrap();
+    assert!(runtime.fullscreen.as_ref().unwrap().bottom_button.is_none());
+    runtime
+        .handle_fullscreen_event(&mouse(MouseEventKind::ScrollUp, 10, 5))
+        .unwrap();
+    let session = runtime.fullscreen.as_ref().unwrap();
+    let layout = session.state.layout.unwrap();
+    let (start, end) = session.bottom_button.expect("button while scrolled up");
+    let last_row = layout.body_top + layout.body_height - 1;
+    let painted = crate::render::activity_animation::strip_ansi_for_test(
+        &session.state.previous.as_ref().unwrap()[usize::from(last_row)],
+    );
+    assert!(painted.contains("回到底部") || painted.contains("Back to bottom"), "{painted}");
+    click(&mut runtime, (start + end) / 2, last_row);
+    let session = runtime.fullscreen.as_ref().unwrap();
+    assert!(session.state.follow);
+    assert_eq!(session.state.scroll, session.state.max_scroll(usize::from(layout.body_height)));
+    assert!(session.bottom_button.is_none());
+    assert!(session.state.selection.is_none());
+}

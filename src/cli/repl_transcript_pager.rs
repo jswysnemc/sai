@@ -6,7 +6,6 @@ use anyhow::Result;
 use crossterm::cursor::{Hide, Show};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
 use crossterm::execute;
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use std::io;
 use std::time::Duration;
 
@@ -25,19 +24,12 @@ pub(super) fn open_transcript_pager(runtime: &mut ReplRuntime) -> Result<()> {
     if !was_raw {
         crossterm::terminal::enable_raw_mode()?;
     }
-    execute!(
-        io::stdout(),
-        EnterAlternateScreen,
-        Hide,
-        event::EnableMouseCapture
-    )?;
+    crate::cli::alternate_screen::enter_alternate_screen(&mut io::stdout())?;
+    execute!(io::stdout(), Hide, event::EnableMouseCapture)?;
     let result = run_pager_loop(runtime);
-    execute!(
-        io::stdout(),
-        event::DisableMouseCapture,
-        LeaveAlternateScreen,
-        Show
-    )?;
+    execute!(io::stdout(), event::DisableMouseCapture)?;
+    crate::cli::alternate_screen::leave_alternate_screen(&mut io::stdout())?;
+    execute!(io::stdout(), Show)?;
     if !was_raw {
         crossterm::terminal::disable_raw_mode()?;
     }
@@ -187,7 +179,7 @@ fn draw_view(
 ///
 /// 返回:
 /// - 不超宽的行
-pub(super) fn clip_to_width(line: &str, cols: usize) -> String {
+pub(in crate::cli) fn clip_to_width(line: &str, cols: usize) -> String {
     let mut out = String::new();
     let mut width = 0usize;
     let mut index = 0usize;

@@ -30,7 +30,7 @@ impl ComposerFrame {
         layout.styled_display_lines = visible;
         layout.cursor_row_offset = cursor;
         let mut lines = self.visual_lines(&layout, cols);
-        let cursor_offset = self.panel_lines.len()
+        let cursor_offset = self.top_lines(cols).len()
             + usize::from(CHROME_INPUT_PAD_ROWS + CHROME_INPUT_INNER_PAD_ROWS)
             + usize::from(layout.cursor_row_offset);
         let hidden_rows = lines
@@ -77,7 +77,7 @@ impl ComposerFrame {
     /// 参数: `layout` 为正文和补全面板布局，`cols` 为终端列数
     /// 返回: 按显示顺序排列的面板、输入和底栏
     fn visual_lines(&self, layout: &ComposerLayout, cols: usize) -> Vec<String> {
-        let mut lines = self.panel_lines.clone();
+        let mut lines = self.top_lines(cols);
         lines.extend((0..CHROME_INPUT_PAD_ROWS).map(|_| String::new()));
         lines.extend((0..CHROME_INPUT_INNER_PAD_ROWS).map(|_| chrome_input_pad_row(cols)));
         let first_prefix = if self.input.starts_with('!') {
@@ -96,19 +96,24 @@ impl ComposerFrame {
             first = false;
         }
         lines.extend((0..CHROME_INPUT_INNER_PAD_ROWS).map(|_| chrome_input_pad_row(cols)));
-        if layout.mention_panel.is_visible() {
+        let panel_open = if layout.mention_panel.is_visible() {
             lines.extend(layout.mention_panel.rendered_lines(cols));
+            true
         } else if layout.slash_panel.is_visible() {
             lines.extend(layout.slash_panel.rendered_lines(cols));
+            true
         } else if layout.shell_hint.is_visible() {
             lines.extend(layout.shell_hint.rendered_lines(cols));
+            true
         } else {
             lines.push(self.chrome.footer_line(cols));
-        }
-        // 最后一行固定为按键提示；有输入时留空行，输入框高度不随打字跳动
+            false
+        };
+        // 最后一行固定为按键提示；面板打开时留空行，输入框高度保持不变
         lines.push(super::key_hints::render_key_hints(
             self.key_hints,
             self.input.is_empty(),
+            panel_open,
             cols,
         ));
         lines

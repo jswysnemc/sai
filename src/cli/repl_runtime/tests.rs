@@ -571,15 +571,3 @@ fn stream_mode_prefers_draft_mode() {
     );
 }
 
-/// 第一次 Ctrl+C 后按键提示行显示再按一次退出，窗口过期后自动恢复。
-#[test]
-fn exit_hint_is_shown_until_the_window_expires() {
-    let mut runtime = ReplRuntime::new(5_000, options());
-    runtime.arm_exit_hint(std::time::Duration::from_secs(60));
-    let context = runtime.key_hint_context();
-    assert!(context.exit_pending);
-    assert!(runtime.pending_wait().is_some());
-    runtime.arm_exit_hint(std::time::Duration::ZERO);
-    assert!(!runtime.key_hint_context().exit_pending);
-    assert!(runtime.exit_hint_until.is_none());
-}

@@ -102,19 +102,41 @@ class InteractionTests(unittest.TestCase):
             return rows[-1] if rows else ""
 
         with TerminalSession() as terminal:
-            terminal.wait_for(lambda: "Enter" in hint_row(terminal))
+            terminal.wait_for(lambda: "Shift+Tab" in hint_row(terminal))
             row = hint_row(terminal)
-            self.assertNotIn("技巧", row)
+            self.assertNotIn("Enter", row)
             self.assertNotIn("Ctrl+O", row)
-            # 开始输入后提示行让位
+            # 开始输入后出现发送与换行
             terminal.send(b"hello")
-            terminal.wait_for(lambda: "hello" in terminal.text() and "Enter" not in hint_row(terminal))
+            terminal.wait_for(lambda: "Shift+Enter" in hint_row(terminal))
             terminal.send(b"\x7f" * 5)
-            terminal.wait_for(lambda: "Enter" in hint_row(terminal))
+            terminal.wait_for(lambda: "Enter" not in hint_row(terminal) and "Shift+Tab" in hint_row(terminal))
             terminal.send(b"\x03")
             terminal.wait_for(lambda: "再按一次" in hint_row(terminal) or "again" in hint_row(terminal))
             history = "\n".join(terminal.screen.display)
             self.assertEqual(history.count("再按一次 Ctrl+C 退出") + history.count("Press Ctrl+C again to exit"), 1)
+
+    def test_shortcut_sheet_and_escape_hint(self):
+        """空输入按 ? 展开快捷键速查，Esc 收起；有输入时第一次 Esc 提示再按清空；返回无。"""
+
+        def hint_row(terminal):
+            """返回 composer 最后一行，即按键提示行。"""
+            rows = [row for row in terminal.screen.display if row.strip()]
+            return rows[-1] if rows else ""
+
+        with TerminalSession() as terminal:
+            terminal.wait_for(lambda: "Shift+Tab" in hint_row(terminal))
+            terminal.send(b"?")
+            terminal.wait_for(lambda: "快捷键" in terminal.text() and "Shift+Enter" in terminal.text())
+            self.assertNotIn("?", terminal.screen.display[terminal.screen.cursor.y].split("→")[-1].strip()[:1])
+            terminal.send(b"\x1b")
+            terminal.wait_for(lambda: "Shift+Enter" not in terminal.text())
+            terminal.send(b"draft")
+            terminal.pump(.2)
+            terminal.send(b"\x1b")
+            terminal.wait_for(lambda: "再按一次 Esc" in hint_row(terminal) or "Esc again" in hint_row(terminal))
+            terminal.send(b"\x1b")
+            terminal.wait_for(lambda: "draft" not in terminal.text())
 
     def test_overlay_restores_input_and_cursor(self):
         """打开并取消配置面板后可执行命令，返回无。"""

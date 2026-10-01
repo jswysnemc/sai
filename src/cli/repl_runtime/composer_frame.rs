@@ -1,6 +1,7 @@
 mod input_viewport;
 mod key_hints;
 mod layout;
+mod shortcut_sheet;
 mod paint;
 #[cfg(test)]
 mod regression_tests;
@@ -64,6 +65,10 @@ pub(super) struct ComposerFrame {
     placeholder_override: Option<String>,
     /// 状态栏下方按键提示所需的界面状态
     key_hints: key_hints::KeyHintContext,
+    /// 快捷键速查面板是否展开（只在空输入时显示）
+    shortcuts_open: bool,
+    /// 速查面板展示的图片粘贴键
+    paste_key: crate::config::PasteImageKey,
 }
 
 impl ComposerFrame {
@@ -99,6 +104,8 @@ impl ComposerFrame {
             streaming: false,
             placeholder_override: None,
             key_hints: key_hints::KeyHintContext::default(),
+            shortcuts_open: false,
+            paste_key: crate::config::PasteImageKey::default(),
         }
     }
 
@@ -133,6 +140,34 @@ impl ComposerFrame {
     /// - 无
     pub(super) fn set_key_hints(&mut self, context: key_hints::KeyHintContext) {
         self.key_hints = context;
+    }
+
+    /// 设置快捷键速查面板状态。
+    ///
+    /// 参数:
+    /// - `open`: 是否展开
+    /// - `paste_key`: 配置的图片粘贴键
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn set_shortcuts(&mut self, open: bool, paste_key: crate::config::PasteImageKey) {
+        self.shortcuts_open = open;
+        self.paste_key = paste_key;
+    }
+
+    /// 返回输入框上方的全部行：沉底面板与快捷键速查。
+    ///
+    /// 参数:
+    /// - `cols`: 终端列数
+    ///
+    /// 返回:
+    /// - 按显示顺序排列的行
+    fn top_lines(&self, cols: usize) -> Vec<String> {
+        let mut lines = self.panel_lines.clone();
+        if self.shortcuts_open && self.input.is_empty() {
+            lines.extend(shortcut_sheet::render_shortcut_sheet(cols, self.paste_key));
+        }
+        lines
     }
 
     /// 设置是否已用 Esc 收起补全面板。
@@ -193,7 +228,7 @@ impl ComposerFrame {
     /// - composer 所需视觉行数
     pub(super) fn height(&self, cols: usize) -> u16 {
         let layout = self.layout(cols);
-        let panel_rows = self.panel_lines.len().min(usize::from(u16::MAX)) as u16;
+        let panel_rows = self.top_lines(cols).len().min(usize::from(u16::MAX)) as u16;
         // 输入条自身厚度：内部上下背景边距 + 输入行
         let input_block = CHROME_INPUT_INNER_PAD_ROWS
             .saturating_mul(2)
@@ -231,7 +266,7 @@ impl ComposerFrame {
 /// 状态栏下方按键提示占用的行数。
 const KEY_HINT_ROWS: u16 = 1;
 
-pub(super) use key_hints::KeyHintContext;
+pub(super) use key_hints::{KeyHintContext, KeyNotice};
 
 /// composer 在单一终端宽度下的计算结果。
 struct ComposerLayout {

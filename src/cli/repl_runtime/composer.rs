@@ -56,6 +56,7 @@ impl ReplRuntime {
         }
         frame.set_panels_dismissed(self.panels_dismissed.is_some());
         frame.set_key_hints(self.key_hint_context());
+        frame.set_shortcuts(self.shortcuts_open, self.paste_image_key());
         self.last_chrome = Some(chrome.clone());
         self.composer = Some(frame);
         // 全屏视图：输入框固定在底部，不参与主屏腾行与重排
@@ -81,33 +82,6 @@ impl ReplRuntime {
             self.maybe_reflow_due(false)?;
         }
         Ok((self.viewport.composer_top(), composer_height))
-    }
-
-    /// 【终端】【按键提示】标记第一次 Ctrl+C，提示行在退出窗口内显示再按一次退出。
-    ///
-    /// 参数:
-    /// - `window`: 双击退出的判定窗口
-    ///
-    /// 返回:
-    /// - 无
-    pub(in crate::cli) fn arm_exit_hint(&mut self, window: std::time::Duration) {
-        self.exit_hint_until = Some(std::time::Instant::now() + window);
-    }
-
-    /// 汇总按键提示行需要的界面状态；过期的退出提示在这里清除。
-    ///
-    /// 返回:
-    /// - 按键提示上下文
-    pub(super) fn key_hint_context(&mut self) -> super::composer_frame::KeyHintContext {
-        let now = std::time::Instant::now();
-        if self.exit_hint_until.is_some_and(|deadline| deadline <= now) {
-            self.exit_hint_until = None;
-        }
-        super::composer_frame::KeyHintContext {
-            streaming: self.stream_active,
-            fullscreen: self.fullscreen.is_some(),
-            exit_pending: self.exit_hint_until.is_some(),
-        }
     }
 
     /// 组装当前沉底面板行（todo 快照 + 排队消息 + agent 面板）。

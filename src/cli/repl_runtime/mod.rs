@@ -10,6 +10,7 @@ mod history;
 mod history_insert;
 mod history_replay;
 mod history_restore;
+mod key_notice;
 mod layout;
 mod live_usage;
 mod mention_completion;
@@ -133,8 +134,10 @@ pub(super) struct ReplRuntime {
     ssh_prompt: Option<crate::cli::ssh_prompt::SshPromptView>,
     /// Ctrl+O 全屏会话视图；存在时所有绘制改走整屏布局
     fullscreen: Option<fullscreen::FullscreenSession>,
-    /// 第一次 Ctrl+C 后退出提示的截止时间
-    exit_hint_until: Option<Instant>,
+    /// 二次按键确认提示及其截止时间
+    key_notice: Option<(composer_frame::KeyNotice, Instant)>,
+    /// 快捷键速查面板是否展开
+    shortcuts_open: bool,
 }
 
 /// 运行期间底部输入框草稿。
@@ -254,7 +257,8 @@ impl ReplRuntime {
             force_reanchor: false,
             ssh_prompt: None,
             fullscreen: None,
-            exit_hint_until: None,
+            key_notice: None,
+            shortcuts_open: false,
         }
     }
 
@@ -395,7 +399,7 @@ impl ReplRuntime {
             .then_some(Duration::from_millis(20));
         // 退出提示到期时唤醒一次，按键提示行恢复常规内容
         let exit_hint_wait = self
-            .exit_hint_until
+            .key_notice_deadline()
             .map(|deadline| deadline.saturating_duration_since(Instant::now()));
         [
             reflow_wait,

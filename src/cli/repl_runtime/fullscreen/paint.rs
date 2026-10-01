@@ -41,6 +41,8 @@ pub(super) struct PaintedRows {
     pub(super) rows: Vec<String>,
     /// “新输出”提示所在列范围 [start, end)
     pub(super) unseen_cols: Option<(u16, u16)>,
+    /// 正文末行“回到底部”按钮所在列范围 [start, end)
+    pub(super) bottom_button: Option<(u16, u16)>,
 }
 
 /// 组装标题与正文区的全部屏幕行。
@@ -82,6 +84,7 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
         body_height,
         crate::render::terminal_image::kitty_cell_pixel_height(),
     );
+    let mut bottom_button = None;
     for (row, line) in window.iter().enumerate() {
         let line = line.as_str();
         let body = match &preview {
@@ -98,6 +101,16 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
             Some((from, to)) => super::selection::highlight_cols(&body, from, to),
             None => body,
         };
+        // 5. 离开底部时在正文末行右侧叠加“回到底部”按钮；悬停预览所在行不叠加
+        let is_last = row + 1 == body_height;
+        let hovered_here = matches!(&preview, Some((preview_row, _)) if *preview_row == row);
+        let body = if is_last && !hovered_here {
+            let (line, cols) = super::bottom_button::overlay(&body, state, content_width);
+            bottom_button = cols;
+            line
+        } else {
+            body
+        };
         let mut output = body;
         if layout.rail_col.is_some() {
             let mark = marks.iter().position(|mark| mark.row == row);
@@ -107,7 +120,11 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
         output.push_str(&scrollbar_glyph(row, thumb));
         rows.push(output);
     }
-    PaintedRows { rows, unseen_cols }
+    PaintedRows {
+        rows,
+        unseen_cols,
+        bottom_button,
+    }
 }
 
 /// 生成浮动标题：当前用户消息序号与摘要，右侧为新输出提示或快捷键。

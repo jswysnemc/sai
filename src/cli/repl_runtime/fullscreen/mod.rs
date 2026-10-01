@@ -3,6 +3,7 @@
 //! 所有绘制仍经过 `ReplRuntime` 的既有入口（`sync_transcript`、`replay`、
 //! `queue_composer`），全屏时这些入口改走本模块的整屏绘制；输入编辑逻辑不变。
 
+mod bottom_button;
 mod image_window;
 mod input;
 mod layout;
@@ -19,7 +20,7 @@ use crate::render::terminal_rows::paint_changed_rows;
 use anyhow::Result;
 use crossterm::cursor::Hide;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
-use crossterm::terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::terminal::{Clear, ClearType};
 use crossterm::{execute, queue};
 use layout::FullscreenLayout;
 use state::FullscreenState;
@@ -30,6 +31,8 @@ pub(super) struct FullscreenSession {
     state: FullscreenState,
     /// 标题上“新输出”提示的点击范围
     unseen_cols: Option<(u16, u16)>,
+    /// 正文末行“回到底部”按钮的点击范围
+    bottom_button: Option<(u16, u16)>,
     /// 待应用的段落切换锚点：段落键与切换前的屏幕偏移
     pending_toggle: Option<(usize, isize)>,
     /// 上一帧的图片放置签名
@@ -48,17 +51,13 @@ impl FullscreenSession {
             // 备用屏有独立的 Kitty 图片存储，进入时从空记录开始
             crate::render::terminal_image::set_kitty_alternate_screen(true);
             let mut stdout = io::stdout();
-            execute!(
-                stdout,
-                EnterAlternateScreen,
-                EnableMouseCapture,
-                Clear(ClearType::All),
-                Hide
-            )?;
+            crate::cli::alternate_screen::enter_alternate_screen(&mut stdout)?;
+            execute!(stdout, EnableMouseCapture, Clear(ClearType::All), Hide)?;
         }
         Ok(Self {
             state: FullscreenState::new(),
             unseen_cols: None,
+            bottom_button: None,
             pending_toggle: None,
             images: Vec::new(),
             pending_copy: None,
@@ -73,7 +72,8 @@ impl Drop for FullscreenSession {
             return;
         }
         let mut stdout = io::stdout();
-        let _ = execute!(stdout, DisableMouseCapture, LeaveAlternateScreen);
+        let _ = execute!(stdout, DisableMouseCapture);
+        let _ = crate::cli::alternate_screen::leave_alternate_screen(&mut stdout);
         let _ = stdout.flush();
         crate::render::terminal_image::set_kitty_alternate_screen(false);
     }
@@ -175,7 +175,7 @@ impl ReplRuntime {
             write!(
                 self.frame,
                 "{}",
-                crate::render::terminal_image::KITTY_DELETE_PLACEMENTS
+                crate::render::terminal_image::kitty_delete_placements()
             )?;
         }
         queue!(self.frame, Hide)?;
@@ -189,6 +189,7 @@ impl ReplRuntime {
         session.state.previous = Some(painted.rows);
         session.state.layout = Some(layout);
         session.unseen_cols = painted.unseen_cols;
+        session.bottom_button = painted.bottom_button;
         // 4. 输入框画在固定底部；没有输入框时光标保持隐藏
         self.viewport = InlineViewport::fixed(size, layout.composer_top, layout.composer_height);
         self.queue_composer()?;

@@ -21,8 +21,27 @@ pub(in crate::cli::repl_runtime) struct KeyHintContext {
     pub(in crate::cli::repl_runtime) streaming: bool,
     /// 是否处于 Ctrl+O 全屏视图
     pub(in crate::cli::repl_runtime) fullscreen: bool,
-    /// 第一次 Ctrl+C 之后、退出窗口尚未过期
-    pub(in crate::cli::repl_runtime) exit_pending: bool,
+    /// 需要立即提醒的二次按键确认
+    pub(in crate::cli::repl_runtime) notice: Option<KeyNotice>,
+}
+
+/// 二次按键确认提示。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::cli::repl_runtime) enum KeyNotice {
+    /// 第一次 Ctrl+C 之后
+    Exit,
+    /// 有输入时第一次 Esc 之后
+    ClearInput,
+}
+
+impl KeyNotice {
+    /// 返回提示文本。
+    fn text(self) -> &'static str {
+        match self {
+            Self::Exit => t("Press Ctrl+C again to exit", "再按一次 Ctrl+C 退出"),
+            Self::ClearInput => t("Press Esc again to clear input", "再按一次 Esc 清空输入"),
+        }
+    }
 }
 
 /// 一条按键提示：按键与说明。
@@ -38,32 +57,42 @@ fn hint(key: &'static str, label: &'static str) -> Hint {
 
 /// 【终端】【按键提示】按场景返回按键条目，越靠前优先级越高。
 ///
-/// 只在输入框为空时调用：开始输入后提示行让位给正在编辑的内容。
+/// 输入为空时列出浏览与模式类按键；开始输入后才出现 Enter、Shift+Enter 等编辑类按键。
 /// Ctrl+O 与 Alt+↑↓ 不在这里重复，全屏标题栏已经给出。
 ///
 /// 参数:
 /// - `context`: 界面状态
+/// - `input_empty`: 输入框是否为空
 ///
 /// 返回:
 /// - 按键条目
-fn keys_for(context: KeyHintContext) -> Vec<Hint> {
-    let mut hints = if context.streaming {
-        vec![
+fn keys_for(context: KeyHintContext, input_empty: bool) -> Vec<Hint> {
+    let mut hints = match (context.streaming, input_empty) {
+        (true, true) => vec![
             hint("Ctrl+C", t("stop", "停止")),
-            hint("Enter", t("queue message", "排队发送")),
             hint("Ctrl+Z", t("undo queued", "撤回排队")),
             hint("Shift+Tab", t("mode", "切换模式")),
-        ]
-    } else {
-        vec![
-            hint("Enter", t("send", "发送")),
-            hint("Shift+Tab", t("mode", "切换模式")),
+            hint("?", t("shortcuts", "快捷键")),
+        ],
+        (true, false) => vec![
+            hint("Enter", t("queue message", "排队发送")),
             hint("Shift+Enter", t("new line", "换行")),
+            hint("Ctrl+C", t("stop", "停止")),
+        ],
+        (false, true) => vec![
+            hint("Shift+Tab", t("mode", "切换模式")),
             hint("↑", t("history", "历史")),
             hint("←", t("session tree", "会话树")),
-        ]
+            hint("?", t("shortcuts", "快捷键")),
+        ],
+        (false, false) => vec![
+            hint("Enter", t("send", "发送")),
+            hint("Shift+Enter", t("new line", "换行")),
+            hint("Esc Esc", t("clear", "清空")),
+            hint("Ctrl+W", t("delete word", "删词")),
+        ],
     };
-    if context.fullscreen {
+    if context.fullscreen && input_empty {
         hints.push(hint("PgUp/PgDn", t("scroll", "翻页")));
     }
     hints
@@ -73,7 +102,8 @@ fn keys_for(context: KeyHintContext) -> Vec<Hint> {
 ///
 /// 参数:
 /// - `context`: 界面状态
-/// - `input_empty`: 输入框是否为空；非空时只保留退出确认
+/// - `input_empty`: 输入框是否为空
+/// - `panel_open`: 是否有补全或 Shell 面板；面板自带操作说明，此时只保留退出确认
 /// - `cols`: 终端列数
 ///
 /// 返回:
@@ -81,6 +111,7 @@ fn keys_for(context: KeyHintContext) -> Vec<Hint> {
 pub(in crate::cli::repl_runtime) fn render_key_hints(
     context: KeyHintContext,
     input_empty: bool,
+    panel_open: bool,
     cols: usize,
 ) -> String {
     let pad = CHROME_FOOTER_SIDE_PAD.min(cols.saturating_sub(1) / 2);
@@ -88,15 +119,15 @@ pub(in crate::cli::repl_runtime) fn render_key_hints(
     let separator = format!("{LABEL_STYLE}{SEPARATOR}{RESET}");
     let mut line = String::new();
     let mut used = 0usize;
-    // 1. 退出确认优先占据行首，输入非空时也显示
-    if context.exit_pending {
-        let notice = t("Press Ctrl+C again to exit", "再按一次 Ctrl+C 退出");
+    // 1. 退出确认优先占据行首，任何场景都显示
+    if let Some(notice) = context.notice {
+        let notice = notice.text();
         used = visible_width(notice).min(budget);
         line.push_str(&format!("{NOTICE_STYLE}{notice}{RESET}"));
     }
-    if input_empty {
+    if !panel_open {
         // 2. 按键条目：从高优先级开始放入，放不下就停止，不截断半个条目
-        for item in keys_for(context) {
+        for item in keys_for(context, input_empty) {
             let plain = format!("{} {}", item.key, item.label);
             let extra = if used == 0 { 0 } else { SEPARATOR.chars().count() };
             if used + extra + visible_width(&plain) > budget {
@@ -120,18 +151,25 @@ mod tests {
     use super::*;
     use crate::render::activity_animation::strip_ansi_for_test as plain;
 
-    /// 渲染并去除样式。
+    /// 渲染无面板场景并去除样式。
     fn text(context: KeyHintContext, input_empty: bool, cols: usize) -> String {
-        plain(&render_key_hints(context, input_empty, cols))
+        plain(&render_key_hints(context, input_empty, false, cols))
     }
 
-    /// 验证空闲与运行给出不同按键；输入前缀技巧留给输入框占位轮播，不在提示行。
+    /// 验证输入为空时不出现 Enter 与 Shift+Enter，开始输入后才出现。
     #[test]
-    fn hints_follow_the_current_scene() {
-        let idle = text(KeyHintContext::default(), true, 200);
-        assert!(idle.contains("Enter"));
-        assert!(!idle.contains(t("Tips", "技巧")));
-        assert!(!idle.contains("@ "));
+    fn enter_hints_appear_only_after_typing() {
+        for streaming in [false, true] {
+            let context = KeyHintContext {
+                streaming,
+                ..KeyHintContext::default()
+            };
+            let empty = text(context, true, 200);
+            assert!(!empty.contains("Enter"), "{empty}");
+            assert!(empty.contains("Shift+Tab"), "{empty}");
+            let typed = text(context, false, 200);
+            assert!(typed.contains("Enter") && typed.contains("Shift+Enter"), "{typed}");
+        }
         let running = text(
             KeyHintContext {
                 streaming: true,
@@ -142,22 +180,17 @@ mod tests {
         );
         assert!(running.starts_with(&" ".repeat(CHROME_FOOTER_SIDE_PAD.min(99))));
         assert!(running.contains("Ctrl+C"));
-        assert_ne!(idle, running);
+        assert!(!running.contains(t("Tips", "技巧")));
     }
 
-    /// 验证有输入时不显示按键与技巧。
+    /// 验证补全或 Shell 面板打开时提示行留空，面板自带说明。
     #[test]
-    fn typing_hides_the_hints() {
-        for streaming in [false, true] {
-            let context = KeyHintContext {
-                streaming,
-                ..KeyHintContext::default()
-            };
-            assert!(text(context, false, 200).trim().is_empty());
-        }
+    fn panels_suppress_the_hint_row() {
+        let line = plain(&render_key_hints(KeyHintContext::default(), false, true, 200));
+        assert!(line.trim().is_empty(), "{line}");
     }
 
-    /// 验证 Ctrl+O 与 Alt+↑↓ 不出现在提示行，全屏只多出翻页。
+    /// 验证 Ctrl+O 与 Alt+↑↓ 不出现在提示行，全屏空输入时多出翻页。
     #[test]
     fn view_shortcuts_are_left_to_the_fullscreen_header() {
         for fullscreen in [false, true] {
@@ -175,28 +208,37 @@ mod tests {
         }
     }
 
-    /// 验证第一次 Ctrl+C 后行首提示再按一次退出，输入非空时同样显示。
+    /// 验证第一次 Ctrl+C 后行首提示再按一次退出，面板打开时同样显示。
     #[test]
     fn exit_notice_leads_the_line() {
         let context = KeyHintContext {
-            exit_pending: true,
+            notice: Some(KeyNotice::Exit),
             ..KeyHintContext::default()
         };
         let notice = t("Press Ctrl+C again to exit", "再按一次 Ctrl+C 退出");
         assert!(text(context, true, 200).trim_start().starts_with(notice));
-        assert_eq!(text(context, false, 200).trim(), notice);
+        let with_panel = plain(&render_key_hints(context, false, true, 200));
+        assert_eq!(with_panel.trim(), notice);
+        let clear = KeyHintContext {
+            notice: Some(KeyNotice::ClearInput),
+            ..KeyHintContext::default()
+        };
+        let clear_text = t("Press Esc again to clear input", "再按一次 Esc 清空输入");
+        assert!(text(clear, false, 200).trim_start().starts_with(clear_text));
     }
 
-    /// 验证窄终端按优先级省略，结果不超宽，技巧整组省略。
+    /// 验证窄终端按优先级省略，结果不超宽且不截断半个条目。
     #[test]
     fn narrow_terminals_drop_low_priority_hints() {
-        for cols in [8, 20, 40, 60, 80] {
-            let line = render_key_hints(KeyHintContext::default(), true, cols);
-            assert!(visible_width(&line) <= cols, "{cols}: {line:?}");
-            assert!(!plain(&line).trim_end().ends_with('·'), "{cols}: {line:?}");
+        for input_empty in [true, false] {
+            for cols in [8, 20, 40, 60, 80] {
+                let line = render_key_hints(KeyHintContext::default(), input_empty, false, cols);
+                assert!(visible_width(&line) <= cols, "{cols}: {line:?}");
+                assert!(!plain(&line).trim_end().ends_with('·'), "{cols}: {line:?}");
+            }
         }
-        let narrow = text(KeyHintContext::default(), true, 30);
+        let narrow = text(KeyHintContext::default(), false, 30);
         assert!(narrow.contains("Enter"));
-        assert!(!narrow.contains(t("session tree", "会话树")));
+        assert!(!narrow.contains(t("delete word", "删词")));
     }
 }

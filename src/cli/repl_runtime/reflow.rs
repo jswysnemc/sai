@@ -75,7 +75,7 @@ pub(super) fn replay_full<W: Write>(
         output,
         MoveTo(0, 0),
         Clear(ClearType::All),
-        Print(crate::render::terminal_image::KITTY_DELETE_PLACEMENTS),
+        Print(crate::render::terminal_image::kitty_delete_placements()),
         Print(DISABLE_AUTOWRAP)
     )?;
     for line in lines {

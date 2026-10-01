@@ -73,6 +73,9 @@ pub(super) fn handle_stream_key(
             // 与 Enter 同一套分发：置灰命令拒绝留在输入框，避免本轮结束后悄悄执行
             return dispatch_stream_command(runtime, ctx);
         }
+        KeyCode::Esc if runtime.close_shortcuts() => {
+            runtime.redraw_stream_composer()?;
+        }
         KeyCode::Enter => {
             if modifiers.contains(KeyModifiers::SHIFT) {
                 let draft = runtime.stream_draft_mut();
@@ -164,6 +167,12 @@ pub(super) fn handle_stream_key(
                 && !modifiers.contains(KeyModifiers::ALT)
                 && !is_control_char(ch) =>
         {
+            // 空草稿时 `?` 打开或收起快捷键速查，不作为字符输入
+            if ch == '?' && runtime.toggle_shortcuts(runtime.stream_draft().text.is_empty()) {
+                runtime.redraw_stream_composer()?;
+                return Ok(StreamInputAction::Continue);
+            }
+            runtime.close_shortcuts();
             let text = take_text_batch(ch, runtime)?;
             let draft = runtime.stream_draft_mut();
             draft

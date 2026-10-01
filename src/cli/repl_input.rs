@@ -159,8 +159,9 @@ pub(super) fn read_repl_input(
                     windows_paste.drain_console_replay();
                     continue;
                 }
-                if code != KeyCode::Esc {
-                    last_escape = None;
+                if code != KeyCode::Esc && last_escape.take().is_some() {
+                    // 清空确认窗口被其它按键打断，提示行随之恢复
+                    runtime.clear_key_notice();
                 }
                 if !matches!(code, KeyCode::Char('c')) || !modifiers.contains(KeyModifiers::CONTROL)
                 {
@@ -305,6 +306,12 @@ pub(super) fn read_repl_input(
                         redraw_input!()?;
                     }
                     KeyCode::Esc => {
+                        // 1. 快捷键速查展开时，Esc 只负责收起
+                        if runtime.close_shortcuts() {
+                            last_escape = None;
+                            redraw_input!()?;
+                            continue;
+                        }
                         let now = Instant::now();
                         if last_escape.is_some_and(|previous| {
                             now.duration_since(previous) <= REPL_ESC_CLEAR_WINDOW
@@ -316,9 +323,15 @@ pub(super) fn read_repl_input(
                             history_clean_index = None;
                             is_pasted = false;
                             last_escape = None;
+                            runtime.clear_key_notice();
                             redraw_input!()?;
                         } else {
                             last_escape = Some(now);
+                            // 2. 有输入时在提示行说明再按一次 Esc 会清空
+                            if !input.is_empty() {
+                                runtime.arm_clear_input_hint(REPL_ESC_CLEAR_WINDOW);
+                                redraw_input!()?;
+                            }
                         }
                     }
                     // 词级移动：Ctrl+←/→ 是 emacs/readline 通用键位，
@@ -671,6 +684,12 @@ pub(super) fn read_repl_input(
                         if !modifiers.contains(KeyModifiers::CONTROL)
                             && !modifiers.contains(KeyModifiers::ALT) =>
                     {
+                        // 空输入时 `?` 打开或收起快捷键速查，不作为字符输入
+                        if ch == '?' && runtime.toggle_shortcuts(input.is_empty()) {
+                            redraw_input!()?;
+                            continue;
+                        }
+                        runtime.close_shortcuts();
                         if !is_disallowed_control_char(ch) {
                             let text = event_batch::take_text_batch(ch, runtime)?;
                             windows_paste.record_text(&text, Instant::now());

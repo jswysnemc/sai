@@ -223,6 +223,14 @@ impl ReplRuntime {
                     } else {
                         false
                     }
+                } else if layout.in_body(mouse.row)
+                    && usize::from(mouse.row - layout.body_top) + 1 == height
+                    && session
+                        .bottom_button
+                        .is_some_and(|(start, end)| mouse.column >= start && mouse.column < end)
+                {
+                    // 正文末行的“回到底部”按钮：直接跳到最新输出，不开始拖选
+                    state.scroll_to(usize::MAX, height)
                 } else if !layout.in_body(mouse.row) {
                     // 输入框区域：交回终端，不做处理
                     false
