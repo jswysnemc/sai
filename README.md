@@ -112,8 +112,9 @@ Weather, exchange-rate, and image tools require the corresponding [Lua example p
 ### Permission, audit, and sandbox
 
 - **Three tiers** - Yolo / Audited / Plan; TUI and CLI can set independent defaults
-- **Workspace sandbox** - In Audited mode, Linux uses `bubblewrap` to confine writes to the workspace; Windows and macOS keep audit checks but do not provide command isolation
-- **Sensitive path protection** - Reads of sensitive paths (SSH keys, credential dirs, etc.) always require explicit permission
+- **Workspace sandbox** - Linux uses `bubblewrap` and macOS uses `Seatbelt` (`sandbox-exec`) to confine write operations to the workspace; Plan mode executes shell commands in a read-only sandbox; Windows preserves permission approval and path audits without process isolation
+- **Sensitive path & credential protection** - Reads of sensitive paths (SSH keys, credential files, `.git/hooks`) are strictly blocked or prompted; private temporary directories and environment scrubbing prevent secret leakage
+- **Surfaced sandbox scopes** - Permission requests detail the active sandbox policy and escalation reasons on TUI, CLI, and Web approval cards; `/sandbox` inspects live backend availability and writable roots
 - **Audit log** - Every Requested / Approved / Denied event is appended to `permission-audit.jsonl` for traceability
 - **Permission broker** - A unified request/decision channel shared by TUI / CLI / Web, with optional denial replies
 
@@ -180,7 +181,7 @@ Turns are stored as a tree and can fork from any message. Both the TUI and the w
 | --- | --- |
 | Linux | x86_64; `ripgrep` (file search), `alsa-lib` (audio alarms); audit sandbox requires `bubblewrap` |
 | Windows | x86_64; WebView2 or a modern browser for the web workbench; `ripgrep` |
-| macOS | Apple Silicon or Intel; a modern browser for the web workbench; `ripgrep` recommended |
+| macOS | Apple Silicon or Intel; a modern browser for the web workbench; `ripgrep` recommended; audit sandbox uses native `Seatbelt` |
 
 ### Build from source
 
@@ -324,7 +325,7 @@ You can also run `sai config` for the built-in TUI configurator, or use the sett
 sai
 ```
 
-The REPL supports multi-line input, image paste (`-c` reads from clipboard), `!` prefix for shell, `/` prefix for control commands, fuzzy history search, and streaming render of reasoning and body text. Idle `Ctrl+O` opens the transcript pager, including diffs; while a turn is streaming it only toggles live reasoning. Work status stays in the live tail (`Working` / `Thinking`, then waiting to run, write, or respond). Finalized reasoning uses the past-tense `Thought` label.
+The REPL supports multi-line input, image paste (`-c` reads from clipboard), `!` prefix for shell, `/` prefix for control commands (such as `/sandbox` to inspect backend status), fuzzy history search, and streaming render of reasoning and body text. Press `?` on empty input to open the two-column shortcut sheet (`?` or `Esc` closes); press `Esc` once with draft input to show the double-escape clear notice; hint rows adapt to show `Shift+Enter` for newlines and `Enter` to send. Idle `Ctrl+O` opens the fullscreen transcript view with scrollable history, folding, drag-to-copy, and a floating back-to-bottom button; while streaming it toggles live reasoning. Work status stays in the live tail (`Working` / `Thinking`, then waiting to run, write, or respond). Finalized reasoning uses the past-tense `Thought` label. Terminal raw mode, alternate screen, and keyboard enhancement layers safely restore on exit and termination signals.
 
 In the pager, `a` switches between individual segments and the fully expanded transcript. Use `/` to search, `Enter` to finish editing the search, and `n` / `N` to move between matches. Full view includes messages, reasoning, tool inputs and results, and pasted text beyond the main view's line limit. Submitted image, text, file, and skill atoms retain distinct label styles.
 
@@ -401,6 +402,8 @@ Edit the `gateways` section of `config.jsonc`, or use `sai gateway` subcommands 
 | `sai compact` | Manually trigger context compaction |
 
 Global flags: `--lang en-US|zh-CN` (language), `--plan` / `--audited` / `--yolo` (permission mode), `--thinking LEVEL` (thinking chain), `-c` (clipboard), `-w` (web search).
+
+Common REPL commands: `/sandbox` (inspect sandbox backend and writable roots), `/model` (switch models), `/tree` (session branch tree), `/subagents` (subagent manager).
 
 ---
 
@@ -547,7 +550,7 @@ No. Turns beyond the character budget are written to `evicted_context.db` and ca
 
 **Does the sandbox work on Windows or macOS?**
 
-No. The audit sandbox relies on Linux `bubblewrap`. On Windows and macOS, Audited mode still provides audit logging, workspace path validation, and per-call confirmation, but command isolation is disabled.
+Both macOS and Linux support OS-level command sandboxing: Linux via `bubblewrap` and macOS via native `Seatbelt`. Windows currently has no sandbox backend, but retains audit logs, sensitive path interception, and per-call confirmations.
 
 **Do subagents pollute the main workspace?**
 

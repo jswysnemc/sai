@@ -113,11 +113,12 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 
 ### 权限审计与沙盒
 
-- **三级权限** - Yolo / Audited / Plan 三种模式,TUI 与 CLI 可分别配置默认模式
-- **工作区沙盒** - Audited 模式下,Linux 用 `bubblewrap` 限制文件写入在工作区内,Windows 与 macOS 保留审计检查但不提供命令隔离
-- **敏感路径保护** - 读取敏感路径(SSH 密钥、凭证目录等)前强制请求权限
-- **审计日志** - 每次 Requested / Approved / Denied 写入 `permission-audit.jsonl`,可追溯
-- **权限 Broker** - 统一的请求 / 决策通道,TUI / CLI / Web 三端共用,支持附带拒绝理由
+- **三级权限** - Yolo / Audited / Plan 三种模式，TUI 与 CLI 可分别配置默认模式
+- **工作区沙盒** - Linux 使用 `bubblewrap`，macOS 使用 `Seatbelt`（sandbox-exec）隔离命令执行，限制写操作仅在工作区内生效；Plan 模式支持只读沙盒运行命令；Windows 环境不提供命令隔离，由权限审批兜底
+- **敏感路径与凭证保护** - 隐藏与拦截敏感路径（如 SSH 私钥、认证凭据、`.git/hooks` 等），使用独立临时目录并清理敏感环境变量
+- **沙盒作用域透出** - 权限请求携带沙盒策略与提升原因，在 TUI / CLI 与 Web 确认卡片完整展示；支持 `/sandbox` 查看当前后端状态与可写路径
+- **审计日志** - 每次 Requested / Approved / Denied 写入 `permission-audit.jsonl`，可追溯排查
+- **权限 Broker** - 统一请求与决策通道，TUI / CLI / Web 三端共用，支持附带拒绝原因
 
 ### Web 编程工作台
 
@@ -182,7 +183,7 @@ Web 工作台内置源代码管理面板，底层调用系统 `git`。支持变�
 | --- | --- |
 | Linux | x86_64,需 `ripgrep`(文件搜索)、`alsa-lib`(音频闹钟);审计沙盒需 `bubblewrap` |
 | Windows | x86_64,需 WebView2 或现代浏览器访问 Web 工作台;需 `ripgrep` |
-| macOS | Apple Silicon 或 Intel，需要现代浏览器访问 Web 工作台，建议安装 `ripgrep` |
+| macOS | Apple Silicon 或 Intel，需要现代浏览器访问 Web 工作台，建议安装 `ripgrep`；沙盒使用系统原生 `Seatbelt` |
 
 ### 从源码构建
 
@@ -326,7 +327,7 @@ API Key 写入 `secrets.jsonc`(同目录),支持 `$env:VAR_NAME` 引用环境变
 sai
 ```
 
-REPL 内支持多行输入、图片粘贴(`-c` 从剪贴板读图)、`!` 前缀执行 shell、`/` 前缀执行控制命令、模糊搜索历史、流式渲染推理与正文。空闲时 `Ctrl+O` 打开 transcript pager（含 diff）；流式期间只切换实时思考。工作状态留在 live tail（`Working` / `Thinking`，以及等待执行、写入或回复）。思考定稿后标题改为过去式 `Thought`。
+REPL 内支持多行输入、图片粘贴（`-c` 从剪贴板读图）、`!` 前缀执行 shell、`/` 前缀执行控制命令（如 `/sandbox` 查看沙盒状态）、模糊搜索历史、流式渲染推理与正文。空输入时按 `?` 打开双列快捷键速查面板，按 `?` 或 `Esc` 收起；有输入时按一次 `Esc` 提示再次按 `Esc` 清空输入；输入中状态行自适应显示换行（`Shift+Enter`）与发送提示。空闲时 `Ctrl+O` 打开全屏会话视图，支持整屏浏览、历史滚动、折叠展开、鼠标拖选复制与回到底部浮动按钮；流式期间只切换实时思考。工作状态留在 live tail（`Working` / `Thinking`，以及等待执行、写入或回复）。思考定稿后标题改为过去式 `Thought`。退出时自动恢复终端屏幕、键盘增强协议与光标状态。
 
 展开面板中，按 `a` 切换分段与全文视图，按 `/` 输入搜索词，按 `Enter` 确认后使用 `n` / `N` 跳转到下一处或上一处匹配。全文视图展开消息、思考、工具参数与结果、粘贴文本，不受主视图行数上限限制。图片、长文本、文件和技能原子块在提交后保留专用标签样式。
 
@@ -403,6 +404,8 @@ $ nonexist-cmd --flag
 | `sai compact` | 手动触发上下文压缩 |
 
 全局参数:`--lang en-US|zh-CN`(语言)、`--plan` / `--audited` / `--yolo`(权限模式)、`--thinking LEVEL`(思维链)、`-c`(剪贴板)、`-w`(联网搜索)。
+
+REPL 常用内置命令: `/sandbox` (查看沙盒后端状态与可写范围)、`/model` (切换模型)、`/tree` (会话分支树)、`/subagents` (子代理管理)。
 
 ---
 
@@ -548,7 +551,7 @@ Linux `~/.local/share/sai` / macOS `~/Library/Application Support/sai` / Windows
 
 **Windows 或 macOS 上能用沙盒吗?**
 
-不能。审计沙盒依赖 Linux `bubblewrap`。Windows 与 macOS 上的 Audited 模式仍保留审计日志、工作区路径校验与逐次确认，但不提供命令隔离。
+macOS 与 Linux 支持系统级命令沙盒：Linux 基于 `bubblewrap`，macOS 基于 `Seatbelt` 实现进程隔离与工作区限制。Windows 当前暂无沙盒后端，仍保留审计日志、敏感路径拦截与逐次人工确认。
 
 **子代理会污染主工作区吗?**
 
