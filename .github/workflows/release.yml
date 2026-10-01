@@ -97,11 +97,12 @@ jobs:
             cp "${{ matrix.binary }}" "${{ matrix.rename }}"
             chmod +x "${{ matrix.rename }}"
           fi
-          # SHA256 sidecar for release consumers
+          # 1. 【发布】【校验文件】只记录下载文件名，允许在下载目录直接校验
+          asset="$(basename "${{ matrix.rename }}")"
           if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "${{ matrix.rename }}" > "${{ matrix.rename }}.sha256"
+            (cd target/release && sha256sum "$asset" > "$asset.sha256")
           else
-            shasum -a 256 "${{ matrix.rename }}" > "${{ matrix.rename }}.sha256"
+            (cd target/release && shasum -a 256 "$asset" > "$asset.sha256")
           fi
 
       - name: Upload release artifact
@@ -142,11 +143,22 @@ jobs:
             echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Find release notes
+        id: notes
+        env:
+          RELEASE_TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          notes="docs/releases/${RELEASE_TAG}.md"
+          if [[ -f "$notes" ]]; then
+            echo "path=$notes" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.name }}
           name: Sai ${{ steps.tag.outputs.name }}
+          body_path: ${{ steps.notes.outputs.path }}
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(steps.tag.outputs.name, '-') }}
