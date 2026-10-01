@@ -27,7 +27,6 @@ fn chrome() -> ReplChrome {
         thinking: "auto".to_string(),
         directory: "/workspace".to_string(),
         cache_hit_ratio: None,
-        activity: None,
         status_plugin: None,
     }
 }

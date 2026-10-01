@@ -16,7 +16,6 @@ fn frame() -> ComposerFrame {
         thinking: "auto".into(),
         directory: "/workspace".into(),
         cache_hit_ratio: None,
-        activity: None,
         status_plugin: None,
     };
     let mut frame = ComposerFrame::new(chrome, "draft".into(), 5, false, Vec::new(), 0);
@@ -128,4 +127,43 @@ fn exact_width_and_newline_share_cursor_coordinates() {
         let layout = frame.layout(cols);
         assert!(layout.styled_display_lines[usize::from(layout.cursor_row_offset)].contains("END"));
     }
+}
+
+/// 【终端】【运行提示】运行中停止快捷键只出现在按键提示行，状态栏不再重复。
+/// 参数: 无；返回: 无
+#[test]
+fn streaming_frame_shows_stop_shortcut_once() {
+    let mut frame = frame();
+    frame.set_panel_lines(Vec::new());
+    frame.input.clear();
+    frame.cursor = 0;
+    frame.set_streaming(true);
+    frame.set_key_hints(KeyHintContext {
+        streaming: true,
+        ..KeyHintContext::default()
+    });
+    let mut viewport = InlineViewport::new();
+    viewport.update(
+        TerminalSize {
+            cols: 120,
+            rows: 24,
+        },
+        frame.height(120),
+        5,
+    );
+    let (_, signature) = frame.draw_lines(&mut Vec::new(), &viewport, None).unwrap();
+    let plain: Vec<String> = signature
+        .lines
+        .iter()
+        .map(|line| crate::render::activity_animation::strip_ansi_for_test(line))
+        .collect();
+    let stop_rows: Vec<&String> = plain
+        .iter()
+        .filter(|line| line.contains("Ctrl+C"))
+        .collect();
+    assert_eq!(stop_rows.len(), 1, "停止快捷键应只出现一次: {plain:?}");
+    assert!(
+        !stop_rows[0].contains("test-model"),
+        "停止快捷键不应出现在状态栏: {plain:?}"
+    );
 }

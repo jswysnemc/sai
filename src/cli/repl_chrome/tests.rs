@@ -13,7 +13,6 @@ fn test_chrome() -> ReplChrome {
         thinking: "auto".to_string(),
         directory: "/workspace".to_string(),
         cache_hit_ratio: None,
-        activity: None,
         status_plugin: None,
     }
 }
@@ -108,7 +107,6 @@ fn footer_puts_mode_before_context() {
         thinking: "xhigh".to_string(),
         directory: "/workspace".to_string(),
         cache_hit_ratio: None,
-        activity: None,
         status_plugin: None,
     };
     let line = chrome.footer_line(80);
@@ -142,7 +140,6 @@ fn footer_line_never_exceeds_terminal_cols() {
         thinking: "auto".to_string(),
         directory: "/home/snemc/workspace/sai/very/long/path/segment".to_string(),
         cache_hit_ratio: None,
-        activity: None,
         status_plugin: None,
     };
     for cols in [20usize, 40, 59, 60, 80, 120] {

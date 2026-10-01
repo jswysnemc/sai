@@ -456,9 +456,6 @@ impl ReplRuntime {
             self.live_usage.context_prompt_tokens(),
             self.live_usage.cache_hit_ratio(),
         );
-        chrome.set_activity(Some(
-            crate::i18n::text("Ctrl+C stop", "Ctrl+C 停止").to_string(),
-        ));
         // SSH 征询期间输入框只显示占位提示，草稿保留到征询结束后恢复
         if self.ssh_prompt.is_some() {
             self.update_composer(&chrome, "", 0, false, Vec::new(), 0)?;

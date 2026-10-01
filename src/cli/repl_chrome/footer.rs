@@ -3,13 +3,15 @@ use super::*;
 impl ReplChrome {
     /// 底栏整行：左侧模式/上下文/模型/思考，右侧目录。
     ///
+    /// 停止快捷键只在下方按键提示行出现，底栏不再重复。
+    ///
     /// 参数:
     /// - `cols`: 终端列数（面板内为扣除彩条后的净宽）
     ///
     /// 返回:
     /// - 已着色状态行
     pub(in crate::cli) fn footer_line(&self, cols: usize) -> String {
-        self.footer_line_with_activity(cols, self.activity.as_deref())
+        self.footer_line_with_activity(cols, None)
     }
 
     /// 底栏整行，左侧可附加当前工作状态。

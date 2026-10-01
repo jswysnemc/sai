@@ -38,7 +38,6 @@ fn chrome(config: &AppConfig, paths: &SaiPaths) -> ReplChrome {
         thinking: "high".into(),
         directory: "~/项目/sai".into(),
         cache_hit_ratio: Some(0.9),
-        activity: None,
         status_plugin: Some(TuiStatusRenderer::start(config.clone(), paths.clone())),
     }
 }
@@ -46,10 +45,22 @@ fn chrome(config: &AppConfig, paths: &SaiPaths) -> ReplChrome {
 /// 【底栏集成测试】【刷新等待】等待真实后台插件结果进入实际底栏渲染。
 /// @param chrome 底栏；cols 为列数；expected 为预期文本；返回去掉颜色的底栏
 async fn rendered(chrome: &ReplChrome, cols: usize, expected: &str) -> String {
+    rendered_with_activity(chrome, cols, None, expected).await
+}
+
+/// 【底栏集成测试】【刷新等待】等待插件结果进入附带活动提示的底栏渲染。
+/// @param chrome 底栏；cols 为列数；activity 为左侧活动提示；expected 为预期文本；返回去掉颜色的底栏
+async fn rendered_with_activity(
+    chrome: &ReplChrome,
+    cols: usize,
+    activity: Option<&str>,
+    expected: &str,
+) -> String {
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
-            let line =
-                crate::cli::repl_text::strip_terminal_control_sequences(&chrome.footer_line(cols));
+            let line = crate::cli::repl_text::strip_terminal_control_sequences(
+                &chrome.footer_line_with_activity(cols, activity),
+            );
             if line.contains(expected) {
                 return line;
             }
@@ -72,9 +83,14 @@ async fn tui_status_plugin_renders_configuration_live_usage_and_narrow_terminals
     assert!(!line.contains("high") && !line.contains("~/项目"));
     chrome.set_mode(AgentMode::Plan);
     chrome.apply_live_usage(Some(64000), Some(0.5));
-    chrome.set_activity(Some("Ctrl+C 停止".into()));
-    let line = rendered(&chrome, 120, "plan · test-model · 50.0%/128k · cache 50%").await;
-    assert!(line.trim_start().starts_with("Ctrl+C 停止"));
+    let line = rendered_with_activity(
+        &chrome,
+        120,
+        Some("Working 3s"),
+        "plan · test-model · 50.0%/128k · cache 50%",
+    )
+    .await;
+    assert!(line.trim_start().starts_with("Working 3s"));
     let narrow = rendered(&chrome, 50, "plan · test-model").await;
     assert!(!narrow.contains("cache"));
     assert!(visible_width(&narrow) <= 50);

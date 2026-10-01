@@ -18,8 +18,6 @@ pub(super) struct ReplChrome {
     pub(super) directory: String,
     /// 当前轮累计缓存命中率，轮次进行中才有值
     pub(super) cache_hit_ratio: Option<f32>,
-    /// 底栏左侧附加活动提示，如 `Ctrl+C 停止`
-    pub(super) activity: Option<String>,
     pub(super) status_plugin: Option<crate::plugins::TuiStatusRenderer>,
 }
 
@@ -68,7 +66,6 @@ impl ReplChrome {
             thinking,
             directory,
             cache_hit_ratio: None,
-            activity: None,
             status_plugin: Some(crate::plugins::TuiStatusRenderer::start(
                 config.clone(),
                 paths.clone(),
@@ -82,17 +79,6 @@ impl ReplChrome {
     /// - `mode`: 新模式
     pub(super) fn set_mode(&mut self, mode: AgentMode) {
         self.mode = mode;
-    }
-
-    /// 写入底栏活动提示。
-    ///
-    /// 参数:
-    /// - `activity`: 如停止快捷键提示；空则清除
-    ///
-    /// 返回:
-    /// - 无
-    pub(super) fn set_activity(&mut self, activity: Option<String>) {
-        self.activity = activity;
     }
 
     /// 左侧上下文占用文案。
