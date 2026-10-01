@@ -17,8 +17,8 @@ LONG_COMMAND = " && \\\n".join(f"echo STEP-{index}" for index in range(12))
 class CommandModel:
     """按用户问题依次调用 run_command 或后台命令，工具结束后回复一行文本。"""
 
-    def __init__(self):
-        """创建本地模型替身；无参数，返回无。"""
+    def __init__(self, background_command="sleep 300"):
+        """创建本地模型替身；background_command 为后台测试命令，返回无。"""
 
         class Handler(BaseHTTPRequestHandler):
             """按最后一条用户消息与已有工具结果决定下一步。"""
@@ -37,7 +37,7 @@ class CommandModel:
                     call = {"name": "run_command", "arguments": json.dumps({"command": LONG_COMMAND})}
                 elif tag and tag[-1] == "BG" and not tool_done:
                     call = {"name": "background_command", "arguments": json.dumps({
-                        "action": "start", "command": "sleep 300", "label": "fixture-sleep"})}
+                        "action": "start", "command": background_command, "label": "fixture-sleep"})}
                 else:
                     call = None
                 # 每轮工具调用使用不同 ID，重复 ID 会被请求投影拒绝
@@ -151,10 +151,20 @@ class FullscreenPartsTests(unittest.TestCase):
 
     def test_exit_with_background_command_asks_and_stops_it(self):
         """有后台命令时退出弹出选择；选择全部停止后进程结束；返回无。"""
-        with CommandModel() as model, TerminalSession(model.config(), columns=100, rows=30) as terminal:
+        self.assert_background_command_stops("sleep 300")
+
+    def test_exit_waits_for_delayed_background_command_start(self):
+        """模拟登录 shell 延迟启动，退出确认仍应终止实际后台进程；返回无。"""
+        self.assert_background_command_stops("sleep 2; sleep 300")
+
+    def assert_background_command_stops(self, command):
+        """command 为后台测试命令；等待实际启动后验证退出确认与终止，返回无。"""
+        with CommandModel(command) as model, TerminalSession(model.config(), columns=100, rows=30) as terminal:
             terminal.send(b"BG\r")
             terminal.wait_for(lambda: "FINISHED" in terminal.text(), timeout=20)
-            pids = sleep_pids()
+            # 1. 【终端回归】【进程就绪】任务登记先于 shell 执行，不以模型回复作为进程启动信号
+            terminal.wait_for(lambda: bool(sleep_pids(terminal.root)), timeout=10)
+            pids = sleep_pids(terminal.root)
             self.assertTrue(pids, "后台 sleep 应已启动")
             terminal.send(b"/exit\r")
             terminal.wait_for(lambda: "fixture-sleep" in terminal.text()
@@ -168,15 +178,17 @@ class FullscreenPartsTests(unittest.TestCase):
             self.assertFalse(any(alive(pid) for pid in pids), "选择全部停止后后台命令应结束")
 
 
-def sleep_pids():
-    """返回本测试启动的 sleep 300 进程号列表；无参数。"""
+def sleep_pids(root):
+    """root 为独立测试工作目录；返回该目录下的 sleep 300 进程，排除其他会话。"""
     found = []
     for entry in os.listdir("/proc"):
         if not entry.isdigit():
             continue
         try:
             with open(f"/proc/{entry}/cmdline", "rb") as handle:
-                if handle.read().split(b"\0")[:2] == [b"sleep", b"300"]:
+                args = handle.read().split(b"\0")
+                if (len(args) >= 2 and os.path.basename(args[0]) == b"sleep" and args[1] == b"300"
+                        and os.readlink(f"/proc/{entry}/cwd") == os.fspath(root)):
                     found.append(int(entry))
         except OSError:
             continue
