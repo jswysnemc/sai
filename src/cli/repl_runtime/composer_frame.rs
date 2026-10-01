@@ -165,7 +165,19 @@ impl ComposerFrame {
     fn top_lines(&self, cols: usize) -> Vec<String> {
         let mut lines = self.panel_lines.clone();
         if self.shortcuts_open && self.input.is_empty() {
-            lines.extend(shortcut_sheet::render_shortcut_sheet(cols, self.paste_key));
+            // 面板可用行数：终端行数减去输入框其余部分，保留一行给上方的正文
+            let rows = usize::from(super::viewport::TerminalSize::current().rows);
+            let others = self.panel_lines.len()
+                + usize::from(CHROME_INPUT_PAD_ROWS + CHROME_INPUT_INNER_PAD_ROWS * 2)
+                + 1
+                + 1
+                + usize::from(KEY_HINT_ROWS);
+            let max_rows = rows.saturating_sub(others + 1);
+            lines.extend(shortcut_sheet::render_shortcut_sheet(
+                cols,
+                max_rows,
+                self.paste_key,
+            ));
         }
         lines
     }

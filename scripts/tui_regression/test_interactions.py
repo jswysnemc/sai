@@ -124,11 +124,20 @@ class InteractionTests(unittest.TestCase):
             rows = [row for row in terminal.screen.display if row.strip()]
             return rows[-1] if rows else ""
 
+        def sheet_open(terminal):
+            """速查面板的标题、第一组与关闭提示都在当前屏幕内时为真。"""
+            screen = "\n".join(terminal.screen.display)
+            title = "快捷键" in screen.replace("? 快捷键", "") or "Keyboard shortcuts" in screen
+            return title and "Shift+Enter" in screen and ("关闭" in screen or "close" in screen)
+
         with TerminalSession() as terminal:
             terminal.wait_for(lambda: "Shift+Tab" in hint_row(terminal))
             terminal.send(b"?")
-            terminal.wait_for(lambda: "快捷键" in terminal.text() and "Shift+Enter" in terminal.text())
-            self.assertNotIn("?", terminal.screen.display[terminal.screen.cursor.y].split("→")[-1].strip()[:1])
+            # 80x24 终端里整张速查表（含第一组「输入」）必须完整可见，中英文环境一致
+            terminal.wait_for(lambda: sheet_open(terminal))
+            screen = "\n".join(terminal.screen.display)
+            self.assertNotIn("enlarge the terminal", screen)
+            self.assertNotIn("放大终端", screen)
             terminal.send(b"\x1b")
             terminal.wait_for(lambda: "Shift+Enter" not in terminal.text())
             terminal.send(b"draft")

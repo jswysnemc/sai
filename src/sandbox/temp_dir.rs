@@ -76,7 +76,7 @@ fn remove_stale_dirs(root: &Path) {
         else {
             continue;
         };
-        if pid != std::process::id() && !process_alive(pid) {
+        if pid != std::process::id() && !crate::runner::process_liveness::process_exists(pid) {
             // symlink_metadata 保证不会顺着符号链接删除目录外内容
             if entry
                 .path()
@@ -86,21 +86,6 @@ fn remove_stale_dirs(root: &Path) {
                 let _ = std::fs::remove_dir_all(entry.path());
             }
         }
-    }
-}
-
-/// 判断进程是否仍在运行。
-fn process_alive(pid: u32) -> bool {
-    #[cfg(unix)]
-    {
-        // SAFETY: 信号 0 只做存在性检查，不会投递信号
-        let result = unsafe { libc::kill(pid as libc::pid_t, 0) };
-        result == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = pid;
-        true
     }
 }
 

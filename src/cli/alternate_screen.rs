@@ -5,9 +5,9 @@
 //! sai 退出后 shell 仍收到 `CSI 99;5u` 这类转义序列，Ctrl+C、Ctrl+L 全部失效。
 //! 所有切屏都经过这里：离开当前屏前把本进程压入的层数弹掉，到达新屏后再压回去。
 
-use crossterm::event::{KeyboardEnhancementFlags, PushKeyboardEnhancementFlags};
+use crossterm::event::KeyboardEnhancementFlags;
+use crossterm::queue;
 use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
-use crossterm::{queue, Command};
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -18,20 +18,20 @@ static PUSHED: AtomicUsize = AtomicUsize::new(0);
 pub(super) const ENHANCEMENT_FLAGS: KeyboardEnhancementFlags =
     KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES;
 
-/// 弹出指定层数的键盘增强协议序列（`CSI < n u`）。
-struct PopLayers(usize);
+/// 返回压入一层键盘增强协议的序列（`CSI > flags u`）。
+///
+/// 直接写 ANSI 字节而不走 crossterm 命令：crossterm 在 Windows 上会把这条命令
+/// 派发到旧式控制台 API 并报 Unsupported；协议本身只在支持它的终端里启用。
+fn push_sequence() -> String {
+    format!("\x1b[>{}u", ENHANCEMENT_FLAGS.bits())
+}
 
-impl Command for PopLayers {
-    fn write_ansi(&self, f: &mut impl std::fmt::Write) -> std::fmt::Result {
-        if self.0 > 0 {
-            write!(f, "\x1b[<{}u", self.0)?;
-        }
-        Ok(())
-    }
-
-    #[cfg(windows)]
-    fn execute_winapi(&self) -> io::Result<()> {
-        Ok(())
+/// 返回弹出指定层数的序列（`CSI < n u`）；层数为零时为空。
+fn pop_sequence(layers: usize) -> String {
+    if layers == 0 {
+        String::new()
+    } else {
+        format!("\x1b[<{layers}u")
     }
 }
 
@@ -43,7 +43,7 @@ impl Command for PopLayers {
 /// 返回:
 /// - 写出结果
 pub(super) fn push_enhancement<W: Write>(writer: &mut W) -> io::Result<()> {
-    queue!(writer, PushKeyboardEnhancementFlags(ENHANCEMENT_FLAGS))?;
+    writer.write_all(push_sequence().as_bytes())?;
     writer.flush()?;
     PUSHED.fetch_add(1, Ordering::SeqCst);
     Ok(())
@@ -58,10 +58,12 @@ pub(super) fn push_enhancement<W: Write>(writer: &mut W) -> io::Result<()> {
 /// - 写出结果
 pub(super) fn pop_enhancement<W: Write>(writer: &mut W) -> io::Result<()> {
     let popped = PUSHED
-        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |value| value.checked_sub(1))
+        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |value| {
+            value.checked_sub(1)
+        })
         .is_ok();
     if popped {
-        queue!(writer, PopLayers(1))?;
+        writer.write_all(pop_sequence(1).as_bytes())?;
         writer.flush()?;
     }
     Ok(())
@@ -79,16 +81,39 @@ fn switch_screen<W: Write>(writer: &mut W, enter: bool) -> io::Result<()> {
     // 备用屏界面（配置、会话选择等）可能不经过输入守卫，这里同样装好信号恢复
     super::terminal_signals::install();
     let layers = PUSHED.load(Ordering::SeqCst);
-    queue!(writer, PopLayers(layers))?;
-    if enter {
-        queue!(writer, EnterAlternateScreen)?;
-    } else {
-        queue!(writer, LeaveAlternateScreen)?;
-    }
+    writer.write_all(pop_sequence(layers).as_bytes())?;
+    write_screen_switch(writer, enter)?;
     for _ in 0..layers {
-        queue!(writer, PushKeyboardEnhancementFlags(ENHANCEMENT_FLAGS))?;
+        writer.write_all(push_sequence().as_bytes())?;
     }
     writer.flush()
+}
+
+/// 写出切屏命令。
+///
+/// 测试里直接写 ANSI：Windows CI 没有附着控制台，crossterm 会改走旧式控制台 API 并失败；
+/// 运行时仍交给 crossterm，旧式 Windows 控制台照常用其 API 切换缓冲区。
+///
+/// 参数:
+/// - `writer`: 终端输出
+/// - `enter`: true 进入备用屏
+///
+/// 返回:
+/// - 写出结果
+fn write_screen_switch<W: Write>(writer: &mut W, enter: bool) -> io::Result<()> {
+    if cfg!(test) {
+        let sequence: &[u8] = if enter {
+            b"\x1b[?1049h"
+        } else {
+            b"\x1b[?1049l"
+        };
+        return writer.write_all(sequence);
+    }
+    if enter {
+        queue!(writer, EnterAlternateScreen)
+    } else {
+        queue!(writer, LeaveAlternateScreen)
+    }
 }
 
 /// 进入备用屏，键盘增强层随之迁移。
@@ -124,7 +149,7 @@ pub(crate) fn leave_alternate_screen<W: Write>(writer: &mut W) -> io::Result<()>
 /// - 写出结果
 pub(super) fn pop_all_enhancement<W: Write>(writer: &mut W) -> io::Result<()> {
     let layers = PUSHED.swap(0, Ordering::SeqCst);
-    queue!(writer, PopLayers(layers))?;
+    writer.write_all(pop_sequence(layers).as_bytes())?;
     writer.flush()
 }
 
@@ -135,12 +160,7 @@ pub(super) fn pop_all_enhancement<W: Write>(writer: &mut W) -> io::Result<()> {
 /// 返回:
 /// - `CSI < n u`；没有压栈时为空
 pub(super) fn take_pop_all_sequence() -> String {
-    let layers = PUSHED.swap(0, Ordering::SeqCst);
-    if layers == 0 {
-        String::new()
-    } else {
-        format!("\x1b[<{layers}u")
-    }
+    pop_sequence(PUSHED.swap(0, Ordering::SeqCst))
 }
 
 #[cfg(test)]

@@ -8,7 +8,7 @@ mod continuation;
 mod control_runner;
 mod events;
 mod ownership;
-mod process_liveness;
+pub(crate) mod process_liveness;
 mod session_actor;
 mod session_presence;
 mod session_runner;

@@ -1,7 +1,7 @@
 /// 【会话在线】【进程查询】通过操作系统接口判断进程是否仍存活，不启动外部命令。
 /// @param pid 待查询的进程标识
 /// @returns 进程存活或因权限无法确认时返回 true，已退出或标识无效时返回 false
-pub(super) fn process_exists(pid: u32) -> bool {
+pub(crate) fn process_exists(pid: u32) -> bool {
     if pid == 0 {
         return false;
     }

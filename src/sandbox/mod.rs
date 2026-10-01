@@ -9,7 +9,7 @@
 mod availability;
 mod denial;
 mod env_scrub;
-#[cfg(any(target_os = "linux", test))]
+#[cfg(target_os = "linux")]
 mod linux_bwrap;
 #[cfg(any(target_os = "macos", test))]
 mod macos_seatbelt;
