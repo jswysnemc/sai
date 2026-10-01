@@ -272,7 +272,7 @@ where
                 }
             }
         }
-        "response.completed" | "response.incomplete" => {
+        "response.completed" => {
             if let Some(next_usage) = event.response.and_then(|response| response.usage) {
                 *usage = Some(next_usage.into_usage());
             }
@@ -292,7 +292,7 @@ where
             )?;
             return Ok(true);
         }
-        "error" | "response.failed" => {
+        "error" | "response.failed" | "response.incomplete" => {
             bail!(
                 "OpenAI Responses stream failed: {}",
                 clean_plain_text(data.to_string())

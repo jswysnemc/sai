@@ -159,13 +159,15 @@ impl OpenAiCompatibleClient {
                 }
             }
         }
+        let mut completed = false;
         for data in buffer.finish()? {
             if let Some(debug) = debug.as_mut() {
                 debug.append_stream_line(&format!("data: {data}"));
                 debug.append_stream_line("");
             }
-            let _ = handle_anthropic_sse_data(&data, &mut state, &mut *on_event)?;
+            completed |= handle_anthropic_sse_data(&data, &mut state, &mut *on_event)?;
         }
+        require_completion("Anthropic Messages", completed)?;
         let result = finalize_stream_result(
             state.content,
             state.reasoning,

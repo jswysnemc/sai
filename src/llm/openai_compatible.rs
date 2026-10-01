@@ -1,5 +1,11 @@
 mod anthropic_transport;
 mod provider_routing;
+mod stream_completion;
+
+use stream_completion::require_completion;
+
+#[cfg(test)]
+mod tests_transport_lifecycle;
 
 include!("openai_compatible/client.rs");
 include!("openai_compatible/client_anthropic.rs");

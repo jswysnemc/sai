@@ -75,6 +75,7 @@ impl OpenAiCompatibleClient {
         }
         let client = Client::builder()
             .connect_timeout(Duration::from_secs(provider.timeout_seconds.clamp(5, 30)))
+            .read_timeout(Duration::from_secs(provider.timeout_seconds.max(1)))
             .build()?;
         let api_key = provider.resolved_api_key(paths)?;
         // 仅在负载均衡开启且确有多密钥时建立候选池，单密钥场景不引入额外开销
@@ -348,11 +349,12 @@ impl OpenAiCompatibleClient {
                 }
             }
         }
+        let mut completed = false;
         for line in buffer.finish()? {
             if let Some(debug) = debug.as_mut() {
                 debug.append_stream_line(&line);
             }
-            let _ = handle_sse_line(
+            completed |= handle_sse_line(
                 &line,
                 StreamBuffers {
                     content: &mut content,
@@ -364,11 +366,11 @@ impl OpenAiCompatibleClient {
                 &mut tool_calls,
                 &mut finish_reason,
                 &mut on_event,
-            )?;
+            )?.unwrap_or(false);
         }
         // 部分 OpenAI 兼容上游（含 OpenCode）正常收尾时只给 usage，
         // 既不发 [DONE] 也不带 finish_reason。有用量即可视为完整结束。
-        if !openai_stream_completed(finish_reason.as_deref(), usage.as_ref()) {
+        if !completed && !openai_stream_completed(finish_reason.as_deref(), usage.as_ref()) {
             if let Some(debug) = debug.as_ref() {
                 let _ =
                     debug.finish_error(0, "stream ended without [DONE], finish_reason or usage");
@@ -491,28 +493,9 @@ impl OpenAiCompatibleClient {
         let mut content_started = false;
         let mut tool_calls = ResponsesToolAccumulator::default();
         let mut stream = response.bytes_stream();
-        // Codex / 部分网关在正文结束后可能不发 response.completed 且保持连接；
-        // 正文已开始后，空闲超过阈值则按已收到内容收尾，避免前端永久 thinking。
-        let idle_limit = responses_stream_idle_timeout(self.provider.timeout_seconds);
-        loop {
-            let next = tokio::time::timeout(idle_limit, stream.next()).await;
-            let chunk = match next {
-                Ok(Some(chunk)) => chunk?,
-                Ok(None) => break,
-                Err(_) if content_started || !content.is_empty() || !reasoning.is_empty() => {
-                    // 已有输出且长时间无新字节：按成功结束处理
-                    break;
-                }
-                Err(_) => {
-                    bail!(
-                        "{}",
-                        t(
-                            "responses stream idle timeout before any output",
-                            "Responses 流在输出前空闲超时"
-                        )
-                    );
-                }
-            };
+        // 【模型接口】【读取超时】客户端按字节读取设置空闲截止，超时不能转成成功
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk?;
             for line in buffer.push(&chunk)? {
                 if let Some(debug) = debug.as_mut() {
                     debug.append_stream_line(&line);
@@ -539,11 +522,12 @@ impl OpenAiCompatibleClient {
                 }
             }
         }
+        let mut completed = false;
         for line in buffer.finish()? {
             if let Some(debug) = debug.as_mut() {
                 debug.append_stream_line(&line);
             }
-            let _ = handle_responses_sse_line(
+            completed |= handle_responses_sse_line(
                 &line,
                 StreamBuffers {
                     content: &mut content,
@@ -565,6 +549,7 @@ impl OpenAiCompatibleClient {
             &mut reasoning_emitted,
             &mut *on_event,
         )?;
+        require_completion("OpenAI Responses", completed)?;
         let result = finalize_stream_result(content, reasoning, usage, tool_calls.finish())?;
         if let Some(debug) = debug.as_ref() {
             let _ = debug.finish_ok(&result);
