@@ -136,6 +136,16 @@ export function toolDisplaySummary(
     return text(locale, "page", "页面");
   }
 
+  if (name.startsWith("browser_")) {
+    const url = stringField(args, "url");
+    if (url) return compactText(url.replace(/^https?:\/\//, ""));
+    for (const field of ["key", "option", "text", "selector", "ref", "action", "direction"] as const) {
+      const value = stringField(args, field);
+      if (value) return compactText(value);
+    }
+    return "";
+  }
+
   // 通用字段：路径优先，复杂 pattern 再做人话处理
   const path = stringField(args, "path");
   if (path && !isComplexPattern(path)) return displayPath(path, workspacePath);

@@ -19,6 +19,7 @@ mod pdf;
 mod request;
 mod text;
 
+pub(super) use image::image_output;
 use request::ReadRequest;
 
 /// 注册 read_file 工具。

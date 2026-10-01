@@ -3,6 +3,7 @@ mod app_state;
 mod assets;
 mod auth;
 mod bind_address;
+mod browser;
 mod error;
 pub(crate) mod password;
 // 会话事件总线（src/runner/session_actor.rs）需要复用 Web 事件与事件日志类型

@@ -1,4 +1,4 @@
-import { Activity, Bot, FileCode2, GitCompareArrows, MessageSquarePlus, Server, SquareTerminal } from "../../shared/ui/icons";
+import { Activity, Bot, FileCode2, GitCompareArrows, Globe, MessageSquarePlus, Server, SquareTerminal } from "../../shared/ui/icons";
 import type { PaneTab } from "./workspace-tab";
 
 /**
@@ -29,6 +29,7 @@ export const WORKSPACE_PANEL_OPTIONS: WorkspacePanelOption[] = [
   { type: "ssh", labelEn: "SSH terminal", labelZh: "SSH 终端", icon: Server },
   { type: "tasks", labelEn: "Background tasks", labelZh: "后台任务", icon: Activity },
   { type: "subagents", labelEn: "Subagents", labelZh: "子智能体", icon: Bot },
+  { type: "browser", labelEn: "Browser", labelZh: "浏览器", icon: Globe },
   { type: "side-chat", labelEn: "Side conversation", labelZh: "旁路对话", icon: MessageSquarePlus }
 ];
 

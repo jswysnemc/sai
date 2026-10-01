@@ -39,7 +39,7 @@ export function ToolIcon({ name, backgroundTask = false }: { name: string; backg
   if (name === "request_capability") return <DiamondCheck size={size} />;
   if (name === "todo") return <ListTodo size={size} />;
   if (name === "trash_path" || name.includes("delete")) return <Trash2 size={size} />;
-  if (name.includes("web") || name.includes("search")) return <Globe size={size} />;
+  if (name.startsWith("browser_") || name.includes("web") || name.includes("search")) return <Globe size={size} />;
   if (name.includes("skill") || name.includes("agent")) return <Sparkles size={size} />;
   if (name === "load" || name.includes("file")) return <FileCode2 size={size} />;
   return <Wrench size={size} />;

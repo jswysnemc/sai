@@ -1,4 +1,4 @@
-import { Activity, Bot, ChevronLeft, FileCode2, GitCompareArrows, Maximize2, MessageSquarePlus, Minimize2, PanelRightClose, Plus, SquareTerminal, X } from "../../shared/ui/icons";
+import { Activity, Bot, ChevronLeft, FileCode2, GitCompareArrows, Globe, Maximize2, MessageSquarePlus, Minimize2, PanelRightClose, Plus, SquareTerminal, X } from "../../shared/ui/icons";
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { Button } from "../../shared/ui/button/button";
 import { ContextActionMenu } from "../../shared/ui/menu/context-action-menu";
@@ -200,6 +200,7 @@ function TabIcon({ type, path }: { type: PaneTab; path?: string }) {
   if (type === "terminal") return <SquareTerminal size={14} aria-hidden />;
   if (type === "tasks") return <Activity size={14} aria-hidden />;
   if (type === "subagents") return <Bot size={14} aria-hidden />;
+  if (type === "browser") return <Globe size={14} aria-hidden />;
   if (type === "side-chat") return <MessageSquarePlus size={14} aria-hidden />;
   if (path) return <FileTypeIcon name={path} size={14} />;
   return <FileCode2 size={14} aria-hidden />;

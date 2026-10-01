@@ -25,6 +25,7 @@ const BackgroundTasksPanel = lazy(() => import("../background-tasks/background-t
 const SubagentWorkspace = lazy(() => import("../subagents/subagent-workspace").then((module) => ({ default: module.SubagentWorkspace })));
 const TargetedDiffPane = lazy(() => import("./targeted-diff-pane").then((module) => ({ default: module.TargetedDiffPane })));
 const SourceControlPane = lazy(() => import("../source-control/source-control-pane").then((module) => ({ default: module.SourceControlPane })));
+const BrowserPane = lazy(() => import("../browser/browser-pane").then((module) => ({ default: module.BrowserPane })));
 const SideConversationPane = lazy(() => import("../side-conversation/side-conversation-pane").then((module) => ({ default: module.SideConversationPane })));
 
 type WorkspacePaneProps = {
@@ -426,6 +427,7 @@ export function WorkspacePane({
             )}
             {activeTab?.type === "tasks" && <BackgroundTasksPanel />}
             {activeTab?.type === "subagents" && <SubagentWorkspace />}
+            {activeTab?.type === "browser" && <BrowserPane />}
             {tabs.filter((tab) => tab.type === "side-chat" && tab.sideConversation).map((tab) => (
               <div
                 className="workspace-side-chat-host"

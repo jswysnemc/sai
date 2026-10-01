@@ -69,7 +69,12 @@ where
 /// 【Web】【资源回收】同时终止本进程运行与浏览器终端。
 /// 参数: runs 为运行管理器，terminals 为终端管理器；返回无
 pub(super) async fn cleanup(runs: RunManager, terminals: TerminalManager) {
-    let (runs, terminals) = tokio::join!(runs.shutdown(), terminals.shutdown());
+    // 内置浏览器与运行、终端并行关闭，避免浏览器进程在服务退出后残留
+    let (runs, terminals, _) = tokio::join!(
+        runs.shutdown(),
+        terminals.shutdown(),
+        crate::browser::shutdown()
+    );
     for result in [runs, terminals] {
         if let Err(error) = result {
             server_logging::write("资源清理失败", &format!("{error:#}"), true);

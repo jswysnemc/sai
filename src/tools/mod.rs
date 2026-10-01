@@ -1,4 +1,5 @@
 mod ask_question;
+pub(crate) mod browser;
 mod calculator;
 mod catalog;
 pub(crate) mod command;
@@ -94,6 +95,17 @@ pub fn readable_tool_name(name: &str) -> &str {
         "check_os_info" => "查看系统信息",
         "web_search" => "网页搜索",
         "web_fetch" => "读取网页",
+        "browser_navigate" => "浏览器导航",
+        "browser_tabs" => "浏览器标签页",
+        "browser_wait" => "浏览器等待",
+        "browser_snapshot" => "页面快照",
+        "browser_screenshot" => "页面截图",
+        "browser_click" => "浏览器点击",
+        "browser_type" => "浏览器输入",
+        "browser_select_option" => "浏览器选择",
+        "browser_press_key" => "浏览器按键",
+        "browser_scroll" => "浏览器滚动",
+        "browser_evaluate" => "页面脚本",
         "fcitx5_input_method_wiki_qurey" => "查询 Fcitx5 Wiki",
         "search_web_images" => "搜索图片",
         "print_image" => "显示图片",
@@ -214,6 +226,8 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     command::register(&mut registry, config, paths, true);
     default_tools::register(&mut registry);
     web_search::register(&mut registry, &config.plugins.web);
+    // 内置浏览器：进程级共享会话，Web 工作台浏览器面板展示同一页面
+    browser::register(&mut registry);
     image_generation::register(&mut registry, config, paths);
     trash_path::register(&mut registry);
     configurable_cli_tools::register(&mut registry, config);

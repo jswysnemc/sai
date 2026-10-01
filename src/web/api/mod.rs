@@ -2,6 +2,7 @@ mod agent_options;
 mod agents;
 mod background_tasks;
 mod background_work;
+mod browser;
 mod config;
 mod cron_jobs;
 mod engine_connection;
@@ -95,6 +96,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         .merge(system::routes())
         .merge(usage_stats::routes())
         .merge(terminal::routes())
+        .merge(browser::routes())
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::require_auth,

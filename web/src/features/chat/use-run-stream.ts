@@ -9,6 +9,7 @@ import { text } from "../i18n/locale";
 import { createReplyNotifier } from "../../shared/notify/reply-notification";
 import { initialSessionRunsState, sessionRunsReducer, type HistoryTurnKey, type SessionRunsAction, type SessionRunsState } from "./session-runs-reducer";
 import { createSessionRunScope } from "./session-run-scope";
+import { revealBrowserPanelForEvent } from "../browser/browser-panel-reveal";
 export { applyEventsToSessionRuns, sessionRunsReducer, upsertRunFromEvent, updateQueuedRunState } from "./session-runs-reducer";
 export type { HistoryTurnKey } from "./session-runs-reducer";
 
@@ -259,6 +260,7 @@ export function useRunStream(
         enqueueEvent(event);
         // 2. 【会话同步】【补发副作用】历史事件不恢复旧草稿，也不逐条重取会话列表
         if (event.replayed) return;
+        revealBrowserPanelForEvent(event);
         if (event.type === "workspace.changed") onWorkspaceChanged?.();
         if (event.type === "compaction.finished" && event.payload.applied === true) {
           void Promise.all([

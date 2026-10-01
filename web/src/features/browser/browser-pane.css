@@ -1,0 +1,276 @@
+/*
+ * 内置浏览器面板
+ *
+ * 画面是本面板的核心，标签条与工具栏压缩为两条紧凑横栏；
+ * Agent 操作、连接状态与错误以浮动胶囊叠在画面左上角，不占用布局空间。
+ */
+.browser-pane {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  height: 100%;
+  min-width: 0;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.browser-tab-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3xs);
+  min-width: 0;
+  padding: var(--space-2xs) var(--space-sm) 0;
+  overflow-x: auto;
+  background: var(--paper-deep);
+  scrollbar-width: none;
+}
+
+.browser-tab {
+  display: flex;
+  align-items: center;
+  flex: 0 1 11rem;
+  min-width: 5rem;
+  height: 1.75rem;
+  border-radius: var(--radius-2) var(--radius-2) 0 0;
+  color: var(--ink-soft);
+}
+
+.browser-tab.active {
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.browser-tab-title {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 var(--space-sm);
+  overflow: hidden;
+  border: 0;
+  color: inherit;
+  font-size: var(--text-xs);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  cursor: pointer;
+}
+
+.browser-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 1.25rem;
+  height: 1.25rem;
+  margin-right: var(--space-2xs);
+  border: 0;
+  border-radius: var(--radius-1);
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.browser-tab-close:hover,
+.browser-tab-close:focus-visible {
+  background: var(--surface-soft);
+  opacity: 1;
+}
+
+.browser-tab-new {
+  flex: 0 0 auto;
+}
+
+.browser-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3xs);
+  min-width: 0;
+  padding: var(--space-2xs) var(--space-sm);
+  border-bottom: 1px solid var(--line);
+}
+
+.browser-address {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  margin-left: var(--space-2xs);
+}
+
+.browser-address-icon {
+  position: absolute;
+  left: var(--space-sm);
+  color: var(--ink-soft);
+  pointer-events: none;
+}
+
+.browser-address input {
+  width: 100%;
+  height: 1.875rem;
+  padding-left: 1.75rem;
+  font-size: var(--text-sm);
+}
+
+.browser-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.browser-progress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 30%;
+  border-radius: var(--radius-pill);
+  background: var(--signal);
+  animation: browser-progress 1.2s ease-in-out infinite;
+}
+
+@keyframes browser-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(400%); }
+}
+
+.browser-stage {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--paper-deep);
+}
+
+.browser-viewport {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.browser-viewport.focused {
+  box-shadow: inset 0 0 0 1px var(--signal);
+}
+
+.browser-canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  background: #fff;
+  cursor: default;
+}
+
+.browser-viewport-placeholder {
+  position: absolute;
+  top: 40%;
+  left: 0;
+  right: 0;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  text-align: center;
+  pointer-events: none;
+}
+
+/* 视觉隐藏但保留焦点能力，承接键盘、输入法与粘贴 */
+.browser-key-sink {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  resize: none;
+  pointer-events: none;
+}
+
+.browser-overlay {
+  position: absolute;
+  top: var(--space-sm);
+  left: var(--space-sm);
+  right: var(--space-sm);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+  pointer-events: none;
+}
+
+.browser-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  max-width: 100%;
+  padding: var(--space-3xs) var(--space-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--ink);
+  font-size: var(--text-xs);
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 10%, transparent);
+}
+
+.browser-chip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-chip-agent {
+  border-color: color-mix(in srgb, var(--signal) 40%, var(--line));
+  background: color-mix(in srgb, var(--signal-soft) 92%, transparent);
+}
+
+.browser-chip-error {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
+  pointer-events: auto;
+}
+
+.browser-chip-error button {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.browser-pane-failed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-4xl) var(--space-2xl);
+  text-align: center;
+}
+
+.browser-pane-failed strong {
+  font-size: var(--text-sm);
+}
+
+.browser-pane-failed p {
+  max-width: 28rem;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  word-break: break-word;
+}
+
+@media (max-width: 48rem) {
+  .browser-tab {
+    flex-basis: 8rem;
+  }
+
+  .browser-address input {
+    font-size: 1rem;
+  }
+}

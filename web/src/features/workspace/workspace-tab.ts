@@ -1,6 +1,6 @@
 import type { SideConversationRequest } from "../side-conversation/side-conversation-events";
 
-export type PaneTab = "files" | "diff" | "terminal" | "tasks" | "subagents" | "side-chat";
+export type PaneTab = "files" | "diff" | "terminal" | "tasks" | "subagents" | "side-chat" | "browser";
 
 export type WorkspacePanelTab = {
   id: string;
@@ -79,7 +79,8 @@ export function createWorkspacePanelTab(
     diff: "Diff",
     tasks: text(locale, "Background tasks", "后台任务"),
     subagents: text(locale, "Subagents", "子智能体"),
-    "side-chat": text(locale, "Side conversation", "旁路对话")
+    "side-chat": text(locale, "Side conversation", "旁路对话"),
+    browser: text(locale, "Browser", "浏览器")
   };
   return {
     id: `${type}:${crypto.randomUUID()}`,
@@ -102,7 +103,8 @@ export function paneTabLabel(type: PaneTab, locale: Locale = "zh-CN"): string {
     terminal: text(locale, "Terminal", "终端"),
     tasks: text(locale, "Background tasks", "后台任务"),
     subagents: text(locale, "Subagents", "子智能体"),
-    "side-chat": text(locale, "Side conversation", "旁路对话")
+    "side-chat": text(locale, "Side conversation", "旁路对话"),
+    browser: text(locale, "Browser", "浏览器")
   }[type];
 }
 import { text, type Locale } from "../i18n/locale";

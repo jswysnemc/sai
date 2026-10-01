@@ -108,6 +108,7 @@ pub(crate) fn group_for_tool(name: &str) -> &'static str {
         "set_alarm" | "list_alarms" | "cancel_alarm" => "personal",
         "ssh_list_hosts" | "ssh_run_command" | "ssh_upload_file" | "ssh_download_file" => "ssh",
         "mcp_manager" => "mcp",
+        _ if crate::tools::browser::BROWSER_TOOL_NAMES.contains(&name) => "browser",
         "session_probe" | "agent_probe" | "mesh_send" => "mesh",
         _ if name.starts_with("mcp_") => "mcp",
         _ if name.starts_with("lua__") => "plugins",
@@ -251,6 +252,15 @@ pub(crate) fn group_meta(group: &str) -> ToolGroupMeta {
             hint_en: "",
             hint_zh: "",
             model_description: "Personal-assistant tools such as alarms",
+            settings_path: None,
+        },
+        "browser" => ToolGroupMeta {
+            rank: 14,
+            label_en: "Browser",
+            label_zh: "内置浏览器",
+            hint_en: "Agent drives a local Chromium-based browser over CDP. Open the Browser panel in the Web workbench to watch the same page and take over at any time.",
+            hint_zh: "Agent 通过 CDP 驱动本机 Chromium 系浏览器。在 Web 工作台打开「浏览器」面板即可实时查看同一页面并随时接手操作。",
+            model_description: "Built-in browser: open pages, read them as an accessibility tree with element refs, click, type, select, press keys, scroll, take screenshots, manage tabs and run page scripts. The user sees the same page live.",
             settings_path: None,
         },
         "mcp" => ToolGroupMeta {

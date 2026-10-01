@@ -34,9 +34,18 @@ pub(super) fn read_image(path: &Path) -> Result<ToolOutput> {
     if bytes.is_empty() {
         bail!("Image file is empty: {}", path.display())
     }
-    let processed = process_image(&bytes, max_output_tokens())?;
-    let source = path.display().to_string();
-    let note = image_metadata_text(&source, &processed, bytes.len() as u64);
+    image_output(&bytes, &path.display().to_string())
+}
+
+/// 【图片附件】【结果构造】把内存中的图片压缩到 token 预算内，生成带模型附件的工具结果。
+///
+/// 截图等不落盘的图片与本地图片读取共用同一套缩放与说明规则。
+///
+/// @param bytes 为图片字节；source 为来源说明，写入附件元信息
+/// @returns 文本只含元信息、图片放在附件中的工具结果
+pub(crate) fn image_output(bytes: &[u8], source: &str) -> Result<ToolOutput> {
+    let processed = process_image(bytes, max_output_tokens())?;
+    let note = image_metadata_text(source, &processed, bytes.len() as u64);
     let attachment = ToolModelAttachment::new(processed.data_url(), source, note.clone());
     Ok(ToolOutput::text(note).with_model_attachments([attachment]))
 }
