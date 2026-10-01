@@ -41,7 +41,7 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 
 ### 配置 TUI
 
-运行 `sai config`（REPL 内也可进入）打开终端配置界面。主菜单按使用频率分层：激活配置、供应商和模型、Agent、工具、Skills、高级设置。
+运行 `sai config`（REPL 内也可进入）打开终端配置界面。主菜单按使用频率分层：激活配置、供应商和模型、Agent 配置、工具、Skills、高级设置、Jev 与生图模型。
 
 ![配置 TUI 主菜单](pics/config.png)
 

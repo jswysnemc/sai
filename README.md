@@ -39,7 +39,7 @@ Streaming REPL chat, built-in tool replies, the config TUI, plus the web workben
 
 ### Config TUI
 
-Run `sai config` (also reachable from the REPL) for the terminal configurator. The main menu is layered by frequency: active configuration, providers and models, Agent, tools, Skills, advanced settings.
+Run `sai config` (also reachable from the REPL) for the terminal configurator. The main menu is layered by frequency: active configuration, providers and models, agent configuration, tools, skills, advanced settings, and Jev & image models.
 
 ![Config TUI main menu](pics/config.png)
 
