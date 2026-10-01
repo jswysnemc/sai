@@ -131,6 +131,7 @@ impl Agent {
             extra_system_prompt: extra_system_prompt.map(str::to_string),
             anchor_bootstrap_system_prompt,
             context_char_budget,
+            context_token_cache: Default::default(),
             tools_enabled,
             tools,
             tool_visibility,

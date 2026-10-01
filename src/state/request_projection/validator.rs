@@ -77,7 +77,7 @@ fn is_blocking_tool_pairing_warning(message: &str) -> bool {
 ///
 /// 返回:
 /// - 工具配对警告列表
-fn validate_tool_pairing(messages: &[ChatMessage]) -> Vec<ProjectionWarning> {
+pub(super) fn validate_tool_pairing(messages: &[ChatMessage]) -> Vec<ProjectionWarning> {
     let mut warnings = Vec::new();
     let mut calls = HashMap::new();
     let mut duplicate_calls = HashSet::new();

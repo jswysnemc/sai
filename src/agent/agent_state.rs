@@ -19,8 +19,9 @@ pub struct Agent {
     pub(super) extra_system_prompt: Option<String>,
     /// DeepSeek 锚定首轮使用的不含指令摘要与技能目录的系统提示。
     pub(super) anchor_bootstrap_system_prompt: Option<String>,
-    /// 上下文窗口 Token 数经保守换算得到的字符预算
+    /// 当前模型上下文窗口，单位为 token；字段名保留兼容现有调用
     pub(super) context_char_budget: usize,
+    pub(super) context_token_cache: crate::state::MessageTokenCache,
     pub(super) tools_enabled: bool,
     pub(super) tools: ToolRegistry,
     pub(super) tool_visibility: ToolVisibility,

@@ -68,7 +68,7 @@ pub fn occupancy_tokens(messages: &[ChatMessage], last_usage: Option<&Usage>) ->
 ///
 /// 返回:
 /// - 该消息的估算 token
-fn estimate_message_tokens(message: &ChatMessage) -> usize {
+pub(super) fn estimate_message_tokens(message: &ChatMessage) -> usize {
     let mut tokens = MESSAGE_OVERHEAD_TOKENS;
     tokens += token_estimate::estimate_tokens(&message.role);
     tokens += estimate_content_tokens(message.content.as_ref());
@@ -110,7 +110,7 @@ fn estimate_content_tokens(content: Option<&ChatContent>) -> usize {
 
 /// 估算尚未被上次 API usage 计入的尾部消息。
 ///
-/// 从末尾收集连续的 tool 结果；若最后一条是新的 user，则只计这一条。
+/// 从末尾收集 tool 结果与 user 附件、提醒，直到最近一条 assistant。
 /// 轮次开头对应新用户输入，工具轮次对应刚返回的 tool 结果。
 ///
 /// 参数:
@@ -122,11 +122,7 @@ fn estimate_unsent_tail(messages: &[ChatMessage]) -> usize {
     let mut tail = Vec::new();
     for message in messages.iter().rev() {
         match message.role.as_str() {
-            "tool" => tail.push(message),
-            "user" => {
-                tail.push(message);
-                break;
-            }
+            "tool" | "user" => tail.push(message),
             _ => break,
         }
     }

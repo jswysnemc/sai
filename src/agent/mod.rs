@@ -66,7 +66,7 @@ use crate::paths::SaiPaths;
 use crate::perf_trace::PerfTrace;
 use crate::state::request_projection::{
     project_provider_base_context_projection, project_provider_turn_from_base_projection,
-    project_provider_turn_from_messages, DynamicContextSource, ProjectedBaseContext,
+    DynamicContextSource, ProjectedBaseContext,
 };
 use crate::state::StateStore;
 use crate::tools::{self, ToolPermission, ToolRegistry};

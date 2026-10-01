@@ -3,7 +3,7 @@ use super::{Agent, AgentEvent};
 use crate::llm::{ChatMessage, OpenAiCompatibleClient};
 use crate::perf_trace::PerfTrace;
 use crate::state::request_projection::{
-    estimate_projected_request_chars, project_provider_turn_from_messages,
+    project_provider_turn_from_messages,
 };
 use crate::state::{
     classify_context_pressure_with, CompactionBudgetPolicy, ContextPressure, FailureKind,
@@ -32,49 +32,41 @@ impl Agent {
         messages: &[ChatMessage],
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<bool> {
-        let mut projection =
-            project_provider_turn_from_messages(messages, 0, self.context_char_budget);
         if !self.state.should_attempt_auto_compaction()? {
             return Ok(false);
         }
-        // 1. 有 API prompt_tokens 时用上次用量加尚未发出的尾部消息
-        // 2. 未回报时对当前消息做图片友好的全量预估
-        let last_usage = self
-            .state
-            .usage_snapshot()
-            .ok()
+        // 【上下文预算】【按需投影】1. 优先使用供应商占用，低压力时不复制和重新分词整份历史
+        let last_usage = self.state.usage_snapshot().ok()
             .and_then(|snapshot| snapshot.last_conversation_usage);
-        let occupancy = occupancy_tokens(messages, last_usage.as_ref());
-        projection.estimate.message_chars = occupancy;
-        projection.estimate.context_ratio =
-            context_ratio(occupancy, projection.estimate.context_limit_chars);
-        let context_chars = estimate_projected_request_chars(&projection);
-        let context_limit_chars = projection.estimate.context_limit_chars;
+        let occupancy = match last_usage.as_ref().filter(|usage| usage.prompt_tokens > 0) {
+            Some(usage) => occupancy_tokens(messages, Some(usage)),
+            None => self.context_token_cache.count(messages),
+        };
         let policy = self.compaction_budget_policy();
-        let maintained =
-            match classify_context_pressure_with(context_chars, context_limit_chars, policy) {
-                ContextPressure::Relaxed => return Ok(false),
-                ContextPressure::SnipStale => {
-                    // 1. 免费档：只裁剪，不触发摘要压缩
-                    let stats = self
-                        .state
-                        .maintain_stale_tool_results(ToolResultMaintenanceMode::Snip)?;
-                    return Ok(stats.rewritten > 0);
-                }
-                ContextPressure::Compact => {
-                    // 2. 压缩档：先折叠陈旧结果，省够空间就跳过付费摘要
-                    let stats = self
-                        .state
-                        .maintain_stale_tool_results(ToolResultMaintenanceMode::Prune)?;
-                    if stats.rewritten > 0
-                        && context_chars.saturating_sub(stats.saved_chars)
-                            < policy.trigger_chars(context_limit_chars)
-                    {
-                        return Ok(true);
-                    }
-                    stats.rewritten > 0
-                }
-            };
+        match classify_context_pressure_with(occupancy, self.context_char_budget, policy) {
+            ContextPressure::Relaxed => return Ok(false),
+            ContextPressure::SnipStale => {
+                return Ok(self.state.maintain_stale_tool_results(ToolResultMaintenanceMode::Snip)?.rewritten > 0);
+            }
+            ContextPressure::Compact => {}
+        }
+        // 【上下文预算】【结果替换】2. 只扣除当前请求中实际替换结果的 token 差值
+        let stats = self.state.maintain_stale_tool_results(ToolResultMaintenanceMode::Prune)?;
+        let maintained = stats.rewritten > 0;
+        let refreshed = if maintained {
+            Some(self.state.refresh_tool_context(messages, occupancy)?)
+        } else {
+            None
+        };
+        let current_tokens = refreshed.as_ref().map_or(occupancy, |context| context.token_count);
+        if maintained && current_tokens < policy.trigger_chars(self.context_char_budget) {
+            return Ok(true);
+        }
+        // 【上下文预算】【按需投影】3. 确实需要摘要压缩时才构造完整投影
+        let current_messages = refreshed.as_ref().map_or(messages, |context| context.messages.as_slice());
+        let mut projection = project_provider_turn_from_messages(current_messages, 0, self.context_char_budget);
+        projection.estimate.message_chars = current_tokens;
+        projection.estimate.context_ratio = context_ratio(current_tokens, self.context_char_budget);
         let Some(request) =
             self.state
                 .select_compaction_for_projection_with(&projection, false, policy)?

@@ -10,6 +10,7 @@ mod model;
 mod projection;
 mod repository;
 mod result_reader;
+mod refresh;
 
 pub(in crate::state) use budget::build_budgeted_summary_history_with_running;
 pub(in crate::state) use legacy_reports::{

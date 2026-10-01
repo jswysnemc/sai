@@ -9,6 +9,8 @@ mod selector;
 mod storage;
 mod store;
 mod validation;
+mod token_cache;
+pub(crate) use token_cache::MessageTokenCache;
 
 #[allow(unused_imports)]
 pub use budget::RESERVED_CONTEXT_CHARS;

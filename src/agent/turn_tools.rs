@@ -92,13 +92,8 @@ impl Agent {
             let was_anchor_bootstrap = self.tool_visibility.is_anchor_bootstrap();
             perf.mark(&format!("round {tool_round} tool definitions"));
             let ordered_messages = system_messages_first(messages.clone());
-            let projection = project_provider_turn_from_messages(
-                &ordered_messages,
-                definitions.len(),
-                self.context_char_budget,
-            );
             self.state
-                .enforce_provider_projection(Some(turn_id), &projection)?;
+                .enforce_provider_messages(Some(turn_id), &ordered_messages, self.context_char_budget)?;
             perf.mark(&format!("round {tool_round} provider projection"));
             let mut result = match self
                 .request_model_round(
