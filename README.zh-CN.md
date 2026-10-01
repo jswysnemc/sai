@@ -278,7 +278,7 @@ docker run --rm -it \
 
 ### 1. 初始化
 
-首次运行会自动进入初始化向导,生成配置目录与默认文件:
+首次运行会自动生成配置目录与默认文件，也可以显式初始化：
 
 ```bash
 sai init
@@ -292,7 +292,9 @@ sai
 
 ### 2. 配置供应商
 
-编辑配置文件(Linux `~/.config/sai/config.jsonc`,macOS `~/Library/Application Support/sai/config.jsonc`,Windows `%APPDATA%\sai\config.jsonc`):
+全新安装后，首次进入 `sai` 交互会话或登录 `sai web` 工作台时，会自动显示供应商配置引导。选择供应商、填写 API 地址与密钥，再指定默认模型；也可以确认使用无需密钥的内置免费供应商 opencode Zen。任一端保存后，两端都会记录配置完成。取消终端引导会退出本次启动，下次仍可继续配置；旧版已有配置保持正常启动。
+
+也可以编辑配置文件（Linux `~/.config/sai/config.jsonc`、macOS `~/Library/Application Support/sai/config.jsonc`、Windows `%APPDATA%\sai\config.jsonc`）：
 
 ```jsonc
 {

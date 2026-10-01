@@ -20,6 +20,9 @@ mod model_endpoints;
 mod model_metadata;
 mod model_thinking;
 mod model_units;
+pub(crate) mod onboarding;
+#[cfg(test)]
+mod onboarding_tests;
 mod paths;
 mod permission;
 mod prompt_sections;

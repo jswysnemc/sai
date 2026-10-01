@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { ErrorBoundary } from "../shared/ui/error-boundary/error-boundary";
 import { LoadingPanel } from "../shared/ui/loading-panel";
 import { appViewKey } from "./app-view-key";
+import { ProviderSetupGate } from "../features/onboarding/provider-setup-gate";
 import "./app-shell.css";
 
 /**
@@ -26,7 +27,7 @@ export function AppShell() {
         <div className="app-view" key={appViewKey(location.pathname)}>
           <ErrorBoundary>
             <Suspense fallback={<LoadingPanel />}>
-              <Outlet />
+              <ProviderSetupGate><Outlet /></ProviderSetupGate>
             </Suspense>
           </ErrorBoundary>
         </div>

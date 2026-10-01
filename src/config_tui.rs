@@ -12,6 +12,7 @@ pub(crate) mod layout;
 mod model_endpoints;
 mod model_metadata_form;
 mod multi_select;
+mod onboarding;
 mod plugin_fields;
 mod plugins;
 mod provider_fetch;
@@ -27,3 +28,4 @@ pub(crate) mod ui;
 mod web_search_fields;
 
 pub use session::run;
+pub(crate) use onboarding::ensure_provider_setup;

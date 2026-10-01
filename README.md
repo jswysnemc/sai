@@ -276,7 +276,7 @@ On `main` / `v*` tags, the **Docker** workflow builds and pushes `ghcr.io/<owner
 
 ### 1. Initialize
 
-The first run auto-launches the init wizard to generate the config directory and default files:
+The first run creates the config directory and default files automatically. You can also initialize them explicitly:
 
 ```bash
 sai init
@@ -290,7 +290,9 @@ sai
 
 ### 2. Configure a provider
 
-Edit the config file (Linux `~/.config/sai/config.jsonc`, macOS `~/Library/Application Support/sai/config.jsonc`, Windows `%APPDATA%\sai\config.jsonc`):
+On a new installation, the first interactive `sai` session or authenticated `sai web` visit opens provider setup. Choose a provider, enter its API address and key, and set the default model. You can also confirm the built-in free opencode Zen provider without a key. Saving completes setup for both interfaces; cancelling the terminal wizard leaves setup pending. Existing configurations from earlier versions continue to open normally.
+
+You can also edit the config file (Linux `~/.config/sai/config.jsonc`, macOS `~/Library/Application Support/sai/config.jsonc`, Windows `%APPDATA%\sai\config.jsonc`):
 
 ```jsonc
 {

@@ -192,6 +192,8 @@ export type GitConfig = {
 };
 
 export type AppConfig = {
+  /** 首次供应商引导状态；旧服务未返回时保持兼容 */
+  provider_setup_complete?: boolean;
   active_provider: string;
   providers: ProviderConfig[];
   model_endpoints?: ModelEndpointConfig[];

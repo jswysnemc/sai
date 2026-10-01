@@ -18,6 +18,7 @@ mod mcp_config;
 mod memory;
 mod model_endpoint_draft;
 mod notifications;
+mod onboarding;
 mod permissions;
 mod prompts;
 mod providers;
@@ -59,6 +60,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
     let protected = Router::new()
         .merge(workspaces::routes())
         .merge(config::routes())
+        .merge(onboarding::routes())
         .merge(notifications::routes())
         .merge(engine_connection::routes())
         .merge(input_history::routes())

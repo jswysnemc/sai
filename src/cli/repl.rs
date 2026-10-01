@@ -42,6 +42,9 @@ pub(super) async fn run_repl(
     mut thinking_override: Option<String>,
 ) -> Result<()> {
     AppConfig::init_files(paths)?;
+    if !crate::config_tui::ensure_provider_setup(paths)? {
+        return Ok(());
+    }
     let mut config = crate::config::apply_agent_override(
         AppConfig::load_or_default(paths)?,
         None,

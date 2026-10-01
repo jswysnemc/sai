@@ -24,6 +24,17 @@ pub fn run(paths: &SaiPaths) -> Result<()> {
     TerminalSession::start()?.run(paths, config)
 }
 
+/// 【首次配置】【终端会话】在统一终端守卫内运行首次供应商表单，退出时恢复屏幕和输入法。
+/// @param paths 为应用路径；config 为当前配置
+/// @returns 用户完成配置时为 true；取消时为 false
+pub(super) fn run_provider_setup(paths: &SaiPaths, config: &AppConfig) -> Result<bool> {
+    let mut terminal = TerminalSession::start()?;
+    match super::onboarding::run(&mut terminal.stdout, paths, config) {
+        Err(error) if error.downcast_ref::<Interrupted>().is_some() => Ok(false),
+        result => result,
+    }
+}
+
 struct TerminalSession {
     stdout: io::Stdout,
     _ime: super::ime::ImeGuard,

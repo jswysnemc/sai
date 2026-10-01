@@ -9,6 +9,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
+    /// 首次供应商引导是否完成；旧版配置缺少此字段时视为已完成
+    #[serde(default = "default_true")]
+    pub provider_setup_complete: bool,
     pub active_provider: String,
     pub providers: Vec<ProviderConfig>,
     /// 专用模型独立接入，不参与普通 LLM 选择或运行

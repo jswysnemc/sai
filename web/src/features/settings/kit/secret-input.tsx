@@ -14,6 +14,8 @@ type SkSecretInputProps = {
   placeholder?: string;
   disabled?: boolean;
   ariaLabel?: string;
+  /** 首次配置需要直接输入时可关闭编辑确认；设置页默认保持开启 */
+  requireExplicitEdit?: boolean;
 };
 
 /**
@@ -32,7 +34,8 @@ export function SkSecretInput({
   onReveal,
   placeholder,
   disabled,
-  ariaLabel
+  ariaLabel,
+  requireExplicitEdit = true
 }: SkSecretInputProps) {
   const { t } = useI18n();
   const field = useFieldContext();
@@ -40,7 +43,7 @@ export function SkSecretInput({
   return (
     <div className="sk-secret">
       <PasswordField
-        requireExplicitEdit
+        requireExplicitEdit={requireExplicitEdit}
         id={field?.controlId}
         ariaLabel={ariaLabel ?? field?.labelText}
         value={saved ? "" : value}
