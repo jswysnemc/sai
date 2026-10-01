@@ -20,6 +20,7 @@ pub(crate) fn load_redacted(paths: &SaiPaths) -> Result<Value> {
         object.remove("mcp");
     }
     redact_value(&mut value, None);
+    super::provider_identity::annotate_sources(&mut value);
     Ok(value)
 }
 
@@ -88,6 +89,7 @@ pub(crate) fn save(paths: &SaiPaths, mut submitted: Value) -> Result<Value> {
         object.remove("mcp");
     }
     let current = serde_json::to_value(AppConfig::load_or_default(paths)?)?;
+    super::provider_identity::restore_sources(&mut submitted, &current)?;
     merge_secret_sentinels(&mut submitted, &current);
     ensure_secret_sentinels_resolved(&submitted)?;
     let mut config: AppConfig =

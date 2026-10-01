@@ -42,6 +42,7 @@ def seed(origin):
         for suffix in ["a", "b"]
     ]
     config["active_provider"] = "fixture-a"
+    config["provider_setup_complete"] = True
     request(origin, "/api/config", "PUT", config)
 
 
@@ -114,8 +115,8 @@ def verify(origin, session):
             "clear_and_reenter": True, "mobile_no_overflow": True}
 
 
-def main():
-    """启动隔离服务并清理进程；无参数，结果输出为 JSON，断言失败返回非零状态。"""
+def main(verify_case=verify):
+    """启动隔离服务并清理进程；verify_case 为浏览器验证函数，失败返回非零状态。"""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, default=Path("target/debug/sai"))
     parser.add_argument("--output", type=Path)
@@ -150,7 +151,7 @@ def main():
                         if process.poll() is not None or time.monotonic() >= deadline:
                             raise RuntimeError("隔离服务启动失败") from None
                         time.sleep(0.1)
-                result = verify(origin, session)
+                result = verify_case(origin, session)
                 if args.output:
                     args.output.write_text(json.dumps(result, indent=2) + "\n")
                 print(json.dumps(result))

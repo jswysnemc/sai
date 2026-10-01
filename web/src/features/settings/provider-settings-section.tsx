@@ -186,7 +186,7 @@ export function ProviderSettingsSection({
     }
     setIdError("");
     setIdFollowsName(providerIdFollowsName(trimmed, provider.display_name));
-    // 先更新选中项再改写配置，避免中间渲染里选中项指向已不存在的 ID
+    // 【设置】【供应商标识】选中项与配置同步更新，URL 由选择 Hook 随后同步
     setSelectedId(trimmed);
     onProviderChange(selectedIndex, { id: trimmed });
   };
@@ -386,7 +386,7 @@ export function ProviderSettingsSection({
   const revealProviderApiKey = async (keyId: string): Promise<string> => {
     setSecretError(null);
     try {
-      const response = await api.config.providerSecret(provider.id, provider.api_keys?.length ? keyId : undefined);
+      const response = await api.config.providerSecret(provider.original_id ?? provider.id, provider.api_keys?.length ? keyId : undefined);
       return response.api_key;
     } catch (error) {
       setSecretError(toDisplayError(error, "Failed to reveal API key", "读取 API Key 失败"));

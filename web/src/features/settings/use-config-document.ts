@@ -10,6 +10,8 @@ type ConfigDocumentOptions<Config, Response> = {
   extract: (response: Response) => Config;
   /** 保存配置文档 */
   save: (config: Config) => Promise<Response>;
+  /** 保存期间继续编辑时，仅同步服务端生成的对象身份，保留本地字段 */
+  rebase?: (draft: Config, submitted: Config, saved: Config) => Config;
   /** 保存成功后的附加副作用（缓存失效等） */
   onSaved?: (response: Response, queryClient: QueryClient) => Promise<void> | void;
 };
@@ -28,6 +30,7 @@ export function useConfigDocument<Config, Response>({
   load,
   save,
   extract,
+  rebase,
   onSaved
 }: ConfigDocumentOptions<Config, Response>) {
   const queryClient = useQueryClient();
@@ -51,6 +54,8 @@ export function useConfigDocument<Config, Response>({
       if (revision.current === submission.revision) {
         setDraft(extract(saved));
         setDirty(false);
+      } else if (rebase) {
+        setDraft(current => current === null ? null : rebase(current, submission.config, extract(saved)));
       }
       queryClient.setQueryData(queryKey, saved);
       await onSaved?.(saved, queryClient);

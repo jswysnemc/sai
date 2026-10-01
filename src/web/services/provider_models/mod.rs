@@ -6,8 +6,7 @@ mod reasoning_field;
 mod response;
 mod transport_error;
 
-use super::config_service::SECRET_SENTINEL;
-use crate::config::{AppConfig, ProviderConfig};
+use crate::config::ProviderConfig;
 use crate::paths::SaiPaths;
 use anyhow::{bail, Result};
 use serde::Serialize;
@@ -17,55 +16,6 @@ use std::time::Duration;
 use catalog::{fetch_litellm_catalog, fetch_models_dev_catalog, fetch_openrouter_catalog};
 use response::parse_models_response;
 use transport_error::describe_transport_error;
-
-/// 使用当前配置补齐脱敏凭据。
-///
-/// 参数:
-/// - `paths`: Sai 路径集合
-/// - `provider`: 浏览器提交的供应商配置
-///
-/// 返回:
-/// - 可用于模型请求的供应商配置
-pub(crate) fn restore_provider_secret(
-    paths: &SaiPaths,
-    mut provider: ProviderConfig,
-) -> Result<ProviderConfig> {
-    let current = AppConfig::load_or_default(paths)?;
-    let current_provider = current
-        .providers
-        .into_iter()
-        .find(|item| item.id == provider.id);
-    // 1. 单密钥哨兵回填
-    if provider.api_key.as_deref() == Some(SECRET_SENTINEL) {
-        provider.api_key = current_provider
-            .as_ref()
-            .and_then(|item| item.api_key.clone());
-    }
-    // 2. 多密钥哨兵按稳定 id 回填，避免删除或重排后串用密钥
-    if provider
-        .api_keys
-        .iter()
-        .any(|key| key.api_key == SECRET_SENTINEL)
-    {
-        let current_keys = current_provider
-            .as_ref()
-            .map(|item| &item.api_keys)
-            .cloned()
-            .unwrap_or_default();
-        let current_by_id: std::collections::HashMap<&str, &str> = current_keys
-            .iter()
-            .map(|key| (key.id.as_str(), key.api_key.as_str()))
-            .collect();
-        for key in &mut provider.api_keys {
-            if key.api_key == SECRET_SENTINEL {
-                if let Some(real) = current_by_id.get(key.id.as_str()) {
-                    key.api_key = (*real).to_string();
-                }
-            }
-        }
-    }
-    Ok(provider)
-}
 
 /// 供应商模型接口返回结果。
 #[derive(Debug)]

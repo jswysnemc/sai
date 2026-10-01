@@ -13,6 +13,8 @@ export type ModelEndpointApiKey = ProviderApiKey;
 
 export type ProviderConfig = {
   id: string;
+  /** 服务端已保存的 ID；仅用于草稿改名期间匹配凭据，不写入配置文件 */
+  original_id?: string;
   display_name: string;
   base_url: string;
   /** 是否启用；停用后不出现在模型列表，也不能被解析为当前供应商 */

@@ -1,7 +1,7 @@
 use super::super::app_state::WebAppState;
 use super::super::error::{WebError, WebResult};
+use super::super::services::provider_identity::ProviderDraft;
 use super::super::services::provider_models;
-use crate::config::ProviderConfig;
 use axum::extract::State;
 use axum::routing::post;
 use axum::{Json, Router};
@@ -18,7 +18,7 @@ enum ProviderProbeMode {
 
 #[derive(Deserialize)]
 struct FetchModelsRequest {
-    provider: ProviderConfig,
+    provider: ProviderDraft,
 }
 
 #[derive(Serialize)]
@@ -39,7 +39,7 @@ pub(super) fn routes() -> Router<WebAppState> {
 
 #[derive(Deserialize)]
 struct TestProviderRequest {
-    provider: ProviderConfig,
+    provider: ProviderDraft,
     #[serde(default)]
     model: Option<String>,
     #[serde(default)]
@@ -58,7 +58,9 @@ async fn test_provider(
     State(state): State<WebAppState>,
     Json(request): Json<TestProviderRequest>,
 ) -> WebResult<Json<crate::web::services::provider_probe::ProviderProbeReport>> {
-    let provider = provider_models::restore_provider_secret(&state.paths, request.provider)
+    let provider = request
+        .provider
+        .restore(&state.paths)
         .map_err(WebError::from)?;
     let config = crate::config::AppConfig::load_or_default(&state.paths).unwrap_or_default();
     let report = match request.mode {
@@ -98,8 +100,7 @@ async fn fetch_models(
     Json(request): Json<FetchModelsRequest>,
 ) -> WebResult<Json<FetchModelsResponse>> {
     let paths = state.paths.clone();
-    let provider = provider_models::restore_provider_secret(&paths, request.provider)
-        .map_err(WebError::from)?;
+    let provider = request.provider.restore(&paths).map_err(WebError::from)?;
     let result = tokio::task::spawn_blocking(move || {
         let mut result = provider_models::fetch_models(&paths, &provider)?;
         provider_models::enrich_catalog_metadata(&mut result);

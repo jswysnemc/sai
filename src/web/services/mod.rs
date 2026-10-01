@@ -8,6 +8,9 @@ mod context_runtime;
 mod model_endpoint_config_tests;
 pub(super) mod prompt_service;
 pub(crate) mod provider_models;
+pub(crate) mod provider_identity;
+#[cfg(test)]
+mod provider_identity_tests;
 pub(super) mod provider_probe;
 pub(crate) mod weixin_login;
 

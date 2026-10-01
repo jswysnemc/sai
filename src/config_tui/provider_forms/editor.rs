@@ -10,6 +10,9 @@ pub(crate) fn edit_provider_form(
     new_provider: bool,
 ) -> Result<Option<ProviderConfig>> {
     let mut selected = 0;
+    let has_models = !provider.models.is_empty() || !provider.default_model.trim().is_empty();
+    let mut imported_connection =
+        (!new_provider && has_models).then(|| model_import::connection_key(&provider));
     loop {
         let labels = [
             t("Connection", "连接设置"),
@@ -28,7 +31,7 @@ pub(crate) fn edit_provider_form(
             t("Manage a single key or a key pool. Values stay masked; environment references are supported.", "管理单密钥或密钥池，默认隐藏密钥，支持环境变量引用。").into(),
             t("Timeout, reasoning, request body and headers.", "超时、思考参数、自定义请求体与请求头。").into(),
             t("Fetch the catalog using this draft. Esc leaves the test; local models remain available on failure.", "使用当前草稿获取模型目录。Esc 返回，失败时仍可手动配置模型。").into(),
-            t("Apply this draft. Save and exit config to write it to disk.", "确认此草稿；在配置主菜单保存退出后写入磁盘。").into(),
+            t("Import models when the connection changes, then apply this draft. Save and exit config to write it to disk.", "接入变更后自动导入模型并确认草稿；在配置主菜单保存退出后写入磁盘。").into(),
         ];
         draw_menu_with_details(
             stdout,
@@ -59,32 +62,21 @@ pub(crate) fn edit_provider_form(
                 }
                 2 => advanced::edit(stdout, &mut provider)?,
                 3 => {
-                    let draft = provider.clone();
-                    if let Some(result) = crate::config_tui::background::run(
-                        stdout,
-                        t(" MODEL CONNECTION TEST ", " 模型连接测试 "),
-                        move || super::super::provider_fetch::fetch_models(&draft),
-                    )? {
-                        match result {
-                            Ok(result) => {
-                                for model in result.models {
-                                    if !provider.models.contains(&model) {
-                                        provider.models.push(model);
-                                    }
-                                }
-                                message(
-                                    stdout,
-                                    t(
-                                        "Connection succeeded; models imported",
-                                        "连接成功，已导入模型",
-                                    ),
-                                )?;
-                            }
-                            Err(error) => message(stdout, &error)?,
-                        }
+                    if model_import::refresh(stdout, &mut provider, true)? == Some(true) {
+                        imported_connection = Some(model_import::connection_key(&provider));
                     }
                 }
-                _ => return Ok(Some(provider)),
+                _ => {
+                    // 1. 【供应商配置】【保存刷新】接入变更后的目录必须进入 /model 使用的模型列表
+                    let key = model_import::connection_key(&provider);
+                    if provider.enabled
+                        && imported_connection.as_ref() != Some(&key)
+                        && model_import::refresh(stdout, &mut provider, false)?.is_none()
+                    {
+                        continue;
+                    }
+                    return Ok(Some(provider));
+                }
             },
             _ => {}
         }

@@ -2,7 +2,7 @@ import type { AppConfig, ProviderConfig } from "../../api/contracts";
 import { useState } from "react";
 import { parseSettingsJson } from "./advanced/settings-json";
 import { api } from "../../api/client";
-import { renameNewSessionProviderReference } from "../sessions/new-session-preferences";
+import { rebaseProviderSources, renameProviderReferences } from "./model/provider-identity";
 import { useConfigDocument } from "./use-config-document";
 import type { GatewayId, SettingsConfigController } from "./settings-types";
 
@@ -22,6 +22,7 @@ export function useSettingsConfig(): SettingsConfigController {
     load: api.config.load,
     extract: (response) => response.config,
     save: (config: AppConfig) => api.config.save(config),
+    rebase: rebaseProviderSources,
     onSaved: async (_, queryClient) => {
       // 内核查询在设置页通常未挂载；直接移除旧值，避免返回聊天页时闪现旧模型
       queryClient.removeQueries({ queryKey: ["engine-status"] });
@@ -68,11 +69,8 @@ export function useSettingsConfig(): SettingsConfigController {
     const providers = config.providers.map((provider, providerIndex) => (
       providerIndex === index ? { ...provider, ...patch } : provider
     ));
-    const activeProvider = patch.id && previousId === config.active_provider ? patch.id : config.active_provider;
-    const session = patch.id
-      ? renameNewSessionProviderReference(config.session, previousId, patch.id)
-      : config.session;
-    updateConfig({ ...config, active_provider: activeProvider, providers, session });
+    const next = { ...config, providers };
+    updateConfig(patch.id && previousId ? renameProviderReferences(next, previousId, patch.id) : next);
   };
 
   /**

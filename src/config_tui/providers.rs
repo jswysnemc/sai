@@ -211,6 +211,8 @@ impl<'a> ProviderBrowser<'a> {
         }
     }
 
+    /// 【供应商配置】【新增保存】保存供应商草稿；无模型时保留原激活项，返回交互结果。
+    /// 参数: stdout 为终端输出
     fn add_provider(&mut self, stdout: &mut io::Stdout) -> Result<()> {
         let mut draft = ProviderConfig::new_openai_compatible();
         draft.id = (1..)
@@ -230,7 +232,13 @@ impl<'a> ProviderBrowser<'a> {
                 )?;
                 return Ok(());
             }
+            let previous_active = self.config.active_provider.clone();
+            let has_model = !local_provider_models(&provider).is_empty();
             self.config.upsert_provider(provider);
+            // 1. 【供应商配置】【激活保护】目录失败或为空时允许稍后手动添加模型
+            if !has_model {
+                self.config.active_provider = previous_active;
+            }
             self.provider_idx = self.config.providers.len().saturating_sub(1);
             self.refresh_models();
         }

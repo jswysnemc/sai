@@ -3,6 +3,7 @@ mod connection;
 mod credentials;
 mod editor;
 pub(crate) mod keys;
+mod model_import;
 mod values;
 use crate::config::ProviderConfig;
 use crate::i18n::text as t;
