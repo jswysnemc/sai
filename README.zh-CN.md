@@ -240,8 +240,8 @@ sudo pacman -U ~/.cache/sai/packages/sai-<version>-1-x86_64.pkg.tar.zst
 - 各文件对应的 `.sha256` 校验和
 
 ```bash
-git tag v0.2.1
-git push origin v0.2.1
+git tag v0.2.2
+git push origin v0.2.2
 ```
 
 也可在 Actions 中手动运行 **Release** 工作流，并填写已有标签。
@@ -255,7 +255,7 @@ git push origin v0.2.1
 docker pull ghcr.io/jswysnemc/sai:latest
 
 # 指定版本
-docker pull ghcr.io/jswysnemc/sai:0.2.1
+docker pull ghcr.io/jswysnemc/sai:0.2.2
 ```
 
 本地构建：
