@@ -33,8 +33,6 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 
 终端 REPL 的流式对话、内置工具回执、配置 TUI，以及 Web 工作台的子代理与源代码管理。
 
-> 下列界面图为占位，正式截图稍后替换。
-
 ### 终端 REPL
 
 ![Sai REPL 问候与流式对话](pics/repl.png)
@@ -126,6 +124,7 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 
 - **多会话切换** - 会话列表、新建、重命名、删除、恢复
 - **实时对话** - 与 REPL 等价的流式渲染,支持图片粘贴
+- **内置浏览器** - 在聊天旁操作标签页与网页，将选中元素加入输入框，调整视口尺寸，处理上传、下载及页面对话框。`browser` 工具共用同一浏览器会话。运行 Sai 的机器需要安装 Chrome、Chromium 或 Edge，也可通过 `SAI_BROWSER_EXECUTABLE` 指定路径。登录状态保存在 Sai 独立用户目录；`SAI_BROWSER_PROFILE=temp` 使用临时目录。
 - **Monaco 编辑器** - 内置代码编辑,与本地文件联动
 - **xterm 终端** - 浏览器内完整终端,走平台 shell 抽象
 - **子代理面板** - 查看子代理运行状态与时间线
@@ -188,17 +187,17 @@ Web 工作台内置源代码管理面板，底层调用系统 `git`。支持变�
 
 ### 从源码构建
 
-需要 Rust stable、Node.js 22、npm。
+需要 Rust stable、Node.js 22、pnpm。
 
 ```bash
 # 1. 克隆仓库
 git clone https://github.com/jswysnemc/sai.git
-cd Sai
+cd sai
 
 # 2. 构建前端资源(Web 工作台)
 cd web
-npm ci
-npm run build
+pnpm install --frozen-lockfile
+pnpm build
 cd ..
 
 # 3. 构建 Sai 二进制
@@ -241,11 +240,11 @@ sudo pacman -U ~/.cache/sai/packages/sai-<version>-1-x86_64.pkg.tar.zst
 - 各文件对应的 `.sha256` 校验和
 
 ```bash
-git tag v0.2.2
-git push origin v0.2.2
+git tag v0.2.3
+git push origin v0.2.3
 ```
 
-也可在 Actions 中手动运行 **Release** 工作流，并填写已有标签。
+也可在 Actions 中手动运行 **Release** 工作流，并填写已有标签。功能变更和升级说明见 [v0.2.3 发布说明](docs/releases/v0.2.3.md)。
 
 ### Docker 镜像
 
@@ -256,7 +255,7 @@ git push origin v0.2.2
 docker pull ghcr.io/jswysnemc/sai:latest
 
 # 指定版本
-docker pull ghcr.io/jswysnemc/sai:0.2.2
+docker pull ghcr.io/jswysnemc/sai:0.2.3
 ```
 
 本地构建：
@@ -322,7 +321,9 @@ API Key 写入 `secrets.jsonc`(同目录),支持 `$env:VAR_NAME` 引用环境变
 }
 ```
 
-也可用 `sai config` 打开内置 TUI 配置器,或用 `sai web` 的设置中心图形化编辑。
+也可用 `sai config` 打开内置 TUI 配置器，或用 `sai web` 的设置中心编辑。
+
+TUI 新增供应商或修改接入后，保存时会自动导入模型；还需在主菜单完成**保存并退出**，同一会话中的 `/model` 才能读取新模型。Web 修改供应商名称或 ID 后会保持当前选中项、已保存密钥及配置引用。具体操作与导入失败处理见[供应商配置指南](docs/provider-configuration.zh-CN.md)。
 
 ### 3. 交互式 REPL
 
@@ -332,7 +333,7 @@ sai
 
 REPL 内支持多行输入、图片粘贴（`-c` 从剪贴板读图）、`!` 前缀执行 shell、`/` 前缀执行控制命令（如 `/sandbox` 查看沙盒状态）、模糊搜索历史、流式渲染推理与正文。空输入时按 `?` 打开双列快捷键速查面板，按 `?` 或 `Esc` 收起；有输入时按一次 `Esc` 提示再次按 `Esc` 清空输入；输入中状态行自适应显示换行（`Shift+Enter`）与发送提示。空闲时 `Ctrl+O` 打开全屏会话视图，支持整屏浏览、历史滚动、折叠展开、鼠标拖选复制与回到底部浮动按钮；流式期间只切换实时思考。工作状态留在 live tail（`Working` / `Thinking`，以及等待执行、写入或回复）。思考定稿后标题改为过去式 `Thought`。退出时自动恢复终端屏幕、键盘增强协议与光标状态。
 
-全屏会话视图支持使用方向键与 `PageUp` / `PageDown` 连续滚动浏览，按 `Alt+↑` / `Alt+↓` 跳转上一条或下一条消息，按 `Ctrl+Home` / `Ctrl+End`（或 `Ctrl+↓`）直达顶部与最新输出；支持点击折叠或展开消息与工具块，鼠标拖选文字自动复制到系统剪贴板。消息中的数学公式与图片在全屏视图中保持高清排版。
+全屏会话视图支持使用方向键与 `PageUp` / `PageDown` 连续滚动浏览，按 `Alt+↑` / `Alt+↓` 跳转上一条或下一条消息，按 `Ctrl+Home` / `Ctrl+End`（或 `Ctrl+↓`）直达顶部与最新输出；支持点击折叠或展开消息与工具块，鼠标拖选文字自动复制到系统剪贴板。消息中的数学公式与图片在全屏视图中保持高清排版。命令行与输出可以分别折叠，鼠标悬停时突出显示可展开区域。存在运行中的子代理或后台命令时，退出菜单提供停止任务后退出、保留后台命令退出或取消退出。
 
 在 `/model` 中按 `Tab` 打开子任务模型设置，可调整共享默认值或单个任务类型的模型与思考等级。Web 对话区的“子任务模型与思考”按钮使用同一配置；保存后对新启动的子任务生效。`/tree` 的“会话起点”允许创建并列的起始消息，也可直接输入 `/tree root` 返回起点，各分支独立保留上下文。
 
@@ -584,7 +585,7 @@ Sai fork 自 [Miyu](https://github.com/SHORiN-KiWATA/Miyu)。感谢上游作者 
 欢迎提交 Issue 与 Pull Request。提交前请确保:
 
 1. Rust 测试通过:`cargo test --locked`
-2. Web 前端构建与测试通过:`cd web && npm ci && npm run build && npm test`
+2. Web 前端构建与测试通过:`cd web && pnpm install --frozen-lockfile && pnpm build && pnpm test`
 3. 配置校验通过:`sai config validate`
 4. 提交信息遵循 Conventional Commits(`feat:` / `fix:` / `docs:` 等)
 

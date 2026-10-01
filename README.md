@@ -124,6 +124,7 @@ Run `sai web` and a browser opens a full remote programming workbench:
 
 - **Multi-session** - List, create, rename, delete, resume sessions
 - **Live chat** - Streaming render on par with the REPL, with image paste
+- **Built-in browser** - Operate tabs and pages alongside chat; share selected page elements with the composer, resize the viewport, and handle uploads, downloads and page dialogs. The `browser` tool uses the same browser session. Install Chrome, Chromium or Edge on the machine running Sai; set `SAI_BROWSER_EXECUTABLE` for a custom path. Login state uses a separate Sai browser profile; `SAI_BROWSER_PROFILE=temp` selects a temporary profile.
 - **Monaco editor** - In-browser code editing wired to local files
 - **xterm terminal** - Full terminal in the browser via the platform shell abstraction
 - **Subagent panel** - Inspect subagent status and timelines
@@ -186,17 +187,17 @@ Turns are stored as a tree and can fork from any message. Both the TUI and the w
 
 ### Build from source
 
-Requires Rust stable, Node.js 22, npm.
+Requires Rust stable, Node.js 22, pnpm.
 
 ```bash
 # 1. Clone
 git clone https://github.com/jswysnemc/sai.git
-cd Sai
+cd sai
 
 # 2. Build web assets (web workbench)
 cd web
-npm ci
-npm run build
+pnpm install --frozen-lockfile
+pnpm build
 cd ..
 
 # 3. Build the Sai binary
@@ -239,11 +240,11 @@ Pushing a `v*` tag runs the **Release** workflow and publishes assets on [Releas
 - matching `.sha256` checksums
 
 ```bash
-git tag v0.2.2
-git push origin v0.2.2
+git tag v0.2.3
+git push origin v0.2.3
 ```
 
-You can also run the **Release** workflow manually from Actions and supply an existing tag.
+You can also run the **Release** workflow manually from Actions and supply an existing tag. See the [v0.2.3 release notes](docs/releases/v0.2.3.md) for changes and upgrade details.
 
 ### Docker image
 
@@ -254,7 +255,7 @@ Images are published to GitHub Container Registry:
 docker pull ghcr.io/jswysnemc/sai:latest
 
 # version tag
-docker pull ghcr.io/jswysnemc/sai:0.2.2
+docker pull ghcr.io/jswysnemc/sai:0.2.3
 ```
 
 Build locally:
@@ -322,6 +323,8 @@ API keys go in `secrets.jsonc` (same dir), supporting `$env:VAR_NAME` references
 
 You can also run `sai config` for the built-in TUI configurator, or use the settings center in `sai web`.
 
+In TUI settings, saving a new provider or changed connection imports its models. Finish **Save and exit** in the main menu; `/model` then lists them in the same conversation. Web provider names and IDs can be edited without losing selection, saved keys or configuration references. See the [provider configuration guide](docs/provider-configuration.md) for exact steps and import-failure recovery.
+
 ### 3. Interactive REPL
 
 ```bash
@@ -330,7 +333,7 @@ sai
 
 The REPL supports multi-line input, image paste (`-c` reads from clipboard), `!` prefix for shell, `/` prefix for control commands (such as `/sandbox` to inspect backend status), fuzzy history search, and streaming render of reasoning and body text. Press `?` on empty input to open the two-column shortcut sheet (`?` or `Esc` closes); press `Esc` once with draft input to show the double-escape clear notice; hint rows adapt to show `Shift+Enter` for newlines and `Enter` to send. Idle `Ctrl+O` opens the fullscreen transcript view with scrollable history, folding, drag-to-copy, and a floating back-to-bottom button; while streaming it toggles live reasoning. Work status stays in the live tail (`Working` / `Thinking`, then waiting to run, write, or respond). Finalized reasoning uses the past-tense `Thought` label. Terminal raw mode, alternate screen, and keyboard enhancement layers safely restore on exit and termination signals.
 
-In the fullscreen transcript view, use arrow keys and `PageUp` / `PageDown` to scroll smoothly, `Alt+↑` / `Alt+↓` to jump between user messages, and `Ctrl+Home` / `Ctrl+End` (or `Ctrl+↓`) to reach the top or newest output. Click to fold or unfold blocks, and drag mouse across text to automatically copy via OSC 52. Math formulas and images render with inline fidelity throughout the fullscreen canvas.
+In the fullscreen transcript view, use arrow keys and `PageUp` / `PageDown` to scroll smoothly, `Alt+↑` / `Alt+↓` to jump between user messages, and `Ctrl+Home` / `Ctrl+End` (or `Ctrl+↓`) to reach the top or newest output. Click to fold or unfold blocks, and drag mouse across text to automatically copy via OSC 52. Math formulas and images render with inline fidelity throughout the fullscreen canvas. Command lines and their outputs fold independently, and hovering highlights expandable regions. Exiting with active subagents or background commands offers a choice to stop tasks, keep background commands, or stay in the session.
 
 Press `Tab` in `/model` to configure shared subagent defaults or override the model and thinking level for an individual task type. The Web chat's “Subagent models & thinking” button uses the same configuration; changes apply to newly started subagents. Select “Session start” in `/tree`, or use `/tree root`, to create another starting message. Each branch keeps its own conversation context.
 
@@ -583,7 +586,7 @@ Sai is a fork of [Miyu](https://github.com/SHORiN-KiWATA/Miyu). Thanks to upstre
 Issues and pull requests are welcome. Before submitting, ensure:
 
 1. Rust tests pass: `cargo test --locked`
-2. Web frontend builds and tests pass: `cd web && npm ci && npm run build && npm test`
+2. Web frontend builds and tests pass: `cd web && pnpm install --frozen-lockfile && pnpm build && pnpm test`
 3. Config validates: `sai config validate`
 4. Commit messages follow Conventional Commits (`feat:` / `fix:` / `docs:`)
 
