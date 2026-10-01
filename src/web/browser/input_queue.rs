@@ -70,14 +70,20 @@ fn merge(previous: &mut ClientMessage, next: &ClientMessage) -> bool {
             }
         }
         (
-            ClientMessage::Resize { width, height },
+            ClientMessage::Resize {
+                width,
+                height,
+                scale,
+            },
             ClientMessage::Resize {
                 width: next_width,
                 height: next_height,
+                scale: next_scale,
             },
         ) => {
             *width = *next_width;
             *height = *next_height;
+            *scale = *next_scale;
             true
         }
         _ => false,

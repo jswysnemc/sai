@@ -65,7 +65,7 @@ fn active_port_file_parses_into_websocket_url() {
 #[test]
 fn launch_args_bind_loopback_and_isolate_profile() {
     let profile = std::path::Path::new("/tmp/sai-browser-test");
-    let args = launch_args(profile, false);
+    let args = launch_args(profile, false, None);
     assert!(args.contains(&"--remote-debugging-address=127.0.0.1".to_string()));
     assert!(args.contains(&"--remote-debugging-port=0".to_string()));
     assert!(args.contains(&"--headless=new".to_string()));
@@ -73,7 +73,10 @@ fn launch_args_bind_loopback_and_isolate_profile() {
     assert!(args
         .iter()
         .any(|arg| arg == "--user-data-dir=/tmp/sai-browser-test"));
-    assert!(!launch_args(profile, true).contains(&"--headless=new".to_string()));
+    assert!(!launch_args(profile, true, None).contains(&"--headless=new".to_string()));
+    assert!(args.contains(&"--disable-blink-features=AutomationControlled".to_string()));
+    let spoofed = launch_args(profile, false, Some("Mozilla/5.0 Chrome/150"));
+    assert!(spoofed.contains(&"--user-agent=Mozilla/5.0 Chrome/150".to_string()));
 }
 
 /// 【内置浏览器测试】【组合键】修饰键累加、单字符与功能键都能解析。
@@ -125,7 +128,9 @@ async fn real_browser_round_trip_when_enabled() {
     let page = "data:text/html,<title>Sai</title><h1>Hello</h1>\
         <input id=q placeholder=Query><button onclick=\"document.title=document.getElementById('q').value\">Go</button>\
         <a href='/next'>Next</a>";
-    let session = super::BrowserSession::launch().await.unwrap();
+    let session = super::BrowserSession::launch_with(super::ProfileMode::Temporary)
+        .await
+        .unwrap();
     // data: 地址只在测试中直接导航，工具入口的地址策略会拦截
     session.navigate(page).await.unwrap();
     let snapshot = session.snapshot(20_000, false).await.unwrap();
@@ -198,4 +203,82 @@ fn find_ref(text: &str, prefix: &str) -> String {
     let start = line.find("[ref=").unwrap() + 5;
     let end = line[start..].find(']').unwrap() + start;
     line[start..end].to_string()
+}
+
+/// 【内置浏览器测试】【无头标识】只改写无头标识，普通 User-Agent 保持原样。
+#[test]
+fn headless_user_agent_is_rewritten_to_chrome() {
+    use super::profile::normal_user_agent;
+    assert_eq!(
+        normal_user_agent("Mozilla/5.0 (X11) HeadlessChrome/154.0.0.0 Safari/537.36").as_deref(),
+        Some("Mozilla/5.0 (X11) Chrome/154.0.0.0 Safari/537.36")
+    );
+    assert_eq!(normal_user_agent("Mozilla/5.0 Chrome/154.0.0.0"), None);
+}
+
+/// 【内置浏览器测试】【下载文件名】去掉路径与引号，防止写出目录外或注入响应头。
+#[test]
+fn download_file_names_are_sanitized() {
+    use super::downloads::sanitize_file_name;
+    assert_eq!(sanitize_file_name("../../etc/passwd"), "etcpasswd");
+    assert_eq!(sanitize_file_name("a\"b\r\n.zip"), "ab.zip");
+    assert_eq!(sanitize_file_name("  ..  "), "download");
+    assert_eq!(sanitize_file_name("报告 2026.pdf"), "报告 2026.pdf");
+}
+
+/// 【内置浏览器测试】【上传 ID】只接受本进程生成的 ID，拒绝路径穿越。
+#[tokio::test]
+async fn upload_ids_cannot_escape_the_upload_directory() {
+    let id = super::store_upload("a.txt", b"x").unwrap();
+    assert_eq!(id.len(), 32);
+    let session_less = super::uploads::resolve_upload_for_test(&id).unwrap();
+    assert!(session_less.ends_with("a.txt"));
+    for bad in ["../etc", "", "zzzz", &"a".repeat(31)] {
+        assert!(
+            super::uploads::resolve_upload_for_test(bad).is_err(),
+            "{bad}"
+        );
+    }
+    assert!(super::store_upload("big", &vec![0; super::MAX_UPLOAD_BYTES + 1]).is_err());
+    super::uploads::remove_uploads();
+}
+
+/// 【内置浏览器测试】【调试端口】从浏览器调试地址取出端口。
+#[test]
+fn debug_port_is_parsed_from_the_websocket_url() {
+    use super::session_lifecycle::debug_port;
+    assert_eq!(debug_port("ws://127.0.0.1:41235/devtools/browser/x"), 41235);
+    assert_eq!(debug_port("ws://example.com/x"), 0);
+}
+
+/// 【内置浏览器测试】【下载记录】残留的浏览器下载记录在启动前被清空，其余历史保留。
+#[test]
+fn stale_download_history_is_cleared_before_launch() {
+    let root = tempfile::tempdir().unwrap();
+    let history = root.path().join("Default");
+    std::fs::create_dir_all(&history).unwrap();
+    let connection = rusqlite::Connection::open(history.join("History")).unwrap();
+    connection
+        .execute_batch(
+            "CREATE TABLE downloads (id INTEGER PRIMARY KEY, state INTEGER);
+             CREATE TABLE downloads_url_chains (id INTEGER, url TEXT);
+             CREATE TABLE urls (id INTEGER PRIMARY KEY, url TEXT);
+             INSERT INTO downloads VALUES (1, 0);
+             INSERT INTO downloads_url_chains VALUES (1, 'http://x');
+             INSERT INTO urls VALUES (1, 'http://kept');",
+        )
+        .unwrap();
+    drop(connection);
+    super::profile::clear_download_history(root.path());
+    let connection = rusqlite::Connection::open(history.join("History")).unwrap();
+    let count = |table: &str| -> i64 {
+        connection
+            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                row.get(0)
+            })
+            .unwrap()
+    };
+    assert_eq!(count("downloads"), 0);
+    assert_eq!(count("downloads_url_chains"), 0);
+    assert_eq!(count("urls"), 1, "普通浏览历史保留");
 }

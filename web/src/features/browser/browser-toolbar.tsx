@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowLeft, ArrowRight, Globe, RotateCcw, X } from "../../shared/ui/icons";
 import { Button } from "../../shared/ui/button/button";
 import { TextInput } from "../../shared/ui/form/text-input";
@@ -9,6 +9,8 @@ type BrowserToolbarProps = {
   state: BrowserState | null;
   disabled: boolean;
   onSend: (message: BrowserClientMessage) => void;
+  /** 地址栏右侧的附加操作 */
+  trailing?: ReactNode;
 };
 
 /**
@@ -19,7 +21,7 @@ type BrowserToolbarProps = {
  * @param props 浏览器状态、是否禁用与发送方法
  * @returns 工具栏
  */
-export function BrowserToolbar({ state, disabled, onSend }: BrowserToolbarProps) {
+export function BrowserToolbar({ state, disabled, onSend, trailing }: BrowserToolbarProps) {
   const { t } = useI18n();
   const [draft, setDraft] = useState("");
   const editingRef = useRef(false);
@@ -109,6 +111,7 @@ export function BrowserToolbar({ state, disabled, onSend }: BrowserToolbarProps)
           onChange={(event) => setDraft(event.target.value)}
         />
       </form>
+      {trailing}
     </div>
   );
 }

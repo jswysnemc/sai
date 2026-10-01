@@ -28,6 +28,7 @@ import {
   Braces as LucideBraces,
   Brain as LucideBrain,
   BrainCircuit as LucideBrainCircuit,
+  Bug as LucideBug,
   Cable as LucideCable,
   Calculator as LucideCalculator,
   CalendarClock as LucideCalendarClock,
@@ -149,7 +150,9 @@ import {
   Minimize2 as LucideMinimize2,
   Minus as LucideMinus,
   MonitorCog as LucideMonitorCog,
+  MonitorSmartphone as LucideMonitorSmartphone,
   MoreHorizontal as LucideMoreHorizontal,
+  MousePointerClick as LucideMousePointerClick,
   Network as LucideNetwork,
   NotepadText as LucideNotepadText,
   PackageSearch as LucidePackageSearch,
@@ -248,6 +251,7 @@ export const Box = withIconDefaults(LucideBox);
 export const Braces = withIconDefaults(LucideBraces);
 export const Brain = withIconDefaults(LucideBrain);
 export const BrainCircuit = withIconDefaults(LucideBrainCircuit);
+export const Bug = withIconDefaults(LucideBug);
 export const Cable = withIconDefaults(LucideCable);
 export const Calculator = withIconDefaults(LucideCalculator);
 export const CalendarClock = withIconDefaults(LucideCalendarClock);
@@ -369,7 +373,9 @@ export const MessagesSquare = withIconDefaults(LucideMessagesSquare);
 export const Minimize2 = withIconDefaults(LucideMinimize2);
 export const Minus = withIconDefaults(LucideMinus);
 export const MonitorCog = withIconDefaults(LucideMonitorCog);
+export const MonitorSmartphone = withIconDefaults(LucideMonitorSmartphone);
 export const MoreHorizontal = withIconDefaults(LucideMoreHorizontal);
+export const MousePointerClick = withIconDefaults(LucideMousePointerClick);
 export const Network = withIconDefaults(LucideNetwork);
 export const NotepadText = withIconDefaults(LucideNotepadText);
 export const PackageSearch = withIconDefaults(LucidePackageSearch);

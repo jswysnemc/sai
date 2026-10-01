@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { useI18n } from "../i18n/use-i18n";
 import { isNativePasteShortcut, keyMessage, mouseMessage, type ViewportGeometry } from "./browser-input";
 import type { BrowserClientMessage } from "./browser-protocol";
 import type { BrowserFrameHandler } from "./use-browser-session";
 import { useBrowserResize } from "./use-browser-resize";
+import { displayScale, type ResponsiveViewport } from "./browser-responsive";
 
 type BrowserViewportProps = {
   /** 页面视口宽度（CSS 像素） */
@@ -13,6 +14,10 @@ type BrowserViewportProps = {
   disabled: boolean;
   onSend: (message: BrowserClientMessage) => void;
   onFrameHandler: (handler: BrowserFrameHandler | null) => void;
+  /** 自由尺寸模式；为空时页面视口跟随面板大小 */
+  responsive: ResponsiveViewport | null;
+  /** 浮在画面上方的内容（下拉菜单等），坐标按画面缩放后的位置换算 */
+  overlay?: (scale: number) => ReactNode;
 };
 
 /**
@@ -24,7 +29,7 @@ type BrowserViewportProps = {
  * @param props 页面尺寸、是否禁用、发送方法与画面回调注册方法
  * @returns 视口
  */
-export function BrowserViewport({ pageWidth, pageHeight, disabled, onSend, onFrameHandler }: BrowserViewportProps) {
+export function BrowserViewport({ pageWidth, pageHeight, disabled, onSend, onFrameHandler, responsive, overlay }: BrowserViewportProps) {
   const { t } = useI18n();
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -36,7 +41,9 @@ export function BrowserViewport({ pageWidth, pageHeight, disabled, onSend, onFra
   const pageRef = useRef({ width: pageWidth, height: pageHeight });
   pageRef.current = { width: pageWidth, height: pageHeight };
 
-  useBrowserResize(hostRef, !disabled, onSend);
+  const hostSize = useBrowserResize(hostRef, !disabled, onSend, responsive?.size ?? null);
+  // 自由尺寸时按缩放档位显示；跟随面板时画面与面板一比一
+  const scale = responsive ? displayScale({ width: pageWidth, height: pageHeight }, hostSize, responsive.zoom) : 1;
 
   // 1. 注册画面回调：解码中到达的帧只保留最新一张，避免积压
   useEffect(() => {
@@ -150,14 +157,17 @@ export function BrowserViewport({ pageWidth, pageHeight, disabled, onSend, onFra
   };
 
   return (
-    <div ref={hostRef} className={`browser-viewport${focused ? " focused" : ""}`}>
-      <canvas
-        ref={canvasRef}
-        className="browser-canvas"
-        style={{ width: pageWidth, height: pageHeight }}
-        aria-label={t("Browser page", "浏览器页面")}
-        role="img"
-      />
+    <div ref={hostRef} className={`browser-viewport${focused ? " focused" : ""}${responsive ? " responsive" : ""}`}>
+      <div className="browser-canvas-frame" style={{ width: pageWidth * scale, height: pageHeight * scale }}>
+        <canvas
+          ref={canvasRef}
+          className="browser-canvas"
+          style={{ width: pageWidth * scale, height: pageHeight * scale }}
+          aria-label={t("Browser page", "浏览器页面")}
+          role="img"
+        />
+        {overlay?.(scale)}
+      </div>
       {!hasFrame && <p className="browser-viewport-placeholder">{t("Waiting for the page…", "等待页面画面…")}</p>}
       <textarea
         ref={inputRef}

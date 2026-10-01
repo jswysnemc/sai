@@ -40,6 +40,27 @@ impl BrowserSession {
         self.evaluate_in(&session, Some(context), expression).await
     }
 
+    /// 【内置浏览器】【隔离上下文】返回当前标签的隔离世界上下文，不存在时新建。
+    ///
+    /// 只用于需要自定义等待时间的长时间求值；缓存的上下文可能已随导航失效，
+    /// 调用方需把上下文错误按页面已跳转处理。
+    ///
+    /// @returns 执行上下文 ID
+    pub(super) async fn isolated_context(&self) -> Result<i64> {
+        let session = self.active_session()?;
+        let cached = self
+            .inner
+            .lock()
+            .unwrap()
+            .isolated_contexts
+            .get(&session)
+            .copied();
+        match cached {
+            Some(context) => Ok(context),
+            None => self.create_isolated_world(&session).await,
+        }
+    }
+
     /// 【内置浏览器】【隔离世界创建】在主框架创建隔离世界并缓存上下文 ID。
     /// @param session 为 sessionId
     /// @returns 执行上下文 ID

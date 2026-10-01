@@ -69,6 +69,15 @@ impl BrowserSession {
                 self.client
                     .send(Some(&session), "Page.enable", json!({}))
                     .await?;
+                // 无头模式没有系统文件对话框，改为把选择请求交给面板
+                let _ = self
+                    .client
+                    .send(
+                        Some(&session),
+                        "Page.setInterceptFileChooserDialog",
+                        json!({ "enabled": true }),
+                    )
+                    .await;
                 self.inner
                     .lock()
                     .unwrap()

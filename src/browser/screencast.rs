@@ -10,8 +10,8 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 use tokio::sync::broadcast::error::RecvError;
 
-/// 录屏 JPEG 质量。
-const SCREENCAST_QUALITY: u32 = 70;
+/// 录屏 JPEG 质量：提高文字边缘保真度，同时保留有损压缩以控制传输体积。
+const SCREENCAST_QUALITY: u32 = 90;
 /// 状态刷新的合并窗口，连续事件只触发一次汇总。
 const REFRESH_DEBOUNCE: Duration = Duration::from_millis(120);
 
@@ -103,7 +103,8 @@ impl BrowserSession {
             "Target.targetInfoChanged" | "Page.navigatedWithinDocument" | "Page.loadEventFired" => {
                 self.schedule_refresh(weak)
             }
-            _ => {}
+            // 5. 对话框、文件选择与下载交给页面交互事件处理
+            _ => self.handle_page_event(&event, weak),
         }
     }
 
@@ -161,6 +162,22 @@ impl BrowserSession {
         });
     }
 
+    /// 【内置浏览器】【交互后刷新】面板输入之后合并刷新一次地址栏状态。
+    ///
+    /// 页面脚本修改标题、选中下拉项等变化不会产生导航事件，只能在交互后主动汇总；
+    /// 与事件触发的刷新共用合并窗口，连续输入只汇总一次。
+    ///
+    /// @returns 无
+    pub(crate) fn refresh_after_input(self: &Arc<Self>) {
+        let weak = Arc::downgrade(self);
+        // 等页面处理完输入再读取，避免读到点击前的标题
+        spawn_with(&weak, |session| async move {
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            let weak = Arc::downgrade(&session);
+            session.schedule_refresh(&weak);
+        });
+    }
+
     /// 【内置浏览器】【标签接替】当前标签消失后切换到剩余标签，没有时新建空白页。
     /// @returns 无
     async fn recover_active_tab(&self) {
@@ -183,10 +200,32 @@ impl BrowserSession {
     pub(crate) async fn attach_viewer(&self) {
         if self.viewers.fetch_add(1, Ordering::SeqCst) == 0 {
             self.restart_screencast().await;
+        } else {
+            self.send_initial_frame().await;
         }
-        // 静态页面开启录屏后可能很久不出新帧，补发一张截图作为首屏
-        if let Ok((bytes, _)) = self.screenshot(false, None).await {
-            let _ = self.events.send(BrowserEvent::Frame(Arc::new(bytes)));
+    }
+
+    /// 【内置浏览器】【首帧补发】按设备像素补发当前视口，避免静态页面重连后退回低分辨率。
+    /// @returns 无；截图失败时继续等待下一张录屏帧
+    async fn send_initial_frame(&self) {
+        // 1. 工具截图使用 CSS 像素坐标，面板首帧需要保留设备像素分辨率
+        let result = self
+            .page_send(
+                "Page.captureScreenshot",
+                json!({
+                    "format": "jpeg",
+                    "quality": SCREENCAST_QUALITY,
+                    "captureBeyondViewport": false,
+                }),
+            )
+            .await;
+        // 2. 通过相同画面通道发送，画布按 JPEG 实际尺寸保存像素
+        if let Ok(result) = result {
+            if let Some(data) = result.get("data").and_then(Value::as_str) {
+                if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(data) {
+                    let _ = self.events.send(BrowserEvent::Frame(Arc::new(bytes)));
+                }
+            }
         }
     }
 
@@ -210,7 +249,13 @@ impl BrowserSession {
         let Ok(session) = self.active_session() else {
             return;
         };
+        // 帧尺寸按设备像素计算，否则高分屏上画面被放大显示而发糊
         let (width, height) = self.viewport();
+        let scale = self.device_scale();
+        let (width, height) = (
+            (f64::from(width) * scale).round() as u32,
+            (f64::from(height) * scale).round() as u32,
+        );
         let started = self
             .client
             .send(
@@ -227,6 +272,8 @@ impl BrowserSession {
             .await;
         if started.is_ok() {
             self.inner.lock().unwrap().screencast_session = Some(session);
+            // 【内置浏览器】【录屏切换】仅像素比变化时静态页面可能不重绘，主动补发对应分辨率
+            self.send_initial_frame().await;
         }
     }
 
@@ -246,7 +293,7 @@ impl BrowserSession {
 /// 【内置浏览器】【派生任务】会话仍存活时在后台执行一段异步逻辑。
 /// @param weak 为会话弱引用；task 为接收会话的异步闭包
 /// @returns 无
-fn spawn_with<F, Fut>(weak: &Weak<BrowserSession>, task: F)
+pub(super) fn spawn_with<F, Fut>(weak: &Weak<BrowserSession>, task: F)
 where
     F: FnOnce(Arc<BrowserSession>) -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + Send + 'static,

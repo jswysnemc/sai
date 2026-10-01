@@ -2,12 +2,12 @@
 
 use super::cdp::CdpClient;
 use super::events::{BrowserEvent, BrowserState};
-use super::launcher::{self, LaunchedBrowser, DEFAULT_HEIGHT, DEFAULT_WIDTH};
+use super::launcher::{LaunchedBrowser, MAX_DEVICE_SCALE};
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use tokio::sync::broadcast;
 
 /// 会话内可变状态。
@@ -21,6 +21,8 @@ pub(super) struct SessionInner {
     pub(super) width: u32,
     /// 视口高度（CSS 像素）
     pub(super) height: u32,
+    /// 设备像素比：面板所在屏幕的 devicePixelRatio，高分屏上按此倍数渲染才清晰
+    pub(super) scale: f64,
     /// 当前主框架是否在加载
     pub(super) loading: bool,
     /// 最近一次广播的状态，用于去重与新面板首屏
@@ -31,6 +33,12 @@ pub(super) struct SessionInner {
     pub(super) refresh_pending: bool,
     /// sessionId 到 Sai 隔离世界执行上下文 ID 的映射，导航后失效
     pub(super) isolated_contexts: HashMap<String, i64>,
+    /// 当前打开的页面对话框及其所在 sessionId
+    pub(super) dialog: Option<(String, super::events::DialogInfo)>,
+    /// 等待面板选择文件的 input 节点：(sessionId, backendNodeId)
+    pub(super) file_chooser: Option<(String, i64)>,
+    /// 最近的下载记录
+    pub(super) downloads: Vec<super::events::DownloadInfo>,
 }
 
 /// 进程内共享的浏览器会话。
@@ -40,86 +48,18 @@ pub(crate) struct BrowserSession {
     pub(super) events: broadcast::Sender<BrowserEvent>,
     /// 当前连接的面板数量，大于 0 时才开启录屏
     pub(super) viewers: AtomicUsize,
-    process: tokio::sync::Mutex<Option<LaunchedBrowser>>,
+    pub(super) process: tokio::sync::Mutex<Option<LaunchedBrowser>>,
+    /// 调试端口，用于打开 DevTools 前端
+    pub(super) debug_port: u16,
+    /// 是否使用持久用户目录
+    pub(super) persistent_profile: bool,
 }
 
 impl BrowserSession {
-    /// 【内置浏览器】【会话启动】启动浏览器、建立连接并附着到首个页面。
-    /// @returns 共享会话
-    pub(super) async fn launch() -> Result<Arc<Self>> {
-        // 1. 启动进程并连接浏览器级调试地址
-        let launched = launcher::launch().await?;
-        let client = CdpClient::connect(&launched.websocket_url).await?;
-        let (events, _) = broadcast::channel(64);
-        let session = Arc::new(Self {
-            client,
-            inner: Mutex::new(SessionInner {
-                width: DEFAULT_WIDTH,
-                height: DEFAULT_HEIGHT,
-                ..SessionInner::default()
-            }),
-            events,
-            viewers: AtomicUsize::new(0),
-            process: tokio::sync::Mutex::new(Some(launched)),
-        });
-        // 2. 打开目标发现，标签页增删与标题变化都会推送事件
-        session
-            .client
-            .send(
-                None,
-                "Target.setDiscoverTargets",
-                json!({ "discover": true }),
-            )
-            .await?;
-        // 3. 事件泵先于附着启动，避免漏掉首个页面的加载事件
-        session.spawn_event_pump();
-        let target = match session.page_targets().await?.into_iter().next() {
-            Some(target) => target.target_id,
-            None => session.create_target("about:blank").await?,
-        };
-        session.activate_target(&target).await?;
-        Ok(session)
-    }
-
     /// 【内置浏览器】【存活判断】判断 CDP 连接是否仍然可用。
     /// @returns 可用时为 true
     pub(crate) fn is_alive(&self) -> bool {
         self.client.is_alive()
-    }
-
-    /// 【内置浏览器】【进程关闭】请求浏览器正常退出，随后强制结束进程。
-    /// @returns 无
-    pub(crate) async fn close(&self) {
-        let _ = self
-            .client
-            .send_with_timeout(
-                None,
-                "Browser.close",
-                json!({}),
-                std::time::Duration::from_secs(2),
-            )
-            .await;
-        let Some(mut launched) = self.process.lock().await.take() else {
-            return;
-        };
-        // 1. 给浏览器留出正常退出的时间，超时再强制结束
-        let exited = tokio::time::timeout(std::time::Duration::from_secs(3), launched.child.wait())
-            .await
-            .is_ok();
-        if !exited {
-            let _ = launched.child.kill().await;
-        }
-        // 2. 渲染等子进程可能仍在写用户目录，删除失败时短暂重试
-        let LaunchedBrowser {
-            _profile: profile, ..
-        } = launched;
-        let path = profile.keep();
-        for _ in 0..10 {
-            if tokio::fs::remove_dir_all(&path).await.is_ok() || !path.exists() {
-                return;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-        }
     }
 
     /// 【内置浏览器】【事件订阅】订阅面板所需的状态与画面事件。
@@ -209,19 +149,21 @@ impl BrowserSession {
         (inner.width, inner.height)
     }
 
-    /// 【内置浏览器】【视口调整】按面板尺寸调整页面视口并重启录屏。
-    /// @param width 为宽度；height 为高度，单位 CSS 像素
+    /// 【内置浏览器】【视口调整】按面板尺寸与设备像素比调整页面视口并重启录屏。
+    /// @param width 为宽度；height 为高度，单位 CSS 像素；scale 为设备像素比
     /// @returns 操作结果
-    pub(crate) async fn resize(&self, width: u32, height: u32) -> Result<()> {
+    pub(crate) async fn resize(&self, width: u32, height: u32, scale: f64) -> Result<()> {
         let width = width.clamp(320, 3840);
         let height = height.clamp(240, 2160);
+        let scale = clamp_scale(scale);
         {
             let mut inner = self.inner.lock().unwrap();
-            if inner.width == width && inner.height == height {
+            if inner.width == width && inner.height == height && inner.scale == scale {
                 return Ok(());
             }
             inner.width = width;
             inner.height = height;
+            inner.scale = scale;
         }
         let session = self.active_session()?;
         self.apply_viewport(&session).await?;
@@ -230,11 +172,20 @@ impl BrowserSession {
         Ok(())
     }
 
+    /// 【内置浏览器】【像素比】返回当前设备像素比。
+    /// @returns 设备像素比，未设置时为 1
+    pub(crate) fn device_scale(&self) -> f64 {
+        clamp_scale(self.inner.lock().unwrap().scale)
+    }
+
     /// 【内置浏览器】【视口应用】把记录的视口尺寸写入指定目标会话。
     /// @param session 为 sessionId
     /// @returns 操作结果
     pub(super) async fn apply_viewport(&self, session: &str) -> Result<()> {
         let (width, height) = self.viewport();
+        let scale = self.device_scale();
+        // 无头模式的 screen 默认是 800x600，比视口还小，站点验证会据此识别；
+        // 屏幕尺寸取常见桌面分辨率与视口中的较大者
         self.client
             .send(
                 Some(session),
@@ -242,11 +193,25 @@ impl BrowserSession {
                 json!({
                     "width": width,
                     "height": height,
-                    "deviceScaleFactor": 1,
+                    "deviceScaleFactor": scale,
                     "mobile": false,
+                    "screenWidth": width.max(1920),
+                    "screenHeight": height.max(1080),
                 }),
             )
             .await?;
         Ok(())
+    }
+}
+
+/// 【内置浏览器】【像素比限制】把面板上报的像素比限制在 1 到 2 之间，非法值按 1 处理。
+/// @param scale 为面板上报的 devicePixelRatio
+/// @returns 可用的像素比
+pub(super) fn clamp_scale(scale: f64) -> f64 {
+    if scale.is_finite() && scale > 0.0 {
+        // 【内置浏览器】【像素比限制】保留两位小数，避免浮点抖动导致反复重设视口
+        ((scale.clamp(1.0, MAX_DEVICE_SCALE)) * 100.0).round() / 100.0
+    } else {
+        1.0
     }
 }

@@ -1,14 +1,10 @@
-//! 页面交互：点击、悬停、输入、下拉选择、滚动、截图与面板鼠标转发。
+//! 页面交互：点击、悬停、输入、下拉选择、滚动与面板鼠标转发。
 
 use super::navigation::{PageSummary, SETTLE_TIMEOUT};
 use super::session::BrowserSession;
-use anyhow::{bail, Context, Result};
-use base64::Engine;
+use anyhow::{bail, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
-
-/// 整页截图的最大高度，避免超长页面生成巨幅图片。
-const FULL_PAGE_MAX_HEIGHT: f64 = 8_000.0;
 
 /// 点击方式。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -279,59 +275,6 @@ impl BrowserSession {
             "Scrolled {} [ref={reference}] into view at ({:.0}, {:.0}).",
             element.tag, element.x, element.y
         ))
-    }
-
-    /// 【内置浏览器】【页面截图】截取视口、整页或单个元素，返回 JPEG 字节。
-    /// @param full_page 为是否整页；reference 为可选元素 ref
-    /// @returns (JPEG 字节, 截图说明)
-    pub(crate) async fn screenshot(
-        &self,
-        full_page: bool,
-        reference: Option<&str>,
-    ) -> Result<(Vec<u8>, String)> {
-        let mut params = json!({ "format": "jpeg", "quality": 80 });
-        // 1. 元素截图按元素边框裁剪；整页截图按内容尺寸裁剪且限制最大高度
-        let description = if let Some(reference) = reference {
-            let element = self.locate(reference).await?;
-            params["clip"] = json!({
-                "x": (element.x - element.width / 2.0).max(0.0),
-                "y": (element.y - element.height / 2.0).max(0.0),
-                "width": element.width,
-                "height": element.height,
-                "scale": 1,
-            });
-            format!("element {} [ref={reference}]", element.tag)
-        } else if full_page {
-            let metrics = self.page_send("Page.getLayoutMetrics", json!({})).await?;
-            let size = metrics
-                .get("cssContentSize")
-                .or_else(|| metrics.get("contentSize"))
-                .cloned()
-                .unwrap_or(Value::Null);
-            let width = size.get("width").and_then(Value::as_f64).unwrap_or(1280.0);
-            let height = size
-                .get("height")
-                .and_then(Value::as_f64)
-                .unwrap_or(800.0)
-                .min(FULL_PAGE_MAX_HEIGHT);
-            params["clip"] =
-                json!({ "x": 0, "y": 0, "width": width, "height": height, "scale": 1 });
-            params["captureBeyondViewport"] = json!(true);
-            format!("full page {width:.0}x{height:.0}")
-        } else {
-            let (width, height) = self.viewport();
-            format!("viewport {width}x{height}")
-        };
-        // 2. 截图并解码 base64
-        let result = self.page_send("Page.captureScreenshot", params).await?;
-        let data = result
-            .get("data")
-            .and_then(Value::as_str)
-            .context("screenshot returned no data")?;
-        let bytes = base64::engine::general_purpose::STANDARD
-            .decode(data)
-            .context("decode screenshot")?;
-        Ok((bytes, description))
     }
 
     /// 【内置浏览器】【面板鼠标】转发面板捕获的鼠标事件。

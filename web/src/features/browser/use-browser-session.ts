@@ -3,6 +3,7 @@ import {
   browserSocketUrl,
   parseBrowserServerMessage,
   type BrowserClientMessage,
+  type BrowserServerMessage,
   type BrowserState
 } from "./browser-protocol";
 
@@ -14,6 +15,12 @@ export type BrowserActivity = { message: string; at: number };
 
 /** 画面回调：每收到一帧 JPEG 调用一次。 */
 export type BrowserFrameHandler = (frame: Blob) => void;
+
+/** 页面交互消息回调：对话框、下拉框、文件选择、下载、剪贴板与元素选择结果。 */
+export type BrowserPageMessageHandler = (message: BrowserServerMessage) => void;
+
+/** 连接信息：调试工具地址与用户目录类型。 */
+export type BrowserSessionInfo = { devtoolsUrl: string | null; persistentProfile: boolean };
 
 /** 自动重连的最大次数，超过后转为失败并等待用户重试。 */
 const MAX_RECONNECT_ATTEMPTS = 5;
@@ -31,8 +38,10 @@ export function useBrowserSession() {
   const [activity, setActivity] = useState<BrowserActivity | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
+  const [info, setInfo] = useState<BrowserSessionInfo | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const frameHandlerRef = useRef<BrowserFrameHandler | null>(null);
+  const pageHandlerRef = useRef<BrowserPageMessageHandler | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -66,9 +75,13 @@ export function useBrowserSession() {
           setState(message.state);
         } else if (message.type === "activity") {
           setActivity({ message: message.message, at: Date.now() });
-        } else {
+        } else if (message.type === "error") {
           lastServerError = message.message;
           setError(message.message);
+        } else if (message.type === "info") {
+          setInfo({ devtoolsUrl: message.devtools_url, persistentProfile: message.persistent_profile });
+        } else {
+          pageHandlerRef.current?.(message);
         }
       };
       socket.onerror = () => socket.close();
@@ -107,6 +120,11 @@ export function useBrowserSession() {
     frameHandlerRef.current = handler;
   }, []);
 
+  /** 注册页面交互消息回调，传 null 注销。 */
+  const setPageHandler = useCallback((handler: BrowserPageMessageHandler | null) => {
+    pageHandlerRef.current = handler;
+  }, []);
+
   /** 失败后手动重连。 */
   const retry = useCallback(() => {
     setError(null);
@@ -116,5 +134,5 @@ export function useBrowserSession() {
   /** 关闭错误提示。 */
   const dismissError = useCallback(() => setError(null), []);
 
-  return { status, state, activity, error, send, setFrameHandler, retry, dismissError };
+  return { status, state, activity, error, info, send, setFrameHandler, setPageHandler, retry, dismissError };
 }

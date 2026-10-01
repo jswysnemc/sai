@@ -5,25 +5,41 @@
 
 mod actions;
 mod cdp;
+mod dialogs;
+mod downloads;
 mod events;
 mod isolated_world;
 mod keys;
 mod launcher;
 pub(crate) mod navigation;
+mod page_hooks;
+mod profile;
 mod screencast;
+mod screenshot;
 mod session;
+mod session_lifecycle;
 mod snapshot;
 mod tabs;
+mod uploads;
 mod url_policy;
 
 #[cfg(test)]
+mod panel_e2e_tests;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod viewport_e2e_tests;
 
 pub(crate) use actions::{ClickKind, MouseInput, ScrollDirection};
-pub(crate) use events::{BrowserEvent, BrowserState};
+pub(crate) use events::{
+    BrowserEvent, BrowserState, DialogInfo, DownloadInfo, FileChooserInfo, SelectPopup,
+};
 pub(crate) use keys::KeyInput;
+#[cfg(test)]
+pub(crate) use profile::ProfileMode;
 pub(crate) use session::BrowserSession;
 pub(crate) use snapshot::{DEFAULT_SNAPSHOT_CHARS, MAX_SNAPSHOT_CHARS};
+pub(crate) use uploads::{store_upload, MAX_UPLOAD_BYTES};
 pub(crate) use url_policy::normalize_url;
 
 use anyhow::Result;
@@ -44,7 +60,7 @@ pub(crate) async fn shared() -> Result<Arc<BrowserSession>> {
         }
     }
     // 2. 启动新的浏览器进程并附着到首个标签页
-    let session = BrowserSession::launch().await?;
+    let session = BrowserSession::launch_with(profile::default_mode()).await?;
     *slot = Some(session.clone());
     Ok(session)
 }
@@ -67,4 +83,12 @@ pub(crate) async fn shutdown() {
     if let Some(session) = session {
         session.close().await;
     }
+    uploads::remove_uploads();
+}
+
+/// 【内置浏览器】【浏览数据清除】关闭浏览器并删除持久用户目录中的 Cookie、登录状态与缓存。
+/// @returns 是否删除了持久目录
+pub(crate) async fn clear_browsing_data() -> Result<bool> {
+    shutdown().await;
+    profile::remove_persistent()
 }

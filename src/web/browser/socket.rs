@@ -41,6 +41,10 @@ pub(crate) async fn serve_socket(socket: WebSocket) {
     let (frames_tx, frames_rx) = watch::channel(None);
     let (outgoing, messages) = mpsc::unbounded_channel();
     let _ = outgoing.send(text(&ServerMessage::State { state: &state }));
+    // 新连接补发连接信息与仍在等待的对话框、文件选择
+    for message in super::event_messages::initial(&session) {
+        let _ = outgoing.send(message);
+    }
     let mut delivery = tokio::spawn(frame_delivery::deliver(sender, frames_rx, messages));
     let queue = Arc::new(InputQueue::default());
     let mut input = tokio::spawn(commands::run(
@@ -58,6 +62,14 @@ pub(crate) async fn serve_socket(socket: WebSocket) {
                 let Some(Ok(message)) = message else { break };
                 match message {
                     Message::Text(raw) => match serde_json::from_str::<ClientMessage>(&raw) {
+                        // 对话框打开时触发它的点击仍在等待，回复必须绕过输入队列立即执行
+                        Ok(message) if message.bypasses_queue() => {
+                            let session = session.clone();
+                            let outgoing = outgoing.clone();
+                            tokio::spawn(async move {
+                                commands::run_now(&session, message, &outgoing).await;
+                            });
+                        }
                         Ok(message) => {
                             if let Err(error) = queue.push(message) {
                                 server_logging::write("浏览器面板", error, true);
@@ -81,6 +93,11 @@ pub(crate) async fn serve_socket(socket: WebSocket) {
                 }
                 Ok(BrowserEvent::Activity(message)) => {
                     let _ = outgoing.send(text(&ServerMessage::Activity { message: &message }));
+                }
+                Ok(other) => {
+                    if let Some(message) = super::event_messages::encode(&other) {
+                        let _ = outgoing.send(message);
+                    }
                 }
                 Err(broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(broadcast::error::RecvError::Closed) => break,
