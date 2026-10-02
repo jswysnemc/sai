@@ -12,7 +12,7 @@ impl Agent {
         arguments: &str,
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<RealToolExecution> {
-        let request = match QuestionRequest::parse(arguments) {
+        let request = match crate::question::parse_ask_request(arguments) {
             Ok(request) => request,
             Err(error) => {
                 return Ok(failed_question(format!(

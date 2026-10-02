@@ -438,6 +438,9 @@ fn emphasize_verb(label: &str) -> String {
 /// 返回:
 /// - 可直接写入终端的单行状态文本
 pub(crate) fn tool_call_status_text(label: &str, status: &str) -> String {
+    if status == "run" && label == tool_verb("ask_question", ToolVerbTense::Progressive) {
+        return format!("{TOOL_BULLET} {label}");
+    }
     format!("{TOOL_BULLET} {label} {}", color_status(status))
 }
 
@@ -453,6 +456,8 @@ pub(crate) fn tool_verb(name: &str, tense: ToolVerbTense) -> &'static str {
     match (name, tense) {
         (name, ToolVerbTense::Progressive) if name.ends_with("__generate_image") => "Generating",
         (name, ToolVerbTense::Perfect) if name.ends_with("__generate_image") => "Generated",
+        ("ask_question", ToolVerbTense::Progressive) => crate::i18n::text("Asking", "等待回答"),
+        ("ask_question", ToolVerbTense::Perfect) => crate::i18n::text("Asked", "已提问"),
         ("run_command", ToolVerbTense::Progressive) => "Running",
         ("run_command", ToolVerbTense::Perfect) => "Ran",
         ("edit_file", ToolVerbTense::Progressive) => "Editing",
@@ -519,6 +524,7 @@ fn is_builtin_tool_verb(name: &str) -> bool {
     matches!(
         name,
         "run_command"
+            | "ask_question"
             | "edit_file"
             | "write_file"
             | "str_replace"

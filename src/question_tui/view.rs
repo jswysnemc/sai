@@ -1,4 +1,4 @@
-use super::components::{editor_option_line, option_lines, panel_layout, tab_line};
+use super::components::{editor_option_line, option_lines, panel_layout};
 use super::text::{display_inline, editor_view, wrap_display_text};
 use super::QuestionState;
 use crate::i18n::text as t;
@@ -29,7 +29,7 @@ pub(super) fn compose(
     let mut edit_cursor_column = 0usize;
     let mut focused_body_index = None;
 
-    top_lines.push(tab_line(request, state));
+    top_lines.push(super::navigation::tab_line(request, state));
     if state.on_confirm(request) {
         for (question, selected) in request.questions.iter().zip(&state.answers) {
             let value = if selected.is_empty() {
@@ -67,6 +67,11 @@ pub(super) fn compose(
         ));
     } else {
         let question = &request.questions[state.tab];
+        top_lines.push(super::navigation::question_tabs(
+            request,
+            state,
+            content_width,
+        ));
         top_lines.extend(
             wrap_display_text(&display_inline(question.question.trim()), content_width)
                 .into_iter()
@@ -98,7 +103,7 @@ pub(super) fn compose(
             }
             if state.editing && state.selected[state.tab] == index {
                 edit_body_index = Some(body_lines.len());
-                let editor_prefix_width = if question.multiple { 6 } else { 2 };
+                let editor_prefix_width = super::symbols::OPTION_PREFIX_WIDTH;
                 let (editor, cursor_offset) = editor_view(
                     &state.edit_buffer,
                     state.edit_cursor,
@@ -109,9 +114,9 @@ pub(super) fn compose(
                 body_lines.push(editor_option_line(question.multiple, picked, &editor));
             } else {
                 let label = if custom.is_empty() {
-                    t("Type your own answer", "输入其他答案").to_string()
+                    t("Other…", "其他…").to_string()
                 } else {
-                    format!("{}: {}", t("Custom", "自定义"), display_inline(custom))
+                    format!("{}: {}", t("Other", "其他"), display_inline(custom))
                 };
                 body_lines.extend(option_lines(
                     &format!("{}. {label}", index + 1),

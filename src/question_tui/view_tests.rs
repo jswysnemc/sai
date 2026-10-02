@@ -44,7 +44,7 @@ fn question_frame_shows_progress_and_only_focused_description() {
         .collect::<Vec<_>>()
         .join("\n");
     assert!(plain.contains("1/1"));
-    assert!(plain.contains("> [x] 1. 修改实现与测试"));
+    assert!(plain.contains("› ■ 1. 修改实现与测试"));
     assert!(plain.contains("修复行为，并补充回归测试。"));
     assert!(!plain.contains("说明新的操作方式和适用范围。"));
     assert!(plain.contains("更新使用文档"));

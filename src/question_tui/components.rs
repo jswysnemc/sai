@@ -1,7 +1,5 @@
 use super::text::{display_inline, wrap_display_text};
-use super::QuestionState;
 use crate::i18n::text as t;
-use crate::question::QuestionRequest;
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct PanelLayout {
@@ -60,48 +58,6 @@ pub(super) fn panel_layout(
     }
 }
 
-/// 生成问题标签导航行。
-///
-/// # 参数
-/// - `request`: 结构化提问请求
-/// - `state`: 当前回答状态
-///
-/// # 返回值
-/// 带终端样式的标签行
-pub(super) fn tab_line(request: &QuestionRequest, state: &QuestionState) -> String {
-    let answered = state
-        .answers
-        .iter()
-        .filter(|answers| !answers.is_empty())
-        .count();
-    if state.on_confirm(request) {
-        return format!(
-            "\x1b[1m{}\x1b[0m  \x1b[2m{answered}/{} {}\x1b[0m",
-            t("Review answers", "确认回答"),
-            request.questions.len(),
-            t("answered", "已回答")
-        );
-    }
-    let question = &request.questions[state.tab];
-    let mode = if question.multiple {
-        t("multiple", "多选")
-    } else {
-        t("single", "单选")
-    };
-    let requirement = if question.required {
-        t("required", "必答")
-    } else {
-        t("optional", "可跳过")
-    };
-    format!(
-        "\x1b[36m{} {}/{}\x1b[0m  \x1b[2m{} · {mode} · {requirement}\x1b[0m",
-        t("Question", "问题"),
-        state.tab + 1,
-        request.questions.len(),
-        display_inline(&question.header)
-    )
-}
-
 /// 生成单个选项及其说明的显示行。
 ///
 /// # 参数
@@ -122,27 +78,15 @@ pub(super) fn option_lines(
     multiple: bool,
     content_width: usize,
 ) -> Vec<String> {
-    let marker = if multiple {
-        if picked {
-            "[x]"
-        } else {
-            "[ ]"
-        }
-    } else {
-        ""
-    };
-    let pointer = if active { ">" } else { " " };
-    let indent = if multiple { 6 } else { 2 };
+    let marker = super::symbols::choice(multiple, picked);
+    let pointer = super::symbols::focus(active);
+    let indent = super::symbols::OPTION_PREFIX_WIDTH;
     let width = content_width.saturating_sub(indent).max(1);
     let label = display_inline(label);
     let mut lines = Vec::new();
     for (index, part) in wrap_display_text(&label, width).into_iter().enumerate() {
         let prefix = if index == 0 {
-            if multiple {
-                format!("{pointer} {marker} ")
-            } else {
-                format!("{pointer} ")
-            }
+            format!("{pointer} {marker} ")
         } else {
             " ".repeat(indent)
         };
@@ -184,15 +128,7 @@ pub(super) fn option_lines(
 /// # 返回值
 /// 带终端样式的编辑行
 pub(super) fn editor_option_line(multiple: bool, picked: bool, editor: &str) -> String {
-    let marker = if multiple {
-        if picked {
-            "\x1b[36m[x]\x1b[0m "
-        } else {
-            "\x1b[2m[ ]\x1b[0m "
-        }
-    } else {
-        ""
-    };
+    let marker = super::symbols::choice(multiple, picked);
     let value = if editor.is_empty() {
         format!(
             "\x1b[2m{}\x1b[0m",
@@ -201,5 +137,5 @@ pub(super) fn editor_option_line(multiple: bool, picked: bool, editor: &str) -> 
     } else {
         editor.to_string()
     };
-    format!("\x1b[36m>\x1b[0m {marker}{value}")
+    format!("\x1b[36m› {marker}\x1b[0m {value}")
 }

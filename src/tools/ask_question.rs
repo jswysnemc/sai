@@ -9,7 +9,7 @@ use serde_json::json;
 pub fn register(registry: &mut ToolRegistry) {
     registry.register(ToolSpec::new(
         "ask_question",
-        "在当前回复过程中向用户提出结构化问题，并等待回答后继续。仅在确实需要用户偏好、澄清或决策时使用。一次调用可包含多道问题；选项应互斥、简洁且带有有用说明。不要添加“其他”选项，界面默认提供自定义答案。推荐项应放在第一项，并在标签中注明“（推荐）”。",
+        "在当前回复过程中向用户提出结构化问题，并等待回答后继续。仅在确实需要用户偏好、澄清或决策时使用。一次调用可包含多道问题；选项应互斥、简洁且带有有用说明。不要添加“其他”选项，单选与多选界面始终提供可编辑的“其他”答案。推荐项应放在第一项，并在标签中注明“（推荐）”。",
         json!({
             "type": "object",
             "properties": {
@@ -55,7 +55,7 @@ pub fn register(registry: &mut ToolRegistry) {
                             },
                             "custom": {
                                 "type": "boolean",
-                                "description": "是否允许输入自定义答案，默认 true。"
+                                "description": "兼容旧调用的参数；界面始终提供可编辑的 Other 自定义答案，传 false 也不会关闭。"
                             }
                         },
                         "required": ["header", "question", "options"],
@@ -68,4 +68,26 @@ pub fn register(registry: &mut ToolRegistry) {
         }),
         |_| async move { bail!("ask_question requires an active interactive Sai session") },
     ));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 【结构化提问】【入口兼容】旧参数先通过工具校验，再规范化为包含 Other 的请求；无参数和返回值。
+    #[test]
+    fn legacy_custom_false_reaches_question_normalization() {
+        let mut registry = ToolRegistry::new();
+        register(&mut registry);
+        for multiple in [false, true] {
+            let arguments = json!({"questions":[{
+                "header":"范围", "question":"选择范围", "options":[], "multiple":multiple, "custom":false
+            }]}).to_string();
+            registry
+                .validate_arguments("ask_question", &arguments)
+                .unwrap();
+            let request = crate::question::parse_ask_request(&arguments).unwrap();
+            assert!(request.questions[0].custom);
+        }
+    }
 }

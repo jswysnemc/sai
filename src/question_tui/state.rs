@@ -174,7 +174,11 @@ impl QuestionState {
             return Ok(());
         }
         self.selected[self.tab] = number - 1;
-        self.activate_current(request)
+        if question.multiple {
+            self.toggle_current(request)
+        } else {
+            self.activate_current(request)
+        }
     }
 
     /// 【终端提问】【多选继续】参数为问题集合，返回推进结果；自定义选项进入编辑，不隐式勾选。

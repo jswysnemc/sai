@@ -1,4 +1,6 @@
+mod ask_request;
 mod attachments;
+pub(crate) use ask_request::parse_ask_request;
 mod broker;
 
 pub(crate) use broker::{
@@ -136,12 +138,6 @@ impl QuestionExchange {
 }
 
 impl QuestionRequest {
-    pub fn parse(arguments: &str) -> Result<Self> {
-        let request: Self = serde_json::from_str(arguments)?;
-        request.validate()?;
-        Ok(request)
-    }
-
     pub fn validate(&self) -> Result<()> {
         if self.questions.is_empty() {
             bail!("questions must contain at least one question");

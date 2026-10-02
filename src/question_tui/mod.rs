@@ -1,9 +1,11 @@
 mod card;
 mod components;
+mod navigation;
 mod render;
 mod session;
 mod state;
 mod summary;
+mod symbols;
 mod text;
 mod view;
 
@@ -209,3 +211,6 @@ mod tests;
 
 #[cfg(test)]
 mod view_tests;
+
+#[cfg(test)]
+mod interaction_tests;

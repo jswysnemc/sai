@@ -128,7 +128,7 @@ fn option_rows_have_no_numbers_and_put_description_below_title() {
         .iter()
         .map(|line| strip_ansi(line))
         .collect::<Vec<_>>();
-    assert_eq!(visible[0], "> 烧烤");
+    assert_eq!(visible[0], "› ○ 烧烤");
     assert!(!visible.iter().any(|line| line.contains("1.")));
     assert!(visible[1..].iter().all(|line| line.starts_with("  ")));
     assert!(lines[1..].iter().all(|line| line.contains("\x1b[2m")));
@@ -137,8 +137,8 @@ fn option_rows_have_no_numbers_and_put_description_below_title() {
 #[test]
 fn multi_option_rows_keep_checkbox_without_number() {
     let lines = option_lines("代码", "修改实现和测试", true, true, true, 18);
-    assert_eq!(strip_ansi(&lines[0]), "> [x] 代码");
-    assert!(strip_ansi(&lines[1]).starts_with("      "));
+    assert_eq!(strip_ansi(&lines[0]), "› ■ 代码");
+    assert!(strip_ansi(&lines[1]).starts_with("    "));
 }
 
 #[test]
@@ -184,7 +184,7 @@ fn focused_option_uses_cyan_emphasis() {
 #[test]
 fn custom_editor_has_no_extra_ascii_pointer() {
     let line = editor_option_line(false, false, "自定义内容");
-    assert_eq!(strip_ansi(&line), "> 自定义内容");
+    assert_eq!(strip_ansi(&line), "› ○ 自定义内容");
 }
 
 #[test]
