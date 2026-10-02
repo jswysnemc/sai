@@ -212,3 +212,50 @@ fn short_command_registers_only_the_output_paragraph() {
         .collect::<Vec<_>>();
     assert_eq!(parts, vec![ParagraphPart::Segment(ExpandPart::Output)]);
 }
+
+/// 【全屏代码】【展开回归】文件阅读卡片展开后仍保留关键字与字符串着色；无参数或返回值。
+#[test]
+fn expanded_read_file_keeps_syntax_colors() {
+    let mut store = TranscriptStore::new(1000);
+    store.push_tool_call("read_file".into(), r#"{"path":"example.rs"}"#.into());
+    store.push_tool_result(
+        "read_file".into(),
+        true,
+        "1\tfn main() {\n2\t    println!(\"hello\");\n3\t}".into(),
+    );
+    let collapsed = store.render_fullscreen(80, &options(), &HashSet::new());
+    let key = collapsed.paragraphs.last().unwrap().key;
+    let expanded = store.render_fullscreen(80, &options(), &HashSet::from([key]));
+    let ansi = expanded
+        .lines
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(ansi.contains(crate::render::style::CODE_KEYWORD_STYLE));
+    assert!(ansi.contains(crate::render::style::CODE_STRING_STYLE));
+    assert!(plain(&expanded).join("\n").contains("println!"));
+}
+
+/// 【全屏代码】【思考回归】展开带代码围栏的思考内容时使用同一高亮链路；无参数或返回值。
+#[test]
+fn expanded_reasoning_keeps_fenced_code_colors() {
+    let mut store = TranscriptStore::new(1000);
+    store.push_chunk(&ChatStreamChunk {
+        kind: ChatStreamKind::Reasoning,
+        text: "说明\n\n```rust\nfn main() { println!(\"hello world\"); }\n```".into(),
+    });
+    store.finalize_live_tail();
+    let collapsed = store.render_fullscreen(24, &options(), &HashSet::new());
+    let key = collapsed.paragraphs[0].key;
+    let expanded = store.render_fullscreen(24, &options(), &HashSet::from([key]));
+    let ansi = expanded
+        .lines
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(ansi.contains(crate::render::style::CODE_KEYWORD_STYLE));
+    assert!(ansi.contains(crate::render::style::CODE_STRING_STYLE));
+    assert!(!plain(&expanded).join("\n").contains("```"));
+}

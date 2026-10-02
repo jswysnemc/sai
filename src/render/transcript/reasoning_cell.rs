@@ -223,7 +223,19 @@ fn render_thinking_body_with_title(
         return title;
     }
     // 1. 按「终端列数 - gutter」折行，再拼 `  └ `/`    `，保证最终行宽不超过终端
-    let wrapped = wrap_display_lines(body, thinking_body_wrap_width(terminal_cols));
+    let wrapped = if body.contains("```") {
+        // 1. 【全屏代码】【思考展开】代码围栏先解析高亮，再按 ANSI 显示宽度折行
+        let rendered = crate::render::expandable::render_expandable_body(
+            crate::render::expandable::ExpandableBlockKind::Markdown,
+            body,
+        );
+        super::AnsiLine::wrap_block(&rendered, thinking_body_wrap_width(terminal_cols))
+            .into_iter()
+            .map(|line| line.as_str().to_string())
+            .collect()
+    } else {
+        wrap_display_lines(body, thinking_body_wrap_width(terminal_cols))
+    };
     // 2. 丢掉空段落：模型常在思考里插 `\n\n`，渲染成 gutter 空行会像「块内硬隔开」；
     //    思考与后续正文的间距由 cell / live 的前空行负责，工具块不加前空行
     let lines: Vec<String> = wrapped

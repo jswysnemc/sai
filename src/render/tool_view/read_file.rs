@@ -152,6 +152,18 @@ pub(crate) fn render(view: &super::model::ToolView, mode: ToolCallDisplayMode) -
     if mode == ToolCallDisplayMode::Summary {
         return Some(output);
     }
+    let path = if page.path.is_empty() {
+        arguments
+            .get("path")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+    } else {
+        &page.path
+    };
+    let language = std::path::Path::new(path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or_default();
     let number_width = page
         .offset
         .saturating_add(page.content.len().saturating_sub(1))
@@ -159,7 +171,7 @@ pub(crate) fn render(view: &super::model::ToolView, mode: ToolCallDisplayMode) -
         .len();
     for line in &page.content {
         output.push('\n');
-        output.push_str(&render_content_line(line, number_width));
+        output.push_str(&render_content_line(line, number_width, language));
     }
     if page.truncated {
         if let Some(next) = page.next {
@@ -210,19 +222,22 @@ fn split_numbered_line(line: &str) -> Option<(&str, &str)> {
     Some((number, rest))
 }
 
-/// 渲染单条带行号的内容行：行号列灰色，正文默认色。
+/// 渲染单条带行号的内容行：行号列灰色，正文按文件语言着色。
 ///
 /// 参数:
 /// - `line`: 已带行号前缀的内容行
+/// - `language`: 文件语言或扩展名
 /// - `number_width`: 本页行号列的显示宽度
 ///
 /// 返回:
 /// - 着色后的内容行
-fn render_content_line(line: &str, number_width: usize) -> String {
+fn render_content_line(line: &str, number_width: usize, language: &str) -> String {
     let Some((number, rest)) = split_numbered_line(line) else {
         return format!("\x1b[2m    {line}\x1b[0m");
     };
-    format!("\x1b[2m\x1b[38;5;{LINE_NUMBER_COLOR}m{number:>number_width$}\x1b[0m  {rest}")
+    // 1. 【全屏代码】【正文着色】行号保持中性灰，正文按文件语言着色后交给 ANSI 折行器
+    let code = crate::render::code_block::highlight_code_line(language, rest);
+    format!("\x1b[2m\x1b[38;5;{LINE_NUMBER_COLOR}m{number:>number_width$}\x1b[0m  {code}")
 }
 
 #[cfg(test)]
@@ -250,7 +265,7 @@ mod tests {
     /// 行号列被识别并着色，正文保持原样。
     #[test]
     fn content_line_colors_the_number_column() {
-        let rendered = render_content_line("42: let x = 1;", 2);
+        let rendered = render_content_line("42: let x = 1;", 2, "rust");
         let plain = strip_ansi_for_test(&rendered);
         assert!(plain.contains("42"), "{plain}");
         assert!(plain.contains("let x = 1;"), "{plain}");
@@ -260,7 +275,7 @@ mod tests {
     /// 非标准行号格式按普通弱化行处理。
     #[test]
     fn non_numbered_line_falls_back_to_plain() {
-        let rendered = render_content_line("no prefix here", 2);
+        let rendered = render_content_line("no prefix here", 2, "");
         assert!(!rendered.contains("\x1b[38;5;244m"));
     }
 
@@ -296,7 +311,7 @@ mod tests {
         assert_eq!(page.offset, 5);
         assert!(!page.truncated);
         assert_eq!(page.path, "");
-        let rendered = render_content_line("5\tx", 1);
+        let rendered = render_content_line("5\tx", 1, "");
         let plain = strip_ansi_for_test(&rendered);
         assert!(plain.contains('x'), "{plain}");
     }

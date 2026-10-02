@@ -1,4 +1,4 @@
-use crate::render::ansi_style::{is_reset_sgr, sgr_sets_background, update_active_sgr};
+use crate::render::ansi_style::{sgr_sets_background, update_active_sgr};
 use unicode_width::UnicodeWidthChar;
 
 const TAB_STOP_COLUMNS: usize = 4;
@@ -150,9 +150,14 @@ fn wrap_line(
     let mut current = String::new();
     let mut current_width = 0usize;
     let mut active_sgr = String::new();
-    // 需要 EL 铺满背景时，记录最后一次背景相关 SGR，确保 \x1b[K 在 reset 之前生效
+    // 【终端】【差异背景】保留首个基础底色，避免行内强调色污染续行缩进与补齐区域
     let mut fill_to_end = text.contains("\x1b[K");
-    let mut last_fill_sgr = String::new();
+    let mut base_fill_sgr = String::new();
+    let outer_indent = if fill_to_end {
+        text.bytes().take_while(|byte| *byte == b' ').count()
+    } else {
+        0
+    };
     let mut index = 0usize;
 
     while index < text.len() {
@@ -163,13 +168,8 @@ fn wrap_line(
             match sequence.chars().last() {
                 Some('m') => {
                     update_active_sgr(&mut active_sgr, sequence);
-                    if sgr_sets_background(sequence) {
-                        last_fill_sgr = active_sgr.clone();
-                    }
-                    // 原始 diff 行末尾的 reset 延后到 finish_line，避免 EL 在默认背景执行
-                    if fill_to_end && is_reset_sgr(sequence) {
-                        index = end.max(index + ch.len_utf8());
-                        continue;
+                    if base_fill_sgr.is_empty() && sgr_sets_background(sequence) {
+                        base_fill_sgr = active_sgr.clone();
                     }
                     current.push_str(sequence);
                 }
@@ -192,11 +192,16 @@ fn wrap_line(
                         &current,
                         width.saturating_sub(current_width),
                         fill_to_end,
-                        &last_fill_sgr,
+                        &base_fill_sgr,
                         right_margin,
                     ));
-                    (current, current_width) =
-                        continuation_line(&active_sgr, width, continuation_indent);
+                    (current, current_width) = continuation_line(
+                        &active_sgr,
+                        &base_fill_sgr,
+                        width,
+                        continuation_indent,
+                        outer_indent,
+                    );
                 }
                 current.push(' ');
                 current_width += 1;
@@ -211,10 +216,16 @@ fn wrap_line(
                 &current,
                 width.saturating_sub(current_width),
                 fill_to_end,
-                &last_fill_sgr,
+                &base_fill_sgr,
                 right_margin,
             ));
-            (current, current_width) = continuation_line(&active_sgr, width, continuation_indent);
+            (current, current_width) = continuation_line(
+                &active_sgr,
+                &base_fill_sgr,
+                width,
+                continuation_indent,
+                outer_indent,
+            );
         }
         current.push(ch);
         current_width = current_width.saturating_add(char_width);
@@ -226,7 +237,7 @@ fn wrap_line(
             &current,
             width.saturating_sub(current_width),
             fill_to_end,
-            &last_fill_sgr,
+            &base_fill_sgr,
             right_margin,
         ));
     }
@@ -235,24 +246,37 @@ fn wrap_line(
 
 /// 【终端】【ANSI 换行】创建自动续行的初始内容与显示宽度。
 ///
-/// 样式序列写在缩进空格之前：diff 增删行靠背景色连成一个矩形色块，
-/// 若先输出裸空格再恢复背景，续行开头这几列会落在终端默认背景上，
-/// 整块颜色就在每个续行的行首缺一个口子。
+/// 块外留白保持默认背景，内部缩进使用基础底色，正文恢复当前强调与语法样式。
 ///
 /// 参数:
 /// - `active_sgr`: 上一行末尾仍然生效的 ANSI 样式
+/// - `fill_sgr`: diff 基础底色
 /// - `width`: 当前内容区域列数
 /// - `continuation_indent`: 期望恢复的前导空格列数
+/// - `outer_indent`: 不着色的块外留白列数
 ///
 /// 返回:
 /// - `(续行初始文本, 已占用显示列数)`
 fn continuation_line(
     active_sgr: &str,
+    fill_sgr: &str,
     width: usize,
     continuation_indent: usize,
+    outer_indent: usize,
 ) -> (String, usize) {
     let indent = continuation_indent.min(width.saturating_sub(1));
-    (format!("{active_sgr}{}", " ".repeat(indent)), indent)
+    if fill_sgr.is_empty() && outer_indent == 0 {
+        return (format!("{active_sgr}{}", " ".repeat(indent)), indent);
+    }
+    let outer = outer_indent.min(indent);
+    (
+        format!(
+            "{}\x1b[0m{fill_sgr}{}\x1b[0m{active_sgr}",
+            " ".repeat(outer),
+            " ".repeat(indent - outer)
+        ),
+        indent,
+    )
 }
 
 /// 【终端】【差异背景】将背景补为真实空格，保证原生回滚区缩放后仍保留色块。
@@ -313,12 +337,12 @@ mod tests {
             let source = format!("{background}\x1b[38;2;48;0;0mabcdefgh\x1b[K\x1b[0m");
             let lines = AnsiLine::wrap_block(&source, 4);
             assert_eq!(lines.len(), 2);
-            assert!(lines
-                .iter()
-                .all(|line| line.as_str().starts_with(background)));
+            assert!(lines.iter().all(|line| line.as_str().contains(background)));
         }
         assert!(!super::sgr_sets_background("\x1b[38;2;48;0;0m"));
-        assert!(super::is_reset_sgr("\x1b[0;38;2;0;95;0m"));
+        assert!(crate::render::ansi_style::is_reset_sgr(
+            "\x1b[0;38;2;0;95;0m"
+        ));
     }
 
     /// ANSI 文本中的制表符按四列制表位展开并参与折行。
@@ -355,8 +379,7 @@ mod tests {
 
     /// 【终端】【Diff 换行测试】验证带背景的自动续行恢复 diff 内部缩进。
     ///
-    /// 缩进空格必须落在背景样式之后，否则续行开头这几列会用终端默认背景，
-    /// 增删行的整块色块在每个续行的行首缺一个口子。
+    /// 块外缩进保持默认背景，避免续行改变后续布局对块内缩进的判断。
     ///
     /// 参数:
     /// - 无
@@ -373,10 +396,14 @@ mod tests {
         );
 
         assert_eq!(lines.len(), 2);
-        // 续行先恢复背景再补缩进，缩进列因此也带上 diff 背景色
-        assert!(lines[1].as_str().starts_with("\x1b[48;5;22m "));
+        // 块外留白保持在样式序列之前，与首行一致
+        assert!(lines[1].as_str().starts_with(" \x1b[0m\x1b[48;5;22m"));
         assert!(lines
             .iter()
             .all(|line| line.as_str().contains("\x1b[2D\x1b[3X")));
     }
 }
+
+#[cfg(test)]
+#[path = "line_diff_tests.rs"]
+mod diff_tests;
