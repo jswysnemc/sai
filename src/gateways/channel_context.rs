@@ -3,6 +3,7 @@ use crate::paths::SaiPaths;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -148,16 +149,31 @@ pub(crate) fn save_latest_channel_context(
     paths: &SaiPaths,
     context: &ChannelContext,
 ) -> Result<()> {
-    let mut contexts = load_context_map(paths)?;
-    contexts.insert(context.channel().to_string(), context.clone());
     let file = contexts_file(paths);
     if let Some(parent) = file.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(
-        file,
-        format!("{}\n", serde_json::to_string_pretty(&contexts)?),
-    )?;
+    let lock = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(file.with_extension("lock"))?;
+    lock.lock()?;
+    let mut contexts = load_context_map(paths)?;
+    contexts.insert(context.channel().to_string(), context.clone());
+    write_context_atomic(&file, &contexts)?;
+    Ok(())
+}
+
+/// 【渠道上下文】【原子保存】参数为目标路径与可序列化内容，返回保存结果。
+fn write_context_atomic(path: &Path, value: &impl Serialize) -> Result<()> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(parent)?;
+    let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+    serde_json::to_writer_pretty(temporary.as_file_mut(), value)?;
+    temporary.write_all(b"\n")?;
+    temporary.persist(path).map_err(|error| error.error)?;
     Ok(())
 }
 
@@ -195,10 +211,7 @@ pub(crate) fn save_session_channel_context(
 ) -> Result<()> {
     let (_, state_dir) =
         crate::state::state_dir_for_workspace_session(paths, workspace_path, session_id)?;
-    std::fs::write(
-        state_dir.join("channel-context.json"),
-        format!("{}\n", serde_json::to_string_pretty(context)?),
-    )?;
+    write_context_atomic(&state_dir.join("channel-context.json"), context)?;
     Ok(())
 }
 
@@ -272,6 +285,37 @@ fn qq_target_kind_name(target_kind: QqTargetKind) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 【渠道上下文】【并发回归】并发更新不同渠道时不得丢失映射或读取半份 JSON。
+    /// @returns 无；无参数
+    #[test]
+    fn parallel_channel_updates_preserve_both_targets() {
+        let root = tempfile::tempdir().unwrap();
+        let paths = test_paths(root.path().to_path_buf());
+        let contexts = [
+            ChannelContext::qq(QqTargetKind::User, "qq-user".into(), None),
+            ChannelContext::weixin("wx-user".into(), None),
+        ];
+        let tasks = contexts
+            .into_iter()
+            .map(|context| {
+                let paths = paths.clone();
+                std::thread::spawn(move || {
+                    for _ in 0..30 {
+                        save_latest_channel_context(&paths, &context).unwrap();
+                        load_latest_channel_context(&paths, context.channel()).unwrap();
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        for task in tasks {
+            task.join().unwrap();
+        }
+        assert!(load_latest_channel_context(&paths, "qq").unwrap().is_some());
+        assert!(load_latest_channel_context(&paths, "weixin")
+            .unwrap()
+            .is_some());
+    }
 
     /// 验证 QQ 入站标记包含渠道、网关和目标类型。
     ///

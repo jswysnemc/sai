@@ -3,6 +3,12 @@ use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use anyhow::Result;
 
+/// 【网关控制】【调度分类】参数为入站文本，返回是否需要全局控制互斥。
+pub(crate) fn is_gateway_control_command(prompt: &str) -> Result<bool> {
+    Ok(is_gateway_clear_all_command(prompt)
+        || parse_control_command(prompt, ControlSurface::Gateway)?.is_some())
+}
+
 /// 处理 gateway 入站控制命令。
 ///
 /// 参数:

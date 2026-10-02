@@ -135,6 +135,35 @@ mod tests {
         }
     }
 
+    /// 【会话索引】【并发回归】不同 QQ 目标同时创建会话时保留全部记录；无参数或返回值。
+    #[test]
+    fn concurrent_gateway_sessions_keep_every_index_entry() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path().to_path_buf());
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(16));
+        let threads = (0..16)
+            .map(|index| {
+                let paths = paths.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    let context = crate::gateways::channel_context::ChannelContext::qq(
+                        crate::gateways::qq_official::QqTargetKind::User,
+                        index.to_string(),
+                        None,
+                    );
+                    barrier.wait();
+                    crate::gateways::session::ensure_gateway_session(&paths, &context)
+                })
+            })
+            .collect::<Vec<_>>();
+        for thread in threads {
+            thread.join().unwrap().unwrap();
+        }
+        let workspace = crate::gateways::workspace::gateway_workspace_path(&paths);
+        let sessions = crate::state::list_sessions_for_workspace(&paths, &workspace).unwrap();
+        assert_eq!(sessions.len(), 16);
+    }
+
     #[test]
     /// 验证同一渠道目标生成稳定会话标识。
     fn gateway_session_id_is_stable_per_target() {

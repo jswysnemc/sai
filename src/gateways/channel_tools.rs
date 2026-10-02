@@ -46,7 +46,7 @@ pub(crate) fn register_channel_message_tool(
     registry.register(
         ToolSpec::new(
             "send_channel_message",
-            "Send text or a local media file to a channel. Use channel=current for the current chat, or channel=qq/weixin to send to that channel's most recent chat.",
+            "Send text or a local media file to a channel. Use channel=current or the current channel name for this chat. Another channel name sends to that channel's most recent chat.",
             json!({
                 "type": "object",
                 "properties": {
@@ -174,6 +174,9 @@ async fn resolve_target(
 ) -> Result<ActiveChannelTarget> {
     match channel.trim().to_ascii_lowercase().as_str() {
         "" | "current" => Ok(current),
+        // 1. 【渠道消息】【目标隔离】同渠道名称绑定本次入站目标，不读取其他并发会话的最近目标
+        "qq" if matches!(current, ActiveChannelTarget::Qq { .. }) => Ok(current),
+        "weixin" | "wechat" if matches!(current, ActiveChannelTarget::Weixin { .. }) => Ok(current),
         "qq" => resolve_qq_target(paths, config).await,
         "weixin" | "wechat" => resolve_weixin_target(paths, config),
         value => bail!("{}: {value}", t("unsupported channel", "不支持的渠道")),
@@ -511,6 +514,43 @@ fn media_kind_name(kind: WeixinOutboundMediaKind) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 【渠道消息】【目标回归】显式指定当前渠道也沿用本次入站目标，不解析全局最近会话。
+    /// @returns 无；无参数
+    #[tokio::test]
+    async fn explicit_current_channel_keeps_request_target() {
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path();
+        let paths = SaiPaths {
+            config_dir: root.join("config"),
+            config_file: root.join("config/config.jsonc"),
+            secrets_file: root.join("config/secrets.jsonc"),
+            skills_dir: root.join("skills"),
+            data_dir: root.join("data"),
+            cache_dir: root.join("cache"),
+            state_dir: root.join("state"),
+            pictures_dir: root.join("pictures"),
+            fish_hook_file: root.join("fish"),
+            bash_hook_file: root.join("bash"),
+            zsh_hook_file: root.join("zsh"),
+            powershell_hook_file: root.join("ps"),
+        };
+        let current = ActiveChannelTarget::Qq {
+            client: QqOfficialClient::new(
+                "http://127.0.0.1:1".into(),
+                "fixture".into(),
+                QqTargetKind::User,
+                "request-user".into(),
+            ),
+            msg_id: Some("request-message".into()),
+        };
+        let target = resolve_target(&paths, &AppConfig::default(), current, "qq")
+            .await
+            .unwrap();
+        assert!(
+            matches!(target, ActiveChannelTarget::Qq { msg_id: Some(id), .. } if id == "request-message")
+        );
+    }
 
     /// 验证可选字符串参数会去除首尾空白并忽略空值。
     ///

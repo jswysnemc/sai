@@ -83,6 +83,7 @@ pub fn ensure_workspace_session(
         bail!("session title cannot be empty");
     }
     let scope = workspace_scope_for_path(paths, workspace_path);
+    let _index = super::index::lock_index(&scope.state_dir)?;
     super::workspace_metadata::record(&scope)?;
     let mut sessions = read_sorted_sessions(&scope.state_dir)?;
     if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {

@@ -5,6 +5,7 @@ pub(crate) mod inbound_media;
 pub(crate) mod processor;
 pub(crate) mod prompt;
 pub(crate) mod replay_guard;
+mod session_locks;
 pub(crate) mod signature;
 pub(crate) mod webhook_security;
 pub(crate) mod webhook_server;

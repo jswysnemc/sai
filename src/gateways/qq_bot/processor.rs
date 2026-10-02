@@ -3,6 +3,7 @@ use super::event::{QqBotInboundMediaKind, QqBotMessageEvent};
 use super::inbound_media::{save_inbound_media, saved_image_to_data_url, SavedQqInboundMedia};
 use super::prompt::channel_prompt;
 use super::replay_guard::MessageReplayGuard;
+use super::session_locks::SessionLocks;
 use crate::agent::AgentMode;
 use crate::cli::build_tool_registry;
 use crate::config::AppConfig;
@@ -32,7 +33,7 @@ pub(crate) struct QqBotProcessor {
     verbose: bool,
     authenticator: Mutex<QqBotAuthenticator>,
     http_client: reqwest::Client,
-    agent_lock: Mutex<()>,
+    session_locks: SessionLocks,
     message_replay_guard: MessageReplayGuard,
 }
 
@@ -52,7 +53,7 @@ impl QqBotProcessor {
             verbose: config.verbose,
             authenticator: Mutex::new(QqBotAuthenticator::new(config.app_id, config.client_secret)),
             http_client: reqwest::Client::new(),
-            agent_lock: Mutex::new(()),
+            session_locks: SessionLocks::default(),
             message_replay_guard: MessageReplayGuard::default(),
         }
     }
@@ -214,7 +215,21 @@ impl QqBotProcessor {
     /// 返回:
     /// - 处理是否成功
     async fn process_message_event(&self, event: &QqBotMessageEvent) -> Result<()> {
-        let _guard = self.agent_lock.lock().await;
+        let target = format!(
+            "{}:{}",
+            target_kind_name(event.target_kind),
+            event.target_id
+        );
+        let control =
+            crate::gateways::command_intercept::is_gateway_control_command(&event.prompt)?;
+        self.session_locks
+            .run(target, control, self.process_serialized_message(event))
+            .await
+    }
+
+    /// 【QQ网关】【消息处理】在会话调度锁内处理事件，返回处理结果。
+    /// @param event 为已通过去重与调度的 QQ 消息
+    async fn process_serialized_message(&self, event: &QqBotMessageEvent) -> Result<()> {
         let context = ChannelContext::qq(
             event.target_kind,
             event.target_id.clone(),

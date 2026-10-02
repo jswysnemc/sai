@@ -88,6 +88,7 @@ fn create_session_record(
     title: Option<&str>,
     activate: bool,
 ) -> Result<SessionInfo> {
+    let _index = super::index::lock_index(&scope.state_dir)?;
     super::workspace_metadata::record(scope)?;
     let now = Utc::now().to_rfc3339();
     let session = SessionInfo {
@@ -152,6 +153,7 @@ pub(super) fn switch_session_in_base(
     base_state_dir: &Path,
     session_id: &str,
 ) -> Result<SessionInfo> {
+    let _index = super::index::lock_index(base_state_dir)?;
     let session_id = session_id.trim();
     let session = read_sorted_sessions(base_state_dir)?
         .into_iter()
@@ -173,6 +175,7 @@ pub(super) fn switch_session_in_base(
 /// - 更新后的会话信息
 pub fn rename_session(paths: &SaiPaths, session_id: &str, title: &str) -> Result<SessionInfo> {
     let scope = current_session_scope(paths)?;
+    let _index = super::index::lock_index(&scope.state_dir)?;
     let title = title.trim();
     if title.is_empty() {
         bail!("session title cannot be empty");
@@ -238,6 +241,7 @@ pub(super) fn delete_sessions_in_base(
         .map(|id| id.trim())
         .filter(|id| !id.is_empty())
         .collect::<std::collections::BTreeSet<_>>();
+    let _index = super::index::lock_index(state_dir)?;
     let mut sessions = read_sessions_from_base(state_dir)?;
     let deleted = sessions
         .iter()
@@ -464,6 +468,7 @@ pub fn touch_session_with_message(
     session_id: &str,
     message: &str,
 ) -> Result<()> {
+    let _index = super::index::lock_index(base_state_dir)?;
     let mut sessions = read_sorted_sessions(base_state_dir)?;
     let now = Utc::now().to_rfc3339();
     if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {

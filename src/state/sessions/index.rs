@@ -2,12 +2,36 @@ use super::model::SessionInfo;
 use super::repository::sort_sessions;
 use super::repository_paths::{current_session_file, sessions_file};
 use anyhow::{Context, Result};
+use std::io::Write;
 use std::path::Path;
 
 #[cfg(test)]
 thread_local! {
     static INDEX_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static INDEX_WRITES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// 【会话索引】【并发写入】锁定一次完整读改写；参数为工作区目录，返回释放时自动解锁的文件。
+pub(super) fn lock_index(base_state_dir: &Path) -> Result<std::fs::File> {
+    std::fs::create_dir_all(base_state_dir)?;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(base_state_dir.join(".index.lock"))?;
+    file.lock()?;
+    Ok(file)
+}
+
+/// 【会话索引】【原子写入】参数为目标路径与文本，返回保存结果，读者只会读到完整文件。
+fn write_atomic(path: &Path, text: &str) -> Result<()> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(parent)?;
+    let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+    temporary.write_all(text.as_bytes())?;
+    temporary.persist(path).map_err(|error| error.error)?;
+    Ok(())
 }
 
 /// 【会话索引】【性能回归】读取当前测试线程累计的索引访问次数。
@@ -61,9 +85,9 @@ pub(super) fn write_current_session_id_to_base(
     if let Some(parent) = current_session_file(base_state_dir).parent() {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(
-        current_session_file(base_state_dir),
-        format!("{session_id}\n"),
+    write_atomic(
+        &current_session_file(base_state_dir),
+        &format!("{session_id}\n"),
     )?;
     Ok(())
 }
@@ -102,9 +126,9 @@ pub(super) fn save_sessions_to_base(base_state_dir: &Path, sessions: &[SessionIn
     if let Some(parent) = file.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(
-        file,
-        format!("{}\n", serde_json::to_string_pretty(sessions)?),
+    write_atomic(
+        &file,
+        &format!("{}\n", serde_json::to_string_pretty(sessions)?),
     )?;
     Ok(())
 }
