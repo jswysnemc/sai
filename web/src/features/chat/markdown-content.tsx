@@ -1,4 +1,4 @@
-import { createContext, memo, useContext, type ReactNode } from "react";
+import { createContext, Fragment, memo, useContext, useMemo, useRef, type ReactNode } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
@@ -16,6 +16,7 @@ import {
   type MarkdownStylePreferences
 } from "../markdown/markdown-style-preferences";
 import "./markdown-renderer.css";
+import { splitMarkdownStream, type MarkdownStreamState } from "./markdown-stream-blocks";
 
 /**
  * 放行 data:image URL，其余交给默认清洗规则。
@@ -122,10 +123,18 @@ export const MarkdownContent = memo(function MarkdownContent({
   source: string;
   inlineAtoms: readonly ReactNode[];
   style: MarkdownStylePreferences;
-  /** 流式输出时延后解析并使用轻量插件集 */
+  /** 流式输出复用完成块，保持完整插件语义 */
   streaming: boolean;
   collapseJson?: boolean;
 }) {
+  const previous = useRef<MarkdownStreamState | undefined>(undefined);
+  const blocks = useMemo(() => {
+    // 1. 【正文渲染】【增量分块】完成后保留稳定键；静态历史直接走一次完整解析
+    if (!streaming && !previous.current) return [{ offset: 0, source }];
+    const next = splitMarkdownStream(source, previous.current);
+    previous.current = next;
+    return next.blocks;
+  }, [source, streaming]);
   return (
     <markdownStyleContext.Provider value={style}>
       <collapseJsonContext.Provider value={collapseJson}>
@@ -147,17 +156,25 @@ export const MarkdownContent = memo(function MarkdownContent({
             data-streaming={streaming ? "true" : "false"}
             spellCheck={false}
           >
-            <ReactMarkdown
-              remarkPlugins={remarkPlugins}
-              rehypePlugins={rehypePlugins}
-              urlTransform={transformUrl}
-              components={markdownComponents}
-            >
-              {source}
-            </ReactMarkdown>
+            {blocks.map((block, index) => (
+              <Fragment key={block.offset}>
+                {index > 0 ? "\n" : null}
+                <MarkdownParsedBlock source={block.source} />
+              </Fragment>
+            ))}
           </div>
         </inlineAtomContext.Provider>
       </collapseJsonContext.Provider>
     </markdownStyleContext.Provider>
   );
+});
+
+/**
+ * 【正文渲染】【块缓存】只在块文本变化时运行完整插件链，外观与原子由上下文更新。
+ * @param props 单个稳定块或可变尾部文本
+ * @returns 无额外 DOM 容器的 Markdown 节点
+ */
+const MarkdownParsedBlock = memo(function MarkdownParsedBlock({ source }: { source: string }) {
+  return <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}
+    urlTransform={transformUrl} components={markdownComponents}>{source}</ReactMarkdown>;
 });
