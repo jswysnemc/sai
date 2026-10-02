@@ -40,6 +40,15 @@ pub(super) struct ComposerSignature {
     lines: Vec<String>,
     cursor_col: u16,
     cursor_row: u16,
+    /// 首个面板标题仍可见时的显示宽度，裁剪后为零
+    panel_header_width: usize,
+}
+
+impl ComposerSignature {
+    /// 【全屏视图】【面板点击】参数为终端列与行，返回是否命中实际可见的首个面板标题。
+    pub(in crate::cli::repl_runtime) fn hits_panel_header(&self, column: u16, row: u16) -> bool {
+        row == self.top && usize::from(column) < self.panel_header_width
+    }
 }
 
 /// 可从输入 source 按当前终端宽度重绘的 REPL composer。

@@ -55,6 +55,13 @@ impl ComposerFrame {
             lines,
             cursor_col,
             cursor_row,
+            panel_header_width: if hidden_rows == 0 && height > 0 {
+                self.panel_lines.first().map_or(0, |line| {
+                    crate::cli::repl_text::visible_width(line).min(cols)
+                })
+            } else {
+                0
+            },
         };
         let same_geometry =
             previous.filter(|old| old.top == top && old.height == height && old.cols == cols);

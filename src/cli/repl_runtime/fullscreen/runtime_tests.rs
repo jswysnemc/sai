@@ -18,7 +18,7 @@ fn options() -> TranscriptRenderOptions {
 }
 
 /// 测试用底栏。
-fn chrome() -> ReplChrome {
+pub(super) fn chrome() -> ReplChrome {
     ReplChrome {
         mode: AgentMode::Yolo,
         context_ratio: 0.0,

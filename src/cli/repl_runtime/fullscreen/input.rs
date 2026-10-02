@@ -114,6 +114,22 @@ impl ReplRuntime {
     /// 返回:
     /// - 处理效果
     fn fullscreen_mouse(&mut self, mouse: MouseEvent) -> Effect {
+        // 1. 【全屏视图】【待办切换】只响应可见 TODO 标题，不把输入区或被裁掉的标题当作按钮
+        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
+            && self.transcript.latest_todo_items().iter()
+                .any(|item| matches!(item.status.as_str(), "pending" | "in_progress"))
+            && self.last_composer_signature.as_ref()
+                .is_some_and(|signature| signature.hits_panel_header(mouse.column, mouse.row))
+        {
+            if let Some(session) = self.fullscreen.as_mut() {
+                session.state.press = None;
+                session.state.selection = None;
+                session.state.copied = None;
+                session.state.dragging = false;
+            }
+            self.toggle_todo_panel_compact();
+            return Effect::Repaint;
+        }
         let Some(session) = self.fullscreen.as_mut() else {
             return Effect::Pass;
         };

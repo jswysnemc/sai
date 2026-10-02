@@ -254,3 +254,6 @@ mod hover_tests;
 #[cfg(test)]
 #[path = "runtime_tests.rs"]
 mod runtime_tests;
+
+#[cfg(test)]
+mod todo_tests;
