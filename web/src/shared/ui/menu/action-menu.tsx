@@ -21,7 +21,9 @@ type ActionMenuProps = {
   items: ActionMenuItem[];
   className?: string;
   triggerClassName?: string;
+  triggerSize?: "default" | "small" | "icon";
   disabled?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 /**
@@ -29,7 +31,7 @@ type ActionMenuProps = {
  * @param props 触发器、可用动作和样式
  * @returns 使用独立浮层的操作菜单
  */
-export function ActionMenu({ label, trigger, items, className = "", triggerClassName = "", disabled }: ActionMenuProps) {
+export function ActionMenu({ label, trigger, items, className = "", triggerClassName = "", triggerSize = "icon", disabled, onOpenChange }: ActionMenuProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -44,6 +46,7 @@ export function ActionMenu({ label, trigger, items, className = "", triggerClass
       if (!(event.target instanceof Node)) return;
       if (triggerRef.current?.contains(event.target) || menuRef.current?.contains(event.target)) return;
       setOpen(false);
+      onOpenChange?.(false);
     };
     document.addEventListener("pointerdown", handlePointer);
     return () => document.removeEventListener("pointerdown", handlePointer);
@@ -61,6 +64,7 @@ export function ActionMenu({ label, trigger, items, className = "", triggerClass
       event.preventDefault();
       event.stopPropagation();
       setOpen(false);
+      onOpenChange?.(false);
       triggerRef.current?.focus();
       return;
     }
@@ -76,7 +80,7 @@ export function ActionMenu({ label, trigger, items, className = "", triggerClass
       <Button
         ref={triggerRef}
         variant="ghost"
-        size="icon"
+        size={triggerSize}
         className={triggerClassName}
         aria-label={label}
         title={label}
@@ -84,11 +88,16 @@ export function ActionMenu({ label, trigger, items, className = "", triggerClass
         aria-expanded={open}
         aria-controls={open ? id : undefined}
         disabled={disabled}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => setOpen((current) => {
+          const next = !current;
+          onOpenChange?.(next);
+          return next;
+        })}
         onKeyDown={(event) => {
           if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
             setOpen(true);
+            onOpenChange?.(true);
           }
         }}
       >
@@ -105,6 +114,7 @@ export function ActionMenu({ label, trigger, items, className = "", triggerClass
                 disabled={item.disabled}
                 onClick={() => {
                   setOpen(false);
+                  onOpenChange?.(false);
                   triggerRef.current?.focus();
                   item.onSelect();
                 }}
