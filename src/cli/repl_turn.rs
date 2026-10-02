@@ -162,7 +162,8 @@ pub(super) async fn execute_repl_turn(
     // 1. 本轮开始时保留可编辑输入框，供 Tab 入队
     runtime.begin_stream_composer(stream_mode)?;
     // 2. 绑定热切换句柄：Shift+Tab 立即改权限模式
-    runtime.bind_live_mode(agent.live_mode_handle(), agent.session_id());
+    let final_mode_handle = agent.live_mode_handle();
+    runtime.bind_live_mode(final_mode_handle.clone(), agent.session_id());
     // 停止标志在丢弃 chat future 前置位，轮次守卫据此把本轮记为用户中断
     let cancel_flag = agent.cancel_handle();
     let chat = runner.run_submission_with_agent(submission, agent, &mut sink);
@@ -237,6 +238,9 @@ pub(super) async fn execute_repl_turn(
     // 终端模式恢复失败也不能跳过流状态清理，先记录结果最后上报
     let guard_result = stream_terminal_guard.finish(&mut io::stdout());
     let leftover_draft = {
+        runtime.stream_draft_mut().mode = Some(AgentMode::from_u8(
+            final_mode_handle.load(std::sync::atomic::Ordering::SeqCst),
+        ));
         runtime.clear_live_mode();
         runtime.finish_stream()?;
         let draft = runtime.stream_draft().text.trim().to_string();

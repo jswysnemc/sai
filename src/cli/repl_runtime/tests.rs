@@ -572,3 +572,24 @@ fn stream_mode_prefers_draft_mode() {
     );
 }
 
+/// 【计划模式】【界面同步】共享模式变化立即覆盖旧草稿，用户主动切换仍能更新句柄；无参数和返回值。
+#[test]
+fn plan_transition_updates_composer_without_losing_manual_switch() {
+    use crate::agent::AgentMode;
+    use std::sync::{
+        atomic::{AtomicU8, Ordering},
+        Arc,
+    };
+    let mut runtime = ReplRuntime::new(5_000, options());
+    let handle = Arc::new(AtomicU8::new(AgentMode::Plan.as_u8()));
+    runtime.bind_live_mode(handle.clone(), "plan-test");
+    runtime.stream_draft_mut().mode = Some(AgentMode::Plan);
+    handle.store(AgentMode::Audited.as_u8(), Ordering::SeqCst);
+    assert_eq!(runtime.stream_mode(AgentMode::Plan), AgentMode::Audited);
+    runtime.stream_draft_mut().mode = Some(AgentMode::AutoAudit);
+    assert_eq!(
+        runtime.apply_stream_mode_live(AgentMode::Audited),
+        AgentMode::AutoAudit
+    );
+    assert_eq!(handle.load(Ordering::SeqCst), AgentMode::AutoAudit.as_u8());
+}

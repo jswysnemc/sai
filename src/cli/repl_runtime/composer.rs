@@ -286,8 +286,10 @@ impl ReplRuntime {
     /// 返回:
     /// - 当前草稿或 chrome 模式
     pub(in crate::cli) fn stream_mode(&self, fallback: AgentMode) -> AgentMode {
-        self.stream_draft
-            .mode
+        self.live_mode_handle
+            .as_ref()
+            .map(|handle| AgentMode::from_u8(handle.load(std::sync::atomic::Ordering::SeqCst)))
+            .or(self.stream_draft.mode)
             .or_else(|| self.composer.as_ref().map(|frame| frame.chrome().mode))
             .unwrap_or(fallback)
     }
@@ -448,9 +450,7 @@ impl ReplRuntime {
         else {
             return Ok(());
         };
-        if let Some(mode) = self.stream_draft.mode {
-            chrome.set_mode(mode);
-        }
+        chrome.set_mode(self.stream_mode(chrome.mode));
         // 轮次进行中用已完成请求的实报读数覆盖底栏，避免停留在上一轮结束时的快照
         chrome.apply_live_usage(
             self.live_usage.context_prompt_tokens(),

@@ -89,3 +89,13 @@ describe("question card state", () => {
     expect(summarizeAnswers([["前端", "后端"]], zh)).toEqual(["前端、后端"]);
   });
 });
+
+describe("Plan review", () => {
+  it("shows the full plan before approval options without truncating its ending", () => {
+    const plan = "# Scope\n\n" + "Detailed implementation step.\n\n".repeat(100) + "Final verification boundary";
+    const html = renderToStaticMarkup(<QuestionRequestCard pending={{ ...pending, plan }} active />);
+    expect(html).toContain('aria-label="Plan review"');
+    expect(html).toContain("Final verification boundary");
+    expect(html.indexOf("Final verification boundary")).toBeLessThan(html.indexOf("question-option-line"));
+  });
+});

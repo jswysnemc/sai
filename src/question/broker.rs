@@ -12,6 +12,8 @@ pub(crate) struct PendingQuestion {
     pub(crate) id: String,
     pub(crate) session_id: String,
     pub(crate) request: QuestionRequest,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) plan: Option<String>,
 }
 
 struct PendingEntry {
@@ -30,10 +32,20 @@ pub(crate) fn request_question(
     session_id: &str,
     request: QuestionRequest,
 ) -> (PendingQuestion, oneshot::Receiver<QuestionResponse>) {
+    request_question_with_plan(session_id, request, None)
+}
+
+/// 【计划模式】【审批队列】参数为会话、审批表单与完整计划，返回请求及单次回执通道。
+pub(crate) fn request_question_with_plan(
+    session_id: &str,
+    request: QuestionRequest,
+    plan: Option<String>,
+) -> (PendingQuestion, oneshot::Receiver<QuestionResponse>) {
     let question = PendingQuestion {
         id: Uuid::new_v4().to_string(),
         session_id: session_id.to_string(),
         request,
+        plan,
     };
     let (sender, receiver) = oneshot::channel();
     pending().lock().unwrap().insert(

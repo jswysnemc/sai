@@ -81,6 +81,8 @@ export type PendingQuestion = {
   id: string;
   session_id: string;
   request: QuestionRequestPayload;
+  /** 当前审批的完整计划快照，普通问题不提供 */
+  plan?: string;
 };
 
 export type QuestionAnswers = string[][];

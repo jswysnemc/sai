@@ -48,9 +48,17 @@ pub(crate) fn apply_enabled_tools_filter(
         return Ok(filtered);
     }
     let required = match source {
-        SubmissionSource::Repl | SubmissionSource::Web => &["subagent", "todo", "ask_question"][..],
+        SubmissionSource::Repl | SubmissionSource::Web => &[
+            "subagent",
+            "todo",
+            "ask_question",
+            "enter_plan_mode",
+            "exit_plan_mode",
+        ][..],
         SubmissionSource::Gateway => &["cron", "send_channel_message"][..],
-        SubmissionSource::Command | SubmissionSource::ShellIntercept => &["ask_question"][..],
+        SubmissionSource::Command | SubmissionSource::ShellIntercept => {
+            &["ask_question", "enter_plan_mode", "exit_plan_mode"][..]
+        }
     };
     for name in required {
         if registry.contains(name) {

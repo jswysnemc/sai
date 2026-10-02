@@ -243,7 +243,7 @@ pub(super) fn prompt_permission_request_tui(
 /// 返回:
 /// - 是否成功提交回答
 fn prompt_question_request(pending: &crate::question::PendingQuestion) -> Result<()> {
-    let response = crate::question_tui::ask(&pending.request)
+    let response = super::plan_review::ask(pending)
         .unwrap_or_else(|err| crate::question::QuestionResponse::Unavailable(err.to_string()));
     crate::question::resolve_question(&pending.id, response)
 }
@@ -267,7 +267,7 @@ pub(super) fn prompt_question_request_tui(
     let mut terminal_guard = terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
     runtime.prepare_question_prompt()?;
 
-    let response = crate::question_tui::ask(&pending.request)
+    let response = super::plan_review::ask(pending)
         .unwrap_or_else(|err| crate::question::QuestionResponse::Unavailable(err.to_string()));
 
     // 2. 恢复终端模式；提问面板直接写过终端，受管区域需要在下次同步前重启

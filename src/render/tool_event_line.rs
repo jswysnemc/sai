@@ -456,6 +456,10 @@ pub(crate) fn tool_verb(name: &str, tense: ToolVerbTense) -> &'static str {
     match (name, tense) {
         (name, ToolVerbTense::Progressive) if name.ends_with("__generate_image") => "Generating",
         (name, ToolVerbTense::Perfect) if name.ends_with("__generate_image") => "Generated",
+        ("enter_plan_mode", ToolVerbTense::Progressive) => "Planning",
+        ("enter_plan_mode", ToolVerbTense::Perfect) => "Entered plan mode",
+        ("exit_plan_mode", ToolVerbTense::Progressive) => "Reviewing plan",
+        ("exit_plan_mode", ToolVerbTense::Perfect) => "Reviewed plan",
         ("ask_question", ToolVerbTense::Progressive) => "Asking",
         ("ask_question", ToolVerbTense::Perfect) => "Asked",
         ("run_command", ToolVerbTense::Progressive) => "Running",
@@ -525,6 +529,8 @@ fn is_builtin_tool_verb(name: &str) -> bool {
         name,
         "run_command"
             | "ask_question"
+            | "enter_plan_mode"
+            | "exit_plan_mode"
             | "edit_file"
             | "write_file"
             | "str_replace"

@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { RunMode, RunModelSelection, ThinkingLevel, WebEvent } from "../../api/contracts";
 import { api } from "../../api/client";
+import { planModeFromEvent } from "./plan-mode-event";
 import { parseRunStreamReset } from "./run-stream-reset";
 import { runFailureEvent } from "./run-failure-event";
 import { parseQueueInsertAt, type LiveRunState } from "./run-event-reducer";
@@ -78,7 +79,8 @@ export function useRunStream(
   onSettled: () => void,
   onWorkspaceChanged?: () => void,
   onInterruptedWithoutReply?: (input: string) => void,
-  onQueueMerged?: (input: string) => void
+  onQueueMerged?: (input: string) => void,
+  onModeChange?: (mode: RunMode) => void
 ) {
   const { locale } = useI18n();
   const queryClient = useQueryClient();
@@ -145,8 +147,10 @@ export function useRunStream(
     if (event.type === "run.merged" && !event.replayed) {
       onQueueMerged?.(typeof event.payload.input === "string" ? event.payload.input : "");
     }
+    const mode = planModeFromEvent(event);
+    if (mode) onModeChange?.(mode);
     dispatch({ type: "event", event });
-  }, [flushPendingEvents, onQueueMerged]);
+  }, [flushPendingEvents, onQueueMerged, onModeChange]);
 
   useEffect(() => {
     dispatch({ type: "relocalize" });

@@ -92,8 +92,11 @@ impl Agent {
             let was_anchor_bootstrap = self.tool_visibility.is_anchor_bootstrap();
             perf.mark(&format!("round {tool_round} tool definitions"));
             let ordered_messages = system_messages_first(messages.clone());
-            self.state
-                .enforce_provider_messages(Some(turn_id), &ordered_messages, self.context_char_budget)?;
+            self.state.enforce_provider_messages(
+                Some(turn_id),
+                &ordered_messages,
+                self.context_char_budget,
+            )?;
             perf.mark(&format!("round {tool_round} provider projection"));
             let mut result = match self
                 .request_model_round(
@@ -176,11 +179,19 @@ impl Agent {
                 if was_anchor_bootstrap {
                     self.promote_anchor_and_refresh_prompt(messages);
                 }
-                self.state.save_assistant_message(turn_id, crate::state::tool_history::AssistantMessageKey::Final, &result)?;
+                self.state.save_assistant_message(
+                    turn_id,
+                    crate::state::tool_history::AssistantMessageKey::Final,
+                    &result,
+                )?;
                 result.usage = turn_usage;
                 return Ok(result);
             }
-            self.state.save_assistant_message(turn_id, crate::state::tool_history::AssistantMessageKey::Tool(&result.tool_calls[0].id), &result)?;
+            self.state.save_assistant_message(
+                turn_id,
+                crate::state::tool_history::AssistantMessageKey::Tool(&result.tool_calls[0].id),
+                &result,
+            )?;
             messages.push(assistant_tool_message(&result));
             let prepared_calls = tool_invocation::prepare_tool_calls(
                 &self.tool_visibility,
@@ -303,8 +314,12 @@ impl Agent {
                             continue;
                         }
                     }
-                    if call.function.name == "ask_question" {
-                        if question_call_count > 1 {
+                    if matches!(
+                        call.function.name.as_str(),
+                        "ask_question" | "exit_plan_mode"
+                    ) || (call.function.name == "enter_plan_mode" && !defer_sibling_tools)
+                    {
+                        if question_call_count > 1 && call.function.name != "enter_plan_mode" {
                             let output = "tool error: only one ask_question call is allowed per tool batch; combine all questions into one call".to_string();
                             repeat_guard
                                 .observe_rejected(&call.function.name, &call.function.arguments);
@@ -317,7 +332,7 @@ impl Agent {
                             messages.push(ChatMessage::tool(call.id, output));
                             continue;
                         }
-                        if !question_round_allowed {
+                        if !question_round_allowed && call.function.name != "enter_plan_mode" {
                             let output = tool_invocation::question_limit_notice();
                             repeat_guard
                                 .observe_rejected(&call.function.name, &call.function.arguments);
@@ -330,9 +345,17 @@ impl Agent {
                             messages.push(ChatMessage::tool(call.id, output));
                             continue;
                         }
-                        let execution = self
-                            .execute_question(&call.function.arguments, on_event)
-                            .await?;
+                        let execution = if call.function.name == "ask_question" {
+                            self.execute_question(&call.function.arguments, on_event)
+                                .await?
+                        } else {
+                            self.execute_plan_tool(
+                                &call.function.name,
+                                &call.function.arguments,
+                                on_event,
+                            )
+                            .await?
+                        };
                         if execution.failed {
                             repeat_guard
                                 .observe_rejected(&call.function.name, &call.function.arguments);

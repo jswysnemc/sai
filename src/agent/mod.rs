@@ -33,6 +33,9 @@ mod model_context;
 pub(crate) mod model_json;
 mod plugin_commands;
 mod question_execution;
+mod plan_execution;
+#[cfg(test)]
+mod plan_execution_tests;
 #[cfg(test)]
 mod question_execution_tests;
 mod recovery;

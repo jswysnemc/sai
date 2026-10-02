@@ -136,7 +136,8 @@ export function ChatPage({ toolbar, selectedSessionId }: { toolbar?: ReactNode; 
     onSettled,
     onWorkspaceChanged,
     onInterruptedWithoutReply,
-    onQueueMerged
+    onQueueMerged,
+    setMode
   );
   const turnTree = useTurnTree(activeSession?.id, {
     onBranchChanged: run.reset,

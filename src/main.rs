@@ -27,6 +27,7 @@ mod platform;
 mod plugins;
 mod prompts;
 mod question;
+mod plan;
 mod question_tui;
 mod render;
 mod runner;

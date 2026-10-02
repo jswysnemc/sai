@@ -204,6 +204,12 @@ impl PermissionProfile {
         self.mode.store(mode.as_u8(), Ordering::SeqCst);
     }
 
+    /// 【计划模式】【状态共享】参数为现有会话模式句柄，返回绑定后的权限配置。
+    pub(crate) fn with_mode_handle(mut self, handle: Arc<AtomicU8>) -> Self {
+        self.mode = handle;
+        self
+    }
+
     /// 返回可与 Agent 共享的模式原子句柄。
     pub(crate) fn mode_handle(&self) -> Arc<AtomicU8> {
         self.mode.clone()

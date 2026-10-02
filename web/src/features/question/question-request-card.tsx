@@ -11,6 +11,7 @@ import { QuestionStepDots } from "./question-step-dots";
 import { QuestionSummaryBar } from "./question-summary-bar";
 import { useQuestionAnswers } from "./use-question-answers";
 import "./question-request-card.css";
+import { PlanReviewContent } from "./plan-review-content";
 
 type QuestionRequestCardProps = {
   pending: PendingQuestion;
@@ -56,6 +57,7 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
         <QuestionSummaryBar status={status} label={label} summary={summaryLine} expanded={historyOpen} onToggle={() => setHistoryOpen((value) => !value)} />
       )}
       <Collapse open={live || historyOpen}>
+        {pending.plan && <PlanReviewContent plan={pending.plan} />}
         {live && current ? (
           <div className="question-request-body">
             <QuestionOptionPanel

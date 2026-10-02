@@ -343,7 +343,7 @@ impl ReplRuntime {
     ) -> crate::agent::AgentMode {
         use crate::agent::AgentMode;
         use std::sync::atomic::Ordering;
-        let mode = self.stream_mode(fallback);
+        let mode = self.stream_draft.mode.unwrap_or(fallback);
         if let Some(handle) = self.live_mode_handle.as_ref() {
             handle.store(mode.as_u8(), Ordering::SeqCst);
         }
@@ -409,9 +409,9 @@ impl ReplRuntime {
             completion_wait,
             exit_hint_wait,
         ]
-            .into_iter()
-            .flatten()
-            .min()
+        .into_iter()
+        .flatten()
+        .min()
     }
 
     /// 重放已经到期的 resize 请求。

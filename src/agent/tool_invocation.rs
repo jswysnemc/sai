@@ -85,13 +85,19 @@ impl PreparedToolCalls {
         visibility: &ToolVisibility,
         first_sequence: usize,
     ) -> Vec<ToolExecutionGroup> {
+        let serial_batch = self.question_call_count > 0
+            || self.calls.iter().any(|(_, call)| {
+                call.as_ref()
+                    .is_ok_and(|call| call.function.name == "enter_plan_mode")
+            });
         let mut groups = Vec::new();
         let mut read_only = Vec::new();
 
         for (index, (provider_call, execution_call)) in self.calls.into_iter().enumerate() {
-            let concurrent = execution_call
-                .as_ref()
-                .is_ok_and(|call| is_concurrent_read_only_call(registry, visibility, call));
+            let concurrent = !serial_batch
+                && execution_call
+                    .as_ref()
+                    .is_ok_and(|call| is_concurrent_read_only_call(registry, visibility, call));
             let call = SequencedToolCall {
                 sequence: first_sequence.saturating_add(index),
                 provider_call,
@@ -115,8 +121,10 @@ fn is_concurrent_read_only_call(
     visibility: &ToolVisibility,
     call: &ToolCall,
 ) -> bool {
-    if call.function.name == "ask_question"
-        || call.function.name == tools::REQUEST_CAPABILITY_NAME
+    if matches!(
+        call.function.name.as_str(),
+        "ask_question" | "enter_plan_mode" | "exit_plan_mode"
+    ) || call.function.name == tools::REQUEST_CAPABILITY_NAME
         || visibility.is_loader_call(&call.function.name)
     {
         return false;
@@ -172,14 +180,17 @@ pub(super) fn prepare_tool_calls(
     let question_call_count = calls
         .iter()
         .filter(|(_, call)| {
-            registry.contains("ask_question")
-                && call.as_ref().is_ok_and(|call| {
-                    call.function.name == "ask_question"
-                        && visibility.is_visible("ask_question")
-                        && registry
-                            .validate_arguments("ask_question", &call.function.arguments)
-                            .is_ok()
-                })
+            call.as_ref().is_ok_and(|call| {
+                registry.contains(&call.function.name)
+                    && matches!(
+                        call.function.name.as_str(),
+                        "ask_question" | "exit_plan_mode"
+                    )
+                    && visibility.is_visible(&call.function.name)
+                    && registry
+                        .validate_arguments(&call.function.name, &call.function.arguments)
+                        .is_ok()
+            })
         })
         .count();
     PreparedToolCalls {
@@ -533,6 +544,43 @@ mod tests {
         );
         assert!(matches!(groups[1], ToolExecutionGroup::Serial(ref call) if call.sequence == 13));
         assert!(matches!(groups[2], ToolExecutionGroup::Serial(ref call) if call.sequence == 14));
+    }
+
+    /// 【计划模式】【调度回归】审批批次的其他工具全部串行延后，进入计划同样形成模式边界；无参数和返回值。
+    #[test]
+    fn plan_tools_preserve_serial_approval_boundary() {
+        let visibility = ToolVisibility::new(Vec::new());
+        let mut registry = ToolRegistry::new();
+        tools::register_ask_question(&mut registry);
+        registry.register(crate::tools::ToolSpec::new(
+            "read_file",
+            "read",
+            tools::empty_parameters(),
+            |_| async { Ok(String::new()) },
+        ));
+        for (name, arguments) in [
+            ("enter_plan_mode", "{}"),
+            (
+                "exit_plan_mode",
+                r#"{"title":"Design","plan":"Complete plan"}"#,
+            ),
+        ] {
+            let calls = vec![
+                call("read_file", "{}"),
+                call("read_file", "{}"),
+                call(name, arguments),
+            ];
+            let prepared = prepare_tool_calls(&visibility, &registry, &calls);
+            assert_eq!(
+                prepared.question_call_count,
+                usize::from(name == "exit_plan_mode")
+            );
+            let groups = prepared.into_execution_groups(&registry, &visibility, 1);
+            assert_eq!(groups.len(), 3);
+            assert!(groups
+                .iter()
+                .all(|group| matches!(group, ToolExecutionGroup::Serial(_))));
+        }
     }
 
     /// 构造测试用供应商工具调用。

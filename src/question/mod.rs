@@ -5,7 +5,8 @@ mod broker;
 
 pub(crate) use broker::{
     answer_question_with_images, cancel_question, discard_pending_questions_for_session,
-    pending_questions, request_question, resolve_question, PendingQuestion,
+    pending_questions, request_question, request_question_with_plan, resolve_question,
+    PendingQuestion,
 };
 
 use anyhow::{bail, Context, Result};

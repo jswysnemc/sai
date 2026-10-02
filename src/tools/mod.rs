@@ -19,6 +19,7 @@ mod memory;
 pub(crate) mod mesh;
 pub(crate) mod model_attachment;
 mod native_search;
+mod plan_mode;
 pub(crate) mod progressive;
 mod registry;
 mod search_process;
@@ -50,11 +51,11 @@ use crate::config::AppConfig;
 use crate::paths::SaiPaths;
 pub(crate) use catalog::{catalog_config, mcp_tool_catalog, tool_catalog, ToolCatalogEntry};
 pub(crate) use context::tool_output_for_context;
+pub(crate) use jev_request::REQUEST_CAPABILITY_NAME;
 pub(crate) use progressive::{
     register_loader as register_progressive_loader, DEFERRED_ALL_EXCEPT_ANCHOR_BOOTSTRAP,
     INVOKE_NAME, LOAD_NAME,
 };
-pub(crate) use jev_request::REQUEST_CAPABILITY_NAME;
 pub use registry::{empty_parameters, ToolPermission, ToolProgress, ToolRegistry, ToolSpec};
 pub(crate) use registry::{
     PluginReplyContexts, PluginToolPolicyStates, PreparedPluginReplies, ToolModelAttachment,
@@ -326,11 +327,15 @@ pub(crate) fn register_ask_question(registry: &mut ToolRegistry) {
     if !registry.contains("ask_question") {
         ask_question::register(registry);
     }
+    if !registry.contains("enter_plan_mode") {
+        plan_mode::register(registry);
+    }
 }
 
 pub fn readonly_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     let mut registry = ToolRegistry::new();
     command::register_readonly(&mut registry, config, paths);
+    register_ask_question(&mut registry);
     default_tools::register_readonly(&mut registry);
     web_search::register(&mut registry, &config.plugins.web);
     crate::plugins::register_plugins(&mut registry, config, paths, true);
