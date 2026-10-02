@@ -120,7 +120,7 @@ export function ComposerSurface({
         onPasteImages={onPasteImages}
         onSubmit={() => submit()}
       />
-      {variant === "full" && <div className="flex justify-end px-2"><TemplateManager scope={templateScope} disabled={disabled} /></div>}
+      {variant === "full" && <TemplateManager scope={templateScope} disabled={disabled} onApply={onChange} />}
       {children}
     </form>
   );
