@@ -1,4 +1,4 @@
-use super::render::{editor_option_line, option_lines, panel_layout};
+use super::components::{editor_option_line, option_lines, panel_layout};
 use super::text::{editor_view, insert_text, strip_ansi, truncate_width};
 use super::*;
 use crate::question::QuestionOption;
@@ -128,7 +128,7 @@ fn option_rows_have_no_numbers_and_put_description_below_title() {
         .iter()
         .map(|line| strip_ansi(line))
         .collect::<Vec<_>>();
-    assert_eq!(visible[0], "> 烧烤");
+    assert_eq!(visible[0], "> ( ) 烧烤");
     assert!(!visible.iter().any(|line| line.contains("1.")));
     assert!(visible[1..].iter().all(|line| line.starts_with("  ")));
     assert!(lines[1..].iter().all(|line| line.contains("\x1b[2m")));
@@ -143,7 +143,7 @@ fn multi_option_rows_keep_checkbox_without_number() {
 
 #[test]
 fn description_soft_wrap_preserves_indentation_budget() {
-    let lines = option_lines("烧烤", "烤肉串烤鸡翅烤韭菜", false, false, false, 10);
+    let lines = option_lines("烧烤", "烤肉串烤鸡翅烤韭菜", true, false, false, 10);
     assert!(lines.len() > 2);
     for line in &lines[1..] {
         assert!(UnicodeWidthStr::width(strip_ansi(line).as_str()) <= 10);
@@ -157,6 +157,7 @@ fn resize_recovers_panel_height_after_terminal_grows() {
         stdout: io::stdout(),
         anchor_y: 8,
         panel_lines: 12,
+        previous: Vec::new(),
     });
     session.resize_to_terminal(3);
     assert_eq!(session.panel_lines, 2);
@@ -175,16 +176,15 @@ fn truncation_honors_very_narrow_widths() {
 }
 
 #[test]
-fn selected_option_uses_color_without_bold() {
+fn focused_option_uses_cyan_emphasis() {
     let lines = option_lines("烧烤", "", true, false, false, 20);
-    assert!(lines[0].contains("\x1b[35m"));
-    assert!(!lines[0].contains("\x1b[1m"));
+    assert!(lines[0].contains("\x1b[1;36m"));
 }
 
 #[test]
 fn custom_editor_has_no_extra_ascii_pointer() {
     let line = editor_option_line(false, false, "自定义内容");
-    assert_eq!(strip_ansi(&line), "> 自定义内容");
+    assert_eq!(strip_ansi(&line), "> ( ) 自定义内容");
 }
 
 #[test]
