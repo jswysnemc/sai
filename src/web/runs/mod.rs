@@ -8,6 +8,7 @@ mod journal;
 mod manager;
 pub(crate) mod model_override;
 mod request_limits;
+mod replay;
 
 pub(crate) use assembler::EventAssembler;
 pub(crate) use event::WebEvent;

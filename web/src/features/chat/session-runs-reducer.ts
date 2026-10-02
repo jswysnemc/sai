@@ -22,6 +22,7 @@ export type SessionRunsAction =
   | { type: "stop-local"; runId: string }
   | { type: "fail-open"; summary: string; detail: string }
   | { type: "relocalize" }
+  | { type: "restore"; events: WebEvent[] }
   | { type: "reset" };
 
 /**
@@ -53,6 +54,10 @@ export const initialSessionRunsState: SessionRunsState = { runs: [] };
  * @returns 更新后的会话运行集合
  */
 export function sessionRunsReducer(state: SessionRunsState, action: SessionRunsAction, locale: Locale = "zh-CN"): SessionRunsState {
+  if (action.type === "restore") {
+    // 1. 【会话同步】【快照恢复】严格按原顺序重放，保留队列控制与工具边界
+    return action.events.reduce((next, event) => applyEventToSessionRuns(next, { ...event, replayed: true }, locale), initialSessionRunsState);
+  }
   if (action.type === "reset") return initialSessionRunsState;
   if (action.type === "relocalize") {
     return { runs: state.runs.map((run) => ({ ...run, error: relocalizeRunError(run.error, locale) })) };

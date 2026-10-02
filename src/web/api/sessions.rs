@@ -77,6 +77,7 @@ async fn events(
     // 2. 取到日志与订阅后即释放总线句柄，避免 SSE 流长期持有执行者
     let bus = state.runs.session_bus(&workspace.id, &id).await;
     let stream = session_events_stream(bus, replay_after(query.after, &headers))
+        .await
         .ok_or_else(|| WebError::conflict("session event stream is unavailable"))?;
     Ok(Sse::new(stream).keep_alive(sse_keep_alive()))
 }

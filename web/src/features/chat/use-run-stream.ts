@@ -1,7 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { RunMode, RunModelSelection, ThinkingLevel, WebEvent } from "../../api/contracts";
 import { api } from "../../api/client";
+import { parseRunStreamReset } from "./run-stream-reset";
 import { runFailureEvent } from "./run-failure-event";
 import { parseQueueInsertAt, type LiveRunState } from "./run-event-reducer";
 import { useI18n } from "../i18n/use-i18n";
@@ -47,7 +48,9 @@ export const EVENT_TYPES = [
   "run.completed",
   "run.interrupted",
   "run.failed",
-  "stream.lagged"
+  "stream.lagged",
+  "stream.reset",
+  "run.event.truncated"
 ] as const;
 
 /** 高频流式事件：合并到同一动画帧再进 reducer，降低 React 提交次数 */
@@ -86,6 +89,7 @@ export function useRunStream(
     [locale]
   );
   const [state, dispatch] = useReducer(reducer, initialSessionRunsState);
+  const [recoveryIncomplete, setRecoveryIncomplete] = useState(false);
   const pendingEventsRef = useRef<WebEvent[]>([]);
   const coalesceFrameRef = useRef<number | null>(null);
   const notificationRef = useRef<ReturnType<typeof createReplyNotifier> | null>(null);
@@ -93,6 +97,7 @@ export function useRunStream(
   useEffect(() => {
     pendingEventsRef.current = [];
     dispatch({ type: "reset" });
+    setRecoveryIncomplete(false);
   }, [scope]);
 
   useEffect(() => {
@@ -227,6 +232,20 @@ export function useRunStream(
           reconnectTimer = window.setTimeout(openSource, 100);
           return;
         }
+        if (message.type === "stream.reset") {
+          const reset = parseRunStreamReset(message.data, workspaceId, sessionId);
+          if (!reset) { setRecoveryIncomplete(true); return; }
+          // 2. 【会话同步】【快照恢复】丢弃旧帧并替换状态，不触发通知、草稿与面板副作用
+          pendingEventsRef.current = [];
+          if (coalesceFrameRef.current !== null) cancelAnimationFrame(coalesceFrameRef.current);
+          coalesceFrameRef.current = null;
+          lastSequenceRef.current = reset.through_sequence;
+          reconnectAttempts = 0;
+          setRecoveryIncomplete(reset.incomplete_run_ids.length > 0);
+          dispatch({ type: "restore", events: reset.events });
+          onSettled();
+          return;
+        }
         let event: WebEvent;
         try {
           event = JSON.parse(message.data) as WebEvent;
@@ -257,6 +276,7 @@ export function useRunStream(
           reconnectTimer = window.setTimeout(openSource, 100);
           return;
         }
+        if (event.type === "run.event.truncated") setRecoveryIncomplete(true);
         enqueueEvent(event);
         // 2. 【会话同步】【补发副作用】历史事件不恢复旧草稿，也不逐条重取会话列表
         if (event.replayed) return;
@@ -502,6 +522,7 @@ export function useRunStream(
   const sessionRuns = useMemo(() => state.runs.filter((run) => run.sessionId === sessionId), [sessionId, state.runs]);
   return {
     states: sessionRuns,
+    recoveryIncomplete,
     start,
     startGoal,
     startCompaction,

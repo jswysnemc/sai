@@ -1,3 +1,4 @@
+use super::replay::{ReplayBatch, ReplaySnapshot};
 use super::WebEvent;
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
@@ -20,6 +21,7 @@ pub(crate) struct EventJournal {
 
 struct JournalInner {
     next_sequence: u64,
+    snapshot: ReplaySnapshot,
     events: VecDeque<WebEvent>,
     retained_bytes: usize,
     persisted_bytes: u64,
@@ -35,6 +37,7 @@ impl EventJournal {
         Self {
             inner: Arc::new(Mutex::new(JournalInner {
                 next_sequence: 1,
+                snapshot: ReplaySnapshot::default(),
                 events: VecDeque::new(),
                 retained_bytes: 0,
                 persisted_bytes: 0,
@@ -59,17 +62,18 @@ impl EventJournal {
                 .inner
                 .lock()
                 .unwrap_or_else(|error| error.into_inner());
-            inner.next_sequence = loaded
-                .events
-                .back()
-                .map(|event| event.sequence.saturating_add(1))
-                .unwrap_or(1);
+            inner.next_sequence = loaded.snapshot.sequence().saturating_add(1);
+            inner.snapshot = loaded.snapshot;
             inner.events = loaded.events;
             inner.retained_bytes = loaded.retained_bytes;
             inner.persisted_bytes = loaded.source_bytes;
             inner.persisted_events = inner.events.len();
             if loaded.truncated {
-                if let Ok(bytes) = rewrite_events(&path, &inner.events) {
+                if let Ok(bytes) = inner
+                    .snapshot
+                    .save(&path)
+                    .and_then(|_| rewrite_events(&path, &inner.events))
+                {
                     inner.persisted_bytes = bytes;
                     inner.persisted_events = inner.events.len();
                 }
@@ -94,6 +98,7 @@ impl EventJournal {
         inner.next_sequence = inner.next_sequence.saturating_add(1);
         let encoded = encode_bounded_event(&mut event);
         let encoded_bytes = encoded.len().saturating_add(1);
+        inner.snapshot.observe(&event);
         inner.events.push_back(event.clone());
         inner.retained_bytes = inner.retained_bytes.saturating_add(encoded_bytes);
         trim_retained_events(&mut inner);
@@ -119,10 +124,43 @@ impl EventJournal {
             .cloned()
             .collect()
     }
+    /// 【会话恢复】【补发选择】参数为客户端水位；返回连续增量或完整快照。
+    pub(crate) fn replay_after(&self, after: u64) -> ReplayBatch {
+        let inner = self.inner.lock().unwrap_or_else(|error| error.into_inner());
+        let through_sequence = inner.next_sequence.saturating_sub(1);
+        let mut expected = after.saturating_add(1);
+        let contiguous = inner
+            .events
+            .iter()
+            .filter(|event| event.sequence > after)
+            .all(|event| {
+                let matches = event.sequence == expected;
+                expected = event.sequence.saturating_add(1);
+                matches
+            });
+        if after > through_sequence || !contiguous || expected <= through_sequence {
+            return ReplayBatch {
+                events: Vec::new(),
+                reset: Some(inner.snapshot.reset()),
+                through_sequence,
+            };
+        }
+        ReplayBatch {
+            events: inner
+                .events
+                .iter()
+                .filter(|event| event.sequence > after)
+                .cloned()
+                .collect(),
+            reset: None,
+            through_sequence,
+        }
+    }
 }
 
 /// 从 JSONL 尾部回载有界事件。
 struct JournalLoad {
+    snapshot: ReplaySnapshot,
     events: VecDeque<WebEvent>,
     retained_bytes: usize,
     source_bytes: u64,
@@ -137,8 +175,10 @@ struct JournalLoad {
 /// 返回:
 /// - 有界事件集合与原文件统计
 fn load_recent_events(path: &Path) -> JournalLoad {
+    let mut snapshot = ReplaySnapshot::load(path);
     let Ok(mut file) = std::fs::File::open(path) else {
         return JournalLoad {
+            snapshot,
             events: VecDeque::new(),
             retained_bytes: 0,
             source_bytes: 0,
@@ -149,6 +189,7 @@ fn load_recent_events(path: &Path) -> JournalLoad {
     let start = source_bytes.saturating_sub(EVENT_JOURNAL_MAX_BYTES);
     if file.seek(SeekFrom::Start(start)).is_err() {
         return JournalLoad {
+            snapshot,
             events: VecDeque::new(),
             retained_bytes: 0,
             source_bytes,
@@ -167,6 +208,10 @@ fn load_recent_events(path: &Path) -> JournalLoad {
         let Ok(event) = serde_json::from_str::<WebEvent>(&line) else {
             continue;
         };
+        if event.sequence > snapshot.sequence().saturating_add(1) {
+            snapshot.mark_gap();
+        }
+        snapshot.observe(&event);
         retained_bytes = retained_bytes.saturating_add(encoded_event_len(&event));
         events.push_back(event);
         while events.len() > EVENT_JOURNAL_CAPACITY
@@ -179,6 +224,7 @@ fn load_recent_events(path: &Path) -> JournalLoad {
         }
     }
     JournalLoad {
+        snapshot,
         events,
         retained_bytes,
         source_bytes,
@@ -237,7 +283,11 @@ fn persist_event(path: &Path, encoded: &str, inner: &mut JournalInner) {
         || inner.persisted_events > EVENT_JOURNAL_COMPACT_EVENTS)
         && !inner.events.is_empty()
     {
-        if let Ok(bytes) = rewrite_events(path, &inner.events) {
+        if let Ok(bytes) = inner
+            .snapshot
+            .save(path)
+            .and_then(|_| rewrite_events(path, &inner.events))
+        {
             inner.persisted_bytes = bytes;
             inner.persisted_events = inner.events.len();
         }

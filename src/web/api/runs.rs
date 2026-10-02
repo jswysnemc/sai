@@ -161,18 +161,22 @@ pub(super) fn replay_after(after: Option<u64>, headers: &HeaderMap) -> u64 {
 ///
 /// 返回:
 /// - SSE 事件流；事件总线已停止时返回空
-pub(super) fn session_events_stream(
+pub(super) async fn session_events_stream(
     bus: ActorHandle,
     after: u64,
 ) -> Option<impl Stream<Item = Result<Event, Infallible>>> {
     let journal = bus.journal();
-    let subscription = bus.attach()?;
-    let backlog = journal.events_after(after);
-    let latest_backlog = backlog.last().map(|event| event.sequence).unwrap_or(after);
+    let subscription = bus.attach_ready().await?;
+    let replay = journal.replay_after(after);
+    let latest_backlog = replay.through_sequence;
+    let reset = replay.reset.map(|reset| {
+        Event::default().event("stream.reset")
+            .id(reset.through_sequence.to_string())
+            .data(serde_json::to_string(&reset).unwrap_or_else(|_| "{}".to_string()))
+    });
     let backlog_stream = stream::iter(
-        backlog
-            .into_iter()
-            .map(|event| Ok::<_, Infallible>(sse_event(&event, true))),
+        reset.into_iter().chain(replay.events.into_iter().map(|event| sse_event(&event, true)))
+            .map(Ok::<_, Infallible>),
     );
     let live_stream = ReceiverStream::new(subscription.events).filter_map(move |event| {
         let event = (event.sequence > latest_backlog).then_some(event);
@@ -208,6 +212,7 @@ async fn events(
         .await
         .ok_or_else(|| WebError::not_found(format!("run not found: {id}")))?;
     let stream = session_events_stream(bus, replay_after(query.after, &headers))
+        .await
         .ok_or_else(|| WebError::conflict("session event stream is unavailable"))?;
     Ok(Sse::new(stream).keep_alive(sse_keep_alive()))
 }
