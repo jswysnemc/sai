@@ -18,6 +18,7 @@ export type SkillOption = {
 type SkillMentionPopoverProps = {
   open: boolean;
   scope?: TemplateScope;
+  allowPlan?: boolean;
   anchorRef: RefObject<HTMLElement | null>;
   query: string;
   activeIndex: number;
@@ -51,7 +52,7 @@ export function filterSkills(skills: SkillOption[], query: string): SkillOption[
  * @returns skill 浮层；关闭时返回 null
  */
 export const SkillMentionPopover = forwardRef<HTMLDivElement, SkillMentionPopoverProps>(
-  function SkillMentionPopover({ scope = "chat", open, anchorRef, query, activeIndex, onActiveIndexChange, onSelect, onOptionsChange }, ref) {
+  function SkillMentionPopover({ scope = "chat", allowPlan = false, open, anchorRef, query, activeIndex, onActiveIndexChange, onSelect, onOptionsChange }, ref) {
     const { t } = useI18n();
     const [skills, setSkills] = useState<SkillOption[]>([]);
     const templates = useQuery({ queryKey: templateKey(scope), queryFn: () => templateApi.list(scope), enabled: open, staleTime: 30_000 });
@@ -94,13 +95,14 @@ export const SkillMentionPopover = forwardRef<HTMLDivElement, SkillMentionPopove
     }, [scope, open, t]);
 
     const options = useMemo<SkillOption[]>(() => [
+      ...(scope === "chat" && allowPlan ? [{ name: "plan", description: t("Enter planning; review before execution", "进入规划，审阅后执行"), kind: "command" as const }] : []),
       ...(scope === "chat" ? skills : []),
       ...(templates.data ?? []).map((item) => ({
         name: `template:${item.name}`, keyword: item.name, content: item.content,
         description: `${t("Template", "模板")} · ${item.content.split("\n")[0]}`,
         kind: "template" as const
       }))
-    ], [scope, skills, templates.data, t]);
+    ], [scope, allowPlan, skills, templates.data, t]);
     useEffect(() => { onOptionsChange(options); }, [options, onOptionsChange]);
     const filtered = useMemo(() => filterSkills(options, query), [options, query]);
 

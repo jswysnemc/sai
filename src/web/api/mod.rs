@@ -20,6 +20,7 @@ mod model_endpoint_draft;
 mod notifications;
 mod onboarding;
 mod permissions;
+mod plan_mode;
 mod prompts;
 mod providers;
 mod questions;
@@ -81,6 +82,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         .merge(jev::routes())
         .merge(prompts::routes())
         .merge(permissions::routes())
+        .merge(plan_mode::routes())
         .merge(questions::routes())
         .merge(gateways::routes())
         .merge(goals::routes())

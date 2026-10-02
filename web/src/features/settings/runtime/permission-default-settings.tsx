@@ -13,8 +13,10 @@ import type { RuntimeSettingsProps } from "./runtime-settings-types";
 export function PermissionDefaultSettings({ config, onConfigChange }: RuntimeSettingsProps) {
   const { t } = useI18n();
   const permission = config.permission;
-  const tuiMode = permission?.tui_mode ?? permission?.default_mode ?? "yolo";
-  const cliMode = permission?.cli_mode ?? permission?.default_mode ?? "yolo";
+  const legacyTui = permission?.tui_mode ?? permission?.default_mode ?? "yolo";
+  const tuiMode = legacyTui === "plan" ? "audited" : legacyTui;
+  const legacyCli = permission?.cli_mode ?? permission?.default_mode ?? "yolo";
+  const cliMode = legacyCli === "plan" ? "audited" : legacyCli;
   const options = createRunModeOptions(t).map((option) => ({ ...option, title: option.description }));
 
   /**

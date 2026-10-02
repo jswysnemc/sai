@@ -1,6 +1,7 @@
 pub(crate) mod activity_animation;
 pub(crate) mod ansi_style;
 mod asset_block;
+pub(crate) use asset_block::preferences::configure as configure_asset_rendering;
 mod background_command_event;
 pub(crate) mod background_promotion;
 pub(crate) mod brand_logo;

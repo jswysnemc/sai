@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";
 import { Button } from "../../shared/ui/button/button";
 import { useI18n } from "../i18n/use-i18n";
+import { parsePlanCommand, usePlanModeControls } from "./plan-mode-controls";
 import { ComposerSurface } from "./composer/composer-surface";
 import { resolveComposerAvailability } from "./composer-availability";
 import { ComposerModelControls } from "./chat-composer/composer-model-controls";
@@ -18,6 +19,7 @@ import "./chat-composer.css";
  */
 export function ChatComposer(props: ChatComposerProps) {
   const { t } = useI18n();
+  const plan = usePlanModeControls(props.sessionId, props.mode, props.onModeChange);
   const engineStatus = useQuery({ queryKey: ["engine-status"], queryFn: api.config.engineStatus, staleTime: 60_000 });
   const externalEngine = engineStatus.data?.external === true ? engineStatus.data : null;
   const enginePending = engineStatus.isLoading && !engineStatus.data;
@@ -44,6 +46,14 @@ export function ChatComposer(props: ChatComposerProps) {
     : props.running ? t("Add a follow-up. Enter to queue it.", "补充任务内容，Enter 加入队列")
         : t("Describe a task, or type @ to add context", "描述任务，或输入 @ 添加上下文");
 
+  /** 【计划模式】【输入命令】无参数，处理独立规划命令；普通正文继续走原提交回调。 */
+  const submit = async () => {
+    const task = parsePlanCommand(props.value);
+    if (task === null) { props.onSubmit(); return; }
+    if (props.running || plan.busy) return;
+    if (await plan.enter()) props.onChange(task);
+  };
+
   return (
     <div className="composer-shell">
       <ComposerSurface
@@ -51,19 +61,20 @@ export function ChatComposer(props: ChatComposerProps) {
         className="composer"
         value={props.value}
         historyEntries={props.historyEntries}
-        disabled={availability.inputDisabled}
+        disabled={availability.inputDisabled || plan.busy}
         submitDisabled={availability.sendDisabled}
         placeholder={placeholder}
         attachments={props.attachments}
         onChange={props.onChange}
         onPasteImages={props.onAddImages}
         onRemoveAttachment={props.onRemoveAttachment}
-        onSubmit={props.onSubmit}
+        onSubmit={() => void submit()}
+        onPlanCommand={props.running ? undefined : plan.enter}
         floating={props.floating}
       >
         <div className="composer-footer">
           <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileChange} hidden />
-          <Button variant="ghost" size="icon" className="composer-attach" onClick={() => fileInputRef.current?.click()} disabled={availability.inputDisabled} title={t("Attach images", "添加图片")} aria-label={t("Add images", "添加图片")}><Plus size={16} /></Button>
+          <Button variant="ghost" size="icon" className="composer-attach" onClick={() => fileInputRef.current?.click()} disabled={availability.inputDisabled || plan.busy} title={t("Attach images", "添加图片")} aria-label={t("Add images", "添加图片")}><Plus size={16} /></Button>
           <ComposerModelControls composer={props} engine={externalEngine} loading={enginePending} />
           <div className="composer-actions">
             {availability.showStop ? (
@@ -76,7 +87,8 @@ export function ChatComposer(props: ChatComposerProps) {
           </div>
         </div>
       </ComposerSurface>
-      <ComposerContextFooter composer={props} showUsage={!externalEngine && !enginePending} />
+      {plan.error && <p role="alert" className="px-3 text-sm">{plan.error}</p>}
+      <ComposerContextFooter composer={props} showUsage={!externalEngine && !enginePending} plan={plan} />
     </div>
   );
 }

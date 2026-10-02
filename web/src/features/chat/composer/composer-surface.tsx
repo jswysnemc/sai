@@ -12,6 +12,7 @@ export type ComposerSurfaceVariant = "full" | "compact";
 type ComposerSurfaceProps = {
   variant: ComposerSurfaceVariant;
   templateScope?: TemplateScope;
+  onPlanCommand?: () => Promise<boolean>;
   className?: string;
   value: string;
   historyEntries: string[];
@@ -39,6 +40,7 @@ type ComposerSurfaceProps = {
 export function ComposerSurface({
   variant,
   templateScope = "chat",
+  onPlanCommand,
   className = "",
   value,
   historyEntries,
@@ -107,6 +109,7 @@ export function ComposerSurface({
       )}
       <ComposerTextarea
         templateScope={templateScope}
+        onPlanCommand={onPlanCommand}
         value={value}
         historyEntries={historyEntries}
         disabled={disabled}

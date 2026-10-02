@@ -1,13 +1,21 @@
 use super::*;
 
-/// 【终端】【权限模式】处理 `/plan`、`/audit`、`/yolo`、`/auto` 与 `/auto-audit`。
+/// 【终端】【会话模式】处理 `/plan`、`/audit`、`/yolo`、`/auto` 与 `/auto-audit`。
 ///
 /// 参数: `input` 为提交文本，`mode` 为当前权限模式，`runtime` 为终端界面
 /// 返回: 命中模式命令并完成切换时返回 true
-pub(super) fn handle(input: &str, mode: &mut AgentMode, runtime: &mut ReplRuntime) -> Result<bool> {
+pub(super) fn handle(
+    input: &str,
+    mode: &mut AgentMode,
+    runtime: &mut ReplRuntime,
+    state_dir: &std::path::Path,
+) -> Result<bool> {
     let Some(next) = parse(input) else {
         return Ok(false);
     };
+    if next == AgentMode::Plan && *mode != AgentMode::Plan {
+        crate::plan::store::begin_sync(state_dir, *mode)?;
+    }
     *mode = next;
     runtime.record_meta(format!("{}: {}", t("mode", "模式"), mode.label()))?;
     Ok(true)

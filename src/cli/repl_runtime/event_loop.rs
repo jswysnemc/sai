@@ -429,8 +429,8 @@ fn cycle_mode(mode: AgentMode) -> AgentMode {
     match mode {
         AgentMode::Yolo => AgentMode::Audited,
         AgentMode::Audited => AgentMode::AutoAudit,
-        AgentMode::AutoAudit => AgentMode::Plan,
-        AgentMode::Plan => AgentMode::Yolo,
+        AgentMode::AutoAudit => AgentMode::Yolo,
+        AgentMode::Plan => AgentMode::Plan,
     }
 }
 

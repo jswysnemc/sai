@@ -76,6 +76,9 @@ impl Default for PromptConfig {
 impl Default for DisplayConfig {
     fn default() -> Self {
         Self {
+            fullscreen: true,
+            math_images: true,
+            mermaid_images: true,
             reasoning: default_reasoning_display(),
             tool_calls: default_tool_call_display(),
             readable_tool_names: default_true(),

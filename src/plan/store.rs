@@ -23,3 +23,34 @@ pub(crate) async fn save(state_dir: &Path, record: &PlanRecord) -> Result<()> {
     result?;
     Ok(())
 }
+
+/// 【计划模式】【创建规划】参数为会话目录与普通模式，返回写入结果；清除上一次审批状态。
+pub(crate) async fn begin(state_dir: &Path, mode: crate::agent::AgentMode) -> Result<()> {
+    save(state_dir, &planning_record(mode)?).await
+}
+
+/// 【计划模式】【同步入口】参数为会话目录与普通模式，返回原子写入结果，供终端按键线程使用。
+pub(crate) fn begin_sync(state_dir: &Path, mode: crate::agent::AgentMode) -> Result<()> {
+    use std::io::Write;
+    let record = planning_record(mode)?;
+    std::fs::create_dir_all(state_dir)?;
+    let mut file = tempfile::NamedTempFile::new_in(state_dir)?;
+    file.write_all(&serde_json::to_vec_pretty(&record)?)?;
+    file.persist(state_dir.join("plan.json"))?;
+    Ok(())
+}
+
+/// 【计划模式】【初始状态】参数为执行权限，返回独立规划记录；不允许把 Plan 作为恢复权限。
+fn planning_record(mode: crate::agent::AgentMode) -> Result<PlanRecord> {
+    anyhow::ensure!(
+        mode != crate::agent::AgentMode::Plan,
+        "Plan is not an execution permission mode"
+    );
+    Ok(PlanRecord {
+        title: String::new(),
+        plan: String::new(),
+        status: "planning".into(),
+        execution_mode: mode.key().into(),
+        feedback: None,
+    })
+}

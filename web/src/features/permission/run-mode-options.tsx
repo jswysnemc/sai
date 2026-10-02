@@ -1,4 +1,4 @@
-import { Hand, NotepadText, ShieldAlert, ShieldCheck } from "../../shared/ui/icons";
+import { Hand, ShieldAlert, ShieldCheck } from "../../shared/ui/icons";
 import type { RunMode } from "../../api/contracts";
 import type { SelectOption } from "../../shared/ui/select/select";
 import type { Translate } from "../i18n/i18n-context";
@@ -29,15 +29,6 @@ export function createRunModeOptions(t: Translate): SelectOption<RunMode>[] {
         "自动审核变更；离开沙箱的命令从严判断。"
       ),
       icon: <span className="run-mode-icon auto"><ShieldCheck size={16} /></span>
-    },
-    {
-      value: "plan",
-      label: t("Plan mode", "计划模式"),
-      description: t(
-        "Plan first; commands run read-only.",
-        "编辑前先出计划；命令只读执行。"
-      ),
-      icon: <span className="run-mode-icon plan"><NotepadText size={16} /></span>
     },
     {
       value: "yolo",

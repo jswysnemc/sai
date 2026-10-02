@@ -161,3 +161,50 @@ fn plan_tools_survive_legacy_profile_without_expanding_exclusive_profile() {
         assert_eq!(filtered.contains("exit_plan_mode"), !exclusive);
     }
 }
+
+/// 【计划模式】【命令入口】规划入口记录普通模式，批准后自动恢复并返回继续执行指令；无参数和返回值。
+#[tokio::test]
+async fn slash_plan_approval_restores_each_normal_permission() {
+    for mode in [AgentMode::Yolo, AgentMode::Audited, AgentMode::AutoAudit] {
+        let root = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(root.path());
+        let mut agent = agent(&paths, AgentMode::Plan);
+        crate::plan::store::begin_sync(agent.state.state_dir(), mode).unwrap();
+        let result = agent
+            .execute_plan_tool(
+                "exit_plan_mode",
+                r#"{"title":"Plan","plan":"Implement then verify"}"#,
+                &mut |event| {
+                    if let AgentEvent::QuestionRequested(pending) = event {
+                        assert!(pending.request.questions[0].default_answers.is_empty());
+                        crate::question::resolve_question(
+                            &pending.id,
+                            crate::question::QuestionResponse::Answered(vec![vec![
+                                crate::plan::APPROVE.into(),
+                            ]]),
+                        )?;
+                    }
+                    Ok(())
+                },
+            )
+            .await
+            .unwrap();
+        assert!(!result.failed, "{}", result.output);
+        assert_eq!(agent.mode(), mode);
+        assert!(result.output.contains("Continue implementation now"));
+        let record = crate::plan::store::load(agent.state.state_dir())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(record.status, "approved");
+        crate::plan::store::begin(agent.state.state_dir(), mode)
+            .await
+            .unwrap();
+        let fresh = crate::plan::store::load(agent.state.state_dir())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(fresh.status, "planning");
+        assert!(fresh.plan.is_empty());
+    }
+}

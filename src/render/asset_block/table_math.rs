@@ -18,6 +18,7 @@ use tempfile::TempDir;
 /// 返回:
 /// - 半块文本，失败时返回带样式源码
 pub(crate) fn render_inline_halfblock(source: &str) -> String {
+    if !super::preferences::math_images() { return format!("${source}$"); }
     if source.trim().is_empty() {
         return String::new();
     }
@@ -50,6 +51,7 @@ fn render_inline_halfblock_inner(source: &str) -> Result<String> {
 /// 返回:
 /// - 图片单元格，失败时返回源码单元格
 pub(crate) fn render_cell(source: &str, max_cols: usize, mixed: bool) -> CellContent {
+    if !super::preferences::math_images() { return CellContent::from_inline(source.to_string()); }
     if source.trim().is_empty() {
         return CellContent::empty();
     }

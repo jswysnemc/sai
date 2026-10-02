@@ -103,7 +103,7 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
                 {t("Cancel", "取消")}
               </Button>
               <Button variant="primary" size="small" disabled={submitting || !satisfied.every(Boolean)} onClick={() => void controller.submit()}>
-                {submitting ? t("Submitting", "提交中") : t("Confirm", "确认")}
+                {submitting ? t("Submitting", "提交中") : pending.plan && answers[0]?.includes("Approve and implement") ? t("Execute plan", "执行计划") : t("Confirm", "确认")}
               </Button>
             </div>
           </div>

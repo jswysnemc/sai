@@ -34,14 +34,7 @@ impl Agent {
     async fn enter_plan(&self) -> Result<String> {
         if self.mode() != AgentMode::Plan {
             let previous = self.mode();
-            let record = PlanRecord {
-                title: String::new(),
-                plan: String::new(),
-                status: "planning".into(),
-                execution_mode: previous.key().into(),
-                feedback: None,
-            };
-            plan::store::save(self.state.state_dir(), &record).await?;
+            plan::store::begin(self.state.state_dir(), previous).await?;
             if self.mode() != previous {
                 bail!("session mode changed while entering Plan; retry only if still requested");
             }

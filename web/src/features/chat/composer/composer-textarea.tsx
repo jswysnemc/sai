@@ -27,6 +27,7 @@ import type { TemplateScope } from "../../prompt-templates/template-client";
 
 type ComposerTextareaProps = {
   templateScope?: TemplateScope;
+  onPlanCommand?: () => Promise<boolean>;
   value: string;
   historyEntries: string[];
   disabled: boolean;
@@ -246,7 +247,20 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
     }
     // /goal 是会话目标命令，不是 Skill，插入纯文本 token 以渲染 Target 图标
     const option = skillOptionsRef.current.find((item) => item.name === name);
-    const insertion = option?.kind === "template" ? option.content ?? "" : name === "goal" ? "/goal " : `${formatSkillMention(name)} `;
+    if (name === "plan" && props.onPlanCommand) {
+      dismissSkill(false);
+      void props.onPlanCommand().then((entered) => {
+        const editor = editorRef.current;
+        if (!entered || !editor || serializeComposerAtomEditor(editor) !== current) return;
+        const next = `${current.slice(0, range.start)}${current.slice(range.end)}`;
+        const selection = { start: range.start, end: range.start };
+        pendingSelectionRef.current = selection;
+        editHistoryRef.current.record(lastSnapshotRef.current, { value: next, selection });
+        props.onChange(next);
+      });
+      return;
+    }
+    const insertion = option?.kind === "template" ? option.content ?? "" : (name === "goal" || (name === "plan" && props.onPlanCommand)) ? `/${name} ` : `${formatSkillMention(name)} `;
     const next = `${current.slice(0, range.start)}${insertion}${current.slice(range.end)}`;
     pendingSelectionRef.current = { start: range.start + insertion.length, end: range.start + insertion.length };
     const nextSelection = pendingSelectionRef.current;
@@ -527,6 +541,7 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
         ref={skillPopoverRef}
         open={skillOpen}
         scope={props.templateScope ?? "chat"}
+        allowPlan={Boolean(props.onPlanCommand)}
         anchorRef={editorRef}
         query={skillQuery}
         activeIndex={skillActiveIndex}

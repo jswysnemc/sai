@@ -7,6 +7,12 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DisplayConfig {
+    /// TUI 启动时使用全局渲染，Ctrl+O 可临时切换
+    pub fullscreen: bool,
+    /// 将终端公式渲染成图片
+    pub math_images: bool,
+    /// 将终端 Mermaid 代码块渲染成图片
+    pub mermaid_images: bool,
     #[serde(default = "default_reasoning_display")]
     pub reasoning: String,
     #[serde(default = "default_tool_call_display")]
@@ -34,6 +40,12 @@ pub struct DebugConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 struct RawDisplayConfig {
+    #[serde(default)]
+    fullscreen: Option<bool>,
+    #[serde(default)]
+    math_images: Option<bool>,
+    #[serde(default)]
+    mermaid_images: Option<bool>,
     #[serde(default)]
     reasoning: Option<String>,
     #[serde(default)]
@@ -75,6 +87,9 @@ impl<'de> Deserialize<'de> for DisplayConfig {
             }
         });
         Ok(Self {
+            fullscreen: raw.fullscreen.unwrap_or(true),
+            math_images: raw.math_images.unwrap_or(true),
+            mermaid_images: raw.mermaid_images.unwrap_or(true),
             reasoning,
             tool_calls,
             readable_tool_names: raw.readable_tool_names.unwrap_or_else(default_true),

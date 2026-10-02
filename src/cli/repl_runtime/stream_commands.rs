@@ -123,6 +123,10 @@ pub(in crate::cli) fn run_immediate_stream_command(
             // 权限模式切换等价于 Shift+Tab 热切换：只改运行期草稿模式，
             // 由共享的 live 句柄通知 Agent，不需要 &mut Agent
             Some(mode) => {
+                let previous = runtime.stream_mode(ctx.turn_mode);
+                if mode == AgentMode::Plan && previous != AgentMode::Plan {
+                    crate::plan::store::begin_sync(std::path::Path::new(&ctx.owner_key), previous)?;
+                }
                 runtime.stream_draft_mut().mode = Some(mode);
                 let _ = runtime.apply_stream_mode_live(ctx.turn_mode);
                 runtime.record_meta(mode_notice(mode))

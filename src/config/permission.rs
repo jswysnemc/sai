@@ -7,22 +7,22 @@ use serde::{Deserialize, Serialize};
 pub enum DefaultPermissionMode {
     #[default]
     Yolo,
+    /// 兼容旧配置中的 plan；规划改由 /plan 显式进入
+    #[serde(alias = "plan")]
     Audited,
     AutoAudit,
-    Plan,
 }
 
 impl DefaultPermissionMode {
     /// 返回配置文件使用的稳定字符串。
     ///
     /// 返回:
-    /// - `yolo`、`audited`、`auto_audit` 或 `plan`
+    /// - `yolo`、`audited` 或 `auto_audit`
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Yolo => "yolo",
             Self::Audited => "audited",
             Self::AutoAudit => "auto_audit",
-            Self::Plan => "plan",
         }
     }
 
@@ -37,7 +37,7 @@ impl DefaultPermissionMode {
         match value.trim() {
             "audited" | "audit" => Self::Audited,
             "auto_audit" | "auto-audit" | "auto" => Self::AutoAudit,
-            "plan" => Self::Plan,
+            "plan" => Self::Audited,
             _ => Self::Yolo,
         }
     }
@@ -112,7 +112,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(config.tui_mode(), DefaultPermissionMode::Audited);
-        assert_eq!(config.cli_mode(), DefaultPermissionMode::Plan);
+        assert_eq!(config.cli_mode(), DefaultPermissionMode::Audited);
 
         let legacy: PermissionConfig =
             serde_json::from_str(r#"{"default_mode":"audited"}"#).unwrap();

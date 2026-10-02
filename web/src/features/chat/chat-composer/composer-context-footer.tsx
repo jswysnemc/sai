@@ -1,3 +1,4 @@
+import { PlanModeControls, usePlanModeControls } from "../plan-mode-controls";
 import { Undo2 } from "../../../shared/ui/icons";
 import { Button } from "../../../shared/ui/button/button";
 import { Select } from "../../../shared/ui/select/select";
@@ -13,12 +14,13 @@ import type { ChatComposerProps } from "./composer-types";
  * @param props 会话操作和是否展示内置内核统计
  * @returns 输入区辅助控制栏
  */
-export function ComposerContextFooter({ composer, showUsage }: { composer: ChatComposerProps; showUsage: boolean }) {
+export function ComposerContextFooter({ composer, showUsage, plan }: { composer: ChatComposerProps; showUsage: boolean; plan: ReturnType<typeof usePlanModeControls> }) {
   const { t } = useI18n();
   return (
     <div className="composer-context-footer">
       <div className="composer-context-options">
-        <div className="composer-mode"><Select value={composer.mode} options={createRunModeOptions(t)} ariaLabel={t("Run mode", "运行模式")} menuPreferredWidth={260} menuMinimumWidth={200} menuAlign="left" menuClassName="run-mode-menu" onChange={composer.onModeChange} /></div>
+        <div className="composer-mode"><Select disabled={composer.mode === "plan" || composer.running || plan.busy} value={composer.mode === "plan" ? plan.normalMode : composer.mode} options={createRunModeOptions(t)} ariaLabel={t("Permissions", "权限策略")} menuPreferredWidth={260} menuMinimumWidth={200} menuAlign="left" menuClassName="run-mode-menu" onChange={composer.onModeChange} /></div>
+        <PlanModeControls mode={composer.mode} disabled={!composer.sessionAvailable || composer.running || plan.busy} onEnter={() => void plan.enter()} onLeave={() => composer.onModeChange(plan.normalMode)} />
         <GoalControl sessionId={composer.sessionId} running={composer.running} draftValue={composer.value} onDraftChange={composer.onChange} onContinue={composer.onContinueGoal} />
         <TodoMarkdownView sessionId={composer.sessionId} compact />
       </div>

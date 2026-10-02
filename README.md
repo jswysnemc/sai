@@ -80,7 +80,7 @@ Weather, exchange-rate, and image tools require the corresponding [Lua example p
 
 ### Agent and progressive tool system
 
-- **Four permission modes** - `Yolo` free tool use, `Audited` (sandbox + audit log + per-call confirm), `Auto-audit` (LLM / Jev auto-audit alongside user approval), `Plan` read-only (commands run in a read-only sandbox)
+- **Three permission modes plus independent planning** - `Yolo` free tool use, `Audited` (sandbox + audit log + per-call confirm), and `Auto-audit` (LLM / Jev auto-audit alongside user approval). Enter the read-only planning workflow with `/plan`; after approval and execution, the previous permission mode is restored.
 - **Progressive tool loading** - Only `load` and base tools are exposed at start; the model calls `load` to pull in tool groups or skills on demand. Tool groups persist to `loaded-tools.json`. Each skill is loaded once per session: later `load` calls return `already_loaded` without the body, and the name list lives in a suffix `<context-resource>` so the system-prompt prefix stays cacheable. Compaction clears `loaded-skills.json` so the next load can return the full document.
 - **Core tools and optional features** - The host provides file, command, web search, session, permission, and extension services. All 25 Lua business packages, including search, investigations, images, todo, knowledge base, memes, and alarms, are standalone examples with explicit installation and grants.
 - **Subagents** - The `subagent` tool starts an independent LLM loop with a `max_steps` budget and timeout; writable tasks auto-create a `.sai-subagents` git worktree for isolation, then apply back and clean up on success. Persistent agents can idle and take follow-ups (REPL `/subagents`, `/msg`)
@@ -112,7 +112,7 @@ Weather, exchange-rate, and image tools require the corresponding [Lua example p
 ### Permission, audit, and sandbox
 
 - **Four tiers** - Yolo / Audited / Auto-audit / Plan; TUI and CLI can set independent defaults
-- **Workspace sandbox** - Linux uses `bubblewrap` and macOS uses `Seatbelt` (`sandbox-exec`) to confine write operations to the workspace; Plan mode executes shell commands in a read-only sandbox; Windows preserves permission approval and path audits without process isolation
+- **Workspace sandbox** - Linux uses `bubblewrap` and macOS uses `Seatbelt` (`sandbox-exec`) to confine write operations to the workspace; the independent `/plan` workflow executes shell commands in a read-only sandbox and restores the prior permission mode after approval; Windows preserves permission approval and path audits without process isolation
 - **Sensitive path & credential protection** - Reads of sensitive paths (SSH keys, credential files, `.git/hooks`) are strictly blocked or prompted; private temporary directories and environment scrubbing prevent secret leakage
 - **Surfaced sandbox scopes** - Permission requests detail the active sandbox policy and escalation reasons on TUI, CLI, and Web approval cards; `/sandbox` inspects live backend availability and writable roots
 - **Audit log** - Every Requested / Approved / Denied event is appended to `permission-audit.jsonl` for traceability
@@ -178,6 +178,10 @@ Type `/keyword` in normal chat or the image workbench to search templates. Use a
 The composer’s **Templates** button creates, edits, renames, and deletes custom templates. Chat presets cover code review, debugging, explanation, and test design. Image presets cover photography, product shots, illustration, and image editing. Built-ins are read-only; change the keyword to save a custom copy. Keywords are unique within each scope and may be reused across scopes.
 
 Custom templates are Markdown files under `input-templates/chat/` and `input-templates/image/` in the Sai configuration directory. Keywords accept 1–64 ASCII letters, numbers, hyphens, or underscores; content is limited to 64 KiB. These user-message templates are separate from internal task system prompts.
+
+### Terminal rendering preferences
+
+The TUI starts in global rendering by default. Web and TUI display settings can switch to inline rendering and independently enable or disable formula images and Mermaid images. `Ctrl+O` still toggles the current session. When an image option is disabled, the terminal keeps the original source as a readable fallback.
 
 ### Conversation branches
 

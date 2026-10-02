@@ -113,7 +113,6 @@ impl From<crate::config::DefaultPermissionMode> for AgentMode {
             crate::config::DefaultPermissionMode::Yolo => Self::Yolo,
             crate::config::DefaultPermissionMode::Audited => Self::Audited,
             crate::config::DefaultPermissionMode::AutoAudit => Self::AutoAudit,
-            crate::config::DefaultPermissionMode::Plan => Self::Plan,
         }
     }
 }

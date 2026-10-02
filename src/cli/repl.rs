@@ -76,6 +76,11 @@ pub(super) async fn run_repl(
         config.display.repl_transcript_row_cap,
         initial_transcript_options,
     );
+    // 1. 【终端】【全局渲染】启动时应用显示偏好，后续 Ctrl+O 只改变当前会话
+    if config.display.fullscreen {
+        runtime.toggle_fullscreen()?;
+    }
+    render::configure_asset_rendering(&config.display);
     runtime.set_paste_image_key(config.input.paste_image_key);
     runtime.record_welcome(
         env!("CARGO_PKG_VERSION").to_string(),
@@ -150,6 +155,7 @@ pub(super) async fn run_repl(
             reasoning_mode: render::ReasoningDisplayMode::from_config(&config.display.reasoning),
             tool_call_mode: render::ToolCallDisplayMode::from_config(&config.display.tool_calls),
         };
+        render::configure_asset_rendering(&config.display);
         runtime.update_options(config.display.repl_transcript_row_cap, transcript_options);
         runtime.set_mention_skills(super::repl_mentions::load_mention_skills(&config, paths));
         // 2. 优先执行本终端运行期间排队的消息
@@ -509,7 +515,7 @@ pub(super) async fn run_repl(
                 continue;
             }
         }
-        if mode_commands::handle(input, &mut mode, &mut runtime)? {
+        if mode_commands::handle(input, &mut mode, &mut runtime, state.state_dir())? {
             continue;
         }
         if input.eq_ignore_ascii_case("/providers") {

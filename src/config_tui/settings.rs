@@ -163,12 +163,12 @@ fn edit_permission_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
             t("TUI default permission mode", "TUI 默认权限模式"),
             config.permission.tui_mode().as_str().to_string(),
         )
-        .choices(&["yolo", "audited", "auto_audit", "plan"]),
+        .choices(&["yolo", "audited", "auto_audit"]),
         Field::new(
             t("CLI default permission mode", "CLI 默认权限模式"),
             config.permission.cli_mode().as_str().to_string(),
         )
-        .choices(&["yolo", "audited", "auto_audit", "plan"]),
+        .choices(&["yolo", "audited", "auto_audit"]),
     ];
     if !run_form(stdout, t(" PERMISSIONS ", " 权限 "), &mut fields)? {
         return Ok(());
@@ -403,6 +403,21 @@ fn edit_display_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Res
             t("REPL transcript row cap", "REPL 历史重放行数上限"),
             config.display.repl_transcript_row_cap.to_string(),
         ),
+        Field::boolean(
+            t(
+                "Start in global rendering (Ctrl+O toggles)",
+                "启动时全局渲染（Ctrl+O 切换）",
+            ),
+            config.display.fullscreen,
+        ),
+        Field::boolean(
+            t("Render formulas as images", "公式使用图片渲染"),
+            config.display.math_images,
+        ),
+        Field::boolean(
+            t("Render Mermaid as images", "Mermaid 使用图片渲染"),
+            config.display.mermaid_images,
+        ),
     ];
     loop {
         if !run_form(stdout, t(" DISPLAY ", " 显示偏好 "), &mut fields)? {
@@ -424,8 +439,14 @@ fn apply_display_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()> 
     let readable_names = parse_bool_field(&fields[2].value)?;
     let wait_model = parse_bool_field(&fields[3].value)?;
     let wait_thinking = parse_bool_field(&fields[4].value)?;
+    let fullscreen = parse_bool_field(&fields[6].value)?;
+    let math_images = parse_bool_field(&fields[7].value)?;
+    let mermaid_images = parse_bool_field(&fields[8].value)?;
     config.display.reasoning = fields[0].value.trim().to_string();
     config.display.tool_calls = fields[1].value.trim().to_string();
+    config.display.fullscreen = fullscreen;
+    config.display.math_images = math_images;
+    config.display.mermaid_images = mermaid_images;
     config.display.readable_tool_names = readable_names;
     config.display.wait_show_model = wait_model;
     config.display.wait_show_thinking_level = wait_thinking;
