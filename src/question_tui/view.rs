@@ -1,5 +1,5 @@
 use super::components::{editor_option_line, option_lines, panel_layout, tab_line};
-use super::text::{display_inline, editor_view, truncate_width, wrap_display_text};
+use super::text::{display_inline, editor_view, wrap_display_text};
 use super::QuestionState;
 use crate::i18n::text as t;
 use crate::question::QuestionRequest;
@@ -19,7 +19,8 @@ pub(super) fn compose(
     cols: usize,
     max_lines: usize,
 ) -> QuestionView {
-    let content_width = cols.saturating_sub(2).max(1);
+    let card = super::card::CardLayout::new(cols, max_lines);
+    let content_width = card.content_width();
     let mut top_lines = Vec::new();
     let mut body_lines = Vec::new();
     let mut footer_lines = Vec::new();
@@ -80,7 +81,7 @@ pub(super) fn compose(
                 focused_body_index = Some(body_lines.len());
             }
             body_lines.extend(option_lines(
-                &option.label,
+                &format!("{}. {}", index + 1, option.label),
                 &option.description,
                 state.selected[state.tab] == index,
                 picked,
@@ -97,7 +98,7 @@ pub(super) fn compose(
             }
             if state.editing && state.selected[state.tab] == index {
                 edit_body_index = Some(body_lines.len());
-                let editor_prefix_width = 6;
+                let editor_prefix_width = if question.multiple { 6 } else { 2 };
                 let (editor, cursor_offset) = editor_view(
                     &state.edit_buffer,
                     state.edit_cursor,
@@ -113,7 +114,7 @@ pub(super) fn compose(
                     format!("{}: {}", t("Custom", "自定义"), display_inline(custom))
                 };
                 body_lines.extend(option_lines(
-                    &label,
+                    &format!("{}. {label}", index + 1),
                     "",
                     state.selected[state.tab] == index,
                     picked,
@@ -155,7 +156,10 @@ pub(super) fn compose(
             footer_lines.push(format!("\x1b[2m{help}\x1b[0m"));
             footer_lines.push(format!(
                 "\x1b[2m{}\x1b[0m",
-                t("Tab next · Esc twice cancel", "Tab 换题 · Esc 两次取消")
+                t(
+                    "1–9 choose · Tab next · Esc twice cancel",
+                    "1–9 选择 · Tab 换题 · Esc 两次取消"
+                )
             ));
         }
     }
@@ -170,7 +174,12 @@ pub(super) fn compose(
         ));
     }
 
-    let max_content_lines = max_lines;
+    let heading = if card.framed {
+        Some(top_lines.remove(0))
+    } else {
+        None
+    };
+    let max_content_lines = max_lines.saturating_sub(if card.framed { 3 } else { 0 });
     let layout = panel_layout(
         top_lines.len(),
         body_lines.len(),
@@ -181,19 +190,35 @@ pub(super) fn compose(
     );
     state.scroll_starts[state.tab] = layout.body_start;
 
-    let mut lines = top_lines
-        .iter()
-        .skip(layout.top_start)
-        .take(layout.top_budget)
-        .chain(
-            body_lines
-                .iter()
-                .skip(layout.body_start)
-                .take(layout.body_capacity),
-        )
-        .chain(footer_lines.iter().skip(layout.footer_start))
-        .map(|line| truncate_width(&format!("  {line}"), cols))
-        .collect::<Vec<_>>();
+    let mut lines = Vec::new();
+    if let Some(title) = &heading {
+        lines.push(card.heading(title));
+    }
+    lines.extend(
+        top_lines
+            .iter()
+            .skip(layout.top_start)
+            .take(layout.top_budget)
+            .chain(
+                body_lines
+                    .iter()
+                    .skip(layout.body_start)
+                    .take(layout.body_capacity),
+            )
+            .map(|line| card.row(line)),
+    );
+    if card.framed {
+        lines.push(card.rule(false));
+    }
+    lines.extend(
+        footer_lines
+            .iter()
+            .skip(layout.footer_start)
+            .map(|line| card.row(line)),
+    );
+    if card.framed {
+        lines.push(card.rule(true));
+    }
     lines.resize(max_lines, String::new());
     let cursor = edit_body_index
         .filter(|index| {
@@ -202,7 +227,7 @@ pub(super) fn compose(
         .map(|index| {
             (
                 (edit_cursor_column + edit_cursor_offset).min(cols.saturating_sub(1)),
-                layout.top_budget + index - layout.body_start,
+                layout.top_budget + index - layout.body_start + usize::from(card.framed),
             )
         });
     QuestionView { lines, cursor }

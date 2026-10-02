@@ -128,20 +128,23 @@ pub(super) fn option_lines(
         } else {
             "[ ]"
         }
-    } else if picked {
-        "(x)"
     } else {
-        "( )"
+        ""
     };
     let pointer = if active { ">" } else { " " };
-    let width = content_width.saturating_sub(6).max(1);
+    let indent = if multiple { 6 } else { 2 };
+    let width = content_width.saturating_sub(indent).max(1);
     let label = display_inline(label);
     let mut lines = Vec::new();
     for (index, part) in wrap_display_text(&label, width).into_iter().enumerate() {
         let prefix = if index == 0 {
-            format!("{pointer} {marker} ")
+            if multiple {
+                format!("{pointer} {marker} ")
+            } else {
+                format!("{pointer} ")
+            }
         } else {
-            "      ".into()
+            " ".repeat(indent)
         };
         let color = if active {
             "\x1b[1;36m"
@@ -162,7 +165,7 @@ pub(super) fn option_lines(
                 .into_iter()
                 .map(|line| {
                     super::text::truncate_width(
-                        &format!("      \x1b[2m{line}\x1b[0m"),
+                        &format!("{}\x1b[2m{line}\x1b[0m", " ".repeat(indent)),
                         content_width,
                     )
                 }),
@@ -187,10 +190,8 @@ pub(super) fn editor_option_line(multiple: bool, picked: bool, editor: &str) -> 
         } else {
             "\x1b[2m[ ]\x1b[0m "
         }
-    } else if picked {
-        "\x1b[36m(x)\x1b[0m "
     } else {
-        "\x1b[2m( )\x1b[0m "
+        ""
     };
     let value = if editor.is_empty() {
         format!(

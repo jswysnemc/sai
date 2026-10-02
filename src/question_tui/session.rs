@@ -49,32 +49,31 @@ impl QuestionSession {
     ) -> Result<()> {
         self.clear()?;
         let width = terminal::size().map(|(cols, _)| cols).unwrap_or(80) as usize;
-        let content_width = width.saturating_sub(3).max(1);
-        let keeps_blank_line = self.panel_lines > 1;
-        let content_rows = self
-            .panel_lines
-            .saturating_sub(u16::from(keeps_blank_line))
-            .max(1);
-        let mut row = 0u16;
-        for line in answered_summary_lines(request, answers, content_rows as usize) {
-            self.write_answered_line(row, &line, content_width)?;
-            row += 1;
-        }
-        if keeps_blank_line {
-            queue!(
-                self.stdout,
-                MoveTo(0, self.anchor_y.saturating_add(row)),
-                Clear(ClearType::CurrentLine),
-                crossterm::style::Print("\r\n")
-            )?;
-        } else {
-            queue!(
-                self.stdout,
-                MoveTo(0, self.anchor_y.saturating_add(row.saturating_sub(1))),
-                crossterm::style::Print("\r\n")
-            )?;
-        }
-        queue!(self.stdout, Clear(ClearType::CurrentLine), Show)?;
+        let lines = super::summary::answered_card_lines(
+            request,
+            answers,
+            width,
+            usize::from(self.panel_lines),
+        );
+        crate::render::terminal_rows::paint_changed_rows(
+            &mut self.stdout,
+            self.anchor_y,
+            width,
+            &lines,
+            None,
+        )?;
+        let row = self.anchor_y.saturating_add(
+            lines
+                .len()
+                .min(usize::from(self.panel_lines.saturating_sub(1))) as u16,
+        );
+        queue!(
+            self.stdout,
+            crossterm::style::Print("\x1b[0m"),
+            MoveTo(0, row),
+            crossterm::style::Print("\r\n"),
+            Show
+        )?;
         self.stdout.flush()?;
         Ok(())
     }
@@ -100,33 +99,12 @@ impl QuestionSession {
         Ok(())
     }
 
-    /// 在指定面板行输出一条回答摘要。
-    ///
-    /// 参数:
-    /// - `row`: 相对面板行号
-    /// - `text`: 摘要文本
-    /// - `width`: 最大显示宽度
-    ///
-    /// 返回:
-    /// - 输出成功时返回空结果
-    pub(super) fn write_answered_line(&mut self, row: u16, text: &str, width: usize) -> Result<()> {
-        queue!(
-            self.stdout,
-            MoveTo(0, self.anchor_y.saturating_add(row)),
-            Clear(ClearType::CurrentLine),
-            crossterm::style::Print(ANSWERED_BAR),
-            crossterm::style::Print(" \x1b[2m\x1b[90m"),
-            crossterm::style::Print(truncate_width(text, width)),
-            crossterm::style::Print("\x1b[0m")
-        )?;
-        Ok(())
-    }
-
     /// 清空当前面板占用的全部终端行。
     ///
     /// 返回:
     /// - 清理成功时返回空结果
     pub(super) fn clear(&mut self) -> Result<()> {
+        queue!(self.stdout, crossterm::style::Print("\x1b[0m"))?;
         for row in 0..self.panel_lines {
             queue!(
                 self.stdout,

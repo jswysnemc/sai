@@ -265,7 +265,7 @@ pub(super) fn prompt_question_request_tui(
     let mut stdout = io::stdout();
     // 1. 独占 raw 输入，避免与主循环输入框事件竞争
     let mut terminal_guard = terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
-    runtime.pause_for_permission_prompt()?;
+    runtime.prepare_question_prompt()?;
 
     let response = crate::question_tui::ask(&pending.request)
         .unwrap_or_else(|err| crate::question::QuestionResponse::Unavailable(err.to_string()));

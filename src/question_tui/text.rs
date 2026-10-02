@@ -38,10 +38,13 @@ pub(super) fn wrap_display_text(value: &str, width: usize) -> Vec<String> {
 /// # 返回值
 /// 输出成功时返回空结果
 pub(super) fn reserve_space(lines: u16) -> Result<()> {
+    let mut stdout = io::stdout();
+    // 1. 【终端提问】【预留空间】清除继承样式并归零列坐标，raw 模式下显式使用 CRLF
+    write!(stdout, "\x1b[0m\r")?;
     for _ in 1..lines {
-        println!();
+        write!(stdout, "\r\n")?;
     }
-    io::stdout().flush()?;
+    stdout.flush()?;
     Ok(())
 }
 

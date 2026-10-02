@@ -66,6 +66,38 @@ pub(super) fn answered_summary_lines(
     lines
 }
 
+/// 【终端提问】【完成卡片】参数为问题、答案与可用尺寸，返回无背景色的紧凑回答卡片。
+pub(super) fn answered_card_lines(
+    request: &QuestionRequest,
+    answers: &QuestionAnswers,
+    cols: usize,
+    max_lines: usize,
+) -> Vec<String> {
+    let card = super::card::CardLayout::new(cols, max_lines);
+    let summary = answered_summary_lines(request, answers, max_lines);
+    let Some(heading) = summary.first() else {
+        return Vec::new();
+    };
+    let mut lines = vec![if card.framed {
+        card.heading(heading)
+    } else {
+        card.row(heading)
+    }];
+    let remaining = max_lines.saturating_sub(lines.len() + usize::from(card.framed));
+    lines.extend(
+        summary
+            .iter()
+            .skip(1)
+            .flat_map(|line| super::text::wrap_display_text(line, card.content_width()))
+            .take(remaining)
+            .map(|line| card.row(&line)),
+    );
+    if card.framed {
+        lines.push(card.rule(true));
+    }
+    lines
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

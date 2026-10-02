@@ -163,6 +163,20 @@ impl QuestionState {
         Ok(())
     }
 
+    /// 【终端提问】【编号选择】参数为问题集合与从一开始的编号；有效编号执行选择或编辑，返回结果。
+    pub(super) fn activate_number(
+        &mut self,
+        request: &QuestionRequest,
+        number: usize,
+    ) -> Result<()> {
+        let question = &request.questions[self.tab];
+        if number == 0 || number > option_count(question) {
+            return Ok(());
+        }
+        self.selected[self.tab] = number - 1;
+        self.activate_current(request)
+    }
+
     /// 【终端提问】【多选继续】参数为问题集合，返回推进结果；自定义选项进入编辑，不隐式勾选。
     pub(super) fn continue_multiple(&mut self, request: &QuestionRequest) -> Result<()> {
         let question = &request.questions[self.tab];

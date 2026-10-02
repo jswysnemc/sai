@@ -1,3 +1,4 @@
+mod card;
 mod components;
 mod render;
 mod session;
@@ -9,10 +10,7 @@ mod view;
 use self::render::draw;
 use self::session::QuestionSession;
 use self::state::{handle_editing_key, submitted_answers, QuestionState};
-use self::summary::answered_summary_lines;
-use self::text::{
-    insert_text, remove_at_cursor, remove_before_cursor, reserve_space, truncate_width,
-};
+use self::text::{insert_text, remove_at_cursor, remove_before_cursor, reserve_space};
 use crate::i18n::text as t;
 use crate::question::{
     validate_answers, QuestionAnswers, QuestionPrompt, QuestionRequest, QuestionResponse,
@@ -31,7 +29,6 @@ use std::time::{Duration, Instant};
 const MAX_PANEL_LINES: u16 = 16;
 const CANCEL_CONFIRM_WINDOW: Duration = Duration::from_secs(2);
 const BAR: &str = " ";
-const ANSWERED_BAR: &str = "\x1b[2m\x1b[90m┃\x1b[0m";
 
 /// 判断当前标准输出和终端设备是否支持交互式提问。
 ///
@@ -162,6 +159,22 @@ pub fn ask(request: &QuestionRequest) -> Result<QuestionResponse> {
 
                 let question = &request.questions[state.tab];
                 match key.code {
+                    KeyCode::Char(number)
+                        if number.is_ascii_digit()
+                            && number != '0'
+                            && (number.to_digit(10).unwrap_or(0) as usize)
+                                <= question.options.len() + usize::from(question.custom)
+                            && !key.modifiers.contains(KeyModifiers::CONTROL) =>
+                    {
+                        state
+                            .activate_number(request, number.to_digit(10).unwrap_or(0) as usize)?;
+                        if !request.needs_review() {
+                            if let Some(answers) = submitted_answers(request, &state)? {
+                                session.finish_answered(request, &answers)?;
+                                return Ok(QuestionResponse::Answered(answers));
+                            }
+                        }
+                    }
                     KeyCode::Left | KeyCode::Char('h') => state.previous_tab(request),
                     KeyCode::Right | KeyCode::Char('l') => state.next_tab(request),
                     KeyCode::Up | KeyCode::Char('k') => state.previous_option(question),

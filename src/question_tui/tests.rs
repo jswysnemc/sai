@@ -128,7 +128,7 @@ fn option_rows_have_no_numbers_and_put_description_below_title() {
         .iter()
         .map(|line| strip_ansi(line))
         .collect::<Vec<_>>();
-    assert_eq!(visible[0], "> ( ) 烧烤");
+    assert_eq!(visible[0], "> 烧烤");
     assert!(!visible.iter().any(|line| line.contains("1.")));
     assert!(visible[1..].iter().all(|line| line.starts_with("  ")));
     assert!(lines[1..].iter().all(|line| line.contains("\x1b[2m")));
@@ -184,7 +184,7 @@ fn focused_option_uses_cyan_emphasis() {
 #[test]
 fn custom_editor_has_no_extra_ascii_pointer() {
     let line = editor_option_line(false, false, "自定义内容");
-    assert_eq!(strip_ansi(&line), "> ( ) 自定义内容");
+    assert_eq!(strip_ansi(&line), "> 自定义内容");
 }
 
 #[test]

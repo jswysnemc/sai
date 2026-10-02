@@ -44,7 +44,7 @@ fn question_frame_shows_progress_and_only_focused_description() {
         .collect::<Vec<_>>()
         .join("\n");
     assert!(plain.contains("1/1"));
-    assert!(plain.contains("> [x] 修改实现与测试"));
+    assert!(plain.contains("> [x] 1. 修改实现与测试"));
     assert!(plain.contains("修复行为，并补充回归测试。"));
     assert!(!plain.contains("说明新的操作方式和适用范围。"));
     assert!(plain.contains("更新使用文档"));
@@ -99,4 +99,34 @@ fn initial_focus_matches_default_answer() {
     request.questions[0].default_answers = vec!["更新使用文档".into()];
     let state = QuestionState::new(&request);
     assert_eq!(state.selected[0], 1);
+}
+
+/// 【终端提问】【卡片回归】回答前后使用圆角细框和默认背景，不生成实色横条；无参数或返回值。
+#[test]
+fn question_and_answer_cards_use_default_terminal_background() {
+    let request = request();
+    let mut state = QuestionState::new(&request);
+    let view = super::view::compose(&request, &mut state, 120, 16);
+    assert!(view.lines.first().unwrap().contains('╭'));
+    let answers = vec![vec!["修改实现与测试".into()]];
+    let completed = super::summary::answered_card_lines(&request, &answers, 120, 12);
+    assert!(completed.first().unwrap().contains('╭'));
+    assert!(completed.last().unwrap().contains('╯'));
+    for line in view.lines.iter().chain(&completed) {
+        assert!(!line.contains("[48;") && !line.contains("[40m") && !line.contains("[7m"));
+        assert!(UnicodeWidthStr::width(strip_ansi(line).as_str()) <= 88);
+    }
+}
+
+/// 【终端提问】【编号回归】数字键直接勾选，其他答案进入编辑，无效编号保持原状态；无参数或返回值。
+#[test]
+fn numbered_selection_handles_options_and_custom_input() {
+    let request = request();
+    let mut state = QuestionState::new(&request);
+    state.activate_number(&request, 2).unwrap();
+    assert_eq!(state.answers[0], vec!["更新使用文档"]);
+    state.activate_number(&request, 9).unwrap();
+    assert_eq!(state.selected[0], 1);
+    state.activate_number(&request, 3).unwrap();
+    assert!(state.editing);
 }

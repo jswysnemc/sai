@@ -16,6 +16,7 @@ mod live_usage;
 mod mention_completion;
 mod mention_panel;
 mod placeholder_tips;
+mod question_handoff;
 mod queue_panel;
 mod queue_source;
 mod records;
