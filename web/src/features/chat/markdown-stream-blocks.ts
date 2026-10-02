@@ -26,8 +26,11 @@ export function splitMarkdownStream(source: string, previous?: MarkdownStreamSta
   const stableCount = Math.max(0, tree.children.length - 2);
   let start = 0;
   for (let index = 0; index < stableCount; index += 1) {
-    const end = tree.children[index + 1].position?.start.offset;
-    if (end === undefined) break;
+    const nodeStart = tree.children[index + 1].position?.start.offset;
+    if (nodeStart === undefined) break;
+    // 3. 从物理行首切分，保留顶层列表的缩进，否则后续缩进行会被误判为代码
+    const end = Math.max(tail.lastIndexOf("\n", nodeStart - 1), tail.lastIndexOf("\r", nodeStart - 1)) + 1;
+    if (end <= start) break;
     stable.push({ offset: offset + start, source: tail.slice(start, end) });
     start = end;
   }

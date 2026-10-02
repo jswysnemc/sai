@@ -10,6 +10,7 @@ import { DEFAULT_MARKDOWN_STYLE_PREFERENCES as style } from "../markdown/markdow
 
 const parser = unified().use(remarkParse).use(remarkGfm).use(remarkMath);
 const fixtures = [
+  "Intro\n\nBefore\n\n   - item\n       continuation\n\n       code?\n\nAfter\n\nLast",
   "# Heading\n\nparagraph\n\n| A | B |\n| - | - |\n| x | y |\n\nnext\n\nlast",
   "Intro\n\n- first\n\n  continuation\n  - nested\n\n- second\n\nAfter\n\nlast",
   "> quote\n>\n> continued\n\n> another\n\nOutside\n\n---\n\nend",
