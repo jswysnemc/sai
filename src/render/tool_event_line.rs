@@ -456,8 +456,8 @@ pub(crate) fn tool_verb(name: &str, tense: ToolVerbTense) -> &'static str {
     match (name, tense) {
         (name, ToolVerbTense::Progressive) if name.ends_with("__generate_image") => "Generating",
         (name, ToolVerbTense::Perfect) if name.ends_with("__generate_image") => "Generated",
-        ("ask_question", ToolVerbTense::Progressive) => crate::i18n::text("Asking", "等待回答"),
-        ("ask_question", ToolVerbTense::Perfect) => crate::i18n::text("Asked", "已提问"),
+        ("ask_question", ToolVerbTense::Progressive) => "Asking",
+        ("ask_question", ToolVerbTense::Perfect) => "Asked",
         ("run_command", ToolVerbTense::Progressive) => "Running",
         ("run_command", ToolVerbTense::Perfect) => "Ran",
         ("edit_file", ToolVerbTense::Progressive) => "Editing",

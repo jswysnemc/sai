@@ -294,6 +294,6 @@ fn unknown_tools_use_tool_label() {
 fn asking_live_status_does_not_append_running() {
     let label = tool_event_label("ask_question", Some("{}"));
     let status = tool_call_status_text(&label, "run");
-    assert_eq!(label, crate::i18n::text("Asking", "等待回答"));
+    assert_eq!(label, "Asking");
     assert!(!status.contains("running"));
 }

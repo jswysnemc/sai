@@ -176,13 +176,10 @@ fn ask_question_uses_question_status_instead_of_running() {
     let mut view = ToolView::running("ask_question".into(), "{}".into());
     let waiting = super::formatter::render(&view, crate::render::ToolCallDisplayMode::Summary);
     let waiting = crate::render::activity_animation::strip_ansi_for_test(&waiting);
-    assert!(
-        waiting.contains(crate::i18n::text("Asking", "等待回答")),
-        "{waiting}"
-    );
+    assert!(waiting.contains("Asking"), "{waiting}");
     assert!(!waiting.contains("Running") && !waiting.contains("ask_question"));
     view.finish(true, "{}".into());
     let completed = super::formatter::render(&view, crate::render::ToolCallDisplayMode::Summary);
     let completed = crate::render::activity_animation::strip_ansi_for_test(&completed);
-    assert!(completed.contains(crate::i18n::text("Asked", "已提问")));
+    assert!(completed.contains("Asked"));
 }
