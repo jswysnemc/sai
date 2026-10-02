@@ -8,6 +8,12 @@ use crossterm::{
 };
 
 impl ReplRuntime {
+    /// 【终端提问】【返回主屏】无参数，返回交互结束后的主屏同步结果。
+    pub(in crate::cli) fn finish_question_prompt(&mut self) -> Result<()> {
+        self.last_composer_signature = None;
+        self.sync_transcript(true)
+    }
+
     /// 【终端提问】【界面交接】暂停输出并从输入框顶部撤下旧底色，保留草稿供提问结束后恢复。
     /// @returns 绘制结果；无参数
     pub(in crate::cli) fn prepare_question_prompt(&mut self) -> Result<()> {

@@ -181,7 +181,7 @@ pub fn ask(request: &QuestionRequest) -> Result<QuestionResponse> {
                     KeyCode::Right | KeyCode::Char('l') => state.next_tab(request),
                     KeyCode::Up | KeyCode::Char('k') => state.previous_option(question),
                     KeyCode::Down | KeyCode::Char('j') => state.next_option(question),
-                    KeyCode::Char(' ') if question.multiple => {
+                    KeyCode::Char(' ') => {
                         state.toggle_current(request)?;
                     }
                     KeyCode::Tab => state.next_tab(request),
@@ -190,7 +190,7 @@ pub fn ask(request: &QuestionRequest) -> Result<QuestionResponse> {
                         state.continue_multiple(request)?;
                     }
                     KeyCode::Enter => {
-                        state.activate_current(request)?;
+                        state.confirm_single(request)?;
                         if !request.needs_review() {
                             if let Some(answers) = submitted_answers(request, &state)? {
                                 session.finish_answered(request, &answers)?;

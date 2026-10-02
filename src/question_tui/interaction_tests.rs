@@ -94,3 +94,55 @@ fn navigation_tracks_current_and_answered_questions() {
     let narrow = strip_ansi(&super::navigation::question_tabs(&request, &state, 12));
     assert!(narrow.contains("◆ 第二题"));
 }
+
+/// 【终端提问】【单选空格回归】切换选中状态不提交、不换题，多个选项始终互斥；无参数和返回值。
+#[test]
+fn single_question_space_toggles_without_advancing() {
+    let request = parse_ask_request(&serde_json::json!({"questions":[
+        {"header":"范围","question":"选择模块","options":[{"label":"A","description":""},{"label":"B","description":""}]},
+        {"header":"确认","question":"补充说明","options":[]}
+    ]}).to_string()).unwrap();
+    let mut state = QuestionState::new(&request);
+    state.toggle_current(&request).unwrap();
+    assert_eq!(state.tab, 0, "空格只能切换，不能推进到下一题");
+    assert_eq!(state.answers[0], vec!["A"]);
+    state.selected[0] = 1;
+    state.toggle_current(&request).unwrap();
+    assert_eq!(state.answers[0], vec!["B"]);
+    state.toggle_current(&request).unwrap();
+    assert!(state.answers[0].is_empty());
+    state.activate_current(&request).unwrap();
+    assert_eq!(state.tab, 1);
+    assert_eq!(state.answers[0], vec!["B"]);
+}
+
+/// 【终端提问】【确认回归】Enter 保留空格选中的答案，自定义答案也满足互斥与取消选择；无参数和返回值。
+#[test]
+fn single_question_confirm_preserves_choice_and_other_toggle() {
+    let request = parse_ask_request(&serde_json::json!({"questions":[{
+        "header":"范围","question":"选择模块","options":[{"label":"A","description":""},{"label":"B","description":""}]
+    }]}).to_string()).unwrap();
+    let mut state = QuestionState::new(&request);
+    state.toggle_current(&request).unwrap();
+    state.selected[0] = 1;
+    state.confirm_single(&request).unwrap();
+    assert_eq!(state.answers[0], vec!["A"]);
+    state.selected[0] = 2;
+    state.confirm_single(&request).unwrap();
+    assert!(state.editing);
+    state.edit_buffer = "自定义".into();
+    handle_editing_key(
+        &request,
+        &mut state,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(state.answers[0], vec!["自定义"]);
+    state.toggle_current(&request).unwrap();
+    assert!(state.answers[0].is_empty());
+    state.toggle_current(&request).unwrap();
+    assert_eq!(state.answers[0], vec!["自定义"]);
+    state.selected[0] = 0;
+    state.toggle_current(&request).unwrap();
+    assert_eq!(state.answers[0], vec!["A"]);
+}

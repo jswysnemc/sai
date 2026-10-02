@@ -37,6 +37,7 @@ mod init;
 mod input_flags;
 mod interaction;
 mod plan_review;
+mod question_screen;
 mod kb_commands;
 pub(crate) mod alternate_screen;
 mod terminal_signals;

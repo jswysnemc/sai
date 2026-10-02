@@ -151,11 +151,14 @@ pub(super) fn compose(
                     )
                 }
             } else if content_width < 48 {
-                t("Up/Down · Enter choose/edit", "↑/↓ 选择 · Enter 确认/编辑")
+                t(
+                    "Space toggle · Enter confirm/edit",
+                    "空格选择 · Enter 确认/编辑",
+                )
             } else {
                 t(
-                    "Up/Down focus · Enter choose/edit",
-                    "↑/↓ 移动 · Enter 确认/编辑",
+                    "Up/Down focus · Space toggle · Enter confirm/edit",
+                    "↑/↓ 移动 · 空格选择 · Enter 确认/编辑",
                 )
             };
             footer_lines.push(format!("\x1b[2m{help}\x1b[0m"));

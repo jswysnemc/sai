@@ -1,8 +1,8 @@
 use crate::question::{PendingQuestion, QuestionResponse};
 use anyhow::Result;
 
-/// 【计划模式】【终端审阅】参数为待审批请求，返回用户决定；正文先在可滚动 Markdown 预览中完整展示。
-pub(super) fn ask(pending: &PendingQuestion) -> Result<QuestionResponse> {
+/// 【计划模式】【终端审阅】参数为待审批请求与是否使用临时屏幕，返回用户决定；正文先在可滚动 Markdown 预览中完整展示。
+pub(super) fn ask(pending: &PendingQuestion, overlay: bool) -> Result<QuestionResponse> {
     if let Some(plan) = &pending.plan {
         if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
             return Ok(QuestionResponse::Unavailable(
@@ -20,5 +20,9 @@ pub(super) fn ask(pending: &PendingQuestion) -> Result<QuestionResponse> {
             ))
         })?;
     }
-    crate::question_tui::ask(&pending.request)
+    if overlay {
+        super::question_screen::ask(&pending.request)
+    } else {
+        crate::question_tui::ask(&pending.request)
+    }
 }

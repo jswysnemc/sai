@@ -31,6 +31,9 @@ pub(crate) fn render_framed(view: &ToolView, mode: ToolCallDisplayMode, frame: u
         return String::new();
     }
 
+    if view.name == "ask_question" {
+        return super::question::render(view, mode, frame);
+    }
     if let Some(rendered) = super::background::render(view, frame) {
         return rendered;
     }

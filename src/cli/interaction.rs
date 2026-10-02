@@ -243,7 +243,7 @@ pub(super) fn prompt_permission_request_tui(
 /// 返回:
 /// - 是否成功提交回答
 fn prompt_question_request(pending: &crate::question::PendingQuestion) -> Result<()> {
-    let response = super::plan_review::ask(pending)
+    let response = super::plan_review::ask(pending, false)
         .unwrap_or_else(|err| crate::question::QuestionResponse::Unavailable(err.to_string()));
     crate::question::resolve_question(&pending.id, response)
 }
@@ -260,19 +260,19 @@ pub(super) fn prompt_question_request_tui(
     pending: &crate::question::PendingQuestion,
     runtime: &mut ReplRuntime,
 ) -> Result<()> {
-    // 提问面板在主屏光标处绘制，全屏视图必须先退出
+    // 【终端提问】【屏幕切换】先退出会话全屏视图，避免临时提问屏幕嵌套切换
     runtime.leave_fullscreen()?;
     let mut stdout = io::stdout();
     // 1. 独占 raw 输入，避免与主循环输入框事件竞争
     let mut terminal_guard = terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
     runtime.prepare_question_prompt()?;
 
-    let response = super::plan_review::ask(pending)
+    let response = super::plan_review::ask(pending, true)
         .unwrap_or_else(|err| crate::question::QuestionResponse::Unavailable(err.to_string()));
 
-    // 2. 恢复终端模式；提问面板直接写过终端，受管区域需要在下次同步前重启
+    // 2. 【终端提问】【恢复主屏】临时屏幕已恢复，保留历史行位置供工具结果原地更新
     let _ = terminal_guard.finish(&mut stdout);
-    runtime.mark_desynced();
+    runtime.finish_question_prompt()?;
     crate::question::resolve_question(&pending.id, response)
 }
 

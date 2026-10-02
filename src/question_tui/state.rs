@@ -192,7 +192,7 @@ impl QuestionState {
         }
     }
 
-    /// 切换当前多选答案的选中状态。
+    /// 切换当前答案的选中状态，单选保持互斥且不自动推进。
     ///
     /// 参数:
     /// - `request`: 结构化提问请求
@@ -202,15 +202,42 @@ impl QuestionState {
     pub(super) fn toggle_current(&mut self, request: &QuestionRequest) -> Result<()> {
         let question = &request.questions[self.tab];
         let selected = self.selected[self.tab];
-        if selected == question.options.len() && question.custom {
+        let value = if selected == question.options.len() && question.custom {
             let custom = self.custom_answers[self.tab].trim();
             if custom.is_empty() {
                 return self.activate_current(request);
             }
-            toggle_answer(&mut self.answers[self.tab], custom);
-            return Ok(());
+            custom.to_string()
+        } else {
+            question
+                .options
+                .get(selected)
+                .ok_or_else(|| anyhow::anyhow!("selected question option is out of range"))?
+                .answer_value()
+                .to_string()
+        };
+        // 1. 【终端提问】【选中切换】空格只改变选择；单选替换旧答案，重复选择则清空
+        if question.multiple {
+            toggle_answer(&mut self.answers[self.tab], &value);
+        } else if self.answers[self.tab].contains(&value) {
+            self.answers[self.tab].clear();
+        } else {
+            self.answers[self.tab] = vec![value];
         }
-        self.activate_current(request)
+        Ok(())
+    }
+
+    /// 【终端提问】【单选确认】参数为问题请求，返回确认结果；已有答案不随焦点改变，Other 仍进入编辑。
+    pub(super) fn confirm_single(&mut self, request: &QuestionRequest) -> Result<()> {
+        let question = &request.questions[self.tab];
+        if self.answers[self.tab].is_empty()
+            || (question.custom && self.selected[self.tab] == question.options.len())
+        {
+            self.activate_current(request)
+        } else {
+            self.advance_after_single(request);
+            Ok(())
+        }
     }
 
     /// 单选完成后推进到下一个标签。

@@ -259,3 +259,27 @@ fn expanded_reasoning_keeps_fenced_code_colors() {
     assert!(ansi.contains(crate::render::style::CODE_STRING_STYLE));
     assert!(!plain(&expanded).join("\n").contains("```"));
 }
+
+/// 【提问展示】【全屏回归】实际展开路径保留问题、答案与选项说明，不显示原始协议；无参数和返回值。
+#[test]
+fn expanded_question_uses_readable_answers() {
+    for width in [40, 80] {
+        let mut store = TranscriptStore::new(1000);
+        store.push_tool_call("ask_question".into(), r#"{"questions":[{"header":"Scope","question":"Select a module","options":[{"label":"UI","description":"Option details"}]}]}"#.into());
+        store.push_tool_result("ask_question".into(), true, r#"{"status":"answered","answers":[{"header":"Scope","question":"Select a module","answer":"UI"}]}"#.into());
+        let collapsed = store.render_fullscreen(width, &options(), &HashSet::new());
+        let key = collapsed.paragraphs.last().unwrap().key;
+        let expanded = store.render_fullscreen(width, &options(), &HashSet::from([key]));
+        let text = plain(&expanded).join("\n");
+        assert!(
+            text.contains("Asked")
+                && text.contains("Select a module")
+                && text.contains("Option details"),
+            "{text}"
+        );
+        assert!(
+            !text.contains("args:") && !text.contains("output:"),
+            "{text}"
+        );
+    }
+}

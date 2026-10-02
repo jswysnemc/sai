@@ -593,3 +593,29 @@ fn plan_transition_updates_composer_without_losing_manual_switch() {
     );
     assert_eq!(handle.load(Ordering::SeqCst), AgentMode::AutoAudit.as_u8());
 }
+
+/// 【终端提问】【主屏回归】提问返回后旧标题仍可原地更新，不能把可见行全部丢入回滚区；无参数和返回值。
+#[test]
+fn question_completion_keeps_main_screen_title_patchable() {
+    let mut runtime = ReplRuntime::new(5_000, options());
+    runtime
+        .record_runner_event(&RunnerEvent::Agent(AgentEvent::ToolCall {
+            name: "ask_question".into(),
+            arguments: r#"{"questions":[]}"#.into(),
+        }))
+        .unwrap();
+    runtime.prepare_question_prompt().unwrap();
+    runtime.finish_question_prompt().unwrap();
+    runtime
+        .record_runner_event(&RunnerEvent::Agent(AgentEvent::ToolResult {
+            name: "ask_question".into(),
+            ok: true,
+            output: r#"{"status":"answered","answers":[]}"#.into(),
+        }))
+        .unwrap();
+    assert_eq!(
+        runtime.stream.offscreen(),
+        0,
+        "原 Asking 行必须仍可原地修补"
+    );
+}

@@ -5,6 +5,7 @@ mod formatter;
 mod image;
 mod model;
 mod read_file;
+mod question;
 mod todo;
 
 #[cfg(test)]
@@ -16,3 +17,6 @@ pub(crate) use formatter::{render, render_call, render_framed, render_result};
 pub(crate) use image::is_image_generation_tool;
 pub(crate) use model::{PermissionAuditView, ToolView};
 pub(crate) use todo::render_todo_output;
+
+#[cfg(test)]
+mod question_tests;
