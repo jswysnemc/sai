@@ -7,6 +7,7 @@ mod context_runtime;
 #[cfg(test)]
 mod model_endpoint_config_tests;
 pub(super) mod prompt_service;
+mod input_template_catalog;
 pub(crate) mod provider_models;
 pub(crate) mod provider_identity;
 #[cfg(test)]

@@ -1,4 +1,6 @@
 import { useState, type DragEvent, type FormEvent, type ReactNode } from "react";
+import { TemplateManager } from "../../prompt-templates/template-manager";
+import type { TemplateScope } from "../../prompt-templates/template-client";
 import { AttachmentStrip } from "./attachment-strip";
 import { ComposerTextarea } from "./composer-textarea";
 import type { ComposerAttachment } from "./use-composer-attachments";
@@ -9,6 +11,7 @@ export type ComposerSurfaceVariant = "full" | "compact";
 
 type ComposerSurfaceProps = {
   variant: ComposerSurfaceVariant;
+  templateScope?: TemplateScope;
   className?: string;
   value: string;
   historyEntries: string[];
@@ -35,6 +38,7 @@ type ComposerSurfaceProps = {
  */
 export function ComposerSurface({
   variant,
+  templateScope = "chat",
   className = "",
   value,
   historyEntries,
@@ -102,6 +106,7 @@ export function ComposerSurface({
         <AttachmentStrip attachments={attachments} onRemove={onRemoveAttachment} />
       )}
       <ComposerTextarea
+        templateScope={templateScope}
         value={value}
         historyEntries={historyEntries}
         disabled={disabled}
@@ -112,6 +117,7 @@ export function ComposerSurface({
         onPasteImages={onPasteImages}
         onSubmit={() => submit()}
       />
+      {variant === "full" && <div className="flex justify-end px-2"><TemplateManager scope={templateScope} disabled={disabled} /></div>}
       {children}
     </form>
   );

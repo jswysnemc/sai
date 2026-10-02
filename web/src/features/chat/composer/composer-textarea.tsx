@@ -23,7 +23,10 @@ import type { InputHistoryState } from "./input-history";
 import { useI18n } from "../../i18n/use-i18n";
 import { FOCUS_COMPOSER_EVENT } from "./composer-events";
 
+import type { TemplateScope } from "../../prompt-templates/template-client";
+
 type ComposerTextareaProps = {
+  templateScope?: TemplateScope;
   value: string;
   historyEntries: string[];
   disabled: boolean;
@@ -236,9 +239,14 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
    */
   const handleSkillSelect = useCallback((name: string) => {
     const current = editorRef.current ? serializeComposerAtomEditor(editorRef.current) : props.value;
-    const range = skillRangeRef.current ?? { start: current.length, end: current.length, query: "" };
+    const range = skillRangeRef.current;
+    if (!range || current.slice(range.start, range.end) !== `/${range.query}`) {
+      dismissSkill(false);
+      return;
+    }
     // /goal 是会话目标命令，不是 Skill，插入纯文本 token 以渲染 Target 图标
-    const insertion = name === "goal" ? "/goal " : `${formatSkillMention(name)} `;
+    const option = skillOptionsRef.current.find((item) => item.name === name);
+    const insertion = option?.kind === "template" ? option.content ?? "" : name === "goal" ? "/goal " : `${formatSkillMention(name)} `;
     const next = `${current.slice(0, range.start)}${insertion}${current.slice(range.end)}`;
     pendingSelectionRef.current = { start: range.start + insertion.length, end: range.start + insertion.length };
     const nextSelection = pendingSelectionRef.current;
@@ -425,13 +433,14 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
         setSkillActiveIndex((index) => Math.max(index - 1, 0));
         return;
       }
-      if ((event.key === "Enter" || event.key === "Tab") && !event.nativeEvent.isComposing) {
+      if ((event.key === "Enter" || event.key === "Tab") && !event.shiftKey && !event.nativeEvent.isComposing) {
+        event.preventDefault();
         const skill = filtered[skillActiveIndex];
         if (skill) {
           event.preventDefault();
           handleSkillSelect(skill.name);
-          return;
         }
+        return;
       }
       if (event.key === "Escape") {
         event.preventDefault();
@@ -517,6 +526,7 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
       <SkillMentionPopover
         ref={skillPopoverRef}
         open={skillOpen}
+        scope={props.templateScope ?? "chat"}
         anchorRef={editorRef}
         query={skillQuery}
         activeIndex={skillActiveIndex}

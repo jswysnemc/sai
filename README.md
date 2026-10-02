@@ -171,6 +171,14 @@ The native read-only `web_search` tool works without Lua plugins or Python. Term
 
 Open a known URL with the native read-only `web_fetch` tool, including in Plan mode. No plugin, Python runtime, or search API key is required. Output formats are `markdown` (default), `text`, and `html`. Defaults are a 30-second timeout and 24000 characters; limits are 120 seconds, 80000 characters, 10 redirects, and a 5 MiB response body. JavaScript is not executed; use the browser tools for dynamic pages. The optional Lua plugin remains available separately as `lua__web-fetch__web_fetch`.
 
+### Web input prompt templates
+
+Type `/keyword` in normal chat or the image workbench to search templates. Use arrow keys and Enter / Tab, or click an item, to insert its text without sending. The result remains editable and supports Ctrl+Z. Normal chat also keeps skills and commands; the image workbench only lists image templates.
+
+The composer’s **Templates** button creates, edits, renames, and deletes custom templates. Chat presets cover code review, debugging, explanation, and test design. Image presets cover photography, product shots, illustration, and image editing. Built-ins are read-only; change the keyword to save a custom copy. Keywords are unique within each scope and may be reused across scopes.
+
+Custom templates are Markdown files under `input-templates/chat/` and `input-templates/image/` in the Sai configuration directory. Keywords accept 1–64 ASCII letters, numbers, hyphens, or underscores; content is limited to 64 KiB. These user-message templates are separate from internal task system prompts.
+
 ### Conversation branches
 
 Turns are stored as a tree and can fork from any message. Both the TUI and the web workbench can browse and switch branches; the web UI also has a pan-and-zoom branch overview.

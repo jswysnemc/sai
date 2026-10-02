@@ -8,12 +8,17 @@ use std::path::PathBuf;
 #[derive(Clone, Copy)]
 pub(crate) enum PromptKind {
     Identity,
+    ChatTemplate,
+    ImageTemplate,
 }
 
 /// 提示词文件摘要。
 #[derive(Clone, Debug, Serialize)]
 pub(crate) struct PromptSummary {
     pub name: String,
+    pub builtin: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
 }
 
 /// 提示词文件内容。
@@ -21,6 +26,7 @@ pub(crate) struct PromptSummary {
 pub(crate) struct PromptDocument {
     pub name: String,
     pub content: String,
+    pub builtin: bool,
 }
 
 /// 解析浏览器提交的提示词类型。
@@ -33,6 +39,8 @@ pub(crate) struct PromptDocument {
 pub(crate) fn parse_kind(value: &str) -> Result<PromptKind> {
     match value {
         "identities" => Ok(PromptKind::Identity),
+        "chat-templates" => Ok(PromptKind::ChatTemplate),
+        "image-templates" => Ok(PromptKind::ImageTemplate),
         _ => bail!("unsupported prompt kind: {value}"),
     }
 }
@@ -46,10 +54,17 @@ pub(crate) fn parse_kind(value: &str) -> Result<PromptKind> {
 /// 返回:
 /// - 按名称排序的文件摘要
 pub(crate) fn list(paths: &SaiPaths, kind: PromptKind) -> Result<Vec<PromptSummary>> {
-    let config = AppConfig::load_or_default(paths)?;
-    let directory = prompt_directory(paths, &config, kind);
+    let directory = prompt_directory(paths, kind)?;
+    let defaults = super::input_template_catalog::presets(kind);
     if !directory.exists() {
-        return Ok(Vec::new());
+        return Ok(defaults
+            .into_iter()
+            .map(|item| PromptSummary {
+                name: item.name,
+                builtin: true,
+                content: Some(item.content),
+            })
+            .collect());
     }
     let mut items = std::fs::read_dir(directory)?
         .filter_map(Result::ok)
@@ -63,9 +78,21 @@ pub(crate) fn list(paths: &SaiPaths, kind: PromptKind) -> Result<Vec<PromptSumma
             let name = entry.file_name().to_string_lossy().to_string();
             name.ends_with(".md").then_some(PromptSummary {
                 name: display_name(&name).to_string(),
+                builtin: false,
+                content: None,
             })
         })
         .collect::<Vec<_>>();
+    if !matches!(kind, PromptKind::Identity) {
+        for item in &mut items {
+            item.content = Some(read(paths, kind, &item.name)?.content);
+        }
+    }
+    items.extend(defaults.into_iter().map(|item| PromptSummary {
+        name: item.name,
+        builtin: true,
+        content: Some(item.content),
+    }));
     items.sort_by(|left, right| left.name.cmp(&right.name));
     Ok(items)
 }
@@ -80,15 +107,21 @@ pub(crate) fn list(paths: &SaiPaths, kind: PromptKind) -> Result<Vec<PromptSumma
 /// 返回:
 /// - 提示词文件内容
 pub(crate) fn read(paths: &SaiPaths, kind: PromptKind, name: &str) -> Result<PromptDocument> {
-    let config = AppConfig::load_or_default(paths)?;
+    if let Some(item) = super::input_template_catalog::presets(kind)
+        .into_iter()
+        .find(|item| item.name == name)
+    {
+        return Ok(item);
+    }
     let file_name = sanitize_name(name)?;
-    let path = prompt_path(paths, &config, kind, &file_name);
+    let path = prompt_path(paths, kind, &file_name)?;
     if !path.is_file() {
         bail!("prompt not found: {}", display_name(&file_name));
     }
     Ok(PromptDocument {
         name: display_name(&file_name).to_string(),
         content: std::fs::read_to_string(path)?,
+        builtin: false,
     })
 }
 
@@ -110,17 +143,46 @@ pub(crate) fn save(
     name: &str,
     content: &str,
 ) -> Result<PromptDocument> {
-    let config = AppConfig::load_or_default(paths)?;
     let file_name = sanitize_name(name)?;
-    let path = prompt_path(paths, &config, kind, &file_name);
+    let path = prompt_path(paths, kind, &file_name)?;
+    if !matches!(kind, PromptKind::Identity) {
+        super::input_template_catalog::validate(name, content)?;
+        let presets = super::input_template_catalog::presets(kind);
+        if presets
+            .iter()
+            .any(|item| item.name == name || Some(item.name.as_str()) == current_name)
+        {
+            bail!("Built-in templates are read-only; use another keyword to create a copy");
+        }
+        if path.exists() && current_name != Some(name) {
+            bail!("Template keyword already exists");
+        }
+        if let Some(current) = current_name {
+            let source = prompt_path(paths, kind, &sanitize_name(current)?)?;
+            if !source.is_file() {
+                bail!("Template not found");
+            }
+        }
+    }
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(&path, format_content(content))?;
+    if matches!(kind, PromptKind::Identity) {
+        std::fs::write(&path, format_content(content))?;
+    } else {
+        use std::io::Write;
+        let mut temporary = tempfile::NamedTempFile::new_in(path.parent().unwrap())?;
+        temporary.write_all(content.as_bytes())?;
+        if current_name == Some(name) {
+            temporary.persist(&path)?;
+        } else {
+            temporary.persist_noclobber(&path)?;
+        }
+    }
     if let Some(current_name) = current_name {
         let current_file_name = sanitize_name(current_name)?;
         if current_file_name != file_name {
-            let current_path = prompt_path(paths, &config, kind, &current_file_name);
+            let current_path = prompt_path(paths, kind, &current_file_name)?;
             if current_path.exists() {
                 std::fs::remove_file(current_path)?;
             }
@@ -139,9 +201,14 @@ pub(crate) fn save(
 /// 返回:
 /// - 文件存在并删除时返回 true
 pub(crate) fn remove(paths: &SaiPaths, kind: PromptKind, name: &str) -> Result<bool> {
-    let config = AppConfig::load_or_default(paths)?;
     let file_name = sanitize_name(name)?;
-    let path = prompt_path(paths, &config, kind, &file_name);
+    let path = prompt_path(paths, kind, &file_name)?;
+    if super::input_template_catalog::presets(kind)
+        .iter()
+        .any(|item| item.name == name)
+    {
+        bail!("Built-in templates are read-only");
+    }
     if !path.exists() {
         return Ok(false);
     }
@@ -150,15 +217,17 @@ pub(crate) fn remove(paths: &SaiPaths, kind: PromptKind, name: &str) -> Result<b
 }
 
 /// 返回指定类型的提示词目录。
-fn prompt_directory(paths: &SaiPaths, config: &AppConfig, kind: PromptKind) -> PathBuf {
-    match kind {
-        PromptKind::Identity => config.identities_dir_path(paths),
-    }
+fn prompt_directory(paths: &SaiPaths, kind: PromptKind) -> Result<PathBuf> {
+    Ok(match kind {
+        PromptKind::Identity => AppConfig::load_or_default(paths)?.identities_dir_path(paths),
+        PromptKind::ChatTemplate => paths.config_dir.join("input-templates/chat"),
+        PromptKind::ImageTemplate => paths.config_dir.join("input-templates/image"),
+    })
 }
 
 /// 返回指定提示词文件路径。
-fn prompt_path(paths: &SaiPaths, config: &AppConfig, kind: PromptKind, name: &str) -> PathBuf {
-    prompt_directory(paths, config, kind).join(name)
+fn prompt_path(paths: &SaiPaths, kind: PromptKind, name: &str) -> Result<PathBuf> {
+    Ok(prompt_directory(paths, kind)?.join(name))
 }
 
 /// 校验提示词名称并补充 Markdown 扩展名。

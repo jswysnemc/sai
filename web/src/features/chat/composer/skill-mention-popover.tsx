@@ -1,5 +1,8 @@
 import { BookOpen, Target } from "../../../shared/ui/icons";
 import { forwardRef, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { templateApi, templateKey, type TemplateScope } from "../../prompt-templates/template-client";
+import { Button } from "../../../shared/ui/button/button";
 import { api } from "../../../api/client";
 import { useI18n } from "../../i18n/use-i18n";
 import { MentionPopoverPortal } from "./mention-popover-portal";
@@ -7,11 +10,14 @@ import { MentionPopoverPortal } from "./mention-popover-portal";
 export type SkillOption = {
   name: string;
   description: string;
-  kind?: "skill" | "command";
+  kind?: "skill" | "command" | "template";
+  content?: string;
+  keyword?: string;
 };
 
 type SkillMentionPopoverProps = {
   open: boolean;
+  scope?: TemplateScope;
   anchorRef: RefObject<HTMLElement | null>;
   query: string;
   activeIndex: number;
@@ -31,7 +37,7 @@ export function filterSkills(skills: SkillOption[], query: string): SkillOption[
   const keyword = query.trim().toLowerCase();
   if (!keyword) return skills;
   return skills.filter((skill) =>
-    skill.name.toLowerCase().includes(keyword)
+    (skill.keyword ?? skill.name).toLowerCase().includes(keyword)
     || skill.description.toLowerCase().includes(keyword)
   );
 }
@@ -45,14 +51,15 @@ export function filterSkills(skills: SkillOption[], query: string): SkillOption[
  * @returns skill 浮层；关闭时返回 null
  */
 export const SkillMentionPopover = forwardRef<HTMLDivElement, SkillMentionPopoverProps>(
-  function SkillMentionPopover({ open, anchorRef, query, activeIndex, onActiveIndexChange, onSelect, onOptionsChange }, ref) {
+  function SkillMentionPopover({ scope = "chat", open, anchorRef, query, activeIndex, onActiveIndexChange, onSelect, onOptionsChange }, ref) {
     const { t } = useI18n();
     const [skills, setSkills] = useState<SkillOption[]>([]);
+    const templates = useQuery({ queryKey: templateKey(scope), queryFn: () => templateApi.list(scope), enabled: open, staleTime: 30_000 });
     const [loading, setLoading] = useState(false);
     const listRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-      if (!open) return;
+      if (!open || scope === "image") return;
       let cancelled = false;
       setLoading(true);
       api.skills
@@ -68,7 +75,6 @@ export const SkillMentionPopover = forwardRef<HTMLDivElement, SkillMentionPopove
             ...response.skills.map((skill) => ({ ...skill, kind: "skill" as const }))
           ];
           setSkills(options);
-          onOptionsChange(options);
         })
         .catch(() => {
           if (cancelled) return;
@@ -78,7 +84,6 @@ export const SkillMentionPopover = forwardRef<HTMLDivElement, SkillMentionPopove
             kind: "command"
           }];
           setSkills(options);
-          onOptionsChange(options);
         })
         .finally(() => {
           if (!cancelled) setLoading(false);
@@ -86,9 +91,18 @@ export const SkillMentionPopover = forwardRef<HTMLDivElement, SkillMentionPopove
       return () => {
         cancelled = true;
       };
-    }, [onOptionsChange, open, t]);
+    }, [scope, open, t]);
 
-    const filtered = useMemo(() => filterSkills(skills, query), [skills, query]);
+    const options = useMemo<SkillOption[]>(() => [
+      ...(scope === "chat" ? skills : []),
+      ...(templates.data ?? []).map((item) => ({
+        name: `template:${item.name}`, keyword: item.name, content: item.content,
+        description: `${t("Template", "模板")} · ${item.content.split("\n")[0]}`,
+        kind: "template" as const
+      }))
+    ], [scope, skills, templates.data, t]);
+    useEffect(() => { onOptionsChange(options); }, [options, onOptionsChange]);
+    const filtered = useMemo(() => filterSkills(options, query), [options, query]);
 
     useEffect(() => {
       if (!open) return;
@@ -106,27 +120,29 @@ export const SkillMentionPopover = forwardRef<HTMLDivElement, SkillMentionPopove
         open={open}
         anchorRef={anchorRef}
         className="skill-mention-popover"
-        ariaLabel={t("Choose a Skill", "选择 Skill")}
+        ariaLabel={t("Commands and templates", "命令与模板")}
       >
-        <div className="file-mention-filter skill-mention-title">{t("Choose a Skill · ↑↓ navigate · Enter select · Esc close", "选择 Skill · ↑↓ 导航 · Enter 确认 · Esc 关闭")}</div>
+        <div className="file-mention-filter skill-mention-title">{t("↑↓ navigate · Enter / Tab insert · Esc close", "↑↓ 导航 · Enter / Tab 插入 · Esc 关闭")}</div>
+        {templates.isError && <div role="alert" className="file-mention-empty">{t("Unable to load templates", "无法加载模板")}</div>}
         <div className="file-mention-list" ref={listRef}>
           {filtered.map((skill, index) => (
-            <button
+            <Button variant="ghost"
               type="button"
               role="option"
               aria-selected={index === activeIndex}
               className={index === activeIndex ? "file-mention-item active" : "file-mention-item"}
+              onMouseDown={(event) => event.preventDefault()}
               onMouseEnter={() => onActiveIndexChange(index)}
               onClick={() => onSelect(skill.name)}
               key={skill.name}
             >
               {skill.kind === "command" ? <Target size={12} /> : <BookOpen size={12} />}
-              <span className="skill-mention-name">/{skill.name}</span>
+              <span className="skill-mention-name">/{skill.keyword ?? skill.name}</span>
               {skill.description && <span className="skill-mention-desc">{skill.description}</span>}
-            </button>
+            </Button>
           ))}
           {filtered.length === 0 && (
-            <div className="file-mention-empty">{loading ? t("Loading Skills", "正在加载 Skills") : t("No matching Skills", "没有匹配的 Skill")}</div>
+            <div className="file-mention-empty">{loading || templates.isLoading ? t("Loading…", "正在加载…") : t("No matches", "没有匹配项")}</div>
           )}
         </div>
       </MentionPopoverPortal>

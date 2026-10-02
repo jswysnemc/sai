@@ -81,6 +81,7 @@ export function ImageWorkbenchComposer(props: ImageWorkbenchComposerProps) {
   return (
     <div className="composer-shell">
       <ComposerSurface
+        templateScope="image"
         variant="full"
         className="composer"
         value={props.value}
