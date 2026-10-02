@@ -297,3 +297,17 @@ fn asking_live_status_does_not_append_running() {
     assert_eq!(label, "Asking");
     assert!(!status.contains("running"));
 }
+
+/// 【网页读取】【状态文案】无参数；原生读取使用 Fetching/Fetched，标题不显示凭据与查询参数。
+#[test]
+fn web_fetch_status_uses_native_verb_and_redacted_url() {
+    let arguments = r#"{"url":"https://user:secret@example.com/docs?token=hidden#section"}"#;
+    assert_eq!(
+        tool_event_label("web_fetch", Some(arguments)),
+        "Fetching https://example.com/docs"
+    );
+    assert_eq!(
+        tool_event_label_tense("web_fetch", Some(arguments), ToolVerbTense::Perfect),
+        "Fetched https://example.com/docs"
+    );
+}

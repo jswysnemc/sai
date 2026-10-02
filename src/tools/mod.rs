@@ -45,6 +45,7 @@ pub(crate) mod todo;
 mod tool_spec;
 mod trash_path;
 mod web_search;
+mod web_fetch;
 mod write_file;
 
 use crate::config::AppConfig;
@@ -217,6 +218,7 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     command::register(&mut registry, config, paths, true);
     default_tools::register(&mut registry);
     web_search::register(&mut registry, &config.plugins.web);
+    web_fetch::register(&mut registry);
     // 内置浏览器：进程级共享会话，Web 工作台浏览器面板展示同一页面
     browser::register(&mut registry);
     image_generation::register(&mut registry, config, paths);
@@ -338,6 +340,7 @@ pub fn readonly_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     register_ask_question(&mut registry);
     default_tools::register_readonly(&mut registry);
     web_search::register(&mut registry, &config.plugins.web);
+    web_fetch::register(&mut registry);
     crate::plugins::register_plugins(&mut registry, config, paths, true);
     if config.memory_config().enabled {
         memory::register_readonly(&mut registry, config.clone(), paths.clone());

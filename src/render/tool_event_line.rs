@@ -470,6 +470,8 @@ pub(crate) fn tool_verb(name: &str, tense: ToolVerbTense) -> &'static str {
         ("write_file", ToolVerbTense::Perfect) => "Wrote",
         ("str_replace", ToolVerbTense::Progressive) => "Replacing",
         ("str_replace", ToolVerbTense::Perfect) => "Replaced",
+        ("web_fetch", ToolVerbTense::Progressive) => "Fetching",
+        ("web_fetch", ToolVerbTense::Perfect) => "Fetched",
         ("read_file", ToolVerbTense::Progressive) => "Reading",
         ("read_file", ToolVerbTense::Perfect) => "Read",
         ("trash_path", ToolVerbTense::Progressive) => "Trashing",
@@ -535,6 +537,7 @@ fn is_builtin_tool_verb(name: &str) -> bool {
             | "write_file"
             | "str_replace"
             | "read_file"
+            | "web_fetch"
             | "trash_path"
             | "glob"
             | "find_files"

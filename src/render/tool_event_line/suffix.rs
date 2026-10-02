@@ -45,6 +45,7 @@ pub(super) fn tool_suffix(name: &str, arguments: &Value) -> Option<String> {
             string_field(arguments, &["path"]).map(file_basename)
         }
         "read_file" => read_file_suffix(arguments),
+        "web_fetch" => string_field(arguments, &["url"]).and_then(web_url_suffix),
         "glob" | "find_files" | "grep" | "search_text" => {
             string_field(arguments, &["include", "pattern"]).map(compact_text)
         }
@@ -77,6 +78,7 @@ pub(super) fn tool_suffix_from_partial_text(name: &str, arguments: &str) -> Opti
             string_field_from_partial(arguments, &["path"]).map(file_basename)
         }
         "read_file" => read_file_suffix_from_partial(arguments),
+        "web_fetch" => lenient_string_field(arguments, "url").and_then(web_url_suffix),
         "glob" | "find_files" | "grep" | "search_text" => {
             string_field_from_partial(arguments, &["include", "pattern"]).map(compact_text)
         }
@@ -494,4 +496,14 @@ pub(super) fn compact_text(value: String) -> String {
     let value = value.split_whitespace().collect::<Vec<_>>().join(" ");
     // 按显示列数截断：中文路径按字符数截断会撑到近两倍宽
     crate::render::clip_to_width(&value, 48, "...")
+}
+
+/// 【网页读取】【状态对象】参数为请求地址，返回不含凭据、查询参数或片段的紧凑 URL。
+fn web_url_suffix(value: impl AsRef<str>) -> Option<String> {
+    let mut url = reqwest::Url::parse(value.as_ref()).ok()?;
+    url.set_query(None);
+    url.set_fragment(None);
+    let _ = url.set_username("");
+    let _ = url.set_password(None);
+    Some(compact_text(url.to_string()))
 }

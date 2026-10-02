@@ -20,10 +20,10 @@ fn web_fetch_preserves_the_frozen_native_definition() {
     assert_eq!(tool.access, ToolAccess::ReadOnly);
 }
 
-/// 【网页迁移测试】【真实注册】普通和只读目录中的工具都必须归属 Lua 包
-/// @returns 无；新包通过真实发现与注册，不能保留同名原生业务
+/// 【网页迁移测试】【真实注册】原生工具与显式安装的 Lua 包使用独立名称共存
+/// @returns 无；Lua 包仍通过真实发现与注册，不覆盖原生入口
 #[test]
-fn web_fetch_is_owned_by_lua_in_both_registries() {
+fn web_fetch_native_and_lua_coexist_in_both_registries() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
     let config = AppConfig::default();
@@ -45,7 +45,8 @@ fn web_fetch_is_owned_by_lua_in_both_registries() {
             "{:?}",
             registry.plugin_diagnostics()
         );
-        assert!(!registry.contains("web_fetch"));
+        assert!(registry.contains("web_fetch"));
+        assert_eq!(registry.plugin_owner("web_fetch"), None);
         assert_eq!(
             registry.plugin_owner("lua__web-fetch__web_fetch"),
             Some("web-fetch")

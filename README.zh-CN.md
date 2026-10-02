@@ -169,6 +169,8 @@ Web 工作台内置源代码管理面板，底层调用系统 `git`。支持变�
 
 网页搜索通过原生只读工具 `web_search` 提供，无需安装 Lua 插件或 Python。终端配置中的「工具 → 网页搜索」与 Web 设置中的「网页搜索」共用 `config.jsonc` 的 `plugins.web` 配置。自动模式按 TinyFish、Tavily、Firecrawl、AnySearch、SearXNG、DuckDuckGo 顺序尝试已启用服务，默认返回 5 条结果、每次请求超时 20 秒；DuckDuckGo 无需密钥。密钥支持 `<provider>_api_keys` 数组、`$env:VARIABLE` 引用及对应供应商的 `*_API_KEY` 环境变量。旧版 `plugins.web` 配置可继续使用；Lua `web-search` 示例仍使用独立的 `plugins.jsonc` 配置与 `lua__web-search__web_search` 名称。
 
+已知 URL 可直接使用原生只读工具 `web_fetch`，无需插件、Python 或搜索 API Key，Plan 模式同样可用。支持 `markdown`（默认）、`text`、`html`；默认超时 30 秒、返回 24000 字符，上限分别为 120 秒、80000 字符。最多跟随 10 次重定向，响应限制为 5 MiB。它不执行网页脚本；动态页面可使用浏览器工具。原 Lua 插件仍以 `lua__web-fetch__web_fetch` 独立提供。
+
 ### 会话分支
 
 对话轮次按树存储,可从任意轮次分叉。TUI 与 Web 工作台均可浏览、切换分支;Web 另提供可缩放拖动的分支总览。

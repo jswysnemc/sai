@@ -15,6 +15,7 @@ const GATEWAY_AGENT_TOOLS: &[&str] = &[
     "glob",
     "grep",
     "web_search",
+    "web_fetch",
     "run_command",
     "write_memory",
     "read_memory",
@@ -46,6 +47,7 @@ const CODE_AGENT_TOOLS: &[&str] = &[
     "enter_plan_mode",
     "exit_plan_mode",
     "web_search",
+    "web_fetch",
     "generate_image",
     "write_memory",
     "read_memory",
@@ -75,15 +77,23 @@ const PLAN_AGENT_TOOLS: &[&str] = &[
     "enter_plan_mode",
     "exit_plan_mode",
     "web_search",
+    "web_fetch",
     "read_memory",
     "list_memory",
     "search_evicted_context",
 ];
 
-const EXPLORE_AGENT_TOOLS: &[&str] = &["check_os_info", "read_file", "glob", "grep", "web_search"];
+const EXPLORE_AGENT_TOOLS: &[&str] = &[
+    "check_os_info",
+    "read_file",
+    "glob",
+    "grep",
+    "web_search",
+    "web_fetch",
+];
 
-/// 探索和规划过程中保持网页搜索直接可见，避免每次检索都先加载工具定义。
-const SEARCH_KEEP_VISIBLE: &[&str] = &["web_search"];
+/// 探索和规划过程中保持网页搜索与读取直接可见，避免每次请求都先加载工具定义。
+const SEARCH_KEEP_VISIBLE: &[&str] = &["web_search", "web_fetch"];
 
 /// 网关 Agent 需要保持初始可见的工具。
 ///
@@ -138,13 +148,21 @@ pub(super) fn resolve_enabled_tools(profile: &AgentProfile) -> Vec<String> {
         GATEWAY_AGENT_ID => GATEWAY_AGENT_TOOLS,
         _ => &[],
     };
-    let legacy: Vec<_> = preset
-        .iter()
-        .copied()
-        .filter(|name| *name != "web_search")
-        .collect();
-    if !legacy.is_empty() && tools.iter().map(String::as_str).eq(legacy) {
-        tools.push("web_search".to_string());
+    // 1. 【网页工具】【预设升级】仅匹配曾发布的完整预设，保留用户定制与独占白名单
+    for missing in [
+        &["web_search"][..],
+        &["web_fetch"][..],
+        &["web_search", "web_fetch"][..],
+    ] {
+        let legacy: Vec<_> = preset
+            .iter()
+            .copied()
+            .filter(|name| !missing.contains(name))
+            .collect();
+        if !legacy.is_empty() && tools.iter().map(String::as_str).eq(legacy) {
+            tools = tools_to_owned(preset);
+            break;
+        }
     }
     expand_enabled_tool_conveniences(tools, true)
 }

@@ -51,7 +51,11 @@ pub(crate) fn tool_description(name: &str, fallback: &str) -> String {
             "发送网格消息并立即返回。",
         ),
         "web_search" => t("Search the web.", "搜索网页。"),
-        "web_fetch" | "fetch_url" => t("Read a web page.", "读取网页。"),
+        "web_fetch" => t(
+            "Read a known HTTP(S) URL as Markdown, text, or HTML. Does not search or execute JavaScript.",
+            "读取已知 HTTP(S) URL，返回 Markdown、纯文本或 HTML。不执行搜索或 JavaScript。",
+        ),
+        "fetch_url" => t("Read a web page.", "读取网页。"),
         "get_weather" | "weather" | "query_weather" => t("Read weather data.", "查询天气。"),
         "get_exchange_rate" | "exchange_rate" | "convert_exchange_rate" => {
             t("Read currency exchange rates.", "查询货币汇率。")

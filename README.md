@@ -169,6 +169,8 @@ Run `sai config` for the terminal configurator. The 8-item main menu is layered 
 
 The native read-only `web_search` tool works without Lua plugins or Python. Terminal configuration under Tools → Web search and Web Settings → Web search share `plugins.web` in `config.jsonc`. Auto mode tries enabled providers in this order: TinyFish, Tavily, Firecrawl, AnySearch, SearXNG, DuckDuckGo. Defaults are 5 results and a 20-second timeout per request; DuckDuckGo requires no API key. Credentials support `<provider>_api_keys` arrays, `$env:VARIABLE` references, and provider-specific `*_API_KEY` environment variables. Existing `plugins.web` settings remain supported. The optional Lua example retains its independent `plugins.jsonc` settings and `lua__web-search__web_search` tool name.
 
+Open a known URL with the native read-only `web_fetch` tool, including in Plan mode. No plugin, Python runtime, or search API key is required. Output formats are `markdown` (default), `text`, and `html`. Defaults are a 30-second timeout and 24000 characters; limits are 120 seconds, 80000 characters, 10 redirects, and a 5 MiB response body. JavaScript is not executed; use the browser tools for dynamic pages. The optional Lua plugin remains available separately as `lua__web-fetch__web_fetch`.
+
 ### Conversation branches
 
 Turns are stored as a tree and can fork from any message. Both the TUI and the web workbench can browse and switch branches; the web UI also has a pan-and-zoom branch overview.
