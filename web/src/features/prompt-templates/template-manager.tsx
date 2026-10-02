@@ -32,10 +32,11 @@ const QUICK_CONTENT: Record<TemplateScope, Record<string, string>> = {
  * @param props 场景、禁用状态和应用模板回调
  * @returns 输入区模板控件
  */
-export function TemplateManager({ scope, disabled, onApply }: {
+export function TemplateManager({ scope, disabled, onApply, showQuickTemplates = false }: {
   scope: TemplateScope;
   disabled: boolean;
   onApply: (content: string) => void;
+  showQuickTemplates?: boolean;
 }) {
   const { t } = useI18n();
   const cache = useQueryClient();
@@ -146,14 +147,14 @@ export function TemplateManager({ scope, disabled, onApply }: {
         onOpenChange={setMenuOpen}
       />
     </div>
-    <div className="composer-template-suggestions" aria-label={t("Quick prompt templates", "快捷提示词模板")}>
+    {showQuickTemplates && <div className="composer-template-suggestions" aria-label={t("Quick prompt templates", "快捷提示词模板")}>
       {quickTemplates.map(({ name, label, content }) => {
         const item = templates.data?.find((template) => template.name === name);
         return <Button key={name} variant="secondary" size="small" disabled={disabled} onClick={() => apply(item ?? { name, content, builtin: true })}>
           <BookOpen size={12} />{t(label, label)}
         </Button>;
       })}
-    </div>
+    </div>}
     {open && <Modal
       open
       title={scope === "image" ? t("Image prompt templates", "绘图提示词模板") : t("Chat prompt templates", "普通聊天提示词模板")}
@@ -195,4 +196,29 @@ export function TemplateManager({ scope, disabled, onApply }: {
       </div>
     </Modal>}
   </>;
+}
+
+/**
+ * 渲染空会话居中布局使用的快捷模板按钮。
+ *
+ * @param props 场景、禁用状态和应用模板回调
+ * @returns 输入框下方的快捷模板
+ */
+export function TemplateQuickSuggestions({ scope, disabled, onApply }: {
+  scope: TemplateScope;
+  disabled: boolean;
+  onApply: (content: string) => void;
+}) {
+  const { t } = useI18n();
+  const templates = useQuery({ queryKey: templateKey(scope), queryFn: () => templateApi.list(scope), staleTime: 30_000 });
+  const labels = QUICK_LABELS[scope];
+  return <div className="composer-template-suggestions" aria-label={t("Quick prompt templates", "快捷提示词模板")}>
+    {Object.entries(labels).map(([name, label]) => {
+      const item = templates.data?.find((template) => template.name === name);
+      const content = item?.content ?? QUICK_CONTENT[scope][name] ?? "";
+      return <Button key={name} variant="secondary" size="small" disabled={disabled || templates.isLoading} onClick={() => onApply(content)}>
+        <BookOpen size={12} />{t(label, label)}
+      </Button>;
+    })}
+  </div>;
 }

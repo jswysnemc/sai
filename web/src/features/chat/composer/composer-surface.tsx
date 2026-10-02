@@ -1,5 +1,5 @@
 import { useState, type DragEvent, type FormEvent, type ReactNode } from "react";
-import { TemplateManager } from "../../prompt-templates/template-manager";
+import { TemplateManager, TemplateQuickSuggestions } from "../../prompt-templates/template-manager";
 import type { TemplateScope } from "../../prompt-templates/template-client";
 import { AttachmentStrip } from "./attachment-strip";
 import { ComposerTextarea } from "./composer-textarea";
@@ -12,6 +12,7 @@ export type ComposerSurfaceVariant = "full" | "compact";
 type ComposerSurfaceProps = {
   variant: ComposerSurfaceVariant;
   templateScope?: TemplateScope;
+  showTemplateSuggestions?: boolean;
   onPlanCommand?: () => Promise<boolean>;
   className?: string;
   value: string;
@@ -40,6 +41,7 @@ type ComposerSurfaceProps = {
 export function ComposerSurface({
   variant,
   templateScope = "chat",
+  showTemplateSuggestions = false,
   onPlanCommand,
   className = "",
   value,
@@ -93,6 +95,7 @@ export function ComposerSurface({
   };
 
   return (
+    <>
     <form
       className={`composer-surface composer-surface-${variant}${dragging ? " is-dragover" : ""}${className ? ` ${className}` : ""}`}
       onSubmit={submit}
@@ -123,5 +126,7 @@ export function ComposerSurface({
       {variant === "full" && <TemplateManager scope={templateScope} disabled={disabled} onApply={onChange} />}
       {children}
     </form>
+    {variant === "full" && showTemplateSuggestions && <TemplateQuickSuggestions scope={templateScope} disabled={disabled} onApply={onChange} />}
+    </>
   );
 }

@@ -22,6 +22,8 @@ export type ChatComposerProps = {
   submitBlocked?: boolean;
   runStatus: LiveRunState["status"];
   sessionAvailable: boolean;
+  /** 空会话居中时在输入框下方展示快捷提示词。 */
+  showTemplateSuggestions?: boolean;
   undoAvailable: boolean;
   agentChoices: AgentChoice[];
   agentSelection: AgentChoice | null;

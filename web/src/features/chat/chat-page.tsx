@@ -540,6 +540,7 @@ export function ChatPage({ toolbar, selectedSessionId }: { toolbar?: ReactNode; 
       submitBlocked={branchTransitioning || resend.pending}
       runStatus={activeRun?.status ?? "idle"}
       sessionAvailable={Boolean(activeSession)}
+      showTemplateSuggestions={centerEmptySession}
       undoAvailable={Boolean(timeline.data?.turns.length) && !branchTransitioning && !resend.pending}
       agentChoices={chatAgent.choices}
       agentSelection={chatAgent.selection}
@@ -701,7 +702,7 @@ export function ChatPage({ toolbar, selectedSessionId }: { toolbar?: ReactNode; 
             />
           </div>
           {centerEmptySession ? (
-            <ChatEmptyState onChoose={setInput} disabled={!activeSession}>{composerDock}</ChatEmptyState>
+            <ChatEmptyState hideSuggestions onChoose={setInput} disabled={!activeSession}>{composerDock}</ChatEmptyState>
           ) : (
             composerDock
           )}

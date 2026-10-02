@@ -59,6 +59,7 @@ export function ChatComposer(props: ChatComposerProps) {
       <ComposerSurface
         variant="full"
         className="composer"
+        showTemplateSuggestions={props.showTemplateSuggestions}
         value={props.value}
         historyEntries={props.historyEntries}
         disabled={availability.inputDisabled || plan.busy}

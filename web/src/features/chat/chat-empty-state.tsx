@@ -5,14 +5,14 @@ import { useI18n } from "../i18n/use-i18n";
 import { FOCUS_COMPOSER_EVENT } from "./composer/composer-events";
 import "./chat-empty-state.css";
 
-type ChatEmptyStateProps = { children: ReactNode; onChoose: (prompt: string) => void; disabled: boolean };
+type ChatEmptyStateProps = { children: ReactNode; onChoose: (prompt: string) => void; disabled: boolean; hideSuggestions?: boolean };
 
 /**
  * 展示新会话入口，任务建议只填入草稿，由用户确认发送。
  * @param props 输入区域、草稿更新回调和会话可用状态
  * @returns 紧凑的新会话界面
  */
-export function ChatEmptyState({ children, onChoose, disabled }: ChatEmptyStateProps) {
+export function ChatEmptyState({ children, onChoose, disabled, hideSuggestions = false }: ChatEmptyStateProps) {
   const { t } = useI18n();
   const suggestions = [
     { label: t("Explore this project", "了解项目"), icon: FileSearch, prompt: t("Explain this project's architecture and show me the key entry points.", "请梳理当前项目的架构、主要模块和关键入口。") },
@@ -26,12 +26,12 @@ export function ChatEmptyState({ children, onChoose, disabled }: ChatEmptyStateP
         <p>{t("Plan, build, and review in your workspace.", "在当前项目中规划、开发和审阅代码。")}</p>
       </div>
       {children}
-      <div className="empty-session-suggestions" aria-label={t("Suggested tasks", "任务建议")}>
+      {!hideSuggestions && <div className="empty-session-suggestions" aria-label={t("Suggested tasks", "任务建议")}>
         {suggestions.map(({ label, icon: Icon, prompt }) => <Button variant="ghost" key={label} disabled={disabled} onClick={() => {
           onChoose(prompt);
           window.requestAnimationFrame(() => window.dispatchEvent(new Event(FOCUS_COMPOSER_EVENT)));
         }}><Icon size={14} /><span>{label}</span></Button>)}
-      </div>
+      </div>}
     </div>
   );
 }
