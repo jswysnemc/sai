@@ -86,6 +86,11 @@ fn compression_preserves_pairs_and_original_history() {
         }
     }
     assert!(!state.apply_context_blocks(&mut messages).unwrap());
+    let status = state.context_block_catalog(0, 50, 0).unwrap();
+    assert!(status.candidates[0]
+        .preview
+        .contains("Historical tool results summarized"));
+    assert!(!status.candidates[0].eligible);
     assert_eq!(
         state.compress_context_block(&req).unwrap().block_id,
         block.block_id
@@ -464,4 +469,21 @@ fn global_compaction_budget_uses_projected_block_sizes() {
             .abs_diff(estimate_chat_messages_tokens(&next))
             < 32
     );
+}
+
+/// 【上下文】【净收益回归】结果变短但提交摘要及回执使请求变大时，应拒绝压缩
+/// 参数: 无；返回无
+#[test]
+fn compression_rejects_negative_savings_after_submission_overhead() {
+    let (_root, _paths, state, original) = fixture();
+    let original_tokens = crate::token_estimate::estimate_tokens(&original);
+    let mut req = request(&["first-0"], 0);
+    req.summary = "需要".repeat(original_tokens * 2 / 3);
+    assert!(req.summary.chars().count() <= 6000);
+    assert!(crate::token_estimate::estimate_tokens(&req.summary) + 256 < original_tokens);
+    assert!(
+        state.compress_context_block(&req).is_err(),
+        "应同时计算摘要参数和回执的请求开销"
+    );
+    assert_eq!(state.context_block_catalog(0, 20, 0).unwrap().revision, 0);
 }

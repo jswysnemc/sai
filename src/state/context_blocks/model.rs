@@ -44,6 +44,19 @@ pub(crate) struct Block {
     pub revision: u64,
 }
 
+impl Block {
+    /// 【上下文】【压缩回执】仅返回引用和统计，避免在工具结果中再次复制完整摘要
+    /// 参数: 无；返回可供工具与开销预检复用的 JSON 回执
+    pub(crate) fn receipt(&self) -> serde_json::Value {
+        serde_json::json!({
+            "block_id": self.block_id,
+            "revision": self.revision,
+            "before_tokens": self.before_tokens,
+            "after_tokens": self.after_tokens,
+        })
+    }
+}
+
 /// 【上下文】【局部压缩】一次候选查询的数据库版本和分页结果
 #[derive(Serialize)]
 pub(crate) struct Catalog {

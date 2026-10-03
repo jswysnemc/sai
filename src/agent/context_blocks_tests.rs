@@ -278,12 +278,177 @@ async fn tool_rounds_send_summary_then_exact_restored_page() {
         assert!(tool_content(2, "old-0").contains("已检查"));
         assert!(!tool_content(2, "old-0").contains("KEEP_ORIGINAL"));
         assert!(tool_content(3, "restore").contains("KEEP_ORIGINAL"));
+        let receipt: Value = serde_json::from_str(&tool_content(2, "compress")).unwrap();
+        assert!(
+            receipt.get("summary").is_none(),
+            "压缩回执不应重复携带摘要正文"
+        );
+        assert!(receipt["block_id"].as_str().unwrap().starts_with("cb_"));
         let before = crate::token_estimate::estimate_tokens(&requests[1]["messages"].to_string());
         let after = crate::token_estimate::estimate_tokens(&requests[2]["messages"].to_string());
         assert!(
             after < before,
             "including tool traffic: {before} -> {after}"
         );
+    })
+    .await;
+    server.abort();
+}
+
+/// 【上下文】【恢复模型】提供本地摘要响应并记录请求，避免依赖外部模型
+/// 参数: requests 为记录，request 为摘要请求；返回 SSE 摘要
+async fn compaction_response(
+    axum::extract::State(requests): axum::extract::State<Requests>,
+    axum::Json(request): axum::Json<Value>,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    requests.lock().unwrap().push(request);
+    let chunk = json!({"choices":[{"index":0,"delta":{"content":"已检查旧源码结果，路径为 /src/lib.rs，继续处理最近四项工具结果。"},"finish_reason":"stop"}]});
+    (
+        [("content-type", "text/event-stream")],
+        format!("data: {chunk}\n\ndata: [DONE]\n\n"),
+    )
+        .into_response()
+}
+
+/// 【上下文】【恢复集成】通过真实 Agent 溢出恢复入口请求摘要并继续当前长轮次
+/// 参数: 无；返回无
+#[tokio::test]
+async fn overflow_recovery_combines_context_blocks_with_running_compaction() {
+    use crate::agent::turn_request::TurnRequest;
+    let requests = Requests::default();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let app = axum::Router::new()
+        .route(
+            "/v1/chat/completions",
+            axum::routing::post(compaction_response),
+        )
+        .with_state(requests.clone());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let root = tempfile::tempdir().unwrap();
+    crate::runtime_cwd::scope(root.path().to_path_buf(), async {
+        let paths = SaiPaths::for_tests(root.path());
+        let mut config = config();
+        let mut provider = crate::config::ProviderConfig::default_openai();
+        provider.base_url = format!("http://{address}/v1");
+        provider.api_key = Some("test".into());
+        config.active_provider = provider.id.clone();
+        config.providers = vec![provider];
+        let state = StateStore::new(&paths).unwrap();
+        let client = OpenAiCompatibleClient::from_config(&config, &paths).unwrap();
+        let mut agent = Agent::new(
+            config,
+            &paths,
+            state,
+            client,
+            ToolRegistry::new(),
+            AgentMode::Yolo,
+        )
+        .unwrap();
+        agent.state.start_turn("running", "continue").unwrap();
+        let original = "KEEP_ORIGINAL path=/src/lib.rs status=valid\n".repeat(300);
+        for index in 0..16 {
+            let id = format!("running-{index}");
+            agent
+                .state
+                .record_tool_call_started_with_context(
+                    "running",
+                    index + 1,
+                    crate::state::tool_history::ToolAssistantContext {
+                        assistant_round: index + 1,
+                        assistant_reasoning: None,
+                    },
+                    &id,
+                    "read_file",
+                    "{}",
+                )
+                .unwrap();
+            agent
+                .state
+                .record_tool_result_completed(
+                    "running",
+                    &id,
+                    true,
+                    ToolResultOutput {
+                        result_preview: &original,
+                        result_ref: None,
+                        error: None,
+                        original_chars: original.chars().count(),
+                    },
+                )
+                .unwrap();
+        }
+        let mut args = compression_args();
+        args["message_ids"] = json!(["running-0"]);
+        agent
+            .tools
+            .call("compress_context", &args.to_string())
+            .await
+            .unwrap();
+        let mut before = agent
+            .chat_messages_for_turn("running", "continue", &[], None, None)
+            .unwrap();
+        before.extend(
+            agent
+                .state
+                .project_running_turn_tool_messages("running")
+                .unwrap(),
+        );
+        agent.project_context_blocks(&mut before).unwrap();
+        agent.context_char_budget = crate::state::occupancy_tokens(&before, None) / 2;
+        let request = TurnRequest {
+            turn_id: "running",
+            input: "continue",
+            image_urls: &[],
+            memory_index_prompt: None,
+            plugin_reply_reminder: None,
+            inter_message_source: None,
+            wait_for_external: false,
+        };
+        let recovered = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            agent.recover_after_provider_overflow(
+                request,
+                &before,
+                &anyhow::anyhow!("maximum context length exceeded"),
+                &mut |_| Ok(()),
+            ),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert!(recovered, "已完成局部压缩的长轮次仍应能通过全局摘要恢复");
+        assert!(!requests.lock().unwrap().is_empty(), "应实际请求压缩模型");
+        let mut after = agent
+            .chat_messages_for_turn("running", "continue", &[], None, None)
+            .unwrap();
+        after.extend(
+            agent
+                .state
+                .project_running_turn_tool_messages("running")
+                .unwrap(),
+        );
+        agent.project_context_blocks(&mut after).unwrap();
+        assert_eq!(
+            after
+                .iter()
+                .filter(|message| message.role == "tool")
+                .count(),
+            4
+        );
+        assert!(crate::state::occupancy_tokens(&after, None) < agent.context_char_budget);
+        let restored = agent
+            .tools
+            .call(
+                "restore_context",
+                r#"{"message_id":"running-0","limit":80}"#,
+            )
+            .await
+            .unwrap();
+        assert!(restored.contains("KEEP_ORIGINAL"));
     })
     .await;
     server.abort();

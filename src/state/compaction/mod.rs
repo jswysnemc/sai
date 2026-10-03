@@ -4,12 +4,14 @@ mod handoff;
 mod model;
 mod policy;
 mod projection_budget;
+#[cfg(test)]
+mod projection_budget_tests;
 mod prompt;
 mod selector;
 mod storage;
 mod store;
-mod validation;
 mod token_cache;
+mod validation;
 pub(crate) use token_cache::MessageTokenCache;
 
 #[allow(unused_imports)]

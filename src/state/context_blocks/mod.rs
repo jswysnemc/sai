@@ -1,4 +1,6 @@
+mod candidate_visibility;
 mod catalog;
+mod cost;
 mod model;
 mod projection;
 mod repository;

@@ -1,5 +1,5 @@
-use super::repository::load_tool_exchanges_for_turn;
 use super::assistant_messages::{self, AssistantMessageKey, SavedAssistantMessages};
+use super::repository::load_tool_exchanges_for_turn;
 use crate::llm::{ChatMessage, ToolCall, ToolCallFunction};
 use crate::state::tool_history::project_legacy_tool_report_messages;
 use crate::state::turn_messages::{load_turn_messages_for_turn, TurnMessageRecord};
@@ -22,20 +22,29 @@ impl crate::state::StateStore {
         &self,
         turn_id: &str,
     ) -> Result<Vec<ChatMessage>> {
-        let Some(turn) = self
-            .conv_db
-            .load_turns()?
-            .into_iter()
-            .find(|turn| turn.turn_id == turn_id)
-        else {
-            return Ok(Vec::new());
-        };
-        // 已被摘要覆盖的工具调用不再回放，否则轮次内压缩不会产生任何节省
         let skip_calls = self
             .running_turn_compaction_boundary()?
             .filter(|(compacted_turn_id, _)| compacted_turn_id == turn_id)
             .map(|(_, calls)| calls)
             .unwrap_or_default();
+        self.project_running_turn_tools_at_boundary(turn_id, skip_calls)
+    }
+
+    /// 【上下文】【运行轮次投影】按已提交或预检中的边界重建同一份工具消息
+    /// 参数: turn_id 为活动轮次，skip_calls 为累计覆盖调用数；返回不含轮次首尾的工具消息
+    pub(in crate::state) fn project_running_turn_tools_at_boundary(
+        &self,
+        turn_id: &str,
+        skip_calls: usize,
+    ) -> Result<Vec<ChatMessage>> {
+        let Some(turn) = self
+            .conv_db
+            .active_branch_turns()?
+            .into_iter()
+            .find(|turn| turn.turn_id == turn_id)
+        else {
+            return Ok(Vec::new());
+        };
         let mut messages = project_turn_messages_with_tool_history_skipping(
             &self.conv_db,
             &self.session_id,
@@ -66,7 +75,8 @@ impl crate::state::StateStore {
 ///
 /// 返回:
 /// - provider 可直接发送的历史消息
-pub(in crate::state) fn project_turn_messages_with_tool_history(
+#[cfg(test)]
+fn project_turn_messages_with_tool_history(
     db: &ConversationDb,
     session_id: &str,
     turns: &[Turn],
@@ -248,7 +258,13 @@ fn append_tool_exchange_messages(
             .last()
             .map(|exchange| exchange.call.seq)
             .unwrap_or_default();
-        append_inter_messages_through(inter_messages, &mut message_index, boundary, saved, messages);
+        append_inter_messages_through(
+            inter_messages,
+            &mut message_index,
+            boundary,
+            saved,
+            messages,
+        );
         start = end;
     }
     append_turn_inter_messages(&inter_messages[message_index..], saved, messages);
@@ -312,13 +328,19 @@ fn append_turn_inter_messages(
 ///
 /// 返回:
 /// - 无
-fn append_assistant_context_messages(turn: &Turn, saved: &SavedAssistantMessages, messages: &mut Vec<ChatMessage>) {
+fn append_assistant_context_messages(
+    turn: &Turn,
+    saved: &SavedAssistantMessages,
+    messages: &mut Vec<ChatMessage>,
+) {
     // 1. 最终回复必须带上本轮思考，DeepSeek 带 tools 的后续请求不能缺这个字段
     if !turn.assistant_content.trim().is_empty() || turn.assistant_reasoning.is_some() {
         messages.push(
-            saved.restore(AssistantMessageKey::Final,
+            saved.restore(
+                AssistantMessageKey::Final,
                 ChatMessage::plain("assistant", turn.assistant_content.clone())
-                    .with_reasoning(turn.assistant_reasoning.clone())),
+                    .with_reasoning(turn.assistant_reasoning.clone()),
+            ),
         );
     }
     messages.extend(project_legacy_tool_report_messages(&turn.tool_reports));

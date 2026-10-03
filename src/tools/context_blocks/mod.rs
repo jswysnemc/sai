@@ -37,7 +37,7 @@ pub(crate) fn register(registry: &mut ToolRegistry, state: &StateStore, config: 
             "limit": {"type":"integer","minimum":1,"maximum":50},
             "block_offset": {"type":"integer","minimum":0}
         }), vec![]),
-        ("compress_context", "Archive exact original tool outputs and replace their request text with your concise factual summary. No extra model call. Select only eligible IDs from context_status; use its revision as expected_revision. Preserve outcomes, exact paths/IDs and unresolved details. Minimum saving: 128 tokens. Submit one block at a time, then query status again. Original calls and user messages remain unchanged.", json!({
+        ("compress_context", "Archive exact original tool outputs and replace their request text with your concise factual summary. No extra model call. Select only eligible IDs from context_status; use its revision as expected_revision. Preserve outcomes, exact paths/IDs and unresolved details. Minimum estimated saving: 128 tokens after summary references, submission arguments and receipt overhead. Submit one block at a time, then query status again. Original calls and user messages remain unchanged.", json!({
             "message_ids": {"type":"array","items":{"type":"string"},"minItems":1,"maxItems":32,"uniqueItems":true},
             "summary": {"type":"string","minLength":1,"maxLength":6000},
             "topic": {"type":"string","minLength":1,"maxLength":120},

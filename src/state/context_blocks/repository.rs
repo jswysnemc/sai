@@ -68,9 +68,13 @@ impl StateStore {
     /// 【上下文】【原子提交】校验来源、归档原文并一次写入摘要及修订号
     /// 参数: request 为已校验请求，request_hash 为指纹；返回新块
     fn commit_context_block(&self, request: &CompressRequest, request_hash: &str) -> Result<Block> {
-        let leaf = {
+        let (leaf, checkpoint_id) = {
             let conn = self.conv_db.conn.lock().unwrap();
-            schema::leaf(&conn)?
+            (
+                schema::leaf(&conn)?,
+                crate::state::checkpoints::load_latest_checkpoint(&conn)?
+                    .map(|checkpoint| checkpoint.id),
+            )
         };
         let mut candidates = self
             .context_block_candidates()?
@@ -104,10 +108,9 @@ impl StateStore {
             .iter()
             .map(|id| crate::token_estimate::estimate_tokens(&replacement(&block, id)))
             .sum();
-        ensure!(
-            block.before_tokens >= block.after_tokens.saturating_add(128),
-            "compression must reclaim at least 128 tokens after reference overhead"
-        );
+        let submission_tokens = super::cost::submission_tokens(request, &block)?;
+        ensure!(block.before_tokens >= block.after_tokens.saturating_add(submission_tokens).saturating_add(128),
+            "compression must reclaim at least 128 estimated tokens after summary references, submission arguments and receipt overhead");
 
         // 2. 【上下文】【原文归档】任何一个引用缺失或超出预算，都不提交摘要
         let reader = self.tool_result_ref_reader()?;
@@ -144,6 +147,11 @@ impl StateStore {
         ensure!(
             schema::leaf(&tx)? == leaf,
             "active branch changed; query context_status again"
+        );
+        ensure!(
+            crate::state::checkpoints::load_latest_checkpoint(&tx)?.map(|checkpoint| checkpoint.id)
+                == checkpoint_id,
+            "context checkpoint changed; query context_status again"
         );
         ensure!(
             schema::revision(&tx, &self.session_id)? == request.expected_revision,

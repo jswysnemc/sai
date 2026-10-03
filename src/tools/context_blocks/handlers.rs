@@ -47,7 +47,7 @@ pub(super) fn execute(state: &StateStore, name: &str, mut args: Value) -> Result
         "compress_context" => {
             let args: CompressRequest = serde_json::from_value(args)?;
             Ok(serde_json::to_string(
-                &state.compress_context_block(&args)?,
+                &state.compress_context_block(&args)?.receipt(),
             )?)
         }
         "search_context" => {

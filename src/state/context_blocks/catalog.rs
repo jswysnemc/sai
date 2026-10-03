@@ -44,7 +44,7 @@ impl StateStore {
     /// 参数: 无；返回完整候选列表，正文只供内部归档与预算检查
     pub(super) fn context_block_candidates(&self) -> Result<Vec<Candidate>> {
         let turns = self.conv_db.active_branch_turns()?;
-        let boundary = self.running_turn_compaction_boundary()?;
+        let mut projected = self.projected_context_results()?;
         let archived = {
             let conn = self.conv_db.conn.lock().unwrap();
             let mut stmt = conn
@@ -59,10 +59,7 @@ impl StateStore {
                 &self.session_id,
                 &turn.turn_id,
             )? {
-                if boundary
-                    .as_ref()
-                    .is_some_and(|(id, count)| id == &turn.turn_id && exchange.call.seq <= *count)
-                {
+                if !projected.contains_key(&exchange.call.provider_call_id) {
                     continue;
                 }
                 exchanges.push(exchange);
@@ -78,11 +75,9 @@ impl StateStore {
                 .call
                 .display_tool_name
                 .unwrap_or(exchange.call.tool_name);
-            let visible = exchange
-                .replacement
-                .as_ref()
-                .map(|item| item.replacement.clone())
-                .unwrap_or_else(|| result.result_preview.clone());
+            let visible = projected
+                .remove(&exchange.call.provider_call_id)
+                .expect("候选必须具有正式投影正文");
             let protected_reason = if archived.contains(&exchange.call.provider_call_id) {
                 Some("already_compressed")
             } else if !result.ok || exchange.call.status != ToolCallStatus::Completed {

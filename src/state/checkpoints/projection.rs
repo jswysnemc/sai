@@ -1,9 +1,9 @@
 use super::model::{CheckpointStats, CompactionCheckpoint, ProjectedHistory};
 use super::repository::{count_checkpoints, load_latest_checkpoint};
 use crate::llm::ChatMessage;
-use crate::state::tool_history::{
-    project_legacy_tool_report_messages, project_turn_messages_with_tool_history,
-};
+#[cfg(test)]
+use crate::state::tool_history::project_legacy_tool_report_messages;
+use crate::state::tool_history::project_turn_messages_with_tool_history_skipping;
 use crate::state::turns::ConversationDb;
 use crate::state::turns::{turns_to_entries, Turn};
 use anyhow::Result;
@@ -16,7 +16,8 @@ use anyhow::Result;
 ///
 /// 返回:
 /// - 会话历史投影
-pub(in crate::state) fn project_history_from_parts(
+#[cfg(test)]
+fn project_history_from_parts(
     checkpoint: Option<CompactionCheckpoint>,
     tail_turns: Vec<Turn>,
 ) -> ProjectedHistory {
@@ -80,6 +81,24 @@ pub(in crate::state) fn project_history(
     let checkpoint_count = count_checkpoints(&conn)?;
     let checkpoint = load_latest_checkpoint(&conn)?;
     drop(conn);
+    project_history_with_checkpoint(
+        db,
+        session_id,
+        exclude_turn_id,
+        checkpoint,
+        checkpoint_count,
+    )
+}
+
+/// 【上下文】【统一历史投影】正式请求和预算预检使用相同的轮次及调用边界
+/// 参数: db/session_id 为会话，exclude_turn_id 为独立拼接的运行轮次，checkpoint 为选定摘要，checkpoint_count 为统计数量；返回历史投影
+pub(in crate::state) fn project_history_with_checkpoint(
+    db: &ConversationDb,
+    session_id: &str,
+    exclude_turn_id: Option<&str>,
+    checkpoint: Option<CompactionCheckpoint>,
+    checkpoint_count: usize,
+) -> Result<ProjectedHistory> {
     let after_seq = checkpoint
         .as_ref()
         .map(|checkpoint| checkpoint.compacted_to_seq)
@@ -92,8 +111,23 @@ pub(in crate::state) fn project_history(
         .filter(|turn| turn.seq > after_seq)
         .filter(|turn| exclude_turn_id.is_none_or(|excluded| turn.turn_id != excluded))
         .collect::<Vec<_>>();
-    let messages = project_turn_messages_with_tool_history(db, session_id, &tail_turns)?;
-    // 1. 【上下文压缩】【边界续接】这些轮次均晚于摘要边界，必须完整保留用户、回答及工具配对
+    let mut messages = Vec::new();
+    for turn in &tail_turns {
+        // 1. 【上下文】【统一历史投影】轮次完成或重启后也不重新发送已被摘要覆盖的工具子轮
+        let skip_calls = checkpoint
+            .as_ref()
+            .filter(|checkpoint| {
+                checkpoint.running_turn_id.as_deref() == Some(turn.turn_id.as_str())
+            })
+            .map(|checkpoint| checkpoint.running_turn_compacted_calls)
+            .unwrap_or_default();
+        messages.extend(project_turn_messages_with_tool_history_skipping(
+            db,
+            session_id,
+            std::slice::from_ref(turn),
+            skip_calls,
+        )?);
+    }
     Ok(project_history_from_parts_with_messages(
         checkpoint,
         tail_turns,
@@ -127,6 +161,7 @@ fn checkpoint_context_message(checkpoint: &CompactionCheckpoint) -> String {
 ///
 /// 返回:
 /// - provider 历史消息列表
+#[cfg(test)]
 fn turns_to_messages(turns: &[Turn]) -> Vec<ChatMessage> {
     let mut messages = Vec::with_capacity(turns.len() * 3);
     for turn in turns {
