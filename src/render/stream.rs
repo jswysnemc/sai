@@ -37,6 +37,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{self, Write};
 use std::time::Instant;
 
+mod context_compression;
 mod input_events;
 mod lifecycle;
 mod live_status;

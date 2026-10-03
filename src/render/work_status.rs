@@ -148,7 +148,9 @@ impl WorkStatus {
 /// 返回:
 /// - 编辑类为等待写入，其余为等待运行
 pub(crate) fn status_for_tool(name: &str) -> WorkStatus {
-    if crate::render::stream_text::is_file_edit_tool(name) {
+    if name == "compress_context" {
+        WorkStatus::Compacting
+    } else if crate::render::stream_text::is_file_edit_tool(name) {
         WorkStatus::WaitingToWrite
     } else {
         WorkStatus::WaitingToRun

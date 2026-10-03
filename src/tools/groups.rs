@@ -31,7 +31,7 @@ pub(crate) const BASE_TOOL_NAMES: &[&str] = &[
 /// 返回:
 /// - 是否为渐进式加载启动时默认暴露的基础工具
 pub(crate) fn is_base_tool(name: &str) -> bool {
-    BASE_TOOL_NAMES.contains(&name)
+    BASE_TOOL_NAMES.contains(&name) || super::context_blocks::is_context_tool(name)
 }
 /// 获取工具所属用途分组。
 ///
@@ -42,6 +42,7 @@ pub(crate) fn is_base_tool(name: &str) -> bool {
 /// - 用途分组名称
 pub(crate) fn group_for_tool(name: &str) -> &'static str {
     match name {
+        _ if super::context_blocks::is_context_tool(name) => "context",
         "web_search"
         | "web_fetch"
         | "fetch_url"
@@ -157,6 +158,15 @@ const UNKNOWN_GROUP: ToolGroupMeta = ToolGroupMeta {
 /// - 该组的标题、提示、模型说明与排序
 pub(crate) fn group_meta(group: &str) -> ToolGroupMeta {
     match group {
+        "context" => ToolGroupMeta {
+            rank: 15,
+            label_en: "Context management",
+            label_zh: "上下文管理",
+            hint_en: "Enable experimental tool-result compression in Settings → Runtime → Tools. Requires the built-in engine.",
+            hint_zh: "在「设置 → 运行时 → 工具」开启实验性工具结果压缩，需要使用内置引擎。",
+            model_description: "Summarize historical tool results and retrieve archived originals",
+            settings_path: Some("/settings/runtime/tools"),
+        },
         "base" => ToolGroupMeta {
             rank: 0,
             label_en: "Base",

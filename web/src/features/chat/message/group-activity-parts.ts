@@ -21,6 +21,8 @@ export type MessageSegment =
  * @returns 是否为可编组的工作部件
  */
 export function isWorkPart(part: LiveMessagePart): part is ReasoningPart | WavePart {
+  // 1. 【上下文】【压缩反馈】压缩结果独立展示，避免完成后收进普通工具折叠组
+  if (part.type === "tool" && part.tool.name === "compress_context") return false;
   return part.type === "reasoning" || part.type === "tool" || part.type === "permission" || part.type === "ssh_secret";
 }
 

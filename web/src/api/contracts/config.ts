@@ -123,6 +123,7 @@ export type DebugConfig = {
 
 export type ContextConfig = {
   default_max_chars: number;
+  experimental_context_blocks?: boolean;
   compaction_ratio?: number;
   compaction_reserve_tokens?: number;
   compaction_provider_id?: string;

@@ -87,6 +87,7 @@ fn catalog_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     );
     // 3. 定时任务只在网关提交路径注册，目录里同样要能勾选
     crate::cron::register_tool(&mut registry, paths.clone(), String::new());
+    crate::tools::context_blocks::register_catalog(&mut registry);
     registry
 }
 
@@ -172,6 +173,24 @@ mod mcp_isolation_tests;
 mod tests {
     use super::*;
     use std::collections::BTreeSet;
+
+    /// 【上下文】【目录回归】实验关闭时仍提供配置选项，且枚举不会创建会话数据库
+    /// 参数: 无；返回无
+    #[test]
+    fn context_tools_are_configurable_without_creating_a_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(dir.path());
+        let entries = tool_catalog(&AppConfig::default(), &paths);
+        for name in crate::tools::context_blocks::NAMES {
+            let entry = entries
+                .iter()
+                .find(|entry| entry.name == name)
+                .unwrap_or_else(|| panic!("目录缺少 {name}"));
+            assert_eq!(entry.group, "context");
+            assert!(entry.resident);
+        }
+        assert!(!paths.state_dir.join("conversation.db").exists());
+    }
 
     /// 构造一份关闭全部插件的配置。
     ///

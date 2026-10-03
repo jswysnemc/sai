@@ -14,6 +14,9 @@ impl StreamRenderer {
         if self.plain {
             return Ok(());
         }
+        if name == "compress_context" {
+            return self.write_context_compression_result(ok, output);
+        }
         self.finish_subagent_reasoning_line()?;
         self.set_work_status(WorkStatus::WaitingResponse, false)?;
         if name != "run_command" {

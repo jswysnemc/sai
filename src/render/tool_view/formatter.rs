@@ -27,6 +27,9 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
 
 /// 渲染工具生命周期；进行中且 `frame > 0` 时用扫光代替静态 `run` 徽标。
 pub(crate) fn render_framed(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -> String {
+    if view.name == "compress_context" {
+        return super::context_compression::render(view, frame);
+    }
     if mode == ToolCallDisplayMode::Hidden {
         return String::new();
     }

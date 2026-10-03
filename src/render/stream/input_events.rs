@@ -164,6 +164,9 @@ impl StreamRenderer {
         if self.plain {
             return Ok(());
         }
+        if name == "compress_context" {
+            return self.write_context_compression_progress(false);
+        }
         self.finish_subagent_reasoning_line()?;
         self.set_work_status(crate::render::work_status::status_for_tool(name), false)?;
         let background_command_start =
@@ -248,6 +251,9 @@ impl StreamRenderer {
     pub fn write_tool_call_progress(&mut self, progress: &ToolCallStreamProgress) -> Result<()> {
         if self.plain {
             return Ok(());
+        }
+        if progress.name.as_deref() == Some("compress_context") {
+            return self.write_context_compression_progress(true);
         }
         let progress_name = progress.name.as_deref().unwrap_or("tool");
         self.set_work_status(

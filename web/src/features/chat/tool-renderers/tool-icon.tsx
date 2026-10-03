@@ -30,6 +30,7 @@ import type { ToolCardTone } from "./tool-card-shell";
  */
 export function ToolIcon({ name, backgroundTask = false }: { name: string; backgroundTask?: boolean }) {
   const size = 14;
+  if (["context_status", "compress_context", "search_context", "restore_context"].includes(name)) return <Layers size={size} />;
   if (backgroundTask) return <Layers size={size} />;
   if (name === "run_command" || name.includes("command")) return <TerminalSquare size={size} />;
   if (name === "edit_file" || name === "write_file" || name === "str_replace") return <FilePenLine size={size} />;

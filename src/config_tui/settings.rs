@@ -2,16 +2,14 @@
 //!
 //! Skills 全局开关已迁至主菜单 Skills 管理页。
 
-use crate::config::{AppConfig, PasteImageKey};
+use super::context_settings::edit_context_settings;
+use crate::config::AppConfig;
 use crate::i18n::text as t;
 use anyhow::Result;
 use crossterm::event::KeyCode;
 use std::io;
 
-use super::form::{
-    parse_bool_field, parse_number_field, parse_provider_model_choice,
-    provider_model_choice_values, run_form, Field,
-};
+use super::form::{parse_bool_field, parse_number_field, run_form, Field};
 use super::input::read_key;
 use super::ui::{draw_menu_with_details, message};
 
@@ -50,7 +48,7 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
                 "{}\n\n{}: {} · {}: {}",
                 t(
                     "Web terminal shell, context budget and compaction model. Thresholds: Auto-compaction menu.",
-                    "网页终端 Shell、上下文预算与压缩模型。阈值请在自动压缩菜单调整。",
+                    "网页终端 Shell、上下文预算、压缩模型与实验性工具结果压缩。阈值请在自动压缩菜单调整。",
                 ),
                 t("Context chars", "上下文字符"),
                 config.context.default_max_chars,
@@ -180,73 +178,6 @@ fn edit_permission_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
     // 兼容旧字段，与 TUI 保持一致
     config.permission.default_mode = tui;
     Ok(())
-}
-
-/// 编辑终端 Shell、上下文预算与压缩模型。
-fn edit_context_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
-    let mut fields = vec![
-        Field::new(
-            t("Web terminal shell", "网页终端 Shell"),
-            config.terminal.shell.clone(),
-        ),
-        Field::new(
-            t("Default context characters", "默认上下文字符数"),
-            config.context.default_max_chars.to_string(),
-        ),
-        Field::new(
-            t("Compaction provider/model", "压缩供应商/模型"),
-            if config.context.compaction_provider_id.is_empty()
-                || config.context.compaction_model.is_empty()
-            {
-                String::new()
-            } else {
-                format!(
-                    "{}\t{}",
-                    config.context.compaction_provider_id, config.context.compaction_model
-                )
-            },
-        )
-        .choices_owned(provider_model_choice_values(config, false))
-        .empty_choice_label(t("Follow conversation model", "沿用会话模型")),
-        Field::new(
-            t(
-                "Clipboard paste key (ctrl_v, alt_v, both)",
-                "剪贴板粘贴键（ctrl_v、alt_v、both）",
-            ),
-            config.input.paste_image_key.as_str().to_string(),
-        )
-        .choices(&["ctrl_v", "alt_v", "both"]),
-    ];
-    loop {
-        if !run_form(
-            stdout,
-            t(" TERMINAL & CONTEXT ", " 终端与上下文 "),
-            &mut fields,
-        )? {
-            return Ok(());
-        }
-        // 解析失败时就地提示并重新打开表单，不让非法输入终止 TUI
-        let default_max_chars = match parse_number_field::<usize>(fields[1].label, &fields[1].value)
-        {
-            Ok(value) => value,
-            Err(err) => {
-                message(
-                    stdout,
-                    &format!("{}: {err}", t("Invalid input", "输入无效")),
-                )?;
-                continue;
-            }
-        };
-        config.terminal.shell = fields[0].value.trim().to_string();
-        config.context.default_max_chars = default_max_chars;
-        (
-            config.context.compaction_provider_id,
-            config.context.compaction_model,
-        ) = parse_provider_model_choice(&fields[2].value);
-        // 无法识别的键位退回平台默认，而不是让输入框彻底失去粘贴能力
-        config.input.paste_image_key = PasteImageKey::parse(&fields[3].value).unwrap_or_default();
-        return Ok(());
-    }
 }
 
 /// 编辑工具行为与后台命令限制。

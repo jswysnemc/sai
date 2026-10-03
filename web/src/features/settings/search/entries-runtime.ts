@@ -33,6 +33,7 @@ const RUNTIME_FIELDS = [
   ["context.compaction_ratio", "Auto-compact ratio", "自动压缩比例", "tools"],
   ["context.compaction_reserve_tokens", "Reserved headroom", "压缩预留 token", "tools"],
   ["context.compaction_model", "Compaction model", "压缩模型", "tools"],
+  ["context.experimental_context_blocks", "Experimental tool-result compression", "实验性工具结果压缩", "tools"],
   ["memory.extraction_model", "Session memory extraction model", "会话记忆点提取模型", "tools"],
   ["tools.command_filter", "Command output filter mode", "命令输出过滤器档位", "tools"],
   ["tools.command_filter_denylist", "Exclude a command", "排除命令", "tools"],

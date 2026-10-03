@@ -21,6 +21,7 @@ import { ToolPanel } from "./tool-renderers/layout/tool-panel";
 import { ToolIcon } from "./tool-renderers/tool-icon";
 import { ToolResultView } from "./tool-renderers/tool-result-view";
 import { TodoToolView } from "./tool-renderers/todo-tool-view";
+import { ContextCompressionTool } from "./tool-renderers/context-compression-tool";
 import { parseTodoTool, todoToolHeadline } from "./tool-renderers/todo-tool-data";
 import "./tool-renderers/tool-renderers.css";
 import { useI18n } from "../i18n/use-i18n";
@@ -64,6 +65,9 @@ export const ToolLifecycleCard = memo(function ToolLifecycleCard({
     : "";
   const backgroundManagement = Boolean(backgroundAction) && backgroundAction !== "start";
   const subagentActivity = parseCodexSubagentActivity(argumentsText);
+  if (tool.name === "compress_context") {
+    return <ContextCompressionTool tool={tool} expanded={expanded} onToggle={() => setExpanded((value) => !value)} />;
+  }
   // Codex 原生子智能体事件使用语义视图，不把协议参数作为唯一内容
   if (subagentActivity) {
     return (

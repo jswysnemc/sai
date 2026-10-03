@@ -64,6 +64,43 @@ fn compression_args() -> Value {
     json!({"message_ids":["old-0"], "topic":"检查", "summary":"已检查 /src/lib.rs，配置有效。", "expected_revision":0})
 }
 
+/// 【上下文】【提醒回归】白名单关闭或显式按需工具尚未加载时，不要求模型直接调用
+/// 参数: 无；返回无
+#[test]
+fn compression_reminders_respect_configured_tool_availability() {
+    for deferred in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(root.path());
+        let mut config = config();
+        config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
+            enabled_tools: if deferred {
+                NAMES.iter().map(|name| name.to_string()).collect()
+            } else {
+                vec!["read_file".into()]
+            },
+            deferred_tools: if deferred {
+                vec!["compress_context".into()]
+            } else {
+                Vec::new()
+            },
+            exclusive: true,
+            ..Default::default()
+        });
+        let mut agent = agent(config, &paths);
+        agent.context_char_budget = 100;
+        let mut messages = vec![crate::llm::ChatMessage::plain(
+            "user",
+            "pressure ".repeat(1000),
+        )];
+        let mut reminded = false;
+        agent
+            .remind_context_blocks(&mut messages, &mut reminded)
+            .unwrap();
+        assert!(!reminded);
+        assert_eq!(messages.len(), 1);
+    }
+}
+
 /// 【上下文】【工具接入】通过注册工具提交，并验证正式请求与关闭开关后的行为
 /// 参数: 无；返回无
 #[tokio::test]

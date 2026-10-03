@@ -1,6 +1,7 @@
 mod agents;
 mod background;
 pub(crate) mod compaction;
+mod context_settings;
 pub(crate) mod form;
 mod gateways;
 mod ime;
@@ -27,5 +28,5 @@ pub(crate) mod theme;
 pub(crate) mod ui;
 mod web_search_fields;
 
-pub use session::run;
 pub(crate) use onboarding::ensure_provider_setup;
+pub use session::run;

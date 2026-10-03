@@ -1,3 +1,4 @@
+import { finishPendingContextCompression, withContextCompressionStatus } from "./context-compression-state";
 import type { PendingQuestion, PermissionDecision, PermissionRequest, QueueInsertAt, QuestionResponse, SshSecretRequest, TurnUsage, WebEvent } from "../../api/contracts";
 import { text, type Locale } from "../i18n/locale";
 import { EMPTY_JEV_EXPOSURE, parseJevCapability, type JevCapabilityExposure } from "./tool-renderers/jev-capability-data";
@@ -153,7 +154,20 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
       ttftMs: null
     };
   }
-  const { event } = action;
+  const next = reduceRunEvent(state, action.event, locale);
+  return next.completed
+    ? finishPendingContextCompression(next, next.error ?? text(locale, "Compression ended without a result", "压缩结束，未收到结果"))
+    : withContextCompressionStatus(next);
+}
+
+/**
+ * 【对话】【事件归并】处理单条服务端事件，压缩状态由外层统一收敛。
+ * @param state 原运行状态
+ * @param event 服务端事件
+ * @param locale 界面语言
+ * @returns 更新后的运行状态
+ */
+function reduceRunEvent(state: LiveRunState, event: WebEvent, locale: Locale): LiveRunState {
   const payload = event.payload;
   switch (event.type) {
     case "status.changed": {

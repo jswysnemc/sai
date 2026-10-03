@@ -31,7 +31,13 @@ impl Agent {
         messages: &mut Vec<ChatMessage>,
         reminded: &mut bool,
     ) -> Result<()> {
-        if !self.context_blocks_enabled() || *reminded {
+        if !self.context_blocks_enabled()
+            || *reminded
+            || !self.tools.contains("context_status")
+            || !self.tools.contains("compress_context")
+            || !self.tool_visibility.is_visible("context_status")
+            || !self.tool_visibility.is_visible("compress_context")
+        {
             return Ok(());
         }
         let count = self.context_token_cache.count(messages);

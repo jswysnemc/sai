@@ -2,7 +2,7 @@ import type { AppConfig } from "../../../api/contracts";
 import { ContextBudgetPreview } from "./context-budget-preview";
 import { useI18n } from "../../i18n/use-i18n";
 import { CompactionModelField } from "../compaction-model-field";
-import { FieldGrid, SettingsField, SettingsPanel, SkNumberInput } from "../kit";
+import { FieldGrid, SettingsField, SettingsPanel, SkNumberInput, SwitchField } from "../kit";
 import { MemoryExtractionModelField } from "./session-memory-extraction-field";
 import type { RuntimeSettingsProps } from "./runtime-settings-types";
 
@@ -38,6 +38,14 @@ export function ContextSettings({ config, onConfigChange }: RuntimeSettingsProps
         <MemoryExtractionModelField config={config} onConfigChange={onConfigChange} />
       </FieldGrid>
       <ContextBudgetPreview limit={context.default_max_chars ?? 120_000} ratio={context.compaction_ratio ?? 0.9} reserve={context.compaction_reserve_tokens ?? 50_000} />
+      <SwitchField
+        label={t("Experimental tool-result compression", "实验性工具结果压缩")}
+        hint={t("The model summarizes older tool results; originals remain available for retrieval. Requires the built-in engine and enabled context tools. Global compaction remains active.", "由模型摘要较早的工具结果，原文保留供回读。需要内置引擎并启用上下文工具；原有全局压缩继续生效。")}
+        checked={context.experimental_context_blocks ?? false}
+        onChange={(enabled) => update({ experimental_context_blocks: enabled })}
+        configKey="context.experimental_context_blocks"
+        anchor="runtime.context.experimental_context_blocks"
+      />
     </SettingsPanel>
   );
 }

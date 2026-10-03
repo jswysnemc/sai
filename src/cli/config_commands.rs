@@ -65,6 +65,7 @@ pub(super) async fn run_config(paths: &SaiPaths, args: ConfigArgs) -> Result<()>
                 paths.state_dir.display().to_string(),
                 "prompt-source".to_string(),
             );
+            crate::tools::context_blocks::register_catalog(&mut known);
             let registered: Vec<String> = known
                 .definitions()
                 .iter()
