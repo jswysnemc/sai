@@ -1,7 +1,7 @@
 # Sai
 
-**A terminal-native AI desktop assistant with a persona**
-Multi-protocol LLM · Core tools and Lua plugins · Long-term memory · Chat platform gateways · Web workbench · Cross-platform
+**High-performance terminal-native and desktop AI programming workbench**
+Multi-protocol LLM · System-level sandbox & Plan mode · Progressive tool loading · Web workbench · Long-term memory · Cross-platform
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
@@ -12,180 +12,119 @@ Multi-protocol LLM · Core tools and Lua plugins · Long-term memory · Chat pla
 [![CI Windows](https://img.shields.io/github/actions/workflow/status/jswysnemc/sai/windows.yml?branch=main&label=CI%20Windows)](https://github.com/jswysnemc/sai/actions/workflows/windows.yml)
 [![CI macOS](https://img.shields.io/github/actions/workflow/status/jswysnemc/sai/macos.yml?branch=main&label=CI%20macOS)](https://github.com/jswysnemc/sai/actions/workflows/macos.yml)
 
-[Why Sai](#why-sai) · [Screenshots](#screenshots) · [Core capabilities](#core-capabilities) · [Installation](#installation) · [Quick start](#quick-start) · [CLI reference](#cli-reference) · [Architecture](#architecture) · [Storage layout](#storage-layout) · [FAQ](#faq) · [Acknowledgments](#acknowledgments) · [Friend links](#friend-links) · [Contributing](#contributing)
+[Why Sai](#why-sai) · [Screenshots](#screenshots) · [Core capabilities](#core-capabilities) · [Installation](#installation) · [Quick start](#quick-start) · [CLI reference](#cli-reference) · [Architecture](#architecture) · [Storage layout](#storage-layout) · [FAQ](#faq) · [Acknowledgments & License](#acknowledgments--license)
 
 ---
 
-## Why Sai?
+## Why Sai
 
-Sai is a terminal-native AI desktop assistant written in Rust. It fuses large language model reasoning with local system tools, long-term memory, chat platform gateways, and a web workbench. Use it as a one-shot CLI Q&A tool, an interactive REPL, a long-running service bridging QQ / WeChat / WeCom, or drive it from a browser.
+Sai is a high-performance AI programming assistant and desktop workbench written in Rust. It bridges large language model reasoning with local system tools, OS-level isolation sandboxing, long-term memory, a modern web workbench, and communication platform gateways. It serves as an interactive terminal REPL, a one-shot CLI assistant, and a full-featured local or remote programming environment.
 
-This project is a fork of [Miyu](https://github.com/SHORiN-KiWATA/Miyu). It continues the upstream architecture and capabilities while staying cross-platform. Some tools come directly from upstream and are Linux-only today (for example Arch package management, parts of system diagnostics, and game-compatibility helpers). On Windows and macOS, disable those tools in the Agent / tool configuration so the model does not call them.
+Originated from [Miyu](https://github.com/SHORiN-KiWATA/Miyu), Sai retains the foundational design while undergoing major architectural refactoring and feature additions. It focuses on robust cross-platform capability, fine-grained permission sandboxing, an independent Plan workflow, an integrated web workbench, progressive context management, and Jev capability routing.
 
-- **An assistant that acts** - Beyond conversation: read/write files, run commands, dispatch subagents, run deep research and system diagnostics
-- **Triple-protocol adaptive** - OpenAI Chat / OpenAI Responses / Anthropic Messages auto-detected; any compatible provider works out of the box
-- **Personality with memory** - Cross-session long-term memory (facts / episodes), half-life forgetting and associative recall, isolated per persona
-- **Multiple entry points** - Terminal REPL, one-shot ask, web workbench, QQ / WeChat / WeCom gateways, all sharing one Agent core
+- **System-integrated toolchain**: File manipulation, granular patch editing, background command process supervision, codebase search, native read-only web search/fetch, and browser automation.
+- **Triple-protocol adaptive engine**: Native compatibility with OpenAI Chat, OpenAI Responses, and Anthropic Messages protocols, supporting both official endpoints and compatible third-party gateways.
+- **Strict sandbox & audit**: OS-level write containment (Linux bubblewrap / macOS Seatbelt), sensitive credential interception, and an independent read-only Plan mode.
+- **Modern dual interface**: Fullscreen transcript browsing with block folding in the terminal TUI, alongside a Web workbench featuring Monaco editor, xterm terminal, built-in browser, and a Git review panel.
+- **Progressive context & Jev routing**: On-demand tool loading and Jev preselection maximize prompt cache hits and sustain long-running sessions.
 
 ---
 
 ## Screenshots
 
-Streaming REPL chat, built-in tool replies, the config TUI, plus the web workbench for subagents and Source Control.
+### Web programming workbench
 
-### Terminal REPL
+Timeline session view, plan execution stream, Monaco editor, built-in browser viewport, Git review panel, and prompt template suggestions.
 
-![Sai REPL greeting and streaming chat](pics/repl.png)
+![Web programming workbench](pics/web.png)
 
-### Config TUI
+![Source Control and diff review](pics/web1.png)
 
-Run `sai config` (also reachable from the REPL) for the terminal configurator. The main menu is layered by frequency: active configuration, providers and models, agent configuration, tools, skills, advanced settings, and Jev & image models.
+### Terminal interactive REPL
+
+Fullscreen transcript view, code and reasoning folding, streaming math and charts, with OSC 52 drag-to-copy.
+
+![Sai REPL chat and streaming rendering](pics/repl.png)
+
+### Terminal config TUI
+
+Run `sai config` to open the hierarchical configurator covering providers, models, agent profiles, tools, and sandboxing policies.
 
 ![Config TUI main menu](pics/config.png)
 
-![Agent tool and Skills multi-select](pics/skills.png)
-
-### Tool examples
-
-Weather, exchange-rate, and image tools require the corresponding [Lua example plugins](examples/lua-plugins/README.md).
-
-![Weather lookup](pics/get_weather.png)
-
-![Set an alarm](pics/set_alarm.png)
-
-![Fortune lot draw](pics/draw_fortune_lot.png)
-
-![Exchange rate lookup](pics/get_exchange_rate.png)
-
-![Image search](pics/search-image.png)
-
-### Web workbench
-
-![Multiple subagents running in parallel](pics/web.png)
-
-![Source Control and model switching](pics/web1.png)
-
+![Agent tools and Skills checklist](pics/skills.png)
 
 ---
 
 ## Core capabilities
 
-### Multi-protocol LLM access
+### Multi-protocol LLM engine & reasoning control
 
-- **Triple-protocol adaptive** - OpenAI Chat, OpenAI Responses, Anthropic Messages; `auto` mode picks by provider, or set explicitly
-- **Any compatible provider** - Built-in templates for opencode Zen, OpenAI, Anthropic; custom `base_url` for any third-party compatible service; multiple API keys per provider with load balancing
-- **Thinking chain control** - `thinking_level` seven tiers (auto / none / low / medium / high / xhigh / max); `thinking_format` covers string / object / deepseek-thinking / openai-chat-reasoning-effort / reasoning / anthropic-thinking
-- **Streaming rendering** - Real-time Markdown streaming with KaTeX math, Mermaid diagrams, Syntect syntax highlighting, o200k tokenizer counting
-- **Context compaction** - Long conversations are summarized by a dedicated compaction model, preserving key information without losing context
+- **Triple-protocol adaptive access**: Automatic detection or manual override for OpenAI Chat, OpenAI Responses, and Anthropic Messages protocols. Includes built-in presets for opencode Zen, OpenAI, and Anthropic, alongside custom endpoints and multi-key load balancing.
+- **Granular reasoning effort**: 7 reasoning tiers (`auto`, `none`, `low`, `medium`, `high`, `xhigh`, `max`), compatible with DeepSeek reasoning, OpenAI reasoning effort, and Anthropic thinking protocols.
+- **Streaming rich-text rendering**: Real-time token streaming with native KaTeX formulas, Mermaid diagrams, Syntect syntax highlighting, and accurate token metering.
+- **Context auto-compaction**: When exceeding token budgets, a dedicated model condenses historical context. Truncated turns are archived in `evicted_context.db` for associative memory retrieval.
 
-### Agent and progressive tool system
+### Permissions, system sandbox & Plan mode
 
-- **Three permission modes plus independent planning** - `Yolo` free tool use, `Audited` (sandbox + audit log + per-call confirm), and `Auto-audit` (LLM / Jev auto-audit alongside user approval). Enter the read-only planning workflow with `/plan`; after approval and execution, the previous permission mode is restored.
-- **Progressive tool loading** - Only `load` and base tools are exposed at start; the model calls `load` to pull in tool groups or skills on demand. Tool groups persist to `loaded-tools.json`. Each skill is loaded once per session: later `load` calls return `already_loaded` without the body, and the name list lives in a suffix `<context-resource>` so the system-prompt prefix stays cacheable. Compaction clears `loaded-skills.json` so the next load can return the full document.
-- **Core tools and optional features** - The host provides file, command, web search, session, permission, and extension services. All 25 Lua business packages, including search, investigations, images, todo, knowledge base, memes, and alarms, are standalone examples with explicit installation and grants.
-- **Subagents** - The `subagent` tool starts an independent LLM loop with a `max_steps` budget and timeout; writable tasks auto-create a `.sai-subagents` git worktree for isolation, then apply back and clean up on success. Persistent agents can idle and take follow-ups (REPL `/subagents`, `/msg`)
-- **Skills** - Reusable `SKILL.md` skill packs with three visibility tiers (hidden / name-only / full); enable / disable / list / stats / prune from the TUI or CLI. Session loads are cached as described above.
-- **MCP bridging** - Native stdio / http MCP servers; tools registered with `mcp_` prefix; dedicated `mcp.jsonc` config
-- **Lua extensions** - Lua 5.4 packages register tools, commands, and lifecycle hooks through public APIs, with independent settings, capability declarations, and user grants. See the [example catalog](examples/lua-plugins/README.md), [developer guide](design/lua-plugins/getting-started.md), [capabilities](design/lua-plugins/capability-matrix.md), [API](design/lua-plugins/api.md), [distribution guide](design/lua-plugins/distribution.md), and [migration guide](design/lua-plugins/bundled-plugins.md).
-- **Optional session todo** - Install the [todo example](examples/lua-plugins/todo/README.md) for a checklist, history, and tool-round reminders; import old snapshots explicitly.
-- **Cron jobs** - bash / http / prompt types, persisted to `jobs.db`, triggered by a background scheduler
+- **Three permission tiers**:
+  - `Yolo`: Full automatic tool execution without approval prompts.
+  - `Audited`: Restricted to workspace sandbox, blocks sensitive paths, prompts on each call, and logs to `permission-audit.jsonl`.
+  - `Auto-audit`: LLM / Jev heuristic inspection parallel to user confirmation.
+- **OS-level workspace sandbox**:
+  - Linux uses `bubblewrap` to enforce write boundaries strictly within the workspace;
+  - macOS leverages native `Seatbelt` (`sandbox-exec`) for process containment;
+  - Windows enforces path white-listing and blocks sensitive credential paths;
+  - Run `/sandbox` anytime to inspect the current backend status and writable roots.
+- **Independent read-only Plan mode**:
+  - Enter via `/plan` or model invocation of `enter_plan_mode`, decoupled from execution permission tiers;
+  - Operates inside a read-only sandbox for codebase discovery, dependency inspection, and web fetching; uses `ask_question` to clarify ambiguities;
+  - Composes Markdown plans specifying objectives, file scopes, step-by-step tasks, and verification methods; submitted via `exit_plan_mode`;
+  - Previews plan cards in TUI and Web; clicking `Approve and implement` restores the prior permission tier and executes the plan seamlessly.
 
-### Long-term memory and context
+### Progressive tool system & Jev routing
 
-- **Dual-store** - `memory.db` holds facts / episodes / pending_events / skill_records; `evicted_context.db` holds turns trimmed from the context window
-- **FTS5 full-text index** - unicode61 + trigram tokenizer for mixed Chinese/English retrieval
-- **Markdown source files** - Memory is also persisted as `memory/files/{facts,episodes}/*.md`, human-readable and editable
-- **Half-life forgetting** - A strength-based decay algorithm yields natural forgetting; recall reinforces frequently used memories
-- **Associative recall** - Before each turn, keywords recall relevant facts / episodes and inject them as system messages
-- **Per-persona isolation** - Memory and skills use separate persona directories. Optional meme libraries use independently configured paths.
+- **Progressive tool loading**: Exposes a minimal initial toolset. The model invokes `load` to pull in specific tool groups or skills as needed, persisting to `loaded-tools.json`, reducing context clutter and hallucination.
+- **Jev dynamic capability router**: Pre-selects required capabilities during user submission, exposing tool schemas and skill documents dynamically to maintain prompt cache prefix stability.
+- **Native toolchain**:
+  - File precision editing: Exact line replacements (`str_replace`), read exploration (`read_file`), full write (`write_file`), safe trash recycling (`trash_path`);
+  - Process execution & background management: Foreground execution and background command supervisor (`run_command` / `background_command`), with auto-demotion and status updates;
+  - Native web tools: Read-only `web_search` (with TinyFish, Tavily, Firecrawl, AnySearch, SearXNG, DuckDuckGo failover) and `web_fetch` (direct page text/markdown extraction without Python dependencies);
+  - Structured queries (`ask_question`): Card-based single/multi-choice selection with custom inputs.
+- **Subagents**:
+  - Independent LLM loops governed by `max_steps` budgets;
+  - Writable tasks automatically run inside an isolated `.sai-subagents` Git Worktree, merged back into the working branch upon successful verification;
+  - Supports persistent standby mode, receiving new messages via `/msg`.
+- **Extensible plugins**:
+  - Native MCP support: Stdio and HTTP transports with automatic `mcp_` namespacing;
+  - Lua 5.4 extension runtime: Sandboxed execution with granular capability permissions.
+
+### Modern Web programming workbench
+
+- **Multi-pane workspace**: Integrates session management, file tree explorer, Monaco editor, xterm console, and CDP-driven browser viewport.
+- **Source Control**: System Git integration supporting single-file and per-line diff staging, discard, commit, branch switching, and merge conflict resolution.
+- **Prompt templates**: Drawer management via the composer button; empty and centered sessions display quick template buttons (e.g. Explore project, Review changes, Plan tests); supports `/keyword` autocompletion.
+- **Turn Tree**: Branch conversations from any historical message with a pan-and-zoom visual overview.
+- **External ACP engines**: Connect Claude Code or Codex ACP kernels directly from the composer, sharing timeline and workspace state.
+
+### Terminal interaction & fullscreen view
+
+- **Interactive streaming REPL**: Multi-line editing, clipboard image paste (`-c`), direct Shell execution (`!` prefix), and slash commands (`/` prefix).
+- **Fullscreen view (Ctrl+O)**: History exploration, block folding for reasoning and commands, and OSC 52 drag-to-copy.
+- **Interactive question cards**: Borderless card UI supporting number shortcuts (1-9), Space toggle, Tab navigation, and custom input.
+- **Terminal state safety**: Restores terminal raw mode, alternate screen, and keyboard protocol upon exit signals or unexpected interrupts.
+
+### Long-term memory
+
+- **Dual-store model**: `memory.db` stores facts, episodes, and skills; `evicted_context.db` preserves compacted turns.
+- **FTS5 full-text indexing**: Uses unicode61 and trigram tokenizers for bilingual search.
+- **Markdown bidirectional sync**: Persists human-readable Markdown files in `memory/files/` for manual inspection and revision.
+- **Half-life decay & associative recall**: Extracts keywords before turns to retrieve relevant facts and reinforces active memories.
 
 ### Chat platform gateways
 
-- **QQ Bot** - WebSocket and Webhook transports; official QQ channels / groups / DMs
-- **QQ Official** - Tencent official QQ OpenAPI client
-- **WeChat iLink** - Long-polling bridge with QR login; image / file / video messages
-- **OneBot HTTP Server** - Standard OneBot v11 server, interoperable with any OneBot implementation
-- **WeCom Webhook** - Group robot push
-- **Concurrent supervision** - `supervisor` starts all enabled channels concurrently via JoinSet; `manager` governs background task lifecycles
-- **Channel tools** - Gateway-side `send_channel_image` / `send_channel_file` / `send_channel_video` let the Agent proactively push media back to chat platforms
-
-### Permission, audit, and sandbox
-
-- **Four tiers** - Yolo / Audited / Auto-audit / Plan; TUI and CLI can set independent defaults
-- **Workspace sandbox** - Linux uses `bubblewrap` and macOS uses `Seatbelt` (`sandbox-exec`) to confine write operations to the workspace; the independent `/plan` workflow executes shell commands in a read-only sandbox and restores the prior permission mode after approval; Windows preserves permission approval and path audits without process isolation
-- **Sensitive path & credential protection** - Reads of sensitive paths (SSH keys, credential files, `.git/hooks`) are strictly blocked or prompted; private temporary directories and environment scrubbing prevent secret leakage
-- **Surfaced sandbox scopes** - Permission requests detail the active sandbox policy and escalation reasons on TUI, CLI, and Web approval cards; `/sandbox` inspects live backend availability and writable roots
-- **Audit log** - Every Requested / Approved / Denied event is appended to `permission-audit.jsonl` for traceability
-- **Permission broker** - A unified request/decision channel shared by TUI / CLI / Web, with optional denial replies
-
-### Web workbench
-
-Run `sai web` and a browser opens a full remote programming workbench:
-
-- **Multi-session** - List, create, rename, delete, resume sessions
-- **Live chat** - Streaming render on par with the REPL, with image paste
-- **Built-in browser** - Operate tabs and pages alongside chat; share selected page elements with the composer, resize the viewport, and handle uploads, downloads and page dialogs. The `browser` tool uses the same browser session. Install Chrome, Chromium or Edge on the machine running Sai; set `SAI_BROWSER_EXECUTABLE` for a custom path. Login state uses a separate Sai browser profile; `SAI_BROWSER_PROFILE=temp` selects a temporary profile.
-- **Monaco editor** - In-browser code editing wired to local files
-- **xterm terminal** - Full terminal in the browser via the platform shell abstraction
-- **Subagent panel** - Inspect subagent status and timelines
-- **Background tasks** - Manage long-running processes and cron jobs
-- **System monitor** - Real-time CPU / RSS charts
-- **Settings center** - Graphical config for providers, models, permissions, gateways, MCP, hooks, memory, personas, skills
-- **Provider checks** - Connection test sends a minimal chat; tool test asks the model to emit a dummy function call. Neither requires `/models`
-- **i18n** - Chinese / English UI toggle
-- **Access control** - `--host` bind address (localhost by default); `sai web-password` sets an access password
-- **Conversation branches** - Fork, browse, and switch from any turn; the branch-overview canvas supports pan and zoom
-- **External engines** - Connect Claude / Codex ACP kernels from the composer; they share the same session and timeline
-- **Markdown styles** - Switchable render presets; reasoning and tool calls collapse into step groups
-
-#### Source Control
-
-The Web workbench includes a Source Control panel backed by the system `git`. It supports staging/discarding changes, branch and remote operations, commit-graph browsing, and text conflict merging, with UX similar to VS Code.
-
-### Cross-platform shell integration
-
-- **Shell interception** - Unknown commands are forwarded to the Agent for natural-language explanation or fix suggestions
-- **Hook install** - `sai fish-init` / `bash-init` / `zsh-init` / `powershell-init` installs the command-not-found hook for the target shell
-- **Platform abstraction** - Windows prefers `SHELL`, then `pwsh.exe` / `powershell.exe` / `cmd.exe`; POSIX uses `-lc`
-- **System directories** - Linux follows XDG; Windows and macOS use their standard application directories
-
-### Internationalization
-
-- **Bilingual** - `en-US` and `zh-CN` UI languages, auto-detected from `SAI_LANG` / `LC_ALL` / `LANG`, overridable with `--lang`
-- **Full-chain localization** - CLI prompts, TUI, web workbench, and error messages all support both languages
-
-### Config TUI
-
-Run `sai config` for the terminal configurator. The 8-item main menu is layered by frequency; number keys jump directly:
-
-1. **Active configuration** - Pick the default provider and model for new chats
-2. **Providers and models** - Browse providers, organizations, and models; add, delete, or refresh the catalog
-3. **Agent configuration** - Create and edit agent profiles: models, system prompts, tool capabilities, and Skills checklists
-4. **Tools** - Toggle and configure assistant tools; web search lives in the same list
-5. **Skills** - Enable or disable installed skills and global skill switches
-6. **Advanced settings** - Permissions, sandbox, terminal & context, tools & background commands, display, session mesh, auto-compaction, knowledge base, and gateway channels
-7. **Jev and image models** - Manage Jev and image generation endpoints, credentials, and default models
-8. **Save and exit** - Persist in-memory changes to disk (shows exit when unchanged)
-
-The native read-only `web_search` tool works without Lua plugins or Python. Terminal configuration under Tools → Web search and Web Settings → Web search share `plugins.web` in `config.jsonc`. Auto mode tries enabled providers in this order: TinyFish, Tavily, Firecrawl, AnySearch, SearXNG, DuckDuckGo. Defaults are 5 results and a 20-second timeout per request; DuckDuckGo requires no API key. Credentials support `<provider>_api_keys` arrays, `$env:VARIABLE` references, and provider-specific `*_API_KEY` environment variables. Existing `plugins.web` settings remain supported. The optional Lua example retains its independent `plugins.jsonc` settings and `lua__web-search__web_search` tool name.
-
-Open a known URL with the native read-only `web_fetch` tool, including in Plan mode. No plugin, Python runtime, or search API key is required. Output formats are `markdown` (default), `text`, and `html`. Defaults are a 30-second timeout and 24000 characters; limits are 120 seconds, 80000 characters, 10 redirects, and a 5 MiB response body. JavaScript is not executed; use the browser tools for dynamic pages. The optional Lua plugin remains available separately as `lua__web-fetch__web_fetch`.
-
-### Web input prompt templates
-
-Type `/keyword` in normal chat or the image workbench to search templates. Use arrow keys and Enter / Tab, or click an item, to insert its text without sending. The result remains editable and supports Ctrl+Z. Normal chat also keeps skills and commands; the image workbench only lists image templates.
-
-The composer’s **Templates** button creates, edits, renames, and deletes custom templates. Chat presets cover code review, debugging, explanation, and test design. Image presets cover photography, product shots, illustration, and image editing. Built-ins are read-only; change the keyword to save a custom copy. Keywords are unique within each scope and may be reused across scopes.
-
-Custom templates are Markdown files under `input-templates/chat/` and `input-templates/image/` in the Sai configuration directory. Keywords accept 1–64 ASCII letters, numbers, hyphens, or underscores; content is limited to 64 KiB. These user-message templates are separate from internal task system prompts.
-
-### Terminal rendering preferences
-
-The TUI starts in global rendering by default. Web and TUI display settings can switch to inline rendering and independently enable or disable formula images and Mermaid images. `Ctrl+O` still toggles the current session. When an image option is disabled, the terminal keeps the original source as a readable fallback.
-
-### Conversation branches
-
-Turns are stored as a tree and can fork from any message. Both the TUI and the web workbench can browse and switch branches; the web UI also has a pan-and-zoom branch overview.
+- **Multi-channel integration**: QQ Bot, Tencent QQ OpenAPI, WeChat iLink, OneBot v11, and WeCom Webhook.
+- **Unified process supervisor**: Launch all configured channels simultaneously via `sai gateway start`, with outbound tools for sending images, files, and video attachments.
 
 ---
 
@@ -195,33 +134,33 @@ Turns are stored as a tree and can fork from any message. Both the TUI and the w
 
 | Platform | Requirements |
 | --- | --- |
-| Linux | x86_64; `ripgrep` (file search), `alsa-lib` (audio alarms); audit sandbox requires `bubblewrap` |
-| Windows | x86_64; WebView2 or a modern browser for the web workbench; `ripgrep` |
-| macOS | Apple Silicon or Intel; a modern browser for the web workbench; `ripgrep` recommended; audit sandbox uses native `Seatbelt` |
+| Linux (x86_64 / aarch64) | Recommended: `ripgrep`; sandbox requires `bubblewrap`; audio alarms require `alsa-lib` |
+| macOS (Apple Silicon / Intel) | Recommended: `ripgrep`; sandbox uses native `Seatbelt`; modern browser for Web UI |
+| Windows (x86_64) | Recommended: `ripgrep`; Web UI requires WebView2 or a modern browser |
 
 ### Build from source
 
-Requires Rust stable, Node.js 22, pnpm.
+Prerequisites: Rust stable, Node.js 22, pnpm.
 
 ```bash
-# 1. Clone
+# 1. Clone repository
 git clone https://github.com/jswysnemc/sai.git
 cd sai
 
-# 2. Build web assets (web workbench)
+# 2. Build web assets (Web workbench)
 cd web
 pnpm install --frozen-lockfile
 pnpm build
 cd ..
 
-# 3. Build the Sai binary
+# 3. Build release binary
 cargo build --release --locked
 
 # 4. Verify
 ./target/release/sai --version
 ```
 
-Linux also needs system dependencies:
+On Linux, install required packages:
 
 ```bash
 sudo apt-get install --yes \
@@ -232,9 +171,9 @@ sudo apt-get install --yes \
   ripgrep
 ```
 
-### Arch Linux
+### Arch Linux package
 
-The repo ships `scripts/package-arch.sh` to build a `.pkg.tar.zst` installable with `pacman -U`:
+Run `scripts/package-arch.sh` to produce a `.pkg.tar.zst` package:
 
 ```bash
 cargo build --release --locked
@@ -244,70 +183,43 @@ sudo pacman -U ~/.cache/sai/packages/sai-<version>-1-x86_64.pkg.tar.zst
 
 ### Prebuilt binaries
 
-Every push to `main` builds Linux, Windows, and macOS binaries. Download artifacts from [Actions](https://github.com/jswysnemc/sai/actions).
-
-Pushing a `v*` tag runs the **Release** workflow and publishes assets on [Releases](https://github.com/jswysnemc/sai/releases):
+Automated builds run on every push to `main`, available under [GitHub Actions](https://github.com/jswysnemc/sai/actions). Tagged releases can be downloaded from [GitHub Releases](https://github.com/jswysnemc/sai/releases):
 
 - `sai-linux-x86_64`
 - `sai-windows-x86_64.exe`
 - `sai-macos-arm64`
-- matching `.sha256` checksums
+
+### Docker container
+
+Container images are published to GitHub Container Registry:
 
 ```bash
-git tag v0.2.4
-git push origin v0.2.4
-```
-
-You can also run the **Release** workflow manually from Actions and supply an existing tag. See the [v0.2.4 release notes](docs/releases/v0.2.4.md) for changes and upgrade details.
-
-### Docker image
-
-Images are published to GitHub Container Registry:
-
-```bash
-# latest main
+# Pull latest image
 docker pull ghcr.io/jswysnemc/sai:latest
 
-# version tag
-docker pull ghcr.io/jswysnemc/sai:0.2.4
-```
-
-Build locally:
-
-```bash
-docker build -t sai:local .
+# Run Web workbench
 docker run --rm -it \
   -v "$HOME/.config/sai:/config/sai" \
   -v "$PWD:/workspace" \
   -p 4096:4096 \
-  sai:local web --port 4096 --no-open
+  ghcr.io/jswysnemc/sai:latest web --port 4096 --no-open
 ```
-
-On `main` / `v*` tags, the **Docker** workflow builds and pushes `ghcr.io/<owner>/sai` (PRs build only). Log in with `docker login ghcr.io` if the package is private.
 
 ---
 
 ## Quick start
 
-### 1. Initialize
+### 1. Initialize environment
 
-The first run creates the config directory and default files automatically. You can also initialize them explicitly:
+Run explicitly or start the REPL directly to generate default configuration directories:
 
 ```bash
 sai init
 ```
 
-Or just start the REPL; missing config triggers init automatically:
+### 2. Configure provider & models
 
-```bash
-sai
-```
-
-### 2. Configure a provider
-
-On a new installation, the first interactive `sai` session or authenticated `sai web` visit opens provider setup. Choose a provider, enter its API address and key, and set the default model. You can also confirm the built-in free opencode Zen provider without a key. Saving completes setup for both interfaces; cancelling the terminal wizard leaves setup pending. Existing configurations from earlier versions continue to open normally.
-
-You can also edit the config file (Linux `~/.config/sai/config.jsonc`, macOS `~/Library/Application Support/sai/config.jsonc`, Windows `%APPDATA%\sai\config.jsonc`):
+The onboarding wizard launches on the first run of `sai` or `sai web`. Alternatively, edit `config.jsonc` directly (Linux `~/.config/sai/config.jsonc`):
 
 ```jsonc
 {
@@ -324,7 +236,7 @@ You can also edit the config file (Linux `~/.config/sai/config.jsonc`, macOS `~/
 }
 ```
 
-API keys go in `secrets.jsonc` (same dir), supporting `$env:VAR_NAME` references:
+Store API keys in `secrets.jsonc` in the same directory:
 
 ```jsonc
 {
@@ -335,57 +247,46 @@ API keys go in `secrets.jsonc` (same dir), supporting `$env:VAR_NAME` references
 }
 ```
 
-You can also run `sai config` for the built-in TUI configurator, or use the settings center in `sai web`.
+Open the visual settings center via `sai config` or within `sai web`.
 
-In TUI settings, saving a new provider or changed connection imports its models. Finish **Save and exit** in the main menu; `/model` then lists them in the same conversation. Web provider names and IDs can be edited without losing selection, saved keys or configuration references. See the [provider configuration guide](docs/provider-configuration.md) for exact steps and import-failure recovery.
-
-### 3. Interactive REPL
+### 3. Interactive terminal REPL
 
 ```bash
 sai
 ```
 
-The REPL supports multi-line input, image paste (`-c` reads from clipboard), `!` prefix for shell, `/` prefix for control commands (such as `/sandbox` to inspect backend status), fuzzy history search, and streaming render of reasoning and body text. Press `?` on empty input to open the two-column shortcut sheet (`?` or `Esc` closes); press `Esc` once with draft input to show the double-escape clear notice; hint rows adapt to show `Shift+Enter` for newlines and `Enter` to send. Idle `Ctrl+O` opens the fullscreen transcript view with scrollable history, folding, drag-to-copy, and a floating back-to-bottom button; while streaming it toggles live reasoning. Work status stays in the live tail (`Working` / `Thinking`, then waiting to run, write, or respond). Finalized reasoning uses the past-tense `Thought` label. Terminal raw mode, alternate screen, and keyboard enhancement layers safely restore on exit and termination signals.
-
-In the fullscreen transcript view, use arrow keys and `PageUp` / `PageDown` to scroll smoothly, `Alt+↑` / `Alt+↓` to jump between user messages, and `Ctrl+Home` / `Ctrl+End` (or `Ctrl+↓`) to reach the top or newest output. Click to fold or unfold blocks, and drag mouse across text to automatically copy via OSC 52. Math formulas and images render with inline fidelity throughout the fullscreen canvas. Command lines and their outputs fold independently, and hovering highlights expandable regions. Exiting with active subagents or background commands offers a choice to stop tasks, keep background commands, or stay in the session.
-
-Press `Tab` in `/model` to configure shared subagent defaults or override the model and thinking level for an individual task type. The Web chat's “Subagent models & thinking” button uses the same configuration; changes apply to newly started subagents. Select “Session start” in `/tree`, or use `/tree root`, to create another starting message. Each branch keeps its own conversation context.
-
-Background command cards keep the `$` command line and update recent logs automatically, with long output available through `Ctrl+O`. Tasks with no new output for 90 seconds, or running for 10 minutes, prompt the main agent to check progress. Acknowledged checks have a five-minute reminder cooldown. Each wait lasts at most 60 seconds and returns the current status and recent logs without stopping the command. Use `Ctrl+T` to fold or expand the plan and `↓` to open the subagent panel and select a task.
+Common REPL commands and controls:
+- Natural conversation input;
+- `/plan`: Enter read-only planning mode;
+- `/sandbox`: Inspect active sandbox policies;
+- `/model`: Switch models, adjust reasoning tiers, or set subagent models;
+- `?`: Toggle shortcut help sheet;
+- `Ctrl+O`: Open fullscreen transcript view.
 
 ### 4. One-shot chat
 
 ```bash
-sai ask "write a quicksort in rust"
-sai ask -c "what is in this image"     # attach clipboard image
-sai ask -w "latest rust stable features"  # trigger web search
+sai ask "Write a quicksort implementation in Rust"
+sai ask -c "What is in this clipboard image"      # Attach clipboard image
+sai ask -w "Latest features in Rust stable"       # Trigger web search
 ```
 
-### 5. Launch the web workbench
+### 5. Launch Web workbench
 
 ```bash
 sai web --port 4096
-sai web --host 0.0.0.0 --port 4096   # set `sai web-password set` before exposing the bind
 ```
 
-A browser opens automatically to `http://localhost:4096`.
+Opens `http://localhost:4096` in your browser. Set access passwords with `sai web-password set` before binding to `--host 0.0.0.0`.
 
-### 6. Shell interception
+### 6. Shell interception (Hooks)
 
-After installing a hook, unknown commands in the terminal are forwarded to Sai:
+Forward unknown terminal commands to Sai for explanation and fix suggestions:
 
 ```bash
-sai fish-init      # or bash-init / zsh-init / powershell-init
-exec $SHELL        # reload the shell
-
-# Now type a nonexistent command
-$ nonexist-cmd --flag
-# Sai takes over and explains or suggests a fix
+sai zsh-init       # or bash-init / fish-init / powershell-init
+exec $SHELL        # Reload shell
 ```
-
-### 7. Connect a chat platform
-
-Edit the `gateways` section of `config.jsonc`, or use `sai gateway` subcommands to bring up individual channels. Once configured, `sai gateway start` launches all enabled channels at once.
 
 ---
 
@@ -393,217 +294,108 @@ Edit the `gateways` section of `config.jsonc`, or use `sai gateway` subcommands 
 
 | Command | Description |
 | --- | --- |
-| `sai` | Enter the interactive REPL |
-| `sai ask <message>` | One-shot chat; supports `-c` image, `-w` web search |
-| `sai web [--port N] [--host ADDR] [--no-open]` | Launch the web workbench |
-| `sai web-password set/clear/status` | Web access password |
-| `sai init` | Initialize the config directory |
-| `sai paths` | Print all directory locations |
-| `sai config` | Open the config TUI |
-| `sai config validate` | Validate the config file |
-| `sai config paths` | Print config paths |
-| `sai models` | Interactive model and thinking-level picker |
-| `sai providers [index]` | View or switch the active provider |
-| `sai set thinking [level]` | Set the thinking-chain level |
-| `sai fish-init` / `bash-init` / `zsh-init` / `powershell-init` | Install the command-not-found hook |
-| `sai remove-shell-hook` | Remove installed shell hooks |
-| `sai history [--limit N] [--raw]` | View conversation history |
-| `sai sessions list` / `new` / `switch` / `resume` / `current` / `delete` / `rename` | Session management |
-| `sai resume [id]` | Resume a session; interactive pick when ID omitted |
-| `sai kb add/list/search/find/read/remove/reindex/stats/embed` | Local knowledge base |
-| `sai memory stats/reset/search/remember` | Memory management |
-| `sai skills list/show/enable/disable/remove/stats/prune` | Skills management |
-| `sai plugins list/info/init/check/pack/install/enable/disable/remove` | Lua plugin and capability grant management |
-| `sai ps` | Background command management |
-| `sai gateway start` | Start all enabled channels from config |
-| `sai gateway qq-bot` / `qq-bot-webhook` / `qq-official` | QQ channels |
-| `sai gateway onebot-server` / `weixin-server` / `wecom-webhook` | Other channels |
-| `sai weixin-login` | WeChat QR login |
-| `sai clear [--memory] [scope]` | Clear conversation or memory |
-| `sai compact` | Manually trigger context compaction |
+| `sai` | Start interactive terminal REPL |
+| `sai ask <message>` | Send a one-shot query; supports `-c` for image, `-w` for web search |
+| `sai web [--port N] [--host ADDR] [--no-open]` | Launch the Web workbench |
+| `sai web-password set/clear/status` | Manage Web access passwords |
+| `sai init` | Initialize default configuration and state directories |
+| `sai paths` | Print filesystem paths for config, data, cache, and state |
+| `sai config` | Open the terminal config TUI |
+| `sai config validate` | Validate syntax of configuration files |
+| `sai models` | Interactive model and thinking-chain selector |
+| `sai providers [index]` | Inspect or switch the active provider |
+| `sai set thinking [level]` | Configure default thinking-chain intensity |
+| `sai fish-init` / `bash-init` / `zsh-init` / `powershell-init` | Install command-not-found shell integration hooks |
+| `sai remove-shell-hook` | Safely remove installed shell hooks |
+| `sai history [--limit N] [--raw]` | Inspect conversation logs |
+| `sai sessions list/new/switch/resume/delete/rename` | Manage conversation sessions |
+| `sai resume [id]` | Resume a session (interactive when ID is omitted) |
+| `sai kb add/list/search/read/remove/reindex` | Manage local knowledge base index and retrieval |
+| `sai memory stats/reset/search/remember` | Inspect and edit long-term memory |
+| `sai skills list/show/enable/disable/remove/prune` | Manage skills packages |
+| `sai plugins list/info/init/pack/install/enable/disable` | Manage Lua extensions and capability grants |
+| `sai ps` | List and supervise background command processes |
+| `sai gateway start` | Concurrently launch all enabled platform gateways |
+| `sai gateway qq-bot` / `weixin-server` / `onebot-server` | Launch specific platform gateway service |
+| `sai weixin-login` | Authenticate WeChat iLink via terminal QR code |
+| `sai compact` | Manually trigger conversation context compaction |
+| `sai clear [--memory]` | Clear active session turns or long-term memory |
 
-Global flags: `--lang en-US|zh-CN` (language), `--plan` / `--audited` / `--auto-audit` / `--yolo` (permission mode), `--thinking LEVEL` (thinking chain), `-c` (clipboard), `-w` (web search).
-
-Common REPL commands: `/sandbox` (inspect sandbox backend and writable roots), `/model` (switch models), `/tree` (session branch tree), `/subagents` (subagent manager).
+Global options: `--lang en-US|zh-CN`, `--plan`, `--audited`, `--auto-audit`, `--yolo`, `--thinking LEVEL`, `-c` (clipboard), `-w` (web search).
 
 ---
 
 ## Architecture
 
-Sai is layered around a shared Runner and Agent core. Entrypoints feed normalized submissions into the Runner; the Agent coordinates LLM calls, tools, memory, and session state.
+Sai centers on a shared Runner and Agent engine. Entry points (REPL, CLI, Web, Gateways) standardize inputs into submissions, which the Runner and Agent coordinate across LLM calls, sandboxing, memory, and tools.
 
-![Sai system architecture](pics/sai-architecture.svg)
+![Sai architecture](pics/sai-architecture.svg)
 
 ### Tech stack
 
-| Component | Technology |
-| --- | --- |
-| Core | Rust 2021 edition · Tokio async runtime |
-| LLM client | reqwest + rustls · SSE streaming · triple-protocol adaptive |
-| Storage | rusqlite (bundled) · SQLite WAL · FTS5 full-text index |
-| Terminal | crossterm · termimad · ratex (LaTeX) · syntect highlight · mermaid-rs-renderer |
-| Web server | axum + WebSocket + embedded static assets |
-| Web frontend | React 19 · Vite 8 · TypeScript · Monaco · xterm · KaTeX · Mermaid · TanStack Query |
-| Build | build.rs (prompt obfuscation + o200k tokenizer compiled in) · rust-embed |
-| CI | GitHub Actions (Linux + Windows + macOS) |
-
-### Project structure
-
-```
-Sai/
-├── src/
-│   ├── agent/            # Agent core: loop, mode, compaction, subagent, context projection
-│   ├── cli/              # CLI subcommand dispatch and REPL implementation
-│   ├── llm/              # LLM client: triple-protocol, streaming, thinking, tool-call stream
-│   ├── tools/            # Core tools, registry, progressive loading, subagent and skills
-│   ├── plugins/          # Public plugin host, management, grants and scheduling
-│   ├── memory/           # Long-term memory: facts/episodes/FTS5/decay/association
-│   ├── state/            # Session state: turns WAL, pending, compaction, snapshot, recovery
-│   ├── gateways/         # Multi-platform gateways: QQ/WeChat/OneBot/WeCom, supervisor
-│   ├── config/           # Config: AppConfig, providers, permissions, gateways, MCP, models
-│   ├── config_tui/       # Terminal config UI: main menu, Agent/tools/Skills, advanced settings
-│   ├── permission/       # Permissions: broker, policy, sandbox, audit log
-│   ├── mcp/              # MCP bridging: stdio/http client and registration
-│   ├── shell/            # Shell hooks: fish/bash/zsh/powershell
-│   ├── platform/         # Cross-platform shell abstraction
-│   ├── web/              # Web workbench server
-│   ├── render/           # Terminal streaming render
-│   ├── prompts/          # System prompt templates (obfuscated by build.rs)
-│   ├── i18n/             # Chinese / English i18n
-│   ├── cron/             # Cron job scheduling
-│   └── ...               # Other host modules
-├── examples/lua-plugins/ # 25 business examples and 2 starter examples
-├── crates/sai-plugin-runtime/ # Reusable Lua runtime and capability contracts
-├── crates/sai-sqlite-buffer/  # Fixed-capacity SQLite snapshot buffers
-├── web/                  # Web workbench frontend (React + Vite)
-├── assets/               # o200k tokenizer vocabulary
-├── pics/                 # Screenshots and architecture overview
-├── Dockerfile            # container image
-├── scripts/              # Packaging scripts (package-arch.sh)
-├── .github/workflows/    # CI (linux.yml + windows.yml + macos.yml)
-├── build.rs              # Build script
-└── Cargo.toml            # Rust package manifest
-```
+- **Core engine**: Rust 2021 Edition, Tokio async runtime, rusqlite (SQLite WAL and FTS5).
+- **LLM client**: reqwest + rustls, full-duplex SSE streaming parser, triple-protocol adapter.
+- **Terminal UI**: crossterm, termimad, syntect syntax highlighting, KaTeX terminal math.
+- **Web backend**: axum HTTP / WebSocket server with embedded asset bundling.
+- **Web frontend**: React 19, Vite 8, TypeScript, TailwindCSS, Monaco Editor, xterm.js, Mermaid.
 
 ---
 
-The [knowledge base plugin guide](design/lua-plugins/knowledge-base.md) describes command compatibility, background indexing, recovery and capacity limits.
-
 ## Storage layout
 
-Sai follows XDG on Linux, the Application Support and Caches conventions on macOS, and Known Folders on Windows. Run `sai paths` to inspect all paths.
+Sai adheres strictly to platform filesystem specifications (XDG on Linux, Application Support on macOS, Known Folders on Windows). Run `sai paths` to display all directories.
 
 ### Config directory
 
-Linux `~/.config/sai` / macOS `~/Library/Application Support/sai` / Windows `%APPDATA%\sai`
+Linux: `~/.config/sai` | macOS: `~/Library/Application Support/sai` | Windows: `%APPDATA%\sai`
 
-| File / Dir | Purpose |
-| --- | --- |
-| `config.jsonc` | Main config: providers, permissions, gateways, plugins, personas |
-| `secrets.jsonc` | API key secrets; supports `$env:VAR` references |
-| `mcp.jsonc` | Dedicated MCP server config |
-| `skills/` | Installed skills directory |
-| `persona/` | Persona dir: `system-prompt.md`, `identities/` |
-| `shell/` | Shell hook scripts (fish / bash / zsh / powershell) |
+- `config.jsonc`: Primary configuration (providers, models, agent preferences, gateways)
+- `secrets.jsonc`: Secret API keys, supporting dynamic `$env:VAR` expansion
+- `mcp.jsonc`: External MCP server connection settings
+- `input-templates/`: User custom prompt templates (`chat/` and `image/` subdirectories)
+- `skills/`: Installed global and custom Skills
+- `persona/`: Agent personas, system prompts, and identities
 
 ### State directory
 
-Linux `~/.local/state/sai` / macOS `~/Library/Application Support/sai` / Windows `%LOCALAPPDATA%\sai`
+Linux: `~/.local/state/sai` | macOS: `~/Library/Application Support/sai` | Windows: `%LOCALAPPDATA%\sai`
 
-| File / Dir | Purpose |
-| --- | --- |
-| `conversation.db` | SQLite WAL conversation turn store |
-| `usage.json` | Token usage stats |
-| `loaded-tools.json` | Progressive tool visibility set (cross-turn restore) |
-| `loaded-skills.json` | Skill names already loaded this session; cleared on compaction |
-| `prompt.sha256` | System prompt fingerprint; change resets the session |
-| `profile.md` | User profile |
-| `sai.log` | Runtime log |
-| `plugin-jobs/` | Persistent plugin tasks, including new alarms |
-| `plugin-legacy/` | Isolated compatibility states for legacy alarm records |
-| `plugin-state/`, `plugin-storage/` | Public per-session and persistent plugin records |
-| `alarms.json`, `alarm.log` | Preserved legacy alarm snapshot and log |
-| `permission-audit.jsonl` | Permission audit log |
+- `conversation.db`: SQLite database for turns and event streams
+- `usage.json`: Token consumption statistics
+- `loaded-tools.json`: Active tool exposure across session turns
+- `loaded-skills.json`: Skills active in the current session
+- `permission-audit.jsonl`: Audit log for permission decisions and sandbox operations
+- `plan.json`: Current session plan status and snapshot
 
 ### Data directory
 
-Linux `~/.local/share/sai` / macOS `~/Library/Application Support/sai` / Windows `%APPDATA%\sai`
+Linux: `~/.local/share/sai` | macOS: `~/Library/Application Support/sai` | Windows: `%APPDATA%\sai`
 
-| File / Dir | Purpose |
-| --- | --- |
-| `kb/` | Legacy knowledge-base data; reuse through explicit data_dir settings and grants |
-| `persona/<name>/memes/` | Legacy meme-library path; reuse through independent plugin settings |
-| `persona/<name>/memory/memory.db` | Memory metadata + FTS5 index |
-| `persona/<name>/memory/files/` | Markdown memory sources (facts / episodes) |
-| `persona/<name>/memory/evicted_context.db` | Trimmed old context |
-| `persona/<name>/skills/` | Auto-learned skills |
-
-The knowledge-base example defaults to workspace `kb/`; memes use `.sai/meme-bases`, `.sai/memes`, and `.sai/state/memes`. See each [example README](examples/lua-plugins/README.md) for installation and data migration.
-
-### Other dirs
-
-- Cache: Linux `~/.cache/sai` / macOS `~/Library/Caches/sai` / Windows `%LOCALAPPDATA%\sai`
-- Image artifacts: Linux `~/Pictures/sai` / macOS `~/Pictures/sai` / Windows `Pictures\sai`
+- `persona/<name>/memory/memory.db`: Long-term memory SQLite FTS5 database
+- `persona/<name>/memory/files/`: Synchronized plain-text Markdown memory files
+- `persona/<name>/memory/evicted_context.db`: Truncated context turn archives
+- `browser/profile/`: Dedicated CDP browser profile and state
 
 ---
 
 ## FAQ
 
-**Do API keys ever leave my machine?**
+**Do my API keys ever leave the machine?**
+No. All API credentials remain inside the local `secrets.jsonc`. Requests travel directly from the local host to model endpoints. Gateways only relay chat platform messages.
 
-No. Keys stay in the local `secrets.jsonc`; requests go directly from the local LLM client to the provider. In gateway mode the local Agent still issues requests; chat platforms only relay messages.
+**How does the independent Plan mode work?**
+Enter with `/plan` in REPL or Web, or through the model's `enter_plan_mode` call. The environment enters a read-only sandbox where tools can explore the codebase and inspect facts without altering files or running mutating commands. After composing and submitting a plan, user approval restores the original execution tier to proceed with implementation.
 
-**Is the gateway required?**
+**How is the sandbox enforced on different operating systems?**
+Linux employs `bubblewrap` and macOS employs `Seatbelt` for kernel-level write restrictions. On Windows, sensitive directories (such as SSH, Git hooks, credentials) are intercepted alongside path audits and per-call confirmations.
 
-No. The terminal REPL, one-shot ask, and web workbench all work locally. Configure gateways only when you want QQ / WeChat / WeCom to reach the Agent.
-
-**Which models are supported?**
-
-Any model compatible with OpenAI Chat, OpenAI Responses, or Anthropic Messages. opencode Zen, OpenAI, and Anthropic templates are bundled; custom `base_url` accepts any third-party relay.
-
-**Why does the connection test not call `/models`?**
-
-The test answers whether the chosen model can produce a reply. Many relays omit `/models` or put it behind a different permission. Refreshing the catalog is a separate action on the providers page.
-
-**Does long-context get lost?**
-
-No. Turns beyond the character budget are written to `evicted_context.db` and can be recalled by memory tools. A dedicated compaction model can also summarize history while preserving key points.
-
-**Does the sandbox work on Windows or macOS?**
-
-Both macOS and Linux support OS-level command sandboxing: Linux via `bubblewrap` and macOS via native `Seatbelt`. Windows currently has no sandbox backend, but retains audit logs, sensitive path interception, and per-call confirmations.
-
-**Do subagents pollute the main workspace?**
-
-No. Writable subagent tasks auto-create a `.sai-subagents` git worktree for isolation, then apply back and clean up only on success.
-
-**Are some tools unavailable on Windows / macOS?**
-
-Yes. Several tools inherited from upstream [Miyu](https://github.com/SHORiN-KiWATA/Miyu) are Linux-only. On other platforms, manually disable those tools in the Agent configuration so the model does not attempt to use them.
+**Do subagents risk polluting the main workspace?**
+No. Subtasks with write permissions automatically run in isolated `.sai-subagents` Git Worktrees. Only after subtasks finish verification and are accepted will changes be merged back.
 
 ---
 
-## Acknowledgments
+## Acknowledgments & License
 
-Sai is a fork of [Miyu](https://github.com/SHORiN-KiWATA/Miyu). Thanks to upstream author [SHORiN-KiWATA](https://github.com/SHORiN-KiWATA) for open-sourcing the architecture, Agent core, and many foundational capabilities that this repository continues to maintain and extend. Some tool implementations still follow upstream; their Linux-only adaptation is noted above.
+Sai is originated from [Miyu](https://github.com/SHORiN-KiWATA/Miyu). Sincere gratitude to [SHORiN-KiWATA](https://github.com/SHORiN-KiWATA) for the open-source foundational architecture. Sai continues to maintain, refactor, and extend these capabilities.
 
----
-
-## Friend links
-
-- [LINUX DO](https://linux.do/) - A next-generation Linux community
-
----
-
-## Contributing
-
-Issues and pull requests are welcome. Before submitting, ensure:
-
-1. Rust tests pass: `cargo test --locked`
-2. Web frontend builds and tests pass: `cd web && pnpm install --frozen-lockfile && pnpm build && pnpm test`
-3. Config validates: `sai config validate`
-4. Commit messages follow Conventional Commits (`feat:` / `fix:` / `docs:`)
-
-## License
-
-[MIT](LICENSE) © SHORiN-KiWATA
+This project is licensed under the [MIT](LICENSE) License.
