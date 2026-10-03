@@ -426,7 +426,10 @@ impl ConversationDb {
     /// - 清空是否成功
     pub fn reset(&self) -> Result<()> {
         self.conn.lock().unwrap().execute_batch(
-            "DELETE FROM turns;
+            "DELETE FROM context_block_messages;
+             DELETE FROM context_blocks;
+             DELETE FROM context_block_revision;
+             DELETE FROM turns;
              DELETE FROM compaction_checkpoints;
              DELETE FROM context_epoch_events;
              DELETE FROM context_epochs;

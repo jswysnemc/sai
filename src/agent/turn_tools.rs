@@ -28,6 +28,7 @@ impl Agent {
             ..
         } = request;
         let mut tool_round = 0usize;
+        let mut context_blocks_reminded = false;
         // 跨轮累计同一工具调用的重复次数，防止模型对同一参数无限重复
         let mut repeat_guard = repeat_guard::RepeatGuard::default();
         let mut tool_event_seq = self.state.tool_call_count_for_turn(turn_id)?;
@@ -82,8 +83,11 @@ impl Agent {
                 &hook_ctx,
             )
             .await;
+            self.project_context_blocks(messages)?;
             self.compact_between_tool_rounds(tool_round, request, messages, on_event, perf)
                 .await?;
+            self.project_context_blocks(messages)?;
+            self.remind_context_blocks(messages, &mut context_blocks_reminded)?;
             let definitions = if self.tools_enabled {
                 self.tool_visibility.definitions(&self.tools)
             } else {

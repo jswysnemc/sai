@@ -65,6 +65,13 @@ impl ToolRegistry {
         self.tools.insert(tool.name.clone(), tool);
     }
 
+    /// 【工具】【会话绑定】移除工具定义及其注册顺序，释放旧会话回调
+    /// 参数: name 为工具名；返回无
+    pub(crate) fn remove(&mut self, name: &str) {
+        self.tools.remove(name);
+        self.order.retain(|entry| entry != name);
+    }
+
     /// 绑定当前会话使用的权限配置。
     ///
     /// 参数:

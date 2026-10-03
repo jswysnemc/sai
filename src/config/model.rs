@@ -317,6 +317,9 @@ impl ProviderModelChoice {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContextConfig {
+    /// 【上下文】【局部压缩】启用可精确回读的工具结果摘要试验，默认关闭
+    #[serde(default)]
+    pub experimental_context_blocks: bool,
     #[serde(default = "default_context_chars")]
     pub default_max_chars: usize,
     /// 自动压缩比例，占用达到窗口的该比例时触发。

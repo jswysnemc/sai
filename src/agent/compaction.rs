@@ -155,18 +155,21 @@ impl Agent {
                 return Ok(false);
             }
         };
+        // 1. 【上下文】【预算预检】全局压缩重建时沿用当前请求的实验开关
+        let mut guarded_projection = projection.clone();
+        guarded_projection.context_blocks = self.context_blocks_enabled();
         let outcome = if manual {
             self.state.apply_manual_compaction_with_projection_guard(
                 request,
                 &summary,
-                projection,
+                &guarded_projection,
                 exclude_turn_id,
             )?
         } else {
             self.state.apply_compaction_with_budget_guard(
                 request,
                 &summary,
-                projection,
+                &guarded_projection,
                 exclude_turn_id,
             )?
         };

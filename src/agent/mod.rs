@@ -3,6 +3,7 @@ mod compaction;
 mod compaction_model;
 mod compaction_replay;
 pub(crate) mod compaction_schema;
+mod context_blocks;
 mod context_projection;
 mod context_resources;
 mod conversation;
@@ -31,11 +32,11 @@ mod message_usage;
 mod mode;
 mod model_context;
 pub(crate) mod model_json;
-mod plugin_commands;
-mod question_execution;
 mod plan_execution;
 #[cfg(test)]
 mod plan_execution_tests;
+mod plugin_commands;
+mod question_execution;
 #[cfg(test)]
 mod question_execution_tests;
 mod recovery;

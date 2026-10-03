@@ -124,6 +124,7 @@ mod tests {
     /// - 请求投影
     fn projection(message_chars: usize, context_limit_chars: usize) -> ProjectedRequest {
         ProjectedRequest {
+            context_blocks: false,
             kind: ProjectionKind::ProviderTurn,
             messages: vec![ChatMessage::plain("user", "hi")],
             tool_count: 0,

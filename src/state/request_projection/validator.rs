@@ -156,6 +156,7 @@ mod tests {
 
     fn projection(messages: Vec<ChatMessage>, context_limit_chars: usize) -> ProjectedRequest {
         ProjectedRequest {
+            context_blocks: false,
             kind: ProjectionKind::ProviderTurn,
             messages,
             tool_count: 0,

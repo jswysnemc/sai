@@ -51,6 +51,8 @@ pub(crate) struct DynamicContextSource {
 /// provider 请求投影视图。
 #[derive(Debug, Clone)]
 pub(crate) struct ProjectedRequest {
+    /// 【上下文】【预算预检】重建压缩后历史时是否继续应用实验块摘要
+    pub context_blocks: bool,
     #[allow(dead_code)]
     pub kind: ProjectionKind,
     pub messages: Vec<ChatMessage>,

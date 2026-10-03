@@ -60,7 +60,8 @@ impl Agent {
             .goal()?
             .map(|goal| crate::goal::system_context(&goal));
         let session_goal_context = goal_context.unwrap_or_default();
-        let projected_history = self.state.project_history(exclude_turn_id)?;
+        let mut projected_history = self.state.project_history(exclude_turn_id)?;
+        self.project_context_blocks(&mut projected_history.messages)?;
         let compaction_summary_context = projected_history
             .checkpoint_context
             .or(self.state.compaction_summary_context()?);

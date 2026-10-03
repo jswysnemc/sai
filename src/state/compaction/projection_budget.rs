@@ -27,9 +27,43 @@ impl StateStore {
         projection: &ProjectedRequest,
         exclude_turn_id: Option<&str>,
     ) -> Result<usize> {
-        let current_history_chars = self.visible_history_context_chars(exclude_turn_id)?;
-        let next_history_chars =
-            self.projected_history_chars_after_compaction(request, summary, exclude_turn_id)?;
+        // 1. 【上下文】【预算预检】当前历史按实际请求中的工具正文计数，避免重复扣除已节省空间
+        let mut history = self.project_history(exclude_turn_id)?;
+        let current_tools = projection
+            .messages
+            .iter()
+            .filter(|message| message.role == "tool")
+            .filter_map(|message| {
+                message
+                    .tool_call_id
+                    .as_deref()
+                    .map(|id| (id, &message.content))
+            })
+            .collect::<std::collections::HashMap<_, _>>();
+        for message in history
+            .messages
+            .iter_mut()
+            .filter(|message| message.role == "tool")
+        {
+            if let Some(content) = message
+                .tool_call_id
+                .as_deref()
+                .and_then(|id| current_tools.get(id))
+            {
+                message.content = (*content).clone();
+            }
+        }
+        let summary_context = history
+            .checkpoint_context
+            .or(self.compaction_summary_context()?);
+        let current_history_chars =
+            history_messages_chars(summary_context.as_deref(), history.messages);
+        let next_history_chars = self.projected_history_chars_with_blocks(
+            request,
+            summary,
+            exclude_turn_id,
+            projection.context_blocks,
+        )?;
         Ok(projection
             .estimate
             .message_chars
@@ -73,16 +107,31 @@ impl StateStore {
         summary: &str,
         exclude_turn_id: Option<&str>,
     ) -> Result<usize> {
+        self.projected_history_chars_with_blocks(request, summary, exclude_turn_id, false)
+    }
+
+    /// 【上下文】【预算预检】按请求开关估算全局压缩后的历史，组成员缺失时保留原文
+    /// 参数: request 为压缩范围，summary 为摘要，exclude_turn_id 为当前轮次，blocks 为实验开关；返回 token 数
+    fn projected_history_chars_with_blocks(
+        &self,
+        request: &CompactionRequest,
+        summary: &str,
+        exclude_turn_id: Option<&str>,
+        blocks: bool,
+    ) -> Result<usize> {
         let checkpoint = self.pending_checkpoint_for_budget(request, summary)?;
         let tail_turns = self.tail_turns_after_compaction(request, exclude_turn_id)?;
         let tail_messages =
             project_turn_messages_with_tool_history(&self.conv_db, &self.session_id, &tail_turns)?;
         let history = project_history_from_parts(Some(checkpoint), tail_turns);
-        let messages = if tail_messages.is_empty() {
+        let mut messages = if tail_messages.is_empty() {
             history.messages
         } else {
             tail_messages
         };
+        if blocks {
+            self.apply_context_blocks(&mut messages)?;
+        }
         Ok(history_messages_chars(
             history.checkpoint_context.as_deref(),
             messages,
@@ -143,14 +192,22 @@ impl StateStore {
         request: &CompactionRequest,
         exclude_turn_id: Option<&str>,
     ) -> Result<Vec<Turn>> {
-        let (_, to_seq) = request
-            .seq_range()
-            .ok_or_else(|| anyhow::anyhow!("compaction request has no turns"))?;
+        // 1. 【上下文】【预算预检】轮次内压缩沿用现有边界，排除其它分支及已覆盖历史
+        let to_seq = match request.seq_range() {
+            Some((_, to_seq)) => to_seq,
+            None => {
+                let conn = self.conv_db.conn.lock().unwrap();
+                crate::state::checkpoints::load_latest_checkpoint(&conn)?
+                    .map(|checkpoint| checkpoint.compacted_to_seq)
+                    .unwrap_or_default()
+            }
+        };
         Ok(self
             .conv_db
-            .load_turns()?
+            .active_branch_turns()?
             .into_iter()
             .filter(|turn| turn.seq > to_seq)
+            .filter(|turn| !request.compact_turn_ids.contains(&turn.turn_id))
             .filter(|turn| Some(turn.turn_id.as_str()) != exclude_turn_id)
             .collect())
     }

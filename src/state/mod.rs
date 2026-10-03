@@ -1,5 +1,6 @@
 mod checkpoints;
 mod compaction;
+pub(crate) mod context_blocks;
 pub(crate) use compaction::MessageTokenCache;
 mod context_epoch;
 pub(crate) mod failure_recovery;

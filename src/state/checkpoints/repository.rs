@@ -186,6 +186,13 @@ pub(in crate::state) fn apply_checkpoint_compaction(
     };
     let mut conn = db.conn.lock().unwrap();
     let tx = conn.transaction()?;
+    let previous = load_latest_checkpoint(&tx)?.map(|item| item.id);
+    crate::state::context_blocks::schema::carry_checkpoint(
+        &tx,
+        &request.compact_turn_ids,
+        previous.as_deref(),
+        &checkpoint.id,
+    )?;
     // 只压缩运行中轮次时 seq 与上一个 checkpoint 相同，覆盖而非新增
     upsert_checkpoint(&tx, &checkpoint)?;
     for turn_id in &request.compact_turn_ids {

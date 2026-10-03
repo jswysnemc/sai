@@ -9,6 +9,7 @@ use rusqlite::Connection;
 /// 返回:
 /// - 建表是否成功
 pub(in crate::state) fn create_tool_history_tables(conn: &Connection) -> Result<()> {
+    crate::state::context_blocks::schema::create_tables(conn)?;
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS tool_calls (
             id               TEXT PRIMARY KEY,

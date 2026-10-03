@@ -25,6 +25,7 @@ pub(crate) fn project_provider_turn_from_messages(
     context_limit_chars: usize,
 ) -> ProjectedRequest {
     let mut projection = ProjectedRequest {
+        context_blocks: false,
         kind: ProjectionKind::ProviderTurn,
         messages: messages.to_vec(),
         tool_count,

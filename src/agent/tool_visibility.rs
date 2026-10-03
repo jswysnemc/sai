@@ -29,6 +29,7 @@ pub(crate) struct ToolVisibility {
     anchor_promoted: bool,
     /// 是否由 Jev 决定额外工具与 skill 的暴露
     jev_routing: bool,
+    context_blocks: bool,
 }
 
 impl ToolVisibility {
@@ -51,6 +52,7 @@ impl ToolVisibility {
             anchor_enabled: false,
             anchor_promoted: false,
             jev_routing: false,
+            context_blocks: false,
         }
     }
 
@@ -62,10 +64,13 @@ impl ToolVisibility {
     /// 返回:
     /// - 依据 `agent_runtime.deferred_tools` 构造的可见性状态
     pub(crate) fn from_config(config: &AppConfig) -> Self {
-        if config.jev.routing.enabled {
-            return Self::with_jev_routing(config.agent_deferred_tools());
-        }
-        Self::new(config.agent_deferred_tools().to_vec())
+        let mut visibility = if config.jev.routing.enabled {
+            Self::with_jev_routing(config.agent_deferred_tools())
+        } else {
+            Self::new(config.agent_deferred_tools().to_vec())
+        };
+        visibility.context_blocks = config.context.experimental_context_blocks;
+        visibility
     }
 
     /// 按配置创建可见性状态，并启用 DeepSeek Anchored Standard。
@@ -130,6 +135,13 @@ impl ToolVisibility {
     pub(crate) fn definitions(&self, registry: &ToolRegistry) -> Vec<ToolDefinition> {
         if self.anchor_enabled {
             let mut definitions = deepseek_anchor::definitions();
+            if self.context_blocks {
+                let names = tools::context_blocks::NAMES
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect();
+                definitions.extend(registry.definitions_for_names(&names));
+            }
             if self.anchor_promoted {
                 let names = [tools::LOAD_NAME, tools::INVOKE_NAME]
                     .into_iter()
@@ -143,7 +155,10 @@ impl ToolVisibility {
             return registry.definitions();
         }
         // 1. 基础工具与未配置为延迟的工具保留原生 Schema，延迟工具通过固定网关调用
-        let names = tools::progressive::visible_tool_names(registry, &self.deferred);
+        let mut names = tools::progressive::visible_tool_names(registry, &self.deferred);
+        if self.context_blocks {
+            names.extend(tools::context_blocks::NAMES.into_iter().map(str::to_string));
+        }
         registry.definitions_for_names(&names)
     }
 
@@ -155,6 +170,9 @@ impl ToolVisibility {
     /// 返回:
     /// - 当前是否可见并允许调用
     pub(crate) fn is_visible(&self, name: &str) -> bool {
+        if self.context_blocks && tools::context_blocks::is_context_tool(name) {
+            return true;
+        }
         if self.anchor_enabled
             && (deepseek_anchor::is_provider_tool(name) || deepseek_anchor::is_execution_tool(name))
         {
@@ -178,6 +196,9 @@ impl ToolVisibility {
     /// 返回:
     /// - 当前配置下是否属于延迟工具
     pub(crate) fn requires_load(&self, name: &str) -> bool {
+        if self.context_blocks && tools::context_blocks::is_context_tool(name) {
+            return false;
+        }
         self.is_progressive() && tools::progressive::is_deferred_tool(name, &self.deferred)
     }
 

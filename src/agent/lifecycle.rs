@@ -81,6 +81,7 @@ impl Agent {
         let context_char_budget = config.active_context_window_tokens()?;
         let compaction_runtime = compaction_model::resolve_compaction_runtime(&config, paths)?;
         crate::goal::register_tools_for_config(&mut tools, state.goal_file(), &config)?;
+        crate::tools::context_blocks::register(&mut tools, &state, &config);
         // 渐进加载由当前 Agent 的 deferred_tools 决定；
         // skill 提示词只给名称与简介，正文一律靠 load 读取，因此有可见 skill 时同样注册
         let mut tool_visibility =
@@ -255,6 +256,7 @@ impl Agent {
         };
         self.mode = mode;
         crate::goal::register_tools_for_config(&mut tools, self.state.goal_file(), &self.config)?;
+        crate::tools::context_blocks::register(&mut tools, &self.state, &self.config);
         let anchor_enabled = deepseek_anchor_available(&self.config, self.tools_enabled, &tools)?;
         let anchor_promoted = anchor_enabled && session_anchor_promoted(&self.state)?;
         self.tool_visibility =
@@ -301,6 +303,7 @@ impl Agent {
         let loaded = self.tool_visibility.loaded_tool_names();
         crate::goal::register_tools_for_config(&mut tools, self.state.goal_file(), &self.config)
             .expect("failed to register goal tools");
+        crate::tools::context_blocks::register(&mut tools, &self.state, &self.config);
         if self.tools_enabled && self.tool_visibility.is_progressive() {
             jev_routing::register_tool_gateways(&mut tools, &self.tool_visibility);
         }
@@ -382,6 +385,7 @@ impl Agent {
         self.tools_enabled =
             self.config.tools.enabled && self.config.active_model_tools_enabled()?;
         crate::goal::register_tools_for_config(&mut tools, self.state.goal_file(), &self.config)?;
+        crate::tools::context_blocks::register(&mut tools, &self.state, &self.config);
         // 与初始化保持一致：有可见 skill 时同样需要加载器读取正文
         let anchor_enabled = deepseek_anchor_available(&self.config, self.tools_enabled, &tools)?;
         let anchor_promoted = anchor_enabled && session_anchor_promoted(&self.state)?;
@@ -434,6 +438,7 @@ impl Agent {
             self.state.goal_file(),
             &self.config,
         )?;
+        crate::tools::context_blocks::register(&mut self.tools, &self.state, &self.config);
         let anchor_enabled =
             deepseek_anchor_available(&self.config, self.tools_enabled, &self.tools)?;
         let anchor_promoted = anchor_enabled && session_anchor_promoted(&self.state)?;

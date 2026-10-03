@@ -185,6 +185,7 @@ impl Default for MemoryConfig {
 impl Default for ContextConfig {
     fn default() -> Self {
         Self {
+            experimental_context_blocks: false,
             default_max_chars: default_context_chars(),
             compaction_ratio: default_compaction_ratio(),
             compaction_reserve_tokens: default_compaction_reserve_tokens(),

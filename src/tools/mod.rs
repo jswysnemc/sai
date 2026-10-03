@@ -5,6 +5,7 @@ mod catalog;
 pub(crate) mod command;
 mod configurable_cli_tools;
 mod context;
+pub(crate) mod context_blocks;
 mod default_tools;
 mod descriptions;
 pub(crate) mod file_change_model;
@@ -44,8 +45,8 @@ mod subagent_worktree;
 pub(crate) mod todo;
 mod tool_spec;
 mod trash_path;
-mod web_search;
 mod web_fetch;
+mod web_search;
 mod write_file;
 
 use crate::config::AppConfig;
@@ -123,6 +124,10 @@ pub fn readable_tool_name(name: &str) -> &str {
         "list_memory" => "列出记忆",
         "delete_memory" => "删除记忆",
         "search_evicted_context" => "搜索旧上下文",
+        "context_status" => "查看上下文块",
+        "compress_context" => "压缩上下文块",
+        "search_context" => "搜索上下文原文",
+        "restore_context" => "回读上下文原文",
         "aur_search_packages" => "搜索 AUR",
         "aur_get_package_info" => "查看 AUR 包",
         "aur_check_status" => "查询 AUR 状态",
