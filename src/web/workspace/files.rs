@@ -12,7 +12,11 @@ use std::time::UNIX_EPOCH;
 const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
 const MAX_TREE_DEPTH: usize = 8;
-const IGNORED_DIRECTORIES: &[&str] = &[".git", "node_modules", "target", "dist", "build"];
+const IGNORED_DIRECTORIES: &[&str] = &["node_modules", "target", "dist", "build"];
+
+#[cfg(test)]
+#[path = "file_tree_tests.rs"]
+mod file_tree_tests;
 
 /// 文件树节点。
 #[derive(Clone, Debug, Serialize)]
@@ -72,15 +76,21 @@ impl std::error::Error for FileVersionConflict {}
 /// - `root`: 工作区根目录
 /// - `relative`: 起始相对目录
 /// - `depth`: 最大递归深度
+/// - `show_hidden`: 是否显示以点开头的文件和目录
 ///
 /// 返回:
 /// - 文件树节点
-pub(crate) fn read_tree(root: &Path, relative: &str, depth: usize) -> Result<Vec<FileNode>> {
+pub(crate) fn read_tree(
+    root: &Path,
+    relative: &str,
+    depth: usize,
+    show_hidden: bool,
+) -> Result<Vec<FileNode>> {
     let path = existing_path(root, relative)?;
     if !path.is_dir() {
         bail!("tree path is not a directory");
     }
-    read_directory(root, &path, depth.clamp(1, MAX_TREE_DEPTH))
+    read_directory(root, &path, depth.clamp(1, MAX_TREE_DEPTH), show_hidden)
 }
 
 /// 读取 UTF-8 文本文件。
@@ -468,8 +478,16 @@ fn relative_tree_path(root: &Path, path: &Path) -> String {
         .replace('\\', "/")
 }
 
-/// 递归读取单个目录。
-fn read_directory(root: &Path, directory: &Path, depth: usize) -> Result<Vec<FileNode>> {
+/// 【工作区】【文件树】递归读取目录，并统一过滤各层隐藏条目
+/// 参数: `root` 为工作区根目录，`directory` 为当前目录，`depth` 为剩余深度，
+/// `show_hidden` 控制是否显示以点开头的条目
+/// 返回: 按目录优先、名称排序的文件树节点
+fn read_directory(
+    root: &Path,
+    directory: &Path,
+    depth: usize,
+    show_hidden: bool,
+) -> Result<Vec<FileNode>> {
     let mut entries = std::fs::read_dir(directory)?
         .filter_map(Result::ok)
         .collect::<Vec<_>>();
@@ -483,7 +501,7 @@ fn read_directory(root: &Path, directory: &Path, depth: usize) -> Result<Vec<Fil
     let mut nodes = Vec::new();
     for entry in entries {
         let name = entry.file_name().to_string_lossy().to_string();
-        if IGNORED_DIRECTORIES.contains(&name.as_str()) {
+        if (!show_hidden && name.starts_with('.')) || IGNORED_DIRECTORIES.contains(&name.as_str()) {
             continue;
         }
         let path = entry.path();
@@ -497,7 +515,7 @@ fn read_directory(root: &Path, directory: &Path, depth: usize) -> Result<Vec<Fil
         };
         let relative = relative_tree_path(root, &path);
         let children = if file_type.is_dir() && depth > 1 {
-            read_directory(root, &path, depth - 1)?
+            read_directory(root, &path, depth - 1, show_hidden)?
         } else {
             Vec::new()
         };

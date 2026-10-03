@@ -375,8 +375,8 @@ export const api = {
       })
   },
   workspace: {
-    tree: (path = "", depth = 5) => {
-      const query = new URLSearchParams({ depth: String(depth) });
+    tree: (path = "", depth = 5, showHidden = false) => {
+      const query = new URLSearchParams({ depth: String(depth), show_hidden: String(showHidden) });
       if (path) query.set("path", path);
       return apiRequest<FileNode[]>(`/api/workspace/tree?${query.toString()}`);
     },

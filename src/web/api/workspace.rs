@@ -13,6 +13,8 @@ use serde::Deserialize;
 struct TreeQuery {
     path: Option<String>,
     depth: Option<usize>,
+    #[serde(default)]
+    show_hidden: bool,
 }
 
 #[derive(Deserialize)]
@@ -77,7 +79,9 @@ async fn image(
         .map_err(WebError::from)
 }
 
-/// 读取文件树。
+/// 【工作区】【文件树】按查询中的显示选项读取工作区目录
+/// 参数: `state` 为应用状态，`query` 包含路径、深度和隐藏条目选项
+/// 返回: 文件树 JSON，读取失败时返回请求错误
 async fn tree(
     State(state): State<WebAppState>,
     Query(query): Query<TreeQuery>,
@@ -87,6 +91,7 @@ async fn tree(
         std::path::Path::new(&active.path),
         query.path.as_deref().unwrap_or(""),
         query.depth.unwrap_or(4),
+        query.show_hidden,
     )
     .map_err(|error| WebError::bad_request(error.to_string()))?;
     Ok(Json(nodes))

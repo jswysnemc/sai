@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, FilePlus2, FolderPlus, MoreHorizontal, Search } from "../../shared/ui/icons";
+import { ChevronRight, Eye, FilePlus2, FolderPlus, MoreHorizontal, Search } from "../../shared/ui/icons";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type UIEvent } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
@@ -7,6 +7,7 @@ import type { FileNode } from "../../api/contracts";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { DirectoryIcon, FileTypeIcon } from "../../shared/ui/file-icon";
 import { readExpandedDirectories, writeExpandedDirectories } from "./file-tree-expansion";
+import { readShowHiddenFiles, writeShowHiddenFiles } from "./file-tree-visibility";
 import {
   applyLazyChildren,
   directoryPaths,
@@ -71,8 +72,10 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
     staleTime: 60_000
   });
   const storageKey = workspaceKey ?? listed.data?.active_id ?? "active";
-  const tree = useQuery({ queryKey: ["file-tree"], queryFn: () => api.workspace.tree(), refetchOnWindowFocus: true, refetchInterval: 15_000 });
-  const [storageKeySeen, setStorageKeySeen] = useState(storageKey);
+  const [showHidden, setShowHidden] = useState(readShowHiddenFiles);
+  const treeScope = JSON.stringify([storageKey, showHidden]);
+  const tree = useQuery({ queryKey: ["file-tree", storageKey, showHidden], queryFn: () => api.workspace.tree("", 5, showHidden), refetchOnWindowFocus: true, refetchInterval: 15_000 });
+  const [treeScopeSeen, setTreeScopeSeen] = useState(treeScope);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => withAncestors(readExpandedDirectories(storageKey), selectedFile));
   const [lazyChildren, setLazyChildren] = useState<ReadonlyMap<string, FileNode[]>>(() => new Map());
   const [focusedPath, setFocusedPath] = useState<string | null>(selectedFile);
@@ -89,16 +92,19 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
   const probeRef = useRef<HTMLDivElement>(null);
   const scrollFrame = useRef(0);
   const inFlight = useRef(new Set<string>());
+  const activeTreeScope = useRef(treeScope);
   const lazyPathsRef = useRef(lazyChildren);
   const expandedRef = useRef(expanded);
   const pinnedPath = useRef<string | null>(null);
   lazyPathsRef.current = lazyChildren;
   expandedRef.current = expanded;
+  activeTreeScope.current = treeScope;
 
-  if (storageKeySeen !== storageKey) {
-    setStorageKeySeen(storageKey);
+  if (treeScopeSeen !== treeScope) {
+    setTreeScopeSeen(treeScope);
     setExpanded(withAncestors(readExpandedDirectories(storageKey), selectedFile));
     setLazyChildren(new Map());
+    inFlight.current = new Set();
     pinnedPath.current = null;
   }
 
@@ -115,11 +121,18 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
   const range = visibleRowRange(rows.length, scrollTop, viewport, rowHeight);
   const windowRows = rows.slice(range.start, range.end);
 
+  /**
+   * 【工作区】【文件树】按当前显示选项读取目录，丢弃切换前的异步结果。
+   * @param path 待展开的工作区相对目录
+   * @returns 目录加载完成，无返回值
+   */
   const loadDirectory = useCallback(async (path: string) => {
-    if (inFlight.current.has(path)) return;
-    inFlight.current.add(path);
+    const requests = inFlight.current;
+    if (treeScope !== activeTreeScope.current || requests.has(path)) return;
+    requests.add(path);
     try {
-      const children = await api.workspace.tree(path, 2);
+      const children = await api.workspace.tree(path, 2, showHidden);
+      if (requests !== inFlight.current) return;
       setLazyChildren((current) => {
         const next = new Map(current);
         next.set(path, children);
@@ -127,11 +140,11 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
       });
       setError(null);
     } catch (reason) {
-      setError(toDisplayError(reason, "Failed to read directory", "读取目录失败"));
+      if (requests === inFlight.current) setError(toDisplayError(reason, "Failed to read directory", "读取目录失败"));
     } finally {
-      inFlight.current.delete(path);
+      requests.delete(path);
     }
-  }, []);
+  }, [showHidden, treeScope]);
 
   useEffect(() => {
     writeExpandedDirectories(storageKey, expanded);
@@ -159,6 +172,14 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
     const truncated = truncatedDirectoryFor(source, selectedFile);
     if (truncated && !lazyChildren.has(truncated)) void loadDirectory(truncated);
   }, [selectedFile, source, lazyChildren, loadDirectory]);
+
+  useEffect(() => {
+    // 1. 【工作区】【文件树】切换显示选项后，补读仍处于展开状态的深层目录
+    for (const path of expanded) {
+      const node = findFileNode(source, path);
+      if (node?.kind === "directory" && node.children.length === 0 && !lazyChildren.has(path)) void loadDirectory(path);
+    }
+  }, [source, expanded, lazyChildren, loadDirectory]);
 
   useEffect(() => {
     if (!tree.dataUpdatedAt) return;
@@ -225,6 +246,20 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
 
   /** 收起全部目录。 */
   const collapseAll = () => setExpanded(new Set());
+
+  /**
+   * 切换隐藏条目显示状态，并记住选择。
+   * @returns 无返回值
+   */
+  const toggleHiddenFiles = () => {
+    const next = !showHidden;
+    setShowHidden(next);
+    writeShowHiddenFiles(next);
+    setTreeMenu(null);
+    setError(null);
+    setScrollTop(0);
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  };
 
   /** 展开父目录，并在该目录下打开新建输入栏。 */
   const beginCreate = (kind: "file" | "directory", targetPath = focusedPath) => {
@@ -371,6 +406,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
         {showHeading && <span>{t("Files", "文件")}</span>}
         {embedded && <span className="file-tree-title" title={workspaceLabel}>{workspaceLabel || t("Files", "文件")}</span>}
         <div className="file-tree-actions">
+          <Button className="file-tree-search-toggle" variant="ghost" size="icon" aria-pressed={showHidden} onClick={toggleHiddenFiles} aria-label={t("Show hidden files", "显示隐藏文件")} title={showHidden ? t("Hide hidden files", "不显示隐藏文件") : t("Show hidden files", "显示隐藏文件")}><Eye size={14} /></Button>
           <Button className="file-tree-search-toggle" variant="ghost" size="icon" aria-pressed={searchOpen || Boolean(search)} onClick={() => setSearchOpen((open) => !open || Boolean(search))} aria-label={t("Filter files", "筛选文件")} title={t("Filter files", "筛选文件")}><Search size={14} /></Button>
           <ActionMenu
             label={t("File tree actions", "文件树操作")}
