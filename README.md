@@ -134,7 +134,7 @@ Run `sai config` to open the hierarchical configurator covering providers, model
 
 | Platform | Requirements |
 | --- | --- |
-| Linux (x86_64 / aarch64) | Recommended: `ripgrep`; sandbox requires `bubblewrap`; audio alarms require `alsa-lib` |
+| Linux (x86_64 / aarch64) | Recommended: `ripgrep`; sandbox requires `bubblewrap` |
 | macOS (Apple Silicon / Intel) | Recommended: `ripgrep`; sandbox uses native `Seatbelt`; modern browser for Web UI |
 | Windows (x86_64) | Recommended: `ripgrep`; Web UI requires WebView2 or a modern browser |
 

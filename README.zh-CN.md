@@ -97,7 +97,7 @@ Sai 是使用 Rust 编写的高性能 AI 编程助手与桌面工作台。它将
   - 支持 persistent 常驻模式，通过主 Agent 追加消息（`/msg`）协同作业。
 - **开放插件与协议扩展**：
   - 原生 MCP 支持：支持 stdio 与 http 传输协议，自动以 `mcp_` 前缀挂载外部 MCP 服务；
-  - Lua 5.4 扩展框架：独立的插件运行时与细粒度权限声明，支持包括天气、汇率、闹钟、知识库在内的丰富业务扩展。
+  - Lua 5.4 扩展框架：独立的插件运行时与细粒度权限声明，支持通过安装独立插件扩展多样化领域与业务能力。
 
 ### 现代 Web 编程工作台
 
@@ -134,7 +134,7 @@ Sai 是使用 Rust 编写的高性能 AI 编程助手与桌面工作台。它将
 
 | 平台 | 环境依赖 |
 | --- | --- |
-| Linux (x86_64 / aarch64) | 推荐安装 `ripgrep`；沙盒隔离需要 `bubblewrap`；音频提示需要 `alsa-lib` |
+| Linux (x86_64 / aarch64) | 推荐安装 `ripgrep`；沙盒隔离需要 `bubblewrap` |
 | macOS (Apple Silicon / Intel) | 推荐安装 `ripgrep`；沙盒使用系统原生 `Seatbelt`；Web 工作台需要现代浏览器 |
 | Windows (x86_64) | 推荐安装 `ripgrep`；Web 工作台支持 WebView2 或系统默认浏览器 |
 
