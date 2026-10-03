@@ -267,3 +267,31 @@ fn budget_preserves_recent_attachments_and_rejects_true_overflow() {
             < 32
     );
 }
+
+/// 【上下文】【模型用量回归】供应商额外报告的占用不能在重建历史时被当作零处理
+/// 参数: 无；返回无
+#[test]
+fn provider_usage_overhead_survives_compaction_budget_reprojection() {
+    let root = tempfile::tempdir().unwrap();
+    let state = StateStore::new(&SaiPaths::for_tests(root.path())).unwrap();
+    seed(&state, "running", 16, false);
+    let before = running_request(&state, "running");
+    let mut projection = project_provider_turn_from_messages(&before, 0, 100_000);
+    let provider_overhead = 5000;
+    projection.estimate.message_chars += provider_overhead;
+    let request = state
+        .select_compaction_for_projection(&projection, true)
+        .unwrap()
+        .unwrap();
+    let budget = state
+        .compaction_budget_check(&request, "旧子轮已完成", &projection, Some("running"))
+        .unwrap();
+    state.apply_compaction(&request, "旧子轮已完成").unwrap();
+    let after = running_request(&state, "running");
+    assert!(
+        budget
+            .result_chars
+            .abs_diff(estimate_chat_messages_tokens(&after) + provider_overhead)
+            < 32
+    );
+}

@@ -115,7 +115,11 @@ impl StateStore {
             policy,
         );
         // 压缩边界按累计记录：第二次压缩要接着上一次的位置往后推进
-        Ok(request.map(|request| request.with_compacted_call_offset(already_compacted)))
+        self.align_running_compaction(
+            request.map(|request| request.with_compacted_call_offset(already_compacted)),
+            already_compacted,
+            force,
+        )
     }
 
     /// 统计运行中轮次的工具调用总数与已被摘要覆盖的条数。
@@ -179,7 +183,7 @@ impl StateStore {
             .load_authoritative_compaction_summary()?
             .map(|summary| summary.summary);
         let (running_turn_call_count, already_compacted) = self.running_turn_call_counts(&turns)?;
-        Ok(super::select_compaction_with(
+        let request = super::select_compaction_with(
             &turns,
             previous_summary,
             running_turn_call_count,
@@ -188,7 +192,8 @@ impl StateStore {
             true,
             super::CompactionBudgetPolicy::DEFAULT,
         )
-        .map(|request| request.with_compacted_call_offset(already_compacted)))
+        .map(|request| request.with_compacted_call_offset(already_compacted));
+        self.align_running_compaction(request, already_compacted, true)
     }
 
     /// 构造带工具历史预算的压缩摘要提示词。

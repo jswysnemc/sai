@@ -7,6 +7,7 @@ mod projection_budget;
 #[cfg(test)]
 mod projection_budget_tests;
 mod prompt;
+mod running_boundary;
 mod selector;
 mod storage;
 mod store;

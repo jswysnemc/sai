@@ -1,4 +1,5 @@
 use super::assistant_messages::{self, AssistantMessageKey, SavedAssistantMessages};
+use super::compaction_boundary::retained_exchanges;
 use super::repository::load_tool_exchanges_for_turn;
 use crate::llm::{ChatMessage, ToolCall, ToolCallFunction};
 use crate::state::tool_history::project_legacy_tool_report_messages;
@@ -136,7 +137,7 @@ fn append_turn_messages(
     let exchanges = load_tool_exchanges_for_turn(db, session_id, &turn.turn_id)?;
     let mut inter_messages = load_turn_messages_for_turn(db, &turn.turn_id)?;
     // 跳过已压缩部分时必须落在 assistant 子轮边界上，否则会留下孤立的 tool 结果
-    let exchanges = skip_compacted_exchanges(&exchanges, skip_calls);
+    let exchanges = retained_exchanges(&exchanges, skip_calls);
     if skip_calls > 0 {
         inter_messages.retain(|message| message.after_tool_seq > skip_calls);
     }
@@ -152,44 +153,6 @@ fn append_turn_messages(
     append_assistant_context_messages(turn, &saved, messages);
     append_interrupted_turn_marker(turn, messages);
     Ok(())
-}
-
-/// 跳过已被摘要覆盖的工具交换，并把切点对齐到子轮边界。
-///
-/// provider 要求 assistant 的 tool_calls 与后续 tool 结果一一配对。若切点落在
-/// 子轮中间，剩余部分会以孤立的 tool 结果开头，请求直接被拒。这里把切点前移到
-/// 下一个完整子轮的起点。
-///
-/// 参数:
-/// - `exchanges`: 该轮次的全部工具交换，按发生顺序
-/// - `skip_calls`: 期望跳过的条数
-///
-/// 返回:
-/// - 剩余的工具交换切片
-fn skip_compacted_exchanges(
-    exchanges: &[super::model::ToolExchangeRecord],
-    skip_calls: usize,
-) -> &[super::model::ToolExchangeRecord] {
-    if skip_calls == 0 || exchanges.is_empty() {
-        return exchanges;
-    }
-    if skip_calls >= exchanges.len() {
-        return &[];
-    }
-    // 切点落在子轮中间时前移到下一个子轮起点，保证 tool_calls 与结果成套保留
-    let boundary_round = exchanges[skip_calls].call.assistant_round;
-    let starts_new_round = exchanges[skip_calls - 1].call.assistant_round != boundary_round;
-    if starts_new_round {
-        return &exchanges[skip_calls..];
-    }
-    match exchanges[skip_calls..]
-        .iter()
-        .position(|exchange| exchange.call.assistant_round != boundary_round)
-    {
-        Some(offset) => &exchanges[skip_calls + offset..],
-        // 切点之后全属同一子轮：整体丢弃，否则会留下没有 assistant 消息的孤立结果
-        None => &[],
-    }
 }
 
 /// 按原始模型子轮重建 assistant 工具调用、tool 结果与工具图片附件消息。

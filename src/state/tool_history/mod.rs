@@ -4,6 +4,8 @@ mod assistant_messages;
 mod attachments;
 pub(crate) use assistant_messages::AssistantMessageKey;
 mod budget;
+mod compaction_boundary;
+pub(in crate::state) use compaction_boundary::aligned_compaction_prefix;
 mod legacy_reports;
 mod maintenance;
 mod model;

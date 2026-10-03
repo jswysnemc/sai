@@ -19,7 +19,7 @@ pub const PRESERVED_RUNNING_TOOL_CALLS: usize = 4;
 /// 只保留末尾 4 条意味着第 5 条工具就会触发一次付费摘要，读几个文件就会
 /// 打出 `Compacting context ×0`。自动路径要求积攒更多旧调用；手动压缩仍用
 /// 原来的保留条数。
-const MIN_RUNNING_CALLS_TO_AUTO_COMPACT: usize = 12;
+pub(super) const MIN_RUNNING_CALLS_TO_AUTO_COMPACT: usize = 12;
 
 /// 使用统一策略选择需要压缩的会话内容。
 ///
