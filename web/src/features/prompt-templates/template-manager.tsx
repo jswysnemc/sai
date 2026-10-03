@@ -6,37 +6,21 @@ import { Button } from "../../shared/ui/button/button";
 import { Modal } from "../../shared/ui/dialog/modal";
 import { TextInput } from "../../shared/ui/form/text-input";
 import { TextArea } from "../../shared/ui/form/text-area";
+import { FOCUS_COMPOSER_EVENT } from "../chat/composer/composer-events";
 import { useI18n } from "../i18n/use-i18n";
 import { templateApi, templateKey, type InputTemplate, type TemplateScope } from "./template-client";
 
-const QUICK_LABELS: Record<TemplateScope, Record<string, string>> = {
-  chat: { "tpl-explain": "了解项目", "tpl-review": "审阅变更", "tpl-test": "规划测试" },
-  image: { "tpl-photo": "摄影", "tpl-product": "产品图", "tpl-illustration": "插画" }
-};
-const QUICK_CONTENT: Record<TemplateScope, Record<string, string>> = {
-  chat: {
-    "tpl-explain": "请解释当前项目的结构、主要模块、入口和关键工作流，并指出继续开发前需要了解的约束。",
-    "tpl-review": "请审阅当前变更，重点检查正确性、边界条件、安全性和性能。按严重程度列出问题，并给出修复建议。",
-    "tpl-test": "请为当前功能规划测试，覆盖正常流程、边界条件和错误处理，优先验证用户可观察的行为。"
-  },
-  image: {
-    "tpl-photo": "生成一张写实摄影作品。\n主体：[描述主体]\n场景：[环境与背景]\n构图：[景别与视角]\n光线：[光源与氛围]\n要求：自然纹理，准确透视，不添加文字或水印。",
-    "tpl-product": "生成一张商业产品摄影图。\n产品：[产品外观与材质]\n背景：[背景色与场景]\n构图：突出产品，保持轮廓清晰，预留适量留白。\n光线：柔和棚拍光，真实阴影与反射。",
-    "tpl-illustration": "创作一幅插画。\n主题：[画面内容]\n风格：[插画风格]\n色彩：[主色与辅助色]\n构图：[主体位置与层次]\n氛围：[情绪与光线]。"
-  }
-};
-
 /**
- * 渲染输入区模板入口、快捷模板和模板管理弹窗。
+ * 渲染模板操作菜单和管理弹窗。
  *
- * @param props 场景、禁用状态和应用模板回调
+ * @param props 场景、禁用状态、应用模板回调和入口位置
  * @returns 输入区模板控件
  */
-export function TemplateManager({ scope, disabled, onApply, showQuickTemplates = false }: {
+export function TemplateManager({ scope, disabled, onApply, placement = "composer" }: {
   scope: TemplateScope;
   disabled: boolean;
   onApply: (content: string) => void;
-  showQuickTemplates?: boolean;
+  placement?: "composer" | "inline";
 }) {
   const { t } = useI18n();
   const cache = useQueryClient();
@@ -54,10 +38,6 @@ export function TemplateManager({ scope, disabled, onApply, showQuickTemplates =
     enabled: menuOpen || open,
     staleTime: 30_000
   });
-  const quickTemplates = useMemo(() => {
-    const labels = QUICK_LABELS[scope];
-    return Object.entries(labels).map(([name, label]) => ({ name, label, content: QUICK_CONTENT[scope][name] ?? "" }));
-  }, [scope]);
 
   /** 载入模板或清空表单；参数为模板，返回空值。 */
   function select(item: InputTemplate | null, confirmDelete = false) {
@@ -74,9 +54,14 @@ export function TemplateManager({ scope, disabled, onApply, showQuickTemplates =
     setOpen(true);
   }
 
-  /** 将选中的模板正文替换到输入区；参数为模板，返回空值。 */
+  /**
+   * 将选中的模板正文填入输入区并恢复编辑焦点。
+   * @param item 要应用的模板
+   * @returns 无返回值
+   */
   function apply(item: InputTemplate) {
     onApply(item.content);
+    window.requestAnimationFrame(() => window.dispatchEvent(new Event(FOCUS_COMPOSER_EVENT)));
   }
 
   /** 保存或删除当前模板；参数为动作，返回完成状态。 */
@@ -108,6 +93,9 @@ export function TemplateManager({ scope, disabled, onApply, showQuickTemplates =
     if (templates.isLoading) {
       items.push({ id: "loading", label: t("Loading templates…", "正在加载模板…"), disabled: true, onSelect: () => undefined });
     }
+    if (templates.isError) {
+      items.push({ id: "error", label: t("Could not load templates", "无法加载模板"), disabled: true, onSelect: () => undefined });
+    }
     items.push({
       id: "new",
       label: t("New template", "新建模板"),
@@ -133,13 +121,15 @@ export function TemplateManager({ scope, disabled, onApply, showQuickTemplates =
       }
     }
     return items;
-  }, [t, templates.data, templates.isLoading]);
+  }, [t, templates.data, templates.isLoading, templates.isError, onApply]);
 
   return <>
-    <div className="composer-template-trigger">
+    <div className={placement === "composer" ? "composer-template-trigger" : undefined}>
       <ActionMenu
         label={t("Prompt templates", "提示词模板")}
-        trigger={<><BookOpen size={14} />{t("Templates", "模板")}</>}
+        trigger={placement === "inline"
+          ? <><MoreHorizontal size={14} />{t("More", "更多")}</>
+          : <><BookOpen size={14} />{t("Templates", "模板")}</>}
         triggerSize="small"
         triggerClassName="composer-template-button"
         items={menuItems}
@@ -147,14 +137,6 @@ export function TemplateManager({ scope, disabled, onApply, showQuickTemplates =
         onOpenChange={setMenuOpen}
       />
     </div>
-    {showQuickTemplates && <div className="composer-template-suggestions" aria-label={t("Quick prompt templates", "快捷提示词模板")}>
-      {quickTemplates.map(({ name, label, content }) => {
-        const item = templates.data?.find((template) => template.name === name);
-        return <Button key={name} variant="secondary" size="small" disabled={disabled} onClick={() => apply(item ?? { name, content, builtin: true })}>
-          <BookOpen size={12} />{t(label, label)}
-        </Button>;
-      })}
-    </div>}
     {open && <Modal
       open
       title={scope === "image" ? t("Image prompt templates", "绘图提示词模板") : t("Chat prompt templates", "普通聊天提示词模板")}
@@ -196,29 +178,4 @@ export function TemplateManager({ scope, disabled, onApply, showQuickTemplates =
       </div>
     </Modal>}
   </>;
-}
-
-/**
- * 渲染空会话居中布局使用的快捷模板按钮。
- *
- * @param props 场景、禁用状态和应用模板回调
- * @returns 输入框下方的快捷模板
- */
-export function TemplateQuickSuggestions({ scope, disabled, onApply }: {
-  scope: TemplateScope;
-  disabled: boolean;
-  onApply: (content: string) => void;
-}) {
-  const { t } = useI18n();
-  const templates = useQuery({ queryKey: templateKey(scope), queryFn: () => templateApi.list(scope), staleTime: 30_000 });
-  const labels = QUICK_LABELS[scope];
-  return <div className="composer-template-suggestions" aria-label={t("Quick prompt templates", "快捷提示词模板")}>
-    {Object.entries(labels).map(([name, label]) => {
-      const item = templates.data?.find((template) => template.name === name);
-      const content = item?.content ?? QUICK_CONTENT[scope][name] ?? "";
-      return <Button key={name} variant="secondary" size="small" disabled={disabled || templates.isLoading} onClick={() => onApply(content)}>
-        <BookOpen size={12} />{t(label, label)}
-      </Button>;
-    })}
-  </div>;
 }

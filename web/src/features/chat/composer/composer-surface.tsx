@@ -1,5 +1,5 @@
 import { useState, type DragEvent, type FormEvent, type ReactNode } from "react";
-import { TemplateManager, TemplateQuickSuggestions } from "../../prompt-templates/template-manager";
+import { TemplateManager } from "../../prompt-templates/template-manager";
 import type { TemplateScope } from "../../prompt-templates/template-client";
 import { AttachmentStrip } from "./attachment-strip";
 import { ComposerTextarea } from "./composer-textarea";
@@ -12,7 +12,7 @@ export type ComposerSurfaceVariant = "full" | "compact";
 type ComposerSurfaceProps = {
   variant: ComposerSurfaceVariant;
   templateScope?: TemplateScope;
-  showTemplateSuggestions?: boolean;
+  showTemplateMenu?: boolean;
   onPlanCommand?: () => Promise<boolean>;
   className?: string;
   value: string;
@@ -41,7 +41,7 @@ type ComposerSurfaceProps = {
 export function ComposerSurface({
   variant,
   templateScope = "chat",
-  showTemplateSuggestions = false,
+  showTemplateMenu = true,
   onPlanCommand,
   className = "",
   value,
@@ -95,9 +95,8 @@ export function ComposerSurface({
   };
 
   return (
-    <>
     <form
-      className={`composer-surface composer-surface-${variant}${dragging ? " is-dragover" : ""}${className ? ` ${className}` : ""}`}
+      className={`composer-surface composer-surface-${variant}${variant === "full" && showTemplateMenu ? " has-template-menu" : ""}${dragging ? " is-dragover" : ""}${className ? ` ${className}` : ""}`}
       onSubmit={submit}
       onDragOver={handleDragOver}
       onDragLeave={(event) => {
@@ -123,10 +122,8 @@ export function ComposerSurface({
         onPasteImages={onPasteImages}
         onSubmit={() => submit()}
       />
-      {variant === "full" && <TemplateManager scope={templateScope} disabled={disabled} onApply={onChange} />}
+      {variant === "full" && showTemplateMenu && <TemplateManager scope={templateScope} disabled={disabled} onApply={onChange} />}
       {children}
     </form>
-    {variant === "full" && showTemplateSuggestions && <TemplateQuickSuggestions scope={templateScope} disabled={disabled} onApply={onChange} />}
-    </>
   );
 }

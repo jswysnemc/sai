@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";
 import { Button } from "../../shared/ui/button/button";
 import { useI18n } from "../i18n/use-i18n";
+import { TemplateQuickSuggestions } from "../prompt-templates/template-quick-suggestions";
 import { parsePlanCommand, usePlanModeControls } from "./plan-mode-controls";
 import { ComposerSurface } from "./composer/composer-surface";
 import { resolveComposerAvailability } from "./composer-availability";
@@ -59,7 +60,7 @@ export function ChatComposer(props: ChatComposerProps) {
       <ComposerSurface
         variant="full"
         className="composer"
-        showTemplateSuggestions={props.showTemplateSuggestions}
+        showTemplateMenu={!props.showTemplateSuggestions}
         value={props.value}
         historyEntries={props.historyEntries}
         disabled={availability.inputDisabled || plan.busy}
@@ -90,6 +91,11 @@ export function ChatComposer(props: ChatComposerProps) {
       </ComposerSurface>
       {plan.error && <p role="alert" className="px-3 text-sm">{plan.error}</p>}
       <ComposerContextFooter composer={props} showUsage={!externalEngine && !enginePending} plan={plan} />
+      {props.showTemplateSuggestions && <TemplateQuickSuggestions
+        scope="chat"
+        disabled={availability.inputDisabled || plan.busy}
+        onApply={props.onChange}
+      />}
     </div>
   );
 }
