@@ -1,10 +1,14 @@
 use crate::cli::repl_mentions::MentionSuggestion;
 use crate::cli::repl_text::visible_width;
 
+/// 引用面板最多同时展示的候选行数，完整列表通过导航浏览
+const MAX_VISIBLE_MENTION_ROWS: usize = 8;
+
 /// `#` skill 与 `@` 文件引用的过滤面板。
 pub(super) struct MentionPanel {
     suggestions: Vec<MentionSuggestion>,
     selected: usize,
+    max_rows: usize,
 }
 
 impl MentionPanel {
@@ -21,6 +25,7 @@ impl MentionPanel {
         Self {
             suggestions,
             selected,
+            max_rows: MAX_VISIBLE_MENTION_ROWS,
         }
     }
 
@@ -35,9 +40,15 @@ impl MentionPanel {
     /// 返回面板占用的终端行数。
     ///
     /// 返回:
-    /// - 建议数量
+    /// - 可见建议数量
     pub(super) fn height(&self) -> u16 {
-        self.suggestions.len().min(u16::MAX as usize) as u16
+        self.suggestions.len().min(self.max_rows) as u16
+    }
+
+    /// 【终端】【引用面板】按实际可用高度收缩显示窗口，保留全部候选
+    /// 参数: `rows` 为可用行数；返回: 无，存在候选时至少保留一行
+    pub(super) fn limit_height(&mut self, rows: usize) {
+        self.max_rows = self.max_rows.min(rows.max(1));
     }
 
     /// 返回面板各行的渲染结果。
@@ -48,9 +59,17 @@ impl MentionPanel {
     /// 返回:
     /// - 面板每行文本
     pub(super) fn rendered_lines(&self, cols: usize) -> Vec<String> {
+        // 1. 【终端】【引用面板】显示窗口跟随选中项移动，首尾不越过候选范围
+        let visible_rows = usize::from(self.height());
+        let start = self
+            .selected
+            .saturating_sub(visible_rows / 2)
+            .min(self.suggestions.len().saturating_sub(visible_rows));
         self.suggestions
             .iter()
             .enumerate()
+            .skip(start)
+            .take(visible_rows)
             .map(|(index, suggestion)| format_suggestion(suggestion, cols, index == self.selected))
             .collect()
     }

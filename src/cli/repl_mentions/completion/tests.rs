@@ -1,6 +1,88 @@
 use super::*;
 use std::time::{Duration, Instant};
 
+/// 【终端】【技能匹配】按字符顺序匹配非连续缩写，并保持大小写不敏感
+/// 参数: 无；返回: 无，缩写无法命中技能名称时断言失败
+#[test]
+fn skill_fuzzy_matching_accepts_non_contiguous_names() {
+    let skills = vec![("git-checkout".into(), String::new())];
+    let mut completion = MentionCompletion::default();
+    for input in ["#gco", "#GCO"] {
+        let items = completion.query(input, input.chars().count(), &skills);
+        assert_eq!(items.len(), 1, "{input} 应匹配 git-checkout");
+        assert_eq!(items[0].insert, "#git-checkout");
+    }
+    assert!(completion.query("#ocg", 4, &skills).is_empty());
+}
+
+/// 【终端】【技能匹配】名称完全匹配优先，其次名称匹配，最后是仅描述匹配
+/// 参数: 无；返回: 无，弱相关结果排在名称匹配前面时断言失败
+#[test]
+fn skill_fuzzy_matching_ranks_name_above_description() {
+    let skills = vec![
+        ("helper".into(), "git".into()),
+        ("git-checkout".into(), String::new()),
+        ("git".into(), String::new()),
+    ];
+    let items = MentionCompletion::default().query("#git", 4, &skills);
+    let names = items
+        .iter()
+        .map(|item| item.insert.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["#git", "#git-checkout", "#helper"]);
+}
+
+/// 【终端】【技能匹配】同为名称模糊匹配时，紧密连续命中优先于分散命中
+/// 参数: 无；返回: 无，候选没有按相关度排序时断言失败
+#[test]
+fn skill_fuzzy_matching_ranks_compact_matches_first() {
+    let skills = vec![
+        ("g-long-c-long-o".into(), String::new()),
+        ("gco-helper".into(), String::new()),
+    ];
+    let items = MentionCompletion::default().query("#gco", 4, &skills);
+    let names = items
+        .iter()
+        .map(|item| item.insert.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["#gco-helper", "#g-long-c-long-o"]);
+}
+
+/// 【终端】【技能匹配】描述支持非连续匹配和中文，空查询及同分结果顺序保持稳定
+/// 参数: 无；返回: 无，描述无法检索或结果顺序漂移时断言失败
+#[test]
+fn skill_fuzzy_matching_supports_descriptions_and_stable_ties() {
+    let skills = vec![
+        ("z-helper".into(), "web search 网页搜索".into()),
+        ("a-helper".into(), "web search 网页搜索".into()),
+    ];
+    let mut completion = MentionCompletion::default();
+    for input in ["#", "#ws", "#网页索", "#WS"] {
+        let items = completion.query(input, input.chars().count(), &skills);
+        let names = items
+            .iter()
+            .map(|item| item.insert.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(names, ["#z-helper", "#a-helper"], "{input}");
+    }
+}
+
+/// 【终端】【技能补全】空查询和关键词查询均保留全部匹配技能
+/// 参数: 无；返回: 无，候选遭到截断时断言失败
+#[test]
+fn skill_completion_keeps_all_matches() {
+    let skills = (0..12)
+        .map(|index| (format!("skill-{index:02}"), "shared description".into()))
+        .collect::<Vec<_>>();
+    let mut completion = MentionCompletion::default();
+    for input in ["#", "#skill", "#SHARED"] {
+        let items = completion.query(input, input.chars().count(), &skills);
+        assert_eq!(items.len(), skills.len(), "查询 {input} 丢失匹配技能");
+        assert_eq!(items.last().unwrap().insert, "#skill-11");
+    }
+    assert!(completion.query("#missing", 8, &skills).is_empty());
+}
+
 /// 请求序号、光标或输入任何一项变化时拒绝旧结果
 #[test]
 fn stale_responses_cannot_replace_current_candidates() {

@@ -4,6 +4,7 @@ use crate::paths::SaiPaths;
 use crate::tools::{load_installed_skill_document, skill_catalog};
 pub(in crate::cli) mod completion;
 mod files;
+mod skill_matcher;
 mod worker;
 
 /// 输入框引用触发类型。
@@ -157,24 +158,17 @@ fn is_skill_name_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || ch == '.' || ch == '_' || ch == '-'
 }
 
-/// 按名称或描述过滤 skill。
+/// 按名称或描述模糊匹配 skill，并按相关度生成引用建议。
 ///
 /// 参数:
 /// - `skills`: skill 目录
 /// - `query`: 过滤词
 ///
 /// 返回:
-/// - 匹配的 skill 建议
+/// - 按相关度排列的全部 skill 建议，显示数量由引用面板控制
 fn filter_skills(skills: &[(String, String)], query: &str) -> Vec<MentionSuggestion> {
-    let keyword = query.trim().to_ascii_lowercase();
-    skills
-        .iter()
-        .filter(|(name, description)| {
-            keyword.is_empty()
-                || name.to_ascii_lowercase().contains(&keyword)
-                || description.to_ascii_lowercase().contains(&keyword)
-        })
-        .take(MAX_REPL_COMMAND_SUGGESTIONS)
+    skill_matcher::matching_skills(skills, query)
+        .into_iter()
         .map(|(name, description)| MentionSuggestion {
             insert: format!("#{name}"),
             label: format!("#{name}"),

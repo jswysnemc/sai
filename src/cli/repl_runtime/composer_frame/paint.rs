@@ -16,7 +16,17 @@ impl ComposerFrame {
         let top = viewport.composer_top();
         let height = viewport.composer_height();
         let mut layout = self.layout(cols);
-        // 1. 【终端】【输入视口】小窗口优先保留光标周围正文，再裁剪辅助区域
+        // 1. 【终端】【引用面板】先按实际视口收缩候选窗口，避免末尾选中项遭到裁剪
+        if layout.mention_panel.is_visible() {
+            let other_rows = self
+                .visual_lines(&layout, cols)
+                .len()
+                .saturating_sub(usize::from(layout.mention_panel.height()));
+            layout
+                .mention_panel
+                .limit_height(usize::from(height).saturating_sub(other_rows));
+        }
+        // 2. 【终端】【输入视口】小窗口优先保留光标周围正文，再裁剪辅助区域
         let overhead = self
             .visual_lines(&layout, cols)
             .len()
@@ -66,12 +76,12 @@ impl ComposerFrame {
         let same_geometry =
             previous.filter(|old| old.top == top && old.height == height && old.cols == cols);
         let previous_lines = same_geometry.map(|old| old.lines.as_slice());
-        // 2. 光标单独恢复；内容相同时不切换隐藏状态，也不重写静态行
+        // 3. 光标单独恢复；内容相同时不切换隐藏状态，也不重写静态行
         if previous_lines != Some(signature.lines.as_slice()) {
             queue!(output, Hide)?;
             paint_changed_rows(output, top, cols, &signature.lines, previous_lines)?;
         }
-        // 3. 布局改变后清理区域下方的旧内容，稳定布局只更新发生变化的行
+        // 4. 布局改变后清理区域下方的旧内容，稳定布局只更新发生变化的行
         let end_row = top.saturating_add(height);
         if same_geometry.is_none() && end_row < viewport.size().rows {
             queue!(output, MoveTo(0, end_row), Clear(ClearType::FromCursorDown))?;

@@ -23,6 +23,83 @@ fn frame() -> ComposerFrame {
     frame
 }
 
+/// 【终端】【技能补全】候选超出可用高度时，仍显示当前选中的技能
+/// 参数: 无；返回: 无，后续技能无法进入可见区域时断言失败
+#[test]
+fn skill_completion_scrolls_to_selected_item() {
+    let mut frame = frame();
+    frame.set_panel_lines(Vec::new());
+    frame.input = "#".into();
+    frame.cursor = 1;
+    frame.set_mention_candidates(
+        (0..6)
+            .map(|index| MentionSuggestion {
+                insert: format!("#skill-{index:02}"),
+                label: format!("#skill-{index:02}"),
+                description: "description".into(),
+                continue_filter: false,
+            })
+            .collect(),
+    );
+    frame.slash_selection = 5;
+    let viewport = InlineViewport::fixed(TerminalSize { cols: 80, rows: 24 }, 17, 7);
+    let (_, signature) = frame.draw_lines(&mut Vec::new(), &viewport, None).unwrap();
+    assert!(
+        signature
+            .lines
+            .iter()
+            .any(|line| line.contains("#skill-05") && line.contains('→')),
+        "选中第六项后仍然只显示前五项: {:?}",
+        signature.lines,
+    );
+}
+
+/// 【终端】【技能补全】长列表在窄窗口、短窗口及多行输入下始终显示选中项
+/// 参数: 无；返回: 无，选中项不可见或面板无限增高时断言失败
+#[test]
+fn skill_completion_keeps_selection_visible_after_resize() {
+    let mut frame = frame();
+    let skills = (0..40)
+        .map(|index| (format!("skill-{index:02}"), "description".into()))
+        .collect::<Vec<_>>();
+    let mut completion = crate::cli::repl_mentions::completion::MentionCompletion::default();
+    frame.set_mention_candidates(completion.query("#", 1, &skills));
+    for input in ["#", "intro\n#"] {
+        frame.input = input.into();
+        frame.cursor = input.chars().count();
+        for (cols, rows) in [(80, 24), (40, 12), (20, 7), (20, 4)] {
+            for selected in 0..skills.len() {
+                frame.slash_selection = selected;
+                let viewport = InlineViewport::fixed(
+                    TerminalSize { cols, rows },
+                    0,
+                    frame.height(usize::from(cols)).min(rows),
+                );
+                let (_, signature) = frame.draw_lines(&mut Vec::new(), &viewport, None).unwrap();
+                let label = format!("#skill-{selected:02}");
+                assert!(
+                    signature
+                        .lines
+                        .iter()
+                        .any(|line| line.contains(&label) && line.contains('→')),
+                    "{cols}x{rows} 下未显示选中项 {label}: {:?}",
+                    signature.lines,
+                );
+                let cursor_row = usize::from(signature.cursor_row - signature.top);
+                assert!(signature.lines[cursor_row].contains('#'));
+                assert!(
+                    signature
+                        .lines
+                        .iter()
+                        .filter(|line| line.contains("#skill-"))
+                        .count()
+                        <= 8
+                );
+            }
+        }
+    }
+}
+
 /// 【终端】【样式折行】技能标签跨行后必须保留背景色与前景色。
 /// 参数: 无
 /// 返回: 无，样式丢失时断言失败

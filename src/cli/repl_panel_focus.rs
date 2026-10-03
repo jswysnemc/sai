@@ -85,6 +85,42 @@ impl ReplRuntime {
 mod tests {
     use super::*;
 
+    /// 【终端】【技能补全】方向键遍历完整列表，首尾跳转后仍插入对应技能
+    /// 参数: 无；返回: 无，候选不可达或插入错误时断言失败
+    #[test]
+    fn skill_completion_navigates_and_inserts_all_matches() {
+        let mut runtime = ReplRuntime::new(
+            100,
+            crate::render::transcript::TranscriptRenderOptions {
+                reasoning_mode: crate::render::ReasoningDisplayMode::Summary,
+                tool_call_mode: crate::render::ToolCallDisplayMode::Summary,
+            },
+        );
+        runtime.set_mention_skills(
+            (0..12)
+                .map(|index| (format!("skill-{index:02}"), String::new()))
+                .collect(),
+        );
+        let trigger = crate::cli::repl_mentions::find_mention_trigger("#", 1).unwrap();
+        let mut selected = 0;
+        for (key, expected) in std::iter::repeat_n(KeyCode::Down, 12)
+            .zip((1..12).chain(std::iter::once(0)))
+            .chain([
+                (KeyCode::Up, 11),
+                (KeyCode::PageUp, 0),
+                (KeyCode::PageDown, 11),
+            ])
+        {
+            assert!(runtime.navigate_completion("#", 1, &mut selected, key, KeyModifiers::NONE));
+            assert_eq!(selected, expected);
+            let candidates = runtime.mention_candidates("#", 1);
+            let (input, cursor) =
+                crate::cli::repl_mentions::apply_mention("#", &trigger, &candidates[selected]);
+            assert_eq!(input, format!("#skill-{expected:02} "));
+            assert_eq!(cursor, input.chars().count());
+        }
+    }
+
     /// 候选分页和关闭不应进入历史面板，关闭后焦点恢复输入框
     #[test]
     fn completion_owns_navigation_until_dismissed() {
