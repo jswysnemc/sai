@@ -1,7 +1,15 @@
 pub(crate) mod activity_animation;
 pub(crate) mod ansi_style;
 mod asset_block;
-pub(crate) use asset_block::preferences::configure as configure_asset_rendering;
+
+/// 【终端显示】【渲染偏好】同步公式、Mermaid 与折叠预览开关。
+///
+/// 参数:
+/// - `config`: 显示配置
+pub(crate) fn configure_display_rendering(config: &crate::config::DisplayConfig) {
+    asset_block::preferences::configure(config);
+    fold_text::configure_fold_preview(config);
+}
 mod background_command_event;
 pub(crate) mod background_promotion;
 pub(crate) mod brand_logo;

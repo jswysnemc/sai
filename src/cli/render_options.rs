@@ -9,7 +9,7 @@ use crate::render::StreamRenderOptions;
 /// 返回:
 /// - 流式渲染选项，包含等待动效详情
 pub(super) fn stream_render_options(config: &AppConfig) -> StreamRenderOptions {
-    crate::render::configure_asset_rendering(&config.display);
+    crate::render::configure_display_rendering(&config.display);
     let provider = config.provider(None).ok();
     StreamRenderOptions {
         readable_tool_names: config.display.readable_tool_names,

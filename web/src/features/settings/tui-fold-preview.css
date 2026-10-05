@@ -1,0 +1,59 @@
+/* 【Web 设置】【TUI 折叠】用纸带示意保留行与省略行 */
+
+.tui-fold-preview {
+  display: grid;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.tui-fold-tape {
+  display: grid;
+  gap: 0.125rem;
+  max-width: 16rem;
+}
+
+.tui-fold-line {
+  display: grid;
+  grid-template-columns: 1.25rem 1fr;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-height: 0.75rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tui-fold-line:disabled {
+  cursor: default;
+}
+
+.tui-fold-index {
+  color: var(--ink-faint, var(--ink-soft));
+  font-size: var(--text-xs, 0.6875rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: right;
+}
+
+.tui-fold-bar {
+  display: block;
+  height: 0.375rem;
+  border-radius: 999px;
+  background: var(--ink);
+}
+
+.tui-fold-line[data-kind="omitted"] .tui-fold-bar {
+  opacity: 0.35;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--ink-soft) 0 0.25rem,
+    transparent 0.25rem 0.4375rem
+  );
+}
+
+.tui-fold-line[data-kind="tail"] .tui-fold-bar {
+  background: var(--ink-soft);
+}
+

@@ -85,6 +85,9 @@ impl Default for DisplayConfig {
             wait_show_model: default_true(),
             wait_show_thinking_level: default_true(),
             repl_transcript_row_cap: default_repl_transcript_row_cap(),
+            fold_preview: super::display::FoldPreviewMode::Ends,
+            fold_head_lines: default_fold_head_lines(),
+            fold_tail_lines: default_fold_tail_lines(),
         }
     }
 }
@@ -376,6 +379,16 @@ pub(super) fn default_tool_call_display() -> String {
 
 pub(super) fn default_repl_transcript_row_cap() -> usize {
     5_000
+}
+
+/// 【显示配置】【折叠默认】折叠预览默认保留开头两行。
+pub(super) fn default_fold_head_lines() -> usize {
+    2
+}
+
+/// 【显示配置】【折叠默认】折叠预览默认保留结尾四行。
+pub(super) fn default_fold_tail_lines() -> usize {
+    4
 }
 
 pub(super) fn default_memory_snippet_chars() -> usize {

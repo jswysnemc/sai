@@ -12,6 +12,14 @@ describe("structured config finite fields", () => {
     ]);
   });
 
+  it("为折叠预览提供有限选项", () => {
+    expect(fieldSelectOptions("fold_preview", translate)?.map((option) => option.value)).toEqual([
+      "head",
+      "ends",
+      "hidden"
+    ]);
+  });
+
   it("为命令过滤方式提供有限选项", () => {
     expect(fieldSelectOptions("command_filter", translate)?.map((option) => option.value)).toEqual([
       "auto",

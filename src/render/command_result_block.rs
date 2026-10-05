@@ -1,6 +1,5 @@
 use crate::render::fold_text::{
-    fold_display_lines, terminal_wrap_width, wrap_display_lines, FoldedDisplayLine,
-    FOLD_HEAD_LINES, FOLD_TAIL_LINES,
+    fold_preview_lines, terminal_wrap_width, wrap_display_lines, FoldedDisplayLine,
 };
 use crate::render::terminal_text as t;
 use serde_json::Value;
@@ -507,14 +506,7 @@ fn limited_output_text(text: &str, line_limit: Option<usize>) -> Vec<FoldedDispl
     let display_lines = wrap_display_lines(text, terminal_wrap_width().saturating_sub(4));
     crate::render::render_expand::within_part(
         crate::render::render_expand::ExpandPart::Output,
-        || {
-            fold_display_lines(
-                &display_lines,
-                FOLD_HEAD_LINES,
-                FOLD_TAIL_LINES,
-                line_limit.is_none(),
-            )
-        },
+        || fold_preview_lines(&display_lines, line_limit.is_none()),
     )
 }
 

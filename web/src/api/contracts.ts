@@ -120,6 +120,8 @@ export type {
   InputConfig,
   PasteImageKey,
   DebugConfig,
+  DisplayConfig,
+  FoldPreviewMode,
   ContextConfig,
   PromptTemplateConfig,
   PromptTemplatesConfig,

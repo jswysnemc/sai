@@ -3,7 +3,7 @@
 //! Skills 全局开关已迁至主菜单 Skills 管理页。
 
 use super::context_settings::edit_context_settings;
-use crate::config::AppConfig;
+use crate::config::{AppConfig, FoldPreviewMode};
 use crate::i18n::text as t;
 use anyhow::Result;
 use crossterm::event::KeyCode;
@@ -349,6 +349,19 @@ fn edit_display_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Res
             t("Render Mermaid as images", "Mermaid 使用图片渲染"),
             config.display.mermaid_images,
         ),
+        Field::new(
+            t("Fold preview", "折叠预览"),
+            config.display.fold_preview.as_str().to_string(),
+        )
+        .choices(&["head", "ends", "hidden"]),
+        Field::new(
+            t("Fold head lines", "折叠保留开头行数"),
+            config.display.fold_head_lines.to_string(),
+        ),
+        Field::new(
+            t("Fold tail lines", "折叠保留结尾行数"),
+            config.display.fold_tail_lines.to_string(),
+        ),
     ];
     loop {
         if !run_form(stdout, t(" DISPLAY ", " 显示偏好 "), &mut fields)? {
@@ -373,6 +386,8 @@ fn apply_display_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()> 
     let fullscreen = parse_bool_field(&fields[6].value)?;
     let math_images = parse_bool_field(&fields[7].value)?;
     let mermaid_images = parse_bool_field(&fields[8].value)?;
+    let fold_head = parse_number_field::<usize>(fields[10].label, &fields[10].value)?;
+    let fold_tail = parse_number_field::<usize>(fields[11].label, &fields[11].value)?;
     config.display.reasoning = fields[0].value.trim().to_string();
     config.display.tool_calls = fields[1].value.trim().to_string();
     config.display.fullscreen = fullscreen;
@@ -382,6 +397,9 @@ fn apply_display_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()> 
     config.display.wait_show_model = wait_model;
     config.display.wait_show_thinking_level = wait_thinking;
     config.display.repl_transcript_row_cap = transcript_row_cap.max(1);
+    config.display.fold_preview = FoldPreviewMode::parse(&fields[9].value);
+    config.display.fold_head_lines = crate::config::DisplayConfig::clamp_head(fold_head);
+    config.display.fold_tail_lines = crate::config::DisplayConfig::clamp_tail(fold_tail);
     Ok(())
 }
 

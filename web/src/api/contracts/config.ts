@@ -161,6 +161,26 @@ export type PromptConfig = {
   [key: string]: unknown;
 };
 
+/** TUI 折叠预览：只保留开头、保留首尾，或全部省略。 */
+export type FoldPreviewMode = "head" | "ends" | "hidden";
+
+/** 终端显示偏好：渲染方式、公式图片与折叠预览。 */
+export type DisplayConfig = {
+  fullscreen?: boolean;
+  math_images?: boolean;
+  mermaid_images?: boolean;
+  reasoning?: string;
+  tool_calls?: string;
+  readable_tool_names?: boolean;
+  wait_show_model?: boolean;
+  wait_show_thinking_level?: boolean;
+  repl_transcript_row_cap?: number;
+  fold_preview?: FoldPreviewMode;
+  fold_head_lines?: number;
+  fold_tail_lines?: number;
+  [key: string]: unknown;
+};
+
 export type MemoryRuntimeConfig = {
   enabled?: boolean;
   extraction_provider_id?: string;
@@ -226,7 +246,7 @@ export type AppConfig = {
   debug?: DebugConfig;
   tools?: Record<string, unknown>;
   skills?: Record<string, unknown>;
-  display?: Record<string, unknown>;
+  display?: DisplayConfig;
   scm?: ScmConfig;
   git?: GitConfig;
   context?: ContextConfig;

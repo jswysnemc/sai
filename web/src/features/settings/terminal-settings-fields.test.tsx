@@ -19,5 +19,8 @@ describe("TerminalSettingsFields", () => {
     expect(html).toContain("终端 Shell");
     expect(html).toContain('value="powershell.exe"');
     expect(html).toContain("Windows 留空使用 PowerShell");
+    expect(html).toContain("TUI 折叠预览");
+    expect(html).toContain("TUI 公式图片");
+    expect(html).toContain("TUI Mermaid 图片");
   });
 });

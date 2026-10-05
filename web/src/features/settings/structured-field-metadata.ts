@@ -20,6 +20,13 @@ export function fieldSelectOptions(
       { value: "full", label: t("Full", "完整") }
     ];
   }
+  if (name === "fold_preview") {
+    return [
+      { value: "head", label: t("Keep first lines", "保留开头") },
+      { value: "ends", label: t("Keep first and last", "保留首尾") },
+      { value: "hidden", label: t("Hide all", "全部省略") }
+    ];
+  }
   if (name === "command_filter") {
     return [
       { value: "auto", label: t("Automatic", "自动") },
@@ -107,6 +114,12 @@ export function fieldLabel(name: string, t: (en: string, zh: string) => string):
     wait_show_model: t("Show model while waiting", "等待时显示模型"),
     wait_show_thinking_level: t("Show thinking level while waiting", "等待时显示思考等级"),
     repl_transcript_row_cap: t("Terminal transcript row limit", "终端记录行数上限"),
+    fullscreen: t("TUI rendering", "TUI 渲染方式"),
+    math_images: t("Formula images in TUI", "TUI 公式图片"),
+    mermaid_images: t("Mermaid images in TUI", "TUI Mermaid 图片"),
+    fold_preview: t("TUI fold preview", "TUI 折叠预览"),
+    fold_head_lines: t("Fold head lines", "折叠保留开头行数"),
+    fold_tail_lines: t("Fold tail lines", "折叠保留结尾行数"),
     default_max_chars: t("Default context tokens", "默认上下文 token 数"),
     compaction_ratio: t("Auto-compact ratio", "自动压缩比例"),
     compaction_reserve_tokens: t("Reserved headroom", "压缩预留 token")

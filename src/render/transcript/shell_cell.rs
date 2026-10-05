@@ -1,8 +1,7 @@
 use crate::render::code_block::{highlight_code_line_continued, CodeLineHighlightState};
 use crate::render::fold_text::{
-    command_body_column, command_wrap_width_for_title, fold_display_lines,
-    fold_display_lines_tracked, wrap_display_lines, FoldedDisplayLine, FOLD_HEAD_LINES,
-    FOLD_TAIL_LINES,
+    command_body_column, command_wrap_width_for_title, fold_preview_lines,
+    fold_preview_lines_tracked, wrap_display_lines, FoldedDisplayLine,
 };
 use crate::render::render_expand::{within_part, ExpandPart};
 use crate::render::status_style::{tool_bullet, ToolHealth};
@@ -93,11 +92,11 @@ pub(super) fn render(cell: &ShellCell) -> String {
 /// 返回:
 /// - 可见行（省略标记已本地化文案）
 fn fold_display_text(text: &str, expanded: bool, title: &str) -> Vec<FoldedDisplayLine> {
-    // 命令与输出共用同一套折行宽度：前 2 后 4 行做预览折叠
+    // 命令与输出共用同一套折行宽度，按显示配置做预览折叠
     let wrap = command_wrap_width_for_title(title);
     let wrapped = wrap_display_lines(text, wrap);
     within_part(ExpandPart::Output, || {
-        fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded)
+        fold_preview_lines(&wrapped, expanded)
     })
 }
 
@@ -114,7 +113,7 @@ fn fold_command_entries(text: &str, expanded: bool, title: &str) -> Vec<FoldedDi
     let wrap = command_wrap_width_for_title(title);
     let wrapped = wrap_display_lines(text, wrap);
     within_part(ExpandPart::Command, || {
-        fold_display_lines_tracked(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded)
+        fold_preview_lines_tracked(&wrapped, expanded)
     })
 }
 

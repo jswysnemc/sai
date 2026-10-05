@@ -1,7 +1,6 @@
 use crate::render::activity_animation::render_activity_line;
 use crate::render::fold_text::{
-    fold_display_lines, terminal_wrap_width, wrap_display_lines, FoldedDisplayLine,
-    FOLD_HEAD_LINES, FOLD_TAIL_LINES,
+    fold_preview_lines, terminal_wrap_width, wrap_display_lines, FoldedDisplayLine,
 };
 use crate::render::work_status::format_elapsed;
 use crate::render::ReasoningDisplayMode;
@@ -242,7 +241,7 @@ fn render_thinking_body_with_title(
         .into_iter()
         .filter(|line| !line.trim().is_empty())
         .collect();
-    let visible = fold_display_lines(&lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded);
+    let visible = fold_preview_lines(&lines, expanded);
 
     let mut output = title;
     let mut content_index = 0usize;

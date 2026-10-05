@@ -46,6 +46,9 @@ mod tests {
     fn display_preferences_default_on_and_preserve_false() {
         let defaults: DisplayConfig = serde_json::from_str("{}").unwrap();
         assert!(defaults.fullscreen && defaults.math_images && defaults.mermaid_images);
+        assert_eq!(defaults.fold_preview, crate::config::FoldPreviewMode::Ends);
+        assert_eq!(defaults.fold_head_lines, 2);
+        assert_eq!(defaults.fold_tail_lines, 4);
         let configured: DisplayConfig = serde_json::from_str(
             r#"{"fullscreen":false,"math_images":false,"mermaid_images":false}"#,
         )

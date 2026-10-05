@@ -166,15 +166,14 @@ fn fold_shell_command_lines(
     title: &str,
 ) -> Vec<crate::render::fold_text::FoldedDisplayLine> {
     use crate::render::fold_text::{
-        command_wrap_width_for_title, fold_display_lines_tracked, wrap_display_lines,
-        FOLD_HEAD_LINES, FOLD_TAIL_LINES,
+        command_wrap_width_for_title, fold_preview_lines_tracked, wrap_display_lines,
     };
-    // 命令行预览：前 2 后 4，过长时收缩
+    // 命令行预览：按显示配置折叠，过长时收缩
     let wrap = command_wrap_width_for_title(title);
     let wrapped = wrap_display_lines(command, wrap);
     crate::render::render_expand::within_part(
         crate::render::render_expand::ExpandPart::Command,
-        || fold_display_lines_tracked(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded),
+        || fold_preview_lines_tracked(&wrapped, expanded),
     )
 }
 

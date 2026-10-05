@@ -80,7 +80,7 @@ pub(super) async fn run_repl(
     if config.display.fullscreen {
         runtime.toggle_fullscreen()?;
     }
-    render::configure_asset_rendering(&config.display);
+    render::configure_display_rendering(&config.display);
     runtime.set_paste_image_key(config.input.paste_image_key);
     runtime.record_welcome(
         env!("CARGO_PKG_VERSION").to_string(),
@@ -155,7 +155,7 @@ pub(super) async fn run_repl(
             reasoning_mode: render::ReasoningDisplayMode::from_config(&config.display.reasoning),
             tool_call_mode: render::ToolCallDisplayMode::from_config(&config.display.tool_calls),
         };
-        render::configure_asset_rendering(&config.display);
+        render::configure_display_rendering(&config.display);
         runtime.update_options(config.display.repl_transcript_row_cap, transcript_options);
         runtime.set_mention_skills(super::repl_mentions::load_mention_skills(&config, paths));
         // 2. 优先执行本终端运行期间排队的消息

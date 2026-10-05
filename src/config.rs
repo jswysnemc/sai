@@ -9,6 +9,7 @@ mod app_validation;
 mod cli_tool_defaults;
 mod cli_tools;
 pub mod defaults;
+mod display;
 mod gateway_defaults;
 mod git;
 mod jev;

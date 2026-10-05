@@ -1,4 +1,5 @@
 use super::*;
+use crate::render::fold_text::{FOLD_HEAD_LINES, FOLD_TAIL_LINES};
 
 /// 标准错误流本身不代表失败，运行中和正常结束的诊断日志不应使用红色状态。
 #[test]

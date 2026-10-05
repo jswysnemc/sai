@@ -1,31 +1,10 @@
 pub use super::app_config::AppConfig;
 use super::defaults::*;
+pub use super::display::{DisplayConfig, FoldPreviewMode};
 use super::model_metadata::ModelMetadata;
 use super::prompt_templates::PromptTemplatesConfig;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DisplayConfig {
-    /// TUI 启动时使用全局渲染，Ctrl+O 可临时切换
-    pub fullscreen: bool,
-    /// 将终端公式渲染成图片
-    pub math_images: bool,
-    /// 将终端 Mermaid 代码块渲染成图片
-    pub mermaid_images: bool,
-    #[serde(default = "default_reasoning_display")]
-    pub reasoning: String,
-    #[serde(default = "default_tool_call_display")]
-    pub tool_calls: String,
-    #[serde(default = "default_true")]
-    pub readable_tool_names: bool,
-    #[serde(default = "default_true")]
-    pub wait_show_model: bool,
-    #[serde(default = "default_true")]
-    pub wait_show_thinking_level: bool,
-    #[serde(default = "default_repl_transcript_row_cap")]
-    pub repl_transcript_row_cap: usize,
-}
 
 /// Web 可控制的调试记录配置。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -36,70 +15,6 @@ pub struct DebugConfig {
     /// 是否保留完整请求、响应流和重组响应。
     #[serde(default = "default_true")]
     pub retain_logs: bool,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct RawDisplayConfig {
-    #[serde(default)]
-    fullscreen: Option<bool>,
-    #[serde(default)]
-    math_images: Option<bool>,
-    #[serde(default)]
-    mermaid_images: Option<bool>,
-    #[serde(default)]
-    reasoning: Option<String>,
-    #[serde(default)]
-    tool_calls: Option<String>,
-    #[serde(default)]
-    show_reasoning: Option<bool>,
-    #[serde(default)]
-    reasoning_mode: Option<String>,
-    #[serde(default)]
-    show_tool_details: Option<bool>,
-    #[serde(default)]
-    readable_tool_names: Option<bool>,
-    #[serde(default)]
-    wait_show_model: Option<bool>,
-    #[serde(default)]
-    wait_show_thinking_level: Option<bool>,
-    #[serde(default)]
-    repl_transcript_row_cap: Option<usize>,
-}
-
-impl<'de> Deserialize<'de> for DisplayConfig {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let raw = RawDisplayConfig::deserialize(deserializer)?;
-        let reasoning = raw.reasoning.unwrap_or_else(|| {
-            if raw.show_reasoning == Some(false) {
-                "hidden".to_string()
-            } else {
-                raw.reasoning_mode.unwrap_or_else(default_reasoning_display)
-            }
-        });
-        let tool_calls = raw.tool_calls.unwrap_or_else(|| {
-            if raw.show_tool_details == Some(true) {
-                "full".to_string()
-            } else {
-                default_tool_call_display()
-            }
-        });
-        Ok(Self {
-            fullscreen: raw.fullscreen.unwrap_or(true),
-            math_images: raw.math_images.unwrap_or(true),
-            mermaid_images: raw.mermaid_images.unwrap_or(true),
-            reasoning,
-            tool_calls,
-            readable_tool_names: raw.readable_tool_names.unwrap_or_else(default_true),
-            wait_show_model: raw.wait_show_model.unwrap_or_else(default_true),
-            wait_show_thinking_level: raw.wait_show_thinking_level.unwrap_or_else(default_true),
-            repl_transcript_row_cap: raw
-                .repl_transcript_row_cap
-                .unwrap_or_else(default_repl_transcript_row_cap),
-        })
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

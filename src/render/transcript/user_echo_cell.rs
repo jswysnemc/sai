@@ -1,8 +1,8 @@
 use super::cell::TranscriptMode;
 use super::AnsiLine;
 use crate::render::fold_text::{
-    fold_display_lines, terminal_wrap_width, wrap_display_lines, FoldedDisplayLine,
-    FOLD_HEAD_LINES, FOLD_TAIL_LINES,
+    fold_preview_bounds, fold_preview_lines, terminal_wrap_width, wrap_display_lines,
+    FoldedDisplayLine,
 };
 use crate::render::input_atom::{render_input_atoms, InputAtom, InputAtomKind, InputEcho};
 
@@ -104,7 +104,7 @@ pub(crate) fn render(cell: &UserEchoCell) -> String {
         .map(|line| line.as_str().to_string())
         .collect();
     let visible = if cell.fold {
-        fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded)
+        fold_preview_lines(&wrapped, expanded)
     } else {
         wrapped
             .iter()
@@ -173,7 +173,11 @@ pub(crate) fn would_fold(cell: &UserEchoCell) -> bool {
     }
     let wrap = terminal_wrap_width().saturating_sub(2).max(8);
     let wrapped = wrap_display_lines(body, wrap);
-    wrapped.len() > FOLD_HEAD_LINES.saturating_add(FOLD_TAIL_LINES)
+    let bounds = fold_preview_bounds();
+    if bounds.omit_all {
+        return true;
+    }
+    wrapped.len() > bounds.head.saturating_add(bounds.tail)
 }
 
 #[cfg(test)]
