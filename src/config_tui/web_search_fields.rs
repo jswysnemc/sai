@@ -28,6 +28,8 @@ pub(super) fn web_search_fields(config: &AppConfig) -> Vec<Field> {
             "tavily",
             "firecrawl",
             "anysearch",
+            "brave",
+            "exa",
             "searxng",
             "duckduckgo",
         ]),
@@ -117,6 +119,29 @@ pub(super) fn web_search_fields(config: &AppConfig) -> Vec<Field> {
             config.plugins.web.anysearch_base_url.clone(),
         ),
         Field::boolean(
+            t("Brave enabled", "Brave 启用"),
+            config.plugins.web.brave_enabled,
+        ),
+        Field::textarea(
+            t("Brave API Keys", "Brave 密钥"),
+            config.plugins.web.brave_api_keys.join("\n"),
+        )
+        .secret(),
+        Field::new(
+            t("Brave base URL", "Brave 服务地址"),
+            config.plugins.web.brave_base_url.clone(),
+        ),
+        Field::boolean(t("Exa enabled", "Exa 启用"), config.plugins.web.exa_enabled),
+        Field::textarea(
+            t("Exa API Keys", "Exa 密钥"),
+            config.plugins.web.exa_api_keys.join("\n"),
+        )
+        .secret(),
+        Field::new(
+            t("Exa base URL", "Exa 服务地址"),
+            config.plugins.web.exa_base_url.clone(),
+        ),
+        Field::boolean(
             t("SearXNG enabled", "SearXNG 启用"),
             config.plugins.web.searxng_enabled,
         ),
@@ -173,11 +198,17 @@ pub(super) fn apply_web_search_fields(config: &mut AppConfig, fields: &[Field]) 
     next.anysearch_enabled = parse_bool_field(&fields[19].value)?;
     next.anysearch_api_keys = parse_key_list(&fields[20].value);
     next.anysearch_base_url = normalize_url(&fields[21].value);
-    next.searxng_enabled = parse_bool_field(&fields[22].value)?;
-    next.searxng_base_url = normalize_url(&fields[23].value);
-    next.searxng_language = fields[24].value.trim().to_string();
-    next.searxng_safe_search = fields[25].value.trim().parse()?;
-    next.duckduckgo_enabled = parse_bool_field(&fields[26].value)?;
+    next.brave_enabled = parse_bool_field(&fields[22].value)?;
+    next.brave_api_keys = parse_key_list(&fields[23].value);
+    next.brave_base_url = normalize_url(&fields[24].value);
+    next.exa_enabled = parse_bool_field(&fields[25].value)?;
+    next.exa_api_keys = parse_key_list(&fields[26].value);
+    next.exa_base_url = normalize_url(&fields[27].value);
+    next.searxng_enabled = parse_bool_field(&fields[28].value)?;
+    next.searxng_base_url = normalize_url(&fields[29].value);
+    next.searxng_language = fields[30].value.trim().to_string();
+    next.searxng_safe_search = fields[31].value.trim().parse()?;
+    next.duckduckgo_enabled = parse_bool_field(&fields[32].value)?;
     // 2. 【网页搜索】【表单校验】兼容旧地址输入，完整校验通过后再替换当前配置
     next.normalize_endpoints();
     next.validate()?;

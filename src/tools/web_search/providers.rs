@@ -39,6 +39,22 @@ pub(super) fn build_request(
         "anysearch" => client.post(config.anysearch_base_url.trim())
             .bearer_auth(first_api_key(&config.anysearch_api_keys, "ANYSEARCH_API_KEY")?)
             .json(&json!({"query":query,"max_results":input.max_results})),
+        "brave" => {
+            let key = first_api_key(&config.brave_api_keys, "BRAVE_API_KEY")?;
+            let count = input.max_results.to_string();
+            client
+                .get(config.brave_base_url.trim())
+                .header("X-Subscription-Token", key)
+                .query(&[("q", query.as_str()), ("count", count.as_str())])
+        }
+        "exa" => client
+            .post(config.exa_base_url.trim())
+            .header("x-api-key", first_api_key(&config.exa_api_keys, "EXA_API_KEY")?)
+            .json(&json!({
+                "query": query,
+                "numResults": input.max_results,
+                "contents": { "text": true, "highlights": true }
+            })),
         "searxng" => {
             let base = config.searxng_base_url.trim().trim_end_matches('/');
             client.get(format!("{base}/search?q={}&format=json&language={}&safesearch={}",
@@ -95,14 +111,22 @@ pub(super) fn render_response(provider: &str, input: &SearchInput, body: &str) -
         "tavily" => ("Tavily", "results", false),
         "firecrawl" => ("Firecrawl", "data", false),
         "anysearch" => ("AnySearch", "results", false),
+        "brave" => ("Brave", "web.results", true),
+        "exa" => ("Exa", "results", false),
         "searxng" => ("SearXNG", "results", true),
         _ => bail!("unknown web search provider"),
     };
-    let mut results = data
-        .get(field)
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+    let mut results = if field.contains('.') {
+        data.pointer(&format!("/{}", field.replace('.', "/")))
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+    } else {
+        data.get(field)
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+    };
     if limit {
         results.truncate(input.max_results);
         if results.is_empty() {

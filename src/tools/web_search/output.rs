@@ -30,6 +30,7 @@ pub(super) fn format_search_results(query: &str, provider: &str, results: Vec<Va
             .get("content")
             .or_else(|| item.get("snippet"))
             .or_else(|| item.get("description"))
+            .or_else(|| item.get("text"))
             .and_then(Value::as_str)
             .unwrap_or("");
         let raw = item

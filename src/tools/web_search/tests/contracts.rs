@@ -8,6 +8,8 @@ fn config() -> WebSearchConfig {
         tavily_api_keys: vec!["tavily-key".into()],
         firecrawl_api_keys: vec!["fire-key".into()],
         anysearch_api_keys: vec!["any-key".into()],
+        brave_api_keys: vec!["brave-key".into()],
+        exa_api_keys: vec!["exa-key".into()],
         searxng_base_url: "https://search.example.test".into(),
         ..Default::default()
     }
@@ -114,6 +116,37 @@ fn web_search_requests_preserve_provider_contracts() {
             expected
         );
     }
+    let brave = providers::build_request(&client, "brave", &input, &config)
+        .unwrap()
+        .build()
+        .unwrap();
+    assert_eq!(brave.method(), "GET");
+    assert_eq!(brave.headers()["x-subscription-token"], "brave-key");
+    assert_eq!(
+        brave
+            .url()
+            .query_pairs()
+            .map(|(k, v)| (k.into_owned(), v.into_owned()))
+            .collect::<Vec<_>>(),
+        vec![
+            ("q".into(), input.query.clone()),
+            ("count".into(), "10".into())
+        ]
+    );
+    let exa = providers::build_request(&client, "exa", &input, &config)
+        .unwrap()
+        .build()
+        .unwrap();
+    assert_eq!(exa.method(), "POST");
+    assert_eq!(exa.headers()["x-api-key"], "exa-key");
+    assert_eq!(
+        serde_json::from_slice::<Value>(exa.body().unwrap().as_bytes().unwrap()).unwrap(),
+        json!({
+            "query": input.query,
+            "numResults": 10,
+            "contents": { "text": true, "highlights": true }
+        })
+    );
     let ddg = providers::build_request(&client, "duckduckgo", &input, &config)
         .unwrap()
         .build()
@@ -130,6 +163,8 @@ fn web_search_requests_preserve_provider_contracts() {
             "tavily",
             "firecrawl",
             "anysearch",
+            "brave",
+            "exa",
             "searxng",
             "duckduckgo"
         ]
@@ -160,4 +195,27 @@ fn web_search_credentials_preserve_environment_references() {
     );
     std::env::remove_var(&variable);
     assert!(providers::first_api_key(&[], &variable).is_err());
+}
+
+/// 【网页搜索测试】【Brave/Exa 结果】无参数；Brave 读取 web.results，Exa 读取 text。
+#[test]
+fn brave_and_exa_render_provider_specific_fields() {
+    let input = SearchInput::parse(&json!({"query":"Rust"}), &config()).unwrap();
+    let brave = providers::render_response(
+        "brave",
+        &input,
+        r#"{"web":{"results":[{"title":"Rust","url":"https://www.rust-lang.org","description":"语言"}]}}"#,
+    )
+    .unwrap();
+    assert!(brave.contains("**Provider**: Brave"));
+    assert!(brave.contains("**URL**: https://www.rust-lang.org"));
+    assert!(brave.contains("**Snippet**: 语言"));
+    let exa = providers::render_response(
+        "exa",
+        &input,
+        r#"{"results":[{"title":"Rust","url":"https://www.rust-lang.org","text":"系统语言"}]}"#,
+    )
+    .unwrap();
+    assert!(exa.contains("**Provider**: Exa"));
+    assert!(exa.contains("**Snippet**: 系统语言"));
 }

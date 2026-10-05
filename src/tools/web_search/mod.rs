@@ -27,7 +27,7 @@ pub(super) fn register(registry: &mut ToolRegistry, config: &WebSearchConfig) {
             "properties":{
                 "query":{"type":"string","description":"Search query."},
                 "max_results":{"type":"integer","description":"Maximum results, normalized to 1–10. Uses the configured default when omitted."},
-                "provider":{"type":"string","enum":["auto","tinyfish","tavily","firecrawl","anysearch","searxng","duckduckgo","script"],"description":"Search provider. Uses the configured default when omitted; script aliases duckduckgo."},
+                "provider":{"type":"string","enum":["auto","tinyfish","tavily","firecrawl","anysearch","brave","exa","searxng","duckduckgo","script"],"description":"Search provider. Uses the configured default when omitted; script aliases duckduckgo."},
                 "location":{"type":"string","description":"Optional TinyFish country code, such as US or GB."},
                 "language":{"type":"string","description":"Optional TinyFish language code, such as en or zh-CN."}
             },

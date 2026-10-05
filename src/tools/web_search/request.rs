@@ -51,6 +51,8 @@ pub(super) fn provider_order(config: &WebSearchConfig, requested: &str) -> Vec<&
         "tavily",
         "firecrawl",
         "anysearch",
+        "brave",
+        "exa",
         "searxng",
         "duckduckgo",
     ]
