@@ -194,7 +194,7 @@ fn subagent_uses_description_label() {
     );
     assert_eq!(
         tool_event_label("subagent", Some(r#"{"action":"list"}"#)),
-        "Listing"
+        "Listing subagents"
     );
 }
 
@@ -225,7 +225,7 @@ fn management_tools_include_action_and_target() {
     );
     assert_eq!(
         tool_event_label("todo", Some(r#"{"action":"list"}"#)),
-        "Listing"
+        "Listing todos"
     );
 }
 
@@ -294,8 +294,49 @@ fn unknown_tools_use_tool_label() {
 fn asking_live_status_does_not_append_running() {
     let label = tool_event_label("ask_question", Some("{}"));
     let status = tool_call_status_text(&label, "run");
-    assert_eq!(label, "Asking");
+    assert_eq!(label, "Asking question");
     assert!(!status.contains("running"));
+}
+
+/// 内置工具无参数时仍给出可读对象，不裸显示动词或原始工具名。
+#[test]
+fn builtin_tools_keep_a_readable_object() {
+    assert_eq!(
+        tool_event_label("list_directory", Some(r#"{"path":"src/render"}"#)),
+        "Listing render"
+    );
+    assert_eq!(
+        tool_event_label("create_directory", Some(r#"{"path":"/tmp/out"}"#)),
+        "Creating out"
+    );
+    assert_eq!(
+        tool_event_label(
+            "ask_question",
+            Some(r#"{"questions":[{"header":"Theme","question":"Which theme?"}]}"#)
+        ),
+        "Asking Theme"
+    );
+    assert_eq!(
+        tool_event_label("check_os_info", Some("{}")),
+        "Checking OS info"
+    );
+    assert_eq!(tool_event_label("glob", Some("{}")), "Finding files");
+}
+
+/// MCP 风格工具名收成可读对象，并优先展示 URL 等常见字段。
+#[test]
+fn mcp_style_tools_humanize_name_and_url() {
+    assert_eq!(
+        tool_event_label(
+            "browser__navigate",
+            Some(r#"{"url":"https://example.com/docs"}"#)
+        ),
+        "Running https://example.com/docs"
+    );
+    assert_eq!(
+        tool_event_label("browser__navigate", None),
+        "Running navigate"
+    );
 }
 
 /// 【网页读取】【状态文案】无参数；原生读取使用 Fetching/Fetched，标题不显示凭据与查询参数。
@@ -309,5 +350,88 @@ fn web_fetch_status_uses_native_verb_and_redacted_url() {
     assert_eq!(
         tool_event_label_tense("web_fetch", Some(arguments), ToolVerbTense::Perfect),
         "Fetched https://example.com/docs"
+    );
+}
+
+/// 网页搜索使用 Searching/Searched，并展示查询词而不是 Running。
+#[test]
+fn web_search_uses_search_verb_and_query() {
+    let arguments = r#"{"query":"rust async traits"}"#;
+    assert_eq!(
+        tool_event_label("web_search", Some(arguments)),
+        "Searching rust async traits"
+    );
+    assert_eq!(
+        tool_event_label_tense("web_search", Some(arguments), ToolVerbTense::Perfect),
+        "Searched rust async traits"
+    );
+    assert_eq!(
+        tool_event_label("web_search", Some("{}")),
+        "Searching the web"
+    );
+    // 参数流式到一半时也能提前展示查询词
+    assert_eq!(
+        tool_event_label("web_search", Some(r#"{"query":"tokio sel"#)),
+        "Searching tokio sel"
+    );
+}
+
+/// 浏览器按 action 选动词，完成态切换时态保留对象。
+#[test]
+fn browser_actions_use_specific_verbs() {
+    assert_eq!(
+        tool_event_label(
+            "browser",
+            Some(r#"{"action":"navigate","url":"https://example.com/a"}"#)
+        ),
+        "Opening https://example.com/a"
+    );
+    assert_eq!(
+        tool_event_label("browser", Some(r#"{"action":"click","ref":"e12"}"#)),
+        "Clicking e12"
+    );
+    assert_eq!(
+        tool_event_label_tense(
+            "browser",
+            Some(r#"{"action":"screenshot"}"#),
+            ToolVerbTense::Perfect
+        ),
+        "Captured screenshot"
+    );
+    assert_eq!(
+        retarget_label_tense(
+            "browser",
+            "Opening tab https://a.dev",
+            ToolVerbTense::Perfect
+        ),
+        "Opened tab https://a.dev"
+    );
+}
+
+/// 记忆、目标、SSH 等内置工具不再落到 Running/Ran。
+#[test]
+fn other_builtin_tools_avoid_generic_run_verb() {
+    assert_eq!(
+        tool_event_label("write_memory", Some(r#"{"name":"deploy-steps"}"#)),
+        "Saving deploy-steps"
+    );
+    assert_eq!(
+        tool_event_label("list_memory", Some("{}")),
+        "Listing memories"
+    );
+    assert_eq!(
+        tool_event_label(
+            "ssh_run_command",
+            Some(r#"{"host_id":"prod","command":"uptime"}"#)
+        ),
+        "Running uptime on prod"
+    );
+    assert_eq!(
+        tool_event_label("scientific_calculator", Some(r#"{"expression":"2^10"}"#)),
+        "Calculating 2^10"
+    );
+    assert_eq!(
+        tool_event_label("create_goal", Some(r#"{"objective":"ship v1"}"#)),
+        "Setting goal ship v1"
     );
 }

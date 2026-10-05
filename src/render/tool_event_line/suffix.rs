@@ -4,6 +4,17 @@ use std::path::Path;
 mod command_summary;
 use command_summary::command_summary;
 
+/// 对外提供命令摘要，供补充工具复用同一套截断规则。
+///
+/// 参数:
+/// - `value`: 原始命令文本
+///
+/// 返回:
+/// - 单行命令摘要
+pub(super) fn command_summary_text(value: String) -> String {
+    command_summary(value)
+}
+
 /// 解析工具参数 JSON。
 ///
 /// 参数:
@@ -53,7 +64,12 @@ pub(super) fn tool_suffix(name: &str, arguments: &Value) -> Option<String> {
         "todo" | "cron" => action_suffix(arguments),
         "load" => load_suffix(arguments),
         "request_capability" => string_field(arguments, &["need"]).map(compact_text),
-        _ => None,
+        "create_directory" | "list_directory" => {
+            string_field(arguments, &["path"]).map(file_basename)
+        }
+        "ask_question" => ask_question_suffix(arguments),
+        "check_os_info" => Some("OS info".to_string()),
+        _ => generic_object(arguments),
     }
 }
 
@@ -86,7 +102,12 @@ pub(super) fn tool_suffix_from_partial_text(name: &str, arguments: &str) -> Opti
         "todo" | "cron" => action_suffix_from_partial(arguments),
         "load" => load_suffix_from_partial(arguments),
         "request_capability" => string_field_from_partial(arguments, &["need"]).map(compact_text),
-        _ => None,
+        "create_directory" | "list_directory" => {
+            string_field_from_partial(arguments, &["path"]).map(file_basename)
+        }
+        "ask_question" => ask_question_suffix_from_partial(arguments),
+        "check_os_info" => Some("OS info".to_string()),
+        _ => generic_object_from_partial(arguments),
     }
 }
 
@@ -496,6 +517,122 @@ pub(super) fn compact_text(value: String) -> String {
     let value = value.split_whitespace().collect::<Vec<_>>().join(" ");
     // 按显示列数截断：中文路径按字符数截断会撑到近两倍宽
     crate::render::clip_to_width(&value, 48, "...")
+}
+
+/// 提问工具优先用首题标题，其次用完整问题。
+///
+/// 参数:
+/// - `arguments`: 工具参数
+///
+/// 返回:
+/// - 可展示问题摘要
+pub(super) fn ask_question_suffix(arguments: &Value) -> Option<String> {
+    let first = arguments.get("questions")?.as_array()?.first()?;
+    string_field(first, &["header", "question"]).map(compact_text)
+}
+
+/// 从不完整参数中提取提问摘要。
+///
+/// 参数:
+/// - `arguments`: 可能尚未闭合的 JSON 参数文本
+///
+/// 返回:
+/// - 可展示问题摘要
+pub(super) fn ask_question_suffix_from_partial(arguments: &str) -> Option<String> {
+    string_field_from_partial(arguments, &["header", "question"]).map(compact_text)
+}
+
+/// 未知工具从常见字段里抽出一个展示对象。
+///
+/// 参数:
+/// - `arguments`: 工具参数
+///
+/// 返回:
+/// - 路径、地址或其它短文本
+pub(super) fn generic_object(arguments: &Value) -> Option<String> {
+    string_field(
+        arguments,
+        &[
+            "path", "url", "query", "prompt", "text", "command", "pattern", "include", "name",
+            "id", "selector",
+        ],
+    )
+    .and_then(format_generic_object)
+}
+
+/// 从不完整参数中提取未知工具的展示对象。
+///
+/// 参数:
+/// - `arguments`: 可能尚未闭合的 JSON 参数文本
+///
+/// 返回:
+/// - 路径、地址或其它短文本
+pub(super) fn generic_object_from_partial(arguments: &str) -> Option<String> {
+    string_field_from_partial(
+        arguments,
+        &[
+            "path", "url", "query", "prompt", "text", "command", "pattern", "include", "name",
+            "id", "selector",
+        ],
+    )
+    .and_then(format_generic_object)
+}
+
+/// 把通用字段格式化成状态行对象。
+///
+/// 参数:
+/// - `value`: 字段原文
+///
+/// 返回:
+/// - 紧凑展示文本
+pub(super) fn format_generic_object(value: String) -> Option<String> {
+    if value.contains("://") {
+        return web_url_suffix(value);
+    }
+    if value.contains('/') || value.contains('\\') {
+        return Some(compact_text(file_basename(value)));
+    }
+    Some(compact_text(value))
+}
+
+/// 内置工具在参数尚未给出对象时使用的兜底对象。
+///
+/// 参数:
+/// - `name`: 工具原始名称
+///
+/// 返回:
+/// - 兜底对象；规划类动词本身已完整时返回空
+pub(super) fn builtin_fallback_object(name: &str) -> Option<&'static str> {
+    match name {
+        "ask_question" => Some("question"),
+        "create_directory" | "list_directory" => Some("directory"),
+        "check_os_info" => Some("OS info"),
+        "load" => Some("context"),
+        "request_capability" => Some("capability"),
+        "glob" | "find_files" => Some("files"),
+        "grep" | "search_text" => Some("text"),
+        "web_fetch" => Some("page"),
+        "read_file" | "write_file" | "str_replace" | "trash_path" | "edit_file" => Some("file"),
+        "run_command" => Some("command"),
+        "generate_image" => Some("image"),
+        _ => None,
+    }
+}
+
+/// 把 `vendor__action` 这类工具名收成可读对象。
+///
+/// 参数:
+/// - `name`: 工具原始名称
+///
+/// 返回:
+/// - 去掉供应商前缀并把下划线换成空格后的文本
+pub(super) fn humanize_tool_name(name: &str) -> String {
+    let local = name.rsplit_once("__").map(|(_, rest)| rest).unwrap_or(name);
+    if name.contains("__") {
+        local.replace('_', " ")
+    } else {
+        local.to_string()
+    }
 }
 
 /// 【网页读取】【状态对象】参数为请求地址，返回不含凭据、查询参数或片段的紧凑 URL。

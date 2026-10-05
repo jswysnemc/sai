@@ -59,8 +59,8 @@ pub(crate) const MD_H3_STYLE: &str = "\x1b[1m\x1b[2m";
 pub(crate) const MD_LIST_MARKER_STYLE: &str = "\x1b[2m";
 /// 引用块左侧竖线：弱化灰，不再借用绿色语义。
 pub(crate) const MD_QUOTE_BAR_STYLE: &str = "\x1b[2m";
-/// 行内代码：浅驼色点缀（256 色 180），无背景无加粗。
-pub(crate) const MD_INLINE_CODE_STYLE: &str = "\x1b[38;5;180m";
+/// 行内代码：浅紫色文字（256 色 183），无背景、无留空，紧贴正文。
+pub(crate) const MD_INLINE_CODE_STYLE: &str = "\x1b[38;5;183m";
 /// 加粗强调：纯字重，不占用色相。
 pub(crate) const MD_BOLD_STYLE: &str = "\x1b[1m";
 /// 斜体强调：纯斜体。

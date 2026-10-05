@@ -80,8 +80,8 @@ impl HistoryCell {
                 let rendered = meta_cell::render(cell);
                 let refit = crate::render::session_summary::refit_turn_rule(&rendered, width);
                 if cell.kind == meta_cell::MetaKind::Summary {
-                    // 总览正文与通栏分割线直接相连，扫读时作为同一块信息
-                    format!("{refit}\n{}", turn_rule(width))
+                    // 总览信息嵌进分割线，同一行既是数据也是轮次边界
+                    crate::render::session_summary::inline_turn_rule(&refit, width)
                 } else {
                     refit
                 }
@@ -275,17 +275,6 @@ impl HistoryCell {
     pub(crate) fn welcome(cell: WelcomeCell) -> Self {
         Self::Welcome(cell)
     }
-}
-
-/// 【终端】【会话分隔】生成一条弱化的通栏 turn 分割线。
-///
-/// 参数:
-/// - `width`: 正文净宽度
-///
-/// 返回:
-/// - 恰好占满一行的弱化横线
-fn turn_rule(width: usize) -> String {
-    format!("\x1b[2m{}\x1b[0m", "─".repeat(width.max(1)))
 }
 
 /// 【终端】【会话渲染】按指定净宽度渲染并折行普通 transcript cell。

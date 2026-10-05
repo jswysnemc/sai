@@ -1,3 +1,4 @@
+use crate::render::session_summary_labels::{summary_labels, SummaryLabels};
 use crate::render::terminal_text as t;
 use crate::runtime_recovery::has_visible_runtime_recovery;
 use crate::state::failure_recovery::summary::{format_recovery_snapshot, has_visible_recovery};
@@ -28,49 +29,29 @@ pub fn print_session_summary(snapshot: &SessionSnapshot) -> Result<()> {
 /// 返回:
 /// - 上下文占用与本轮耗时摘要（不含会话 ID）
 pub fn render_session_summary(snapshot: &SessionSnapshot) -> String {
+    render_session_summary_with(snapshot, summary_labels())
+}
+
+/// 按指定标签集渲染会话摘要，供测试固定图标或文字形态。
+///
+/// 参数:
+/// - `snapshot`: 当前会话状态快照
+/// - `labels`: 图标或文字标签集
+///
+/// 返回:
+/// - 上下文占用与本轮耗时摘要（不含会话 ID）
+pub(crate) fn render_session_summary_with(
+    snapshot: &SessionSnapshot,
+    labels: SummaryLabels,
+) -> String {
     observe_non_display_fields(snapshot);
-    // 行首引导点与助手正文共用同一符号，摘要因此落在同一条视觉引导线上
-    let ratio = snapshot.context_token_ratio;
-    let mut output = format!(
-        "\x1b[2m•\x1b[0m \x1b[2m{}:\x1b[0m {} / {} \x1b[2m{}\x1b[0m {}({:.1}%)\x1b[0m",
-        t("Context", "上下文"),
-        format_k(snapshot.context_prompt_tokens),
-        format_k(snapshot.context_window_tokens),
-        t("tokens", "token"),
-        context_ratio_style(ratio),
-        ratio * 100.0,
-    );
-    if snapshot.last_turn_duration_ms > 0 {
-        output.push_str(&format!(
-            " \x1b[2m· {}\x1b[0m {}",
-            t("Turn", "本轮"),
-            format_turn_duration_ms(snapshot.last_turn_duration_ms),
-        ));
-    }
-    if snapshot.last_turn_ttft_ms > 0 {
-        output.push_str(&format!(
-            " \x1b[2m· {}\x1b[0m {}",
-            t("TTFT", "首字"),
-            format_ttft_ms(snapshot.last_turn_ttft_ms),
-        ));
-    }
-    if let Some(usage) = snapshot.usage.last_conversation_usage.as_ref() {
-        output.push_str(&format!(
-            " \x1b[2m·\x1b[0m \x1b[36m↑ {}\x1b[0m \x1b[2m·\x1b[0m \x1b[32m↓ {}\x1b[0m",
-            format_k_u64(usage.prompt_tokens),
-            format_k_u64(usage.completion_tokens),
-        ));
-        if let Some(rate) =
-            format_tokens_per_sec(usage.completion_tokens, snapshot.last_turn_duration_ms)
-        {
-            output.push_str(&format!(" \x1b[2m·\x1b[0m \x1b[32m{rate} tok/s\x1b[0m"));
-        }
-        output.push_str(&format!(
-            " \x1b[2m· {}\x1b[0m \x1b[32m{:.1}%\x1b[0m",
-            t("cache", "缓存"),
-            turn_cache_hit_ratio(usage) * 100.0,
-        ));
-    }
+    let data = SummaryData {
+        duration_ms: snapshot.last_turn_duration_ms,
+        ttft_ms: snapshot.last_turn_ttft_ms,
+        usage: snapshot.usage.last_conversation_usage.as_ref(),
+        finished_at: Some(chrono::Local::now().format("%-I:%M %p").to_string()),
+    };
+    let mut output = format!("\x1b[2m•\x1b[0m {}", summary_body(&data, labels));
     if snapshot.checkpoint_count > 0 {
         let reason = match snapshot.latest_checkpoint_reason.as_deref() {
             Some("manual") => t("manual", "手动"),
@@ -99,6 +80,126 @@ pub fn render_session_summary(snapshot: &SessionSnapshot) -> String {
     output
 }
 
+/// 总览需要的数值，现场快照与持久化轮次都能提供。
+struct SummaryData<'a> {
+    duration_ms: u64,
+    ttft_ms: u64,
+    usage: Option<&'a crate::llm::Usage>,
+    /// 本轮结束时刻（本地时间，如 `1:58 PM`）；未知时省略
+    finished_at: Option<String>,
+}
+
+/// 【终端】【会话摘要】组合总览正文：
+/// `Worked for 27s · 1:58 PM · First word 6.1s · ↑ 12k toks · ↓ 344 toks · 缓存 88% · 速度 233 toks/s`。
+///
+/// 标签、图标、单位与分隔符弱化，数值保持正文颜色；没有数据的项整体省略。
+///
+/// 参数:
+/// - `data`: 总览数值
+/// - `labels`: 图标或字符标签集
+///
+/// 返回:
+/// - 不含行首引导点的摘要正文
+fn summary_body(data: &SummaryData, labels: SummaryLabels) -> String {
+    let dim = |text: &str| format!("\x1b[2m{text}\x1b[0m");
+    let mut parts = Vec::new();
+    // 1. 耗时与完成时刻
+    let total_ms = data.ttft_ms + data.duration_ms;
+    if total_ms > 0 {
+        parts.push(format!(
+            "{} {}",
+            dim(labels.worked),
+            format_ttft_ms(total_ms)
+        ));
+    }
+    if let Some(time) = data.finished_at.as_deref() {
+        parts.push(dim(time));
+    }
+    if data.ttft_ms > 0 {
+        parts.push(format!(
+            "{} {}",
+            dim(labels.first_word),
+            format_ttft_ms(data.ttft_ms)
+        ));
+    }
+    // 2. 用量：输入、输出、缓存命中与生成速率
+    if let Some(usage) = data.usage {
+        parts.push(format!(
+            "{} {} {}",
+            dim(labels.input),
+            format_k_u64(usage.prompt_tokens),
+            dim(labels.tokens)
+        ));
+        parts.push(format!(
+            "{} {} {}",
+            dim(labels.output),
+            format_k_u64(usage.completion_tokens),
+            dim(labels.tokens)
+        ));
+        parts.push(format!(
+            "{} {:.0}%",
+            dim(labels.cached),
+            turn_cache_hit_ratio(usage) * 100.0
+        ));
+        if let Some(rate) = format_tokens_per_sec(usage.completion_tokens, data.duration_ms) {
+            parts.push(format!(
+                "{} {rate} {}",
+                dim(labels.speed),
+                dim(&format!("{}/s", labels.tokens))
+            ));
+        }
+    }
+    parts.join(&format!(" {} ", dim("·")))
+}
+
+/// 把 RFC3339 时间转成本地 12 小时制时刻，如 `1:58 PM`。
+///
+/// 参数:
+/// - `timestamp`: 持久化的 RFC3339 时间
+///
+/// 返回:
+/// - 本地时刻文本；无法解析时为空
+fn local_clock(timestamp: &str) -> Option<String> {
+    let parsed = chrono::DateTime::parse_from_rfc3339(timestamp.trim()).ok()?;
+    Some(
+        parsed
+            .with_timezone(&chrono::Local)
+            .format("%-I:%M %p")
+            .to_string(),
+    )
+}
+
+/// 【终端】【会话恢复】用持久化轮次的耗时、用量与完成时间重建轮次总览。
+///
+/// 三项统计都缺失的旧记录不生成总览。
+///
+/// 参数:
+/// - `duration_ms`: 首字后的生成耗时
+/// - `ttft_ms`: 首字延迟
+/// - `usage`: 本轮汇总用量
+/// - `finished_at`: 助手回复的 RFC3339 时间
+///
+/// 返回:
+/// - 总览文本；没有可显示数据时为空
+pub(crate) fn render_history_turn_summary(
+    duration_ms: u64,
+    ttft_ms: u64,
+    usage: Option<&crate::llm::Usage>,
+    finished_at: &str,
+) -> Option<String> {
+    if duration_ms == 0 && ttft_ms == 0 && usage.is_none() {
+        return None;
+    }
+    let data = SummaryData {
+        duration_ms,
+        ttft_ms,
+        usage,
+        finished_at: local_clock(finished_at),
+    };
+    let body = summary_body(&data, summary_labels());
+    (!body.trim().is_empty()).then(|| format!("\x1b[2m•\x1b[0m {body}"))
+}
+
 /// 【终端】【会话分隔】去掉历史烘焙的 turn 横线。
 ///
 /// CLI 有 PS1、TUI 有区块空行，新总览不再画 turn 线；此处只清理旧会话残留。
@@ -122,6 +223,37 @@ pub(crate) fn strip_turn_rule(text: &str) -> String {
         kept.pop();
     }
     kept.join("\n")
+}
+
+/// 【终端】【会话分隔】把总览首行嵌进 turn 分割线：`信息 ────────`。
+///
+/// 信息从左起，横线向右补满正文净宽；宽度放不下时只保留信息行。
+/// 其余行原样保留在后面。
+///
+/// 参数:
+/// - `text`: 已剥离旧横线的总览文本
+/// - `width`: 正文净宽度
+///
+/// 返回:
+/// - 信息与分割线合为一体的总览
+pub(crate) fn inline_turn_rule(text: &str, width: usize) -> String {
+    let (first, rest) = text.split_once('\n').unwrap_or((text, ""));
+    let body = first.strip_prefix("\x1b[2m•\x1b[0m ").unwrap_or(first);
+    let body_width = crate::render::table::visible_width(body);
+    // 1. 信息靠左、横线向右补满：横线至少 8 列才有分隔感，放不下时只留信息行
+    let merged = if body_width + 9 <= width {
+        format!(
+            "{body}\x1b[2m {}\x1b[0m",
+            "─".repeat(width - body_width - 1)
+        )
+    } else {
+        body.to_string()
+    };
+    if rest.is_empty() {
+        merged
+    } else {
+        format!("{merged}\n{rest}")
+    }
 }
 
 /// 【终端】【会话分隔】兼容旧入口：只剥离 turn 横线，不再按宽度重画。
@@ -171,26 +303,6 @@ fn truncate_ansi_to_plain_prefix(line: &str, prefix_plain: &str) -> String {
         index += ch.len_utf8();
     }
     line[..index].trim_end().to_string()
-}
-
-/// 【终端】【会话摘要】按上下文压力选择占比数值的着色。
-///
-/// 低压力时占比是背景信息，随标签一起弱化；接近上限时逐级升黄、升红，
-/// 提醒该压缩或另起会话了。
-///
-/// 参数:
-/// - `ratio`: 0 到 1 之间的上下文占用比例
-///
-/// 返回:
-/// - 占比数值的 ANSI 前景样式
-fn context_ratio_style(ratio: f32) -> &'static str {
-    if ratio >= 0.85 {
-        "\x1b[31m"
-    } else if ratio >= 0.6 {
-        "\x1b[33m"
-    } else {
-        "\x1b[2m"
-    }
 }
 
 /// 【终端】【会话摘要】将首字延迟格式化为紧凑文本。

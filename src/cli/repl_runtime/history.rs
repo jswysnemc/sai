@@ -35,6 +35,29 @@ pub(super) fn append_timeline_with_compaction(
     for turn in turns {
         append_user_message(transcript, turn);
         super::history_replay::replay_turn(transcript, turn);
+        append_turn_summary(transcript, turn);
+    }
+}
+
+/// 【会话恢复】【轮次总览】用持久化的耗时与用量补回每轮末尾的总览分割线。
+///
+/// 现场渲染时总览来自运行期快照，不写入时间线；恢复时据轮次自带的统计重建，
+/// 退出再进入后每轮的分割线与统计因此仍在。
+///
+/// 参数:
+/// - `transcript`: 当前 TUI transcript
+/// - `turn`: 已重放的历史轮次
+///
+/// 返回:
+/// - 无
+fn append_turn_summary(transcript: &mut TranscriptStore, turn: &SessionTimelineTurn) {
+    if let Some(summary) = crate::render::session_summary::render_history_turn_summary(
+        turn.duration_ms,
+        turn.ttft_ms,
+        turn.usage.as_ref(),
+        &turn.assistant.timestamp,
+    ) {
+        transcript.push_turn_summary(summary);
     }
 }
 

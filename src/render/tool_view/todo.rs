@@ -100,7 +100,11 @@ pub(crate) fn render_todo_output(
         stats.push_str(&format!(" · {cancelled} cancelled"));
     }
     // 1. 读取清单直接展示计划进度，修改操作保留动作和条目，不重复成功徽标
-    let mut output = if ok && matches!(display_label.as_str(), "Listed" | "Todo") {
+    let mut output = if ok
+        && matches!(
+            display_label.as_str(),
+            "Listed" | "Listed todos" | "Listing todos" | "Todo"
+        ) {
         tool_status_line(
             "Todo",
             &format!("\x1b[2m{}\x1b[0m", stats.trim_start_matches("Todo ")),

@@ -404,21 +404,33 @@ fn summary_mode_keeps_tool_progress_message_visible() {
         .any(|line| line.as_str().contains("subagent is checking")));
 }
 
-/// 验证轮次总览渲染后自带按宽度绘制的 turn 分割线，普通提示没有。
+/// 验证轮次总览嵌进按宽度绘制的 turn 分割线，普通提示没有。
 #[test]
-fn turn_summary_appends_a_width_fitted_rule() {
+fn turn_summary_merges_into_a_width_fitted_rule() {
     let mut store = TranscriptStore::new(100);
-    store.push_turn_summary("\x1b[2m•\x1b[0m \x1b[2mContext:\x1b[0m 8.0k / 1000k".to_string());
+    store.push_turn_summary("\x1b[2m•\x1b[0m 8.0k\x1b[2m/1.0M\x1b[0m".to_string());
 
     let width = 48;
     let lines = store.display_tail(width, &options());
     let rule = lines
         .iter()
         .map(|line| crate::render::activity_animation::strip_ansi_for_test(line.as_str()))
-        .find(|plain| !plain.trim().is_empty() && plain.trim().chars().all(|ch| ch == '─'))
-        .expect("turn summary must append a horizontal rule");
-    // 分割线恰好占满正文净宽，terminal 缩放时由渲染层按新宽度重画
-    assert_eq!(rule.trim().chars().count(), width);
+        .find(|plain| plain.contains("8.0k/1.0M"))
+        .expect("turn summary must render its stats");
+    // 信息与横线同在一行：信息靠左，横线向右补满
+    assert!(rule.trim_start().starts_with("8.0k/1.0M "), "{rule}");
+    assert!(rule.trim_end().ends_with('─'), "{rule}");
+    assert!(!rule.contains('•'), "{rule}");
+    assert_eq!(
+        crate::render::table::visible_width(rule.trim()),
+        width,
+        "{rule}"
+    );
+    // 不再另起一行独立横线
+    assert!(!lines
+        .iter()
+        .map(|line| crate::render::activity_animation::strip_ansi_for_test(line.as_str()))
+        .any(|plain| !plain.trim().is_empty() && plain.trim().chars().all(|ch| ch == '─')));
 
     let mut plain_store = TranscriptStore::new(100);
     plain_store.push_meta("已切换模型".to_string());

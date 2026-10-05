@@ -12,11 +12,11 @@ mod command_result_block;
 pub(crate) mod content_indent;
 mod edit_diff;
 mod engine_notice;
-mod jev_preselect;
 mod error;
 pub(crate) mod expandable;
 pub(crate) mod fold_text;
 pub(crate) mod input_atom;
+mod jev_preselect;
 mod live_tool_status;
 mod markdown;
 mod markdown_blocks;
@@ -29,6 +29,7 @@ pub(crate) mod render_expand;
 pub(crate) mod render_width;
 mod sandbox_notice;
 pub(crate) mod session_summary;
+pub(crate) mod session_summary_labels;
 #[cfg(test)]
 mod session_summary_tests;
 pub(crate) mod status_style;
@@ -58,15 +59,15 @@ mod wait_spinner;
 pub(crate) mod work_status;
 
 pub(crate) use command_result_block::command_result_streams;
-pub(crate) use sandbox_notice::{render_sandbox_denial, render_sandbox_scope};
 pub(crate) use engine_notice::engine_notice;
-pub(crate) use jev_preselect::format_jev_preselect;
 pub(crate) use error::write_chat_error;
 pub(crate) use expandable::render_expandable_body;
+pub(crate) use jev_preselect::format_jev_preselect;
 pub(crate) use permission::{
     render_auto_audit_status, render_permission_controls, render_permission_decision,
     render_permission_decision_for, render_permission_title, PermissionChoice, PermissionView,
 };
+pub(crate) use sandbox_notice::{render_sandbox_denial, render_sandbox_scope};
 pub use session_summary::print_session_summary;
 pub use stream::StreamRenderer;
 pub use stream_config::{ReasoningDisplayMode, StreamRenderOptions, ToolCallDisplayMode};

@@ -3,7 +3,12 @@ use crate::render::status_style::{color_status, tool_bullet, ToolHealth};
 use crate::render::style::TOOL_BULLET;
 use serde_json::Value;
 
+mod extra_tools;
 mod suffix;
+use extra_tools::{
+    browser_call_label, browser_verb_pairs, extra_fallback_object, extra_tool_suffix,
+    extra_tool_verb,
+};
 pub(crate) use suffix::lenient_string_field;
 use suffix::*;
 
@@ -71,8 +76,19 @@ pub(crate) fn tool_event_label_tense(
     if name == "generate_image" || name.ends_with("__generate_image") {
         return image_call_label(name, arguments, tense);
     }
+    if name == "browser" {
+        return browser_call_label(arguments, tense);
+    }
     let action = tool_verb(name, tense);
-    let suffix = arguments.and_then(|arguments| tool_suffix_from_text(name, arguments));
+    let extra_suffix = arguments.and_then(|arguments| extra_tool_suffix(name, arguments));
+    let suffix = extra_suffix
+        .or_else(|| arguments.and_then(|arguments| tool_suffix_from_text(name, arguments)))
+        .or_else(|| extra_fallback_object(name).map(str::to_string))
+        .or_else(|| builtin_fallback_object(name).map(str::to_string))
+        .or_else(|| {
+            let humanized = humanize_tool_name(name);
+            (humanized != name).then_some(humanized)
+        });
     match suffix {
         Some(suffix) if !suffix.trim().is_empty() => format!("{action} {suffix}"),
         _ if is_builtin_tool_verb(name) => action.to_string(),
@@ -104,6 +120,7 @@ fn subagent_call_label(arguments: Option<&str>, tense: ToolVerbTense) -> String 
     let suffix = arguments.and_then(|arguments| tool_suffix_from_text("subagent", arguments));
     match suffix {
         Some(suffix) if !suffix.trim().is_empty() => format!("{verb} {suffix}"),
+        _ if action == "list" => format!("{verb} subagents"),
         _ => verb.to_string(),
     }
 }
@@ -138,7 +155,7 @@ fn image_call_label(name: &str, arguments: Option<&str>, tense: ToolVerbTense) -
         });
     prompt
         .map(|prompt| format!("{action} {prompt}"))
-        .unwrap_or_else(|| action.to_string())
+        .unwrap_or_else(|| format!("{action} image"))
 }
 
 /// 子智能体各 action 对应的展示动词。
@@ -184,7 +201,7 @@ fn subagent_verb(action: &str, tense: ToolVerbTense) -> &'static str {
 /// - 面向终端展示的短标签
 fn todo_call_label(arguments: Option<&str>, tense: ToolVerbTense) -> String {
     let Some(arguments) = arguments else {
-        return tool_verb("todo", tense).to_string();
+        return format!("{} todos", tool_verb("todo", tense));
     };
     let action = parse_arguments(arguments)
         .and_then(|value| string_field(&value, &["action"]))
@@ -194,6 +211,7 @@ fn todo_call_label(arguments: Option<&str>, tense: ToolVerbTense) -> String {
     let suffix = todo_object(arguments, &action);
     match suffix {
         Some(suffix) if !suffix.trim().is_empty() => format!("{verb} {suffix}"),
+        _ if action == "list" => format!("{verb} todos"),
         _ => verb.to_string(),
     }
 }
@@ -438,7 +456,7 @@ fn emphasize_verb(label: &str) -> String {
 /// 返回:
 /// - 可直接写入终端的单行状态文本
 pub(crate) fn tool_call_status_text(label: &str, status: &str) -> String {
-    if status == "run" && label == tool_verb("ask_question", ToolVerbTense::Progressive) {
+    if status == "run" && label.starts_with(tool_verb("ask_question", ToolVerbTense::Progressive)) {
         return format!("{TOOL_BULLET} {label}");
     }
     format!("{TOOL_BULLET} {label} {}", color_status(status))
@@ -498,8 +516,10 @@ pub(crate) fn tool_verb(name: &str, tense: ToolVerbTense) -> &'static str {
         ("create_directory", ToolVerbTense::Perfect) => "Created",
         ("list_directory", ToolVerbTense::Progressive) => "Listing",
         ("list_directory", ToolVerbTense::Perfect) => "Listed",
-        (_, ToolVerbTense::Progressive) => "Running",
-        (_, ToolVerbTense::Perfect) => "Ran",
+        (name, tense) => extra_tool_verb(name, tense).unwrap_or(match tense {
+            ToolVerbTense::Progressive => "Running",
+            ToolVerbTense::Perfect => "Ran",
+        }),
     }
 }
 
@@ -513,12 +533,28 @@ pub(crate) fn tool_verb(name: &str, tense: ToolVerbTense) -> &'static str {
 /// 返回:
 /// - 切换动词后的标签；无法识别前缀时原样返回
 pub(crate) fn retarget_label_tense(name: &str, label: &str, tense: ToolVerbTense) -> String {
-    let target = tool_verb(name, tense);
-    for candidate in [ToolVerbTense::Progressive, ToolVerbTense::Perfect] {
-        let verb = tool_verb(name, candidate);
-        if let Some(rest) = label.strip_prefix(verb) {
-            if rest.is_empty() || rest.starts_with(' ') {
-                return format!("{target}{rest}");
+    // 1. 收集该工具的 (进行时, 完成时) 动词对；浏览器按 action 有多组
+    let mut pairs = vec![(
+        tool_verb(name, ToolVerbTense::Progressive),
+        tool_verb(name, ToolVerbTense::Perfect),
+    )];
+    if name == "browser" {
+        pairs.extend(browser_verb_pairs());
+    }
+    // 2. 长动词优先匹配，避免「Opening」先吃掉「Opening tab」
+    pairs.sort_by_key(|(progressive, perfect)| {
+        std::cmp::Reverse(progressive.len().max(perfect.len()))
+    });
+    for (progressive, perfect) in pairs {
+        let target = match tense {
+            ToolVerbTense::Progressive => progressive,
+            ToolVerbTense::Perfect => perfect,
+        };
+        for verb in [progressive, perfect] {
+            if let Some(rest) = label.strip_prefix(verb) {
+                if rest.is_empty() || rest.starts_with(' ') {
+                    return format!("{target}{rest}");
+                }
             }
         }
     }
@@ -527,32 +563,33 @@ pub(crate) fn retarget_label_tense(name: &str, label: &str, tense: ToolVerbTense
 
 /// 是否为内置工具（有专用动词，标签不必再拼原始工具名）。
 fn is_builtin_tool_verb(name: &str) -> bool {
-    matches!(
-        name,
-        "run_command"
-            | "ask_question"
-            | "enter_plan_mode"
-            | "exit_plan_mode"
-            | "edit_file"
-            | "write_file"
-            | "str_replace"
-            | "read_file"
-            | "web_fetch"
-            | "trash_path"
-            | "glob"
-            | "find_files"
-            | "grep"
-            | "search_text"
-            | "subagent"
-            | "todo"
-            | "cron"
-            | "check_os_info"
-            | "load"
-            | "request_capability"
-            | "create_directory"
-            | "list_directory"
-            | "generate_image"
-    )
+    extra_tool_verb(name, ToolVerbTense::Progressive).is_some()
+        || matches!(
+            name,
+            "run_command"
+                | "ask_question"
+                | "enter_plan_mode"
+                | "exit_plan_mode"
+                | "edit_file"
+                | "write_file"
+                | "str_replace"
+                | "read_file"
+                | "web_fetch"
+                | "trash_path"
+                | "glob"
+                | "find_files"
+                | "grep"
+                | "search_text"
+                | "subagent"
+                | "todo"
+                | "cron"
+                | "check_os_info"
+                | "load"
+                | "request_capability"
+                | "create_directory"
+                | "list_directory"
+                | "generate_image"
+        )
 }
 
 #[cfg(test)]

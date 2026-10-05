@@ -23,6 +23,20 @@ pub(crate) fn render_inline(text: &str) -> String {
     render_inline_with_math_mode(text, InlineMathMode::TerminalImage)
 }
 
+/// 把行内代码渲染成浅紫色文字，不加背景与留空。
+///
+/// 参数:
+/// - `output`: 输出缓冲
+/// - `chars`: 反引号内的字符切片
+///
+/// 返回:
+/// - 无
+fn push_inline_code(output: &mut String, chars: &[char]) {
+    output.push_str(MD_INLINE_CODE_STYLE);
+    output.extend(chars.iter());
+    output.push_str(RESET);
+}
+
 /// 按指定公式策略渲染 Markdown 行内语法。
 ///
 /// 参数:
@@ -67,9 +81,7 @@ pub(crate) fn render_inline_with_math_mode(text: &str, math_mode: InlineMathMode
                 continue;
             }
             if let Some(end) = find_marker(&chars, index + 1, '`') {
-                output.push_str(MD_INLINE_CODE_STYLE);
-                output.extend(chars[index + 1..end].iter());
-                output.push_str(RESET);
+                push_inline_code(&mut output, &chars[index + 1..end]);
                 index = end + 1;
                 continue;
             }
@@ -243,9 +255,7 @@ pub(crate) fn render_table_cell(text: &str) -> String {
         }
         if chars[index] == '`' {
             if let Some(end) = find_marker(&chars, index + 1, '`') {
-                output.push_str(MD_INLINE_CODE_STYLE);
-                output.extend(chars[index + 1..end].iter());
-                output.push_str(RESET);
+                push_inline_code(&mut output, &chars[index + 1..end]);
                 index = end + 1;
                 continue;
             }

@@ -288,4 +288,36 @@ mod tests {
         assert!(think < tool_line, "{plain:?}");
         assert!(tool_line < body, "{plain:?}");
     }
+
+    /// 【会话恢复】【轮次总览】有持久化统计的轮次在重放后补回总览分割线，旧记录不补。
+    #[test]
+    fn restored_turns_keep_their_summary_rule() {
+        let mut measured = turn_with_tools(None, "answer", Vec::new());
+        measured.duration_ms = 900;
+        measured.ttft_ms = 1_200;
+        measured.usage = Some(crate::llm::Usage {
+            prompt_tokens: 5_800,
+            completion_tokens: 254,
+            total_tokens: 6_054,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+        });
+        let legacy = turn_with_tools(None, "old answer", Vec::new());
+        let mut transcript = TranscriptStore::new(200);
+        append_timeline(&mut transcript, &[legacy, measured]);
+        let lines = transcript
+            .display_tail(100, &options())
+            .iter()
+            .map(|line| strip_ansi_for_test(line.as_str()))
+            .collect::<Vec<_>>();
+        let rules = lines
+            .iter()
+            .filter(|line| {
+                line.trim_start().starts_with("Worked for")
+                    && line.contains("5.8k")
+                    && line.trim_end().ends_with('─')
+            })
+            .count();
+        assert_eq!(rules, 1, "{lines:#?}");
+    }
 }

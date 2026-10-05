@@ -1,7 +1,7 @@
 mod commands;
-pub(crate) mod preferences;
 mod math;
 mod mermaid;
+pub(crate) mod preferences;
 mod svg;
 mod table_math;
 
@@ -73,7 +73,9 @@ pub(crate) fn render_asset_block(lang: &str, lines: &[String]) -> String {
         return render_error("asset", t("unsupported asset language", "不支持的资源语言"));
     };
     let source = lines.join("\n");
-    if !is_asset_language(lang) { return format!("{source}\n"); }
+    if !is_asset_language(lang) {
+        return format!("{source}\n");
+    }
     render_cached(kind.label(), &source, || render_asset(kind, &source))
 }
 
@@ -86,7 +88,9 @@ pub(crate) fn render_asset_block(lang: &str, lines: &[String]) -> String {
 /// - 终端图片协议文本或错误提示
 pub(crate) fn render_math_block(lines: &[String]) -> String {
     let source = lines.join("\n");
-    if !preferences::math_images() { return format!("$$\n{source}\n$$\n"); }
+    if !preferences::math_images() {
+        return format!("$$\n{source}\n$$\n");
+    }
     render_cached("math-block", &source, || {
         math::render_source(&source, MathRenderMode::Block)
     })
@@ -104,7 +108,9 @@ pub(crate) fn render_math_block(lines: &[String]) -> String {
 /// 返回:
 /// - 行内图片放置序列或带样式源码
 pub(crate) fn render_inline_math_at(source: &str, occurrence: &str) -> String {
-    if !preferences::math_images() { return format!("${source}$"); }
+    if !preferences::math_images() {
+        return format!("${source}$");
+    }
     let key = format!("{source}\u{0}{occurrence}");
     render_cached("math-inline", &key, || {
         math::render_source(source, MathRenderMode::Inline)
