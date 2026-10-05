@@ -57,6 +57,7 @@ mod tests {
             model: "fixture".into(),
             thinking: "auto".into(),
             directory: "/tmp".into(),
+            branch: None,
             cache_hit_ratio: None,
             status_plugin: None,
         };

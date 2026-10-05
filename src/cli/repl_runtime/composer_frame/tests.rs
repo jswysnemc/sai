@@ -19,6 +19,7 @@ fn draws_at_viewport_bottom_and_restores_input_cursor() {
         model: "gpt".to_string(),
         thinking: "auto".to_string(),
         directory: "/workspace".to_string(),
+        branch: None,
         cache_hit_ratio: None,
         status_plugin: None,
     };
@@ -49,6 +50,7 @@ fn repaint_hides_cursor_first_and_shows_it_last() {
         model: "gpt".to_string(),
         thinking: "auto".to_string(),
         directory: "/workspace".to_string(),
+        branch: None,
         cache_hit_ratio: None,
         status_plugin: None,
     };
@@ -95,6 +97,7 @@ fn skips_repaint_when_nothing_changed() {
         model: "gpt".to_string(),
         thinking: "auto".to_string(),
         directory: "/workspace".to_string(),
+        branch: None,
         cache_hit_ratio: None,
         status_plugin: None,
     };
@@ -139,6 +142,7 @@ fn repaints_after_the_input_changes() {
         model: "gpt".to_string(),
         thinking: "auto".to_string(),
         directory: "/workspace".to_string(),
+        branch: None,
         cache_hit_ratio: None,
         status_plugin: None,
     };
@@ -172,6 +176,7 @@ fn bang_prefix_shows_shell_hint_instead_of_footer() {
         model: "gpt-test".to_string(),
         thinking: "auto".to_string(),
         directory: "/tmp".to_string(),
+        branch: None,
         cache_hit_ratio: None,
         status_plugin: None,
     };
@@ -206,6 +211,7 @@ fn slash_panel_keeps_input_frame_visible_above_command_descriptions() {
         model: "gpt".to_string(),
         thinking: "auto".to_string(),
         directory: "/workspace".to_string(),
+        branch: None,
         cache_hit_ratio: None,
         status_plugin: None,
     };
@@ -236,6 +242,7 @@ fn panel_lines_render_above_chrome_and_extend_height() {
         model: "gpt".to_string(),
         thinking: "auto".to_string(),
         directory: "/workspace".to_string(),
+        branch: None,
         cache_hit_ratio: None,
         status_plugin: None,
     };
@@ -270,6 +277,7 @@ fn empty_composer_shows_placeholder() {
         model: "gpt".to_string(),
         thinking: "auto".to_string(),
         directory: "/workspace".to_string(),
+        branch: None,
         cache_hit_ratio: None,
         status_plugin: None,
     };
@@ -298,6 +306,7 @@ fn floating_composer_clears_stale_rows_below() {
         model: "gpt".to_string(),
         thinking: "auto".to_string(),
         directory: "/workspace".to_string(),
+        branch: None,
         cache_hit_ratio: None,
         status_plugin: None,
     };
@@ -327,6 +336,7 @@ fn bottom_pinned_composer_keeps_footer_row() {
         model: "gpt".to_string(),
         thinking: "auto".to_string(),
         directory: "/workspace".to_string(),
+        branch: None,
         cache_hit_ratio: None,
         status_plugin: None,
     };

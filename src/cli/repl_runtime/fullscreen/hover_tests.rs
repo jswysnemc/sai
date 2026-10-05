@@ -1,4 +1,4 @@
-use super::hover::HOVER_BG;
+use super::hover::HOVER_STYLE;
 use super::runtime_tests::{mouse, runtime};
 use crossterm::event::Event;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEventKind};
@@ -35,14 +35,14 @@ fn hovering_an_expandable_paragraph_highlights_it() {
     let scroll = session.state.scroll;
     let title_row = layout.body_top + (span.start - scroll) as u16;
     let last_row = layout.body_top + (span.end - 1 - scroll) as u16;
-    assert!(!painted_row(&runtime, title_row).contains(HOVER_BG));
-    // 1. 指向段落标题：整段铺底色
+    assert!(!painted_row(&runtime, title_row).contains(HOVER_STYLE));
+    // 1. 指向段落标题：整段加粗
     runtime
         .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 4, title_row))
         .unwrap();
-    assert!(painted_row(&runtime, title_row).contains(HOVER_BG));
+    assert!(painted_row(&runtime, title_row).contains(HOVER_STYLE));
     assert!(
-        painted_row(&runtime, last_row).contains(HOVER_BG),
+        painted_row(&runtime, last_row).contains(HOVER_STYLE),
         "整段都应高亮"
     );
     // 2. 在同一段内移动不改变悬停段落
@@ -69,7 +69,7 @@ fn hovering_an_expandable_paragraph_highlights_it() {
     runtime
         .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 4, outside))
         .unwrap();
-    assert!(!painted_row(&runtime, title_row).contains(HOVER_BG));
+    assert!(!painted_row(&runtime, title_row).contains(HOVER_STYLE));
 }
 
 /// 离开底部后按钮水平居中贴在输入框正上方，浮动标题不再重复显示新输出提示。

@@ -12,6 +12,7 @@ fn test_chrome() -> ReplChrome {
         model: "gpt".to_string(),
         thinking: "auto".to_string(),
         directory: "/workspace".to_string(),
+        branch: None,
         cache_hit_ratio: None,
         status_plugin: None,
     }
@@ -106,6 +107,7 @@ fn footer_puts_mode_before_context() {
         model: "gpt".to_string(),
         thinking: "xhigh".to_string(),
         directory: "/workspace".to_string(),
+        branch: None,
         cache_hit_ratio: None,
         status_plugin: None,
     };
@@ -139,6 +141,7 @@ fn footer_line_never_exceeds_terminal_cols() {
         model: "gpt-5.6-sol".to_string(),
         thinking: "auto".to_string(),
         directory: "/home/snemc/workspace/sai/very/long/path/segment".to_string(),
+        branch: None,
         cache_hit_ratio: None,
         status_plugin: None,
     };
@@ -190,6 +193,30 @@ fn format_token_k_scales_thousands() {
     assert_eq!(format_token_k(272_000), "272k");
     assert_eq!(format_token_k(1_500), "1.5k");
     assert_eq!(format_token_k(42), "42");
+}
+
+/// 【TUI】【短模型名】底栏只显示模型 ID 末段，与网页输入框一致。
+#[test]
+fn short_model_name_keeps_the_last_segment() {
+    assert_eq!(
+        short_model_name("clinepass/cline-pass/deepseek-v4.1-flash"),
+        "deepseek-v4.1-flash"
+    );
+    assert_eq!(short_model_name("gpt-5"), "gpt-5");
+    assert_eq!(short_model_name("vendor/"), "vendor");
+}
+
+/// 【TUI】【底栏分支】Git 仓库在目录右侧显示当前分支。
+#[test]
+fn footer_shows_branch_after_directory() {
+    let mut chrome = test_chrome();
+    chrome.branch = Some("main".to_string());
+    let line = chrome.footer_line(80);
+    let plain = strip_ansi(&line);
+    let trimmed = plain.trim_end();
+    assert!(trimmed.ends_with("main"), "右侧最后一段必须是分支: {plain}");
+    assert!(plain.contains("/workspace"), "{plain}");
+    assert!(line.contains("\x1b[38;5;72m"));
 }
 
 #[test]

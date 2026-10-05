@@ -15,6 +15,7 @@ fn frame() -> ComposerFrame {
         model: "test-model".into(),
         thinking: "auto".into(),
         directory: "/workspace".into(),
+        branch: None,
         cache_hit_ratio: None,
         status_plugin: None,
     };

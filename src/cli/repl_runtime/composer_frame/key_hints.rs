@@ -67,7 +67,8 @@ fn hint(key: &'static str, label: &'static str) -> Hint {
 /// 返回:
 /// - 按键条目
 fn keys_for(context: KeyHintContext, input_empty: bool) -> Vec<Hint> {
-    let mut hints = match (context.streaming, input_empty) {
+    let _ = context.fullscreen;
+    match (context.streaming, input_empty) {
         (true, true) => vec![
             hint("Ctrl+C", t("stop", "停止")),
             hint("Ctrl+Z", t("undo queued", "撤回排队")),
@@ -91,11 +92,7 @@ fn keys_for(context: KeyHintContext, input_empty: bool) -> Vec<Hint> {
             hint("Esc Esc", t("clear", "清空")),
             hint("Ctrl+W", t("delete word", "删词")),
         ],
-    };
-    if context.fullscreen && input_empty {
-        hints.push(hint("PgUp/PgDn", t("scroll", "翻页")));
     }
-    hints
 }
 
 /// 【终端】【按键提示】渲染状态栏下方的按键提示行。
@@ -129,7 +126,11 @@ pub(in crate::cli::repl_runtime) fn render_key_hints(
         // 2. 按键条目：从高优先级开始放入，放不下就停止，不截断半个条目
         for item in keys_for(context, input_empty) {
             let plain = format!("{} {}", item.key, item.label);
-            let extra = if used == 0 { 0 } else { SEPARATOR.chars().count() };
+            let extra = if used == 0 {
+                0
+            } else {
+                SEPARATOR.chars().count()
+            };
             if used + extra + visible_width(&plain) > budget {
                 break;
             }
@@ -168,7 +169,10 @@ mod tests {
             assert!(!empty.contains("Enter"), "{empty}");
             assert!(empty.contains("Shift+Tab"), "{empty}");
             let typed = text(context, false, 200);
-            assert!(typed.contains("Enter") && typed.contains("Shift+Enter"), "{typed}");
+            assert!(
+                typed.contains("Enter") && typed.contains("Shift+Enter"),
+                "{typed}"
+            );
         }
         let running = text(
             KeyHintContext {
@@ -186,11 +190,16 @@ mod tests {
     /// 验证补全或 Shell 面板打开时提示行留空，面板自带说明。
     #[test]
     fn panels_suppress_the_hint_row() {
-        let line = plain(&render_key_hints(KeyHintContext::default(), false, true, 200));
+        let line = plain(&render_key_hints(
+            KeyHintContext::default(),
+            false,
+            true,
+            200,
+        ));
         assert!(line.trim().is_empty(), "{line}");
     }
 
-    /// 验证 Ctrl+O 与 Alt+↑↓ 不出现在提示行，全屏空输入时多出翻页。
+    /// 验证 Ctrl+O 与 Alt+↑↓ 不出现在提示行，全屏也不提示 PgUp/PgDn。
     #[test]
     fn view_shortcuts_are_left_to_the_fullscreen_header() {
         for fullscreen in [false, true] {
@@ -204,7 +213,8 @@ mod tests {
             );
             assert!(!line.contains("Ctrl+O"), "{line}");
             assert!(!line.contains("Alt+"), "{line}");
-            assert_eq!(line.contains("PgUp"), fullscreen, "{line}");
+            assert!(!line.contains("PgUp"), "{line}");
+            assert!(!line.contains("PgDn"), "{line}");
         }
     }
 

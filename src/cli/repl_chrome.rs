@@ -16,6 +16,8 @@ pub(super) struct ReplChrome {
     pub(super) model: String,
     pub(super) thinking: String,
     pub(super) directory: String,
+    /// 当前 Git 分支；非仓库时为空
+    pub(super) branch: Option<String>,
     /// 当前轮累计缓存命中率，轮次进行中才有值
     pub(super) cache_hit_ratio: Option<f32>,
     pub(super) status_plugin: Option<crate::plugins::TuiStatusRenderer>,
@@ -49,9 +51,12 @@ impl ReplChrome {
             .map(|provider| provider.thinking_level.trim().to_string())
             .filter(|level| !level.is_empty())
             .unwrap_or_else(|| "auto".to_string());
-        let directory = crate::runtime_cwd::current_dir()
+        let cwd = crate::runtime_cwd::current_dir().ok();
+        let directory = cwd
+            .as_ref()
             .map(|path| compress_home_prefix(&path.display().to_string()))
-            .unwrap_or_else(|_| "?".to_string());
+            .unwrap_or_else(|| "?".to_string());
+        let branch = cwd.as_ref().and_then(|path| crate::agent::git_branch(path));
         Self {
             mode,
             context_ratio: snapshot
@@ -62,9 +67,10 @@ impl ReplChrome {
                 .as_ref()
                 .map(|item| item.context_window_tokens)
                 .unwrap_or(context_limit),
-            model,
+            model: short_model_name(&model),
             thinking,
             directory,
+            branch,
             cache_hit_ratio: None,
             status_plugin: Some(crate::plugins::TuiStatusRenderer::start(
                 config.clone(),
@@ -187,6 +193,48 @@ fn color_thinking(value: &str) -> String {
 /// 给右侧当前目录使用弱化但可辨识的颜色。
 fn color_directory(value: &str) -> String {
     format!("\x1b[38;5;103m{value}\x1b[0m")
+}
+
+/// 给右侧 Git 分支使用略亮于目录的颜色。
+fn color_branch(value: &str) -> String {
+    format!("\x1b[38;5;72m{value}\x1b[0m")
+}
+
+/// 【TUI】【短模型名】去掉路由与分组前缀，只保留最后一段。
+///
+/// 参数:
+/// - `model`: 完整模型 ID，如 `clinepass/cline-pass/deepseek-v4.1-flash`
+///
+/// 返回:
+/// - 末段模型名；无斜杠或末段为空时返回原值
+fn short_model_name(model: &str) -> String {
+    model
+        .trim()
+        .rsplit('/')
+        .find(|part| !part.is_empty())
+        .unwrap_or(model)
+        .to_string()
+}
+
+/// 【TUI】【底栏右侧】把目录与分支分成两段着色。
+///
+/// 参数:
+/// - `right_text`: 已裁剪的右侧纯文本，形如 `/workspace  main`
+///
+/// 返回:
+/// - 着色后的右侧状态
+fn colorize_right_status(right_text: &str) -> String {
+    match right_text.rsplit_once("  ") {
+        Some((directory, branch))
+            if !directory.is_empty()
+                && !branch.is_empty()
+                && !branch.contains('/')
+                && !branch.contains('\\') =>
+        {
+            format!("{}  {}", color_directory(directory), color_branch(branch))
+        }
+        _ => color_directory(right_text),
+    }
 }
 
 /// 将 token 数格式化为 `272k` 风格。

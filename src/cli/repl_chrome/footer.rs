@@ -1,7 +1,7 @@
 use super::*;
 
 impl ReplChrome {
-    /// 底栏整行：左侧模式/上下文/模型/思考，右侧目录。
+    /// 底栏整行：左侧模式/上下文/模型/思考，右侧目录与 Git 分支。
     ///
     /// 停止快捷键只在下方按键提示行出现，底栏不再重复。
     ///
@@ -55,7 +55,18 @@ impl ReplChrome {
                 self.thinking
             ),
         };
-        self.compose_footer_line(cols, &left_plain, &self.directory, false)
+        self.compose_footer_line(cols, &left_plain, &self.right_plain(), false)
+    }
+
+    /// 【TUI】【底栏右侧】工作目录，有 Git 仓库时再跟上当前分支。
+    ///
+    /// 返回:
+    /// - 目录，或 `目录  分支`
+    fn right_plain(&self) -> String {
+        match self.branch.as_deref().filter(|branch| !branch.is_empty()) {
+            Some(branch) => format!("{}  {branch}", self.directory),
+            None => self.directory.clone(),
+        }
     }
 
     /// 按净宽裁剪并着色底栏左右两段。
@@ -87,8 +98,10 @@ impl ReplChrome {
         };
         let right = if right_text.is_empty() {
             String::new()
-        } else {
+        } else if custom {
             color_directory(&right_text)
+        } else {
+            colorize_right_status(&right_text)
         };
         format!(
             "{}{left}{}{right}{}",

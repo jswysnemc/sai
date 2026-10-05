@@ -26,6 +26,7 @@ pub(super) fn chrome() -> ReplChrome {
         model: "gpt".to_string(),
         thinking: "auto".to_string(),
         directory: "/workspace".to_string(),
+        branch: None,
         cache_hit_ratio: None,
         status_plugin: None,
     }
@@ -304,7 +305,10 @@ fn fullscreen_keeps_formula_image_placements_intact() {
         .unwrap();
     let placements = rows
         .iter()
-        .flat_map(|row| row.match_indices("\x1b_Ga=p").map(move |(at, _)| &row[at..]))
+        .flat_map(|row| {
+            row.match_indices("\x1b_Ga=p")
+                .map(move |(at, _)| &row[at..])
+        })
         .collect::<Vec<_>>();
     assert_eq!(placements.len(), 2, "{rows:#?}");
     for placement in placements {
@@ -314,7 +318,6 @@ fn fullscreen_keeps_formula_image_placements_intact() {
     let inline_row = rows.iter().find(|row| row.contains("行内")).unwrap();
     assert!(inline_row.contains("尾巴"), "{inline_row:?}");
 }
-
 
 /// 直接拖动即可选中正文并复制，不展开段落；松开后标题提示已复制。
 #[test]
@@ -336,7 +339,11 @@ fn dragging_selects_and_copies_without_toggling() {
     );
     let start = line.find("turn-1").unwrap() as u16;
     runtime
-        .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), start, screen_row))
+        .handle_fullscreen_event(&mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            start,
+            screen_row,
+        ))
         .unwrap();
     runtime
         .handle_fullscreen_event(&mouse(
@@ -346,7 +353,14 @@ fn dragging_selects_and_copies_without_toggling() {
         ))
         .unwrap();
     // 拖动中选区以反色绘制
-    let painted = runtime.fullscreen.as_ref().unwrap().state.previous.clone().unwrap();
+    let painted = runtime
+        .fullscreen
+        .as_ref()
+        .unwrap()
+        .state
+        .previous
+        .clone()
+        .unwrap();
     assert!(painted[usize::from(screen_row)].contains("\x1b[7m"));
     runtime
         .handle_fullscreen_event(&mouse(
@@ -413,11 +427,17 @@ fn bottom_button_returns_to_latest_output() {
     let painted = crate::render::activity_animation::strip_ansi_for_test(
         &session.state.previous.as_ref().unwrap()[usize::from(last_row)],
     );
-    assert!(painted.contains("回到底部") || painted.contains("Back to bottom"), "{painted}");
+    assert!(
+        painted.contains("回到底部") || painted.contains("Back to bottom"),
+        "{painted}"
+    );
     click(&mut runtime, (start + end) / 2, last_row);
     let session = runtime.fullscreen.as_ref().unwrap();
     assert!(session.state.follow);
-    assert_eq!(session.state.scroll, session.state.max_scroll(usize::from(layout.body_height)));
+    assert_eq!(
+        session.state.scroll,
+        session.state.max_scroll(usize::from(layout.body_height))
+    );
     assert!(session.bottom_button.is_none());
     assert!(session.state.selection.is_none());
 }

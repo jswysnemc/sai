@@ -37,6 +37,7 @@ fn chrome(config: &AppConfig, paths: &SaiPaths) -> ReplChrome {
         model: "test-model".into(),
         thinking: "high".into(),
         directory: "~/项目/sai".into(),
+        branch: None,
         cache_hit_ratio: Some(0.9),
         status_plugin: Some(TuiStatusRenderer::start(config.clone(), paths.clone())),
     }

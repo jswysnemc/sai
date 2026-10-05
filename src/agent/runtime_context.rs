@@ -403,7 +403,7 @@ fn message_text(message: &ChatMessage) -> Option<String> {
 ///
 /// 返回:
 /// - 分支名称；非 Git 目录或 detached HEAD 返回 None
-fn git_branch(cwd: &Path) -> Option<String> {
+pub(crate) fn git_branch(cwd: &Path) -> Option<String> {
     let output = Command::new("git")
         .args(["symbolic-ref", "--quiet", "--short", "HEAD"])
         .env("GIT_OPTIONAL_LOCKS", "0")

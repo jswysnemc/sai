@@ -83,7 +83,7 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
         crate::render::terminal_image::kitty_cell_pixel_height(),
     );
     let mut bottom_button = None;
-    // 4. 悬停在可展开段落上时，整段铺浅色底提示可点击
+    // 4. 悬停在可展开段落上时，整段加粗提示可点击
     let hovered_rows = state.hovered_paragraph().map(|span| (span.start, span.end));
     for (row, line) in window.iter().enumerate() {
         let line = line.as_str();

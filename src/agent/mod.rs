@@ -77,7 +77,7 @@ use crate::tools::{self, ToolPermission, ToolRegistry};
 use anyhow::Result;
 use message_context::system_messages_first;
 use model_context::selected_model_label;
-pub(crate) use runtime_context::{context_state_update, RuntimeContextSnapshot};
+pub(crate) use runtime_context::{context_state_update, git_branch, RuntimeContextSnapshot};
 pub(crate) use tool_gate::{evaluate_tool_gate, ToolGate};
 use tool_gate::{is_tool_error_output, tool_error_output};
 pub(crate) use tool_visibility::ToolVisibility;
