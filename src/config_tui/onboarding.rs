@@ -35,7 +35,7 @@ pub(super) fn run(stdout: &mut io::Stdout, paths: &SaiPaths, config: &AppConfig)
         if provider.is_opencode_zen() {
             t("Built-in free provider; no API key required. Confirm its model to start chatting.", "内置免费供应商，无需密钥。确认默认模型后开始聊天。").to_string()
         } else {
-            format!("{}\n{}", provider.base_url, t("Enter an API key and default model. No request is sent during setup.", "填写密钥和默认模型。引导期间不会发送模型请求。"))
+            format!("{}\n{}", provider.base_url, t("Enter an API key and default model. After saving, you can import the catalog in Settings.", "填写密钥和默认模型。保存后可在设置中导入模型目录。"))
         }
     }).collect();
     options.push(t("Custom provider", "自定义供应商").to_string());

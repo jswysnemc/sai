@@ -135,11 +135,24 @@ impl PromptContext {
         Ok(())
     }
 
-    /// 【Jev路由】【正文注入】参数为本轮选择；返回按来源顺序排列的命中正文及记忆开关。
-    pub(super) fn render(&self, selection: &Selection) -> Preselection {
+    /// 【Jev路由】【正文注入】参数为本轮选择和近期历史；已在上下文中的片段只给提示。
+    ///
+    /// 参数:
+    /// - `selection`: Jev 选择结果
+    /// - `history`: 近期消息序列化文本，用于判断片段是否已注入
+    ///
+    /// 返回:
+    /// - 命中正文或已存在提示，以及记忆开关
+    pub(super) fn render(&self, selection: &Selection, history: &str) -> Preselection {
         let mut blocks = Vec::new();
+        let mut already = Vec::new();
         for fragment in self.selected(selection) {
             if fragment.content.is_empty() {
+                continue;
+            }
+            let marker = format!("<jev-context id=\"{}\"", fragment.id);
+            if history.contains(&marker) || history.contains(&fragment.content) {
+                already.push(fragment.description.clone());
                 continue;
             }
             // 种类、来源与说明写进标签，历史回放时界面无需再查候选表
@@ -152,11 +165,21 @@ impl PromptContext {
                 fragment.content
             ));
         }
-        Preselection {
-            block: (!blocks.is_empty()).then(|| format!(
+        let mut parts = Vec::new();
+        if !already.is_empty() {
+            parts.push(format!(
+                "<jev-context-hint>\nThese configured instructions are already in the current context; do not re-inject them: {}.\n</jev-context-hint>",
+                already.join("; ")
+            ));
+        }
+        if !blocks.is_empty() {
+            parts.push(format!(
                 "<jev-selected-context>\nThe Jev router selected these configured instructions for the current request. Apply them when relevant to this request.\n{}\n</jev-selected-context>",
                 blocks.join("\n\n")
-            )),
+            ));
+        }
+        Preselection {
+            block: (!parts.is_empty()).then(|| parts.join("\n\n")),
             memory_selected: selection.prompts.iter().any(|id| id == MEMORY_ID),
         }
     }

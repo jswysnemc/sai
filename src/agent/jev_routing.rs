@@ -67,7 +67,10 @@ impl Agent {
                 return Ok(Preselection::default());
             }
         };
-        let mut result = prompt_context.render(&selection);
+        let mut result = prompt_context.render(
+            &selection,
+            &serde_json::to_string(&history).unwrap_or_default(),
+        );
         if selection.tools.is_empty() && selection.skills.is_empty() {
             // 只命中提示词片段或记忆：界面同样收到结构化结果
             on_event(AgentEvent::JevPreselect {

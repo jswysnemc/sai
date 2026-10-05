@@ -55,13 +55,13 @@ fn baseline_and_live_instruction_updates_exclude_deferred_content() {
         prompts: context.candidates.iter().map(|c| c.name.clone()).collect(),
         ..Default::default()
     };
-    let rendered = context.render(&selected);
+    let rendered = context.render(&selected, "");
     assert!(rendered.memory_selected);
     for hidden in ["文件隐藏", "配置隐藏", "附加隐藏"] {
         assert!(rendered.block.as_deref().unwrap().contains(hidden));
     }
     assert!(!rendered.block.unwrap().contains("记忆索引内容"));
-    assert!(context.render(&Selection::default()).block.is_none());
+    assert!(context.render(&Selection::default(), "").block.is_none());
     std::fs::write(
         paths.config_dir.join("AGENT.md"),
         "文件已更新<jev>新增隐藏</jev>",
@@ -76,6 +76,28 @@ fn baseline_and_live_instruction_updates_exclude_deferred_content() {
         .candidates
         .iter()
         .any(|c| c.description == "新增隐藏"));
+}
+
+/// 验证已在上下文中的片段只给提示，不再重复注入正文。
+#[test]
+fn already_injected_fragments_become_hints() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(temp.path());
+    std::fs::create_dir_all(&paths.config_dir).unwrap();
+    let mut config = AppConfig::default();
+    config.jev.routing.enabled = true;
+    config.system_prompt = Some("静态<jev description=\"场景\">隐藏正文</jev>".into());
+    let agent = agent(config, &paths);
+    let context = agent.jev_prompt_context(None).unwrap();
+    let selected = Selection {
+        prompts: context.candidates.iter().map(|c| c.name.clone()).collect(),
+        ..Default::default()
+    };
+    let first = context.render(&selected, "").block.unwrap();
+    assert!(first.contains("隐藏正文"));
+    let again = context.render(&selected, &first).block.unwrap();
+    assert!(again.contains("already in the current context"));
+    assert!(!again.contains("<jev-selected-context>"));
 }
 
 /// 验证旧配置默认静态注入，路由关闭时新开关不改变行为，无参数、无返回值。
@@ -158,6 +180,8 @@ async fn http_routing_controls_prompt_and_memory_exposure_each_turn() {
             "id": "local-jev", "kind": "jev", "name": "Local", "endpoint": format!("http://{address}/jev"), "api_key": "test"
         })).unwrap());
         let mut agent = agent(config, &paths);
+        // 片段首次命中时注入正文，之后已在上下文中，只给提示不再重复注入
+        let mut injected = false;
         for (index, (need, prompt_expected, memory_expected)) in [("none", false, false), ("prompt", true, false), ("all", true, true), ("fail", false, false), ("none", false, false), ("all", true, true)].into_iter().enumerate() {
             let turn = format!("route-{index}");
             agent.state.start_turn(&turn, need).unwrap();
@@ -179,11 +203,14 @@ async fn http_routing_controls_prompt_and_memory_exposure_each_turn() {
                 assert!(detail.to_string().contains("配置场景"), "{need}");
             }
             assert_eq!(result.memory_selected, memory_expected, "{need}");
-            assert_eq!(result.block.as_deref().is_some_and(|block| block.contains("条件正文")), prompt_expected, "{need}");
+            let body_expected = prompt_expected && !injected;
+            assert_eq!(result.block.as_deref().is_some_and(|block| block.contains("条件正文")), body_expected, "{need}");
+            assert_eq!(result.block.as_deref().is_some_and(|block| block.contains("already in the current context")), prompt_expected && injected, "{need}");
             let memory = result.memory_selected.then_some("<memory-index>索引</memory-index>");
             let messages = agent.chat_messages_for_turn(&turn, need, &[], memory, result.block.as_deref()).unwrap();
             let current = serde_json::to_string(messages.last().unwrap()).unwrap();
-            assert_eq!(current.contains("条件正文"), prompt_expected);
+            assert_eq!(current.contains("条件正文"), body_expected);
+            injected |= body_expected;
             assert!(!serde_json::to_string(&messages[0]).unwrap().contains("条件正文"));
             if need == "fail" { assert_eq!(phases, ["running", "failed"]); }
             agent.state.complete_turn(&turn, "answer", None).unwrap();
