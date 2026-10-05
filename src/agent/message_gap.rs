@@ -206,7 +206,11 @@ impl Agent {
             reasoning: result.reasoning.clone(),
             image_urls: Vec::new(),
         })?;
-        self.state.save_assistant_message(turn_id, crate::state::tool_history::AssistantMessageKey::Intermediate(&message.id), result)?;
+        self.state.save_assistant_message(
+            turn_id,
+            crate::state::tool_history::AssistantMessageKey::Intermediate(&message.id),
+            result,
+        )?;
         messages.push(result.assistant_message());
         Ok(())
     }

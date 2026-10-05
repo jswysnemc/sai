@@ -194,9 +194,15 @@ fn parse_placement(sequence: &str, start: usize, end: usize, col: usize) -> Opti
         end,
         col,
         image_id: fields.get("i")?.parse().ok()?,
-        placement_id: fields.get("p").and_then(|value| value.parse().ok()).unwrap_or(0),
+        placement_id: fields
+            .get("p")
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(0),
         cols: fields.get("c").and_then(|value| value.parse().ok()),
-        rows: fields.get("r").and_then(|value| value.parse().ok()).unwrap_or(1),
+        rows: fields
+            .get("r")
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(1),
     })
 }
 

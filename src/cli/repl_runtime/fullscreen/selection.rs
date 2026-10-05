@@ -195,7 +195,11 @@ mod tests {
     /// 验证跨行选区按行首、整行、行尾提取，反向拖动结果一致。
     #[test]
     fn extracts_multi_row_text_in_document_order() {
-        let lines = vec!["alpha beta".to_string(), "gamma".to_string(), "delta epsilon".to_string()];
+        let lines = vec![
+            "alpha beta".to_string(),
+            "gamma".to_string(),
+            "delta epsilon".to_string(),
+        ];
         let forward = selected_text(&lines, &selection((0, 6), (2, 5)), 20);
         assert_eq!(forward, "beta\ngamma\ndelta");
         let backward = selected_text(&lines, &selection((2, 5), (0, 6)), 20);
@@ -206,7 +210,10 @@ mod tests {
     #[test]
     fn slices_wide_characters_by_display_columns() {
         let lines = vec!["中文ab测试".to_string()];
-        assert_eq!(selected_text(&lines, &selection((0, 2), (0, 6)), 20), "文ab");
+        assert_eq!(
+            selected_text(&lines, &selection((0, 2), (0, 6)), 20),
+            "文ab"
+        );
     }
 
     /// 验证高亮跨过原有重置序列仍保持反色，区间外恢复。
@@ -218,7 +225,10 @@ mod tests {
         assert!(output.starts_with("a\x1b[31m\x1b[7mb"), "{output:?}");
         assert!(output.contains("\x1b[0m\x1b[7md"));
         assert!(output.ends_with("\x1b[27me"));
-        assert_eq!(crate::render::activity_animation::strip_ansi_for_test(&output), "abcde");
+        assert_eq!(
+            crate::render::activity_animation::strip_ansi_for_test(&output),
+            "abcde"
+        );
     }
 
     /// 验证空选区与区间计算。
