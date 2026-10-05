@@ -183,11 +183,21 @@ sudo pacman -U ~/.cache/sai/packages/sai-<version>-1-x86_64.pkg.tar.zst
 
 ### Prebuilt binaries
 
-Automated builds run on every push to `main`, available under [GitHub Actions](https://github.com/jswysnemc/sai/actions). Tagged releases can be downloaded from [GitHub Releases](https://github.com/jswysnemc/sai/releases):
+Automated builds run on every push to `main`, available under [GitHub Actions](https://github.com/jswysnemc/sai/actions). Tagged releases can be downloaded from [GitHub Releases](https://github.com/jswysnemc/sai/releases).
+
+Web-embedded CLI binaries (TUI plus `sai web`):
 
 - `sai-linux-x86_64`
 - `sai-windows-x86_64.exe`
 - `sai-macos-arm64`
+
+Desktop installers (Electron shell around the same web-embedded backend):
+
+- Linux: `sai-desktop-*-linux-*.AppImage`, `sai-desktop-*-linux-*.tar.gz`
+- macOS: `sai-desktop-*-mac-*.dmg`, `sai-desktop-*-mac-*.zip`
+- Windows: `sai-desktop-*-win-*.exe`, `sai-desktop-*-win-*.zip`
+
+Local desktop packaging lives in [`desktop/`](desktop/README.md). Installer files are published; staging directories and unpacked Electron folders stay local.
 
 ### Docker container
 

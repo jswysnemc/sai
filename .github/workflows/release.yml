@@ -9,6 +9,11 @@ on:
         description: "Existing tag to publish (for example v0.1.0). Leave empty to use the push ref."
         required: false
         type: string
+      target:
+        description: "Desktop platforms to build. CLI binaries are always built."
+        type: choice
+        default: all
+        options: [all, linux-x64, linux-arm64, win-x64, mac-x64, mac-arm64]
 
 permissions:
   contents: write
@@ -19,7 +24,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build ${{ matrix.asset }}
+    name: CLI ${{ matrix.asset }}
     strategy:
       fail-fast: false
       matrix:
@@ -84,17 +89,15 @@ jobs:
         with:
           shared-key: release-${{ matrix.os }}
 
-      - name: Build release binary
+      - name: Build web-embedded release binary
         run: cargo build --release --locked
 
       - name: Prepare asset
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            cp "${{ matrix.binary }}" "${{ matrix.rename }}"
-          else
-            cp "${{ matrix.binary }}" "${{ matrix.rename }}"
+          cp "${{ matrix.binary }}" "${{ matrix.rename }}"
+          if [[ "${{ runner.os }}" != "Windows" ]]; then
             chmod +x "${{ matrix.rename }}"
           fi
           # 1. 【发布】【校验文件】只记录下载文件名，允许在下载目录直接校验
@@ -114,9 +117,115 @@ jobs:
             ${{ matrix.rename }}.sha256
           if-no-files-found: error
 
+  desktop:
+    name: Desktop ${{ matrix.target }}
+    runs-on: ${{ fromJSON('{"linux-x64":"ubuntu-22.04","linux-arm64":"ubuntu-24.04-arm","win-x64":"windows-2022","mac-x64":"macos-15-intel","mac-arm64":"macos-latest"}')[matrix.target] }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON((inputs.target == '' || inputs.target == 'all' || inputs.target == null) && '["linux-x64","linux-arm64","win-x64","mac-x64","mac-arm64"]' || format('["{0}"]', inputs.target)) }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      CARGO_INCREMENTAL: '0'
+      CARGO_BUILD_JOBS: '2'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: desktop/package.json
+          run_install: false
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libasound2-dev libwayland-dev libxkbcommon-dev pkg-config ripgrep xvfb imagemagick
+          if [ -f /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
+      - name: Install Windows assembler
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install nasm --no-progress --yes
+          'C:\Program Files\NASM' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            desktop/native/browser-launcher -> desktop/native/browser-launcher/target
+          shared-key: desktop-${{ matrix.target }}
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: pnpm install --frozen-lockfile
+
+      - name: Test desktop modules
+        working-directory: desktop
+        run: pnpm test
+
+      - name: Build native desktop packages
+        working-directory: desktop
+        run: pnpm build --platform ${{ startsWith(matrix.target, 'win') && 'win' || startsWith(matrix.target, 'mac') && 'mac' || 'linux' }} --arch ${{ endsWith(matrix.target, 'arm64') && 'arm64' || 'x64' }}
+
+      - name: Smoke test Linux package
+        if: runner.os == 'Linux'
+        working-directory: desktop
+        env:
+          SAI_DESKTOP_EXECUTABLE: dist/${{ endsWith(matrix.target, 'arm64') && 'linux-arm64-unpacked' || 'linux-unpacked' }}/sai-desktop
+        run: xvfb-run -a -s '-screen 0 1440x1000x24' pnpm test:smoke
+
+      - name: Smoke test packaged Electron browser
+        if: runner.os == 'Linux'
+        working-directory: desktop
+        env:
+          SAI_DESKTOP_EXECUTABLE: dist/${{ endsWith(matrix.target, 'arm64') && 'linux-arm64-unpacked' || 'linux-unpacked' }}/sai-desktop
+        run: xvfb-run -a -s '-screen 0 1440x1000x24' pnpm test:browser
+
+      - name: Upload desktop packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: sai-desktop-${{ matrix.target }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            desktop/dist/packages/*.AppImage
+            desktop/dist/packages/*.tar.gz
+            desktop/dist/packages/*.exe
+            desktop/dist/packages/*.dmg
+            desktop/dist/packages/*.zip
+            desktop/dist/packages/*.sha256
+
+      - name: Upload test evidence
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-tests-${{ matrix.target }}
+          path: desktop/test-results/
+          if-no-files-found: ignore
+
   publish:
     name: Publish GitHub Release
-    needs: build
+    needs: [build, desktop]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -130,6 +239,7 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+          pattern: sai-*
 
       - name: List assets
         run: find dist -type f | sort

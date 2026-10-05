@@ -3,6 +3,7 @@ mod app_state;
 mod assets;
 mod auth;
 mod bind_address;
+mod daemon;
 mod browser;
 mod error;
 pub(crate) mod password;
@@ -31,5 +32,8 @@ use anyhow::Result;
 /// 返回:
 /// - 服务运行结果
 pub(crate) async fn run(paths: &SaiPaths, args: WebArgs) -> Result<()> {
+    if daemon::detach_if_interactive(&args)? {
+        return Ok(());
+    }
     server::run(paths, args).await
 }

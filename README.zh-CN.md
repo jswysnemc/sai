@@ -183,11 +183,21 @@ sudo pacman -U ~/.cache/sai/packages/sai-<version>-1-x86_64.pkg.tar.zst
 
 ### 预编译二进制文件
 
-每次推送到 `main` 分支均会触发自动化构建，可在 [GitHub Actions](https://github.com/jswysnemc/sai/actions) 下载各平台构件；正式发布版本请前往 [GitHub Releases](https://github.com/jswysnemc/sai/releases) 下载：
+每次推送到 `main` 分支均会触发自动化构建，可在 [GitHub Actions](https://github.com/jswysnemc/sai/actions) 下载各平台构件；正式发布版本请前往 [GitHub Releases](https://github.com/jswysnemc/sai/releases) 下载。
+
+内嵌 Web 工作台的 CLI 可执行文件（终端界面与 `sai web`）：
 
 - `sai-linux-x86_64`
 - `sai-windows-x86_64.exe`
 - `sai-macos-arm64`
+
+桌面安装包（Electron 外壳，内含同一套内嵌 Web 的后端）：
+
+- Linux：`sai-desktop-*-linux-*.AppImage`、`sai-desktop-*-linux-*.tar.gz`
+- macOS：`sai-desktop-*-mac-*.dmg`、`sai-desktop-*-mac-*.zip`
+- Windows：`sai-desktop-*-win-*.exe`、`sai-desktop-*-win-*.zip`
+
+本地桌面打包说明见 [`desktop/`](desktop/README.md)。发布只上传安装包文件，暂存目录和解压后的 Electron 文件夹不会进入发布产物。
 
 ### Docker 容器部署
 

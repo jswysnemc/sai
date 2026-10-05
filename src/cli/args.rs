@@ -217,6 +217,10 @@ pub struct WebArgs {
     #[arg(long)]
     pub no_open: bool,
 
+    /// 占用当前终端；默认在交互终端拆到后台，只打印监听地址
+    #[arg(long)]
+    pub foreground: bool,
+
     /// 关闭启动令牌，仅允许监听 127.0.0.1 / ::1 时使用
     #[arg(long)]
     pub allow_anonymous: bool,

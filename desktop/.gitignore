@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.staging/
+renderer/dist/
+native/browser-launcher/target/
+test-results/
+*.log
+.DS_Store

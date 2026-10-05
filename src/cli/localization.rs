@@ -262,6 +262,12 @@ fn localize_web_command(command: clap::Command) -> clap::Command {
                 "不自动打开浏览器",
             ))
         })
+        .mut_arg("foreground", |arg| {
+            arg.help(t(
+                "Keep the server in this terminal",
+                "在当前终端前台运行",
+            ))
+        })
 }
 
 fn localize_ask_command(command: clap::Command) -> clap::Command {

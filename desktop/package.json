@@ -1,0 +1,46 @@
+{
+  "name": "sai-desktop",
+  "version": "0.2.4",
+  "private": true,
+  "description": "Sai 桌面工作台",
+  "desktopName": "sai-desktop.desktop",
+  "license": "MIT",
+  "main": "electron/main.cjs",
+  "packageManager": "pnpm@12.6.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "pnpm desktop:prepare && electron .",
+    "desktop:prepare": "node scripts/prepare-desktop.mjs",
+    "desktop:check": "node scripts/check-sai-contracts.mjs",
+    "backend:build": "node scripts/prepare-backend.mjs",
+    "backend:reuse": "node scripts/prepare-backend.mjs --reuse",
+    "build": "node scripts/build-desktop.mjs",
+    "build:win": "node scripts/build-desktop.mjs --platform win --arch x64",
+    "build:mac": "node scripts/build-desktop.mjs --platform mac",
+    "build:linux": "node scripts/build-desktop.mjs --platform linux",
+    "pack": "node scripts/build-desktop.mjs --dir",
+    "dist": "node scripts/build-desktop.mjs --skip-backend",
+    "test": "node --test tests/*.test.cjs",
+    "test:smoke": "node scripts/smoke-test.mjs",
+    "test:browser": "node scripts/browser-smoke.mjs"
+  },
+  "devDependencies": {
+    "@radix-ui/react-toolbar": "^1.1.19",
+    "@radix-ui/react-tooltip": "^1.2.16",
+    "@tailwindcss/vite": "4.3.3",
+    "@vitejs/plugin-react": "4.7.0",
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3",
+    "lucide-react": "0.468.0",
+    "playwright": "1.63.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tailwindcss": "4.3.3",
+    "vite": "6.4.3"
+  },
+  "dependencies": {
+    "ws": "8.21.0"
+  }
+}

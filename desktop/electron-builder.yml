@@ -1,0 +1,53 @@
+appId: com.sai.desktop
+productName: Sai Desktop
+executableName: sai-desktop
+asar: true
+npmRebuild: false
+directories:
+  output: dist
+  buildResources: build
+files:
+  - electron/**/*.cjs
+  - renderer/dist/**/*
+  - build/icon.png
+  - package.json
+  - LICENSE
+  - '!scripts/**'
+  - '!tests/**'
+  - '!.staging/**'
+  - '!native/**'
+  - '!docs/**'
+extraResources:
+  - from: .staging/${os}-${arch}/backend
+    to: backend
+  - from: .staging/${os}-${arch}/desktop-host
+    to: desktop-host
+artifactName: ${name}-${version}-${os}-${arch}.${ext}
+beforePack: scripts/verify-package.cjs
+linux:
+  syncDesktopName: true
+  target:
+    - AppImage
+    - tar.gz
+  category: Development
+  icon: build/icon.png
+  desktop:
+    entry:
+      StartupWMClass: sai-desktop
+      Comment: Sai 桌面工作台
+mac:
+  icon: build/icon.png
+  identity: '-'
+  target:
+    - dmg
+    - zip
+  category: public.app-category.developer-tools
+win:
+  icon: build/icon.png
+  target:
+    - nsis
+    - zip
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true

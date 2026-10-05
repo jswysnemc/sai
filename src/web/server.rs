@@ -40,7 +40,13 @@ pub(super) async fn run(paths: &SaiPaths, args: WebArgs) -> Result<()> {
         );
     }
     let workspaces = WorkspaceManager::new(paths, args.workspace.as_deref())?;
-    let runs = RunManager::new(paths)?.with_console_logging();
+    let detached = std::env::var_os("SAI_WEB_DETACHED").is_some();
+    let interactive = std::io::IsTerminal::is_terminal(&std::io::stdout());
+    let runs = if detached {
+        RunManager::new(paths)?
+    } else {
+        RunManager::new(paths)?.with_console_logging()
+    };
     let state = WebAppState {
         paths: paths.clone(),
         auth_token: Arc::from(token.as_str()),
@@ -53,11 +59,13 @@ pub(super) async fn run(paths: &SaiPaths, args: WebArgs) -> Result<()> {
         weixin_login: WeixinLoginManager::new(paths),
     };
     runs.resume_queued().await;
-    let app = Router::new()
+    let mut app = Router::new()
         .merge(api::router(state.clone()))
         .fallback(assets::serve)
-        .layer(axum::middleware::from_fn(super::server_logging::request))
         .with_state(state.clone());
+    if !detached {
+        app = app.layer(axum::middleware::from_fn(super::server_logging::request));
+    }
     let listener = tokio::net::TcpListener::bind(address)
         .await
         .with_context(|| format!("failed to bind Sai Web at {address}"))?;
@@ -93,7 +101,11 @@ pub(super) async fn run(paths: &SaiPaths, args: WebArgs) -> Result<()> {
     if !args.no_open {
         let _ = open::that_detached(&url);
     }
-    println!("Press Ctrl+C to stop Sai Web.");
+    if detached {
+        hush_stdio()?;
+    } else if interactive {
+        println!("Press Ctrl+C to stop Sai Web.");
+    }
     super::server_shutdown::serve_until(
         listener,
         app,
@@ -102,6 +114,24 @@ pub(super) async fn run(paths: &SaiPaths, args: WebArgs) -> Result<()> {
         std::time::Duration::from_secs(3),
     )
     .await
+}
+
+/// 【Web 服务】【后台输出】拆出后台后关掉标准输出，避免管道关闭后收到 SIGPIPE。
+fn hush_stdio() -> Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::fd::AsRawFd;
+        let null = std::fs::OpenOptions::new()
+            .write(true)
+            .open("/dev/null")
+            .context("open /dev/null")?;
+        let fd = null.as_raw_fd();
+        unsafe {
+            libc::dup2(fd, 1);
+            libc::dup2(fd, 2);
+        }
+    }
+    Ok(())
 }
 
 /// 生成单次服务启动令牌。
