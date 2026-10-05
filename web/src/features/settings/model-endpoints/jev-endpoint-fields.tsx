@@ -76,6 +76,7 @@ export function JevEndpointFields({
             secretSentinel={secretSentinel}
             onRevealKey={onRevealKey}
             onChange={onKeysChange}
+            compact
           />
           <small className="sk-field-hint">{t("Use one selected key by default, or enable load balancing when multiple keys are configured. Environment variables can be referenced with `$env:VARIABLE_NAME`.", "默认使用一个选中的密钥；配置多个密钥后可以启用负载均衡。支持使用 `$env:VARIABLE_NAME` 引用环境变量。")}</small>
         </div>

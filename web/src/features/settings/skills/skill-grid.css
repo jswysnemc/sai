@@ -7,6 +7,24 @@
   list-style: none;
 }
 
+.skill-filter-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 10rem 10rem;
+  gap: var(--space-md);
+  align-items: center;
+  min-width: 0;
+}
+
+.skill-filter-toolbar .sk-input {
+  padding-left: var(--space-md);
+}
+
+@media (width < 36rem) {
+  .skill-filter-toolbar {
+    grid-template-columns: 1fr;
+  }
+}
+
 .skill-grid-item {
   min-width: 0;
 }

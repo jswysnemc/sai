@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AppConfig } from "../../../api/contracts";
+import { removeSearchApiKey } from "./search-api-keys-field";
 import {
   hiddenSearchApiKeyCount,
   mergeSearchApiKeyText,
@@ -68,6 +69,8 @@ describe("web search config", () => {
     expect(webSearchProviderStatus(config, "duckduckgo")).toBe("builtin");
     expect(webSearchProviderStatus(config, "tavily")).toBe("configured");
     expect(webSearchProviderStatus(config, "tinyfish")).toBe("missing");
+    expect(webSearchProviderStatus(config, "brave")).toBe("missing");
+    expect(webSearchProviderStatus(config, "exa")).toBe("missing");
   });
 
   it("编辑密钥时隐藏服务端占位符", () => {
@@ -92,5 +95,10 @@ describe("web search config", () => {
       sentinel
     ]);
     expect(mergeSearchApiKeyText(keys, "", sentinel)).toEqual(["", sentinel]);
+  });
+
+  it("deletes an environment-reference row instead of leaving an empty slot", () => {
+    expect(removeSearchApiKey(["saved-key", "$env:TINYFISH_API_KEY"], 1)).toEqual(["saved-key"]);
+    expect(removeSearchApiKey(["$env:TINYFISH_API_KEY"], 0)).toEqual([""]);
   });
 });

@@ -91,7 +91,7 @@ export function UsageStatsSection({ subview }: { subview?: string }) {
 
   return (
     <section className="usage-stats-section">
-      <SettingsPanel title={t("Filters", "筛选条件")} description={t("Compare provider-reported and cache-adjusted token usage.", "对比供应商上报用量与缓存折算后的计费用量。")} actions={<>
+      <SettingsPanel title={t("Filters", "筛选条件")} description={t("Bill estimate folds cache discounts so you can compare with the vendor invoice. Provider-reported totals stay raw.", "账单估算已折算缓存折扣，便于对照供应商账单；接口上报量保持原始数值。")} actions={<>
         <Button variant="secondary" onClick={() => void stats.refetch()} disabled={stats.isFetching}><RefreshCw size={14} />{t("Refresh", "刷新")}</Button>
         <Button variant="ghost-danger" disabled={clear.isPending} onClick={() => void confirm({ title: t("Clear all usage logs?", "清空全部用量日志？"), description: t("This removes logs for every time range and cannot be undone.", "将删除全部时间范围的日志，操作无法恢复。"), confirmLabel: t("Clear all", "全部清空"), danger: true }).then((accepted) => { if (accepted) clear.mutate(); })}><Trash2 size={14} />{t("Clear", "清空")}</Button>
       </>}>

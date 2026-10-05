@@ -100,9 +100,6 @@
 }
 
 .sk-secret .ui-password-field button {
+  width: 1.875rem;
   min-width: 1.875rem;
-}
-
-.sk-secret .ui-password-field-saved {
-  font-size: var(--text-xs);
 }

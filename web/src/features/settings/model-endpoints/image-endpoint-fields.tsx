@@ -75,12 +75,24 @@ export function ImageEndpointFields({
               spellCheck={false}
             />
           </SettingsField>
-          <SettingsField label={t("Model", "模型")} anchor="image-models.model" configKey="model_endpoints.model" hint={t("The model field sent with every image request.", "每次生图请求都会发送此模型字段。")}>
+          <SettingsField label={t("Model", "模型")} anchor="image-models.model" configKey="model_endpoints.model" hint={t("The model field sent with every image request. Fetch the catalog after the address and key are ready.", "每次生图请求都会发送此模型字段。地址和密钥就绪后可以获取目录。")}>
             {modelOptions.length > 0 ? (
               <SkSelect value={activeModel} options={modelOptions} onChange={(model) => onPatch({ model })} ariaLabel={t("Image model", "生图模型")} />
             ) : (
               <SkTextInput value={endpoint.model} onChange={(value) => onPatch({ model: value })} placeholder="gpt-image-1" spellCheck={false} />
             )}
+          </SettingsField>
+          <SettingsField label={t("Model catalog", "模型目录")} span="full" hint={models.length > 0 ? t(`${models.length} models imported from this endpoint.`, `已从该端点导入 ${models.length} 个模型。`) : t("Same as LLM providers: fetch the catalog, then pick a model above.", "与语言模型供应商相同：先获取目录，再在上方选择模型。")}>
+            <div className="provider-probe">
+              <div className="provider-probe-actions">
+                <Button className="provider-probe-run" disabled={fetching || !endpoint.endpoint.trim()} onClick={() => void fetchModels()}>
+                  {fetching ? <Loader2 size={14} className="provider-probe-spin" /> : <RefreshCw size={14} />}
+                  {fetching ? t("Fetching", "获取中") : t("Fetch models", "获取模型")}
+                </Button>
+              </div>
+              {fetchError && <p className="provider-probe-error">{fetchError}</p>}
+              {models.length > 0 && <div className="model-endpoint-models">{models.map((model) => <Button key={model} size="small" variant={model === activeModel ? "primary" : "secondary"} aria-pressed={model === activeModel} onClick={() => onPatch({ model })}>{model}</Button>)}</div>}
+            </div>
           </SettingsField>
           <SettingsField label={t("Protocol", "协议")} anchor="image-models.protocol" configKey="model_endpoints.protocol" hint={t("Auto adapts the URL, body, and authentication; choose a format to override it.", "自动模式会适配地址、请求体和认证方式，也可以手动指定格式。")}>
             <SkSelect
@@ -109,24 +121,9 @@ export function ImageEndpointFields({
             secretSentinel={secretSentinel}
             onRevealKey={onRevealKey}
             onChange={onKeysChange}
+            compact
           />
           <small className="sk-field-hint">{t("Use one selected key by default, or enable load balancing when multiple keys are configured. Environment variables can be referenced with `$env:VARIABLE_NAME`.", "默认使用一个选中的密钥；配置多个密钥后可以启用负载均衡。支持使用 `$env:VARIABLE_NAME` 引用环境变量。")}</small>
-        </div>
-      </SettingsPanel>
-
-      <SettingsPanel
-        title={t("Model catalog", "模型目录")}
-        description={models.length > 0 ? t(`${models.length} models imported from this endpoint.`, `已从该端点导入 ${models.length} 个模型。`) : t("Fetch the endpoint catalog, then choose the model above.", "获取端点模型目录后，可以在上方选择模型。")}
-      >
-        <div className="provider-probe">
-          <div className="provider-probe-actions">
-            <Button className="provider-probe-run" disabled={fetching || !endpoint.endpoint.trim()} onClick={() => void fetchModels()}>
-              {fetching ? <Loader2 size={14} className="provider-probe-spin" /> : <RefreshCw size={14} />}
-              {fetching ? t("Fetching", "获取中") : t("Fetch models", "获取模型")}
-            </Button>
-          </div>
-          {fetchError && <p className="provider-probe-error">{fetchError}</p>}
-          {models.length > 0 && <div className="model-endpoint-models">{models.map((model) => <Button key={model} size="small" variant={model === activeModel ? "primary" : "secondary"} aria-pressed={model === activeModel} onClick={() => onPatch({ model })}>{model}</Button>)}</div>}
         </div>
       </SettingsPanel>
 

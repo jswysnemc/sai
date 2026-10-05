@@ -1,4 +1,4 @@
-import { Check, Copy, Eye, EyeOff, Loader2, Pencil, X } from "./icons";
+import { Check, Copy, Eye, EyeOff, Loader2, Pencil, Trash2 } from "./icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "./button/button";
 import "./password-field.css";
@@ -195,18 +195,16 @@ export function PasswordField({
         placeholder={placeholder}
         disabled={disabled || revealing}
         onChange={(event) => updateValue(event.target.value)}
-        autoComplete={requireExplicitEdit ? "new-password" : "off"}
-        data-lpignore={requireExplicitEdit ? "true" : undefined}
-        data-1p-ignore={requireExplicitEdit ? "true" : undefined}
+        autoComplete="new-password"
+        data-lpignore="true"
+        data-1p-ignore="true"
         spellCheck={false}
       /> : <span
         id={id}
         className="ui-password-field-value"
         aria-label={ariaLabel}
         tabIndex={0}
-      >{state.visible ? displayed : value ? "••••••••" : savedValueHint
-          ? t("Edit to replace", "点击编辑以替换")
-          : t("Not configured", "未设置")}</span>}
+      >{state.visible ? displayed : value || savedValueHint ? "••••••••••••" : t("Not configured", "未设置")}</span>}
       {requireExplicitEdit && <Button
         variant="ghost"
         size="icon"
@@ -215,22 +213,6 @@ export function PasswordField({
         aria-label={editing ? t("Finish editing", "完成编辑") : t("Edit secret", "编辑密钥")}
         title={editing ? t("Finish editing", "完成编辑") : t("Edit secret", "编辑密钥")}
       >{editing ? <Check size={16} /> : <Pencil size={16} />}</Button>}
-      {savedValueHint && (
-        <span className="ui-password-field-saved">
-          {savedValueHint}
-          {onClearSavedValue && (
-            <button
-              type="button"
-              onClick={onClearSavedValue}
-              disabled={disabled || revealing}
-              aria-label={t("Clear the saved value", "清除已保存的值")}
-              title={t("Clear the saved value", "清除已保存的值")}
-            >
-              <X size={12} />
-            </button>
-          )}
-        </span>
-      )}
       {copyable.length > 0 && (
         <button
           type="button"
@@ -262,6 +244,19 @@ export function PasswordField({
             ? <EyeOff size={16} />
             : <Eye size={16} />}
       </button>}
+      {savedValueHint && onClearSavedValue && (
+        <button
+          type="button"
+          className="ui-password-field-clear"
+          onClick={onClearSavedValue}
+          onMouseDown={(event) => event.preventDefault()}
+          disabled={disabled || revealing}
+          aria-label={t("Clear the saved value", "清除已保存的值")}
+          title={t("Clear the saved value", "清除已保存的值")}
+        >
+          <Trash2 size={16} />
+        </button>
+      )}
     </div>
   );
 }

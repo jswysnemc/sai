@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { applyDisplayScale, loadDisplayScale } from "./display-scale";
 
 export type ThemeId =
   | "system"
@@ -121,6 +122,7 @@ const DARK_THEME_IDS = new Set(
 export function initializeTheme(): ThemeId {
   const theme = loadTheme();
   document.documentElement.dataset.theme = theme;
+  applyDisplayScale(loadDisplayScale());
   return theme;
 }
 

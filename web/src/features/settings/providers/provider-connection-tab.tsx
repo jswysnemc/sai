@@ -50,7 +50,7 @@ export function ProviderConnectionTab({ provider, providerKeys, selectedProvider
       </FieldGrid>
     </SettingsPanel>
     <SettingsPanel title={t("Credentials", "凭据")} description={t("Use a selected key or rotate across multiple keys. Environment references use $env:VARIABLE_NAME.", "固定使用所选密钥或在多个密钥间轮换。环境变量使用 $env:VARIABLE_NAME 引用。")} id={fieldAnchorId("providers.connection.api_keys")}>
-      <ProviderApiKeysField key={provider.id} providerId={provider.id} keys={providerKeys} selected={selectedProviderKey} balance={provider.api_key_balance === true} secretSentinel={secretSentinel} onRevealKey={onRevealKey} onChange={onKeysChange} />
+      <ProviderApiKeysField key={provider.id} providerId={provider.id} keys={providerKeys} selected={selectedProviderKey} balance={provider.api_key_balance === true} secretSentinel={secretSentinel} onRevealKey={onRevealKey} onChange={onKeysChange} compact />
     </SettingsPanel>
     <SettingsPanel title={t("Connectivity", "连通性")} description={t("Test normal responses or tool calls using the selected key.", "使用所选密钥测试普通响应或工具调用。")}>
       <ProviderConnectionTest formId={probeFormId} key={`${provider.id}:${provider.default_model ?? ""}:${selectedProviderKey ?? ""}`} provider={provider} model={provider.default_model || undefined} selectedKeyId={selectedProviderKey} />

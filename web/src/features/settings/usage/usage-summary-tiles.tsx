@@ -29,20 +29,20 @@ export function UsageSummaryTiles({ summary, t }: UsageSummaryTilesProps) {
           sub={`${formatCount(summary.successful_requests)} ${t("ok", "成功")} · ${formatCount(summary.failed_requests)} ${t("failed", "失败")}`}
         />
         <SummaryTile
-          label={t("Billable tokens", "计费 Token")}
+          label={t("Estimated bill", "账单估算")}
           value={formatTokens(summary.billable_total_tokens)}
-          sub={`${formatTokens(summary.billable_input_tokens)} / ${formatTokens(summary.output_tokens)}`}
+          sub={`${formatTokens(summary.billable_input_tokens)} ${t("in", "输入")} / ${formatTokens(summary.output_tokens)} ${t("out", "输出")}`}
           accent
         />
         <SummaryTile
-          label={t("Reported tokens", "上报 Token")}
+          label={t("Provider reported", "接口上报")}
           value={formatTokens(summary.total_tokens)}
-          sub={ratio ? `${formatTokens(summary.input_tokens)} ${t("in", "输入")} · ${ratio}` : `${formatTokens(summary.input_tokens)} ${t("in", "输入")}`}
+          sub={ratio ? `${formatTokens(summary.input_tokens)} ${t("in", "输入")} · ${t(`${ratio} vs bill`, `约为账单的 ${ratio}`)}` : `${formatTokens(summary.input_tokens)} ${t("in", "输入")}`}
         />
         <SummaryTile
-          label={t("Cache hit", "缓存命中")}
+          label={t("Cache share", "缓存占比")}
           value={cacheRatio}
-          sub={`${formatTokens(summary.cache_read_tokens)} ${t("read", "读取")} · ${formatTokens(summary.cache_write_tokens)} ${t("write", "写入")}`}
+          sub={`${formatTokens(summary.cache_read_tokens)} ${t("cached reads", "缓存读取")} · ${formatTokens(summary.cache_write_tokens)} ${t("writes", "写入")}`}
         />
         <SummaryTile
           label={t("Avg duration", "平均耗时")}
@@ -54,8 +54,8 @@ export function UsageSummaryTiles({ summary, t }: UsageSummaryTilesProps) {
         <p className="usage-billing-note">
           <Info size={14} />
           {t(
-            `Reported input is ${ratio} the billable amount: cached reads are billed at a fraction of the standard input price.`,
-            `上报输入量是计费量的 ${ratio}：命中缓存的读取按标准输入价的一小部分计费。`
+            `Reported input is ${ratio} the bill estimate because cached reads cost a fraction of a full input token.`,
+            `接口上报的输入量是账单估算的 ${ratio}：命中缓存的读取只按完整输入价的一小部分计入账单。`
           )}
         </p>
       )}

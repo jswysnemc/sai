@@ -18,6 +18,8 @@ type ProviderApiKeysFieldProps = {
     api_key_selected?: string;
     api_key_balance: boolean;
   }) => void;
+  /** 外层面板已写「凭据」时不再重复标题 */
+  compact?: boolean;
 };
 
 /**
@@ -44,7 +46,7 @@ export function editorProviderApiKeys(keys: ProviderApiKey[]): ProviderApiKey[] 
 }
 
 /**
- * 渲染供应商的多密钥列表、使用策略与工作或测试密钥。
+ * 渲染供应商的多密钥紧凑行：序号、备注、密钥与删除。
  *
  * 每个密钥带稳定标识，服务端据此在脱敏回填时按 id 对齐，
  * 删除或重排后不会串用密钥。
@@ -59,13 +61,15 @@ export function ProviderApiKeysField({
   balance,
   secretSentinel,
   onRevealKey,
-  onChange
+  onChange,
+  compact = false
 }: ProviderApiKeysFieldProps) {
   const { t } = useI18n();
   const editorKeys = editorProviderApiKeys(keys);
   const selectedId = selected && editorKeys.some((key) => key.id === selected)
     ? selected
     : editorKeys[0]?.id;
+  const multiple = editorKeys.length > 1;
 
   /**
    * 以新列表更新，并在选中项被删除时回落到首个。
@@ -114,18 +118,51 @@ export function ProviderApiKeysField({
 
   return (
     <div className="provider-api-keys-field">
-      <div className="provider-api-keys-head">
-        <span>{t("API keys", "接口密钥")}</span>
-        <Button className="provider-api-keys-add" onClick={addKey}>
-          <Plus size={14} />
-          {t("Add key", "新增密钥")}
-        </Button>
-      </div>
+      {!compact && (
+        <div className="provider-api-keys-head">
+          <span>{t("API keys", "接口密钥")}</span>
+          <Button className="provider-api-keys-add" onClick={addKey}>
+            <Plus size={14} />
+            {t("Add key", "新增密钥")}
+          </Button>
+        </div>
+      )}
+      {compact && (
+        <div className="provider-api-keys-head is-compact">
+          <span>{t("Keys", "密钥")}</span>
+          <Button className="provider-api-keys-add" onClick={addKey}>
+            <Plus size={14} />
+            {t("Add", "新增")}
+          </Button>
+        </div>
+      )}
       <ul className="provider-api-keys-list">
         {editorKeys.map((key, index) => (
-          // 同一供应商内 key.id 唯一，跨供应商会重复：带上供应商标识，
-          // 避免切换供应商时 React 复用上一个供应商的输入框实例
-          <li className={editorKeys.length > 1 ? "provider-api-key-row has-remove" : "provider-api-key-row"} key={`${providerId}:${key.id}`}>
+          <li
+            className={`provider-api-key-row${multiple ? " is-selectable" : ""}${key.id === selectedId ? " is-active" : ""}`}
+            key={`${providerId}:${key.id}`}
+          >
+            {multiple ? (
+              <button
+                type="button"
+                className="provider-api-key-index"
+                onClick={() => onChange({ api_keys: editorKeys, api_key_selected: key.id, api_key_balance: balance })}
+                aria-label={t(`Use key ${index + 1}`, `使用密钥 ${index + 1}`)}
+                aria-pressed={key.id === selectedId}
+              >
+                {index + 1}
+              </button>
+            ) : (
+              <span className="provider-api-key-index" aria-hidden>{index + 1}</span>
+            )}
+            <SkTextInput
+              aria-label={t(`Key ${index + 1} note`, `密钥 ${index + 1} 备注`)}
+              className="provider-api-key-label"
+              value={key.label ?? ""}
+              placeholder={t("Note", "备注")}
+              spellCheck={false}
+              onChange={(value) => updateKey(key.id, { label: value })}
+            />
             <div className="provider-api-key-value">
               <SkSecretInput
                 value={key.api_key}
@@ -140,15 +177,7 @@ export function ProviderApiKeysField({
                 onChange={(value) => updateKey(key.id, { api_key: value })}
               />
             </div>
-            <SkTextInput
-              aria-label={t(`Key ${index + 1} note`, `密钥 ${index + 1} 备注`)}
-              className="provider-api-key-label"
-              value={key.label ?? ""}
-              placeholder={t("Note", "备注")}
-              spellCheck={false}
-              onChange={(value) => updateKey(key.id, { label: value })}
-            />
-            {editorKeys.length > 1 && (
+            {multiple && (
               <Button
                 variant="ghost" size="icon"
                 className="provider-api-key-remove"
@@ -162,7 +191,7 @@ export function ProviderApiKeysField({
           </li>
         ))}
       </ul>
-      {editorKeys.length > 1 && (
+      {multiple && (
         <FieldGrid className="provider-api-keys-controls">
           <SettingsField label={t("Key usage", "密钥使用方式")} hint={t("Use one selected key or rotate requests across all configured keys.", "固定使用一个密钥，或在全部已配置密钥间轮换。")}>
             <ChoicePills

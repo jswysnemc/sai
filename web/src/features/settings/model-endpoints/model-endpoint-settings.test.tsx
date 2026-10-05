@@ -27,8 +27,8 @@ describe("model connection settings", () => {
     expect(html).toContain("测试连接");
     expect(html).toContain("接入点");
     expect(html).toContain("凭据");
-    expect(html).not.toContain('type="password"');
-    expect(html).toContain("编辑密钥");
+    expect(html).toContain('type="password"');
+    expect(html).not.toContain("编辑密钥");
     expect(html).not.toContain("SAVED_SECRET");
     expect(html).not.toContain("image-secret");
     expect(html).not.toContain("Image connection");
@@ -51,8 +51,8 @@ describe("model connection settings", () => {
     expect(html).toContain("测试生图");
     expect(html).toContain("身份");
     expect(html).toContain("显示名称");
-    expect(html).not.toContain('type="password"');
-    expect(html).toContain("编辑密钥");
+    expect(html).toContain('type="password"');
+    expect(html).not.toContain("编辑密钥");
     expect(html).not.toContain("SAVED_SECRET");
     expect(html).not.toContain("JEV connection");
     expect(html).not.toContain("jev-secret");

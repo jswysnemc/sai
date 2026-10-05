@@ -4,7 +4,9 @@ import {
   Globe2,
   Network,
   Radar,
-  Search
+  Search,
+  ShieldCheck,
+  Sparkles
 } from "../../../shared/ui/icons";
 import type { LucideIcon } from "../../../shared/ui/icons";
 import type { Locale } from "../../i18n/locale";
@@ -56,6 +58,24 @@ export const SEARCH_PROVIDER_CATALOG: SearchProviderCatalogEntry[] = [
     descriptionZh: "可配置服务地址的通用搜索接口",
     environmentVariable: "ANYSEARCH_API_KEY",
     icon: Radar
+  },
+  {
+    id: "brave",
+    features: [["Independent index", "独立索引"], ["Fresh results", "时效结果"]],
+    label: "Brave",
+    descriptionEn: "Independent web index with a subscription token",
+    descriptionZh: "使用订阅令牌的独立网页索引",
+    environmentVariable: "BRAVE_API_KEY",
+    icon: ShieldCheck
+  },
+  {
+    id: "exa",
+    features: [["Neural search", "语义检索"], ["Page excerpts", "页面摘录"]],
+    label: "Exa",
+    descriptionEn: "Neural search API with optional page excerpts",
+    descriptionZh: "带可选页面摘录的语义检索接口",
+    environmentVariable: "EXA_API_KEY",
+    icon: Sparkles
   },
   {
     id: "searxng",

@@ -2,6 +2,7 @@ import type { ThemeId } from "../theme/theme";
 import { useI18n } from "../i18n/use-i18n";
 import { useMarkdownStylePreferences } from "../markdown/markdown-style-store";
 import { ChoicePills, SettingsField, SettingsPanel } from "./kit";
+import { DisplayScaleSettings } from "./appearance/display-scale-settings";
 import { ThemeSettings } from "./appearance/theme-settings";
 import { MarkdownStyleSettings } from "./markdown-style-settings";
 
@@ -21,6 +22,7 @@ export function AppearanceSettingsSection({ theme, onThemeChange }: { theme: The
         </SettingsField>
       </SettingsPanel>
       <ThemeSettings theme={theme} onThemeChange={onThemeChange} />
+      <DisplayScaleSettings />
       <MarkdownStyleSettings preferences={markdownStyle.preferences} onPresetChange={markdownStyle.updatePreset} onTableChange={markdownStyle.updateTable} onCodeBlockChange={markdownStyle.updateCodeBlock} onReset={markdownStyle.reset} />
     </>
   );

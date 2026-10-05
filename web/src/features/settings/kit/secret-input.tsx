@@ -14,15 +14,15 @@ type SkSecretInputProps = {
   placeholder?: string;
   disabled?: boolean;
   ariaLabel?: string;
-  /** 首次配置需要直接输入时可关闭编辑确认；设置页默认保持开启 */
+  /** 需要先点编辑才挂载输入框时开启；设置页默认直接显示掩码 */
   requireExplicitEdit?: boolean;
 };
 
 /**
  * 渲染设置页密钥输入。
  *
- * 默认展示已保存或未配置状态，明确点击编辑后才挂载输入框。
- * 防止浏览器将设置项识别为登录密码并把自动填充值写入草稿。
+ * 已保存的值直接以圆点掩码显示，输入即替换；输入框关闭自动填充，
+ * 避免浏览器把设置项识别为登录密码。
  *
  * @param props 当前值、脱敏占位符、更新与读取回调
  * @returns 密钥输入框
@@ -35,7 +35,7 @@ export function SkSecretInput({
   placeholder,
   disabled,
   ariaLabel,
-  requireExplicitEdit = true
+  requireExplicitEdit = false
 }: SkSecretInputProps) {
   const { t } = useI18n();
   const field = useFieldContext();
@@ -47,7 +47,7 @@ export function SkSecretInput({
         id={field?.controlId}
         ariaLabel={ariaLabel ?? field?.labelText}
         value={saved ? "" : value}
-        placeholder={saved ? t("Type a new value to replace it", "输入新值以替换") : placeholder}
+        placeholder={saved ? "••••••••••••" : placeholder}
         disabled={disabled}
         savedValueHint={saved ? t("Saved", "已保存") : undefined}
         onClearSavedValue={saved ? () => onChange("") : undefined}

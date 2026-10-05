@@ -13,9 +13,22 @@ type SearchApiKeysFieldProps = {
 };
 
 /**
+ * 删除指定密钥行；至少保留一个空槽以便继续填写。
+ *
+ * @param keys 当前密钥列表
+ * @param index 要删除的下标
+ * @returns 删除后的密钥列表
+ */
+export function removeSearchApiKey(keys: string[], index: number): string[] {
+  const rows = keys.length ? keys : [""];
+  const next = rows.filter((_, position) => position !== index);
+  return next.length ? next : [""];
+}
+
+/**
  * 【网页搜索】【凭据编辑】使用独立密钥行，保留隐藏密钥在服务端数组中的位置。
  * @param props 密钥列表、环境变量名、脱敏标记与更新回调
- * @returns 具备显隐、已保存标记和清除操作的密钥列表
+ * @returns 具备显隐、已保存标记和删除操作的密钥列表
  */
 export function SearchApiKeysField({ anchor, keys, environmentVariable, secretSentinel, onChange }: SearchApiKeysFieldProps) {
   const { t } = useI18n();
@@ -30,7 +43,15 @@ export function SearchApiKeysField({ anchor, keys, environmentVariable, secretSe
     {rows.map((key, index) => <SettingsField key={index} label={t(`API key ${index + 1}`, `接口密钥 ${index + 1}`)}>
       <div className="flex min-w-0 items-center gap-1">
         <div className="min-w-0 flex-1"><SkSecretInput value={key} secretSentinel={secretSentinel} onChange={(value) => update(index, value)} placeholder={`$env:${environmentVariable}`} /></div>
-        <Button variant="ghost-danger" size="icon" disabled={!key} aria-label={t(`Clear key ${index + 1}`, `清除密钥 ${index + 1}`)} onClick={() => update(index, "")}><Trash2 size={14} /></Button>
+        <Button
+          variant="ghost-danger"
+          size="icon"
+          disabled={rows.length === 1 && !key}
+          aria-label={t(`Remove key ${index + 1}`, `删除密钥 ${index + 1}`)}
+          onClick={() => onChange(removeSearchApiKey(rows, index))}
+        >
+          <Trash2 size={14} />
+        </Button>
       </div>
     </SettingsField>)}
     <p className="sk-field-hint m-0">{t(`One key or environment reference per row. Also reads ${environmentVariable}.`, `每行填写一个密钥或环境变量引用，也会读取 ${environmentVariable}。`)}</p>

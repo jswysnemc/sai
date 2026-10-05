@@ -183,7 +183,7 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     descriptionEn: "Built-in search routing, endpoints, and credentials",
     descriptionZh: "内置搜索路由、供应商地址与凭据",
     icon: Globe,
-    searchKeys: ["web-search", "search", "tinyfish", "tavily", "firecrawl", "anysearch", "searxng", "duckduckgo", "网页", "搜索", "联网"]
+    searchKeys: ["web-search", "search", "tinyfish", "tavily", "firecrawl", "anysearch", "brave", "exa", "searxng", "duckduckgo", "网页", "搜索", "联网"]
   },
   {
     id: "jev",

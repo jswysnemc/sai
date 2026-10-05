@@ -52,7 +52,7 @@ export function SkillGrid({ skills, filters, scanning, error, onFiltersChange, o
     <Button variant="secondary" onClick={onScan} disabled={scanning}><RefreshCw size={14} />{t("Scan", "扫描")}</Button>
     <Button variant="primary" onClick={onAdd}><Plus size={14} />{t("Add Skill", "新增 Skill")}</Button>
   </>}>
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_10rem_10rem]">
+    <div className="skill-filter-toolbar">
       <SkTextInput type="search" value={filters.query} onChange={(query) => onFiltersChange({ ...filters, query })} placeholder={t("Search name, description, or source", "搜索名称、说明或来源")} aria-label={t("Search Skills", "搜索 Skills")} />
       <SkSelect value={filters.status} options={statusOptions} ariaLabel={t("Filter Skill status", "筛选 Skill 状态")} onChange={(status) => onFiltersChange({ ...filters, status })} />
       <SkSelect value={filters.scope} options={scopeOptions} ariaLabel={t("Filter Skill source", "筛选 Skill 来源")} onChange={(scope) => onFiltersChange({ ...filters, scope })} />

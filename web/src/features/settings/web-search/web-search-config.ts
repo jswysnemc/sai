@@ -1,7 +1,7 @@
 import type { AppConfig } from "../../../api/contracts";
 import { mergeSecretText } from "../controls/merge-secret-values";
 
-export type WebSearchProviderId = "tinyfish" | "tavily" | "firecrawl" | "anysearch" | "searxng" | "duckduckgo";
+export type WebSearchProviderId = "tinyfish" | "tavily" | "firecrawl" | "anysearch" | "brave" | "exa" | "searxng" | "duckduckgo";
 export type WebSearchDefaultProvider = "auto" | WebSearchProviderId;
 
 /** Web 搜索总配置与供应商详细参数。 */
@@ -28,6 +28,12 @@ export type WebSearchConfig = {
   anysearch_enabled: boolean;
   anysearch_api_keys: string[];
   anysearch_base_url: string;
+  brave_enabled: boolean;
+  brave_api_keys: string[];
+  brave_base_url: string;
+  exa_enabled: boolean;
+  exa_api_keys: string[];
+  exa_base_url: string;
   searxng_enabled: boolean;
   searxng_base_url: string;
   searxng_language: string;
@@ -41,6 +47,8 @@ export const WEB_SEARCH_PROVIDER_IDS: WebSearchProviderId[] = [
   "tavily",
   "firecrawl",
   "anysearch",
+  "brave",
+  "exa",
   "searxng",
   "duckduckgo"
 ];
@@ -68,6 +76,12 @@ export const DEFAULT_WEB_SEARCH_CONFIG: WebSearchConfig = {
   anysearch_enabled: true,
   anysearch_api_keys: [],
   anysearch_base_url: "https://api.anysearch.com/v1/search",
+  brave_enabled: true,
+  brave_api_keys: [],
+  brave_base_url: "https://api.search.brave.com/res/v1/web/search",
+  exa_enabled: true,
+  exa_api_keys: [],
+  exa_base_url: "https://api.exa.ai/search",
   searxng_enabled: true,
   searxng_base_url: "",
   searxng_language: "auto",
@@ -107,6 +121,12 @@ export function readWebSearchConfig(config: AppConfig): WebSearchConfig {
     anysearch_enabled: booleanValue(raw.anysearch_enabled, true),
     anysearch_api_keys: stringArrayValue(raw.anysearch_api_keys),
     anysearch_base_url: stringValue(raw.anysearch_base_url, DEFAULT_WEB_SEARCH_CONFIG.anysearch_base_url),
+    brave_enabled: booleanValue(raw.brave_enabled, true),
+    brave_api_keys: stringArrayValue(raw.brave_api_keys),
+    brave_base_url: stringValue(raw.brave_base_url, DEFAULT_WEB_SEARCH_CONFIG.brave_base_url),
+    exa_enabled: booleanValue(raw.exa_enabled, true),
+    exa_api_keys: stringArrayValue(raw.exa_api_keys),
+    exa_base_url: stringValue(raw.exa_base_url, DEFAULT_WEB_SEARCH_CONFIG.exa_base_url),
     searxng_enabled: booleanValue(raw.searxng_enabled, true),
     searxng_base_url: stringValue(raw.searxng_base_url, ""),
     searxng_language: stringValue(raw.searxng_language, "auto"),

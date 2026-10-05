@@ -26,6 +26,8 @@ export const SEARCH_PROVIDER_FIELDS: Record<Exclude<WebSearchProviderId, "duckdu
     { key: "firecrawl_only_main_content", kind: "switch", en: "Only main content", zh: "仅保留主要正文", hintEn: "Remove navigation, footer and other page chrome.", hintZh: "移除导航、页脚等非正文内容。" }
   ],
   anysearch: [],
+  brave: [],
+  exa: [],
   searxng: [
     { key: "searxng_language", kind: "text", en: "Language", zh: "语言", hintEn: "Use auto or a supported SearXNG language code.", hintZh: "填写 auto 或 SearXNG 支持的语言代码。" },
     { key: "searxng_safe_search", kind: "choice", en: "Safe search", zh: "安全搜索", hintEn: "Filter explicit search results.", hintZh: "设置搜索结果的内容过滤级别。", options: [["0", "Off", "关闭"], ["1", "Moderate", "适中"], ["2", "Strict", "严格"]], numeric: true }
