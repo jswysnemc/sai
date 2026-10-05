@@ -90,7 +90,9 @@ pub(crate) fn read_tree(
     if !path.is_dir() {
         bail!("tree path is not a directory");
     }
-    read_directory(root, &path, depth.clamp(1, MAX_TREE_DEPTH), show_hidden)
+    // 目录项来自规范化路径（如 macOS 的 /var -> /private/var），相对化也须基于规范化根目录
+    let root = root.canonicalize()?;
+    read_directory(&root, &path, depth.clamp(1, MAX_TREE_DEPTH), show_hidden)
 }
 
 /// 读取 UTF-8 文本文件。

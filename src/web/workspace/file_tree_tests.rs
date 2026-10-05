@@ -59,3 +59,22 @@ fn hidden_files_follow_visibility_at_every_depth() {
         assert!(children.iter().any(|node| node.path == "src/main.rs"));
     }
 }
+
+/// 【工作区】【文件树】根目录经符号链接访问时（如 macOS 临时目录 /var -> /private/var）仍返回相对路径
+/// 参数: 无；返回: 无，节点路径变成绝对路径时断言失败
+#[cfg(unix)]
+#[test]
+fn symlinked_root_still_yields_relative_paths() {
+    let workspace = tempfile::tempdir().unwrap();
+    let real = workspace.path().join("real");
+    std::fs::create_dir_all(real.join("src")).unwrap();
+    std::fs::write(real.join("src/main.rs"), "").unwrap();
+    let link = workspace.path().join("link");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+
+    let tree = read_tree(&link, "", 2, false).unwrap();
+    assert_eq!(tree[0].path, "src");
+    assert_eq!(tree[0].children[0].path, "src/main.rs");
+    let nested = read_tree(&link, "src", 1, false).unwrap();
+    assert_eq!(nested[0].path, "src/main.rs");
+}
