@@ -43,7 +43,10 @@ export function scrollOutputToBottom(element: OutputScrollTarget | null): void {
 }
 
 /**
- * 把滚动位置向下对齐到整行，避免限高容器贴底时顶边裁出半行字。
+ * 把滚动位置对齐到最近的整行，避免限高容器停在半行处。
+ *
+ * 取最近行界而不是向下取整：scrollHeight 是整数像素、行高可能带小数，
+ * 向下取整会因 1px 误差少滚一整行，最新一行只露出一半。
  *
  * @param scrollTop 目标滚动位置
  * @param lineHeight 行高（像素）
@@ -61,7 +64,7 @@ export function snapScrollTopToLine(
   if (!Number.isFinite(lineHeight) || lineHeight <= 0) return bounded;
   const inset = Math.max(0, paddingTop);
   if (bounded <= inset) return 0;
-  const snapped = Math.floor((bounded - inset) / lineHeight + 1e-6) * lineHeight + inset;
+  const snapped = Math.round((bounded - inset) / lineHeight) * lineHeight + inset;
   return Math.min(Math.max(0, maxScroll), Math.max(0, snapped));
 }
 

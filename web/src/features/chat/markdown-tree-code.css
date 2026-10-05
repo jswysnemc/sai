@@ -13,3 +13,9 @@
 .tree-connector[data-glyph="└"]::before { top: 0; bottom: 50%; left: 50%; width: 0.0625rem; }
 .tree-connector[data-glyph="├"]::after, .tree-connector[data-glyph="└"]::after { top: 50%; left: 50%; right: 0; height: 0.0625rem; }
 .tree-connector[data-glyph="─"]::after { top: 50%; left: 0; right: 0; height: 0.0625rem; }
+/* 目录树行保持行内排版，行号定宽后连接线在两位、三位行号间保持对齐 */
+.markdown-tree-line .syntax-line-number {
+  display: inline-block;
+  box-sizing: border-box;
+  width: calc(var(--line-number-digits, 2) * 1ch + 0.65rem);
+}

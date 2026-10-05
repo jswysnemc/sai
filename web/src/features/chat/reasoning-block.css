@@ -11,12 +11,16 @@
 .reasoning-content {
   min-width: 0;
   max-width: 100%;
-  /* 高度对齐整行：上下 0.55em 内边距 + 8 个 1.75em 行高，滚动停靠处不残留半行文字 */
-  max-height: calc(0.55em * 2 + 1.75em * 8);
+  /*
+   * 高度恰为 8 个 1.75em 行高，且滚动区不留上下内边距：
+   * 内容高度与视口高度都是整行倍数，贴底时最新一行完整可见，顶边也落在行界上。
+   * 竖向留白改用外边距，不进入滚动区。
+   */
+  max-height: calc(1.75em * 8);
   overflow: auto;
   overflow-anchor: none;
-  margin: var(--space-3xs) 0 0 calc(10px);
-  padding: 0.55em 0 0.55em var(--space-lg);
+  margin: calc(var(--space-3xs) + 0.4em) 0 0.4em calc(10px);
+  padding: 0 0 0 var(--space-lg);
   border-left: 1px solid var(--line);
   color: var(--ink-soft);
   font-size: var(--text-base);

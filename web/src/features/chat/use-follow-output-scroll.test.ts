@@ -53,11 +53,14 @@ describe("follow output scroll", () => {
     expect(canProgrammaticFollow(false, 1000, 2000)).toBe(false);
   });
 
-  it("把贴底滚动对齐到整行，避免顶边裁出半行", () => {
-    expect(snapScrollTopToLine(54, 20, 4, 54)).toBe(44);
+  it("把贴底滚动对齐到最近整行，最新一行不被裁掉", () => {
+    expect(snapScrollTopToLine(54, 20, 4, 54)).toBe(54);
+    // 行高带小数时 scrollHeight 取整差 1px，仍落在最后一行而不是少滚一行
+    expect(snapScrollTopToLine(78, 26.25, 0, 78)).toBe(78);
+    expect(snapScrollTopToLine(52, 26.25, 0, 78)).toBe(52.5);
     expect(snapScrollTopToLine(44, 20, 4, 54)).toBe(44);
     expect(snapScrollTopToLine(0, 20, 4, 54)).toBe(0);
-    expect(snapScrollTopToLine(80, 20, 4, 54)).toBe(44);
+    expect(snapScrollTopToLine(80, 20, 4, 54)).toBe(54);
     expect(snapScrollTopToLine(54, 0, 4, 54)).toBe(54);
   });
 });

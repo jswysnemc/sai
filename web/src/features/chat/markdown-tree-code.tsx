@@ -1,3 +1,4 @@
+import { lineNumberDigitsStyle } from "./line-number-gutter";
 import "./markdown-tree-code.css";
 
 /**
@@ -15,7 +16,9 @@ export function isTreeCode(source: string): boolean {
  * @returns 文字和连接线共用同一行高的代码块
  */
 export function MarkdownTreeCode({ source, showLineNumbers }: { source: string; showLineNumbers: boolean }) {
-  return <code className="markdown-tree-code">{source.split("\n").map((line, index, lines) => {
+  const rows = source.split("\n");
+  const gutter = showLineNumbers ? lineNumberDigitsStyle(rows.length) : undefined;
+  return <code className="markdown-tree-code" style={gutter}>{rows.map((line, index, lines) => {
     const prefix = /^[ │├└─]*/u.exec(line)?.[0] ?? "";
     return <span className="markdown-tree-line" key={index}>
       {showLineNumbers && <span className="syntax-line-number" aria-hidden>{index + 1}</span>}

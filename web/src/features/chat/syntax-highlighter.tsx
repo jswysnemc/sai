@@ -1,4 +1,5 @@
 import { memo, useMemo } from "react";
+import { lineNumberDigitsStyle } from "./line-number-gutter";
 import hljs from "highlight.js/lib/core";
 import bash from "highlight.js/lib/languages/bash";
 import css from "highlight.js/lib/languages/css";
@@ -72,7 +73,7 @@ export const SyntaxHighlighter = memo(function SyntaxHighlighter({
     return <code className={className} dangerouslySetInnerHTML={{ __html: result.value }} />;
   }
   return (
-    <code className={`${className} syntax-lines`}>
+    <code className={`${className} syntax-lines`} style={lineNumberDigitsStyle(lines.length)}>
       {lines.map((line, index) => (
         <span className="syntax-line" key={index}>
           <span className="syntax-line-number" aria-hidden="true">{index + 1}</span>

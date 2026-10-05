@@ -550,9 +550,11 @@
   padding-left: 0.25rem;
 }
 
+/* 行号列按最大行号位数定宽：位数由组件写入 --line-number-digits，避免两位、三位行号挤占正文 */
 .syntax-line {
+  --line-number-gutter: calc(var(--line-number-digits, 2) * 1ch + 0.65rem);
   display: grid;
-  grid-template-columns: 1.75rem minmax(max-content, 1fr);
+  grid-template-columns: var(--line-number-gutter) minmax(max-content, 1fr);
   min-height: 1.62em;
 }
 
@@ -589,7 +591,7 @@
 
 .markdown-body[data-code-wrap="true"] .syntax-line,
 .markdown-code-block[data-wrapped="true"] .syntax-line {
-  grid-template-columns: 1.75rem minmax(0, 1fr);
+  grid-template-columns: var(--line-number-gutter) minmax(0, 1fr);
 }
 
 .markdown-code-block[data-wrapped="true"] pre {
