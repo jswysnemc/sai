@@ -9,7 +9,9 @@ use crate::i18n::text as t;
 
 /// 按钮底色与文字：与标题栏同色系，出现新输出时换成强调色。
 const BUTTON_STYLE: &str = "\x1b[48;5;238m\x1b[38;5;252m";
-const BUTTON_UNSEEN_STYLE: &str = "\x1b[48;2;42;74;66m\x1b[1m\x1b[38;2;94;196;168m";
+const BUTTON_HOVER_STYLE: &str = "\x1b[48;5;244m\x1b[38;5;255m";
+const BUTTON_UNSEEN_STYLE: &str = "\x1b[48;2;42;74;66m\x1b[38;2;94;196;168m";
+const BUTTON_UNSEEN_HOVER_STYLE: &str = "\x1b[48;2;58;102;90m\x1b[38;2;160;230;210m";
 const RESET: &str = "\x1b[0m";
 /// 按钮两侧至少保留的正文列数，过窄时不显示按钮。
 const SIDE_MARGIN: usize = 2;
@@ -35,6 +37,7 @@ fn label(state: &FullscreenState) -> &'static str {
 /// - `line`: 已适配正文宽度的最后一行
 /// - `state`: 全屏状态
 /// - `width`: 正文列数
+/// - `pointer_col`: 鼠标在正文区的列；落在按钮上时提亮
 ///
 /// 返回:
 /// - 叠加后的行与按钮所在列范围 `[start, end)`；在底部或宽度不足时原样返回
@@ -42,6 +45,7 @@ pub(super) fn overlay(
     line: &str,
     state: &FullscreenState,
     width: usize,
+    pointer_col: Option<u16>,
 ) -> (String, Option<(u16, u16)>) {
     if state.follow {
         return (line.to_string(), None);
@@ -53,10 +57,15 @@ pub(super) fn overlay(
     }
     let start = (width - button_width) / 2;
     let end = start + button_width;
-    let style = if state.unseen {
-        BUTTON_UNSEEN_STYLE
-    } else {
-        BUTTON_STYLE
+    let hovered = pointer_col.is_some_and(|col| {
+        let col = usize::from(col);
+        col >= start && col < end
+    });
+    let style = match (state.unseen, hovered) {
+        (true, true) => BUTTON_UNSEEN_HOVER_STYLE,
+        (true, false) => BUTTON_UNSEEN_STYLE,
+        (false, true) => BUTTON_HOVER_STYLE,
+        (false, false) => BUTTON_STYLE,
     };
     // 按钮两侧的正文原样保留，行宽保持不变
     let left = clip_to_width(line, start);
@@ -117,7 +126,7 @@ mod tests {
     /// 验证停在底部时不显示按钮。
     #[test]
     fn hidden_while_following() {
-        let (line, cols) = overlay("text", &state(true, false), 40);
+        let (line, cols) = overlay("text", &state(true, false), 40, None);
         assert_eq!(line, "text");
         assert!(cols.is_none());
     }
@@ -126,7 +135,7 @@ mod tests {
     #[test]
     fn shown_centered_when_scrolled_up() {
         let body = format!("{:<40}", "left-side transcript text right-side!");
-        let (line, cols) = overlay(&body, &state(false, false), 40);
+        let (line, cols) = overlay(&body, &state(false, false), 40, None);
         let (start, end) = cols.unwrap();
         assert_eq!(visible_width(&line), 40);
         let width = visible_width(label(&state(false, false)));
@@ -136,7 +145,7 @@ mod tests {
         assert!(text.contains(label(&state(false, false)).trim()));
         assert!(text.starts_with(&body[..usize::from(start)]));
         assert!(text.ends_with(&body[usize::from(end)..]));
-        let (unseen, _) = overlay(&body, &state(false, true), 40);
+        let (unseen, _) = overlay(&body, &state(false, true), 40, None);
         assert!(plain(&unseen).contains(t("New output", "有新输出")));
     }
 
@@ -144,7 +153,7 @@ mod tests {
     #[test]
     fn wide_characters_at_the_edge_keep_the_width() {
         let body = "中".repeat(20);
-        let (line, cols) = overlay(&body, &state(false, false), 40);
+        let (line, cols) = overlay(&body, &state(false, false), 40, None);
         assert!(cols.is_some());
         assert_eq!(visible_width(&line), 40);
     }
@@ -152,7 +161,20 @@ mod tests {
     /// 验证过窄时不显示按钮。
     #[test]
     fn skipped_when_too_narrow() {
-        let (_, cols) = overlay("x", &state(false, false), 8);
+        let (_, cols) = overlay("x", &state(false, false), 8, None);
         assert!(cols.is_none());
+    }
+
+    /// 指针落在按钮上时换成更亮的样式，文字不变。
+    #[test]
+    fn hover_brightens_the_button() {
+        let body = format!("{:<40}", "left-side transcript text right-side!");
+        let idle = overlay(&body, &state(false, false), 40, None).0;
+        let start = overlay(&body, &state(false, false), 40, None).1.unwrap().0;
+        let hovered = overlay(&body, &state(false, false), 40, Some(start)).0;
+        assert_ne!(idle, hovered);
+        assert!(hovered.contains(BUTTON_HOVER_STYLE), "{hovered:?}");
+        assert!(!hovered.contains("\x1b[1m"), "{hovered:?}");
+        assert_eq!(plain(&idle), plain(&hovered));
     }
 }

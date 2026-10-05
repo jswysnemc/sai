@@ -116,9 +116,14 @@ impl ReplRuntime {
     fn fullscreen_mouse(&mut self, mouse: MouseEvent) -> Effect {
         // 1. 【全屏视图】【待办切换】只响应可见 TODO 标题，不把输入区或被裁掉的标题当作按钮
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
-            && self.transcript.latest_todo_items().iter()
+            && self
+                .transcript
+                .latest_todo_items()
+                .iter()
                 .any(|item| matches!(item.status.as_str(), "pending" | "in_progress"))
-            && self.last_composer_signature.as_ref()
+            && self
+                .last_composer_signature
+                .as_ref()
                 .is_some_and(|signature| signature.hits_panel_header(mouse.column, mouse.row))
         {
             if let Some(session) = self.fullscreen.as_mut() {
@@ -151,11 +156,24 @@ impl ReplRuntime {
                     None
                 };
                 let before = state.hovered_paragraph().map(|span| span.key);
-                state.pointer_row = (layout.in_body(mouse.row)
-                    && mouse.column < layout.content_width)
-                    .then_some(body_row);
+                let before_button = session.bottom_button.is_some_and(|(start, end)| {
+                    state.pointer_row == Some(height.saturating_sub(1))
+                        && state
+                            .pointer_col
+                            .is_some_and(|col| col >= start && col < end)
+                });
+                let in_body = layout.in_body(mouse.row) && mouse.column < layout.content_width;
+                state.pointer_row = in_body.then_some(body_row);
+                state.pointer_col = in_body.then_some(mouse.column);
                 let after = state.hovered_paragraph().map(|span| span.key);
-                let changed = hover != state.hover || before != after;
+                let after_button = session.bottom_button.is_some_and(|(start, end)| {
+                    state.pointer_row == Some(height.saturating_sub(1))
+                        && state
+                            .pointer_col
+                            .is_some_and(|col| col >= start && col < end)
+                });
+                let changed =
+                    hover != state.hover || before != after || before_button != after_button;
                 state.hover = hover;
                 changed
             }
@@ -232,45 +250,45 @@ impl ReplRuntime {
                 // 新的按下清掉上一次选区与复制提示
                 let cleared = state.selection.take().is_some() | state.copied.take().is_some();
                 let handled = {
-                // 2. 标题：回到当前消息开头
-                if mouse.row < layout.body_top {
-                    match state.current_anchor() {
-                        Some(index) => state.jump_to_anchor(index, height),
-                        None => false,
+                    // 2. 标题：回到当前消息开头
+                    if mouse.row < layout.body_top {
+                        match state.current_anchor() {
+                            Some(index) => state.jump_to_anchor(index, height),
+                            None => false,
+                        }
+                    } else if layout.in_body(mouse.row)
+                        && usize::from(mouse.row - layout.body_top) + 1 == height
+                        && session
+                            .bottom_button
+                            .is_some_and(|(start, end)| mouse.column >= start && mouse.column < end)
+                    {
+                        // 输入框正上方的“回到底部”按钮：直接跳到最新输出，不开始拖选
+                        state.scroll_to(usize::MAX, height)
+                    } else if !layout.in_body(mouse.row) {
+                        // 输入框区域：交回终端，不做处理
+                        false
+                    } else if mouse.column == layout.scrollbar_col {
+                        // 3. 滚动条：按点击位置定位并开始拖动
+                        state.dragging = true;
+                        let target = scroll_for_track_row(state, body_row, height);
+                        state.scroll_to(target, height)
+                    } else if layout.in_rail(mouse.column) {
+                        // 4. 概览标记：跳到对应用户消息
+                        let marks = rail_marks(state.document.anchors.len(), height);
+                        match mark_at_row(&marks, body_row) {
+                            Some(mark) => state.jump_to_anchor(mark.anchor, height),
+                            None => false,
+                        }
+                    } else if mouse.column < layout.content_width {
+                        // 5. 正文：先记下按下位置，松开时再区分点击与拖选
+                        state.press = Some(selection::TextPoint {
+                            row: state.scroll + body_row,
+                            col: usize::from(mouse.column),
+                        });
+                        false
+                    } else {
+                        false
                     }
-                } else if layout.in_body(mouse.row)
-                    && usize::from(mouse.row - layout.body_top) + 1 == height
-                    && session
-                        .bottom_button
-                        .is_some_and(|(start, end)| mouse.column >= start && mouse.column < end)
-                {
-                    // 输入框正上方的“回到底部”按钮：直接跳到最新输出，不开始拖选
-                    state.scroll_to(usize::MAX, height)
-                } else if !layout.in_body(mouse.row) {
-                    // 输入框区域：交回终端，不做处理
-                    false
-                } else if mouse.column == layout.scrollbar_col {
-                    // 3. 滚动条：按点击位置定位并开始拖动
-                    state.dragging = true;
-                    let target = scroll_for_track_row(state, body_row, height);
-                    state.scroll_to(target, height)
-                } else if layout.in_rail(mouse.column) {
-                    // 4. 概览标记：跳到对应用户消息
-                    let marks = rail_marks(state.document.anchors.len(), height);
-                    match mark_at_row(&marks, body_row) {
-                        Some(mark) => state.jump_to_anchor(mark.anchor, height),
-                        None => false,
-                    }
-                } else if mouse.column < layout.content_width {
-                    // 5. 正文：先记下按下位置，松开时再区分点击与拖选
-                    state.press = Some(selection::TextPoint {
-                        row: state.scroll + body_row,
-                        col: usize::from(mouse.column),
-                    });
-                    false
-                } else {
-                    false
-                }
                 };
                 handled || cleared
             }

@@ -5,12 +5,13 @@
 
 mod bottom_button;
 mod hover;
+mod hover_color;
 mod image_window;
 mod input;
 mod layout;
-mod selection;
 mod overview;
 mod paint;
+mod selection;
 mod state;
 
 pub(in crate::cli) use input::FullscreenEvent;

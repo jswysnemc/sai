@@ -30,6 +30,8 @@ pub(super) struct FullscreenState {
     pub(super) hover: Option<usize>,
     /// 鼠标在正文区的位置（相对正文顶部的行）；滚动后据此重新判断悬停段落
     pub(super) pointer_row: Option<usize>,
+    /// 鼠标在正文区的列；用于「回到底部」按钮悬停
+    pub(super) pointer_col: Option<u16>,
     /// 是否正在拖动滚动条
     pub(super) dragging: bool,
     /// 正文按下位置；松开时没有拖动则按点击处理

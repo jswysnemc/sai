@@ -83,7 +83,7 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
         crate::render::terminal_image::kitty_cell_pixel_height(),
     );
     let mut bottom_button = None;
-    // 4. 悬停在可展开段落上时，整段加粗提示可点击
+    // 4. 悬停在可展开段落上时，整段提亮前景提示可点击
     let hovered_rows = state.hovered_paragraph().map(|span| (span.start, span.end));
     for (row, line) in window.iter().enumerate() {
         let line = line.as_str();
@@ -112,7 +112,8 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
         let is_last = row + 1 == body_height;
         let hovered_here = matches!(&preview, Some((preview_row, _)) if *preview_row == row);
         let body = if is_last && !hovered_here {
-            let (line, cols) = super::bottom_button::overlay(&body, state, content_width);
+            let (line, cols) =
+                super::bottom_button::overlay(&body, state, content_width, state.pointer_col);
             bottom_button = cols;
             line
         } else {
