@@ -7,3 +7,6 @@ license = "MIT"
 [profile.release]
 strip = true
 opt-level = "s"
+
+# 独立于仓库根 workspace：自带 Cargo.lock，由 desktop 打包脚本单独构建
+[workspace]
