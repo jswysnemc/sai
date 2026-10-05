@@ -13,10 +13,10 @@ describe("system usage api", () => {
     vi.stubGlobal("fetch", fetchMock);
     const selection: RunModelSelection = { providerId: "provider-a", model: "model/large" };
 
-    await api.system.usage(selection);
+    await api.system.usage(selection, undefined, undefined, "session-viewed");
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/system/usage?provider_id=provider-a&model=model%2Flarge",
+      "/api/system/usage?provider_id=provider-a&model=model%2Flarge&session_id=session-viewed",
       expect.objectContaining({ credentials: "same-origin" })
     );
   });

@@ -18,6 +18,8 @@ struct SystemUsageQuery {
     provider_id: Option<String>,
     model: Option<String>,
     mode: Option<String>,
+    /// 当前查看的会话；缺省时回退到工作区当前指针
+    session_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -109,12 +111,9 @@ async fn usage(
     let config =
         resolve_usage_config(&state.paths, &base_config, &query).map_err(WebError::from)?;
     let mode = AgentMode::parse(query.mode.as_deref()).map_err(WebError::from)?;
-    let Some(session) =
-        crate::state::active_session_if_present(&state.paths).map_err(WebError::from)?
-    else {
+    let Some(store) = usage_store(&state, &query)? else {
         return empty::usage(&state, &base_config, context_window_tokens);
     };
-    let store = StateStore::for_session(&state.paths, &session.id).map_err(WebError::from)?;
     // 用量顶栏不应因瞬时 DB 忙碌打挂；快照失败时降级为零值并带警告
     let snapshot = match store.session_snapshot(context_window_tokens) {
         Ok(snapshot) => snapshot,
@@ -244,6 +243,38 @@ async fn usage(
             terminal_count,
         },
     }))
+}
+
+/// 【系统用量】【会话存储】优先打开查询指定的会话，否则回退到工作区当前指针。
+///
+/// 主界面查看的会话不一定是工作区当前指针；用量弹层必须跟随正在看的会话。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+/// - `query`: 系统用量查询，可含 `session_id`
+///
+/// 返回:
+/// - 指定或当前会话的状态存储；没有会话时为空
+fn usage_store(state: &WebAppState, query: &SystemUsageQuery) -> WebResult<Option<StateStore>> {
+    if let Some(session_id) = query
+        .session_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+    {
+        return match StateStore::for_session(&state.paths, session_id) {
+            Ok(store) => Ok(Some(store)),
+            Err(_) => Ok(None),
+        };
+    }
+    let Some(session) =
+        crate::state::active_session_if_present(&state.paths).map_err(WebError::from)?
+    else {
+        return Ok(None);
+    };
+    Ok(Some(
+        StateStore::for_session(&state.paths, &session.id).map_err(WebError::from)?,
+    ))
 }
 
 /// 解析系统用量对应的模型上下文容量。

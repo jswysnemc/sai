@@ -658,7 +658,8 @@ export const api = {
     usage: (
       selection?: RunModelSelection | null,
       mode?: RunMode,
-      agentId?: string | null
+      agentId?: string | null,
+      sessionId?: string | null
     ) => {
       const query = new URLSearchParams();
       if (selection) {
@@ -667,6 +668,7 @@ export const api = {
       }
       if (mode) query.set("mode", mode);
       if (agentId) query.set("agent_id", agentId);
+      if (sessionId) query.set("session_id", sessionId);
       const suffix = query.size > 0 ? `?${query.toString()}` : "";
       return apiRequest<SystemUsage>(`/api/system/usage${suffix}`);
     }

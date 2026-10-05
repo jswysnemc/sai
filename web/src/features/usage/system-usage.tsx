@@ -18,13 +18,14 @@ export { formatContextCacheDetail } from "./usage-format";
 
 /**
  * 分别提供上下文用量和进程资源入口，共享同一份用量查询。
- * @param props 当前模型、运行模式、压缩回调和禁用状态
+ * @param props 当前模型、运行模式、查看中的会话、压缩回调和禁用状态
  * @returns 两个紧凑入口及各自的详情弹层
  */
-export function SystemUsage({ selection, mode, agentId, onCompact, compactDisabled }: {
+export function SystemUsage({ selection, mode, agentId, sessionId, onCompact, compactDisabled }: {
   selection: RunModelSelection | null;
   mode: RunMode;
   agentId?: string | null;
+  sessionId?: string;
   onCompact: () => Promise<void>;
   compactDisabled: boolean;
 }) {
@@ -38,8 +39,8 @@ export function SystemUsage({ selection, mode, agentId, onCompact, compactDisabl
   const popoverRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const usage = useQuery({
-    queryKey: ["system-usage", selection?.providerId, selection?.model, mode, agentId ?? ""],
-    queryFn: () => api.system.usage(selection, mode, agentId),
+    queryKey: ["system-usage", sessionId ?? "", selection?.providerId, selection?.model, mode, agentId ?? ""],
+    queryFn: () => api.system.usage(selection, mode, agentId, sessionId),
     refetchInterval: open || policyOpen ? 2_000 : 5_000
   });
   const compact = useMutation({

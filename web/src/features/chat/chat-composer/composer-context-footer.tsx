@@ -25,7 +25,7 @@ export function ComposerContextFooter({ composer, showUsage, plan }: { composer:
         <TodoMarkdownView sessionId={composer.sessionId} compact />
       </div>
       <div className="composer-context-meta">
-        {showUsage && <SystemUsage selection={composer.selection} mode={composer.mode} agentId={composer.agentSelection?.id} onCompact={composer.onCompact} compactDisabled={composer.running} />}
+        {showUsage && <SystemUsage selection={composer.selection} mode={composer.mode} agentId={composer.agentSelection?.id} sessionId={composer.sessionId} onCompact={composer.onCompact} compactDisabled={composer.running} />}
         {composer.undoAvailable && <Button variant="ghost" size="icon" className="composer-undo" onClick={composer.onUndo} disabled={composer.running} title={t("Step back to the previous turn", "退回上一轮")} aria-label={t("Undo last turn", "撤销最后一轮")}><Undo2 size={14} /></Button>}
       </div>
     </div>
