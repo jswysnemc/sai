@@ -4,11 +4,13 @@ use crate::render::style::TOOL_BULLET;
 use serde_json::Value;
 
 mod extra_tools;
+mod search_labels;
 mod suffix;
 use extra_tools::{
     browser_call_label, browser_verb_pairs, extra_fallback_object, extra_tool_suffix,
     extra_tool_verb,
 };
+use search_labels::{is_search_tool, search_call_label};
 pub(crate) use suffix::lenient_string_field;
 use suffix::*;
 
@@ -78,6 +80,9 @@ pub(crate) fn tool_event_label_tense(
     }
     if name == "browser" {
         return browser_call_label(arguments, tense);
+    }
+    if is_search_tool(name) {
+        return search_call_label(name, arguments, tense);
     }
     let action = tool_verb(name, tense);
     let extra_suffix = arguments.and_then(|arguments| extra_tool_suffix(name, arguments));

@@ -7,6 +7,7 @@ mod image;
 mod model;
 mod question;
 mod read_file;
+mod search;
 mod todo;
 
 #[cfg(test)]

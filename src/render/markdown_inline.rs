@@ -1,4 +1,5 @@
 use crate::render::asset_block;
+use crate::render::markdown_inline_code::{take_code_span, wrap_inline_style};
 use crate::render::style::{
     FOOTNOTE_REF_STYLE, MD_BOLD_STYLE, MD_IMAGE_STYLE, MD_INLINE_CODE_STYLE, MD_ITALIC_STYLE,
     MD_LINK_LABEL_STYLE, MD_STRIKE_STYLE, MD_URL_STYLE, RESET,
@@ -80,9 +81,9 @@ pub(crate) fn render_inline_with_math_mode(text: &str, math_mode: InlineMathMode
                 index += 1;
                 continue;
             }
-            if let Some(end) = find_marker(&chars, index + 1, '`') {
-                push_inline_code(&mut output, &chars[index + 1..end]);
-                index = end + 1;
+            if let Some((content, next)) = take_code_span(&chars, index) {
+                push_inline_code(&mut output, &content.chars().collect::<Vec<_>>());
+                index = next;
                 continue;
             }
         }
@@ -131,36 +132,48 @@ pub(crate) fn render_inline_with_math_mode(text: &str, math_mode: InlineMathMode
         }
         if index + 1 < chars.len() && chars[index] == '~' && chars[index + 1] == '~' {
             if let Some(end) = find_double_marker(&chars, index + 2, '~') {
-                output.push_str(MD_STRIKE_STYLE);
-                output.extend(chars[index + 2..end].iter());
-                output.push_str(RESET);
+                let inner: String = chars[index + 2..end].iter().collect();
+                output.push_str(&wrap_inline_style(
+                    MD_STRIKE_STYLE,
+                    &render_inline_with_math_mode(&inner, math_mode),
+                    RESET,
+                ));
                 index = end + 2;
                 continue;
             }
         }
         if index + 1 < chars.len() && chars[index] == '*' && chars[index + 1] == '*' {
             if let Some(end) = find_double_marker(&chars, index + 2, '*') {
-                output.push_str(MD_BOLD_STYLE);
-                output.extend(chars[index + 2..end].iter());
-                output.push_str(RESET);
+                let inner: String = chars[index + 2..end].iter().collect();
+                output.push_str(&wrap_inline_style(
+                    MD_BOLD_STYLE,
+                    &render_inline_with_math_mode(&inner, math_mode),
+                    RESET,
+                ));
                 index = end + 2;
                 continue;
             }
         }
         if chars[index] == '*' {
             if let Some(end) = find_marker(&chars, index + 1, '*') {
-                output.push_str(MD_ITALIC_STYLE);
-                output.extend(chars[index + 1..end].iter());
-                output.push_str(RESET);
+                let inner: String = chars[index + 1..end].iter().collect();
+                output.push_str(&wrap_inline_style(
+                    MD_ITALIC_STYLE,
+                    &render_inline_with_math_mode(&inner, math_mode),
+                    RESET,
+                ));
                 index = end + 1;
                 continue;
             }
         }
         if chars[index] == '_' && is_emphasis_start(&chars, index) {
             if let Some(end) = find_emphasis_end(&chars, index + 1, '_') {
-                output.push_str(MD_ITALIC_STYLE);
-                output.extend(chars[index + 1..end].iter());
-                output.push_str(RESET);
+                let inner: String = chars[index + 1..end].iter().collect();
+                output.push_str(&wrap_inline_style(
+                    MD_ITALIC_STYLE,
+                    &render_inline_with_math_mode(&inner, math_mode),
+                    RESET,
+                ));
                 index = end + 1;
                 continue;
             }
@@ -254,9 +267,9 @@ pub(crate) fn render_table_cell(text: &str) -> String {
             }
         }
         if chars[index] == '`' {
-            if let Some(end) = find_marker(&chars, index + 1, '`') {
-                push_inline_code(&mut output, &chars[index + 1..end]);
-                index = end + 1;
+            if let Some((content, next)) = take_code_span(&chars, index) {
+                push_inline_code(&mut output, &content.chars().collect::<Vec<_>>());
+                index = next;
                 continue;
             }
         }
@@ -278,36 +291,48 @@ pub(crate) fn render_table_cell(text: &str) -> String {
         }
         if index + 1 < chars.len() && chars[index] == '~' && chars[index + 1] == '~' {
             if let Some(end) = find_double_marker(&chars, index + 2, '~') {
-                output.push_str(MD_STRIKE_STYLE);
-                output.extend(chars[index + 2..end].iter());
-                output.push_str(RESET);
+                let inner: String = chars[index + 2..end].iter().collect();
+                output.push_str(&wrap_inline_style(
+                    MD_STRIKE_STYLE,
+                    &render_table_cell(&inner),
+                    RESET,
+                ));
                 index = end + 2;
                 continue;
             }
         }
         if index + 1 < chars.len() && chars[index] == '*' && chars[index + 1] == '*' {
             if let Some(end) = find_double_marker(&chars, index + 2, '*') {
-                output.push_str(MD_BOLD_STYLE);
-                output.extend(chars[index + 2..end].iter());
-                output.push_str(RESET);
+                let inner: String = chars[index + 2..end].iter().collect();
+                output.push_str(&wrap_inline_style(
+                    MD_BOLD_STYLE,
+                    &render_table_cell(&inner),
+                    RESET,
+                ));
                 index = end + 2;
                 continue;
             }
         }
         if chars[index] == '*' {
             if let Some(end) = find_marker(&chars, index + 1, '*') {
-                output.push_str(MD_ITALIC_STYLE);
-                output.extend(chars[index + 1..end].iter());
-                output.push_str(RESET);
+                let inner: String = chars[index + 1..end].iter().collect();
+                output.push_str(&wrap_inline_style(
+                    MD_ITALIC_STYLE,
+                    &render_table_cell(&inner),
+                    RESET,
+                ));
                 index = end + 1;
                 continue;
             }
         }
         if chars[index] == '_' && is_emphasis_start(&chars, index) {
             if let Some(end) = find_emphasis_end(&chars, index + 1, '_') {
-                output.push_str(MD_ITALIC_STYLE);
-                output.extend(chars[index + 1..end].iter());
-                output.push_str(RESET);
+                let inner: String = chars[index + 1..end].iter().collect();
+                output.push_str(&wrap_inline_style(
+                    MD_ITALIC_STYLE,
+                    &render_table_cell(&inner),
+                    RESET,
+                ));
                 index = end + 1;
                 continue;
             }

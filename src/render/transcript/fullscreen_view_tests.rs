@@ -283,3 +283,35 @@ fn expanded_question_uses_readable_answers() {
         );
     }
 }
+
+/// 【全屏视图】【表格避让】宽表格按扣除引导列后的净宽排版，右缘不顶上概览轨道。
+#[test]
+fn wide_table_stays_inside_fullscreen_body_width() {
+    let mut store = TranscriptStore::new(1_000);
+    store.push_chunk(&ChatStreamChunk {
+        kind: ChatStreamKind::Content,
+        text: [
+            "| 项目 | 内容 |",
+            "|---|---|",
+            &format!("| 很长 | {} |", "一段不可拆单词ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+            "",
+        ]
+        .join("\n"),
+    });
+    store.finalize_live_tail();
+    let width = 40usize;
+    let document = store.render_fullscreen(width, &options(), &HashSet::new());
+    let lines = plain(&document);
+    let joined = lines.join("\n");
+    assert!(
+        joined.contains('┐') && joined.contains('┘'),
+        "表格右边框必须完整可见: {joined}"
+    );
+    for line in &lines {
+        let columns = crate::render::table::visible_width(line);
+        assert!(
+            columns <= width,
+            "fullscreen table line exceeds body width {width}: {columns} {line:?}"
+        );
+    }
+}

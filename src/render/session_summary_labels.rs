@@ -22,12 +22,12 @@ pub(crate) struct SummaryLabels {
 /// Nerd Font 图标（Font Awesome / Material 区段，主流 Nerd Font 均包含）。
 pub(crate) const ICON_LABELS: SummaryLabels = SummaryLabels {
     worked: "Worked for",
-    first_word: "First word",
+    first_word: "TTFT",
     // nf-fa-arrow_up / nf-fa-arrow_down
     input: "\u{f062}",
     output: "\u{f063}",
     // nf-md-cached：环形箭头，语义即「缓存复用」
-    cached: "\u{f0737}",
+    cached: "\u{f00e8}",
     // nf-md-speedometer
     speed: "\u{f04c5}",
     tokens: "toks",
@@ -36,7 +36,7 @@ pub(crate) const ICON_LABELS: SummaryLabels = SummaryLabels {
 /// 未安装 Nerd Font 时的字符标签。
 pub(crate) const TEXT_LABELS: SummaryLabels = SummaryLabels {
     worked: "Worked for",
-    first_word: "First word",
+    first_word: "TTFT",
     input: "↑",
     output: "↓",
     cached: "cached",

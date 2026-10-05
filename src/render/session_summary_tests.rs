@@ -56,11 +56,9 @@ fn renders_compact_session_summary_with_key_fields() {
     // 顺序：总耗时 · 完成时刻 · 首字 · 输入 · 输出 · 缓存 · 速度
     assert!(plain.starts_with("• Worked for 12s · "), "{plain}");
     let clock = plain.split(" · ").nth(1).unwrap_or_default();
-    assert!(clock.ends_with("AM") || clock.ends_with("PM"), "{plain}");
+    assert!(is_24h_clock(clock), "{plain}");
     assert!(
-        plain.contains(
-            " · First word 420ms · ↑ 8.0k toks · ↓ 4.0k toks · cached 75% · speed 320 toks/s"
-        ),
+        plain.contains(" · TTFT 420ms · ↑ 8.0k toks · ↓ 4.0k toks · cached 75% · speed 320 toks/s"),
         "{plain}"
     );
     // 上下文占用不在这一行；不出现会话 ID 与累计用量
@@ -80,7 +78,7 @@ fn renders_compact_session_summary_with_key_fields() {
         "{icons}"
     );
     assert!(
-        icons.contains("\u{f0737} 75% · \u{f04c5} 320 toks/s"),
+        icons.contains("\u{f00e8} 75% · \u{f04c5} 320 toks/s"),
         "{icons}"
     );
     // 数值保持正文色，不带青、绿色
@@ -140,27 +138,53 @@ fn restored_turn_summary_rebuilds_from_persisted_metrics() {
         plain.contains("5.8k toks") && plain.contains("254 toks"),
         "{plain}"
     );
-    // 完成时刻取自持久化时间并换算为本地 12 小时制
+    // 完成时刻取自持久化时间并换算为本地 24 小时制
     let clock = plain.split(" · ").nth(1).unwrap_or_default();
-    assert!(clock.ends_with("AM") || clock.ends_with("PM"), "{plain}");
+    assert!(is_24h_clock(clock), "{plain}");
     // 时间无法解析时省略时刻，其余照常
     let untimed = super::session_summary::render_history_turn_summary(87, 6_100, Some(&usage), "")
         .expect("summary without clock");
-    assert!(!crate::render::activity_animation::strip_ansi_for_test(&untimed).contains(" PM"));
+    let untimed_plain = crate::render::activity_animation::strip_ansi_for_test(&untimed);
+    assert!(
+        !untimed_plain.split(" · ").any(is_24h_clock),
+        "{untimed_plain}"
+    );
     assert!(super::session_summary::render_history_turn_summary(0, 0, None, "").is_none());
 }
 
-/// 总览嵌进分割线：信息靠左，横线向右补满。
+/// 判断文本是否为 `HH:MM` 形式的 24 小时制时刻。
+///
+/// 参数:
+/// - `text`: 待检查文本
+///
+/// 返回:
+/// - 是否为两位小时、两位分钟的时刻
+fn is_24h_clock(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    bytes.len() == 5
+        && bytes[2] == b':'
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| index == 2 || byte.is_ascii_digit())
+}
+
+/// 总览嵌进分割线：引导点与信息靠左，横线向右补满。
 #[test]
 fn turn_rule_keeps_stats_left_and_fills_right() {
-    let line = super::session_summary::inline_turn_rule("\x1b[2m•\x1b[0m stats", 20);
+    let line = super::session_summary::inline_turn_rule("\x1b[2m•\x1b[0m stats", 22);
     let plain = crate::render::activity_animation::strip_ansi_for_test(&line);
-    assert_eq!(plain, format!("stats {}", "─".repeat(14)));
+    assert_eq!(plain, format!("• stats {}", "─".repeat(14)));
+    // 上游已剥掉引导点时补回
+    let bare = super::session_summary::inline_turn_rule("stats", 22);
+    assert_eq!(
+        crate::render::activity_animation::strip_ansi_for_test(&bare),
+        plain
+    );
     // 宽度不足时只保留信息，不画残缺横线
     let narrow = super::session_summary::inline_turn_rule("\x1b[2m•\x1b[0m stats", 10);
     assert_eq!(
         crate::render::activity_animation::strip_ansi_for_test(&narrow),
-        "stats"
+        "• stats"
     );
 }
-

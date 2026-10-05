@@ -313,7 +313,7 @@ mod tests {
         let rules = lines
             .iter()
             .filter(|line| {
-                line.trim_start().starts_with("Worked for")
+                line.trim_start().starts_with("• Worked for")
                     && line.contains("5.8k")
                     && line.trim_end().ends_with('─')
             })

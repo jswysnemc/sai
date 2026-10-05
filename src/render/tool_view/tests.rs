@@ -183,3 +183,53 @@ fn ask_question_uses_question_status_instead_of_running() {
     let completed = crate::render::activity_animation::strip_ansi_for_test(&completed);
     assert!(completed.contains("Asked"));
 }
+
+/// 网页搜索定稿后挂结果条数与供应商徽标。
+#[test]
+fn web_search_summary_shows_result_count_and_provider() {
+    let mut view = ToolView::running("web_search".into(), r#"{"query":"rust"}"#.into());
+    view.finish(
+        true,
+        "## Search results for: rust\n**Provider**: Brave\n\n### 1. A\n**URL**: https://a\n\n### 2. B\n"
+            .into(),
+    );
+    let plain = crate::render::activity_animation::strip_ansi_for_test(&super::render(
+        &view,
+        ToolCallDisplayMode::Summary,
+    ));
+    assert_eq!(
+        plain.trim(),
+        "• Searched the web for rust 2 results · Brave"
+    );
+}
+
+/// 文件内容搜索定稿后挂命中行数与文件数，截断时标 `+`。
+#[test]
+fn file_search_summary_shows_match_and_file_counts() {
+    let mut view = ToolView::running("grep".into(), r#"{"pattern":"main"}"#.into());
+    view.finish(
+        true,
+        serde_json::json!({
+            "success": true,
+            "stdout": "src/a.rs:1:fn main\nsrc/a.rs:9:main()\nsrc/b.rs:3:main",
+            "truncated": true
+        })
+        .to_string(),
+    );
+    let plain = crate::render::activity_animation::strip_ansi_for_test(&super::render(
+        &view,
+        ToolCallDisplayMode::Summary,
+    ));
+    assert_eq!(
+        plain.trim(),
+        "• Searched files for main 3+ matches in 2 files"
+    );
+    // 无命中时明确写 no matches
+    let mut empty = ToolView::running("grep".into(), r#"{"pattern":"zzz"}"#.into());
+    empty.finish(true, r#"{"stdout":"","truncated":false}"#.into());
+    let plain = crate::render::activity_animation::strip_ansi_for_test(&super::render(
+        &empty,
+        ToolCallDisplayMode::Summary,
+    ));
+    assert!(plain.ends_with("no matches"), "{plain}");
+}

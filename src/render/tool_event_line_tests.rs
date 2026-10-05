@@ -353,17 +353,17 @@ fn web_fetch_status_uses_native_verb_and_redacted_url() {
     );
 }
 
-/// 网页搜索使用 Searching/Searched，并展示查询词而不是 Running。
+/// 网页搜索标明范围「the web」，并展示查询词而不是 Running。
 #[test]
 fn web_search_uses_search_verb_and_query() {
     let arguments = r#"{"query":"rust async traits"}"#;
     assert_eq!(
         tool_event_label("web_search", Some(arguments)),
-        "Searching rust async traits"
+        "Searching the web for rust async traits"
     );
     assert_eq!(
         tool_event_label_tense("web_search", Some(arguments), ToolVerbTense::Perfect),
-        "Searched rust async traits"
+        "Searched the web for rust async traits"
     );
     assert_eq!(
         tool_event_label("web_search", Some("{}")),
@@ -372,8 +372,35 @@ fn web_search_uses_search_verb_and_query() {
     // 参数流式到一半时也能提前展示查询词
     assert_eq!(
         tool_event_label("web_search", Some(r#"{"query":"tokio sel"#)),
-        "Searching tokio sel"
+        "Searching the web for tokio sel"
     );
+    // 完成态切换时态保留整句
+    assert_eq!(
+        retarget_label_tense(
+            "web_search",
+            "Searching the web for tokio",
+            ToolVerbTense::Perfect
+        ),
+        "Searched the web for tokio"
+    );
+}
+
+/// 文件内容搜索标明范围「files」，与网页搜索区分；有 include 时附上文件范围。
+#[test]
+fn file_search_names_files_scope_and_glob() {
+    assert_eq!(
+        tool_event_label("grep", Some(r#"{"pattern":"fn main"}"#)),
+        "Searching files for fn main"
+    );
+    assert_eq!(
+        tool_event_label_tense(
+            "search_text",
+            Some(r#"{"pattern":"TODO","include":"*.rs"}"#),
+            ToolVerbTense::Perfect
+        ),
+        "Searched files for TODO in *.rs"
+    );
+    assert_eq!(tool_event_label("grep", Some("{}")), "Searching files");
 }
 
 /// 浏览器按 action 选动词，完成态切换时态保留对象。

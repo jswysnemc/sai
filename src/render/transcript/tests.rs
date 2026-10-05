@@ -418,9 +418,8 @@ fn turn_summary_merges_into_a_width_fitted_rule() {
         .find(|plain| plain.contains("8.0k/1.0M"))
         .expect("turn summary must render its stats");
     // 信息与横线同在一行：信息靠左，横线向右补满
-    assert!(rule.trim_start().starts_with("8.0k/1.0M "), "{rule}");
+    assert!(rule.trim_start().starts_with("• 8.0k/1.0M "), "{rule}");
     assert!(rule.trim_end().ends_with('─'), "{rule}");
-    assert!(!rule.contains('•'), "{rule}");
     assert_eq!(
         crate::render::table::visible_width(rule.trim()),
         width,

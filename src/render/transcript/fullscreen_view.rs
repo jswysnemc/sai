@@ -9,6 +9,7 @@ use super::line::AnsiLine;
 use super::spacing;
 use super::store::{TranscriptRenderOptions, TranscriptStore, TranscriptView};
 use crate::llm::ChatStreamKind;
+use crate::render::content_indent::{align_to_guide_column_with_width, CONTENT_LEFT_INDENT};
 use crate::render::omitted_line::{rewrite_fold_hint_for_fullscreen, with_fullscreen_hints};
 use crate::render::render_expand::{with_force_collapse, with_force_expand};
 use std::collections::HashSet;
@@ -81,7 +82,7 @@ impl TranscriptStore {
     /// 【全屏视图】【正文文档】按宽度与展开集合渲染完整会话。
     ///
     /// 参数:
-    /// - `width`: 正文列数
+    /// - `width`: 正文区总列数，含左侧引导缩进；表格按扣除后的净宽排版
     /// - `options`: transcript 渲染选项
     /// - `expanded`: 需要展开的段落键
     ///
@@ -93,13 +94,15 @@ impl TranscriptStore {
         options: &TranscriptRenderOptions,
         expanded: &HashSet<ParagraphKey>,
     ) -> FullscreenDocument {
-        // 全屏中 Ctrl+O 是退出键：折叠提示统一改为点击展开。
-        // 渲染缓存与内联视图共用，缓存行在渲染上下文之外生成，最后统一改写
-        let mut document = self.render_document(width, options, expanded);
+        // 1. 【全屏视图】【正文净宽】先扣引导列再排 Markdown / 表格，右缘留给概览轨道
+        let padding = CONTENT_LEFT_INDENT.min(width.saturating_sub(1));
+        let content_width = width.saturating_sub(padding).max(1);
+        let mut document = self.render_document(content_width, options, expanded);
+        // 2. 全屏中 Ctrl+O 是退出键：折叠提示改为点击展开，再把引导列补回
         for line in &mut document.lines {
-            if let Some(rewritten) = rewrite_fold_hint_for_fullscreen(line.as_str()) {
-                *line = AnsiLine::new(rewritten);
-            }
+            let rewritten = rewrite_fold_hint_for_fullscreen(line.as_str());
+            let source = rewritten.as_deref().unwrap_or(line.as_str());
+            *line = AnsiLine::new(align_to_guide_column_with_width(source, padding));
         }
         document
     }

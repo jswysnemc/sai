@@ -49,7 +49,7 @@ pub(crate) fn render_session_summary_with(
         duration_ms: snapshot.last_turn_duration_ms,
         ttft_ms: snapshot.last_turn_ttft_ms,
         usage: snapshot.usage.last_conversation_usage.as_ref(),
-        finished_at: Some(chrono::Local::now().format("%-I:%M %p").to_string()),
+        finished_at: Some(chrono::Local::now().format("%H:%M").to_string()),
     };
     let mut output = format!("\x1b[2m•\x1b[0m {}", summary_body(&data, labels));
     if snapshot.checkpoint_count > 0 {
@@ -85,12 +85,12 @@ struct SummaryData<'a> {
     duration_ms: u64,
     ttft_ms: u64,
     usage: Option<&'a crate::llm::Usage>,
-    /// 本轮结束时刻（本地时间，如 `1:58 PM`）；未知时省略
+    /// 本轮结束时刻（本地 24 小时制，如 `13:58`）；未知时省略
     finished_at: Option<String>,
 }
 
 /// 【终端】【会话摘要】组合总览正文：
-/// `Worked for 27s · 1:58 PM · First word 6.1s · ↑ 12k toks · ↓ 344 toks · 缓存 88% · 速度 233 toks/s`。
+/// `Worked for 27s · 13:58 · TTFT 6.1s · ↑ 12k toks · ↓ 344 toks · 缓存 88% · 速度 233 toks/s`。
 ///
 /// 标签、图标、单位与分隔符弱化，数值保持正文颜色；没有数据的项整体省略。
 ///
@@ -152,7 +152,7 @@ fn summary_body(data: &SummaryData, labels: SummaryLabels) -> String {
     parts.join(&format!(" {} ", dim("·")))
 }
 
-/// 把 RFC3339 时间转成本地 12 小时制时刻，如 `1:58 PM`。
+/// 把 RFC3339 时间转成本地 24 小时制时刻，如 `13:58`。
 ///
 /// 参数:
 /// - `timestamp`: 持久化的 RFC3339 时间
@@ -164,7 +164,7 @@ fn local_clock(timestamp: &str) -> Option<String> {
     Some(
         parsed
             .with_timezone(&chrono::Local)
-            .format("%-I:%M %p")
+            .format("%H:%M")
             .to_string(),
     )
 }
@@ -225,7 +225,7 @@ pub(crate) fn strip_turn_rule(text: &str) -> String {
     kept.join("\n")
 }
 
-/// 【终端】【会话分隔】把总览首行嵌进 turn 分割线：`信息 ────────`。
+/// 【终端】【会话分隔】把总览首行嵌进 turn 分割线：`• 信息 ────────`。
 ///
 /// 信息从左起，横线向右补满正文净宽；宽度放不下时只保留信息行。
 /// 其余行原样保留在后面。
@@ -238,9 +238,15 @@ pub(crate) fn strip_turn_rule(text: &str) -> String {
 /// - 信息与分割线合为一体的总览
 pub(crate) fn inline_turn_rule(text: &str, width: usize) -> String {
     let (first, rest) = text.split_once('\n').unwrap_or((text, ""));
-    let body = first.strip_prefix("\x1b[2m•\x1b[0m ").unwrap_or(first);
+    // 1. 保留行首弱化引导点，与其它 transcript 区块的引导符号对齐
+    let body = if first.starts_with("\x1b[2m•\x1b[0m ") {
+        first.to_string()
+    } else {
+        format!("\x1b[2m•\x1b[0m {first}")
+    };
+    let body = body.as_str();
     let body_width = crate::render::table::visible_width(body);
-    // 1. 信息靠左、横线向右补满：横线至少 8 列才有分隔感，放不下时只留信息行
+    // 2. 信息靠左、横线向右补满：横线至少 8 列才有分隔感，放不下时只留信息行
     let merged = if body_width + 9 <= width {
         format!(
             "{body}\x1b[2m {}\x1b[0m",

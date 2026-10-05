@@ -610,6 +610,34 @@ fn table_cell_preserves_bold_italic_code() {
     assert!(!output.contains('\n'));
 }
 
+/// 【终端】【行内代码】双反引号、尾随空格、未闭合围栏，以及强调内的代码都按 CommonMark 配对。
+#[test]
+fn table_cell_renders_commonmark_code_spans() {
+    let doubled = render_table_cell("``inner``");
+    assert!(doubled.contains(&format!("{MD_INLINE_CODE_STYLE}inner{RESET}")));
+    assert!(!doubled.contains('`'), "{doubled}");
+
+    let spaced = render_table_cell("`ab `");
+    assert!(spaced.contains(&format!("{MD_INLINE_CODE_STYLE}ab {RESET}")));
+    assert!(!spaced.contains('`'), "{spaced}");
+
+    let padded = render_table_cell("` inner `");
+    assert!(padded.contains(&format!("{MD_INLINE_CODE_STYLE}inner{RESET}")));
+    assert!(!padded.contains('`'), "{padded}");
+
+    let unclosed = render_table_cell("`unclosed");
+    assert!(unclosed.contains("`unclosed"), "{unclosed}");
+    assert!(!unclosed.contains(MD_INLINE_CODE_STYLE), "{unclosed}");
+
+    let mixed = render_table_cell("**粗体 + `代码`**");
+    assert!(mixed.contains(&format!("{MD_INLINE_CODE_STYLE}代码{RESET}")));
+    assert!(!mixed.contains('`'), "{mixed}");
+
+    let strike = render_table_cell("~~删除线 + `代码`~~");
+    assert!(strike.contains(&format!("{MD_INLINE_CODE_STYLE}代码{RESET}")));
+    assert!(!strike.contains('`'), "{strike}");
+}
+
 #[test]
 fn table_cell_collapses_list_items() {
     let output = render_table_cell("- 第一项\n- 第二项\n- 第三项");

@@ -61,6 +61,9 @@ pub(crate) fn render_framed(view: &ToolView, mode: ToolCallDisplayMode, frame: u
             return rendered;
         }
     }
+    if let Some(rendered) = super::search::render(view, mode) {
+        return rendered;
+    }
 
     let tense = ToolVerbTense::from_done(view.outcome.is_some());
     let label = view
