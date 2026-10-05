@@ -8,8 +8,10 @@ import { THINKING_OPTIONS } from "../../chat/model-thinking-options";
 import {
   buildNewSessionModelChoices,
   buildNewSessionThinkingLevels,
+  disabledNewSessionProviderName,
   resolveConfiguredNewSessionPreferences
 } from "../../sessions/new-session-preferences";
+import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
 import { modelSelectOption } from "../model-select-option";
 
@@ -38,9 +40,22 @@ export function NewSessionDefaultSettings({
   const matchingStatus = status?.engine === engine ? status : undefined;
   const preferences = resolveConfiguredNewSessionPreferences(config);
   const modelChoices = buildNewSessionModelChoices(config, matchingStatus);
+  const disabledProviderName = disabledNewSessionProviderName(config);
   const configuredModelValue = preferences.model
     ? encodeModelChoice(preferences.model.providerId, preferences.model.model)
     : DEFAULT_MODEL_VALUE;
+  // 1. 停用供应商后仍保留当前配置项，避免界面静默回落到「跟随内核默认」而草稿仍是原值
+  const staleChoice = disabledProviderName && preferences.model
+    ? {
+      providerId: preferences.model.providerId,
+      providerName: disabledProviderName,
+      model: preferences.model.model
+    }
+    : null;
+  const visibleChoices = staleChoice
+    && !modelChoices.some((choice) => choice.providerId === staleChoice.providerId && choice.model === staleChoice.model)
+    ? [staleChoice, ...modelChoices]
+    : modelChoices;
   const modelOptions = [
     {
       value: DEFAULT_MODEL_VALUE,
@@ -50,13 +65,15 @@ export function NewSessionDefaultSettings({
         "使用当前对话内核配置的默认模型。"
       )
     },
-    ...modelChoices.map((choice) => modelSelectOption(
+    ...visibleChoices.map((choice) => modelSelectOption(
       choice,
       encodeModelChoice(choice.providerId, choice.model),
-      t(
-        "Start each new session with this model.",
-        "每个新会话初始使用此模型。"
-      ),
+      staleChoice && choice.providerId === staleChoice.providerId && choice.model === staleChoice.model
+        ? t("This provider is disabled; pick another model or follow the engine default.", "该供应商已停用；请另选模型或改回跟随内核默认。")
+        : t(
+          "Start each new session with this model.",
+          "每个新会话初始使用此模型。"
+        ),
       external ? choice.model : undefined
     ))
   ];
@@ -119,7 +136,21 @@ export function NewSessionDefaultSettings({
 
   return (
     <FieldGrid>
-      <SettingsField label={t("New session model", "新会话模型")} configKey="session.new_session_model" anchor="runtime.session.new_session_model" hint={t("Applied only when creating a session.", "仅在创建新会话时应用。")}>
+      <SettingsField
+        label={t("New session model", "新会话模型")}
+        configKey="session.new_session_model"
+        anchor="runtime.session.new_session_model"
+        hint={t("Applied only when creating a session.", "仅在创建新会话时应用。")}
+        error={disabledProviderName
+          ? t(
+            `The selected provider (${disabledProviderName}) is disabled, so this default cannot be saved. Choose another model or follow the engine default.`,
+            `所选供应商（${disabledProviderName}）已停用，无法保存该默认模型。请另选模型，或改回跟随内核默认。`
+          )
+          : undefined}
+        aside={disabledProviderName
+          ? <Button size="small" variant="ghost" onClick={() => updateModel(DEFAULT_MODEL_VALUE)}>{t("Follow engine default", "跟随内核默认")}</Button>
+          : undefined}
+      >
 
         <SkSelect
           value={modelValue}

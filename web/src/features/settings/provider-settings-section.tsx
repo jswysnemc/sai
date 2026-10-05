@@ -314,26 +314,59 @@ export function ProviderSettingsSection({
     ));
     const nextActive = nextActiveProvider(providers, config.active_provider);
     const name = provider.display_name || provider.id;
+    const isNewSessionDefault = config.session?.new_session_provider_id === provider.id
+      && Boolean(config.session?.new_session_model);
     if (!enabled && provider.id === config.active_provider) {
       const target = providers.find((item) => item.id === nextActive);
       const targetName = target ? target.display_name || target.id : "";
       const confirmed = await confirm({
         title: t("Disable the current provider", "停用当前供应商"),
-        description: targetName
-          ? t(
-            `“${name}” is the current provider. Disabling it switches the current provider to “${targetName}”.`,
-            `“${name}”是当前正在使用的供应商，停用后当前供应商会切换为“${targetName}”。`
-          )
-          : t(
-            `“${name}” is the current provider. Disabling it leaves no provider in use.`,
-            `“${name}”是当前正在使用的供应商，停用后将没有正在使用的供应商。`
-          ),
+        description: [
+          targetName
+            ? t(
+              `“${name}” is the current provider. Disabling it switches the current provider to “${targetName}”.`,
+              `“${name}”是当前正在使用的供应商，停用后当前供应商会切换为“${targetName}”。`
+            )
+            : t(
+              `“${name}” is the current provider. Disabling it leaves no provider in use.`,
+              `“${name}”是当前正在使用的供应商，停用后将没有正在使用的供应商。`
+            ),
+          isNewSessionDefault
+            ? t(
+              "New sessions currently start with a model from this provider; that default will follow the engine instead.",
+              "新会话当前使用该供应商的模型，停用后会改回跟随内核默认。"
+            )
+            : ""
+        ].filter(Boolean).join(" "),
         confirmLabel: t("Disable provider", "停用供应商"),
         danger: true
       });
       if (!confirmed) return;
+    } else if (!enabled && isNewSessionDefault) {
+      const confirmed = await confirm({
+        title: t("Disable provider", "停用供应商"),
+        description: t(
+          `New sessions currently start with a model from “${name}”. Disabling this provider reverts that default to the engine model.`,
+          `新会话当前使用“${name}”的模型。停用后，新会话默认会改回跟随内核默认模型。`
+        ),
+        confirmLabel: t("Disable provider", "停用供应商")
+      });
+      if (!confirmed) return;
     }
-    onConfigChange({ ...config, providers, active_provider: nextActive });
+    onConfigChange({
+      ...config,
+      providers,
+      active_provider: nextActive,
+      session: !enabled && isNewSessionDefault
+        ? clearNewSessionModelReference(config.session)
+        : config.session
+    });
+    if (!enabled && isNewSessionDefault) {
+      showToast(t(
+        `New session model now follows the engine default.`,
+        `新会话模型已改回跟随内核默认。`
+      ));
+    }
   };
 
   /**

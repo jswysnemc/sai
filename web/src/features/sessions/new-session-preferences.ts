@@ -18,11 +18,29 @@ import {
   writeStoredThinkingLevel
 } from "../chat/session-preference-storage";
 import { THINKING_OPTIONS } from "../chat/model-thinking-options";
+import { isProviderEnabled } from "../settings/model/provider-enablement";
 
 export type NewSessionPreferences = {
   model: RunModelSelection | null;
   thinkingLevel: ThinkingLevel;
 };
+
+/**
+ * 【会话】【新会话默认值】当前配置的新会话模型是否落在已停用供应商上。
+ *
+ * 下拉只列出启用供应商，停用后界面会静默回落到「跟随内核默认」，
+ * 草稿里仍保留原值，保存会被后端拒绝。调用方据此给出提醒。
+ *
+ * @param config 应用配置草稿
+ * @returns 已停用供应商的显示名；模型可用或未配置时为空
+ */
+export function disabledNewSessionProviderName(config: AppConfig): string | null {
+  const configured = resolveConfiguredNewSessionPreferences(config).model;
+  if (!configured || (config.agent?.engine ?? "native") !== "native") return null;
+  const provider = (config.providers ?? []).find((item) => item.id === configured.providerId);
+  if (!provider || isProviderEnabled(provider)) return null;
+  return provider.display_name?.trim() || provider.id;
+}
 
 /**
  * 【会话】【新会话默认值】解析配置中显式指定的新会话偏好。

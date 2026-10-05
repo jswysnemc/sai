@@ -12,6 +12,7 @@ import {
   initializeNewSessionPreferences,
   renameNewSessionProviderReference,
   resetNewSessionEnginePreferences,
+  disabledNewSessionProviderName,
   resolveConfiguredNewSessionPreferences,
   resolveEffectiveNewSessionPreferences
 } from "./new-session-preferences";
@@ -81,6 +82,20 @@ describe("new session preferences", () => {
       model: { providerId: "provider-a", model: "model-b" },
       thinkingLevel: "auto"
     });
+    expect(disabledNewSessionProviderName(config)).toBeNull();
+  });
+
+  it("names the disabled provider that still owns the new-session model", () => {
+    const config = {
+      ...nativeConfig,
+      providers: [{ ...nativeConfig.providers[0], enabled: false, display_name: "Provider A" }],
+      session: {
+        new_session_provider_id: "provider-a",
+        new_session_model: "model-b"
+      }
+    } as unknown as AppConfig;
+    expect(disabledNewSessionProviderName(config)).toBe("Provider A");
+    expect(buildNewSessionModelChoices(config).map((choice) => choice.model)).toEqual([]);
   });
 
   it("uses only models currently advertised by a connected ACP runtime", () => {
