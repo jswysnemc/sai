@@ -7,7 +7,7 @@ const RESET: &str = "\x1b[0m";
 /// 【全屏视图】【悬停高亮】给一行正文提亮前景，行内样式复位后重新补上。
 ///
 /// 不铺底、不加粗。已有 256 色或真彩前景会向白色混合一档；
-/// 没有前景的片段使用略低于纯白的默认色。
+/// 暗淡属性取消，没有前景的片段使用纯白。
 ///
 /// 参数:
 /// - `line`: 已适配正文宽度的 ANSI 行
@@ -86,6 +86,10 @@ fn rewrite_sequence(sequence: &str) -> String {
                     index += 1;
                 }
             },
+            "2" => {
+                rewritten.push("22".to_string());
+                index += 1;
+            }
             "39" => {
                 rewritten.push(hover_default_sgr());
                 lifted_fg = true;
@@ -130,7 +134,7 @@ fn hover_default_sgr() -> String {
     HOVER_DEFAULT_FG
         .strip_prefix("\x1b[")
         .and_then(|rest| rest.strip_suffix('m'))
-        .unwrap_or("38;5;250")
+        .unwrap_or("22;38;2;255;255;255")
         .to_string()
 }
 
@@ -184,5 +188,17 @@ mod tests {
         assert!(!output.contains("\x1b[1m"), "{output:?}");
         assert_eq!(plain(&output), "dim");
         assert!(!rewrite_sequence("\x1b[38;2;0;0;0m").contains("\x1b[0m"));
+    }
+
+    /// 暗淡属性被取消，正文由暗变亮。
+    #[test]
+    fn dim_intensity_is_cancelled() {
+        let output = tint_line("\x1b[2mdim");
+        assert!(
+            output.contains("\x1b[22m") || output.contains("22;"),
+            "{output:?}"
+        );
+        assert!(!output.contains("\x1b[2m"), "{output:?}");
+        assert_eq!(plain(&output), "dim");
     }
 }

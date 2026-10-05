@@ -1,9 +1,9 @@
 //! 悬停时把前景色向白色混合一档，避免加粗或铺底。
 
-/// 向白色混合的比例；留一点余量，不顶到 255。
-const LIFT: u16 = 28;
-/// 无显式前景时使用的悬停色，低于纯白。
-pub(super) const HOVER_DEFAULT_FG: &str = "\x1b[38;5;250m";
+/// 向白色混合的比例。
+const LIFT: u16 = 45;
+/// 无显式前景时使用的悬停色：取消暗淡并提到纯白。
+pub(super) const HOVER_DEFAULT_FG: &str = "\x1b[22;38;2;255;255;255m";
 
 const ANSI16: [(u8, u8, u8); 16] = [
     (0, 0, 0),
@@ -33,7 +33,7 @@ const ANSI16: [(u8, u8, u8); 16] = [
 /// - 提亮后的通道
 pub(super) fn lift_channel(value: u8) -> u8 {
     let mixed = u16::from(value) + (255 - u16::from(value)) * LIFT / 100;
-    mixed.max(u16::from(value).saturating_add(16)).min(250) as u8
+    mixed.max(u16::from(value).saturating_add(20)).min(255) as u8
 }
 
 /// 把 256 色下标转成 RGB。
@@ -94,12 +94,12 @@ pub(super) fn lifted_256(index: u8) -> String {
 mod tests {
     use super::*;
 
-    /// 提亮后仍低于纯白，且一定比原值更亮。
+    /// 提亮后一定不比原值暗，已接近白色时顶到纯白。
     #[test]
-    fn lift_stays_below_white() {
+    fn lift_moves_toward_white() {
         assert!(lift_channel(80) > 80);
-        assert!(lift_channel(80) < 255);
-        assert!(lift_channel(240) <= 250);
-        assert!(lift_channel(244) > 244 || lift_channel(244) == 250);
+        assert!(lift_channel(188) > 188);
+        assert_eq!(lift_channel(240), 255);
+        assert_eq!(lift_channel(255), 255);
     }
 }
