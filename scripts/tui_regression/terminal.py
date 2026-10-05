@@ -40,6 +40,11 @@ class TerminalSession:
         config = config or {"active_provider": "test", "providers": [{
             "id": "test", "display_name": "Test", "base_url": "http://127.0.0.1:1/v1",
             "api_key": "local-fixture", "models": ["test"], "default_model": "test"}]}
+        # 产品默认以全局渲染启动并把公式渲染成图片；回归用例按普通模式启动、Ctrl+O 进入全屏，
+        # 且断言公式文本，故未显式指定时固定为普通模式与文本公式
+        display = config.setdefault("display", {})
+        display.setdefault("fullscreen", False)
+        display.setdefault("math_images", False)
         target = self.root / "config/sai/config.jsonc"
         target.parent.mkdir(parents=True)
         target.write_text(json.dumps(config))
