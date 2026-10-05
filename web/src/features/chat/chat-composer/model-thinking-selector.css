@@ -47,9 +47,11 @@
   color: var(--ink);
 }
 
+/* 模型名与推理强度字号不同：统一 line-height 为 1，交给触发器的 align-items:center 对齐字形中线 */
 .model-thinking-model {
   min-width: 0;
   overflow: hidden;
+  line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -58,6 +60,7 @@
   flex: 0 0 auto;
   color: var(--signal);
   font-size:var(--text-xs);
+  line-height: 1;
 }
 
 /* 待生效模型徽标：运行中点选的新模型下一轮才生效，轻量标注不打断当前轮 */
@@ -309,6 +312,52 @@
   color: var(--ink-soft);
   font-size:var(--text-sm);
   text-align: center;
+}
+
+.model-thinking-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--space-2xs) var(--space-sm);
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  background: var(--paper-raised);
+}
+
+.model-thinking-option-list > button.model-thinking-back,
+.model-thinking-option-list > button.model-thinking-vendor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 16px;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  min-height: 1.75rem;
+  padding: 0 var(--space-sm);
+  border: 0;
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.model-thinking-option-list > button.model-thinking-back {
+  grid-template-columns: 14px minmax(0, 1fr);
+  margin-bottom: var(--space-3xs);
+  color: var(--ink-soft);
+}
+
+.model-thinking-option-list > button.model-thinking-back:hover,
+.model-thinking-option-list > button.model-thinking-vendor:hover,
+.model-thinking-option-list > button.model-thinking-vendor.active {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.model-thinking-option-list > button.model-thinking-back > svg,
+.model-thinking-option-list > button.model-thinking-vendor > svg {
+  visibility: visible;
+  color: var(--ink-soft);
 }
 
 /* 去掉默认轮廓后补焦点环，键盘操作才看得出焦点落点 */

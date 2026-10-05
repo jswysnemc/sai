@@ -39,6 +39,23 @@ describe("ModelThinkingSelector 待生效标识", () => {
     expect(renderSelector(null)).not.toContain("model-thinking-pending");
   });
 
+  it("触发器只显示模型名末段，完整 ID 保留在提示里，且推理强度不带图标", () => {
+    const markup = renderToStaticMarkup(
+      <ModelThinkingSelector
+        choices={[{ providerId: "p", providerName: "P", model: "clinepass/cline-pass/deepseek-v4-flash" }]}
+        selection={{ providerId: "p", providerName: "P", model: "clinepass/cline-pass/deepseek-v4-flash" }}
+        thinkingLevel="high"
+        loading={false}
+        disabled={false}
+        onModelSelect={() => undefined}
+        onThinkingLevelChange={() => undefined}
+      />
+    );
+    expect(markup).toContain(">deepseek-v4-flash</span>");
+    expect(markup).toContain('title="clinepass/cline-pass/deepseek-v4-flash"');
+    expect(markup).not.toContain("lucide-brain-circuit");
+  });
+
   it("运行中保持触发器可用", () => {
     // 需求：聊天中不再禁用模型选择器；disabled 传 false 时按钮不带 disabled 属性
     expect(renderSelector(null, false)).not.toContain("disabled");

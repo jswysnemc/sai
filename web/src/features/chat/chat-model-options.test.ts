@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AppConfig } from "../../api/contracts";
-import { buildChatModelChoices, resolveChatModelSelection } from "./chat-model-options";
+import { buildChatModelChoices, groupChatModelChoices, resolveChatModelSelection, shortModelName } from "./chat-model-options";
 
 const config: AppConfig = {
   active_provider: "primary",
@@ -38,6 +38,19 @@ describe("chat model options", () => {
     };
 
     expect(buildChatModelChoices(withDisabled).map((choice) => choice.model)).toEqual(["model-c"]);
+  });
+
+  it("groups models by provider for the second-level picker", () => {
+    const groups = groupChatModelChoices(buildChatModelChoices(config));
+    expect(groups.map((group) => group.providerId)).toEqual(["primary", "backup"]);
+    expect(groups[0].models.map((choice) => choice.model)).toEqual(["model-a", "model-b"]);
+    expect(groups[1].models.map((choice) => choice.model)).toEqual(["model-c"]);
+  });
+
+  it("strips routing prefixes for the composer label only", () => {
+    expect(shortModelName("clinepass/cline-pass/deepseek-v4-flash")).toBe("deepseek-v4-flash");
+    expect(shortModelName("gpt-5")).toBe("gpt-5");
+    expect(shortModelName("vendor/")).toBe("vendor");
   });
 
   it("moves the selection off a disabled provider", () => {

@@ -5,6 +5,7 @@ import { MessageActions } from "./message-actions";
 import { useI18n } from "../../i18n/use-i18n";
 import { UserMessageContent } from "./user-message-content";
 import { UserMessageEditor } from "./user-message-editor";
+import { SelectionContextMenu } from "../selection-context-menu";
 import "./user-message-bubble.css";
 
 type UserMessageBubbleProps = {
@@ -78,9 +79,11 @@ export function UserMessageBubble({
               ))}
             </div>
           )}
-          <div ref={bodyRef} className={`message-content user-markdown${collapsed ? " collapsed" : ""}`}>
-            <UserMessageContent content={content} />
-          </div>
+          <SelectionContextMenu fallbackText={content}>
+            <div ref={bodyRef} className={`message-content user-markdown${collapsed ? " collapsed" : ""}`}>
+              <UserMessageContent content={content} />
+            </div>
+          </SelectionContextMenu>
           {collapsible && (
             <Button className="bubble-expand" onClick={() => setExpanded((value) => !value)}>
               {expanded ? t("Collapse", "收起") : t("Show more", "显示更多")}

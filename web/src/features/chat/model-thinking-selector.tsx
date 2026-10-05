@@ -1,9 +1,10 @@
-import { BrainCircuit, Check, ChevronDown, ChevronRight, Clock3, Search } from "../../shared/ui/icons";
+import { BrainCircuit, Check, ChevronDown, ChevronRight, Clock3 } from "../../shared/ui/icons";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { RunModelSelection, ThinkingLevel } from "../../api/contracts";
 import { ModelIcon } from "../../shared/ui/model-icon";
-import type { ChatModelChoice } from "./chat-model-options";
+import { shortModelName, type ChatModelChoice } from "./chat-model-options";
+import { ModelOptions } from "./model-thinking-model-options";
 import { THINKING_OPTIONS, thinkingLevelLabel } from "./model-thinking-options";
 import { useI18n } from "../i18n/use-i18n";
 
@@ -130,7 +131,7 @@ export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
           : t(`${props.selection?.model ?? "No model configured"}, reasoning effort ${thinkingLabel}`, `${props.selection?.model ?? "未配置模型"}，推理强度 ${thinkingLabel}`)}
       >
         {props.selection?.model ? <ModelIcon model={props.selection.model} size={14} /> : null}
-        <span className="model-thinking-model">{props.loading ? t("Loading models", "读取模型") : props.selection?.model ?? t("No model configured", "未配置模型")}</span>
+        <span className="model-thinking-model" title={props.selection?.model}>{props.loading ? t("Loading models", "读取模型") : props.selection?.model ? shortModelName(props.selection.model) : t("No model configured", "未配置模型")}</span>
         {pending && (
           <span
             className="model-thinking-pending"
@@ -140,7 +141,7 @@ export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
             )}
           >
             <Clock3 size={12} aria-hidden />
-            {t(`${pending.model} next turn`, `${pending.model} 下轮生效`)}
+            {t(`${shortModelName(pending.model)} next turn`, `${shortModelName(pending.model)} 下轮生效`)}
           </span>
         )}
         <span className="model-thinking-level">{thinkingLabel}</span>
@@ -207,40 +208,6 @@ export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
         document.body
       )}
     </div>
-  );
-}
-
-/**
- * 渲染模型搜索和模型选项。
- *
- * @param props 已过滤模型、当前选择、待生效选择、搜索状态和选择回调
- * @returns 模型二级菜单
- */
-function ModelOptions({ choices, selection, pendingSelection, query, onQueryChange, onSelect }: { choices: ChatModelChoice[]; selection: ChatModelChoice | null; pendingSelection?: ChatModelChoice | null; query: string; onQueryChange: (value: string) => void; onSelect: (choice: ChatModelChoice) => void }) {
-  const { t } = useI18n();
-  return (
-    <>
-      <label className="model-thinking-search">
-        <Search size={14} />
-        <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={t("Search models or providers", "搜索模型或供应商")} aria-label={t("Search models or providers", "搜索模型或供应商")} autoFocus />
-      </label>
-      <div className="model-thinking-option-list" role="listbox" aria-label={t("Choose model", "选择模型")}>
-        {choices.map((choice) => {
-          const active = choice.providerId === selection?.providerId && choice.model === selection.model;
-          const isPending = choice.providerId === pendingSelection?.providerId && choice.model === pendingSelection.model;
-          return (
-            <button type="button" role="option" aria-selected={active} aria-label={`${choice.model}，${choice.providerName}`} className={active ? "active" : isPending ? "pending" : ""} key={`${choice.providerId}-${choice.model}`} onClick={() => onSelect(choice)}>
-              <span className="model-thinking-option-main"><ModelIcon model={choice.model} size={16} /><strong>{choice.model}</strong></span>
-              {isPending
-                ? <small className="model-thinking-option-pending"><Clock3 size={12} aria-hidden />{t("Next turn", "下轮生效")}</small>
-                : <small>{choice.providerName}</small>}
-              <Check size={14} />
-            </button>
-          );
-        })}
-        {choices.length === 0 && <div className="model-thinking-empty">{t("No matching models", "没有匹配的模型")}</div>}
-      </div>
-    </>
   );
 }
 

@@ -35,7 +35,7 @@ import { RunErrorNotice } from "./message/run-error-notice";
 import { useI18n } from "../i18n/use-i18n";
 import { parseGoalCommand } from "../goals/goal-command";
 import { parseRenameCommand } from "../sessions/rename-command";
-import { appendTerminalSelection, FOCUS_COMPOSER_EVENT, INSERT_TERMINAL_SELECTION_EVENT, type TerminalSelectionDetail } from "./composer/composer-events";
+import { appendComposerText, appendTerminalSelection, FOCUS_COMPOSER_EVENT, INSERT_COMPOSER_TEXT_EVENT, INSERT_TERMINAL_SELECTION_EVENT, type ComposerTextDetail, type TerminalSelectionDetail } from "./composer/composer-events";
 import { TurnTreePanel } from "./turn-tree/turn-tree-panel";
 import { TurnTreeNavigation } from "./turn-tree/turn-tree-navigation";
 import { useBranchActions } from "./turn-tree/use-branch-actions";
@@ -238,7 +238,19 @@ export function ChatPage({ toolbar, selectedSessionId }: { toolbar?: ReactNode; 
       jumpToBottom();
     };
     window.addEventListener(INSERT_TERMINAL_SELECTION_EVENT, handleTerminalSelection);
-    return () => window.removeEventListener(INSERT_TERMINAL_SELECTION_EVENT, handleTerminalSelection);
+    /** 将聊天选区或轨迹摘要写入输入区。 */
+    const handleComposerText = (event: Event) => {
+      if (!activeSession) return;
+      const detail = (event as CustomEvent<ComposerTextDetail>).detail;
+      if (!detail?.content) return;
+      setInput((current) => appendComposerText(current, detail));
+      jumpToBottom();
+    };
+    window.addEventListener(INSERT_COMPOSER_TEXT_EVENT, handleComposerText);
+    return () => {
+      window.removeEventListener(INSERT_TERMINAL_SELECTION_EVENT, handleTerminalSelection);
+      window.removeEventListener(INSERT_COMPOSER_TEXT_EVENT, handleComposerText);
+    };
   }, [activeSession, jumpToBottom]);
 
   /**

@@ -1,4 +1,6 @@
 import { type CSSProperties, type RefObject, useCallback, useLayoutEffect, useRef, useState } from "react";
+import { ContextActionMenu } from "../../shared/ui/menu/context-action-menu";
+import { dispatchComposerText } from "./composer/composer-events";
 import { evenlySpacedOverviewPosition, previewViewportShift, type MessageOverviewItem } from "./message-overview-utils";
 import "./message-overview-rail.css";
 import { useI18n } from "../i18n/use-i18n";
@@ -73,6 +75,7 @@ export function MessageOverviewRail({ scrollContainerRef, items, activeId, onNav
   const itemsRef = useRef(items);
   const [positionedItems, setPositionedItems] = useState<PositionedOverviewItem[]>([]);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; item: MessageOverviewItem } | null>(null);
   const [previewShift, setPreviewShift] = useState(0);
   const previewRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -205,7 +208,16 @@ export function MessageOverviewRail({ scrollContainerRef, items, activeId, onNav
         {positionedItems.map(({ item, top, active }) => {
           const style = { "--message-overview-top": `${top}px` } as CSSProperties;
           return (
-            <li key={item.id} className="message-overview-entry" style={style} data-message-overview-id={item.id}>
+            <li
+              key={item.id}
+              className="message-overview-entry"
+              style={style}
+              data-message-overview-id={item.id}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setMenu({ x: event.clientX, y: event.clientY, item });
+              }}
+            >
               <button
                 type="button"
                 className={`message-overview-marker${active ? " is-active" : ""}`}
@@ -237,6 +249,19 @@ export function MessageOverviewRail({ scrollContainerRef, items, activeId, onNav
           );
         })}
       </ol>
+      {menu && (
+        <ContextActionMenu
+          label={t("Message actions", "消息操作")}
+          x={menu.x}
+          y={menu.y}
+          items={[
+            { id: "jump", label: t("Jump to message", "跳转到消息"), onSelect: () => jumpToItem(menu.item.id) },
+            { id: "send", label: t("Send to composer", "发送到输入区"), onSelect: () => dispatchComposerText([menu.item.title, menu.item.summary].filter(Boolean).join("\n")) },
+            { id: "copy", label: t("Copy summary", "复制摘要"), onSelect: () => { void navigator.clipboard.writeText(menu.item.summary || menu.item.title); } }
+          ]}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </nav>
   );
 }

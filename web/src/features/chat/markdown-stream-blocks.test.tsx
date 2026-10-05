@@ -27,10 +27,10 @@ function nodes(source: string): unknown[] {
   return JSON.parse(JSON.stringify(parser.parse(source).children, (key, value) => key === "position" ? undefined : value));
 }
 
-/** 【正文渲染】【组件比较】参数为文本，返回统一容器内的实际渲染 HTML。 */
+/** 【正文渲染】【组件比较】参数为文本，返回统一容器内的实际渲染 HTML（剥掉选区菜单与 markdown-body 两层容器）。 */
 function html(source: string): string {
   return renderToStaticMarkup(<MarkdownContent source={source} inlineAtoms={EMPTY_INLINE_ATOMS} style={style} streaming={false} />)
-    .replace(/^<div[^>]*>/, "").replace(/<\/div>$/, "");
+    .replace(/^(<div[^>]*>){2}/, "").replace(/(<\/div>){2}$/, "");
 }
 
 describe("Markdown streaming blocks", () => {
