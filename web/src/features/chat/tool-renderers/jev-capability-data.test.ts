@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jevCapabilityStatusLabel, parseJevCapability, parseJevExposureBlock } from "./jev-capability-data";
+import { jevCapabilityStatusLabel, jevSelectionSummary, parseJevCapability, parseJevExposureBlock } from "./jev-capability-data";
 
 const exposed = JSON.stringify({
   ok: true,
@@ -24,9 +24,15 @@ const exposed = JSON.stringify({
 });
 
 describe("parseJevCapability", () => {
-  it("只保留工具名、说明首句和 skill 状态", () => {
+  it("保留工具名、说明首句、完整说明、顶层参数和 skill 状态，不带 skill 全文", () => {
     expect(parseJevCapability(exposed)).toEqual({
-      tools: [{ kind: "tool", name: "web_search", detail: "Search the web." }],
+      tools: [{
+        kind: "tool",
+        name: "web_search",
+        detail: "Search the web.",
+        description: "Search the web. Returns ranked pages.",
+        parameters: [{ name: "query", type: "string", required: false, description: "" }]
+      }],
       skills: [{ kind: "skill", name: "drawio", detail: "loaded" }],
       contexts: []
     });
@@ -60,6 +66,20 @@ describe("parseJevCapability", () => {
     const exposure = parseJevCapability(exposed)!;
     expect(jevCapabilityStatusLabel(exposure, "zh-CN")).toBe("1 个工具 · 1 个 Skill");
     expect(jevCapabilityStatusLabel(exposure, "en-US")).toBe("1 tool · 1 skill");
+  });
+
+  it("发送前摘要写成一句话，中英文连接词自然", () => {
+    const exposure = parseJevCapability(exposed)!;
+    expect(jevSelectionSummary(exposure, "zh-CN")).toBe("选用了 1 个工具和 1 个 Skill");
+    expect(jevSelectionSummary(exposure, "en-US")).toBe("Picked 1 tool and 1 skill");
+    const withMemory = {
+      ...exposure,
+      tools: [...exposure.tools, { kind: "tool" as const, name: "browser", detail: "" }],
+      contexts: [{ kind: "memory" as const, id: "m", source: "memory", description: "", preview: "" }]
+    };
+    expect(jevSelectionSummary(withMemory, "zh-CN")).toBe("选用了 2 个工具、1 个 Skill 和记忆");
+    expect(jevSelectionSummary(withMemory, "en-US")).toBe("Picked 2 tools, 1 skill and memory");
+    expect(jevSelectionSummary({ ...exposure, tools: [] }, "zh-CN")).toBe("选用了 1 个 Skill");
   });
 
   it("预选 detail 中的片段与记忆按种类解析并计入折叠行", () => {

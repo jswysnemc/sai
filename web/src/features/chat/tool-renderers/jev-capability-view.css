@@ -68,3 +68,62 @@
   grid-template-columns: minmax(0, 1fr);
   min-height: 0;
 }
+
+/* 工具与 Skill 展开详情：说明、参数表与 Skill 正文 */
+.jev-resource-detail {
+  display: grid;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.jev-resource-description,
+.jev-resource-empty {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.jev-resource-empty {
+  color: var(--ink-soft);
+}
+
+.jev-resource-params {
+  display: grid;
+  gap: var(--space-2xs);
+  margin: 0;
+}
+
+.jev-resource-param {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.jev-resource-param dt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  align-items: baseline;
+}
+
+.jev-resource-param code {
+  font: 500 var(--text-xs)/1.4 var(--font-code);
+}
+
+.jev-resource-param-type,
+.jev-resource-param-required {
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+}
+
+.jev-resource-param dd {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.jev-resource-document {
+  max-height: 20rem;
+  overflow-y: auto;
+}

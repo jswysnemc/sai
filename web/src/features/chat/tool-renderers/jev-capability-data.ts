@@ -1,6 +1,7 @@
 import { text, type Locale } from "../../i18n/locale";
 import { contextsOf, parseJevSelectedContext, type JevInjectedContext } from "./jev-context-data";
 import { parseJsonRecord, type JsonRecord } from "./tool-data";
+import { toolParametersOf, type JevToolParameter } from "./jev-tool-parameters";
 
 /** Jev 本次新暴露的一项工具或 Skill。 */
 export type JevExposedResource = {
@@ -8,6 +9,10 @@ export type JevExposedResource = {
   name: string;
   /** 工具说明首句，或 skill 状态（loaded / already_loaded）。 */
   detail: string;
+  /** 完整说明，供展开详情使用；没有时为空 */
+  description?: string;
+  /** 工具的顶层参数；skill 为空 */
+  parameters?: JevToolParameter[];
 };
 
 /** Jev 本轮暴露的资源与按需注入的上下文。 */
@@ -58,7 +63,7 @@ export function parseJevExposureBlock(content: string): JevCapabilityExposure | 
 /**
  * 从 `request_capability` 结果或预选 detail 中提取暴露名单。
  *
- * 只保留名称与一句说明。工具 Schema 和 Skill 全文留给模型，不进入界面；
+ * 保留名称、一句说明、完整说明与工具顶层参数；Skill 全文留给模型，不进入界面；
  * 提示词片段与记忆只保留截断后的预览。
  *
  * @param output 工具输出或预选 detail
@@ -115,6 +120,56 @@ export function jevCapabilityStatusLabel(exposure: JevCapabilityExposure, locale
 }
 
 /**
+ * 【Jev】【发送前摘要】把预选结果写成一句完整的话。
+ *
+ * 例：`选用了 2 个工具、3 个 Skill 和记忆` / `Picked 2 tools, 3 skills and memory`。
+ *
+ * @param exposure 已解析的暴露名单，须非空
+ * @param locale 界面语言
+ * @returns 摘要句
+ */
+export function jevSelectionSummary(exposure: JevCapabilityExposure, locale: Locale): string {
+  const prompts = exposure.contexts.filter((item) => item.kind === "prompt").length;
+  const parts: string[] = [];
+  // 1. 按工具、Skill、片段、记忆的顺序收集非空类别
+  if (exposure.tools.length > 0) {
+    const count = exposure.tools.length;
+    parts.push(text(locale, count === 1 ? "1 tool" : `${count} tools`, `${count} 个工具`));
+  }
+  if (exposure.skills.length > 0) {
+    const count = exposure.skills.length;
+    parts.push(text(locale, count === 1 ? "1 skill" : `${count} skills`, `${count} 个 Skill`));
+  }
+  if (prompts > 0) {
+    parts.push(text(locale, prompts === 1 ? "1 prompt segment" : `${prompts} prompt segments`, `${prompts} 个提示词片段`));
+  }
+  if (exposure.contexts.some((item) => item.kind === "memory")) {
+    parts.push(text(locale, "memory", "记忆"));
+  }
+  // 2. 末两项用「和 / and」连接，其余用顿号或逗号
+  const last = parts.pop() ?? "";
+  if (parts.length === 0) return text(locale, `Picked ${last}`, `选用了 ${last}`);
+  const head = parts.join(text(locale, ", ", "、"));
+  const joined = text(locale, `${head} and ${last}`, `${head}${spaced(head, "和", last)}${last}`);
+  return text(locale, `Picked ${joined}`, `选用了 ${joined}`);
+}
+
+/**
+ * 中文连接词两侧只在紧邻英文或数字时留空格，如 `个工具和 1 个 Skill`、`Skill 和记忆`。
+ *
+ * @param before 连接词前的文本
+ * @param word 连接词
+ * @param after 连接词后的文本
+ * @returns 带必要空格的连接词
+ */
+function spaced(before: string, word: string, after: string): string {
+  const latin = /[A-Za-z0-9]/u;
+  const left = latin.test(before.slice(-1)) ? " " : "";
+  const right = latin.test(after.slice(0, 1)) ? " " : "";
+  return `${left}${word}${right}`;
+}
+
+/**
  * 把结果数组收成可展示的资源。
  *
  * @param value tools 或 skills 字段
@@ -128,7 +183,15 @@ function resourcesOf(value: unknown, kind: JevExposedResource["kind"]): JevExpos
     const name = typeof item.name === "string" ? item.name.trim() : "";
     if (!name) return [];
     const detail = kind === "tool" ? toolDetail(item) : skillDetail(item);
-    return [{ kind, name, detail }];
+    const description = fullDescription(item);
+    const parameters = kind === "tool" ? toolParametersOf(item.definition) : [];
+    return [{
+      kind,
+      name,
+      detail,
+      ...(description ? { description } : {}),
+      ...(parameters.length > 0 ? { parameters } : {})
+    }];
   });
 }
 
@@ -147,6 +210,21 @@ function toolDetail(item: JsonRecord): string {
   const functionDef = definition.function;
   if (!isRecord(functionDef) || typeof functionDef.description !== "string") return "";
   return firstSentence(functionDef.description);
+}
+
+/**
+ * 取工具或 skill 的完整说明，不截首句。
+ *
+ * @param item 结果条目
+ * @returns 完整说明；没有时为空
+ */
+function fullDescription(item: JsonRecord): string {
+  if (typeof item.description === "string" && item.description.trim()) return item.description.trim();
+  const definition = item.definition;
+  if (!isRecord(definition)) return "";
+  const functionDef = definition.function;
+  if (!isRecord(functionDef) || typeof functionDef.description !== "string") return "";
+  return functionDef.description.trim();
 }
 
 /**

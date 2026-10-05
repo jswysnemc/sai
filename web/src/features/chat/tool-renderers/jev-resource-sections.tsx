@@ -1,6 +1,7 @@
 import { useI18n } from "../../i18n/use-i18n";
 import { DisclosureItem } from "./disclosure-item";
 import type { JevCapabilityExposure, JevExposedResource } from "./jev-capability-data";
+import { JevSkillDetail, JevToolDetail } from "./jev-resource-detail";
 import { contextSourceLabel, type JevInjectedContext } from "./jev-context-data";
 
 type JevResourceSectionsProps = {
@@ -10,7 +11,8 @@ type JevResourceSectionsProps = {
 /**
  * 【Jev】【资源分区】按工具、Skill、提示词片段、记忆四类列出本轮结果。
  *
- * 工具与 Skill 只列名称和一句说明；片段与记忆可展开查看注入正文的预览。
+ * 每条都可展开：工具显示完整说明与参数，Skill 读取 SKILL.md 正文，
+ * 片段与记忆显示注入正文的预览。
  *
  * @param props 暴露名单
  * @returns 四个分区；空分区不渲染
@@ -34,7 +36,9 @@ export function JevResourceSections({ exposure }: JevResourceSectionsProps) {
 }
 
 /**
- * 渲染工具或 Skill 名单。
+ * 渲染工具或 Skill 名单，每条可展开详情。
+ *
+ * 详情在首次展开时才挂载：Skill 正文需要请求接口，折叠时不发请求。
  *
  * @param props 标题、条目，以及把 detail 转成界面文字的方法
  * @returns 列表；没有条目时为空
@@ -52,16 +56,12 @@ function ResourceList({
   return (
     <section>
       <h3>{title}</h3>
-      <ul>
-        {items.map((item) => {
-          const detailText = detailLabel(item);
-          return (
-            <li key={`${item.kind}:${item.name}`}>
-              <strong>{item.name}</strong>
-              {detailText ? <span>{detailText}</span> : null}
-            </li>
-          );
-        })}
+      <ul className="jev-context-list">
+        {items.map((item) => (
+          <DisclosureItem key={`${item.kind}:${item.name}`} title={item.name} meta={detailLabel(item) || undefined} lazy>
+            {item.kind === "tool" ? <JevToolDetail item={item} /> : <JevSkillDetail item={item} />}
+          </DisclosureItem>
+        ))}
       </ul>
     </section>
   );

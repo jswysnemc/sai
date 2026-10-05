@@ -62,11 +62,10 @@ describe("HistoryTurn", () => {
 
     const html = renderWithProviders(<HistoryTurn turn={turn} />);
 
-    expect(html).toContain("发送前");
+    expect(html).not.toContain("发送前");
     expect(html).toContain("处理过程 · 工具 1");
-    expect(html.indexOf("发送前")).toBeLessThan(html.indexOf("处理过程"));
-    expect(html).toContain("web_search, skill:drawio");
-    expect(html).toContain("1 个工具 · 1 个 Skill");
+    expect(html.indexOf("选用了 1 个工具和 1 个 Skill")).toBeGreaterThan(-1);
+    expect(html.indexOf("选用了")).toBeLessThan(html.indexOf("处理过程"));
     expect(html).not.toContain("schema_marker_hidden");
     expect(html).not.toContain("SKILL_BODY_HIDDEN");
     expect(html).not.toContain("README.md");
