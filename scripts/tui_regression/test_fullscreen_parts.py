@@ -10,7 +10,7 @@ import unittest
 
 from terminal import TerminalSession
 
-HOVER_BG = "\x1b[48;5;236m"
+HOVER_FG = "\x1b[22;38;2;255;255;255m"
 LONG_COMMAND = " && \\\n".join(f"echo STEP-{index}" for index in range(12))
 
 
@@ -100,7 +100,7 @@ class FullscreenPartsTests(unittest.TestCase):
     """真实终端中验证分段展开、悬停与退出确认。"""
 
     def test_command_and_output_expand_separately_with_hover(self):
-        """点命令只展开命令，点输出只展开输出；悬停整段铺底色；返回无。"""
+        """点命令只展开命令，点输出只展开输出；悬停整段提亮前景；返回无。"""
         with CommandModel() as model, TerminalSession(model.config(), columns=100, rows=40) as terminal:
             terminal.send(b"RUN\r")
             terminal.wait_for(lambda: "FINISHED" in terminal.text(), timeout=20)
@@ -108,11 +108,11 @@ class FullscreenPartsTests(unittest.TestCase):
             terminal.wait_for(lambda: "Ctrl+O" in lines(terminal)[0], timeout=5)
             terminal.wait_for(lambda: row_of(terminal, "STEP-0") is not None)
             self.assertIsNone(row_of(terminal, "STEP-6"), "命令应折叠")
-            # 1. 悬停命令行：发出悬停底色
+            # 1. 悬停命令行：整段提亮前景
             command_row = row_of(terminal, "STEP-0")
             mark = len(terminal.raw)
             terminal.send(f"\x1b[<35;5;{command_row + 1}M".encode())
-            terminal.wait_for(lambda: HOVER_BG.encode() in bytes(terminal.raw[mark:]), timeout=5)
+            terminal.wait_for(lambda: HOVER_FG.encode() in bytes(terminal.raw[mark:]), timeout=5)
             # 2. 点命令行：命令展开，输出不受影响
             mouse(terminal, 4, command_row)
             terminal.wait_for(lambda: row_of(terminal, "STEP-6") is not None, timeout=5)
