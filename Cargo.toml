@@ -63,14 +63,11 @@ ratex-render = { version = "0.1.12", features = ["embed-fonts"] }
 ratex-types = "0.1.12"
 rusqlite = { version = "0.32", features = ["bundled"] }
 russh = "0.62"
-rustyline = "14.0"
 rust-embed = "8.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sai-plugin-runtime = { path = "crates/sai-plugin-runtime" }
 sha2 = "0.10"
-syntect = { version = "5.2", default-features = false, features = ["default-syntaxes", "regex-onig"] }
-termimad = "0.34"
 tempfile = "3.15"
 tar = "0.4"
 tokio = { version = "1.38", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }

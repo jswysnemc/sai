@@ -16,6 +16,18 @@
 
 待办条目、知识库文档和闹钟规则是业务数据；承载它们的会话记录、文件、任务持久化和取消机制是公共能力。已有专用调用并不能证明整个业务包属于核心。
 
+### 仅服务插件宿主的 Rust 依赖
+
+以下依赖只在 `src/plugins/` 中引用，核心对话路径不使用。它们支撑 Lua 插件可调用的宿主接口；移除前需要先移除或替换对应接口，并同步本表。
+
+| 依赖 | 支撑的宿主接口 | 主要引用位置 |
+| --- | --- | --- |
+| `cap-std`、`cap-fs-ext` | 插件私有目录、文件、锁、调度与通知存储的能力句柄访问，防止越出授权目录 | `src/plugins/private/`、`src/plugins/binary/`、`src/plugins/file_ops/`、`src/plugins/scheduler/` |
+| `cap-primitives`（仅 Windows） | 按句柄比对文件身份，用于移除文件前的目标校验 | `src/plugins/file_ops/target.rs` |
+| `tar` | 插件包安装与私有归档的打包、解包 | `src/plugins/package_archive.rs`、`src/plugins/private/archive.rs` |
+
+Lua 运行时自身的依赖（`mlua`、哈希、编码等）归属 `crates/sai-plugin-runtime/`，不在根包声明。
+
 ## 逐包归属
 
 下表全部归属为 `examples/lua-plugins/` 中的普通安装包，四批安装、授权、更新、撤权和卸载验收均已通过。各包保留自身业务实现、输入校验和有效回归样本；包名链接提供配置、权限、调用入口、依赖和数据保留说明。
