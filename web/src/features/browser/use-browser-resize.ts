@@ -46,7 +46,7 @@ export function useBrowserResize(
     if (!connected || !target) return;
     const viewport = browserViewportSize(target);
     if (!viewport) return;
-    const timer = window.setTimeout(() => sendRef.current({ type: "resize", ...viewport, scale }), 150);
+    const timer = window.setTimeout(() => sendRef.current({ type: "resize", ...viewport, scale }), 50);
     return () => window.clearTimeout(timer);
   }, [connected, size, fixedWidth, fixedHeight, scale]);
 

@@ -85,6 +85,21 @@ export function BrowserPane() {
         state={session.state}
         disabled={disabled}
         onSend={session.send}
+        status={(session.status !== "connected" || agentActivity) ? (
+          <>
+            {session.status !== "connected" && (
+              <span className="browser-chip">
+                {session.status === "connecting" ? t("Starting browser…", "正在启动浏览器…") : t("Reconnecting…", "正在重新连接…")}
+              </span>
+            )}
+            {agentActivity && (
+              <span className="browser-chip browser-chip-agent">
+                <Bot size={12} aria-hidden />
+                <span>{t("Agent", "Agent")}: {agentActivity}</span>
+              </span>
+            )}
+          </>
+        ) : undefined}
         trailing={
           <BrowserToolbarActions
             disabled={disabled}
@@ -116,33 +131,24 @@ export function BrowserPane() {
             <BrowserSelectMenu popup={page.selectPopup} scale={scale} onAnswer={page.answerSelect} />
           )}
         />
-        <div className="browser-overlay" aria-live="polite">
-          {session.status !== "connected" && (
-            <span className="browser-chip">
-              {session.status === "connecting" ? t("Starting browser…", "正在启动浏览器…") : t("Reconnecting…", "正在重新连接…")}
-            </span>
-          )}
-          {page.picking && (
-            <span className="browser-chip browser-chip-agent">
-              {t("Click an element on the page to add it to chat · Esc to cancel", "点击页面元素加入聊天 · Esc 取消")}
-            </span>
-          )}
-          {agentActivity && (
-            <span className="browser-chip browser-chip-agent">
-              <Bot size={12} aria-hidden />
-              <span>{t("Agent", "Agent")}: {agentActivity}</span>
-            </span>
-          )}
-          {page.notice && <span className="browser-chip">{page.notice}</span>}
-          {session.error && (
-            <span className="browser-chip browser-chip-error" role="alert">
-              <span>{session.error}</span>
-              <button type="button" aria-label={t("Dismiss", "关闭提示")} onClick={session.dismissError}>
-                <X size={12} aria-hidden />
-              </button>
-            </span>
-          )}
-        </div>
+        {(page.picking || page.notice || session.error) && (
+          <div className="browser-overlay" aria-live="polite">
+            {page.picking && (
+              <span className="browser-chip browser-chip-agent">
+                {t("Click an element on the page to add it to chat · Esc to cancel", "点击页面元素加入聊天 · Esc 取消")}
+              </span>
+            )}
+            {page.notice && <span className="browser-chip">{page.notice}</span>}
+            {session.error && (
+              <span className="browser-chip browser-chip-error" role="alert">
+                <span>{session.error}</span>
+                <button type="button" aria-label={t("Dismiss", "关闭提示")} onClick={session.dismissError}>
+                  <X size={12} aria-hidden />
+                </button>
+              </span>
+            )}
+          </div>
+        )}
       </div>
       <BrowserDialogModal dialog={page.dialog} onAnswer={page.answerDialog} />
     </section>

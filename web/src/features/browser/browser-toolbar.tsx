@@ -9,6 +9,8 @@ type BrowserToolbarProps = {
   state: BrowserState | null;
   disabled: boolean;
   onSend: (message: BrowserClientMessage) => void;
+  /** 地址栏与操作之间的状态胶囊，避免叠在页面上 */
+  status?: ReactNode;
   /** 地址栏右侧的附加操作 */
   trailing?: ReactNode;
 };
@@ -21,7 +23,7 @@ type BrowserToolbarProps = {
  * @param props 浏览器状态、是否禁用与发送方法
  * @returns 工具栏
  */
-export function BrowserToolbar({ state, disabled, onSend, trailing }: BrowserToolbarProps) {
+export function BrowserToolbar({ state, disabled, onSend, status, trailing }: BrowserToolbarProps) {
   const { t } = useI18n();
   const [draft, setDraft] = useState("");
   const editingRef = useRef(false);
@@ -111,6 +113,7 @@ export function BrowserToolbar({ state, disabled, onSend, trailing }: BrowserToo
           onChange={(event) => setDraft(event.target.value)}
         />
       </form>
+      {status && <div className="browser-toolbar-status">{status}</div>}
       {trailing}
     </div>
   );

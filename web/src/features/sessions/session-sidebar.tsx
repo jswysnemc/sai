@@ -220,6 +220,8 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
         onCreateSession={(workspaceId, active) => actions.create.mutate(active ? undefined : workspaceId)}
         onCloseWorkspace={(workspaceId, name, active) => void actions.closeWorkspace(workspaceId, name, active)}
         onAddWorkspace={() => setBrowserOpen(true)}
+        onNewSession={() => actions.create.mutate(undefined)}
+        onSearch={() => setSearchOpen(true)}
         browse={browse}
         onBrowse={(mode) => {
           writeBrowseMode(mode);

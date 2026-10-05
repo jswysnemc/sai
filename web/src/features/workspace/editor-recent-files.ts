@@ -30,3 +30,37 @@ export function rememberRecentFile(path: string): string[] {
   }
   return next;
 }
+
+/**
+ * 把列表写回存储；浏览器限制存储时静默忽略。
+ *
+ * @param files 待保存的列表
+ * @returns 原样返回列表
+ */
+function writeRecentFiles(files: string[]): string[] {
+  try {
+    globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(files));
+  } catch {
+    // 浏览器限制存储时只保留本次返回值
+  }
+  return files;
+}
+
+/**
+ * 从最近列表中移除一个文件。
+ *
+ * @param path 工作区相对路径
+ * @returns 更新后的列表
+ */
+export function forgetRecentFile(path: string): string[] {
+  return writeRecentFiles(readRecentFiles().filter((item) => item !== path));
+}
+
+/**
+ * 清空最近列表。
+ *
+ * @returns 空列表
+ */
+export function clearRecentFiles(): string[] {
+  return writeRecentFiles([]);
+}

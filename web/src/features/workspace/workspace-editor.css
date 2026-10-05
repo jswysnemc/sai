@@ -59,6 +59,26 @@
 .tree-row:hover::before,
 .tree-row.focused::before { background: var(--surface-hover); }
 .tree-row.active::before { background: var(--surface-selected); }
+/* 【文件树多选】已选行用信号色浅底，与当前打开文件（active）区分；两者叠加时以多选为准 */
+.tree-row.multi-selected::before { background: color-mix(in srgb, var(--signal) 14%, transparent); }
+.tree-row.multi-selected.focused::before { background: color-mix(in srgb, var(--signal) 20%, transparent); }
+.file-tree-selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  min-height: 1.625rem;
+  margin: 0.125rem 0.5rem 0.25rem;
+  padding: 0 0.25rem 0 0.5rem;
+  border-radius: var(--radius-2);
+  background: color-mix(in srgb, var(--signal) 10%, transparent);
+  color: var(--ink);
+  font-size: var(--text-xs);
+}
+.file-tree-selection-bar > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-tree-selection-bar button { display: grid; width: 1.375rem; height: 1.375rem; padding: 0; place-items: center; border: 0; border-radius: var(--radius-1); background: transparent; color: var(--ink-soft); }
+.file-tree-selection-bar button:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
+.file-tree-selection-bar button.danger:hover { color: var(--danger); }
+.tree-row.drop-target::before { background: color-mix(in srgb, var(--signal) 16%, var(--paper)); }
 .tree-row:focus { outline: none; }
 .tree-guides { position: absolute; z-index: 1; inset: 0; pointer-events: none; }
 .tree-guides span { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }

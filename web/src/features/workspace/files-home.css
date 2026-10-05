@@ -13,7 +13,7 @@
   min-height: 2rem;
   margin: 0 0 1.25rem;
   padding-left: 0.85rem;
-  border-radius: 999px;
+  border-radius: var(--radius-3);
   background: var(--paper-deep);
 }
 
@@ -34,7 +34,8 @@
   text-align: left;
 }
 .files-home-actions button:hover,
-.files-home-row:hover { background: var(--surface-hover); }
+.files-home-row:hover,
+.files-home-row.is-menu-target { background: var(--surface-hover); }
 .files-home-create input {
   width: 100%;
   min-height: 2rem;

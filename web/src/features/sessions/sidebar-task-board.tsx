@@ -1,6 +1,8 @@
-import { ChevronRight, Plus, X } from "../../shared/ui/icons";
-import { useEffect, useState, type ReactNode, type RefObject } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { CheckSquare, ChevronRight, FolderPlus, History, Plus, RefreshCw, Search, SquarePen, X } from "../../shared/ui/icons";
+import { useEffect, useState, type MouseEvent, type ReactNode, type RefObject } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ContextActionMenu } from "../../shared/ui/menu/context-action-menu";
+import { isSidebarBlankTarget, sidebarBlankMenuItems } from "./sidebar-blank-menu";
 import { api } from "../../api/client";
 import type { WorkspaceSessions } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
@@ -44,6 +46,10 @@ type SidebarTaskBoardProps = {
   onCreateSession: (workspaceId: string, active: boolean) => void;
   onCloseWorkspace: (workspaceId: string, name: string, active: boolean) => void;
   onAddWorkspace: () => void;
+  /** 空白处右键：新建会话 */
+  onNewSession?: () => void;
+  /** 空白处右键：打开搜索 */
+  onSearch?: () => void;
 };
 
 /**
@@ -56,6 +62,8 @@ export function SidebarTaskBoard(props: SidebarTaskBoardProps) {
   const { t } = useI18n();
   const [recents, setRecents] = useState<SidebarRecents>(readRecents);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [blankMenu, setBlankMenu] = useState<{ x: number; y: number } | null>(null);
+  const queryClient = useQueryClient();
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<ReadonlySet<string>>(readExpandedWorkspaces);
   const index = useQuery({ queryKey: ["session-sidebar"], queryFn: () => api.sessionSidebar.read() });
   const activeWorkspaceId = props.workspaces.find((workspace) => workspace.active)?.workspace_id;
@@ -136,8 +144,18 @@ export function SidebarTaskBoard(props: SidebarTaskBoardProps) {
     });
   };
 
+  /**
+   * 【会话侧栏】【空白右键】会话行、按钮和文件树各有自己的菜单，只在空白处弹出页级菜单。
+   * @param event 右键事件
+   */
+  const openBlankMenu = (event: MouseEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || props.browse === "files" || !isSidebarBlankTarget(event.target)) return;
+    event.preventDefault();
+    setBlankMenu({ x: event.clientX, y: event.clientY });
+  };
+
   return (
-    <div className={`sidebar-purpose-scroll${props.browse === "files" ? " is-files" : ""}`}>
+    <div className={`sidebar-purpose-scroll${props.browse === "files" ? " is-files" : ""}`} onContextMenu={openBlankMenu}>
       <div className="sidebar-browse-bar">
         <SidebarTaskToolbar mode={props.browse} onChange={props.onBrowse} />
         {props.browse === "workspaces" && (
@@ -180,6 +198,34 @@ export function SidebarTaskBoard(props: SidebarTaskBoardProps) {
           </HistoryFold>
         </>
       ))}
+      {blankMenu && (
+        <ContextActionMenu
+          label={t("Sidebar actions", "侧栏操作")}
+          x={blankMenu.x}
+          y={blankMenu.y}
+          onClose={() => setBlankMenu(null)}
+          items={sidebarBlankMenuItems({
+            mode: props.browse,
+            historyOpen,
+            hasSessions: selectableIds.length > 0,
+            createPending: props.createPending,
+            onNewSession: () => props.onNewSession?.(),
+            onSearch: () => props.onSearch?.(),
+            onSelectSessions: () => props.selection.enterSelection(),
+            onToggleHistory: () => setHistoryOpen((open) => !open),
+            onAddWorkspace: props.onAddWorkspace,
+            onRefresh: () => void Promise.all([
+              queryClient.invalidateQueries({ queryKey: ["session-tree"] }),
+              queryClient.invalidateQueries({ queryKey: ["sessions"] }),
+              queryClient.invalidateQueries({ queryKey: ["session-sidebar"] })
+            ]),
+            icons: {
+              create: <SquarePen size={14} />, search: <Search size={14} />, select: <CheckSquare size={14} />,
+              history: <History size={14} />, workspace: <FolderPlus size={14} />, refresh: <RefreshCw size={14} />
+            }
+          }, t)}
+        />
+      )}
       {props.browse === "workspaces" && (props.loading ? <SkeletonList items={3} label={t("Loading sessions", "读取会话")} /> : props.workspaces.length > 0 ? (
         <>
           <WorkspaceListView

@@ -15,22 +15,23 @@ import { SkSecretInput } from "../../features/settings/kit/secret-input";
  */
 
 describe("PasswordField", () => {
-  it("设置页的已保存密钥默认不挂载可被自动填充的输入框", () => {
+  it("设置页的已保存密钥直接显示圆点掩码，不需要先点编辑", () => {
     const onChange = vi.fn();
     const html = renderToStaticMarkup(
       <SkSecretInput value="saved-sentinel" secretSentinel="saved-sentinel" onChange={onChange} onReveal={async () => "fixture-secret"} />
     );
-    expect(html).not.toContain("<input");
-    expect(html).toContain("已保存");
-    expect(html).toContain("编辑");
+    expect(html).toContain('type="password"');
+    expect(html).toContain("••••");
+    expect(html).not.toContain("编辑");
+    expect(html).not.toContain("saved-sentinel");
     expect(html).not.toContain("fixture-secret");
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it("设置页未配置密钥也须先主动编辑，避免被识别为登录密码", () => {
+  it("设置页密钥输入框关闭自动填充，避免被识别为登录密码", () => {
     const html = renderToStaticMarkup(<SkSecretInput value="" onChange={vi.fn()} />);
-    expect(html).not.toContain("<input");
-    expect(html).toContain("编辑");
+    expect(html).toContain('autoComplete="new-password"');
+    expect(html).toContain('data-1p-ignore="true"');
   });
 
   it("默认以掩码态渲染", () => {
@@ -55,7 +56,7 @@ describe("PasswordField", () => {
       <PasswordField value="" savedValueHint="已保存" onClearSavedValue={vi.fn()} onChange={vi.fn()} />
     );
 
-    expect(html).toContain("ui-password-field-saved");
+    expect(html).toContain("ui-password-field-clear");
     expect(html).toContain("清除已保存的值");
   });
 });

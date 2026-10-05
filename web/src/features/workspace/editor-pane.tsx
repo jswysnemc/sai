@@ -23,7 +23,7 @@ import { untrackedFilePatch } from "./editor-git-decorations";
 import { EditorDiffView } from "./editor-diff-view";
 import { registerUnsavedEditor } from "./unsaved-editor-changes";
 import { readEditorWordWrap, writeEditorWordWrap } from "./editor-word-wrap";
-import { readRecentFiles, rememberRecentFile } from "./editor-recent-files";
+import { clearRecentFiles, forgetRecentFile, readRecentFiles, rememberRecentFile } from "./editor-recent-files";
 import { FilesHome } from "./files-home";
 import { OpenFileDialog } from "./open-file-dialog";
 import type { EditorNavigation } from "./editor-header";
@@ -135,7 +135,7 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree,
   if (!path) {
     return (
       <section className="editor-pane editor-pane-home">
-        <FilesHome recentFiles={recentFiles} onSelectFile={onSelectFile} onBrowseFiles={() => { if (!fileTreeOpen) onToggleFileTree(); }} />
+        <FilesHome recentFiles={recentFiles} onSelectFile={onSelectFile} onBrowseFiles={() => { if (!fileTreeOpen) onToggleFileTree(); }} onForgetRecent={(item) => setRecentFiles(forgetRecentFile(item))} onClearRecents={() => setRecentFiles(clearRecentFiles())} />
         {fileDialog}
       </section>
     );

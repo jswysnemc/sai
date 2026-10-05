@@ -10,6 +10,7 @@ type TrajectoryRowProps = {
   collapsedCount: number;
   onSelect: (id: string) => void;
   onToggleTurn: (turnId: string) => void;
+  onContextMenu?: (event: React.MouseEvent, record: TrajectoryRecord) => void;
 };
 
 /**
@@ -26,7 +27,8 @@ export function TrajectoryRow({
   selected,
   collapsedCount,
   onSelect,
-  onToggleTurn
+  onToggleTurn,
+  onContextMenu
 }: TrajectoryRowProps) {
   const { t, locale } = useI18n();
   const zh = locale.startsWith("zh");
@@ -46,6 +48,7 @@ export function TrajectoryRow({
       data-nested={record.parentId ? "" : undefined}
       aria-selected={selected}
       onClick={() => onSelect(record.id)}
+      onContextMenu={(event) => onContextMenu?.(event, record)}
       onDoubleClick={() => { if (record.turnId) onToggleTurn(record.turnId); }}
       onKeyDown={(event) => {
         if (event.key !== "Enter" && event.key !== " ") return;

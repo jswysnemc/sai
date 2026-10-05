@@ -42,8 +42,10 @@ export function BrowserViewport({ pageWidth, pageHeight, disabled, onSend, onFra
   pageRef.current = { width: pageWidth, height: pageHeight };
 
   const hostSize = useBrowserResize(hostRef, !disabled, onSend, responsive?.size ?? null);
-  // 自由尺寸时按缩放档位显示；跟随面板时画面与面板一比一
+  // 自由尺寸时按缩放档位显示；跟随面板时画面铺满视口
   const scale = responsive ? displayScale({ width: pageWidth, height: pageHeight }, hostSize, responsive.zoom) : 1;
+  const frameWidth = responsive ? pageWidth * scale : hostSize?.width ?? pageWidth;
+  const frameHeight = responsive ? pageHeight * scale : hostSize?.height ?? pageHeight;
 
   // 1. 注册画面回调：解码中到达的帧只保留最新一张，避免积压
   useEffect(() => {
@@ -158,11 +160,11 @@ export function BrowserViewport({ pageWidth, pageHeight, disabled, onSend, onFra
 
   return (
     <div ref={hostRef} className={`browser-viewport${focused ? " focused" : ""}${responsive ? " responsive" : ""}`}>
-      <div className="browser-canvas-frame" style={{ width: pageWidth * scale, height: pageHeight * scale }}>
+      <div className="browser-canvas-frame" style={{ width: frameWidth, height: frameHeight }}>
         <canvas
           ref={canvasRef}
           className="browser-canvas"
-          style={{ width: pageWidth * scale, height: pageHeight * scale }}
+          style={{ width: frameWidth, height: frameHeight }}
           aria-label={t("Browser page", "浏览器页面")}
           role="img"
         />

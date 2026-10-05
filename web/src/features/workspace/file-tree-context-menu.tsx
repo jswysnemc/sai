@@ -8,6 +8,8 @@ type FileTreeContextMenuProps = {
   path: string;
   directory: boolean;
   canPaste: boolean;
+  /** 右键时的已选条目数；大于 1 时只保留批量可用的操作 */
+  selectedCount?: number;
   onOpenContaining: () => void;
   onCreate: (kind: "file" | "directory") => void;
   onCopyPath: () => void;
@@ -27,6 +29,7 @@ export function FileTreeContextMenu(props: FileTreeContextMenuProps) {
   const position = useClampedMenuPosition(props.x, props.y, ref);
   const rooted = props.path !== "";
   const pasteDirectory = props.directory || !rooted;
+  const count = props.selectedCount ?? 1;
   useEffect(() => {
     const close = (event: PointerEvent) => { if (!ref.current?.contains(event.target as Node)) props.onClose(); };
     const escape = (event: KeyboardEvent) => { if (event.key === "Escape") props.onClose(); };
@@ -34,6 +37,17 @@ export function FileTreeContextMenu(props: FileTreeContextMenuProps) {
     document.addEventListener("keydown", escape);
     return () => { document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", escape); };
   }, [props]);
+  // 1. 多选：复制路径与删除作用于全部已选条目，单项操作隐藏
+  if (rooted && count > 1) {
+    return (
+      <div ref={ref} className="file-tree-context-menu" style={position} role="menu">
+        <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onCopyPath(); }}>{t(`Copy ${count} Paths`, `复制 ${count} 个路径`)}</button>
+        <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onCopyRelativePath(); }}>{t(`Copy ${count} Relative Paths`, `复制 ${count} 个相对路径`)}</button>
+        <div className="file-tree-context-separator" role="separator" />
+        <button type="button" role="menuitem" className="danger" onClick={() => { props.onClose(); props.onDelete(); }}>{t(`Delete ${count} Items`, `删除 ${count} 项`)}</button>
+      </div>
+    );
+  }
   return (
     <div ref={ref} className="file-tree-context-menu" style={position} role="menu">
       {rooted && <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onOpenContaining(); }}>{t("Open Containing Folder", "打开所在文件夹")}</button>}

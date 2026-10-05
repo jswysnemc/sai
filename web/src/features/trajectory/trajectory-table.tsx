@@ -1,5 +1,7 @@
-import { Fragment, useMemo } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight } from "../../shared/ui/icons";
+import { ContextActionMenu } from "../../shared/ui/menu/context-action-menu";
+import { dispatchComposerText } from "../chat/composer/composer-events";
 import { useI18n } from "../i18n/use-i18n";
 import { formatDuration } from "./trajectory-format";
 import type { TrajectoryTurnHeader } from "./trajectory-build";
@@ -36,6 +38,7 @@ export function TrajectoryTable({
   loading
 }: TrajectoryTableProps) {
   const { t } = useI18n();
+  const [menu, setMenu] = useState<{ x: number; y: number; record: TrajectoryRecord } | null>(null);
   const headers = useMemo(
     () => new Map(turns.map((turn) => [turn.turnId, turn])),
     [turns]
@@ -81,11 +84,28 @@ export function TrajectoryTable({
                 collapsedCount={hidden}
                 onSelect={onSelect}
                 onToggleTurn={onToggleTurn}
+                onContextMenu={(event, target) => {
+                  event.preventDefault();
+                  setMenu({ x: event.clientX, y: event.clientY, record: target });
+                }}
               />
             )}
           </Fragment>
         );
       })}
+      {menu && (
+        <ContextActionMenu
+          label={t("Trajectory actions", "轨迹操作")}
+          x={menu.x}
+          y={menu.y}
+          items={[
+            { id: "copy", label: t("Copy summary", "复制摘要"), onSelect: () => { void navigator.clipboard.writeText(menu.record.summary); } },
+            { id: "send", label: t("Send to composer", "发送到输入区"), onSelect: () => dispatchComposerText(menu.record.summary || menu.record.label || "") },
+            ...(menu.record.detail.output ? [{ id: "output", label: t("Send output to composer", "把结果发到输入区"), onSelect: () => dispatchComposerText(menu.record.detail.output ?? "") }] : [])
+          ]}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </div>
   );
 }

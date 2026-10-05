@@ -7,8 +7,8 @@ export type BrowserViewportSize = { width: number; height: number };
  * @returns 远端视口尺寸；隐藏、过小或无效的面板返回 null
  */
 export function browserViewportSize(size: BrowserViewportSize): BrowserViewportSize | null {
-  if (!Number.isFinite(size.width) || !Number.isFinite(size.height) || size.width < 50 || size.height < 50) return null;
-  const width = Math.min(3840, Math.max(320, Math.floor(size.width)));
-  const height = Math.min(2160, Math.max(240, Math.floor(size.height)));
+  if (!Number.isFinite(size.width) || !Number.isFinite(size.height) || size.width < 32 || size.height < 32) return null;
+  const width = Math.min(3840, Math.max(32, Math.floor(size.width)));
+  const height = Math.min(2160, Math.max(32, Math.floor(size.height)));
   return { width, height };
 }

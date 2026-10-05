@@ -2,7 +2,7 @@
  * 内置浏览器面板
  *
  * 画面是本面板的核心，标签条与工具栏压缩为两条紧凑横栏；
- * Agent 操作、连接状态与错误以浮动胶囊叠在画面左上角，不占用布局空间。
+ * 连接状态与 Agent 步骤放在工具栏；选点、错误以右下角胶囊提示，不盖住页面。
  */
 .browser-pane {
   /* 标签条、工具栏与可选的自由尺寸、文件提示条依次排列，画面占满剩余高度 */
@@ -149,11 +149,22 @@
 
 .browser-viewport {
   display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
+  align-items: stretch;
+  justify-content: stretch;
   width: 100%;
   height: 100%;
   overflow: hidden;
+}
+
+.browser-canvas-frame {
+  min-width: 0;
+  min-height: 0;
+}
+
+.browser-viewport:not(.responsive) .browser-canvas-frame,
+.browser-viewport:not(.responsive) .browser-canvas {
+  width: 100%;
+  height: 100%;
 }
 
 .browser-viewport.focused {
@@ -195,13 +206,29 @@
 
 .browser-overlay {
   position: absolute;
-  top: var(--space-sm);
-  left: var(--space-sm);
   right: var(--space-sm);
+  bottom: var(--space-sm);
+  left: auto;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-end;
   gap: var(--space-2xs);
+  max-width: min(24rem, calc(100% - 2 * var(--space-sm)));
   pointer-events: none;
+}
+
+.browser-toolbar-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-width: 0;
+  max-width: 14rem;
+  flex: 0 1 auto;
+}
+
+.browser-toolbar-status .browser-chip {
+  max-width: 100%;
+  box-shadow: none;
 }
 
 .browser-chip {

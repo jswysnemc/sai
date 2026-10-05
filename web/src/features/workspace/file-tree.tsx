@@ -1,11 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Eye, FilePlus2, FolderPlus, MoreHorizontal, Search } from "../../shared/ui/icons";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type UIEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type UIEvent } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { FileNode } from "../../api/contracts";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
-import { DirectoryIcon, FileTypeIcon } from "../../shared/ui/file-icon";
 import { readExpandedDirectories, writeExpandedDirectories } from "./file-tree-expansion";
 import { readShowHiddenFiles, writeShowHiddenFiles } from "./file-tree-visibility";
 import {
@@ -25,19 +24,14 @@ import { Button } from "../../shared/ui/button/button";
 import { ActionMenu } from "../../shared/ui/menu/action-menu";
 import { TextInput } from "../../shared/ui/form/text-input";
 import { absoluteWorkspacePath, pasteTargetPath, uniqueCopyPath, type TreeClipboard } from "./file-tree-clipboard";
+import { dropDirectory, droppedFiles, isNestedDrop, readInternalDrag, setInternalDrag } from "./file-tree-drag";
 import { REVEAL_FILE_TREE_PATH_EVENT } from "./files-home";
 import { FileTreeContextMenu } from "./file-tree-context-menu";
-import {
-  directoryGitTones,
-  fileTreeGitStatusLabel,
-  fileTreeGitStatusTone,
-  useFileTreeGit,
-  type FileTreeGitEntry,
-  type FileTreeGitTone
-} from "./use-file-tree-git";
-
-const TREE_INDENT = 12;
-const TREE_PAD = 10;
+import { FileTreeSelectionBar } from "./file-tree-selection-bar";
+import { outermostPaths } from "./file-tree-selection";
+import { useFileTreeSelection } from "./use-file-tree-selection";
+import { TreeRow, treeRowId } from "./file-tree-row";
+import { directoryGitTones, useFileTreeGit } from "./use-file-tree-git";
 
 type FileTreeProps = {
   selectedFile: string | null;
@@ -51,7 +45,7 @@ type FileTreeProps = {
 };
 
 type FileAction = { kind: "file" | "directory" | "rename"; value: string } | null;
-type TreeMenuState = { x: number; y: number; path: string; directory: boolean } | null;
+type TreeMenuState = { x: number; y: number; path: string; directory: boolean; paths: string[] } | null;
 
 /**
  * 渲染支持创建、重命名和删除的工作区文件树。
@@ -85,6 +79,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
   const [error, setError] = useState<Error | null>(null);
   const [treeMenu, setTreeMenu] = useState<TreeMenuState>(null);
   const [clipboard, setClipboard] = useState<TreeClipboard | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewport, setViewport] = useState(0);
   const [rowHeight, setRowHeight] = useState(22);
@@ -118,6 +113,10 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
   }, [source, search, searching, expanded]);
   const directoryTones = useMemo(() => directoryGitTones(git.entries), [git.entries]);
   const focusedIndex = focusedPath ? rows.findIndex((row) => row.node.path === focusedPath) : -1;
+  const rowOrder = useMemo(() => rows.map((row) => row.node.path), [rows]);
+  const pathExists = useCallback((path: string) => Boolean(findFileNode(source, path)), [source]);
+  const multi = useFileTreeSelection(rowOrder, pathExists);
+  const selectedCount = multi.selection.paths.size;
   const range = visibleRowRange(rows.length, scrollTop, viewport, rowHeight);
   const windowRows = rows.slice(range.start, range.end);
 
@@ -302,6 +301,48 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
     }
   };
 
+  /**
+   * 把内部路径或外部文件落到目标目录。
+   * @param directory 落点目录
+   * @param event 拖放事件
+   * @returns 完成后的 Promise
+   */
+  const acceptDrop = async (directory: string, event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    setDropTarget(null);
+    const internal = readInternalDrag(event);
+    if (internal) {
+      if (isNestedDrop(internal, directory)) return;
+      const destination = pasteTargetPath(directory, internal);
+      if (destination === internal) return;
+      setError(null);
+      try {
+        await api.workspace.rename(internal, destination);
+        setFocusedPath(destination);
+        await reloadTree();
+      } catch (reason) {
+        setError(toDisplayError(reason, "Failed to move", "移动失败"));
+      }
+      return;
+    }
+    const files = droppedFiles(event);
+    if (!files.length) return;
+    setError(null);
+    try {
+      for (const file of files) {
+        const relative = directory ? `${directory}/${file.name}` : file.name;
+        const target = uniqueCopyPath(relative, (candidate) => Boolean(findFileNode(source, candidate)));
+        const content = await file.text();
+        await api.workspace.create(target, "file");
+        await api.workspace.save(target, content);
+        setFocusedPath(target);
+      }
+      await reloadTree();
+    } catch (reason) {
+      setError(toDisplayError(reason, "Failed to drop files", "拖入文件失败"));
+    }
+  };
+
   /** 打开重命名输入栏。 */
   const beginRename = (targetPath = focusedPath) => {
     if (!targetPath) return;
@@ -353,9 +394,54 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
     }
   };
 
+  /**
+   * 【工作区】【文件树多选】确认后依次删除多个条目，被已选目录包含的子项不重复删除。
+   * @param paths 待删除的路径
+   * @returns 完成后的 Promise
+   */
+  const deleteMany = async (paths: string[]) => {
+    const targets = outermostPaths(paths);
+    if (targets.length === 0) return;
+    if (targets.length === 1) return deleteFocused(targets[0]);
+    const confirmed = await confirm({
+      title: t("Delete workspace items", "删除工作区条目"),
+      description: t(`Delete ${targets.length} items, including all contents of selected folders?`, `将删除 ${targets.length} 项，所选目录中的内容一并删除。`),
+      confirmLabel: t("Delete", "删除"),
+      danger: true
+    });
+    if (!confirmed) return;
+    setError(null);
+    try {
+      for (const target of targets) {
+        await api.workspace.remove(target);
+        if (selectedFile === target || selectedFile?.startsWith(`${target}/`)) onClearFile();
+      }
+      multi.clear();
+      setFocusedPath(null);
+      await reloadTree();
+    } catch (reason) {
+      setError(toDisplayError(reason, "Failed to delete workspace items", "删除工作区条目失败"));
+      await reloadTree();
+    }
+  };
+
+  /** 把多个路径按行写入剪贴板；absolute 为 true 时写入绝对路径。 */
+  const copyPaths = (paths: string[], absolute: boolean) => {
+    const text = paths.map((path) => absolute ? absoluteWorkspacePath(workspaceRoot, path) : path).join("\n");
+    void navigator.clipboard?.writeText(text);
+  };
+
   /** 键盘在可见行之间移动，左右键展开或收起目录。 */
   const onTreeKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const key = event.key;
+    // 1. 多选快捷键：Esc 取消、Ctrl/⌘+A 全选可见行、Delete 删除所选
+    if (key === "Escape" && selectedCount > 0) { event.preventDefault(); multi.clear(); return; }
+    if ((event.ctrlKey || event.metaKey) && key.toLowerCase() === "a" && rows.length > 0) { event.preventDefault(); multi.selectAll(); return; }
+    if (key === "Delete" && (selectedCount > 0 || focusedPath)) {
+      event.preventDefault();
+      void deleteMany(selectedCount > 0 ? [...multi.selection.paths] : [focusedPath ?? ""]);
+      return;
+    }
     if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End", "Enter"].includes(key) || rows.length === 0) return;
     event.preventDefault();
     if (focusedIndex < 0) {
@@ -366,7 +452,13 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
     const row = rows[index];
     const focusRow = (next: number) => {
       const target = rows[next];
-      if (target) setFocusedPath(target.node.path);
+      if (!target) return;
+      setFocusedPath(target.node.path);
+      // Shift+方向键从锚点扩展区间；无锚点时以当前行起算
+      if (event.shiftKey) {
+        if (multi.selection.anchor === null) multi.click(row.node.path, { toggle: false, range: false });
+        multi.click(target.node.path, { toggle: false, range: true });
+      }
     };
     const shownOpen = row?.node.kind === "directory" && (searching ? row.node.children.length > 0 : expanded.has(row.node.path));
     if (key === "ArrowDown") focusRow(Math.min(rows.length - 1, index + 1));
@@ -438,6 +530,14 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
             )}
           </div>
         )}
+        {selectedCount > 1 && (
+          <FileTreeSelectionBar
+            count={selectedCount}
+            onCopyPaths={() => copyPaths([...multi.selection.paths], false)}
+            onDelete={() => void deleteMany([...multi.selection.paths])}
+            onClear={multi.clear}
+          />
+        )}
         <div
           ref={scrollRef}
           className="file-tree-rows"
@@ -447,10 +547,14 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
           aria-activedescendant={focusedIndex >= 0 ? treeRowId(rows[focusedIndex].node.path) : undefined}
           onKeyDown={onTreeKeyDown}
           onScroll={onScroll}
+          onDragOver={(event) => { event.preventDefault(); setDropTarget(""); }}
+          onDragLeave={() => setDropTarget((current) => current === "" ? null : current)}
+          onDrop={(event) => void acceptDrop("", event)}
           onContextMenu={(event) => {
             if ((event.target as HTMLElement).closest(".tree-row")) return;
             event.preventDefault();
-            setTreeMenu({ x: event.clientX, y: event.clientY, path: "", directory: true });
+            multi.clear();
+            setTreeMenu({ x: event.clientX, y: event.clientY, path: "", directory: true, paths: [] });
           }}
         >
           <div ref={probeRef} className="tree-row-probe" aria-hidden />
@@ -464,12 +568,27 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
                     depth={row.depth}
                     open={row.node.kind === "directory" && (searching ? row.node.children.length > 0 : expanded.has(row.node.path))}
                     selected={selectedFile === row.node.path}
+                    multiSelected={selectedCount > 1 && multi.selection.paths.has(row.node.path)}
                     focused={focusedPath === row.node.path}
+                    dropActive={dropTarget === row.node.path || (dropTarget === "" && row.node.path === "")}
                     gitEntry={row.node.kind === "directory" ? undefined : git.entries.get(row.node.path)}
                     directoryTone={row.node.kind === "directory" ? directoryTones.get(row.node.path) : undefined}
                     onMouseDown={() => scrollRef.current?.focus({ preventScroll: true })}
-                    onActivate={() => {
+                    onDragStart={(event) => setInternalDrag(event, row.node.path)}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setDropTarget(dropDirectory(row.node.path, row.node.kind === "directory"));
+                    }}
+                    onDrop={(event) => {
+                      event.stopPropagation();
+                      void acceptDrop(dropDirectory(row.node.path, row.node.kind === "directory"), event);
+                    }}
+                    onActivate={(modifiers) => {
                       setFocusedPath(row.node.path);
+                      multi.click(row.node.path, modifiers);
+                      // Ctrl/⌘ 或 Shift 只调整选择，不打开文件、不展开目录
+                      if (modifiers.toggle || modifiers.range) return;
                       if (row.node.kind !== "directory") {
                         onSelectFile(row.node.path);
                         return;
@@ -480,7 +599,8 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
                     onTreeContextMenu={(event) => {
                       event.preventDefault();
                       setFocusedPath(row.node.path);
-                      setTreeMenu({ x: event.clientX, y: event.clientY, path: row.node.path, directory: row.node.kind === "directory" });
+                      const paths = multi.context(row.node.path);
+                      setTreeMenu({ x: event.clientX, y: event.clientY, path: row.node.path, directory: row.node.kind === "directory", paths });
                     }}
                   />
                 ))}
@@ -499,88 +619,21 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
           path={treeMenu.path}
           directory={treeMenu.directory}
           canPaste={Boolean(clipboard)}
+          selectedCount={treeMenu.paths.length}
           onOpenContaining={() => revealContaining(treeMenu.path)}
           onCreate={(kind) => beginCreate(kind, treeMenu.path)}
-          onCopyPath={() => void navigator.clipboard?.writeText(absoluteWorkspacePath(workspaceRoot, treeMenu.path))}
-          onCopyRelativePath={() => void navigator.clipboard?.writeText(treeMenu.path)}
+          onCopyPath={() => copyPaths(treeMenu.paths.length > 1 ? treeMenu.paths : [treeMenu.path], true)}
+          onCopyRelativePath={() => copyPaths(treeMenu.paths.length > 1 ? treeMenu.paths : [treeMenu.path], false)}
           onCut={() => setClipboard({ mode: "cut", path: treeMenu.path, directory: treeMenu.directory })}
           onCopy={() => setClipboard({ mode: "copy", path: treeMenu.path, directory: treeMenu.directory })}
           onPaste={() => void pasteInto(treeMenu.directory ? treeMenu.path : parentFilePath(treeMenu.path))}
           onRename={() => beginRename(treeMenu.path)}
-          onDelete={() => void deleteFocused(treeMenu.path)}
+          onDelete={() => void (treeMenu.paths.length > 1 ? deleteMany(treeMenu.paths) : deleteFocused(treeMenu.path))}
           onClose={() => setTreeMenu(null)}
         />
       )}
     </aside>
   );
-}
-
-/** 渲染虚拟列表中的一行。 */
-function TreeRow({ node, depth, open, selected, focused, gitEntry, directoryTone, onMouseDown, onActivate, onCreate, onTreeContextMenu }: {
-  node: FileNode;
-  depth: number;
-  open: boolean;
-  selected: boolean;
-  focused: boolean;
-  gitEntry?: FileTreeGitEntry;
-  directoryTone?: FileTreeGitTone;
-  onMouseDown: () => void;
-  onActivate: () => void;
-  onCreate: (kind: "file" | "directory") => void;
-  onTreeContextMenu: (event: MouseEvent<HTMLDivElement>) => void;
-}) {
-  const { t } = useI18n();
-  const directory = node.kind === "directory";
-  const className = ["tree-row", selected ? "active" : "", focused ? "focused" : ""].filter(Boolean).join(" ");
-  return (
-    <div
-      id={treeRowId(node.path)}
-      role="treeitem"
-      aria-expanded={directory ? open : undefined}
-      aria-selected={selected}
-      aria-level={depth + 1}
-      className={className}
-      style={{ paddingLeft: TREE_PAD + depth * TREE_INDENT }}
-      title={node.path}
-      onMouseDown={(event) => {
-        if (event.button !== 0) return;
-        event.preventDefault();
-        onMouseDown();
-      }}
-      onClick={onActivate}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") onActivate();
-      }}
-      onContextMenu={onTreeContextMenu}
-    >
-      {depth > 0 && (
-        <span className="tree-guides" aria-hidden>
-          {Array.from({ length: depth }, (_, level) => (
-            <span key={level} style={{ left: TREE_PAD + level * TREE_INDENT + 5 }} />
-          ))}
-        </span>
-      )}
-      {directory ? <ChevronRight size={12} className={open ? "tree-chevron open" : "tree-chevron"} /> : <span className="tree-chevron-spacer" />}
-      {directory ? <DirectoryIcon name={node.name} expanded={open} size={14} /> : <FileTypeIcon name={node.name} size={14} />}
-      <span className={gitEntry
-        ? `tree-row-name git-${fileTreeGitStatusTone(gitEntry.entry)}`
-        : directoryTone
-          ? `tree-row-name git-${directoryTone}`
-          : "tree-row-name"}>{node.name}</span>
-      {directory && (
-        <span className="tree-row-actions">
-          <button type="button" onClick={(event) => { event.stopPropagation(); onCreate("file"); }} aria-label={t("New File", "新建文件")} title={t("New File", "新建文件")}><FilePlus2 size={14} /></button>
-          <button type="button" onClick={(event) => { event.stopPropagation(); onCreate("directory"); }} aria-label={t("New Folder", "新建文件夹")} title={t("New Folder", "新建文件夹")}><FolderPlus size={14} /></button>
-        </span>
-      )}
-      {gitEntry && <span className={`tree-row-git-status git-${fileTreeGitStatusTone(gitEntry.entry)}`}>{fileTreeGitStatusLabel(gitEntry.entry)}</span>}
-    </div>
-  );
-}
-
-/** 把路径收成合法的 DOM id。 */
-function treeRowId(path: string): string {
-  return `file-tree-row-${encodeURIComponent(path)}`;
 }
 
 /** 刷新文件树、文件内容和 Git 状态。 */
