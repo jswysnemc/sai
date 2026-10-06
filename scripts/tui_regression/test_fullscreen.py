@@ -99,9 +99,10 @@ class FullscreenTests(unittest.TestCase):
             self.assertEqual(len(rail_rows), 3, screen)
             click(terminal, rail, rail_rows[0])
             terminal.wait_for(lambda: "1/3" in lines(terminal)[0] and "ALPHA" in lines(terminal)[0])
-            # 3. 点击折叠的思考段展开，正文出现思考内容
-            thought = next(row for row, line in enumerate(lines(terminal)) if "Thought" in line or "思考" in line)
-            click(terminal, 4, thought)
+            # 3. 点击折叠提示展开思考段，正文出现思考内容
+            fold_hint = next(row for row, line in enumerate(lines(terminal))
+                             if row > 0 and ("lines hidden" in line or "行已折叠" in line))
+            click(terminal, 4, fold_hint)
             terminal.wait_for(lambda: "THINK-ALPHA-6" in terminal.text())
             # 4. 滚轮向下离开该位置，Ctrl+↓ 回到底部
             click(terminal, 10, 5, kind=65)

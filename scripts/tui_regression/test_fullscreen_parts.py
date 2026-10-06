@@ -108,13 +108,14 @@ class FullscreenPartsTests(unittest.TestCase):
             terminal.wait_for(lambda: "Ctrl+O" in lines(terminal)[0], timeout=5)
             terminal.wait_for(lambda: row_of(terminal, "STEP-0") is not None)
             self.assertIsNone(row_of(terminal, "STEP-6"), "命令应折叠")
-            # 1. 悬停命令行：整段提亮前景
-            command_row = row_of(terminal, "STEP-0")
+            # 1. 悬停折叠提示行：提亮该行
+            hint_row = next(row for row, line in enumerate(lines(terminal))
+                            if row > 0 and ("lines hidden" in line or "行已折叠" in line))
             mark = len(terminal.raw)
-            terminal.send(f"\x1b[<35;5;{command_row + 1}M".encode())
+            terminal.send(f"\x1b[<35;5;{hint_row + 1}M".encode())
             terminal.wait_for(lambda: HOVER_FG.encode() in bytes(terminal.raw[mark:]), timeout=5)
-            # 2. 点命令行：命令展开，输出不受影响
-            mouse(terminal, 4, command_row)
+            # 2. 点折叠提示行：命令展开，输出不受影响
+            mouse(terminal, 4, hint_row)
             terminal.wait_for(lambda: row_of(terminal, "STEP-6") is not None, timeout=5)
             output_hint = [row for row, line in enumerate(lines(terminal))
                            if ("click to expand" in line or "点击展开" in line) and row > row_of(terminal, "STEP-11")]
