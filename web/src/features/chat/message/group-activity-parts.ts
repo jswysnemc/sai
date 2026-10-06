@@ -27,12 +27,27 @@ export function isWorkPart(part: LiveMessagePart): part is ReasoningPart | WaveP
 }
 
 /**
+ * 判断部件是否为只含空白的正文片段。
+ *
+ * 部分模型（如 Gemini）在每轮思考与工具调用之间只输出换行，没有真正的正文。
+ * 这类片段既不渲染，也不应把连续的工作组拆开。
+ *
+ * @param part 消息部件
+ * @returns 只含空白时为 true
+ */
+export function isBlankText(part: LiveMessagePart): boolean {
+  return part.type === "text" && !part.source.trim();
+}
+
+/**
  * 把连续的思考与工具收成正文前的工作组，组内相邻工具再收成一轮。
  *
  * @param parts 有序消息部件
  * @returns 可渲染的段落序列
  */
 export function groupActivityParts(parts: LiveMessagePart[]): MessageSegment[] {
+  // 1. 先丢掉空白正文，相邻的思考与工具才能连成一组，不留空白间隙
+  parts = parts.filter((part) => !isBlankText(part));
   const segments: MessageSegment[] = [];
   let index = 0;
   while (index < parts.length) {

@@ -117,3 +117,23 @@ describe("groupActivityParts", () => {
     expect(collectWaveTools(segments[0].items).map((part) => part.id)).toEqual(["t1", "t2"]);
   });
 });
+
+describe("blank text between work rounds", () => {
+  const blank = (id: string): LiveMessagePart => ({ id, type: "text", source: "\n\n" });
+
+  it("空白正文不拆开连续的思考与工具", () => {
+    const segments = groupActivityParts([
+      reasoning("r1"), tool("t1"), blank("b1"), reasoning("r2"), tool("t2"), blank("b2"), reasoning("r3"), text("final")
+    ]);
+    expect(segments.map((segment) => segment.type)).toEqual(["preamble", "part"]);
+    const preamble = segments[0];
+    expect(preamble.type === "preamble" && countWorkItems(preamble.items)).toEqual({ reasoning: 3, tools: 2 });
+    expect(preamble.type === "preamble" && preamble.followedByText).toBe(true);
+  });
+
+  it("末尾的空白正文不算作后接正文", () => {
+    const segments = groupActivityParts([reasoning("r1"), tool("t1"), blank("b1")]);
+    expect(segments).toHaveLength(1);
+    expect(segments[0].type === "preamble" && segments[0].followedByText).toBe(false);
+  });
+});

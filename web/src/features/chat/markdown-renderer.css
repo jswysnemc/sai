@@ -91,6 +91,14 @@
   margin:var(--space-3xs) 0;
 }
 
+/*
+ * 有序编号在内侧：松散列表的首段是块级 <p>，编号会单独占一行。
+ * 首段改为行内，编号与首段同行；后续段落与子列表仍按块级换行。
+ */
+.markdown-body ol > li > p:first-child {
+  display: inline;
+}
+
 .markdown-body input[type="checkbox"] {
   margin: 0 var(--space-xs) 0 0;
   accent-color: var(--signal);
