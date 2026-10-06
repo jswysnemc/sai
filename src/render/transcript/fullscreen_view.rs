@@ -10,7 +10,9 @@ use super::spacing;
 use super::store::{TranscriptRenderOptions, TranscriptStore, TranscriptView};
 use crate::llm::ChatStreamKind;
 use crate::render::content_indent::{align_to_guide_column_with_width, CONTENT_LEFT_INDENT};
-use crate::render::omitted_line::{rewrite_fold_hint_for_fullscreen, with_fullscreen_hints};
+use crate::render::omitted_line::{
+    rewrite_fold_hint_for_fullscreen, with_fullscreen_hints, EXPANDED_MARKER, FOLD_MARKER,
+};
 use crate::render::render_expand::{with_force_collapse, with_force_expand};
 use std::collections::HashSet;
 
@@ -33,6 +35,8 @@ pub(crate) struct ParagraphSpan {
     pub(crate) end: usize,
     /// 当前是否展开
     pub(crate) expanded: bool,
+    /// 可点击的控制行：折叠时为「N lines hidden」提示，展开时为末尾的「收起」行
+    pub(crate) control: usize,
 }
 
 /// 一条用户消息在文档中的位置与摘要。
@@ -60,10 +64,22 @@ impl FullscreenDocument {
     ///
     /// 返回:
     /// - 命中的段落
+    #[cfg(test)]
     pub(crate) fn paragraph_at(&self, row: usize) -> Option<&ParagraphSpan> {
         self.paragraphs
             .iter()
             .find(|span| row >= span.start && row < span.end)
+    }
+
+    /// 查找控制行（折叠提示或收起行）恰好位于指定行的段落。
+    ///
+    /// 参数:
+    /// - `row`: 文档行号
+    ///
+    /// 返回:
+    /// - 命中的段落；正文其它行不响应悬停与点击
+    pub(crate) fn paragraph_control_at(&self, row: usize) -> Option<&ParagraphSpan> {
+        self.paragraphs.iter().find(|span| span.control == row)
     }
 
     /// 返回指定行所属的用户消息序号（该行之前最近的一条）。
@@ -147,15 +163,7 @@ impl TranscriptStore {
                         expanded.contains(&key)
                     });
                 if let Some(parts) = parts {
-                    document.lines.extend(parts.lines);
-                    for (key, from, to, open) in parts.spans {
-                        document.paragraphs.push(ParagraphSpan {
-                            key,
-                            start: first_content_row(&document.lines, start + from),
-                            end: start + to,
-                            expanded: open,
-                        });
-                    }
+                    push_segmented(&mut document, parts.lines, parts.spans);
                     continue;
                 }
             }
@@ -178,6 +186,10 @@ impl TranscriptStore {
                     .lines_for(index, &self.cells[index], width, options, frame)
             };
             document.lines.extend(lines);
+            // 3. 展开段末尾追加「收起」行，作为展开态唯一的点击入口
+            if open {
+                document.lines.push(AnsiLine::new(render_collapse_line()));
+            }
             if let HistoryCell::UserEcho(cell) = &self.cells[index] {
                 document.anchors.push(UserAnchor {
                     row: first_content_row(&document.lines, start),
@@ -185,12 +197,9 @@ impl TranscriptStore {
                 });
             }
             if expandable && document.lines.len() > start {
-                document.paragraphs.push(ParagraphSpan {
-                    key,
-                    start: first_content_row(&document.lines, start),
-                    end: document.lines.len(),
-                    expanded: open,
-                });
+                document
+                    .paragraphs
+                    .push(make_span(&document.lines, key, start, document.lines.len(), open));
             }
         }
         self.append_live_tail(&mut document, width, options, expanded);
@@ -231,13 +240,17 @@ impl TranscriptStore {
         spacing::ensure_live_tool_gap(&mut live, self.cells.last());
         let start = document.lines.len();
         document.lines.extend(live);
+        if open {
+            document.lines.push(AnsiLine::new(render_collapse_line()));
+        }
         if reasoning && document.lines.len() > start {
-            document.paragraphs.push(ParagraphSpan {
-                key: LIVE_PARAGRAPH_KEY,
-                start: first_content_row(&document.lines, start),
-                end: document.lines.len(),
-                expanded: open,
-            });
+            document.paragraphs.push(make_span(
+                &document.lines,
+                LIVE_PARAGRAPH_KEY,
+                start,
+                document.lines.len(),
+                open,
+            ));
         }
     }
 }
@@ -251,6 +264,91 @@ fn expanded_options() -> TranscriptRenderOptions {
         reasoning_mode: crate::render::ReasoningDisplayMode::Full,
         tool_call_mode: crate::render::ToolCallDisplayMode::Full,
     }
+}
+
+/// 【全屏视图】【分段写入】把命令卡片的命令段与输出段写入文档，展开段各自追加收起行。
+///
+/// 参数:
+/// - `document`: 正在组装的文档
+/// - `lines`: 分段渲染后的行
+/// - `spans`: 段落键、段内起止与展开状态
+///
+/// 返回:
+/// - 无
+fn push_segmented(
+    document: &mut FullscreenDocument,
+    lines: Vec<AnsiLine>,
+    spans: Vec<(ParagraphKey, usize, usize, bool)>,
+) {
+    let mut copied = 0usize;
+    for (key, from, to, open) in spans {
+        // 1. 先补上两段之间未登记为段落的行
+        document.lines.extend(lines[copied..from].iter().cloned());
+        let start = document.lines.len();
+        document.lines.extend(lines[from..to].iter().cloned());
+        if open {
+            document.lines.push(AnsiLine::new(render_collapse_line()));
+        }
+        let end = document.lines.len();
+        document.paragraphs.push(make_span(&document.lines, key, start, end, open));
+        copied = to;
+    }
+    document.lines.extend(lines[copied..].iter().cloned());
+}
+
+/// 构造段落范围并定位控制行。
+///
+/// 参数:
+/// - `lines`: 文档行
+/// - `key`: 段落键
+/// - `start` / `end`: 段落行范围（含首部空行）
+/// - `open`: 是否展开
+///
+/// 返回:
+/// - 段落范围
+fn make_span(
+    lines: &[AnsiLine],
+    key: ParagraphKey,
+    start: usize,
+    end: usize,
+    open: bool,
+) -> ParagraphSpan {
+    let start = first_content_row(lines, start);
+    let control = if open {
+        end.saturating_sub(1)
+    } else {
+        fold_hint_row(lines, start, end).unwrap_or(start)
+    };
+    ParagraphSpan {
+        key,
+        start,
+        end,
+        expanded: open,
+        control,
+    }
+}
+
+/// 查找折叠段里的「N lines hidden」提示行。
+///
+/// 参数:
+/// - `lines`: 文档行
+/// - `start` / `end`: 段落行范围
+///
+/// 返回:
+/// - 提示行号；段落没有折叠提示时为 None
+fn fold_hint_row(lines: &[AnsiLine], start: usize, end: usize) -> Option<usize> {
+    (start..end).find(|row| lines[*row].as_str().contains(FOLD_MARKER))
+}
+
+/// 展开段末尾的收起行。
+///
+/// 返回:
+/// - 与折叠提示同样式的「收起」行
+fn render_collapse_line() -> String {
+    format!(
+        "  \x1b[2m\x1b[36m{EXPANDED_MARKER} {}\x1b[0m",
+        crate::render::terminal_text("Show less · click to collapse", "收起 · 点击折叠")
+    )
 }
 
 /// 跳过段落开头的空行，返回首个有内容的行号。

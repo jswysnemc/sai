@@ -18,7 +18,7 @@ fn painted_row(runtime: &crate::cli::repl_runtime::ReplRuntime, row: u16) -> Str
     .clone()
 }
 
-/// 鼠标停在折叠段上整段提亮前景，移开后恢复；只在悬停段落变化时重绘。
+/// 只有折叠提示行响应悬停：提亮该行，标题与正文保持原样；移开后恢复。
 #[test]
 fn hovering_an_expandable_paragraph_highlights_it() {
     let mut runtime = runtime(2);
@@ -33,22 +33,20 @@ fn hovering_an_expandable_paragraph_highlights_it() {
     let span = session.state.document.paragraphs[0].clone();
     let layout = session.state.layout.unwrap();
     let scroll = session.state.scroll;
-    let title_row = layout.body_top + (span.start - scroll) as u16;
-    let last_row = layout.body_top + (span.end - 1 - scroll) as u16;
-    assert!(!painted_row(&runtime, title_row).contains(HOVER_DEFAULT_FG));
-    // 1. 指向段落标题：整段提亮
+    let hint_row = layout.body_top + (span.control - scroll) as u16;
+    // 1. 指向控制行：只提亮该行
     runtime
-        .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 4, title_row))
+        .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 4, hint_row))
         .unwrap();
-    assert!(painted_row(&runtime, title_row).contains(HOVER_DEFAULT_FG));
-    assert!(
-        painted_row(&runtime, last_row).contains(HOVER_DEFAULT_FG),
-        "整段都应高亮"
-    );
-    // 2. 在同一段内移动不改变悬停段落
+    assert!(painted_row(&runtime, hint_row).contains(HOVER_DEFAULT_FG));
+    let lit = (0..layout.body_height)
+        .filter(|row| painted_row(&runtime, layout.body_top + row).contains(HOVER_DEFAULT_FG))
+        .count();
+    assert_eq!(lit, 1, "只提亮控制行");
+    // 2. 在控制行内移动不重绘
     let before = runtime.fullscreen.as_ref().unwrap().state.previous.clone();
     runtime
-        .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 6, title_row))
+        .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 6, hint_row))
         .unwrap();
     assert_eq!(runtime.fullscreen.as_ref().unwrap().state.previous, before);
     // 3. 移到段落之外：提亮消失
@@ -69,7 +67,7 @@ fn hovering_an_expandable_paragraph_highlights_it() {
     runtime
         .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 4, outside))
         .unwrap();
-    assert!(!painted_row(&runtime, title_row).contains(HOVER_DEFAULT_FG));
+    assert!(!painted_row(&runtime, hint_row).contains(HOVER_DEFAULT_FG));
 }
 
 /// 离开底部后按钮水平居中贴在输入框正上方，浮动标题不再重复显示新输出提示。

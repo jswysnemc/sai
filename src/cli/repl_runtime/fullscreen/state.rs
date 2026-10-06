@@ -146,7 +146,7 @@ impl FullscreenState {
             return None;
         }
         let row = self.pointer_row?;
-        self.document.paragraph_at(self.scroll + row)
+        self.document.paragraph_control_at(self.scroll + row)
     }
 
     /// 当前浮动标题对应的用户消息：正文首行之前最近的一条。
@@ -203,7 +203,7 @@ impl FullscreenState {
 
     /// 切换段落展开状态，并记录段落标题相对正文顶部的位置用于重排后锚定。
     ///
-    /// 展开与收起都只需点击段落范围内的任意一行。
+    /// 只有控制行响应：折叠时点「N lines hidden」，展开时点末尾的「Show less」。
     ///
     /// 参数:
     /// - `row`: 被点击的文档行
@@ -211,7 +211,7 @@ impl FullscreenState {
     /// 返回:
     /// - 被切换的段落键与点击时标题行在屏幕上的偏移；未命中为 None
     pub(super) fn toggle_at(&mut self, row: usize) -> Option<(ParagraphKey, isize)> {
-        let span = self.document.paragraph_at(row)?.clone();
+        let span = self.document.paragraph_control_at(row)?.clone();
         if !self.expanded.remove(&span.key) {
             self.expanded.insert(span.key);
         }

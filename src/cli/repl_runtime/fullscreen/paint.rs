@@ -83,8 +83,11 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
         crate::render::terminal_image::kitty_cell_pixel_height(),
     );
     let mut bottom_button = None;
-    // 4. 悬停在可展开段落上时，整段提亮前景提示可点击
-    let hovered_rows = state.hovered_paragraph().map(|span| (span.start, span.end));
+    // 4. 悬停在折叠提示或收起行上时只提亮该行；回到底部按钮被悬停时让位给按钮
+    let hovered_rows = state
+        .hovered_paragraph()
+        .filter(|_| !super::bottom_button::is_hovered(state, content_width, body_height))
+        .map(|span| (span.control, span.control + 1));
     for (row, line) in window.iter().enumerate() {
         let line = line.as_str();
         let body = match &preview {

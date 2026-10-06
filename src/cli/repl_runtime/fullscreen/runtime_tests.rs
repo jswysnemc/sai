@@ -127,7 +127,7 @@ fn wheel_scrolls_and_new_output_is_flagged() {
     assert!(state.unseen);
 }
 
-/// 点击折叠的思考段展开，再点展开段正文中任意一行收起。
+/// 点击折叠提示展开思考段；展开后正文不响应点击，点末尾的收起行收起。
 #[test]
 fn clicking_a_paragraph_toggles_it() {
     let mut runtime = runtime(2);
@@ -142,8 +142,10 @@ fn clicking_a_paragraph_toggles_it() {
     let session = runtime.fullscreen.as_ref().unwrap();
     let span = session.state.document.paragraphs[0].clone();
     let layout = session.state.layout.unwrap();
-    let row = layout.body_top + (span.start - session.state.scroll) as u16;
-    click(&mut runtime, 4, row);
+    let scroll = session.state.scroll;
+    let screen = |document_row: usize, scroll: usize| layout.body_top + (document_row - scroll) as u16;
+    // 1. 点控制行展开（摘要思考只有一行标题，标题即控制行）
+    click(&mut runtime, 4, screen(span.control, scroll));
     let session = runtime.fullscreen.as_ref().unwrap();
     assert!(session.state.expanded.contains(&span.key));
     let text = session
@@ -152,25 +154,27 @@ fn clicking_a_paragraph_toggles_it() {
         .lines
         .iter()
         .map(|line| crate::render::activity_animation::strip_ansi_for_test(line.as_str()))
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert!(text.contains("turn-0-think-10"), "{text}");
-    // 标题行停在原来的屏幕位置；点击展开段正文中的一行即可收起
+        .collect::<Vec<_>>();
+    assert!(text.join("\n").contains("turn-0-think-10"));
+    // 2. 展开段末尾出现收起行，正文行点击无效
     let reopened = session.state.document.paragraphs[0].clone();
-    assert_eq!(
-        layout.body_top + (reopened.start - session.state.scroll) as u16,
-        row
-    );
-    let body_row = session
-        .state
-        .document
-        .lines
+    assert!(text[reopened.control].contains("Show less"), "{:?}", text[reopened.control]);
+    let body_row = text
         .iter()
-        .position(|line| line.as_str().contains("turn-0-think-3"))
+        .position(|line| line.contains("turn-0-think-3"))
         .expect("展开后应有思考正文");
-    assert!(body_row > reopened.start && body_row < reopened.end);
-    let screen_row = layout.body_top + (body_row - session.state.scroll) as u16;
-    click(&mut runtime, 4, screen_row);
+    let scroll = session.state.scroll;
+    if body_row >= scroll && body_row - scroll < usize::from(layout.body_height) {
+        click(&mut runtime, 4, screen(body_row, scroll));
+        assert!(!runtime.fullscreen.as_ref().unwrap().state.expanded.is_empty());
+    }
+    // 3. 滚到收起行并点击
+    let session = runtime.fullscreen.as_mut().unwrap();
+    let height = usize::from(layout.body_height);
+    session.state.scroll_to(reopened.control.saturating_sub(height / 2), height);
+    let scroll = session.state.scroll;
+    runtime.paint_fullscreen().unwrap();
+    click(&mut runtime, 4, screen(reopened.control, scroll));
     assert!(runtime
         .fullscreen
         .as_ref()

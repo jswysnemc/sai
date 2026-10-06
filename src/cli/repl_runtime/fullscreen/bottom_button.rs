@@ -78,6 +78,31 @@ pub(super) fn overlay(
     (output, Some((start as u16, end as u16)))
 }
 
+/// 【全屏视图】【按钮悬停】判断指针是否落在回到底部按钮上。
+///
+/// 按钮与正文最后一行重叠，悬停时只提亮按钮，不再提亮下面的折叠提示。
+///
+/// 参数:
+/// - `state`: 全屏状态
+/// - `width`: 正文列数
+/// - `body_height`: 正文区行数
+///
+/// 返回:
+/// - 指针在按钮上时为 true
+pub(super) fn is_hovered(state: &FullscreenState, width: usize, body_height: usize) -> bool {
+    if state.follow || state.pointer_row != Some(body_height.saturating_sub(1)) {
+        return false;
+    }
+    let button_width = visible_width(label(state));
+    if button_width + SIDE_MARGIN * 2 > width {
+        return false;
+    }
+    let start = (width - button_width) / 2;
+    state
+        .pointer_col
+        .is_some_and(|col| (start..start + button_width).contains(&usize::from(col)))
+}
+
 /// 【全屏视图】【列裁剪】跳过行首若干显示列，返回剩余部分并保留之前生效的样式。
 ///
 /// 参数:

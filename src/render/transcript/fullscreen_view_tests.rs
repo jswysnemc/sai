@@ -315,3 +315,25 @@ fn wide_table_stays_inside_fullscreen_body_width() {
         );
     }
 }
+
+/// 折叠段的控制行是「N lines hidden」提示；展开后末尾追加收起行作为控制行。
+#[test]
+fn control_rows_are_the_fold_hint_and_the_collapse_line() {
+    let mut store = command_store();
+    let collapsed = store.render_fullscreen(80, &options(), &HashSet::new());
+    let text = plain(&collapsed);
+    for span in &collapsed.paragraphs {
+        assert!(text[span.control].contains("hidden"), "{:?}", text[span.control]);
+        assert!(span.control >= span.start && span.control < span.end);
+    }
+    let output_key = collapsed.paragraphs[1].key;
+    let open = store.render_fullscreen(80, &options(), &HashSet::from([output_key]));
+    let text = plain(&open);
+    let output = &open.paragraphs[1];
+    assert_eq!(output.control, output.end - 1);
+    assert!(text[output.control].contains("Show less"), "{text:?}");
+    // 收起行插在输出段末尾，命令段的控制行仍是原提示
+    assert!(text[open.paragraphs[0].control].contains("hidden"));
+    assert_eq!(open.paragraph_control_at(output.control).map(|s| s.key), Some(output_key));
+    assert!(open.paragraph_control_at(output.start).is_none() || output.start == output.control);
+}
