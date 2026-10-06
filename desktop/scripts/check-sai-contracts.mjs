@@ -21,7 +21,8 @@ export async function checkSaiContracts(source) {
     ['web/src/features/workspace/workspace-layout.tsx', ['OPEN_WORKSPACE_PANEL_EVENT', 'detail?.tab']],
     ['web/src/features/theme/theme.ts', ['dataset.theme']],
     ['web/src/shared/styles/tokens/neutral-themes.css', ['--paper:', '--ink:', '--ink-soft:', '--line:']],
-    ['web/src/shared/styles/tokens/workbench.css', ['--sidebar-surface:']],
+    ['web/src/shared/styles/tokens/workbench.css', ['--sidebar-surface:', '--toolbar-height:']],
+    ['web/src/features/desktop/desktop-chrome.ts', ['--desktop-inset-right', '--desktop-inset-left', 'data-desktop']],
   ];
   const results = await Promise.allSettled(contracts.map(async ([file, symbols]) => {
     const content = await readFile(path.join(source, file), 'utf8');
@@ -31,7 +32,7 @@ export async function checkSaiContracts(source) {
   }));
   const failures = results.filter((result) => result.status === 'rejected').map((result) => result.reason.message);
   if (failures.length) throw new Error(`Sai 桌面接口发生变化，请更新适配层并执行集成测试：\n${failures.join('\n')}`);
-  console.info('【桌面适配】【升级检查】浏览器入口、面板事件及主题变量均存在');
+  console.info('【桌面适配】【升级检查】浏览器入口、面板事件、主题变量及标题栏让位接口均存在');
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 
-const INITIAL = { maximized: false, canGoBack: false, canGoForward: false, loading: true,
-  title: 'Sai', appearance: {} };
+const INITIAL = { maximized: false, appearance: {} };
 
 /**
- * 【桌面界面】【状态订阅】同步窗口、导航与 Sai 主题，并在卸载时清理订阅
+ * 【桌面界面】【状态订阅】同步窗口最大化状态与 Sai 主题，并在卸载时清理订阅
  * @returns {object} 当前桌面状态
  */
 export function useDesktopState() {

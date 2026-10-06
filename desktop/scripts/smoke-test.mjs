@@ -64,6 +64,25 @@ async function close(origin) {
   await assert.rejects(fetch(`${origin}/api/health`, { signal: AbortSignal.timeout(2000) }));
 }
 
+/**
+ * 【桌面测试】【按钮让位】顶行里最靠右的控件必须停在窗口按钮左侧
+ * @param {import('playwright').Page} page 工作台页面
+ * @param {string} scene 场景名称
+ * @returns {Promise<void>} 重叠时抛出断言错误
+ */
+async function assertNoOverlap(page, scene) {
+  const overlap = await page.evaluate(() => {
+    const edge = innerWidth - Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--desktop-inset-right'));
+    return [...document.querySelectorAll('.chat-header, .workspace-tab-bar, .settings-topbar, .sidebar-heading')]
+      .filter((row) => row.getBoundingClientRect().top < 32)
+      .flatMap((row) => [...row.querySelectorAll('button, a, [role="tab"]')])
+      .filter((node) => node.offsetParent)
+      .map((node) => ({ label: node.getAttribute('aria-label') || node.textContent.trim(), right: node.getBoundingClientRect().right }))
+      .filter((item) => item.right > edge + 0.5);
+  });
+  assert.deepEqual(overlap, [], `${scene}：顶行控件与窗口按钮重叠`);
+}
+
 try {
   // 1. 【桌面测试】【实际加载】验证内嵌页面、认证接口与 Chromium 隔离设置
   let page = await launch();
@@ -103,28 +122,44 @@ try {
   await page.waitForFunction(async () => (await fetch('/api/workspaces')).ok);
   await page.locator('button').first().waitFor({ state: 'visible', timeout: 30000 });
   await page.evaluate(() => localStorage.setItem('desktop-smoke-persistence', 'saved'));
-  const titlebar = application.context().pages().find((candidate) => candidate.url().startsWith('file:'));
-  assert.ok(titlebar, '自定义标题栏未加载');
-  await titlebar.getByRole('button', { name: '打开内置浏览器', exact: true }).waitFor();
+  const controls = application.context().pages().find((candidate) => candidate.url().startsWith('file:'));
+  assert.ok(controls, '窗口按钮页面未加载');
+  await controls.getByRole('button', { name: '关闭窗口', exact: true }).waitFor();
   assert.equal(await page.evaluate(() => typeof window.saiDesktop), 'undefined');
   assert.equal(await application.evaluate(({ Menu }) => Menu.getApplicationMenu()), null);
+  // 【桌面测试】【一体化标题栏】工作台铺满窗口，顶行为窗口按钮让位并可拖动
   const dimensions = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getContentSize());
-  assert.equal(await page.evaluate(() => innerHeight), dimensions[1] - 40);
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'graphite'; });
-  await titlebar.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() === '#ededed');
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'linen'; });
-  await titlebar.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() === '#242424');
+  assert.equal(await page.evaluate(() => innerHeight), dimensions[1]);
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.desktop), 'linux');
   await page.locator('.coding-layout').waitFor({ state: 'visible' });
+  await page.waitForFunction(() => [...document.querySelectorAll('.chat-header, .workspace-tab-bar')]
+    .some((row) => row.dataset.desktopEdge === 'right'));
+  const header = await page.evaluate(() => {
+    const row = [...document.querySelectorAll('[data-desktop-edge="right"]')][0];
+    const style = getComputedStyle(row);
+    return { drag: style.getPropertyValue('-webkit-app-region'), padding: Number.parseFloat(style.paddingRight) };
+  });
+  assert.equal(header.drag, 'drag');
+  assert.ok(header.padding >= 138, `顶行右侧应为窗口按钮让位：${header.padding}`);
+  await assertNoOverlap(page, '会话顶栏');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'graphite'; });
+  await controls.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() === '#ededed');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'linen'; });
+  await controls.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() === '#242424');
   await captureWindow(application, path.join(output, 'desktop.png'));
-  await titlebar.getByRole('button', { name: '打开内置浏览器', exact: true }).click();
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('sai:open-workspace-panel', { detail: { tab: 'browser' } })));
   await page.locator('.browser-pane').waitFor({ state: 'visible' });
   await page.waitForFunction(() => document.querySelector('.browser-pane')?.getAttribute('aria-busy') === 'false');
+  await page.waitForFunction(() => document.querySelector('.workspace-tab-bar')?.dataset.desktopEdge === 'right');
+  await assertNoOverlap(page, '工作区页签');
   await captureWindow(application, path.join(output, 'desktop-browser.png'));
   await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(640, 620));
   await page.waitForFunction(() => innerWidth === 640);
-  const positions = await titlebar.getByRole('button').evaluateAll((buttons) => buttons.filter((button) => button.offsetParent)
+  await delay(200);
+  await assertNoOverlap(page, '窄窗口');
+  const fits = await controls.getByRole('button').evaluateAll((buttons) => buttons
     .every((button) => button.getBoundingClientRect().right <= innerWidth));
-  assert.equal(positions, true);
+  assert.equal(fits, true);
   await captureWindow(application, path.join(output, 'desktop-compact.png'));
   await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1280, 860));
 

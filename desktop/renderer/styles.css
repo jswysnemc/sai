@@ -1,57 +1,50 @@
 @import 'tailwindcss';
 @source './';
 
+/*
+ * 【桌面界面】【窗口按钮】背景透明，按钮所在位置的底色就是工作台顶行，
+ * 视觉上与工作台连成一条标题栏；配色随工作台主题同步。
+ */
 :root {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
   font-size: 16px;
   color-scheme: light dark;
-  --surface: #f7f7f7;
   --paper: #ffffff;
   --ink: #242424;
   --muted: #6b6b6b;
   --line: #e5e5e5;
   color: var(--ink);
-  background: var(--paper);
+  background: transparent;
   user-select: none;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --surface: #171717; --paper: #1c1c1c; --ink: #ededed; --muted: #a3a3a3; --line: #343434; }
+  :root { --paper: #1c1c1c; --ink: #ededed; --muted: #a3a3a3; --line: #343434; }
 }
-html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
-.titlebar { background: var(--surface); -webkit-app-region: drag; }
-.drag-space { -webkit-app-region: drag; }
-.app-mark { border-radius: 0.25rem; }
-@layer components {
-.icon-button {
+html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
+
+.window-controls {
+  display: flex;
+  justify-content: flex-end;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.caption-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 2.875rem;
+  height: 100%;
   flex: none;
   padding: 0;
   border: 0;
-  border-radius: 0.375rem;
-  color: var(--ink);
+  color: var(--muted);
   background: transparent;
   cursor: default;
-  -webkit-app-region: no-drag;
+  transition: background-color 0.12s ease, color 0.12s ease;
 }
-.icon-button:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
-.icon-button:active { background: color-mix(in srgb, var(--ink) 13%, transparent); }
-.icon-button:focus-visible { outline: 0.125rem solid var(--ink); outline-offset: -0.125rem; }
-.icon-button:disabled { opacity: 0.35; }
-.icon-button:disabled:hover { background: transparent; }
-.icon-button-danger:hover { color: white; background: #c42b1c; }
-}
-.toolbar-tooltip {
-  border-radius: 0.3rem;
-  border: 1px solid var(--line);
-  background: var(--paper);
-  color: var(--ink);
-  padding: 0.2rem 0.4rem;
-  font-size: 0.6875rem;
-  line-height: 1rem;
-  pointer-events: none;
-  -webkit-app-region: no-drag;
-}
+.caption-button:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 9%, transparent); }
+.caption-button:active { background: color-mix(in srgb, var(--ink) 15%, transparent); }
+.caption-button:focus-visible { outline: 0.125rem solid var(--ink); outline-offset: -0.125rem; }
+.caption-button-close:hover { color: white; background: #c42b1c; }
+.caption-button-close:active { color: white; background: #b22a1b; }

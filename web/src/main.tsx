@@ -25,6 +25,7 @@ import { PasswordLogin } from "./features/auth/password-login";
 import { initializeTheme } from "./features/theme/theme";
 import { detectInitialLocale, text } from "./features/i18n/locale";
 import { enableAutoHideScrollbars } from "./shared/styles/auto-hide-scrollbar";
+import { enableDesktopChrome } from "./features/desktop/desktop-chrome";
 import { ErrorBoundary } from "./shared/ui/error-boundary/error-boundary";
 import { LoadingPanel } from "./shared/ui/loading-panel";
 
@@ -57,6 +58,7 @@ async function start() {
   initializeTheme();
   // 滚动条默认隐藏，滚动/悬停时短暂显示
   enableAutoHideScrollbars();
+  enableDesktopChrome();
   await bootstrapSession();
 
   // 启用口令验证且尚无有效会话时先呈现登录页

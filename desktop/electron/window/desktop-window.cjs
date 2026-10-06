@@ -2,11 +2,15 @@ const { BrowserWindow, WebContentsView, Menu, screen } = require('electron');
 const path = require('node:path');
 const { configureWorkbench } = require('./workbench-policy.cjs');
 const { installControls } = require('./window-controls.cjs');
+const { createChromeLayout, CONTROLS_WIDTH } = require('./window-chrome.cjs');
 
-const TITLEBAR_HEIGHT = 40;
+const MAC = process.platform === 'darwin';
 
 /**
- * 【桌面端】【自定义窗口】使用独立标题栏与 WebContentsView，避免修改 Sai 页面布局
+ * 【桌面端】【一体化窗口】工作台铺满整个窗口，窗口按钮叠在工作台自身的顶行上
+ *
+ * Windows/Linux 在右上角放一个只含最小化、最大化、关闭的小视图；
+ * macOS 使用系统红绿灯，不创建按钮视图。工作台通过预加载脚本得知需要让出的宽度。
  * @param {URL} url Sai 后端启动地址
  * @param {object} logger 日志接口
  * @returns {Promise<BrowserWindow>} 已加载的桌面窗口
@@ -16,42 +20,52 @@ async function createWindow(url, logger) {
   const window = new BrowserWindow({
     width: Math.min(1280, width), height: Math.min(860, height),
     minWidth: Math.min(520, width), minHeight: Math.min(420, height),
-    frame: false, show: false, title: 'Sai Desktop', backgroundColor: '#f7f7f7',
+    show: false, title: 'Sai Desktop', backgroundColor: '#f7f7f7',
     icon: path.join(__dirname, '../../build/icon.png'),
-    webPreferences: { preload: path.join(__dirname, '../preload/shell.cjs'),
-      nodeIntegration: false, contextIsolation: true, sandbox: true, webviewTag: false },
+    // 1. macOS 保留系统红绿灯并让它落在工作台顶行内；其他平台完全无边框
+    ...(MAC ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 12, y: 9 } } : { frame: false }),
+    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, webviewTag: false },
   });
   const view = new WebContentsView({ webPreferences: {
     partition: 'persist:sai-desktop', preload: path.join(__dirname, '../preload/workbench.cjs'),
     nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, webviewTag: false,
   } });
   window.contentView.addChildView(view);
-  /**
-   * 【桌面端】【视口布局】为标题栏保留高度，业务页面继续使用自己的完整视口
-   * @returns {void} 无返回值
-   */
-  function layout() {
-    const [contentWidth, contentHeight] = window.getContentSize();
-    view.setBounds({ x: 0, y: TITLEBAR_HEIGHT, width: contentWidth, height: Math.max(1, contentHeight - TITLEBAR_HEIGHT) });
+  // 2. 按钮视图后加入，叠在工作台之上
+  const controls = MAC ? null : new WebContentsView({ webPreferences: {
+    preload: path.join(__dirname, '../preload/shell.cjs'),
+    nodeIntegration: false, contextIsolation: true, sandbox: true, webviewTag: false,
+  } });
+  if (controls) {
+    controls.setBackgroundColor('#00000000');
+    window.contentView.addChildView(controls);
   }
-  layout();
-  window.on('resize', layout);
+  const chrome = createChromeLayout(window, view, controls);
   window.setMenu(null);
-  Menu.setApplicationMenu(process.platform === 'darwin'
-    ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }]) : null);
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  window.webContents.session.setPermissionCheckHandler(() => false);
-  window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
-  window.webContents.session.setDevicePermissionHandler(() => false);
-  window.webContents.on('will-navigate', (event) => event.preventDefault());
+  Menu.setApplicationMenu(MAC ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }]) : null);
+  for (const contents of [window.webContents, controls?.webContents].filter(Boolean)) {
+    contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    contents.on('will-navigate', (event) => event.preventDefault());
+  }
+  if (controls) {
+    const session = controls.webContents.session;
+    session.setPermissionCheckHandler(() => false);
+    session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+    session.setDevicePermissionHandler(() => false);
+  }
   await configureWorkbench(view.webContents, url, logger);
-  const cleanup = installControls(window, view.webContents, url.origin);
-  window.once('closed', () => { cleanup(); if (!view.webContents.isDestroyed()) view.webContents.close(); });
-  await window.loadFile(path.join(__dirname, '../../renderer/dist/index.html'));
+  const cleanup = installControls(window, view.webContents, controls?.webContents ?? null, url.origin, chrome);
+  window.once('closed', () => {
+    cleanup();
+    for (const child of [view, controls].filter(Boolean)) {
+      if (!child.webContents.isDestroyed()) child.webContents.close();
+    }
+  });
+  if (controls) await controls.webContents.loadFile(path.join(__dirname, '../../renderer/dist/index.html'));
   window.show();
   await view.webContents.loadURL(url.href);
   view.webContents.focus();
   return window;
 }
 
-module.exports = { createWindow, TITLEBAR_HEIGHT };
+module.exports = { createWindow, CONTROLS_WIDTH };

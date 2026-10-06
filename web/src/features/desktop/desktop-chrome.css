@@ -1,0 +1,19 @@
+/*
+ * 【桌面端】【一体化标题栏】桌面外壳把窗口按钮叠在工作台顶行上，
+ * 顶行本身就是标题栏：空白处拖动窗口，控件照常点击。
+ * 只在桌面外壳写入 data-desktop 时生效，浏览器访问不受影响。
+ */
+html[data-desktop] :is(.chat-header, .workspace-tab-bar, .settings-topbar, .sidebar-heading) {
+  -webkit-app-region: drag;
+}
+
+/* 顶行里的控件与文字输入保持可点击 */
+html[data-desktop] :is(.chat-header, .workspace-tab-bar, .settings-topbar, .sidebar-heading)
+  :is(button, a, input, select, textarea, label, summary, [role="tab"], [role="button"], [role="switch"], [contenteditable="true"], [tabindex]:not([tabindex="-1"])) {
+  -webkit-app-region: no-drag;
+}
+
+/* 浮层可能盖在顶行上方，必须显式排除，否则点击会变成拖动窗口 */
+html[data-desktop] :is([role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"], [role="tooltip"], [data-radix-popper-content-wrapper]) {
+  -webkit-app-region: no-drag;
+}
