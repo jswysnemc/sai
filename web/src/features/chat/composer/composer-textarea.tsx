@@ -51,26 +51,46 @@ export type ComposerTextareaHandle = {
  */
 function ensureComposerCaretVisible(editor: HTMLElement): void {
   const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) {
-    editor.scrollTop = editor.scrollHeight;
-    return;
-  }
+  if (!selection || selection.rangeCount === 0) return;
   const range = selection.getRangeAt(0);
-  if (!editor.contains(range.endContainer)) {
-    editor.scrollTop = editor.scrollHeight;
-    return;
-  }
-  const rect = range.getBoundingClientRect();
+  if (!editor.contains(range.endContainer)) return;
+  const rect = measureCaretRect(editor, range);
+  // 1. 量不到光标位置时保持当前滚动，不再跳到末尾
+  if (!rect) return;
   const editorRect = editor.getBoundingClientRect();
-  if (rect.height === 0 && rect.width === 0) {
-    editor.scrollTop = editor.scrollHeight;
-    return;
-  }
   if (rect.bottom > editorRect.bottom - 4) {
     editor.scrollTop += rect.bottom - editorRect.bottom + 8;
   } else if (rect.top < editorRect.top + 4) {
     editor.scrollTop -= editorRect.top - rect.top + 8;
   }
+}
+
+/**
+ * 测量折叠光标的位置。
+ *
+ * 换行后光标落在 `\n` 文本之后时，折叠选区的矩形常为全零，
+ * 这里临时插入零宽标记测量，再按纯文本偏移恢复选区。
+ *
+ * @param editor 输入区根元素
+ * @param range 当前选区
+ * @returns 光标矩形；无法测量时为 null
+ */
+function measureCaretRect(editor: HTMLElement, range: Range): DOMRect | null {
+  const direct = range.getBoundingClientRect();
+  if (direct.width !== 0 || direct.height !== 0) return direct;
+  const offsets = readEditorTextSelection(editor);
+  const marker = document.createElement("span");
+  marker.textContent = "​";
+  const probe = range.cloneRange();
+  probe.collapse(false);
+  probe.insertNode(marker);
+  const rect = marker.getBoundingClientRect();
+  const parent = marker.parentNode;
+  marker.remove();
+  parent?.normalize();
+  // 1. 移除标记会让原选区节点失效，按纯文本偏移恢复
+  if (offsets) setEditorTextSelection(editor, offsets.start, offsets.end);
+  return rect.height === 0 && rect.width === 0 ? null : rect;
 }
 
 /**
