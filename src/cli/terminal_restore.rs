@@ -2,8 +2,8 @@ use super::keyboard_enhancement::KeyboardEnhancementState;
 use anyhow::Result;
 use crossterm::cursor::Show;
 use crossterm::event::{DisableBracketedPaste, EnableBracketedPaste};
-use crossterm::terminal;
 use crossterm::execute;
+use crossterm::terminal;
 use std::io::{self, Write};
 
 /// REPL 终端输入模式的 RAII 守卫。
@@ -14,6 +14,8 @@ use std::io::{self, Write};
 pub(super) struct TerminalInputGuard {
     enhancement: KeyboardEnhancementState,
     finished: bool,
+    // --- 新增：Windows 控制台输出模式守卫 ---
+    output_mode: bool,
 }
 
 impl TerminalInputGuard {
@@ -38,9 +40,11 @@ impl TerminalInputGuard {
             let _ = terminal::disable_raw_mode();
             return Err(err.into());
         }
+        self::enable_windows_output_mode();
         Ok(Self {
             enhancement: KeyboardEnhancementState::enable(stdout),
             finished: false,
+            output_mode: true,
         })
     }
 
@@ -58,6 +62,7 @@ impl TerminalInputGuard {
         if self.finished {
             return Ok(());
         }
+        self.release_windows_output_mode();
         self.finished = true;
         let paste_result = execute!(stdout, DisableBracketedPaste);
         self.enhancement.disable(stdout);
@@ -66,6 +71,34 @@ impl TerminalInputGuard {
         raw_result?;
         Ok(())
     }
+
+    // --- 新增：Windows 控制台输出模式 ---
+
+    /// 退出本层输入守卫时恢复 Windows 控制台输出模式。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    fn release_windows_output_mode(&mut self) {
+        if !self.output_mode {
+            return;
+        }
+        self.output_mode = false;
+        crate::platform::windows_console::leave_tui_output_mode();
+    }
+}
+
+/// 进入 TUI 时打开 Windows 延迟换行。非 Windows 与测试进程为空操作。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+fn enable_windows_output_mode() {
+    crate::platform::windows_console::enter_tui_output_mode();
 }
 
 impl Drop for TerminalInputGuard {
@@ -78,6 +111,7 @@ impl Drop for TerminalInputGuard {
             return;
         }
         self.finished = true;
+        self.release_windows_output_mode();
         let mut stdout = io::stdout();
         let _ = execute!(stdout, DisableBracketedPaste);
         self.enhancement.disable(&mut stdout);
@@ -143,6 +177,7 @@ pub(crate) fn emergency_restore() {
     let mut stdout = io::stdout();
     let _ = stdout.write_all(restore_sequence().as_bytes());
     let _ = stdout.flush();
+    crate::platform::windows_console::force_restore_tui_output_mode();
     // 关闭 raw mode，让后续输出恢复正常换行
     let _ = terminal::disable_raw_mode();
 }

@@ -91,7 +91,8 @@ pub fn ask(request: &QuestionRequest) -> Result<QuestionResponse> {
         }
         let event = event::read()?;
         match event {
-            Event::Resize(_, rows) => {
+            Event::Resize(cols, rows) => {
+                let (_, rows) = crate::platform::windows_console::viewport_resize(cols, rows);
                 session.resize_to_terminal(rows);
                 continue;
             }

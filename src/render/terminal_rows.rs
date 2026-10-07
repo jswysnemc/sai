@@ -39,10 +39,38 @@ pub(crate) fn paint_changed_rows<W: Write>(
         let width = UnicodeWidthStr::width(strip_ansi_for_test(line).as_str());
         if width < cols {
             queue!(output, Clear(ClearType::UntilNewLine))?;
+        } else if cols > 0 {
+            // 3. 满宽行在 Windows 上会留下延迟换行。先钉回最后一个单元格，
+            //    后面恢复自动换行时才不会把这一行再滚上去。
+            queue!(
+                output,
+                MoveTo((cols - 1) as u16, top.saturating_add(index as u16))
+            )?;
         }
     }
     if started {
         queue!(output, Print("\x1b[?7h"))?;
+    }
+    Ok(())
+}
+
+/// 满宽行写完后把光标钉回最后一个单元格，取消 Windows 的延迟换行。
+///
+/// 参数: `output` 为帧缓冲，`row` 为屏幕行，`cols` 为可见列数，`line` 为刚写过的行
+/// 返回: 输出结果；未满宽时不移动光标
+pub(crate) fn park_if_full_line<W: Write>(
+    output: &mut W,
+    row: u16,
+    cols: u16,
+    line: &str,
+) -> io::Result<()> {
+    let cols = usize::from(cols);
+    if cols == 0 {
+        return Ok(());
+    }
+    let width = UnicodeWidthStr::width(strip_ansi_for_test(line).as_str());
+    if width >= cols {
+        queue!(output, MoveTo((cols - 1) as u16, row))?;
     }
     Ok(())
 }
@@ -74,5 +102,20 @@ mod tests {
         let mut output = Vec::new();
         paint_changed_rows(&mut output, 0, 4, &["abcd".into()], None).unwrap();
         assert!(!String::from_utf8(output).unwrap().contains("\x1b[K"));
+    }
+
+    /// 【终端】【逐行绘制】满宽行在恢复自动换行前把光标钉回行尾，取消延迟换行。
+    /// 参数: 无
+    /// 返回: 无，光标定位晚于恢复换行时断言失败
+    #[test]
+    fn full_width_row_parks_cursor_before_wrap_is_restored() {
+        let mut output = Vec::new();
+        paint_changed_rows(&mut output, 0, 4, &["abcd".into()], None).unwrap();
+        let output = String::from_utf8(output).unwrap();
+        let park = output
+            .find("\x1b[1;4H")
+            .expect("cursor parked on last cell");
+        let restore = output.find("\x1b[?7h").expect("autowrap restored");
+        assert!(park < restore);
     }
 }
