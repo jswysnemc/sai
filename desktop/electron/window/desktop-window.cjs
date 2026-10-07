@@ -4,6 +4,9 @@ const { configureWorkbench } = require('./workbench-policy.cjs');
 const { installControls } = require('./window-controls.cjs');
 const { createChromeLayout, CONTROLS_WIDTH } = require('./window-chrome.cjs');
 
+// ===== 新增 import =====
+const { controlsBackground } = require('./caption-hit-test.cjs');
+
 const MAC = process.platform === 'darwin';
 
 /**
@@ -23,7 +26,8 @@ async function createWindow(url, logger) {
     show: false, title: 'Sai Desktop', backgroundColor: '#f7f7f7',
     icon: path.join(__dirname, '../../build/icon.png'),
     // 1. macOS 保留系统红绿灯并让它落在工作台顶行内；其他平台完全无边框
-    ...(MAC ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 12, y: 9 } } : { frame: false }),
+    //    Windows 保留 thick frame，最小化/最大化/关闭的 WM_SYSCOMMAND 才能作用在无标题栏窗口上
+    ...(MAC ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 12, y: 9 } } : { frame: false, ...(process.platform === 'win32' ? { thickFrame: true } : {}) }),
     webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, webviewTag: false },
   });
   const view = new WebContentsView({ webPreferences: {
@@ -37,7 +41,7 @@ async function createWindow(url, logger) {
     nodeIntegration: false, contextIsolation: true, sandbox: true, webviewTag: false,
   } });
   if (controls) {
-    controls.setBackgroundColor('#00000000');
+    controls.setBackgroundColor(controlsBackground(process.platform));
     window.contentView.addChildView(controls);
   }
   const chrome = createChromeLayout(window, view, controls);
@@ -54,7 +58,12 @@ async function createWindow(url, logger) {
     session.setDevicePermissionHandler(() => false);
   }
   await configureWorkbench(view.webContents, url, logger);
-  const cleanup = installControls(window, view.webContents, controls?.webContents ?? null, url.origin, chrome);
+  const syncControlsBackground = (paper) => {
+    if (!controls || controls.webContents.isDestroyed()) return;
+    const color = controlsBackground(process.platform, paper);
+    if (color) controls.setBackgroundColor(color);
+  };
+  const cleanup = installControls(window, view.webContents, controls?.webContents ?? null, url.origin, chrome, syncControlsBackground);
   window.once('closed', () => {
     cleanup();
     for (const child of [view, controls].filter(Boolean)) {

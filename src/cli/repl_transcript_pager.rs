@@ -104,6 +104,8 @@ fn run_pager_loop(runtime: &mut ReplRuntime) -> Result<()> {
             },
             Event::Resize(next_cols, next_rows) => {
                 // resize 锚定：按新宽度重新渲染，保持距底部行数不变
+                let (next_cols, next_rows) =
+                    crate::platform::windows_console::viewport_resize(next_cols, next_rows);
                 cols = next_cols.max(1);
                 rows = next_rows.max(2);
                 lines = runtime.transcript_pager_lines(usize::from(cols));

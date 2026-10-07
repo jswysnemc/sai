@@ -529,17 +529,7 @@ impl ReplRuntime {
     /// 返回:
     /// - 尺寸预览绘制结果
     pub(in crate::cli) fn observe_input_resize(&mut self, cols: u16, rows: u16) -> Result<()> {
-        self.observe_size(
-            TerminalSize {
-                cols: cols.max(1),
-                rows: rows.max(1),
-            },
-            false,
-        );
-        self.preview_resize(TerminalSize {
-            cols: cols.max(1),
-            rows: rows.max(1),
-        })
+        self.observe_viewport_resize(cols, rows, false)
     }
 
     /// 处理流式阶段的 Resize 事件。
@@ -553,17 +543,7 @@ impl ReplRuntime {
     /// 返回:
     /// - 尺寸预览绘制结果
     pub(in crate::cli) fn observe_stream_resize(&mut self, cols: u16, rows: u16) -> Result<()> {
-        self.observe_size(
-            TerminalSize {
-                cols: cols.max(1),
-                rows: rows.max(1),
-            },
-            true,
-        );
-        self.preview_resize(TerminalSize {
-            cols: cols.max(1),
-            rows: rows.max(1),
-        })
+        self.observe_viewport_resize(cols, rows, true)
     }
 
     /// 收起 slash / @ / # 补全面板。
@@ -591,5 +571,28 @@ impl ReplRuntime {
     /// - 已收起为真
     pub(in crate::cli) fn composer_panels_dismissed(&self) -> bool {
         self.panels_dismissed.is_some()
+    }
+
+    /// 按可见窗口处理 Resize。尺寸未变时不重画。
+    ///
+    /// Windows 的 Resize 经常是屏幕缓冲区高度，或被 crossterm 多加了 1。
+    /// 按事件值重画会把画面拉高，随后又用可见窗口改回来，表现为间歇花屏。
+    ///
+    /// 参数:
+    /// - `cols`: 事件报告的列数
+    /// - `rows`: 事件报告的行数
+    /// - `streaming`: 为真时按流式阶段登记，本轮结束后整区重放
+    ///
+    /// 返回:
+    /// - 尺寸预览绘制结果；可见尺寸未变时直接成功
+    fn observe_viewport_resize(&mut self, cols: u16, rows: u16, streaming: bool) -> Result<()> {
+        let (cols, rows) = crate::platform::windows_console::viewport_resize(cols, rows);
+        let size = TerminalSize { cols, rows };
+        // 1. 可见尺寸没变就不重画
+        if size == self.drawing_viewport().size() {
+            return Ok(());
+        }
+        self.observe_size(size, streaming);
+        self.preview_resize(size)
     }
 }

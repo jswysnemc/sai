@@ -40,6 +40,7 @@ html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; back
   border: 0;
   color: var(--muted);
   background: transparent;
+  -webkit-app-region: no-drag;
   cursor: default;
   transition: background-color 0.12s ease, color 0.12s ease;
 }

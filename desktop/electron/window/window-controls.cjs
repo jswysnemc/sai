@@ -22,9 +22,10 @@ function sanitizeAppearance(appearance) {
  * @param {WebContents|null} controls 窗口按钮页面；macOS 为 null
  * @param {string} origin Sai 后端源地址
  * @param {object} chrome 顶行布局接口
+ * @param {Function} [syncControlsBackground] 按纸色刷新按钮视图底色；Windows 必须不透明才能命中
  * @returns {Function} 主窗口销毁时调用的清理函数
  */
-function installControls(window, workbench, controls, origin, chrome) {
+function installControls(window, workbench, controls, origin, chrome, syncControlsBackground = () => {}) {
   let appearance = {};
   const ownedControls = (event) => Boolean(controls) && event.sender === controls
     && event.senderFrame === controls.mainFrame;
@@ -64,6 +65,7 @@ function installControls(window, workbench, controls, origin, chrome) {
     if (!ownedWorkbench(event)) return;
     appearance = sanitizeAppearance(colors);
     if (/^#[\da-f]{6}$/i.test(appearance.paper || '')) window.setBackgroundColor(appearance.paper);
+    syncControlsBackground(appearance.paper);
     publish();
   };
   const receiveChrome = (event, metrics) => {

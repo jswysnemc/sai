@@ -17,3 +17,19 @@ html[data-desktop] :is(.chat-header, .workspace-tab-bar, .settings-topbar, .side
 html[data-desktop] :is([role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"], [role="tooltip"], [data-radix-popper-content-wrapper]) {
   -webkit-app-region: no-drag;
 }
+
+/*
+ * Windows 顶层窗口的 WM_NCHITTEST 会把整条拖动区判成 HTCAPTION，
+ * 盖住右上角的最小化、最大化、关闭。这块区域从拖动区里挖掉，点击才能落到按钮视图。
+ * 高度与按钮视图相同，宽度随外壳写入的让位值；变量未到之前先按按钮总宽占位。
+ */
+html[data-desktop="win32"] .desktop-caption-shield {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 25;
+  width: var(--desktop-inset-right, 8.625rem);
+  height: var(--toolbar-height, 2rem);
+  -webkit-app-region: no-drag;
+  background: transparent;
+}

@@ -95,6 +95,20 @@ pub(super) fn apply_delta<W: Write>(
     }
     // 3. 追加新行：屏幕未满时直接写入，满后用真实终端滚动保留原生 scrollback
     let outcome = append_lines_to(output, previous_viewport, viewport, append)?;
+    // 4. 没有追加时，最后一条修补行可能写满整行，恢复自动换行前先钉住光标
+    if append.is_empty() {
+        if let Some((row, line)) = patches.last() {
+            if let Some(screen_row) = screen_row_for(previous_viewport, old_total, *row, offscreen)
+            {
+                crate::render::terminal_rows::park_if_full_line(
+                    output,
+                    screen_row,
+                    previous_viewport.size().cols,
+                    line.as_str(),
+                )?;
+            }
+        }
+    }
     queue!(output, Print(ENABLE_AUTOWRAP))?;
     Ok(outcome)
 }
@@ -158,6 +172,16 @@ fn replay_lines_to<W: Write>(
         )?;
         painted += 1;
     }
+    if let Some(line) = lines[visible_start..].last() {
+        crate::render::terminal_rows::park_if_full_line(
+            output,
+            viewport
+                .origin_row()
+                .saturating_add(painted.saturating_sub(1) as u16),
+            viewport.size().cols,
+            line.as_str(),
+        )?;
+    }
     queue!(output, Print(ENABLE_AUTOWRAP))?;
     Ok(painted)
 }
@@ -198,6 +222,12 @@ fn append_lines_to<W: Write>(
         )?;
     }
     if direct_line_count == lines.len() {
+        park_last_appended_line(
+            output,
+            lines,
+            previous_top.saturating_add(direct_line_count.saturating_sub(1) as u16),
+            previous_viewport.size().cols,
+        )?;
         return Ok(AppendOutcome { scrolled_rows: 0 });
     }
 
@@ -213,12 +243,41 @@ fn append_lines_to<W: Write>(
             Print(line.as_str())
         )?;
     }
+    park_last_appended_line(
+        output,
+        lines,
+        composer_top.saturating_sub(1),
+        previous_viewport.size().cols,
+    )?;
     Ok(AppendOutcome {
         scrolled_rows: lines
             .len()
             .saturating_sub(direct_line_count)
             .min(u16::MAX as usize) as u16,
     })
+}
+
+/// 追加结束后，若最后一行写满可见宽度，则把光标钉回行尾。
+///
+/// 参数:
+/// - `output`: 当前帧缓冲
+/// - `lines`: 本次追加的行
+/// - `row`: 最后一行的屏幕行号
+/// - `cols`: 可见列数
+///
+/// 返回:
+/// - 写入结果
+fn park_last_appended_line<W: Write>(
+    output: &mut W,
+    lines: &[AnsiLine],
+    row: u16,
+    cols: u16,
+) -> Result<()> {
+    let Some(line) = lines.last() else {
+        return Ok(());
+    };
+    crate::render::terminal_rows::park_if_full_line(output, row, cols, line.as_str())?;
+    Ok(())
 }
 
 #[cfg(test)]
