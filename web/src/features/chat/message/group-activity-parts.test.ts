@@ -3,10 +3,10 @@ import type { LiveMessagePart } from "../run-event-reducer";
 import { collectWaveSecrets, collectWaveTools, countWorkItems, groupActivityParts } from "./group-activity-parts";
 import type { ToolLifecycle } from "../run-event-reducer";
 
-function tool(id: string): LiveMessagePart {
+function tool(id: string, name = "read_file"): LiveMessagePart {
   const lifecycle: ToolLifecycle = {
     id,
-    name: "read_file",
+    name,
     argumentsPreview: "",
     arguments: "{}",
     progress: "",
@@ -113,8 +113,44 @@ describe("groupActivityParts", () => {
   it("counts reasoning segments and tools", () => {
     const segments = groupActivityParts([reasoning("r1"), tool("t1"), tool("t2")]);
     if (segments[0].type !== "preamble") throw new Error("expected preamble");
-    expect(countWorkItems(segments[0].items)).toEqual({ reasoning: 1, tools: 2 });
+    expect(countWorkItems(segments[0].items)).toEqual({
+      reasoning: 1,
+      tools: 2,
+      read: 2,
+      write: 0,
+      command: 0,
+      other: 0
+    });
     expect(collectWaveTools(segments[0].items).map((part) => part.id)).toEqual(["t1", "t2"]);
+  });
+
+  it("按用途拆分工具计数", () => {
+    const segments = groupActivityParts([
+      reasoning("r1"),
+      tool("t1", "read_file"),
+      tool("t2", "grep"),
+      tool("t3", "write_file"),
+      tool("t4", "str_replace"),
+      tool("t5", "run_command"),
+      tool("t6", "subagent")
+    ]);
+    if (segments[0].type !== "preamble") throw new Error("expected preamble");
+    expect(countWorkItems(segments[0].items)).toEqual({
+      reasoning: 1,
+      tools: 6,
+      read: 2,
+      write: 2,
+      command: 1,
+      other: 1
+    });
+  });
+
+  it("background_command 视为命令类", () => {
+    const segments = groupActivityParts([
+      tool("t1", "background_command")
+    ]);
+    if (segments[0].type !== "preamble") throw new Error("expected preamble");
+    expect(countWorkItems(segments[0].items).command).toBe(1);
   });
 });
 
@@ -127,7 +163,14 @@ describe("blank text between work rounds", () => {
     ]);
     expect(segments.map((segment) => segment.type)).toEqual(["preamble", "part"]);
     const preamble = segments[0];
-    expect(preamble.type === "preamble" && countWorkItems(preamble.items)).toEqual({ reasoning: 3, tools: 2 });
+    expect(preamble.type === "preamble" && countWorkItems(preamble.items)).toEqual({
+      reasoning: 3,
+      tools: 2,
+      read: 2,
+      write: 0,
+      command: 0,
+      other: 0
+    });
     expect(preamble.type === "preamble" && preamble.followedByText).toBe(true);
   });
 

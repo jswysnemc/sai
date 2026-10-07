@@ -72,23 +72,82 @@ export function groupActivityParts(parts: LiveMessagePart[]): MessageSegment[] {
   return segments;
 }
 
+/** 工具按用途的粗分类，用于折叠态摘要的「写入 N · 读取 M」式描述。 */
+export type WorkItemCounts = {
+  reasoning: number;
+  tools: number;
+  read: number;
+  write: number;
+  command: number;
+  other: number;
+};
+
+/** 读类工具：查看文件、检索、搜索网络 */
+const READ_TOOLS = new Set([
+  "read_file",
+  "grep",
+  "glob",
+  "web_fetch",
+  "web_search",
+  "ssh_list_hosts"
+]);
+
+/** 写类工具：新建、修改、删除文件 */
+const WRITE_TOOLS = new Set([
+  "write_file",
+  "str_replace",
+  "edit_file",
+  "trash_path",
+  "ssh_upload_file"
+]);
+
+/** 命令类工具：执行 shell、管理后台任务 */
+const COMMAND_TOOLS = new Set([
+  "run_command",
+  "background_command",
+  "ssh_run_command"
+]);
+
 /**
- * 统计工作组里的思考段与工具调用数。
+ * 按工具名归类为读 / 写 / 命令 / 其他。
+ *
+ * @param name 工具名
+ * @returns 类别
+ */
+function classifyTool(name: string): "read" | "write" | "command" | "other" {
+  if (READ_TOOLS.has(name)) return "read";
+  if (WRITE_TOOLS.has(name)) return "write";
+  if (COMMAND_TOOLS.has(name) || name.includes("background_command")) return "command";
+  return "other";
+}
+
+/**
+ * 统计工作组里的思考段与工具调用数，并按用途拆分。
  *
  * @param items 工作组条目
- * @returns 思考段数与工具数
+ * @returns 思考段数、工具总数与按用途分类的计数
  */
-export function countWorkItems(items: WorkItem[]): { reasoning: number; tools: number } {
-  let reasoning = 0;
-  let tools = 0;
+export function countWorkItems(items: WorkItem[]): WorkItemCounts {
+  const counts: WorkItemCounts = {
+    reasoning: 0,
+    tools: 0,
+    read: 0,
+    write: 0,
+    command: 0,
+    other: 0
+  };
   for (const item of items) {
     if (item.kind === "reasoning") {
-      reasoning += 1;
+      counts.reasoning += 1;
       continue;
     }
-    tools += item.parts.filter((part) => part.type === "tool").length;
+    for (const part of item.parts) {
+      if (part.type !== "tool") continue;
+      counts.tools += 1;
+      counts[classifyTool(part.tool.name)] += 1;
+    }
   }
-  return { reasoning, tools };
+  return counts;
 }
 
 /**
