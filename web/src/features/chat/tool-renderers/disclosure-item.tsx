@@ -32,8 +32,10 @@ export function DisclosureItem({ title, meta, children, defaultOpen = false, laz
   const expandable = children !== undefined && children !== null && children !== false;
   const head = (
     <>
-      <ChevronRight size={12} className={`disclosure-item-chevron${open ? " is-open" : ""}${expandable ? "" : " is-hidden"}`} aria-hidden="true" />
-      <strong className="disclosure-item-title">{title}</strong>
+      <span className="icon-label disclosure-item-lead">
+        <ChevronRight size={12} className={`disclosure-item-chevron${open ? " is-open" : ""}${expandable ? "" : " is-hidden"}`} aria-hidden="true" />
+        <strong className="disclosure-item-title">{title}</strong>
+      </span>
       {meta ? <span className="disclosure-item-meta">{meta}</span> : null}
     </>
   );

@@ -50,8 +50,9 @@
 .file-tree-embedded .tree-row.active:focus-within .tree-row-actions { background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ink) 8%, var(--sidebar-surface)) 0.7rem); }
 .tree-row-actions button { display: grid; width: 1.25rem; height: 1.25rem; padding: 0; place-items: center; border: 0; border-radius: var(--radius-1); background: transparent; color: var(--ink-soft); }
 .tree-row-actions button:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
-.tree-row { position: relative; display: grid; grid-template-columns: 12px 14px minmax(0, 1fr) auto; align-items: center; gap: 0.2rem; width: 100%; height: 22px; padding-right: 0.5rem; overflow: hidden; border: 0; border-radius: 0; background: transparent; color: var(--ink); font-size: var(--text-xs); text-align: left; white-space: nowrap; }
-.tree-row::before { content: ""; position: absolute; z-index: 0; inset: 1px 0.25rem; border-radius: var(--radius-2); background: transparent; pointer-events: none; }
+.tree-row { position: relative; isolation: isolate; display: grid; grid-template-columns: 12px 14px minmax(0, 1fr) auto; align-items: center; gap: 0.2rem; width: 100%; height: 22px; padding-right: 0.5rem; overflow: hidden; border: 0; border-radius: 0; background: transparent; color: var(--ink); font-size: var(--text-xs); text-align: left; white-space: nowrap; }
+/* 胶囊沉到行底，树线画在它上面；选中/悬停时加深树线，避免与 --line 撞色 */
+.tree-row::before { content: ""; position: absolute; z-index: -1; inset: 1px 0.25rem; border-radius: var(--radius-2); background: transparent; pointer-events: none; }
 .file-tree-embedded .tree-row { padding-right: 1rem; }
 .file-tree-embedded .tree-row::before { inset: 1px 0.625rem; }
 .tree-row > :not(.tree-guides) { position: relative; z-index: 1; }
@@ -80,8 +81,14 @@
 .file-tree-selection-bar button.danger:hover { color: var(--danger); }
 .tree-row.drop-target::before { background: color-mix(in srgb, var(--signal) 16%, var(--paper)); }
 .tree-row:focus { outline: none; }
-.tree-guides { position: absolute; z-index: 1; inset: 0; pointer-events: none; }
-.tree-guides span { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.tree-guides { position: absolute; z-index: 2; inset: 0; pointer-events: none; }
+.tree-guides span { position: absolute; z-index: 2; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.tree-row:hover .tree-guides span,
+.tree-row.focused .tree-guides span,
+.tree-row.active .tree-guides span,
+.tree-row.multi-selected .tree-guides span {
+  background: color-mix(in srgb, var(--ink) 28%, transparent);
+}
 .tree-chevron,
 .tree-chevron-spacer { width: 12px; height: 12px; color: var(--ink-soft); }
 .tree-row-name { overflow: hidden; text-overflow: ellipsis; }

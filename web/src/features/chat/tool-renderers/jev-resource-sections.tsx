@@ -56,7 +56,7 @@ function ResourceList({
   return (
     <section>
       <h3>{title}</h3>
-      <ul className="jev-context-list">
+      <ul className="disclosure-list">
         {items.map((item) => (
           <DisclosureItem key={`${item.kind}:${item.name}`} title={item.name} meta={detailLabel(item) || undefined} lazy>
             {item.kind === "tool" ? <JevToolDetail item={item} /> : <JevSkillDetail item={item} />}
@@ -79,7 +79,7 @@ function ContextList({ title, items }: { title: string; items: JevInjectedContex
   return (
     <section>
       <h3>{title}</h3>
-      <ul className="jev-context-list">
+      <ul className="disclosure-list">
         {items.map((item, index) => {
           const name = item.kind === "memory"
             ? t("Memory context", "记忆上下文")

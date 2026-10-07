@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LiveMessagePart } from "../run-event-reducer";
-import { collectWaveSecrets, collectWaveTools, countWorkItems, groupActivityParts } from "./group-activity-parts";
+import { collectWaveSecrets, collectWaveTools, countWorkItems, groupActivityParts, splitWaveForEarlyReadFold } from "./group-activity-parts";
 import type { ToolLifecycle } from "../run-event-reducer";
 
 function tool(id: string, name = "read_file"): LiveMessagePart {
@@ -178,5 +178,87 @@ describe("blank text between work rounds", () => {
     const segments = groupActivityParts([reasoning("r1"), tool("t1"), blank("b1")]);
     expect(segments).toHaveLength(1);
     expect(segments[0].type === "preamble" && segments[0].followedByText).toBe(false);
+  });
+});
+
+describe("splitWaveForEarlyReadFold", () => {
+  /**
+   * 构造测试用的工具部件。
+   *
+   * @param id 部件标识
+   * @param name 工具名
+   * @param status 生命周期状态
+   * @returns 工具部件
+   */
+  function toolWavePart(id: string, name: string, status: ToolLifecycle["status"]) {
+    return {
+      id,
+      type: "tool" as const,
+      tool: {
+        id,
+        name,
+        argumentsPreview: "",
+        arguments: "",
+        progress: "",
+        output: "",
+        status
+      }
+    };
+  }
+
+  it("连续已完成读取提前收成一组", () => {
+    const segments = splitWaveForEarlyReadFold([
+      toolWavePart("a", "read_file", "completed"),
+      toolWavePart("b", "read_file", "completed"),
+      toolWavePart("c", "read_file", "completed")
+    ]);
+    expect(segments).toEqual([
+      { kind: "readFold", parts: [expect.objectContaining({ id: "a" }), expect.objectContaining({ id: "b" }), expect.objectContaining({ id: "c" })] }
+    ]);
+  });
+
+  it("单独一条已完成读取且下一条读取仍在执行时也提前折叠", () => {
+    const segments = splitWaveForEarlyReadFold([
+      toolWavePart("a", "read_file", "completed"),
+      toolWavePart("b", "read_file", "running")
+    ]);
+    expect(segments.map((item) => item.kind)).toEqual(["readFold", "cards"]);
+    expect(segments[0]?.parts.map((part) => part.id)).toEqual(["a"]);
+    expect(segments[1]?.parts.map((part) => part.id)).toEqual(["b"]);
+  });
+
+  it("单独一条已完成读取且后面不是读取时仍逐条展示", () => {
+    const segments = splitWaveForEarlyReadFold([
+      toolWavePart("a", "read_file", "completed"),
+      toolWavePart("b", "write_file", "completed")
+    ]);
+    expect(segments).toHaveLength(1);
+    expect(segments[0]?.kind).toBe("cards");
+    expect(segments[0]?.parts.map((part) => part.id)).toEqual(["a", "b"]);
+  });
+
+  it("写入打断连续读取折叠", () => {
+    const segments = splitWaveForEarlyReadFold([
+      toolWavePart("a", "read_file", "completed"),
+      toolWavePart("b", "read_file", "completed"),
+      toolWavePart("c", "write_file", "completed"),
+      toolWavePart("d", "read_file", "completed"),
+      toolWavePart("e", "grep", "completed")
+    ]);
+    expect(segments.map((item) => item.kind)).toEqual(["readFold", "cards", "readFold"]);
+    expect(segments[0]?.parts.map((part) => part.id)).toEqual(["a", "b"]);
+    expect(segments[1]?.parts.map((part) => part.id)).toEqual(["c"]);
+    expect(segments[2]?.parts.map((part) => part.id)).toEqual(["d", "e"]);
+  });
+
+  it("失败的读取不并入折叠组", () => {
+    const segments = splitWaveForEarlyReadFold([
+      toolWavePart("a", "read_file", "completed"),
+      toolWavePart("b", "read_file", "failed"),
+      toolWavePart("c", "read_file", "completed")
+    ]);
+    expect(segments).toHaveLength(1);
+    expect(segments[0]?.kind).toBe("cards");
+    expect(segments[0]?.parts.map((part) => part.id)).toEqual(["a", "b", "c"]);
   });
 });

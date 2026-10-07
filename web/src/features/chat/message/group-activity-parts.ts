@@ -115,10 +115,92 @@ const COMMAND_TOOLS = new Set([
  * @returns 类别
  */
 function classifyTool(name: string): "read" | "write" | "command" | "other" {
-  if (READ_TOOLS.has(name)) return "read";
+  if (isReadToolName(name)) return "read";
   if (WRITE_TOOLS.has(name)) return "write";
   if (COMMAND_TOOLS.has(name) || name.includes("background_command")) return "command";
   return "other";
+}
+
+/**
+ * 判断工具是否属于读类。
+ *
+ * @param name 工具名
+ * @returns 读类返回 true
+ */
+export function isReadToolName(name: string): boolean {
+  return READ_TOOLS.has(name);
+}
+
+export type WaveRenderSegment =
+  | { kind: "cards"; parts: WavePart[] }
+  | { kind: "readFold"; parts: ToolPart[] };
+
+/**
+ * 判断读类工具是否已完成、可以提前收进紧凑组。
+ *
+ * 失败项默认展开，不并入折叠组。
+ *
+ * @param part 工作波次部件
+ * @returns 可提前折叠时为 true
+ */
+function isFoldableRead(part: WavePart): part is ToolPart {
+  return part.type === "tool"
+    && isReadToolName(part.tool.name)
+    && part.tool.status === "completed";
+}
+
+/**
+ * 把连续已完成的读类工具提前收成紧凑组，其余仍逐条展示。
+ *
+ * 工作组展开时不要等整波结束才折叠：已完成的连续读取立刻收起，
+ * 当前仍在执行的那一条继续展开。单独一条已完成读取、下一条读取仍在执行时也会提前收起。
+ *
+ * @param parts 一轮工具/权限部件
+ * @returns 逐条卡片与提前折叠组交替排列
+ */
+export function splitWaveForEarlyReadFold(parts: readonly WavePart[]): WaveRenderSegment[] {
+  const segments: WaveRenderSegment[] = [];
+  let cards: WavePart[] = [];
+
+  /**
+   * 把累积的逐条卡片冲进结果。
+   *
+   * @returns 无
+   */
+  const flushCards = () => {
+    if (cards.length === 0) return;
+    segments.push({ kind: "cards", parts: cards });
+    cards = [];
+  };
+
+  let index = 0;
+  while (index < parts.length) {
+    const part = parts[index];
+    if (!isFoldableRead(part)) {
+      cards.push(part);
+      index += 1;
+      continue;
+    }
+    // 1. 收集连续已完成读取
+    const run: ToolPart[] = [];
+    while (index < parts.length && isFoldableRead(parts[index])) {
+      run.push(parts[index] as ToolPart);
+      index += 1;
+    }
+    const next = parts[index];
+    const nextIsActiveRead = next?.type === "tool"
+      && isReadToolName(next.tool.name)
+      && (next.tool.status === "preparing" || next.tool.status === "running");
+    // 2. 两条及以上直接折叠；单独一条且下一条读取仍在执行时也提前收起
+    if (run.length >= 2 || (run.length === 1 && nextIsActiveRead)) {
+      flushCards();
+      segments.push({ kind: "readFold", parts: run });
+      continue;
+    }
+    cards.push(...run);
+  }
+  flushCards();
+  return segments;
 }
 
 /**

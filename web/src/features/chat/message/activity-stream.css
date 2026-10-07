@@ -136,6 +136,22 @@
   gap: var(--space-3xs);
 }
 
+.read-fold {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-3xs);
+}
+
+.read-fold.is-open > .activity-preamble-head > svg {
+  transform: rotate(90deg);
+}
+
+.read-fold-body {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-3xs);
+}
+
 @keyframes tool-wave-in {
   from {
     opacity: 0;

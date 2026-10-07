@@ -85,6 +85,8 @@ describe("LoadToolView", () => {
     const html = renderToStaticMarkup(<LoadToolView result={result} />);
     expect(html).toContain("drawio");
     expect(html).toContain("Draw diagrams with draw.io");
+    expect(html).toContain("icon-label");
+    expect(html).toContain("disclosure-list");
     expect(html).toContain("此前已加载");
     expect(html).toContain('aria-expanded="false"');
     // 正文已渲染进折叠容器，展开时无需再请求

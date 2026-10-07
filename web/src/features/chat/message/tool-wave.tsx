@@ -1,7 +1,8 @@
 import { ToolLifecycleCard } from "../tool-lifecycle-card";
 import { PermissionRequestCard } from "../../permission/permission-request-card";
 import { SshSecretCard } from "../../ssh/ssh-secret-card";
-import type { WavePart } from "./group-activity-parts";
+import { splitWaveForEarlyReadFold, type WavePart } from "./group-activity-parts";
+import { ReadFold } from "./read-fold";
 import "./activity-stream.css";
 
 /**
@@ -43,26 +44,11 @@ export function ToolWave({
   if (!carousel) {
     return (
       <div className="tool-wave-stack">
-        {parts.map((part) => {
-          if (part.type === "tool") return <ToolLifecycleCard key={part.id} tool={part.tool} />;
-          if (part.type === "permission") {
-            return (
-              <PermissionRequestCard
-                key={part.id}
-                request={part.request}
-                decision={part.decision}
-                active={Boolean(live)}
-              />
-            );
+        {splitWaveForEarlyReadFold(parts).map((segment) => {
+          if (segment.kind === "readFold") {
+            return <ReadFold key={`${segment.parts[0]?.id}-${segment.parts[segment.parts.length - 1]?.id}`} parts={segment.parts} />;
           }
-          return (
-            <SshSecretCard
-              key={part.id}
-              request={part.request}
-              resolved={part.resolved}
-              active={Boolean(live)}
-            />
-          );
+          return segment.parts.map((part) => renderWavePart(part, live));
         })}
       </div>
     );
@@ -93,5 +79,34 @@ export function ToolWave({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * 渲染波次中的单条工具、权限或 SSH 输入卡。
+ *
+ * @param part 波次部件
+ * @param live 是否处于实时运行
+ * @returns 对应卡片
+ */
+function renderWavePart(part: WavePart, live?: boolean) {
+  if (part.type === "tool") return <ToolLifecycleCard key={part.id} tool={part.tool} />;
+  if (part.type === "permission") {
+    return (
+      <PermissionRequestCard
+        key={part.id}
+        request={part.request}
+        decision={part.decision}
+        active={Boolean(live)}
+      />
+    );
+  }
+  return (
+    <SshSecretCard
+      key={part.id}
+      request={part.request}
+      resolved={part.resolved}
+      active={Boolean(live)}
+    />
   );
 }

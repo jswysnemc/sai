@@ -31,6 +31,8 @@ describe("JevCapabilityView", () => {
     expect(html).toContain("web_search");
     expect(html).toContain("Search the web.");
     expect(html).toContain("drawio");
+    expect(html).toContain("icon-label");
+    expect(html).toContain("disclosure-list");
     expect(html).toContain("新暴露");
     expect(html).not.toContain("secret_schema_field");
     expect(html).not.toContain("SKILL_DOCUMENT_BODY");

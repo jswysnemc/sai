@@ -30,7 +30,7 @@ describe("HistoryTurn", () => {
     expect(html).toContain("已拒绝");
     expect(html).toContain("保留文件");
     expect(html).toContain("处理过程");
-    expect(html).toContain("工具 1");
+    expect(html).toContain("写入 1");
   });
 
   it("shows the Jev preselect before the tool overview without schemas", () => {
@@ -63,7 +63,7 @@ describe("HistoryTurn", () => {
     const html = renderWithProviders(<HistoryTurn turn={turn} />);
 
     expect(html).not.toContain("发送前");
-    expect(html).toContain("处理过程 · 工具 1");
+    expect(html).toContain("处理过程 · 读取 1");
     expect(html.indexOf("选用了 1 个工具和 1 个 Skill")).toBeGreaterThan(-1);
     expect(html.indexOf("选用了")).toBeLessThan(html.indexOf("处理过程"));
     expect(html).not.toContain("schema_marker_hidden");
@@ -102,7 +102,7 @@ describe("HistoryTurn", () => {
     const html = renderWithProviders(<HistoryTurn turn={turn} />);
 
     expect(html).toContain("处理过程");
-    expect(html).toContain("工具 2");
+    expect(html).toContain("读取 2");
     expect(html).not.toContain("src/a.rs");
     expect(html).not.toContain("src/b.rs");
     expect(html).not.toContain("tool-wave-stack");

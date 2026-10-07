@@ -1,13 +1,32 @@
+/*
+ * 折叠条目：固定高度行外层居中，箭头与名称包在 .icon-label 里走光学中线。
+ * 同一列表用 subgrid 共用「名称 | 说明」两列，避免短名被 7rem 下限撑开、长名把说明挤偏。
+ */
 .disclosure-item {
   display: grid;
   min-width: 0;
 }
 
-.disclosure-item-head {
+.disclosure-list {
   display: grid;
-  grid-template-columns: 0.75rem minmax(7rem, max-content) minmax(0, 1fr);
-  gap: var(--space-xs);
-  align-items: baseline;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  column-gap: var(--space-sm);
+  row-gap: var(--space-2xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.disclosure-list > .disclosure-item {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.disclosure-item-head {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
   width: 100%;
   min-height: 1.5rem;
   padding: 0 var(--space-2xs);
@@ -17,6 +36,18 @@
   color: var(--ink);
   font: 400 var(--text-sm)/1.45 var(--font-ui);
   text-align: left;
+}
+
+.disclosure-list > .disclosure-item > .disclosure-item-head {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  column-gap: 0;
+  row-gap: var(--space-2xs);
+}
+
+.disclosure-list > .disclosure-item > .ui-collapse {
+  grid-column: 1 / -1;
 }
 
 button.disclosure-item-head {
@@ -32,8 +63,13 @@ button.disclosure-item-head:focus-visible {
   outline-offset: 1px;
 }
 
+.disclosure-item-lead {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .disclosure-item-chevron {
-  align-self: center;
   color: var(--ink-soft);
   transition: transform 120ms ease;
 }
@@ -55,10 +91,12 @@ button.disclosure-item-head:focus-visible {
 }
 
 .disclosure-item-meta {
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   color: var(--ink-soft);
   font-size: var(--text-xs);
+  line-height: 1.45;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -81,12 +119,17 @@ button.disclosure-item-head:focus-visible {
 }
 
 @media (max-width: 40rem) {
+  .disclosure-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .disclosure-item-head {
-    grid-template-columns: 0.75rem minmax(0, 1fr);
+    flex-wrap: wrap;
   }
 
   .disclosure-item-meta {
-    grid-column: 2;
+    flex: 1 1 100%;
+    padding-left: calc(0.75rem + var(--space-xs));
   }
 
   .disclosure-item-body {

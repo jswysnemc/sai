@@ -20,8 +20,6 @@
 }
 
 .load-tool ul {
-  display: grid;
-  gap: var(--space-2xs);
   list-style: none;
 }
 

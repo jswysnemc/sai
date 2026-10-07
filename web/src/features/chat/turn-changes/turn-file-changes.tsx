@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Copy, FileDiff, FileText, FolderSearch, PanelRightOpen, RotateCcw } from "../../../shared/ui/icons";
 import { api } from "../../../api/client";
@@ -8,6 +9,7 @@ import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import type { TurnFileChange } from "./collect-turn-file-changes";
 import { buildTurnDiffSource, type DiffSourceTool } from "./build-turn-diff-source";
 import { openWorkspaceDiff } from "../../workspace/workspace-passive-diff";
+import { formatDisplayPath } from "../../workspace/workspace-path-utils";
 import { FileTypeIcon } from "../../../shared/ui/file-icon";
 import "./turn-file-changes.css";
 
@@ -41,6 +43,9 @@ export function TurnFileChanges({
 }: TurnFileChangesProps) {
   const { t } = useI18n();
   const confirm = useConfirm();
+  // 1. 读取当前工作区根路径，工作区内改动只展示相对目录
+  const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list, staleTime: 30_000 });
+  const workspacePath = workspaces.data?.workspaces.find((item) => item.id === workspaces.data?.active_id)?.path ?? "";
   // 仅允许同时展开一个文件，避免多文件 diff 一股脑铺开
   const [activePath, setActivePath] = useState<string | null>(null);
   const [filesCollapsed, setFilesCollapsed] = useState(false);
@@ -227,6 +232,7 @@ export function TurnFileChanges({
         <ul className="turn-file-changes-list">
           {changes.map((change) => {
             const expanded = activePath === change.path;
+            const display = turnFileDisplayParts(change.path, workspacePath);
             return (
               <li key={`${change.tool}:${change.path}`} className={expanded ? "is-expanded" : ""}>
                 <div
@@ -241,19 +247,20 @@ export function TurnFileChanges({
                     aria-expanded={expanded}
                   >
                     <span className="turn-file-path" title={change.path}>
-                      <FileTypeIcon name={change.path} size={14} />
-                      <span className="turn-file-name">{fileName(change.path)}</span>
-                      {fileDirectory(change.path) && <span className="turn-file-directory">{fileDirectory(change.path)}</span>}
-                    </span>
-                    {/* 非常规修改（新增/删除/重命名）值得直接标出，默认修改不占位 */}
-                    {change.action !== "Edited" && (
-                      <span className={`turn-file-action is-${change.action.toLowerCase()}`}>
-                        {actionLabel(change.action, t)}
+                      <span className="turn-file-icon">
+                        <FileTypeIcon name={change.path} size={14} />
                       </span>
-                    )}
+                      <span className="turn-file-name">{display.name}</span>
+                      {display.directory ? <span className="turn-file-directory">{display.directory}</span> : null}
+                      {change.action !== "Edited" ? (
+                        <span className={`turn-file-action is-${change.action.toLowerCase()}`}>
+                          {actionLabel(change.action, t)}
+                        </span>
+                      ) : null}
+                    </span>
                     <span className="turn-file-changes-stats">
-                      {change.added > 0 && <b>+{change.added}</b>}
-                      {change.removed > 0 && <i>-{change.removed}</i>}
+                      <b>{change.added > 0 ? `+${change.added}` : null}</b>
+                      <i>{change.removed > 0 ? `-${change.removed}` : null}</i>
                     </span>
                     <ChevronDown size={14} className={expanded ? "rotate" : ""} aria-hidden />
                   </button>
@@ -350,6 +357,18 @@ function actionLabel(action: string, t: (en: string, zh: string) => string): str
   if (action === "Deleted") return t("Deleted", "删除");
   if (action === "Renamed") return t("Renamed", "重命名");
   return t("Edited", "修改");
+}
+
+/**
+ * 把改动路径拆成文件名与目录；工作区内只保留相对路径。
+ *
+ * @param path 原始路径
+ * @param workspacePath 当前工作区根路径
+ * @returns 展示用的文件名与目录
+ */
+export function turnFileDisplayParts(path: string, workspacePath = ""): { name: string; directory: string } {
+  const display = formatDisplayPath(path, workspacePath) || path;
+  return { name: fileName(display), directory: fileDirectory(display) };
 }
 
 /**

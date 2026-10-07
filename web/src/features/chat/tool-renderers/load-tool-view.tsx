@@ -26,7 +26,7 @@ export function LoadToolView({ result }: LoadToolViewProps) {
       <div className="load-tool">
         <h3>{result.kind === "skill" ? "Skills" : t("Tool schemas", "工具 Schema")}</h3>
         {empty ? <p className="load-tool-empty">{t("Nothing was loaded.", "没有加载任何内容。")}</p> : null}
-        <ul>
+        <ul className="disclosure-list">
           {result.kind === "skill"
             ? result.items.map((skill) => <SkillItem key={skill.name} skill={skill} />)
             : result.items.map((tool) => <ToolItem key={tool.name} tool={tool} />)}

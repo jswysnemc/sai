@@ -35,38 +35,7 @@
 }
 
 .jev-capability ul {
-  display: grid;
-  gap: var(--space-2xs);
   list-style: none;
-}
-
-.jev-capability li {
-  display: grid;
-  grid-template-columns: minmax(7rem, max-content) minmax(0, 1fr);
-  gap: var(--space-sm);
-  align-items: baseline;
-  min-height: 24px;
-  font-size: var(--text-sm);
-}
-
-.jev-capability li strong {
-  font-weight: 500;
-}
-
-.jev-capability li span {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--ink-soft);
-  font-size: var(--text-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 可展开的片段与记忆条目自带行布局，不套用名单的两列网格 */
-.jev-capability li.disclosure-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  min-height: 0;
 }
 
 /* 工具与 Skill 展开详情：说明、参数表与 Skill 正文 */
