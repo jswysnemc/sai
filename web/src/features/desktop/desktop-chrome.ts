@@ -1,6 +1,9 @@
 import { rowInset, type DesktopReserve } from "./desktop-chrome-insets";
 import "./desktop-chrome.css";
 
+// ===== 新增 import =====
+import { needsCaptionHitHole } from "./desktop-chrome-insets";
+
 /** 可能贴着窗口顶端的顶行；与桌面预加载脚本的拖动区保持一致。 */
 const TOP_ROWS = ".chat-header, .workspace-tab-bar, .settings-topbar, .sidebar-heading";
 /** 记录元素原始内边距的数据键，恢复时使用。 */
@@ -116,6 +119,7 @@ export function enableDesktopChrome(): () => void {
  * @returns 停止监听的清理函数
  */
 function start(root: HTMLElement): () => void {
+  const removeShield = mountCaptionShield(root);
   let timer = 0;
   // 1. 用定时器合并重算：嵌入视图在后台或未合成时 requestAnimationFrame 可能不触发，
   //    首帧卡住会让之后的重算全部被跳过，窗口按钮因此压在顶行控件上
@@ -144,9 +148,25 @@ function start(root: HTMLElement): () => void {
   return () => {
     if (timer) window.clearTimeout(timer);
     observer.disconnect();
+    removeShield();
     rootObserver.disconnect();
     resize.disconnect();
     window.removeEventListener("resize", onResize);
     document.removeEventListener("transitionend", schedule, true);
   };
+}
+
+/**
+ * 在 Windows 右上角放一块不可拖动的区域，避免标题栏按钮被当成窗口拖动。
+ *
+ * @param root 文档根节点
+ * @returns 移除该区域的函数
+ */
+function mountCaptionShield(root: HTMLElement): () => void {
+  if (!needsCaptionHitHole(root.dataset.desktop ?? "") || !document.body) return () => {};
+  const shield = document.createElement("div");
+  shield.className = "desktop-caption-shield";
+  shield.setAttribute("aria-hidden", "true");
+  document.body.appendChild(shield);
+  return () => shield.remove();
 }

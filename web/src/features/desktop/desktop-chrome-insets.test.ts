@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { rowInset } from "./desktop-chrome-insets";
 
+// ===== 新增 import =====
+import { needsCaptionHitHole } from "./desktop-chrome-insets";
+
 const WINDOWS = { right: 138, left: 0, height: 32 };
 const MAC = { right: 0, left: 78, height: 32 };
 
@@ -19,6 +22,13 @@ describe("desktop chrome row insets", () => {
 
   it("不在窗口顶端的行不受影响", () => {
     expect(rowInset({ left: 300, right: 1280, top: 300, bottom: 332 }, 1280, WINDOWS)).toEqual({ left: 0, right: 0 });
+  });
+
+  it("只有 Windows 需要挖掉标题栏按钮上的拖动区", () => {
+    expect(needsCaptionHitHole("win32")).toBe(true);
+    expect(needsCaptionHitHole("linux")).toBe(false);
+    expect(needsCaptionHitHole("darwin")).toBe(false);
+    expect(needsCaptionHitHole("")).toBe(false);
   });
 
   it("macOS 贴左上角的顶行为红绿灯让位", () => {

@@ -15,6 +15,17 @@ export type RowRect = { left: number; right: number; top: number; bottom: number
 export type RowInset = { left: number; right: number };
 
 /**
+ * Windows 无边框窗口会把顶行拖动区判成标题栏。
+ * 按钮矩形上需要一块不可拖动的区域，点击才能落到窗口按钮上。
+ *
+ * @param platform `documentElement.dataset.desktop` 的值
+ * @returns 是否需要挖掉右上角拖动区
+ */
+export function needsCaptionHitHole(platform: string): boolean {
+  return platform === "win32";
+}
+
+/**
  * 计算顶行元素与窗口按钮重叠的宽度。
  *
  * 只有贴着窗口顶端、且横向覆盖到按钮区域的元素才需要让位；
