@@ -1,6 +1,6 @@
 {
   "name": "sai-desktop",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "private": true,
   "description": "Sai 桌面工作台",
   "desktopName": "sai-desktop.desktop",
