@@ -212,3 +212,32 @@ Sai 的 Web 工作台在**设计系统基建**上已经是开源项目里少见�
   - `web/src/features/chat/chat-page.css`
   - `web/src/features/source-control/diff/file-diff-card.css`
   - `web/src/features/source-control/changes/change-file-list.css`
+
+---
+
+## 十一、整改过程中的更正（2026-10-07 补记）
+
+深入代码后发现本评审中有几条判断不准确，特此更正，避免后续维护者按图索骥返工：
+
+### 已证伪的条目
+
+| 原条目 | 结论 | 证据 |
+|---|---|---|
+| 四.3 文件状态字母（M/A/D）需语义着色 | **已实现** | `web/src/features/source-control/source-control.css` 的 `.git-file-status.tone-{added,deleted,untracked,conflict}` 已用 `--signal/--danger/--ink-soft/--warning` 着色，modified 默认 `--blue` |
+| 四.2 diff 统计 `+N/-N` 需色块化 | **已着色** | `file-diff-card.css` 中 `.git-file-card-stats b/i` 已用 `--diff-added-text/--diff-removed-text`，色条只是进一步优化 |
+| 四.1 Staged/Unstaged/Untracked 分组 | **已实现** | `changes/change-groups.ts` 提供 `groupGitChanges()`，且支持 `untracked_changes` 配置（mixed/separate/hidden） |
+| 八 `.jump-to-bottom` 绝对定位会遮挡 | **误判** | 它是 `.composer-dock` 的子元素，通过 `bottom: calc(100% + 0.35rem)` 把按钮定位在 composer 上方，父级是 sticky，行为正确 |
+| 八 徽章最小字号需锁 11px | **风险过大** | `--text-2xs` 在 220 处使用，密集 UI（徽章、角落标记、命令输出）依赖 10px 保持紧凑，一刀切会撑破布局。如需优化应按场景个案处理 |
+| 三.1 `--chat-column-min: 34rem` | **不该改** | 当前 `min(100%, 52rem)` 是合理的响应式行为，硬塞最小宽度会导致水平滚动 |
+
+### 修正后的真实剩余项
+
+| 优先级 | 条目 | 状态 |
+|---|---|---|
+| P0 | sticky diff 卡片头背景 | **已修复**（commit `ad77d15e`） |
+| P1 | 工具调用折叠摘要升级（"写入 N 个文件 · 读取 M 次"） | 待做，需要改 `tool-renderers` 聚合逻辑与文案规则，工作量大于 CSS 调整 |
+| P2 | 空态引导卡片、运行中工具呼吸动效、Web/TUI 设置语义对齐 | 待做 |
+
+### 教训
+
+下次评审前应先用 `grep` 验证「我以为没做」的条目是否真的没做，再写进文档。
