@@ -4,7 +4,7 @@
   min-width: 0;
   border: 0;
   border-radius: 0;
-  background: transparent;
+  background: var(--paper-raised);
   scroll-margin-top: calc(var(--git-review-summary-height, 5rem) + 0.75rem);
 }
 .git-file-card.is-highlighted .git-file-card-head { background: var(--surface-selected); }
@@ -19,7 +19,7 @@
   padding: 0 0.35rem 0 0.15rem;
   border-bottom: 0;
   border-radius: 0;
-  background: transparent;
+  background: var(--paper-raised);
 }
 .git-file-card.is-collapsed .git-file-card-head { border-bottom: 0; border-radius: 0; }
 .git-file-card-head .git-file-card-toggle { flex: 0 0 1.5rem; width: 1.5rem; height: 1.5rem; min-height: 1.5rem; }
