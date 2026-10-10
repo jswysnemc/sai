@@ -9,12 +9,14 @@ use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 
+mod connection;
 mod environment;
 #[path = "naming.rs"]
 mod naming;
 mod protocol;
 mod runtime;
 
+pub(crate) use connection::McpConnection;
 use environment::{expand_env_map, expand_env_value};
 pub use naming::dynamic_tool_name;
 use protocol::{matches_id, parse_rpc_body, parse_sse_endpoint};

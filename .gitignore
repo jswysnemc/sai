@@ -1,5 +1,6 @@
 /target/
-/docs/
+/docs/*
+!/docs/computer-use.md
 /web/dist/
 /.idea/
 /.vscode/

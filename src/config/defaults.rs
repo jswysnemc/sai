@@ -21,6 +21,7 @@ impl Default for AppConfig {
             context: ContextConfig::default(),
             retry: RetryConfig::default(),
             tools: ToolsConfig::default(),
+            computer_use: super::ComputerUseConfig::default(),
             terminal: TerminalConfig::default(),
             input: InputConfig::default(),
             skills: SkillsConfig::default(),

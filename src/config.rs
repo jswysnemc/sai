@@ -8,6 +8,7 @@ mod app_prompts;
 mod app_validation;
 mod cli_tool_defaults;
 mod cli_tools;
+mod computer_use;
 pub mod defaults;
 mod display;
 mod gateway_defaults;
@@ -39,6 +40,7 @@ mod subagent_models;
 mod tool_whitelist;
 mod web_search;
 
+pub use computer_use::ComputerUseConfig;
 pub use web_search::WebSearchConfig;
 
 #[cfg(test)]

@@ -21,7 +21,7 @@ fn pool() -> &'static Mutex<HashMap<String, Arc<Mutex<PooledClient>>>> {
 ///
 /// 返回:
 /// - 承载 stdio 子进程和网络连接的进程级运行时
-fn mcp_runtime() -> &'static tokio::runtime::Runtime {
+pub(super) fn mcp_runtime() -> &'static tokio::runtime::Runtime {
     MCP_RUNTIME.get_or_init(|| {
         tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)

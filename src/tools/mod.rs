@@ -3,6 +3,7 @@ pub(crate) mod browser;
 mod calculator;
 mod catalog;
 pub(crate) mod command;
+pub(crate) mod computer_use;
 mod configurable_cli_tools;
 mod context;
 pub(crate) mod context_blocks;
@@ -99,6 +100,7 @@ pub fn readable_tool_name(name: &str) -> &str {
         "web_search" => "网页搜索",
         "web_fetch" => "读取网页",
         "browser" => "浏览器",
+        "computer_use" => "桌面操作",
         "fcitx5_input_method_wiki_qurey" => "查询 Fcitx5 Wiki",
         "search_web_images" => "搜索图片",
         "print_image" => "显示图片",
@@ -226,6 +228,7 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     web_fetch::register(&mut registry);
     // 内置浏览器：进程级共享会话，Web 工作台浏览器面板展示同一页面
     browser::register(&mut registry);
+    computer_use::register(&mut registry, &config.computer_use);
     image_generation::register(&mut registry, config, paths);
     trash_path::register(&mut registry);
     configurable_cli_tools::register(&mut registry, config);

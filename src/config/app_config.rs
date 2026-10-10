@@ -34,6 +34,9 @@ pub struct AppConfig {
     pub retry: RetryConfig,
     #[serde(default)]
     pub tools: ToolsConfig,
+    /// 原生桌面操作需要用户显式开启，独立于内置浏览器
+    #[serde(default, skip_serializing_if = "super::computer_use::is_default")]
+    pub computer_use: super::ComputerUseConfig,
     #[serde(default)]
     pub terminal: TerminalConfig,
     #[serde(default)]

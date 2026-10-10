@@ -112,6 +112,7 @@ pub(crate) fn group_for_tool(name: &str) -> &'static str {
         "ssh_list_hosts" | "ssh_run_command" | "ssh_upload_file" | "ssh_download_file" => "ssh",
         "mcp_manager" => "mcp",
         _ if crate::tools::browser::BROWSER_TOOL_NAMES.contains(&name) => "browser",
+        "computer_use" => "computer_use",
         "session_probe" | "agent_probe" | "mesh_send" => "mesh",
         _ if name.starts_with("mcp_") => "mcp",
         _ if name.starts_with("lua__") => "plugins",
@@ -273,6 +274,15 @@ pub(crate) fn group_meta(group: &str) -> ToolGroupMeta {
             hint_en: "Agent drives a local Chromium-based browser over CDP. Open the Browser panel in the Web workbench to watch the same page and take over at any time.",
             hint_zh: "Agent 通过 CDP 驱动本机 Chromium 系浏览器。在 Web 工作台打开「浏览器」面板即可实时查看同一页面并随时接手操作。",
             model_description: "Built-in browser: open pages, read them as an accessibility tree with element refs, click, type, select, press keys, scroll, take screenshots, manage tabs and run page scripts. The user sees the same page live.",
+            settings_path: None,
+        },
+        "computer_use" => ToolGroupMeta {
+            rank: 15,
+            label_en: "Computer Use",
+            label_zh: "桌面操作",
+            hint_en: "Native app automation through cua-driver. Disabled by default; enable computer_use.enabled in Sai configuration and grant the driver's OS permissions. No frontmost-app fallback.",
+            hint_zh: "通过 cua-driver 操作原生应用。默认关闭；需在 Sai 配置中开启 computer_use.enabled，并授予驱动所需的系统权限。不会默认操作前台应用。",
+            model_description: "Native desktop apps: discover apps/windows, inspect accessibility state and window screenshots, then use snapshot-bound element handles or window pixels to click, type, press keys, scroll, drag and set values. Requires explicit user enablement; the built-in browser remains a separate tool.",
             settings_path: None,
         },
         "mcp" => ToolGroupMeta {
