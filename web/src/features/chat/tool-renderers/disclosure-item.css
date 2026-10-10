@@ -10,6 +10,7 @@
 .disclosure-list {
   display: grid;
   grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
+  align-items: baseline;
   column-gap: var(--space-sm);
   row-gap: var(--space-2xs);
   margin: 0;
@@ -21,12 +22,13 @@
   display: grid;
   grid-column: 1 / -1;
   grid-template-columns: subgrid;
+  align-items: baseline;
 }
 
 .disclosure-item-head {
   display: flex;
   gap: var(--space-sm);
-  align-items: center;
+  align-items: baseline;
   width: 100%;
   min-height: 1.5rem;
   padding: 0 var(--space-2xs);
@@ -42,6 +44,7 @@
   display: grid;
   grid-column: 1 / -1;
   grid-template-columns: subgrid;
+  align-items: baseline;
   column-gap: var(--space-sm);
   row-gap: var(--space-2xs);
 }
@@ -81,6 +84,7 @@ button.disclosure-item-head:hover {
   min-width: 0;
   overflow: hidden;
   font-weight: 500;
+  line-height: 1.45;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -98,6 +102,7 @@ button.disclosure-item-head:hover {
 
 .disclosure-item-chevron-slot {
   justify-self: end;
+  align-self: center;
 }
 
 .disclosure-item-body {

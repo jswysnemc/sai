@@ -37,7 +37,8 @@
   line-height: var(--leading-control);
 }
 
-.model-thinking-trigger > svg {
+.model-thinking-trigger > svg,
+.model-thinking-trigger > img {
   display: block;
   flex: 0 0 auto;
 }
@@ -47,11 +48,19 @@
   color: var(--ink);
 }
 
-/* 模型名与推理强度字号不同：统一 line-height 为 1，交给触发器的 align-items:center 对齐字形中线 */
+/* 模型名与推理强度基线对齐包装区 */
+.model-thinking-text {
+  display: inline-flex;
+  align-items: baseline;
+  gap:var(--space-xs);
+  min-width: 0;
+  line-height: 1.35;
+}
+
 .model-thinking-model {
   min-width: 0;
   overflow: hidden;
-  line-height: 1;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -60,7 +69,7 @@
   flex: 0 0 auto;
   color: var(--signal);
   font-size:var(--text-xs);
-  line-height: 1;
+  line-height: 1.35;
 }
 
 /* 待生效模型徽标：运行中点选的新模型下一轮才生效，轻量标注不打断当前轮 */

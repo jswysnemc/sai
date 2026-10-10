@@ -131,7 +131,10 @@ export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
           : t(`${props.selection?.model ?? "No model configured"}, reasoning effort ${thinkingLabel}`, `${props.selection?.model ?? "未配置模型"}，推理强度 ${thinkingLabel}`)}
       >
         {props.selection?.model ? <ModelIcon model={props.selection.model} size={14} /> : null}
-        <span className="model-thinking-model" title={props.selection?.model}>{props.loading ? t("Loading models", "读取模型") : props.selection?.model ? shortModelName(props.selection.model) : t("No model configured", "未配置模型")}</span>
+        <span className="model-thinking-text">
+          <span className="model-thinking-model" title={props.selection?.model}>{props.loading ? t("Loading models", "读取模型") : props.selection?.model ? shortModelName(props.selection.model) : t("No model configured", "未配置模型")}</span>
+          <span className="model-thinking-level">{thinkingLabel}</span>
+        </span>
         {pending && (
           <span
             className="model-thinking-pending"
@@ -144,7 +147,6 @@ export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
             {t(`${shortModelName(pending.model)} next turn`, `${shortModelName(pending.model)} 下轮生效`)}
           </span>
         )}
-        <span className="model-thinking-level">{thinkingLabel}</span>
         <ChevronDown size={12} className={open ? "model-thinking-chevron open" : "model-thinking-chevron"} />
       </button>
       {open && createPortal(
