@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jevCapabilityStatusLabel, jevSelectionSummary, parseJevCapability, parseJevExposureBlock } from "./jev-capability-data";
+import { exposureBodyDescription, exposureRowMeta, jevCapabilityStatusLabel, jevSelectionSummary, parseJevCapability, parseJevExposureBlock } from "./jev-capability-data";
 
 const exposed = JSON.stringify({
   ok: true,
@@ -114,5 +114,40 @@ describe("parseJevCapability", () => {
       { kind: "prompt", id: "prompt_1", source: "instructions", description: "迁移 \"规范\"", preview: "迁移必须可回退" },
       { kind: "memory", id: "memory_context", source: "", description: "", preview: "项目记忆：\n- [偏好](a.md) — 用 pnpm" }
     ]);
+  });
+
+  it("中文句号后没有空格时只取首句，展开区不再重复这句", () => {
+    const output = JSON.stringify({
+      ok: true,
+      router: "jev",
+      tools: [{
+        name: "context_status",
+        description: "查看当前上下文块。完成子任务后再读取。"
+      }],
+      skills: []
+    });
+    const tool = parseJevCapability(output)!.tools[0]!;
+    expect(tool.detail).toBe("查看当前上下文块。");
+    expect(tool.description).toBe("查看当前上下文块。完成子任务后再读取。");
+    expect(exposureRowMeta(tool, "zh-CN")).toBe("查看当前上下文块。");
+    expect(exposureBodyDescription(tool, "zh-CN", tool.detail)).toBe("完成子任务后再读取。");
+  });
+
+  it("中文界面不把已知工具的英文模型说明当作界面文案", () => {
+    const output = JSON.stringify({
+      ok: true,
+      router: "jev",
+      tools: [{
+        name: "context_status",
+        description: "Inspect the current context blocks. Then continue."
+      }],
+      skills: []
+    });
+    const tool = parseJevCapability(output)!.tools[0]!;
+    expect(tool.detail).toBe("Inspect the current context blocks.");
+    expect(exposureRowMeta(tool, "zh-CN")).toBe("");
+    expect(exposureBodyDescription(tool, "zh-CN", "")).toBe("");
+    expect(exposureRowMeta(tool, "en-US")).toBe("Inspect the current context blocks.");
+    expect(exposureBodyDescription(tool, "en-US", "Inspect the current context blocks.")).toBe("Then continue.");
   });
 });

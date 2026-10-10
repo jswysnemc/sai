@@ -4,34 +4,43 @@ import { useI18n } from "../../i18n/use-i18n";
 import { parseSkillDocument } from "../../settings/skills/skill-document";
 import type { JevExposedResource } from "./jev-capability-data";
 
+// ===== 新增 import =====
+import { exposureBodyDescription } from "./jev-capability-data";
+
 /**
- * 【Jev】【资源详情】工具展开后显示完整说明与参数表。
+ * 【Jev】【资源详情】工具展开后显示尚未在折叠行出现的说明，以及暴露的参数表。
  *
- * @param props 工具条目
+ * 参数表是 Jev 暴露给模型的 schema，不是这次调用传入的参数。
+ *
+ * @param props 工具条目，以及折叠行已经展示过的说明
  * @returns 工具详情；既无说明也无参数时为提示文字
  */
-export function JevToolDetail({ item }: { item: JevExposedResource }) {
-  const { t } = useI18n();
+export function JevToolDetail({ item, shownMeta = "" }: { item: JevExposedResource; shownMeta?: string }) {
+  const { locale, t } = useI18n();
   const parameters = item.parameters ?? [];
-  if (!item.description && parameters.length === 0) {
+  const description = exposureBodyDescription(item, locale, shownMeta);
+  if (!description && parameters.length === 0) {
     return <p className="jev-resource-empty">{t("No description or parameters.", "没有说明或参数。")}</p>;
   }
   return (
     <div className="jev-resource-detail">
-      {item.description ? <p className="jev-resource-description">{item.description}</p> : null}
+      {description ? <p className="jev-resource-description">{description}</p> : null}
       {parameters.length > 0 ? (
-        <dl className="jev-resource-params" aria-label={t("Parameters", "参数")}>
-          {parameters.map((parameter) => (
-            <div key={parameter.name} className="jev-resource-param">
-              <dt>
-                <code>{parameter.name}</code>
-                {parameter.type ? <span className="jev-resource-param-type">{parameter.type}</span> : null}
-                {parameter.required ? <span className="jev-resource-param-required">{t("required", "必填")}</span> : null}
-              </dt>
-              {parameter.description ? <dd>{parameter.description}</dd> : null}
-            </div>
-          ))}
-        </dl>
+        <>
+          <p className="jev-resource-schema-caption">{t("Exposed schema, not this call's arguments", "暴露的参数，不是本次调用参数")}</p>
+          <dl className="jev-resource-params" aria-label={t("Exposed schema", "暴露的参数")}>
+            {parameters.map((parameter) => (
+              <div key={parameter.name} className="jev-resource-param">
+                <dt>
+                  <code>{parameter.name}</code>
+                  {parameter.type ? <span className="jev-resource-param-type">{parameter.type}</span> : null}
+                  {parameter.required ? <span className="jev-resource-param-required">{t("required", "必填")}</span> : null}
+                </dt>
+                {parameter.description ? <dd>{parameter.description}</dd> : null}
+              </div>
+            ))}
+          </dl>
+        </>
       ) : null}
     </div>
   );

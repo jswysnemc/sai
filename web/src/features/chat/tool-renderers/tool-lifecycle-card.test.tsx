@@ -147,7 +147,7 @@ describe("ToolLifecycleCard 折叠行", () => {
       })
     }));
     const plain = stripTags(html);
-    expect(plain).toContain("Request");
+    expect(plain).toContain("申请");
     expect(plain).toContain("search the web");
     expect(plain).toContain("1 个工具");
     expect(plain).not.toContain("parameters");

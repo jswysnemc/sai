@@ -63,9 +63,17 @@
   margin: 0;
 }
 
+.jev-resource-schema-caption {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+  line-height: 1.4;
+}
+
 .jev-resource-param {
   display: grid;
   gap: 0.125rem;
+  min-width: 0;
 }
 
 .jev-resource-param dt {
@@ -73,10 +81,13 @@
   flex-wrap: wrap;
   gap: var(--space-xs);
   align-items: baseline;
+  min-width: 0;
 }
 
 .jev-resource-param code {
+  min-width: 0;
   font: 500 var(--text-xs)/1.4 var(--font-code);
+  overflow-wrap: anywhere;
 }
 
 .jev-resource-param-type,
