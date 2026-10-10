@@ -157,16 +157,66 @@ fn footer_line_never_exceeds_terminal_cols() {
 }
 
 #[test]
-fn fit_status_segments_avoids_forced_gap_overflow() {
+fn fit_status_segments_keeps_a_gap_when_the_line_is_full() {
     let left = "yolo  0.0%/500k  gpt-5.6-sol  auto";
     let right = "/home/snemc/workspace/sai";
     let cols = visible_width(left) + visible_width(right);
     let (fitted_left, fitted_right, gap) = fit_status_segments(left, right, cols);
-    assert_eq!(gap, 0);
+    assert!(gap >= 2, "gap={gap}");
+    assert_eq!(fitted_left, left);
+    assert!(fitted_right.ends_with("..."), "{fitted_right}");
     assert_eq!(
         visible_width(&fitted_left) + gap + visible_width(&fitted_right),
         cols
     );
+    let joined = format!("{fitted_left}{}{fitted_right}", " ".repeat(gap));
+    assert!(!joined.contains("auto/"), "{joined}");
+}
+
+/// 【TUI】【底栏分隔】思考等级和 Windows / CJK 路径之间保持双空格，且不超宽。
+#[test]
+fn status_line_separates_effort_from_windows_and_cjk_paths() {
+    let left = "yolo  0.7%/1049k cache 0%  gemini-3.7-flash  high";
+    let right = "D:\\work\\10月\\sai\\crates\\sai-plugin-runtime  main";
+    let exact = visible_width(left) + visible_width(right);
+    for cols in [24usize, 40, 60, 80, exact, exact + 2, 120, 160] {
+        let (fitted_left, fitted_right, gap) = fit_status_segments(left, right, cols);
+        let width = visible_width(&fitted_left) + gap + visible_width(&fitted_right);
+        assert!(width <= cols, "cols={cols} width={width}");
+        if !fitted_right.is_empty() {
+            assert!(gap >= 2, "cols={cols} gap={gap} right={fitted_right}");
+            let joined = format!("{fitted_left}{}{fitted_right}", " ".repeat(gap));
+            assert!(!joined.contains("highD:"), "{joined}");
+            if fitted_left.ends_with("high") {
+                assert!(
+                    joined.contains("high  "),
+                    "effort and path must keep a gap: {joined}"
+                );
+            }
+        }
+    }
+
+    let mut chrome = test_chrome();
+    chrome.context_ratio = 0.007;
+    chrome.context_window_tokens = 1_049_000;
+    chrome.cache_hit_ratio = Some(0.0);
+    chrome.model = "gemini-3.7-flash".to_string();
+    chrome.thinking = "high".to_string();
+    chrome.directory = r"D:\work\10月\sai\crates\sai-plugin-runtime".to_string();
+    chrome.branch = Some("main".to_string());
+    for cols in [40usize, 60, 80, 100, 120, 160] {
+        let line = chrome.footer_line(cols);
+        let plain = strip_ansi(&line);
+        let width = visible_width(&line);
+        assert!(width <= cols, "cols={cols} width={width} plain={plain}");
+        if plain.contains("high") && plain.contains("D:") {
+            assert!(plain.contains("high  "), "{plain}");
+            assert!(!plain.contains("highD:"), "{plain}");
+        }
+        if plain.contains('月') {
+            assert!(width <= cols, "cjk path overflow cols={cols} plain={plain}");
+        }
+    }
 }
 
 fn strip_ansi(text: &str) -> String {

@@ -5,6 +5,9 @@ import { ToolPanel } from "./layout/tool-panel";
 import type { LoadedSkill, LoadedTool, LoadResult } from "./load-tool-data";
 import "./load-tool-view.css";
 
+// ===== 新增 import =====
+import { firstSentence } from "./first-sentence";
+
 type LoadToolViewProps = {
   result: LoadResult;
 };
@@ -98,13 +101,3 @@ function ToolItem({ tool }: { tool: LoadedTool }) {
   );
 }
 
-/**
- * 取说明首句，避免副标题铺满整行。
- *
- * @param value 原始说明
- * @returns 首句
- */
-function firstSentence(value: string): string {
-  const single = value.replace(/\s+/g, " ").trim();
-  return single.split(/(?<=[。.!？?])\s/u)[0] ?? single;
-}

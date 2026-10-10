@@ -257,7 +257,13 @@ fn format_token_k(value: usize) -> String {
     }
 }
 
+/// 底栏左右两段之间至少留出的列数，与段内双空格分隔一致。
+const STATUS_SEGMENT_GAP: usize = 2;
+
 /// 将左右状态段裁剪到终端宽度内。
+///
+/// 两侧都有内容时至少留出两列，避免思考等级和路径贴成 `highD:\work`。
+/// 放不下时先裁剪右侧路径，而不是取消分隔。
 ///
 /// 参数:
 /// - `left`: 左侧纯文本
@@ -273,19 +279,39 @@ fn fit_status_segments(left: &str, right: &str, cols: usize) -> (String, String,
     let left_w = visible_width(&left);
     let right_w = visible_width(&right);
 
-    // 1. 左右总宽不超过终端：gap 填剩余列，贴满时为 0（不再额外预留分隔列）
-    if left_w + right_w <= cols {
+    // 1. 任一侧为空时不预留分隔，避免空路径占掉状态列
+    if right_w == 0 {
+        if left_w <= cols {
+            return (left, String::new(), cols - left_w);
+        }
+        left = truncate_to_width(&left, cols);
+        return (left, String::new(), 0);
+    }
+    if left_w == 0 {
+        if right_w <= cols {
+            return (String::new(), right, cols - right_w);
+        }
+        right = truncate_to_width(&right, cols);
+        let used = visible_width(&right);
+        return (String::new(), right, cols.saturating_sub(used));
+    }
+
+    let min_gap = STATUS_SEGMENT_GAP.min(cols.saturating_sub(1));
+    // 2. 两侧都能放下：剩余列全部作为间隔，把目录顶到行尾
+    if left_w + min_gap + right_w <= cols {
         return (left, right, cols - left_w - right_w);
     }
-
-    // 2. 放不下时右侧先让位，优先保留模式/上下文/模型
-    if left_w < cols {
-        right = truncate_to_width(&right, cols - left_w);
+    // 3. 放不下时先裁路径，分隔列优先于路径
+    if left_w + min_gap <= cols {
+        let right_budget = cols - left_w - min_gap;
+        right = truncate_to_width(&right, right_budget);
+        if right.is_empty() {
+            return (left, right, cols - left_w);
+        }
         let used = left_w + visible_width(&right);
-        return (left, right, cols.saturating_sub(used));
+        return (left, right, cols - used);
     }
-
-    // 3. 左侧单独已超宽：只保留左侧并裁剪
+    // 4. 左侧单独已超宽：只保留左侧并裁剪
     left = truncate_to_width(&left, cols);
     (left, String::new(), 0)
 }

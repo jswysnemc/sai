@@ -26,6 +26,9 @@ import { parseTodoTool, todoToolHeadline } from "./tool-renderers/todo-tool-data
 import "./tool-renderers/tool-renderers.css";
 import { useI18n } from "../i18n/use-i18n";
 
+// ===== 新增 import =====
+import { toolKindLabel } from "./tool-renderers/tool-display-name";
+
 /**
  * 渲染一项实时或历史工具生命周期。
  *
@@ -117,7 +120,7 @@ export const ToolLifecycleCard = memo(function ToolLifecycleCard({
   return (
     <ToolLayout
       icon={<ToolIcon name={tool.name} backgroundTask={backgroundManagement} />}
-      kindLabel={readableToolName(tool.name, backgroundManagement)}
+      kindLabel={readableToolName(tool.name, backgroundManagement, t)}
       kindDetail={permission ? <ToolPermissionBadge autoAudited={autoAudited} t={t} /> : undefined}
       primaryContent={hideTarget ? undefined : target}
       primaryText={hideTarget || target ? "" : summary}
@@ -196,28 +199,17 @@ function ToolPermissionBadge({ autoAudited, t }: { autoAudited: boolean; t: (en:
 }
 
 /**
- * 将工具标识转换为可读名称。
+ * 将工具标识转换为当前界面语言下的种类名。
  *
  * @param name 工具标识
  * @param backgroundTask 是否为后台任务管理操作
- * @returns 可读名称
+ * @param t 双语文本选择方法；缺省时按中文界面
+ * @returns 种类名
  */
-export function readableToolName(name: string, backgroundTask = false): string {
-  const labels: Record<string, string> = {
-    run_command: "Shell",
-    background_command: backgroundTask ? "Tasks" : "Shell",
-    edit_file: "Edit",
-    write_file: "Write",
-    str_replace: "Replace",
-    read_file: "Read",
-    grep: "Search",
-    glob: "Files",
-    list_dir: "List",
-    trash_path: "Trash",
-    todo: "Todo",
-    load: "Load",
-    request_capability: "Request",
-    generate_image: "Generate image"
-  };
-  return labels[name] ?? name.replaceAll("_", " ");
+export function readableToolName(
+  name: string,
+  backgroundTask = false,
+  t: (en: string, zh: string) => string = (_en, zh) => zh
+): string {
+  return toolKindLabel(name, backgroundTask, t);
 }

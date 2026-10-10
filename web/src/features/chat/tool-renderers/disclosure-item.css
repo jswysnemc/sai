@@ -1,6 +1,6 @@
 /*
- * 折叠条目：固定高度行外层居中，箭头与名称包在 .icon-label 里走光学中线。
- * 同一列表用 subgrid 共用「名称 | 说明」两列，避免短名被 7rem 下限撑开、长名把说明挤偏。
+ * 折叠条目：固定高度行外层居中，箭头放在行尾，与工具卡头部一致。
+ * 同一列表用 subgrid 共用「名称 | 说明 | 箭头」三列，名称与说明之间留出列表间距。
  */
 .disclosure-item {
   display: grid;
@@ -9,7 +9,7 @@
 
 .disclosure-list {
   display: grid;
-  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
   column-gap: var(--space-sm);
   row-gap: var(--space-2xs);
   margin: 0;
@@ -42,7 +42,7 @@
   display: grid;
   grid-column: 1 / -1;
   grid-template-columns: subgrid;
-  column-gap: 0;
+  column-gap: var(--space-sm);
   row-gap: var(--space-2xs);
 }
 
@@ -56,11 +56,6 @@ button.disclosure-item-head {
 
 button.disclosure-item-head:hover {
   background: var(--surface-hover);
-}
-
-button.disclosure-item-head:focus-visible {
-  outline: 2px solid var(--signal);
-  outline-offset: 1px;
 }
 
 .disclosure-item-lead {
@@ -101,8 +96,13 @@ button.disclosure-item-head:focus-visible {
   white-space: nowrap;
 }
 
+.disclosure-item-chevron-slot {
+  justify-self: end;
+}
+
 .disclosure-item-body {
-  margin: var(--space-2xs) 0 var(--space-xs) calc(0.75rem + var(--space-xs) + var(--space-2xs));
+  min-width: 0;
+  margin: var(--space-2xs) 0 var(--space-xs) var(--space-2xs);
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-2);
   background: var(--paper-raised);
@@ -120,16 +120,26 @@ button.disclosure-item-head:focus-visible {
 
 @media (max-width: 40rem) {
   .disclosure-list {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .disclosure-item-head {
     flex-wrap: wrap;
   }
 
+  .disclosure-list > .disclosure-item > .disclosure-item-head > .disclosure-item-meta {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .disclosure-list > .disclosure-item > .disclosure-item-head > .disclosure-item-chevron-slot {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
   .disclosure-item-meta {
     flex: 1 1 100%;
-    padding-left: calc(0.75rem + var(--space-xs));
+    padding-left: 0;
   }
 
   .disclosure-item-body {

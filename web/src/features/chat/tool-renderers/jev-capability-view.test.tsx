@@ -28,8 +28,9 @@ describe("JevCapabilityView", () => {
       />
     );
     expect(html).toContain("search the web and draw a diagram");
-    expect(html).toContain("web_search");
-    expect(html).toContain("Search the web.");
+    expect(html).toContain("网页搜索");
+    expect(html).not.toContain("web_search");
+    expect(html).not.toContain("Search the web.");
     expect(html).toContain("drawio");
     expect(html).toContain("icon-label");
     expect(html).toContain("disclosure-list");

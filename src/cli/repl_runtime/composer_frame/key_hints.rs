@@ -116,11 +116,13 @@ pub(in crate::cli::repl_runtime) fn render_key_hints(
     let separator = format!("{LABEL_STYLE}{SEPARATOR}{RESET}");
     let mut line = String::new();
     let mut used = 0usize;
-    // 1. 退出确认优先占据行首，任何场景都显示
+    // 1. 退出确认优先占据行首；窄终端按显示列裁剪，避免中文提示撑出屏幕
     if let Some(notice) = context.notice {
-        let notice = notice.text();
-        used = visible_width(notice).min(budget);
-        line.push_str(&format!("{NOTICE_STYLE}{notice}{RESET}"));
+        let notice = clip_notice(notice.text(), budget);
+        used = visible_width(&notice);
+        if !notice.is_empty() {
+            line.push_str(&format!("{NOTICE_STYLE}{notice}{RESET}"));
+        }
     }
     if !panel_open {
         // 2. 按键条目：从高优先级开始放入，放不下就停止，不截断半个条目
@@ -129,7 +131,7 @@ pub(in crate::cli::repl_runtime) fn render_key_hints(
             let extra = if used == 0 {
                 0
             } else {
-                SEPARATOR.chars().count()
+                visible_width(SEPARATOR)
             };
             if used + extra + visible_width(&plain) > budget {
                 break;
@@ -145,6 +147,40 @@ pub(in crate::cli::repl_runtime) fn render_key_hints(
         }
     }
     format!("{}{line}", " ".repeat(pad))
+}
+
+/// 把提示裁到指定显示列数。
+///
+/// 参数:
+/// - `text`: 纯文本提示
+/// - `width`: 最大显示列数
+///
+/// 返回:
+/// - 不超过列数的文本；放不下省略号时改用点号
+fn clip_notice(text: &str, width: usize) -> String {
+    if width == 0 || text.is_empty() {
+        return String::new();
+    }
+    if visible_width(text) <= width {
+        return text.to_string();
+    }
+    const ELLIPSIS: &str = "...";
+    const ELLIPSIS_WIDTH: usize = 3;
+    if width <= ELLIPSIS_WIDTH {
+        return ".".repeat(width);
+    }
+    let mut output = String::new();
+    let mut used = 0usize;
+    for ch in text.chars() {
+        let char_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+        if used.saturating_add(char_width) + ELLIPSIS_WIDTH > width {
+            break;
+        }
+        output.push(ch);
+        used = used.saturating_add(char_width);
+    }
+    output.push_str(ELLIPSIS);
+    output
 }
 
 #[cfg(test)]
@@ -235,6 +271,27 @@ mod tests {
         };
         let clear_text = t("Press Esc again to clear input", "再按一次 Esc 清空输入");
         assert!(text(clear, false, 200).trim_start().starts_with(clear_text));
+    }
+
+    /// 【终端】【按键提示】退出确认在窄终端和中文文案下也不超出列数。
+    #[test]
+    fn exit_notice_stays_within_narrow_columns() {
+        let context = KeyHintContext {
+            notice: Some(KeyNotice::Exit),
+            ..KeyHintContext::default()
+        };
+        for language in [crate::i18n::Locale::En, crate::i18n::Locale::Zh] {
+            crate::i18n::with_locale(language, || {
+                for cols in [1usize, 8, 16, 24, 40, 80] {
+                    let line = render_key_hints(context, true, false, cols);
+                    assert!(
+                        visible_width(&line) <= cols,
+                        "{language:?} {cols}: {}",
+                        plain(&line)
+                    );
+                }
+            });
+        }
     }
 
     /// 验证窄终端按优先级省略，结果不超宽且不截断半个条目。

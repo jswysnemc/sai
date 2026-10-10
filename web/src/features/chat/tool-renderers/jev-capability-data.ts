@@ -3,6 +3,10 @@ import { contextsOf, parseJevSelectedContext, type JevInjectedContext } from "./
 import { parseJsonRecord, type JsonRecord } from "./tool-data";
 import { toolParametersOf, type JevToolParameter } from "./jev-tool-parameters";
 
+// ===== 新增 import =====
+import { firstSentence } from "./first-sentence";
+import { hasLocalizedToolTitle } from "./tool-display-name";
+
 /** Jev 本次新暴露的一项工具或 Skill。 */
 export type JevExposedResource = {
   kind: "tool" | "skill";
@@ -241,16 +245,48 @@ function skillDetail(item: JsonRecord): string {
 }
 
 /**
- * 把说明压成一句，避免卡片里铺开整段工具描述。
+ * 折叠行上要显示的一句说明。
  *
- * @param value 原始说明
- * @returns 首句
+ * 中文界面已经有工具名称时，不再把纯英文的模型说明塞进折叠行。
+ *
+ * @param item 暴露条目
+ * @param locale 界面语言
+ * @returns 折叠行说明；不需要时为空
  */
-function firstSentence(value: string): string {
-  const single = value.replace(/\s+/g, " ").trim();
-  const sentence = single.split(/(?<=[。.!？?])\s/u)[0] ?? single;
-  if (sentence.length <= 140) return sentence;
-  return `${sentence.slice(0, 139)}…`;
+export function exposureRowMeta(item: JevExposedResource, locale: Locale): string {
+  const detail = item.detail.trim();
+  if (!detail) return "";
+  if (locale === "zh-CN" && hasLocalizedToolTitle(item.name) && !hasCjk(detail)) return "";
+  return detail;
+}
+
+/**
+ * 展开后还需要显示的说明。
+ *
+ * 已经出现在折叠行里的首句不再重复。中文界面下，已知工具的纯英文模型说明不作为界面文案。
+ *
+ * @param item 暴露条目
+ * @param locale 界面语言
+ * @param shownMeta 折叠行已经显示的说明
+ * @returns 展开区说明；没有新增内容时为空
+ */
+export function exposureBodyDescription(item: JevExposedResource, locale: Locale, shownMeta: string): string {
+  const full = item.description?.trim() ?? "";
+  if (!full) return "";
+  if (locale === "zh-CN" && hasLocalizedToolTitle(item.name) && !hasCjk(full)) return "";
+  const meta = shownMeta.trim();
+  if (meta && full.startsWith(meta)) return full.slice(meta.length).trim();
+  return full;
+}
+
+/**
+ * 判断文本是否含中日韩统一表意文字。
+ *
+ * @param value 待判断文本
+ * @returns 含汉字时为 true
+ */
+function hasCjk(value: string): boolean {
+  return /[\u3400-\u9fff]/u.test(value);
 }
 
 /**

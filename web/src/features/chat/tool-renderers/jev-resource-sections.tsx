@@ -1,8 +1,12 @@
 import { useI18n } from "../../i18n/use-i18n";
 import { DisclosureItem } from "./disclosure-item";
-import type { JevCapabilityExposure, JevExposedResource } from "./jev-capability-data";
+import { exposureRowMeta, type JevCapabilityExposure, type JevExposedResource } from "./jev-capability-data";
 import { JevSkillDetail, JevToolDetail } from "./jev-resource-detail";
 import { contextSourceLabel, type JevInjectedContext } from "./jev-context-data";
+
+// ===== 新增 import =====
+import type { Locale } from "../../i18n/locale";
+import { toolExposureTitle } from "./tool-display-name";
 
 type JevResourceSectionsProps = {
   exposure: JevCapabilityExposure;
@@ -18,12 +22,12 @@ type JevResourceSectionsProps = {
  * @returns 四个分区；空分区不渲染
  */
 export function JevResourceSections({ exposure }: JevResourceSectionsProps) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const prompts = exposure.contexts.filter((item) => item.kind === "prompt");
   const memories = exposure.contexts.filter((item) => item.kind === "memory");
   return (
     <>
-      <ResourceList title={t("Tools", "工具")} items={exposure.tools} detailLabel={(item) => item.detail} />
+      <ResourceList title={t("Tools", "工具")} items={exposure.tools} detailLabel={(item) => exposureRowMeta(item, locale)} locale={locale} />
       <ResourceList
         title="Skills"
         items={exposure.skills}
@@ -46,20 +50,28 @@ export function JevResourceSections({ exposure }: JevResourceSectionsProps) {
 function ResourceList({
   title,
   items,
-  detailLabel
+  detailLabel,
+  locale
 }: {
   title: string;
   items: JevExposedResource[];
   detailLabel: (item: JevExposedResource) => string;
+  locale?: Locale;
 }) {
+  const { t } = useI18n();
   if (items.length === 0) return null;
   return (
     <section>
       <h3>{title}</h3>
       <ul className="disclosure-list">
         {items.map((item) => (
-          <DisclosureItem key={`${item.kind}:${item.name}`} title={item.name} meta={detailLabel(item) || undefined} lazy>
-            {item.kind === "tool" ? <JevToolDetail item={item} /> : <JevSkillDetail item={item} />}
+          <DisclosureItem
+            key={`${item.kind}:${item.name}`}
+            title={item.kind === "tool" ? toolExposureTitle(item.name, t) : item.name}
+            meta={detailLabel(item) || undefined}
+            lazy
+          >
+            {item.kind === "tool" ? <JevToolDetail item={item} shownMeta={locale ? exposureRowMeta(item, locale) : item.detail} /> : <JevSkillDetail item={item} />}
           </DisclosureItem>
         ))}
       </ul>
