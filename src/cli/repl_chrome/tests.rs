@@ -169,7 +169,8 @@ fn fit_status_segments_keeps_a_gap_when_the_line_is_full() {
         visible_width(&fitted_left) + gap + visible_width(&fitted_right),
         cols
     );
-    assert!(!format!("{fitted_left}{fitted_right}").contains("auto/"));
+    let joined = format!("{fitted_left}{}{fitted_right}", " ".repeat(gap));
+    assert!(!joined.contains("auto/"), "{joined}");
 }
 
 /// 【TUI】【底栏分隔】思考等级和 Windows / CJK 路径之间保持双空格，且不超宽。

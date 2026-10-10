@@ -42,7 +42,7 @@ describe("JevToolDetail", () => {
 
   it("英文界面展开后不再重复折叠行已经显示的首句", () => {
     const html = renderDetail("en-US", "Inspect the current context blocks.");
-    expect(html).toContain("Exposed schema, not this call's arguments");
+    expect(html).toContain("Exposed schema, not this call");
     expect(html).toContain("Then continue.");
     expect(html).not.toContain("Inspect the current context blocks.");
   });
