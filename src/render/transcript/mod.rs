@@ -2,6 +2,7 @@ mod assistant_body;
 mod cell;
 pub(crate) mod command_output;
 mod diff_cell;
+mod fullscreen_activity;
 mod fullscreen_parts;
 mod fullscreen_view;
 mod line;

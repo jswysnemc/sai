@@ -1,0 +1,81 @@
+//! 全屏视图的临时状态只进入固定面板，不进入可滚动正文。
+
+use super::store::{TranscriptRenderOptions, TranscriptStore, TranscriptView};
+use super::{reasoning_cell, AnsiLine};
+use crate::llm::ChatStreamKind;
+use crate::render::content_indent::align_to_guide_column_with_width;
+use crate::render::work_status::WorkStatus;
+use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
+
+impl TranscriptStore {
+    /// 【全屏视图】【固定状态】组装工作状态和参数接收进度，限制在两行以内。
+    /// @param width 为固定面板宽度；options 为当前展示选项
+    /// @returns 不随正文滚动的状态行；没有活动时为空
+    pub(crate) fn fullscreen_activity_lines(
+        &self,
+        width: usize,
+        options: &TranscriptRenderOptions,
+    ) -> Vec<String> {
+        let frame = self.live_animation_frame();
+        let elapsed = self
+            .work_status_started
+            .map(|started| started.elapsed())
+            .unwrap_or_default();
+        // 1. 【全屏视图】【状态来源】子会话只显示自己的运行状态，不冒用主会话状态
+        if matches!(self.view, TranscriptView::Subagent { .. }) {
+            return if self.viewing_running_subagent() {
+                status_row(&WorkStatus::Working.render_line(frame, elapsed), width)
+            } else {
+                Vec::new()
+            };
+        }
+        let mut lines = Vec::new();
+        // 2. 【全屏视图】【参数进度】尚未定稿的工具参数摘要不参与历史区排版
+        if let Some(call) = &self.live_tool_call {
+            if options.tool_call_mode != ToolCallDisplayMode::Hidden {
+                let preview = crate::render::render_width::with_render_width(width, || {
+                    super::tool_cell::render_live_call(
+                        &call.name,
+                        &call.arguments_preview,
+                        ToolCallDisplayMode::Summary,
+                        call.edit_diff_counts,
+                        frame,
+                    )
+                });
+                lines.extend(status_row(&preview, width));
+            }
+        }
+        // 3. 【全屏视图】【思考进度】正文保留静态思考标题，耗时和动效在固定区更新
+        let reasoning = self
+            .live_tail
+            .as_ref()
+            .filter(|tail| tail.kind == ChatStreamKind::Reasoning && !tail.source.is_empty());
+        let status = match reasoning {
+            Some(tail) => reasoning_cell::render_live(
+                &tail.source,
+                ReasoningDisplayMode::Summary,
+                frame,
+                elapsed,
+                false,
+            ),
+            None => self
+                .work_status
+                .map(|status| status.render_line(frame, elapsed))
+                .unwrap_or_default(),
+        };
+        lines.extend(status_row(&status, width));
+        lines
+    }
+}
+
+/// 【全屏视图】【状态限宽】取摘要首个非空视觉行，避免长参数撑高固定区。
+/// @param text 为状态或工具摘要；width 为可用列数
+/// @returns 至多一行、带统一引导缩进的文本
+fn status_row(text: &str, width: usize) -> Vec<String> {
+    let padding = crate::render::content_indent::CONTENT_LEFT_INDENT.min(width.saturating_sub(1));
+    AnsiLine::wrap_block(text, width.saturating_sub(padding).max(1))
+        .into_iter()
+        .find(|line| !super::spacing::is_visual_blank(line))
+        .map(|line| vec![align_to_guide_column_with_width(line.as_str(), padding)])
+        .unwrap_or_default()
+}

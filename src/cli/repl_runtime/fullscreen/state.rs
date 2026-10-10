@@ -203,7 +203,7 @@ impl FullscreenState {
 
     /// 切换段落展开状态，并记录段落标题相对正文顶部的位置用于重排后锚定。
     ///
-    /// 只有控制行响应：折叠时点「N lines hidden」，展开时点末尾的「Show less」。
+    /// 折叠时只响应提示行；展开后整段均可收起，拖选由输入层优先处理。
     ///
     /// 参数:
     /// - `row`: 被点击的文档行
@@ -211,7 +211,11 @@ impl FullscreenState {
     /// 返回:
     /// - 被切换的段落键与点击时标题行在屏幕上的偏移；未命中为 None
     pub(super) fn toggle_at(&mut self, row: usize) -> Option<(ParagraphKey, isize)> {
-        let span = self.document.paragraph_control_at(row)?.clone();
+        let span = self
+            .document
+            .paragraph_at(row)
+            .filter(|span| span.expanded || span.control == row)?
+            .clone();
         if !self.expanded.remove(&span.key) {
             self.expanded.insert(span.key);
         }

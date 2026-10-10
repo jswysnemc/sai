@@ -209,7 +209,12 @@ impl ReplRuntime {
                 let Some(press) = state.press.take() else {
                     return Effect::Nothing;
                 };
-                match state.selection.filter(|selection| !selection.is_empty()) {
+                match state.selection {
+                    Some(selection) if selection.is_empty() => {
+                        // 1. 【全屏视图】【拖选保护】拖回起点仍是拖选，不把空选区误当作单击
+                        state.selection = None;
+                        true
+                    }
                     Some(selection) => {
                         let lines = state
                             .document
@@ -236,6 +241,14 @@ impl ReplRuntime {
                     }
                     None => {
                         state.selection = None;
+                        // 2. 【全屏视图】【单击判定】释放位置离开原文字时不触发段落收起
+                        if !layout.in_body(mouse.row)
+                            || mouse.column >= layout.content_width
+                            || press.row != state.scroll + body_row
+                            || press.col != usize::from(mouse.column)
+                        {
+                            return Effect::Nothing;
+                        }
                         match state.toggle_at(press.row) {
                             Some(anchor) => {
                                 session.pending_toggle = Some(anchor);

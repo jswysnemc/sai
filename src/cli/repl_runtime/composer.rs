@@ -121,6 +121,13 @@ impl ReplRuntime {
             self.todo_panel_compact,
             self.transcript.live_animation_frame(),
         );
+        // 1. 【全屏视图】【固定状态】仅全屏模式把临时动效放在输入框上方，普通模式不变
+        if self.fullscreen.is_some() {
+            lines.extend(
+                self.transcript
+                    .fullscreen_activity_lines(cols, &self.options),
+            );
+        }
         // SSH 征询卡片紧贴输入框，视线从说明直接落到输入行
         lines.extend(self.ssh_card_lines(cols));
         lines

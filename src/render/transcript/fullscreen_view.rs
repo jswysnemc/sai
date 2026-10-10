@@ -64,7 +64,6 @@ impl FullscreenDocument {
     ///
     /// 返回:
     /// - 命中的段落
-    #[cfg(test)]
     pub(crate) fn paragraph_at(&self, row: usize) -> Option<&ParagraphSpan> {
         self.paragraphs
             .iter()
@@ -77,7 +76,7 @@ impl FullscreenDocument {
     /// - `row`: 文档行号
     ///
     /// 返回:
-    /// - 命中的段落；正文其它行不响应悬停与点击
+    /// - 控制行命中的段落；展开正文的点击范围由 paragraph_at 单独判断
     pub(crate) fn paragraph_control_at(&self, row: usize) -> Option<&ParagraphSpan> {
         self.paragraphs.iter().find(|span| span.control == row)
     }
@@ -139,11 +138,12 @@ impl TranscriptStore {
         expanded: &HashSet<ParagraphKey>,
     ) -> FullscreenDocument {
         let width = width.max(1);
-        let frame = self.live_animation_frame();
+        // 1. 【全屏视图】【静态正文】运行工具保留静态标题，动效统一由固定面板绘制
+        let frame = 0;
         // 1. 子智能体视图整体替换正文，没有可折叠段落和用户锚点
         if let TranscriptView::Subagent { id, label } = self.view.clone() {
             return FullscreenDocument {
-                lines: super::subagent_view::render_view_lines(&id, &label, width, frame),
+                lines: super::subagent_view::render_fullscreen_lines(&id, &label, width),
                 ..FullscreenDocument::default()
             };
         }
@@ -186,7 +186,7 @@ impl TranscriptStore {
                     .lines_for(index, &self.cells[index], width, options, frame)
             };
             document.lines.extend(lines);
-            // 3. 展开段末尾追加「收起」行，作为展开态唯一的点击入口
+            // 3. 展开段末尾保留明确的「收起」入口，正文同样支持点击收起
             if open {
                 document.lines.push(AnsiLine::new(render_collapse_line()));
             }
@@ -197,9 +197,13 @@ impl TranscriptStore {
                 });
             }
             if expandable && document.lines.len() > start {
-                document
-                    .paragraphs
-                    .push(make_span(&document.lines, key, start, document.lines.len(), open));
+                document.paragraphs.push(make_span(
+                    &document.lines,
+                    key,
+                    start,
+                    document.lines.len(),
+                    open,
+                ));
             }
         }
         self.append_live_tail(&mut document, width, options, expanded);
@@ -230,9 +234,11 @@ impl TranscriptStore {
         let mut live = with_fullscreen_hints(|| {
             if open {
                 let full = expanded_options();
-                with_force_expand(|| self.render_live_tail(width, &full, usize::MAX))
+                with_force_expand(|| {
+                    self.render_live_tail_with_activity(width, &full, usize::MAX, false)
+                })
             } else {
-                self.render_live_tail(width, options, usize::MAX)
+                self.render_live_tail_with_activity(width, options, usize::MAX, false)
             }
         });
         // 定稿区末行已是空行时去掉 live 的前空行，与内联视图一致
@@ -290,7 +296,9 @@ fn push_segmented(
             document.lines.push(AnsiLine::new(render_collapse_line()));
         }
         let end = document.lines.len();
-        document.paragraphs.push(make_span(&document.lines, key, start, end, open));
+        document
+            .paragraphs
+            .push(make_span(&document.lines, key, start, end, open));
         copied = to;
     }
     document.lines.extend(lines[copied..].iter().cloned());

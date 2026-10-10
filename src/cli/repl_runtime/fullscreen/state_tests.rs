@@ -69,7 +69,7 @@ fn relative_jumps_walk_user_messages() {
     assert!(state.follow);
 }
 
-/// 只有折叠提示行能展开；重排后标题行停在原屏幕位置；展开后点末尾收起行收起。
+/// 只有折叠提示行能展开；重排后标题保持位置；展开后点击正文即可收起。
 #[test]
 fn toggling_keeps_the_paragraph_header_in_place() {
     let mut state = FullscreenState::new();
@@ -91,8 +91,7 @@ fn toggling_keeps_the_paragraph_header_in_place() {
     state.apply_document(next, 20);
     state.restore_toggle_anchor(key, offset, 20);
     assert_eq!(state.scroll, 18);
-    assert!(state.toggle_at(30).is_none(), "展开段正文不响应点击");
-    assert!(state.toggle_at(54).is_some(), "点收起行收起");
+    assert!(state.toggle_at(30).is_some(), "展开段正文应支持点击收起");
     assert!(!state.expanded.contains(&K7));
     assert!(state.toggle_at(99).is_none(), "段落范围外的行不触发切换");
 }

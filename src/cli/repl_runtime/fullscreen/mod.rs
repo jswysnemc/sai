@@ -258,3 +258,6 @@ mod runtime_tests;
 
 #[cfg(test)]
 mod todo_tests;
+
+#[cfg(test)]
+mod activity_tests;

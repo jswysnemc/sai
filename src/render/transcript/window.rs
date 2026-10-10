@@ -208,7 +208,24 @@ impl TranscriptStore {
         options: &TranscriptRenderOptions,
         live_cap: usize,
     ) -> Vec<AnsiLine> {
-        let frame = self.live_animation_frame();
+        self.render_live_tail_with_activity(width, options, live_cap, true)
+    }
+
+    /// 【终端】【流式分区】渲染正文，并按视图决定是否把临时动效放在同一区域。
+    /// @param width 为正文净宽；options 为展示选项；live_cap 为表格预算；activity 为是否附带动效
+    /// @returns 流式正文及可选临时状态
+    pub(super) fn render_live_tail_with_activity(
+        &mut self,
+        width: usize,
+        options: &TranscriptRenderOptions,
+        live_cap: usize,
+        activity: bool,
+    ) -> Vec<AnsiLine> {
+        let frame = if activity {
+            self.live_animation_frame()
+        } else {
+            0
+        };
         let mut lines = Vec::new();
         let mut emitted_live_content = false;
         if let Some(tail) = &mut self.live_tail {
@@ -232,13 +249,21 @@ impl TranscriptStore {
                         .map(|started| started.elapsed())
                         .unwrap_or_default();
                     let rendered = crate::render::render_width::with_render_width(width, || {
-                        reasoning_cell::render_live(
-                            &tail.source,
-                            options.reasoning_mode,
-                            frame,
-                            elapsed,
-                            tail.expanded,
-                        )
+                        if activity {
+                            reasoning_cell::render_live(
+                                &tail.source,
+                                options.reasoning_mode,
+                                frame,
+                                elapsed,
+                                tail.expanded,
+                            )
+                        } else {
+                            reasoning_cell::render_live_body(
+                                &tail.source,
+                                options.reasoning_mode,
+                                tail.expanded,
+                            )
+                        }
                     });
                     if rendered.is_empty() {
                         Vec::new()
@@ -259,6 +284,9 @@ impl TranscriptStore {
                 }
             }
             lines.extend(rendered_lines);
+        }
+        if !activity {
+            return lines;
         }
         let has_live_reasoning = self
             .live_tail

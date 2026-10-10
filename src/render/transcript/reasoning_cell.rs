@@ -115,6 +115,23 @@ pub(crate) fn render_live(
     }
 }
 
+/// 【全屏视图】【思考正文】保留流式思考内容和折叠入口，不在正文绘制动效与计时。
+/// @param source 为累计思考内容；mode 为展示模式；expanded 为展开状态
+/// @returns 仅随内容变化的思考区块
+pub(super) fn render_live_body(source: &str, mode: ReasoningDisplayMode, expanded: bool) -> String {
+    if mode == ReasoningDisplayMode::Hidden || source.is_empty() {
+        return String::new();
+    }
+    let title = format!(
+        "\x1b[2m\x1b[36m{THINKING_MARKER} {THINKING_LABEL}{}\x1b[0m",
+        format_tokens_suffix(token_counter::count(source))
+    );
+    if mode == ReasoningDisplayMode::Summary {
+        return title;
+    }
+    render_thinking_body_with_title(source, expanded, true, terminal_wrap_width(), title)
+}
+
 /// 将已持续时长转换为标签用耗时（零值视为无耗时）。
 ///
 /// 参数:

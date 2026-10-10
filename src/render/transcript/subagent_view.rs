@@ -24,7 +24,17 @@ pub(super) fn render_view_lines(
 ) -> Vec<AnsiLine> {
     // 渲染宽度上下文与折行共用同一宽度，避免表格/思考块超宽被二次折断
     let rendered = crate::render::render_width::with_render_width(width, || {
-        render_view_text(id, label, frame)
+        render_view_text(id, label, frame, true)
+    });
+    AnsiLine::wrap_block(&rendered, width.max(1))
+}
+
+/// 【全屏视图】【子会话正文】仅输出子会话内容，运行状态由固定面板承载。
+/// @param id 为子会话标识；label 为展示名称；width 为正文净宽
+/// @returns 不含工作动效的正文行
+pub(super) fn render_fullscreen_lines(id: &str, label: &str, width: usize) -> Vec<AnsiLine> {
+    let rendered = crate::render::render_width::with_render_width(width, || {
+        render_view_text(id, label, 0, false)
     });
     AnsiLine::wrap_block(&rendered, width.max(1))
 }
@@ -35,10 +45,11 @@ pub(super) fn render_view_lines(
 /// - `id`: 子智能体 ID
 /// - `label`: 展示名称
 /// - `frame`: live 动画帧序号
+/// - `activity`: 是否在正文附带运行状态
 ///
 /// 返回:
 /// - ANSI 文本块
-fn render_view_text(id: &str, label: &str, frame: usize) -> String {
+fn render_view_text(id: &str, label: &str, frame: usize, activity: bool) -> String {
     let snapshot = crate::tools::subagent_state::subagent_snapshot(id).ok();
     let status = snapshot
         .as_ref()
@@ -135,7 +146,7 @@ fn render_view_text(id: &str, label: &str, frame: usize) -> String {
                 } else {
                     tool_event_text(&label, status)
                 };
-                if status == "run" {
+                if status == "run" && activity {
                     output.push_str(&crate::render::content_indent::animate_guide_marker(
                         &heading, frame,
                     ));
@@ -168,7 +179,7 @@ fn render_view_text(id: &str, label: &str, frame: usize) -> String {
         }
     }
     // 3. 【终端】【子智能体状态】运行中显示 Working 主题流光；待命给出留言提示
-    if status == "run" {
+    if status == "run" && activity {
         output.push('\n');
         let label = WorkStatus::Working.localized_label();
         output.push_str(&render_activity_text(&label, frame));
@@ -201,14 +212,14 @@ mod tests {
         );
         let args = r#"{"command":"printf hello"}"#;
         crate::tools::subagent_state::timeline_tool_started(&snapshot.id, "run_command", args);
-        let running = strip_ansi_for_test(&render_view_text(&snapshot.id, "command test", 0));
+        let running = strip_ansi_for_test(&render_view_text(&snapshot.id, "command test", 0, true));
         crate::tools::subagent_state::timeline_tool_finished(
             &snapshot.id,
             "run_command",
             true,
             "hello",
         );
-        let done = strip_ansi_for_test(&render_view_text(&snapshot.id, "command test", 0));
+        let done = strip_ansi_for_test(&render_view_text(&snapshot.id, "command test", 0, true));
         crate::tools::subagent_state::clear_subagents_for_owner(&owner);
         assert!(running.contains("Running $ printf hello"), "{running}");
         assert!(done.contains("Ran $ printf hello"), "{done}");
@@ -284,9 +295,9 @@ mod tests {
     /// - 无
     #[test]
     fn running_view_uses_working_shimmer() {
-        let first = render_view_text("missing-id", "检查项目", 0);
+        let first = render_view_text("missing-id", "检查项目", 0, true);
         // 【终端】【流光测试】对比扫描带在文字外与文字中的阶段，覆盖 ANSI 降级样式
-        let second = render_view_text("missing-id", "检查项目", 31);
+        let second = render_view_text("missing-id", "检查项目", 31, true);
         let first_status = first.lines().last().unwrap_or_default();
         let second_status = second.lines().last().unwrap_or_default();
 
@@ -332,8 +343,8 @@ mod tests {
         assert!(!overview.running);
         assert!(!cell.has_live_updates());
         assert_eq!(overview.detail, snapshots[0].error);
-        let first = render_view_text(&id, "检查项目", 4);
-        let later = render_view_text(&id, "检查项目", 12);
+        let first = render_view_text(&id, "检查项目", 4, true);
+        let later = render_view_text(&id, "检查项目", 12, true);
         assert_eq!(first, later);
         let plain = strip_ansi_for_test(&first);
         assert!(plain.contains(t("Interruption details", "中断详情")));
@@ -365,7 +376,7 @@ mod tests {
             None,
             None,
         );
-        let text = strip_ansi_for_test(&render_view_text(&snapshot.id, "检查项目", 4));
+        let text = strip_ansi_for_test(&render_view_text(&snapshot.id, "检查项目", 4, true));
         assert!(text.contains("Result without trailing newline"), "{text}");
         assert!(!text.contains("Working"));
         crate::tools::subagent_state::clear_subagents_for_owner(&owner);

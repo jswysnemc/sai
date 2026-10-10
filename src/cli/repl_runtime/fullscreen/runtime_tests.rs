@@ -127,7 +127,7 @@ fn wheel_scrolls_and_new_output_is_flagged() {
     assert!(state.unseen);
 }
 
-/// 点击折叠提示展开思考段；展开后正文不响应点击，点末尾的收起行收起。
+/// 点击折叠提示展开思考段；展开后点击正文即可收起，不必寻找末尾控制行。
 #[test]
 fn clicking_a_paragraph_toggles_it() {
     let mut runtime = runtime(2);
@@ -143,7 +143,8 @@ fn clicking_a_paragraph_toggles_it() {
     let span = session.state.document.paragraphs[0].clone();
     let layout = session.state.layout.unwrap();
     let scroll = session.state.scroll;
-    let screen = |document_row: usize, scroll: usize| layout.body_top + (document_row - scroll) as u16;
+    let screen =
+        |document_row: usize, scroll: usize| layout.body_top + (document_row - scroll) as u16;
     // 1. 点控制行展开（摘要思考只有一行标题，标题即控制行）
     click(&mut runtime, 4, screen(span.control, scroll));
     let session = runtime.fullscreen.as_ref().unwrap();
@@ -156,25 +157,20 @@ fn clicking_a_paragraph_toggles_it() {
         .map(|line| crate::render::activity_animation::strip_ansi_for_test(line.as_str()))
         .collect::<Vec<_>>();
     assert!(text.join("\n").contains("turn-0-think-10"));
-    // 2. 展开段末尾出现收起行，正文行点击无效
+    // 2. 展开段保留末尾收起行，同时正文任意可见行也能收起
     let reopened = session.state.document.paragraphs[0].clone();
-    assert!(text[reopened.control].contains("Show less"), "{:?}", text[reopened.control]);
+    assert!(
+        text[reopened.control].contains("Show less"),
+        "{:?}",
+        text[reopened.control]
+    );
     let body_row = text
         .iter()
         .position(|line| line.contains("turn-0-think-3"))
         .expect("展开后应有思考正文");
     let scroll = session.state.scroll;
-    if body_row >= scroll && body_row - scroll < usize::from(layout.body_height) {
-        click(&mut runtime, 4, screen(body_row, scroll));
-        assert!(!runtime.fullscreen.as_ref().unwrap().state.expanded.is_empty());
-    }
-    // 3. 滚到收起行并点击
-    let session = runtime.fullscreen.as_mut().unwrap();
-    let height = usize::from(layout.body_height);
-    session.state.scroll_to(reopened.control.saturating_sub(height / 2), height);
-    let scroll = session.state.scroll;
-    runtime.paint_fullscreen().unwrap();
-    click(&mut runtime, 4, screen(reopened.control, scroll));
+    assert!(body_row >= scroll && body_row - scroll < usize::from(layout.body_height));
+    click(&mut runtime, 4, screen(body_row, scroll));
     assert!(runtime
         .fullscreen
         .as_ref()
@@ -389,6 +385,53 @@ fn dragging_selects_and_copies_without_toggling() {
     let state = &runtime.fullscreen.as_ref().unwrap().state;
     assert!(state.selection.is_none());
     assert!(state.copied.is_none());
+}
+
+/// 【全屏测试】【展开段拖选】展开段可单击收起，但拖选或拖回原点都不能收起。
+#[test]
+fn dragging_inside_expanded_paragraph_never_collapses_it() {
+    let mut runtime = runtime(2);
+    runtime.enter_fullscreen().unwrap();
+    let session = runtime.fullscreen.as_mut().unwrap();
+    let key = session.state.document.paragraphs[0].key;
+    session.state.expanded.insert(key);
+    session.state.scroll = 0;
+    session.state.follow = false;
+    runtime.paint_fullscreen().unwrap();
+    let session = runtime.fullscreen.as_ref().unwrap();
+    let layout = session.state.layout.unwrap();
+    let document_row = session
+        .state
+        .document
+        .lines
+        .iter()
+        .position(|line| line.as_str().contains("turn-0-think-3"))
+        .unwrap();
+    let row = layout.body_top + document_row as u16;
+    for return_to_start in [false, true] {
+        runtime
+            .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 4, row))
+            .unwrap();
+        runtime
+            .handle_fullscreen_event(&mouse(MouseEventKind::Drag(MouseButton::Left), 9, row))
+            .unwrap();
+        let end = if return_to_start { 4 } else { 9 };
+        if return_to_start {
+            runtime
+                .handle_fullscreen_event(&mouse(MouseEventKind::Drag(MouseButton::Left), end, row))
+                .unwrap();
+        }
+        runtime
+            .handle_fullscreen_event(&mouse(MouseEventKind::Up(MouseButton::Left), end, row))
+            .unwrap();
+        assert!(runtime
+            .fullscreen
+            .as_ref()
+            .unwrap()
+            .state
+            .expanded
+            .contains(&key));
+    }
 }
 
 /// 拖到正文顶部边缘时向上滚动，选区随之延伸。
