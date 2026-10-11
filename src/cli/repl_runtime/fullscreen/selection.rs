@@ -3,6 +3,7 @@
 //! 全屏开启了鼠标捕获，终端自带的拖选需要按住 Shift；这里在应用内实现选择，
 //! 直接拖动即可选中并复制。
 
+use crate::render::transcript::AnsiLine;
 use base64::{engine::general_purpose, Engine as _};
 
 /// 文档坐标：正文行号与显示列。
@@ -63,21 +64,27 @@ impl Selection {
 /// 【全屏视图】【选区文本】按选区提取正文纯文本，行尾空白去除，行间用换行连接。
 ///
 /// 参数:
-/// - `lines`: 正文每行的纯文本
+/// - `lines`: 正文每行的 ANSI 文本，只读取选区覆盖的行
 /// - `selection`: 选区
 /// - `width`: 正文列数
 ///
 /// 返回:
 /// - 选中的文本
-pub(super) fn selected_text(lines: &[String], selection: &Selection, width: usize) -> String {
+pub(super) fn selected_text(lines: &[AnsiLine], selection: &Selection, width: usize) -> String {
     let (start, end) = selection.ordered();
     let mut rows = Vec::new();
-    let last = end.row.min(lines.len().saturating_sub(1));
-    for (row, line) in lines.iter().enumerate().take(last + 1).skip(start.row) {
+    let end_row = end.row.saturating_add(1).min(lines.len());
+    let Some(selected_lines) = lines.get(start.row..end_row) else {
+        return String::new();
+    };
+    // 1. 【全屏视图】【选区文本】先切片再清理样式，复制少量文本不扫描整份会话
+    for (offset, line) in selected_lines.iter().enumerate() {
+        let row = start.row + offset;
         let Some((from, to)) = selection.cols_on_row(row, width) else {
             continue;
         };
-        rows.push(slice_cols(line, from, to).trim_end().to_string());
+        let plain = crate::render::activity_animation::strip_ansi_for_test(line.as_str());
+        rows.push(slice_cols(&plain, from, to).trim_end().to_string());
     }
     rows.join("\n")
 }
@@ -196,9 +203,9 @@ mod tests {
     #[test]
     fn extracts_multi_row_text_in_document_order() {
         let lines = vec![
-            "alpha beta".to_string(),
-            "gamma".to_string(),
-            "delta epsilon".to_string(),
+            AnsiLine::new("alpha beta".to_string()),
+            AnsiLine::new("gamma".to_string()),
+            AnsiLine::new("delta epsilon".to_string()),
         ];
         let forward = selected_text(&lines, &selection((0, 6), (2, 5)), 20);
         assert_eq!(forward, "beta\ngamma\ndelta");
@@ -209,7 +216,7 @@ mod tests {
     /// 验证中文等宽字符按显示列截取。
     #[test]
     fn slices_wide_characters_by_display_columns() {
-        let lines = vec!["中文ab测试".to_string()];
+        let lines = vec![AnsiLine::new("中文ab测试".to_string())];
         assert_eq!(
             selected_text(&lines, &selection((0, 2), (0, 6)), 20),
             "文ab"
@@ -246,5 +253,38 @@ mod tests {
     #[test]
     fn osc52_encodes_text() {
         assert_eq!(osc52_copy("hi"), "\x1b]52;c;aGk=\x07");
+    }
+
+    /// 【全屏视图】【选区文本】选中行去除 ANSI 样式并保留跨行空白语义。
+    ///
+    /// 参数: 无
+    /// 返回: 无；样式泄漏或空行丢失时断言失败
+    #[test]
+    fn extracts_styled_rows_without_escape_sequences() {
+        let lines = [
+            AnsiLine::new("outside selection".to_string()),
+            AnsiLine::new("\x1b[31malpha beta\x1b[0m  ".to_string()),
+            AnsiLine::new(String::new()),
+            AnsiLine::new("\x1b[1m中文ab\x1b[0m".to_string()),
+        ];
+        assert_eq!(
+            selected_text(&lines, &selection((1, 6), (3, 4)), 20),
+            "beta\n\n中文"
+        );
+    }
+
+    /// 【全屏视图】【选区边界】空文档、过期行号和末尾越界不会产生无关文本或溢出。
+    ///
+    /// 参数: 无
+    /// 返回: 无；越界或文本错误时断言失败
+    #[test]
+    fn clips_selection_to_existing_rows() {
+        assert_eq!(selected_text(&[], &selection((0, 0), (1, 2)), 20), "");
+        let lines = [AnsiLine::new("last line".to_string())];
+        assert_eq!(selected_text(&lines, &selection((2, 0), (3, 2)), 20), "");
+        assert_eq!(
+            selected_text(&lines, &selection((0, 5), (usize::MAX, 2)), 20),
+            "line"
+        );
     }
 }

@@ -1,10 +1,10 @@
 mod input_viewport;
 mod key_hints;
 mod layout;
-mod shortcut_sheet;
 mod paint;
 #[cfg(test)]
 mod regression_tests;
+mod shortcut_sheet;
 mod styled_line;
 #[cfg(test)]
 mod tests;

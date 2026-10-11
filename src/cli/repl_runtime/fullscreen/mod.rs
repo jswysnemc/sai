@@ -128,6 +128,25 @@ impl ReplRuntime {
     /// 返回:
     /// - 绘制结果
     pub(super) fn paint_fullscreen(&mut self) -> Result<()> {
+        self.paint_fullscreen_view(true)
+    }
+
+    /// 【全屏视图】【交互重绘】滚动和拖选复用正文，仅在尺寸或展开状态变化时重新排版。
+    ///
+    /// 参数: 无
+    /// 返回: 可见区域绘制结果
+    pub(super) fn paint_fullscreen_interaction(&mut self) -> Result<()> {
+        self.paint_fullscreen_view(false)
+    }
+
+    /// 【全屏视图】【分区绘制】按来源决定是否更新正文，再绘制可见行与固定输入区。
+    ///
+    /// 参数:
+    /// - `refresh_document`: 会话内容或流式状态变化时为真，纯交互重绘时为假
+    ///
+    /// 返回:
+    /// - 绘制结果
+    fn paint_fullscreen_view(&mut self, refresh_document: bool) -> Result<()> {
         if self.fullscreen.is_none() {
             return Ok(());
         }
@@ -145,18 +164,21 @@ impl ReplRuntime {
         let Some(session) = self.fullscreen.as_mut() else {
             return Ok(());
         };
-        // 2. 按正文宽度与展开集合重排；尺寸变化时整屏重画
-        let document = self.transcript.render_fullscreen(
-            usize::from(layout.content_width),
-            &self.options,
-            &session.state.expanded,
-        );
-        self.transcript.clear_dirty();
-        if session.state.layout != Some(layout) {
+        // 2. 【全屏视图】【正文复用】拖选和滚动不遍历历史；内容、布局或展开状态变化才更新正文
+        let layout_changed = session.state.layout != Some(layout);
+        if layout_changed {
             session.state.previous = None;
         }
         let body_height = usize::from(layout.body_height);
-        session.state.apply_document(document, body_height);
+        if refresh_document || layout_changed || session.pending_toggle.is_some() {
+            let document = self.transcript.render_fullscreen(
+                usize::from(layout.content_width),
+                &self.options,
+                &session.state.expanded,
+            );
+            self.transcript.clear_dirty();
+            session.state.apply_document(document, body_height);
+        }
         if let Some((key, offset)) = session.pending_toggle.take() {
             session
                 .state
@@ -256,6 +278,8 @@ mod hover_tests;
 #[path = "runtime_tests.rs"]
 mod runtime_tests;
 
+#[cfg(test)]
+mod copy_tests;
 #[cfg(test)]
 mod todo_tests;
 

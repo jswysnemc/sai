@@ -283,6 +283,6 @@ fn input_row_prefix_follows_line_role() {
     let cont = chrome_input_row(ChromeInputPrefix::Continuation, "wrapped", 20);
     assert!(!cont.contains('→') && !cont.contains('$'));
     assert!(cont.contains("wrapped"));
-    // 输入上方一行空白
-    assert_eq!(chrome_fixed_rows(), 1);
+    // 输入上方紧凑，不留额外空白行
+    assert_eq!(chrome_fixed_rows(), 0);
 }
