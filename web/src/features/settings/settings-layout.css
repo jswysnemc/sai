@@ -83,27 +83,6 @@
   margin-left: auto;
 }
 
-.settings-save-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.settings-save-bar .ui-button { min-height: 1.5rem; }
-
-.settings-save-state {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2xs);
-  margin-right: var(--space-2xs);
-  color: var(--ink-soft);
-  font-size: var(--text-sm);
-  white-space: nowrap;
-}
-
-.settings-save-state.is-dirty { color: var(--warning); }
-.settings-save-state.is-failed { color: var(--danger); }
-
 .settings-save-hint {
   display: inline-flex;
   align-items: center;
@@ -121,12 +100,22 @@
   min-height: 0;
 }
 
+.settings-main-area {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .settings-main {
+  flex: 1;
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  padding: var(--space-2xl) var(--space-4xl) var(--space-5xl);
+  padding: var(--space-2xl) var(--space-4xl) var(--space-6xl);
 }
 
 .settings-main-content {
@@ -190,9 +179,6 @@
   .settings-topbar-inner { gap: var(--space-sm); padding-inline: var(--space-lg); }
   .settings-crumb-separator,
   .settings-crumb-subview { display: none; }
-  .settings-save-state > span,
-  .settings-save-label { display: none; }
-  .settings-save-state { margin-right: 0; }
   .settings-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .settings-main { padding: var(--space-lg) var(--space-lg) var(--space-5xl); }
   .settings-save-hint { font-size: var(--text-xs); }

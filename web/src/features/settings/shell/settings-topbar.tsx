@@ -1,31 +1,25 @@
-import { SettingsSaveBar } from "./settings-save-bar";
 import type { SettingsSectionMeta } from "../settings-types";
 import { useI18n } from "../../i18n/use-i18n";
 
 type SettingsTopbarProps = {
   meta: SettingsSectionMeta | undefined;
   subview?: string;
-  dirty: boolean;
-  saving: boolean;
-  saveErrorMessage?: string;
-  loaded: boolean;
-  validationError?: string | null;
-  onSave: () => void;
-  onDiscard: () => void;
 };
 
 /**
- * 渲染设置页顶栏：分区与子页路径在左，保存区在右。
+ * 渲染设置页顶栏：仅保留分区与子页面包屑路径及轻量保存提示。
  *
- * 分区名只在这里出现一次，页面内容不再重复分区标题。
+ * 全局保存操作已下沉至主内容区浮动栏，顶栏右侧保持清爽，
+ * 避免在桌面客户端中与右上角窗口控制按钮挤在一起或发生误触。
  *
- * @param props 分区元数据、当前子页与保存状态
- * @returns 顶栏
+ * @param props 分区元数据与当前子页标识
+ * @returns 顶栏组件
  */
-export function SettingsTopbar({ meta, subview, dirty, saving, saveErrorMessage, loaded, validationError, onSave, onDiscard }: SettingsTopbarProps) {
+export function SettingsTopbar({ meta, subview }: SettingsTopbarProps) {
   const { t } = useI18n();
   const Icon = meta?.icon;
   const subviewMeta = meta?.subviews?.find((item) => item.id === subview);
+
   return (
     <header className="settings-topbar">
       <div className="settings-topbar-inner">
@@ -39,18 +33,11 @@ export function SettingsTopbar({ meta, subview, dirty, saving, saveErrorMessage,
             </>
           )}
         </div>
-        <div className="settings-topbar-actions">
-          <SettingsSaveBar
-            meta={meta}
-            dirty={dirty}
-            saving={saving}
-            saveErrorMessage={saveErrorMessage}
-            loaded={loaded}
-            validationError={validationError}
-            onSave={onSave}
-            onDiscard={onDiscard}
-          />
-        </div>
+        {meta?.saveHintEn && meta?.saveHintZh && (
+          <div className="settings-topbar-actions">
+            <span className="settings-save-hint">{t(meta.saveHintEn, meta.saveHintZh)}</span>
+          </div>
+        )}
       </div>
     </header>
   );

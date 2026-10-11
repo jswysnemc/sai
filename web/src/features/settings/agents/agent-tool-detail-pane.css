@@ -1,0 +1,147 @@
+/* 【Agent设置】【工具详情】展示面板样式 */
+
+.agent-tool-detail-pane {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: calc(100vh - 14rem);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.agent-tool-detail-pane.is-empty {
+  display: grid;
+  place-items: center;
+  min-height: 20rem;
+  border-style: dashed;
+  background: var(--paper-raised);
+}
+
+.agent-tool-detail-empty {
+  margin: 0;
+  padding: var(--space-xl);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  text-align: center;
+  line-height: 1.6;
+}
+
+.agent-tool-detail-head {
+  display: grid;
+  gap: var(--space-xs);
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-raised);
+}
+
+.agent-tool-detail-head-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.agent-tool-detail-headline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.agent-tool-detail-name {
+  margin: 0;
+  font: 600 var(--text-base)/1.35 var(--font-code);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-tool-detail-group-badge {
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+}
+
+.agent-tool-detail-desc {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.agent-tool-detail-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--space-md) var(--space-lg);
+}
+
+.agent-tool-detail-section-title {
+  margin: 0 0 var(--space-sm) 0;
+  color: var(--ink-soft);
+  font: 500 var(--text-2xs)/1 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.agent-tool-detail-no-params {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+.agent-tool-detail-params {
+  display: grid;
+  gap: var(--space-xs);
+  margin: 0;
+}
+
+.agent-tool-detail-param-item {
+  display: grid;
+  gap: 0.125rem;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--paper-raised);
+}
+
+.agent-tool-detail-param-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.agent-tool-detail-param-name {
+  font: 600 var(--text-xs)/1.3 var(--font-code);
+  color: var(--ink);
+}
+
+.agent-tool-detail-param-type {
+  color: var(--ink-soft);
+  font: 400 var(--text-2xs)/1 var(--font-code);
+}
+
+.agent-tool-detail-param-required {
+  color: var(--danger);
+  font-size: var(--text-2xs);
+}
+
+.agent-tool-detail-param-optional {
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+}
+
+.agent-tool-detail-param-desc {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

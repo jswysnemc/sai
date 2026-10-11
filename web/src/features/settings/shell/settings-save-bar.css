@@ -1,0 +1,81 @@
+/* 【Web 设置】【保存浮动栏】内容区底部居中浮动操作栏与状态反馈 */
+
+.settings-save-dock {
+  position: absolute;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  min-height: 2.25rem;
+  padding: var(--space-2xs) var(--space-md);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-3);
+  background: var(--paper);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06);
+  pointer-events: auto;
+  animation: settings-dock-slide-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes settings-dock-slide-up {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.settings-save-dock-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.settings-save-dock-state.is-dirty {
+  color: var(--ink);
+}
+
+.settings-save-dock-state.is-dirty > svg {
+  color: var(--warning);
+}
+
+.settings-save-dock-state.is-failed {
+  color: var(--danger);
+}
+
+.settings-save-dock-state.is-saved {
+  color: var(--ink-soft);
+}
+
+.settings-save-dock-state.is-saved > svg {
+  color: var(--success, #16a34a);
+}
+
+.settings-save-dock-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.settings-save-dock-actions .ui-button {
+  min-height: 1.75rem;
+}
+
+/* 手机端：贴合底部并撑宽 */
+@media (max-width: 48rem) {
+  .settings-save-dock {
+    bottom: 0.75rem;
+    width: calc(100% - 1.5rem);
+    max-width: 26rem;
+    justify-content: space-between;
+    padding: var(--space-xs) var(--space-sm);
+  }
+}
