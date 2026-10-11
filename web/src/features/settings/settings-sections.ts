@@ -80,10 +80,10 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     saveHintZh: "即时生效",
     labelEn: "Appearance",
     labelZh: "外观",
-    descriptionEn: "Language, theme, colors, and Markdown rendering",
-    descriptionZh: "界面语言、主题、颜色与 Markdown 渲染",
+    descriptionEn: "Language, theme, conversation reading, and Markdown rendering",
+    descriptionZh: "界面语言、主题、对话阅读列与 Markdown 渲染",
     icon: Palette,
-    searchKeys: ["theme", "language", "locale", "appearance", "markdown", "table", "code", "主题", "语言", "配色", "表格", "代码块"]
+    searchKeys: ["theme", "language", "locale", "appearance", "markdown", "table", "code", "font", "width", "chat", "主题", "语言", "配色", "表格", "代码块", "字体", "字号", "列宽", "阅读"]
   },
   {
     id: "runtime",

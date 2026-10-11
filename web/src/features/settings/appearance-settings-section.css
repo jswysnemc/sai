@@ -60,3 +60,31 @@
   color: var(--ink);
 }
 .theme-preset.active .theme-preset-check { visibility: visible; }
+
+.chat-appearance-preview {
+  min-width: 0;
+  margin-top: var(--space-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--paper-deep);
+  overflow: hidden;
+}
+
+.chat-appearance-preview-head {
+  display: flex;
+  min-height: 2.25rem;
+  align-items: center;
+  padding: 0 var(--space-md);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.chat-appearance-preview-body {
+  max-width: var(--chat-column-width);
+  max-height: 16rem;
+  overflow: auto;
+  padding: var(--space-md);
+  background: var(--paper);
+}

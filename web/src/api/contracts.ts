@@ -208,6 +208,8 @@ export type {
   UsageSummary,
   UsageTrendPoint,
   UsageGroupStats,
+  UsageDailyActivity,
+  UsageStreaks,
   UsageStatsResponse,
   UsageStatsQuery,
 } from "./contracts/usage";

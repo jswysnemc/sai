@@ -5,6 +5,9 @@ import type { SettingsSearchEntry } from "./settings-search-types";
 const APPEARANCE_FIELDS = [
   ["locale", "Interface language", "界面语言"],
   ["theme", "Workspace theme", "工作区主题"],
+  ["chat.font", "Chat font", "对话字体"],
+  ["chat.fontSize", "Chat font size", "对话字号"],
+  ["chat.width", "Conversation width", "对话列宽"],
   ["markdown.preset", "Markdown overall style", "Markdown 整体风格"],
   ["markdown.table.borderStyle", "Table borders", "表格边框"],
   ["markdown.table.density", "Cell density", "单元格密度"],

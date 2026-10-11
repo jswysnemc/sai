@@ -1,3 +1,4 @@
+use super::activity::{build_activity, UsageDailyActivity, UsageStreaks};
 use super::grouping::{group_model_stats, group_provider_stats, UsageGroupStats};
 use super::query::{
     filter_records, range_start, UsageStatsQuery, DEFAULT_LOG_LIMIT, MAX_LOG_LIMIT,
@@ -22,6 +23,13 @@ pub struct UsageStatsResponse {
     pub total_sessions: usize,
     pub total_logs: usize,
     pub skipped_records: usize,
+    /// 52 周连续日历，空日也占位
+    pub daily_activity: Vec<UsageDailyActivity>,
+    pub streaks: UsageStreaks,
+    pub active_days: u64,
+    pub total_days: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peak_activity_day: Option<String>,
 }
 
 /// 查询聚合统计。
@@ -31,7 +39,7 @@ pub struct UsageStatsResponse {
 /// - `query`: 筛选与分页条件
 ///
 /// 返回:
-/// - 汇总、趋势、日志与分组统计
+/// - 汇总、趋势、日志、分组统计与 52 周日历
 pub fn get_stats(paths: &SaiPaths, query: UsageStatsQuery) -> Result<UsageStatsResponse> {
     // 1. 按范围下界跳过整月过旧的日志文件，再逐条过滤
     let start = range_start(&query.range);
@@ -47,7 +55,9 @@ pub fn get_stats(paths: &SaiPaths, query: UsageStatsQuery) -> Result<UsageStatsR
     let provider_stats = group_provider_stats(&filtered);
     let model_stats = group_model_stats(&filtered);
     let (session_stats, total_sessions) = group_session_stats(paths, &filtered, &query);
-    // 3. 日志明细按分页截取
+    // 3. 52 周日历与连续天数独立于日志分页
+    let activity = build_activity(&filtered);
+    // 4. 日志明细按分页截取
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(DEFAULT_LOG_LIMIT).min(MAX_LOG_LIMIT);
     let logs = filtered.into_iter().skip(offset).take(limit).collect();
@@ -61,5 +71,10 @@ pub fn get_stats(paths: &SaiPaths, query: UsageStatsQuery) -> Result<UsageStatsR
         total_sessions,
         total_logs,
         skipped_records,
+        daily_activity: activity.daily_activity,
+        streaks: activity.streaks,
+        active_days: activity.active_days,
+        total_days: activity.total_days,
+        peak_activity_day: activity.peak_activity_day,
     })
 }

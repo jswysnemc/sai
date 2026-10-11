@@ -10,7 +10,7 @@ import { useI18n } from "../../i18n/use-i18n";
 import { UsageGroupTable } from "./usage-group-table";
 import { type UsageView } from "./usage-labels";
 import { UsageLogsTable } from "./usage-logs-table";
-import { UsageOverview } from "./usage-overview";
+import { UsageActivityOverview } from "./usage-activity-overview";
 import { UsageStatsFilters, type UsageFilterState } from "./usage-stats-filters";
 import { UsageSessionRanking } from "./usage-session-ranking";
 import { UsageSessionLogDialog } from "./usage-session-log-dialog";
@@ -104,7 +104,7 @@ export function UsageStatsSection({ subview }: { subview?: string }) {
 
       {view === "breakdown" && <ChoicePills value={comparison} onChange={(next) => setParams((current) => { const updated = new URLSearchParams(current); updated.set("view", next); return updated; }, { replace: true })} ariaLabel={t("Compare by", "对比维度")} options={[{ value: "providers", label: t("Providers", "供应商") }, { value: "models", label: t("Models", "模型") }, { value: "sessions", label: t("Sessions", "会话") }]} />}
       {view === "logs" && <SwitchField label={t("Refresh every 5 seconds", "每 5 秒刷新")} checked={autoRefresh} onChange={setAutoRefresh} />}
-      {data && view === "overview" && <UsageOverview data={data} t={t} locale={locale} ranking={<UsageSessionRanking rows={data.session_stats ?? []} total={data.total_sessions ?? 0} sort={sessionSort} limit={sessionLimit} onSortChange={setSessionSort} onLimitChange={setSessionLimit} workspaces={workspaces.data?.workspaces} onSelect={setSelectedSession} t={t} locale={locale} compact />} />}
+      {data && view === "overview" && <UsageActivityOverview data={data} t={t} locale={locale} ranking={<UsageSessionRanking rows={data.session_stats ?? []} total={data.total_sessions ?? 0} sort={sessionSort} limit={sessionLimit} onSortChange={setSessionSort} onLimitChange={setSessionLimit} workspaces={workspaces.data?.workspaces} onSelect={setSelectedSession} t={t} locale={locale} compact />} />}
       {data && view === "breakdown" && comparison === "sessions" && <UsageSessionRanking rows={data.session_stats ?? []} total={data.total_sessions ?? 0} sort={sessionSort} limit={sessionLimit} onSortChange={setSessionSort} onLimitChange={setSessionLimit} workspaces={workspaces.data?.workspaces} onSelect={setSelectedSession} t={t} locale={locale} />}
       {data && view === "breakdown" && comparison === "providers" && <UsageGroupTable rows={data.provider_stats} type="provider" t={t} locale={locale} />}
       {data && view === "breakdown" && comparison === "models" && <UsageGroupTable rows={data.model_stats} type="model" t={t} locale={locale} />}
