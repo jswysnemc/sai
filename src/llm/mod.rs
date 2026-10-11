@@ -14,7 +14,9 @@ pub use http_debug::SessionGuard as HttpDebugSessionGuard;
 pub use openai_compatible::OpenAiCompatibleClient;
 pub use stream_event::{ChatStreamEvent, ToolCallStreamProgress};
 pub(crate) use tool_argument_stats::streamed_diff_counts;
-pub(crate) use transport_retry::{error_detail_text, is_transient_transport_error};
+pub(crate) use transport_retry::{
+    error_detail_text, is_transient_transport_error, simplify_error_text,
+};
 
 use serde::{Deserialize, Serialize};
 

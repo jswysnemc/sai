@@ -126,7 +126,7 @@ class TerminalSession:
             self.pump()
             if predicate():
                 return
-        raise AssertionError("Terminal condition timed out:\n" + self.text())
+        raise AssertionError("Terminal condition timed out:\n" + self.text(history=True))
 
     def send(self, data):
         """发送字节序列 data；返回无。"""
@@ -145,3 +145,7 @@ class TerminalSession:
             lines.extend("".join(cell.data for _, cell in sorted(line.items())).rstrip()
                          for line in self.screen.history.top)
         return "\n".join(lines + [line.rstrip() for line in self.screen.display])
+
+    def visible_text(self, history=False):
+        """返回去掉折行的可见文本，便于匹配被列宽切开的标记。"""
+        return "".join(self.text(history=history).split())

@@ -1,3 +1,5 @@
+use serde_json::Value;
+
 /// 判断错误是否适合在模型输出开始前自动重试（网络/断连/瞬时网关）。
 ///
 /// 参数:
@@ -93,22 +95,62 @@ fn contains_status(message: &str, status: u16) -> bool {
 /// 返回:
 /// - 去重后的完整错误链文本
 pub(crate) fn error_detail_text(error: &anyhow::Error) -> String {
-    let mut lines = Vec::new();
+    let mut lines: Vec<String> = Vec::new();
     for item in error.chain() {
-        let text = item.to_string();
-        let text = text.trim();
+        let text = simplify_error_text(item.to_string().trim());
         if text.is_empty() {
             continue;
         }
-        if lines.last().map(String::as_str) == Some(text) {
+        if lines.last() == Some(&text) {
             continue;
         }
-        lines.push(text.to_string());
+        lines.push(text);
     }
     if lines.is_empty() {
         return error.to_string();
     }
     lines.join("\n")
+}
+
+/// 把供应商返回的 JSON 错误体收成可读短句。
+///
+/// 参数:
+/// - `text`: 原始错误文本
+///
+/// 返回:
+/// - 适合终端展示的错误文本
+pub(crate) fn simplify_error_text(text: &str) -> String {
+    // 1. 没有 JSON 错误体时原样返回
+    let Some((prefix, body)) = text.split_once(": {") else {
+        return text.to_string();
+    };
+    // 2. 解析供应商 error 对象
+    let body = format!("{{{body}");
+    let Ok(value) = serde_json::from_str::<Value>(&body) else {
+        return text.to_string();
+    };
+    let Some(error) = value.get("error") else {
+        return text.to_string();
+    };
+    // 3. 抽出 message / type / code 拼成短句
+    let message = error
+        .get("message")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown provider error");
+    let kind = error.get("type").and_then(Value::as_str);
+    let code = error.get("code").and_then(Value::as_str);
+    let mut details = Vec::new();
+    if let Some(kind) = kind.filter(|value| !value.is_empty()) {
+        details.push(format!("type={kind}"));
+    }
+    if let Some(code) = code.filter(|value| !value.is_empty()) {
+        details.push(format!("code={code}"));
+    }
+    if details.is_empty() {
+        format!("{prefix}: {message}")
+    } else {
+        format!("{prefix}: {message} ({})", details.join(", "))
+    }
 }
 
 #[cfg(test)]
@@ -188,5 +230,15 @@ mod tests {
         assert!(detail.contains("outer layer"));
         assert!(detail.contains("mid layer"));
         assert!(detail.contains("root cause"));
+    }
+
+    #[test]
+    fn error_detail_text_extracts_openai_error_body() {
+        let err = anyhow::anyhow!(
+            "chat completions stream request failed (400 Bad Request): {{\"error\": {{\"message\": \"QUEUE-FAILURE-FIXTURE\", \"type\": \"invalid_request_error\"}}}}"
+        );
+        let detail = error_detail_text(&err);
+        assert!(detail.contains("QUEUE-FAILURE-FIXTURE"));
+        assert!(!detail.contains(r#""message""#));
     }
 }

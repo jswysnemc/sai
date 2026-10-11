@@ -32,7 +32,7 @@ class QueueRecoveryTests(unittest.TestCase):
                 terminal.wait_for(lambda: "QUEUED-START" in terminal.text())
                 terminal.send(b"\x03")
             else:
-                terminal.wait_for(lambda: "QUEUE-FAILURE-FIXTURE" in terminal.text(history=True))
+                terminal.wait_for(lambda: "QUEUE-FAILURE-FIXTURE" in terminal.visible_text(history=True))
             terminal.wait_for(lambda: any(label in terminal.text(history=True) for label in
                                          ["已保留 2", "kept 2", "已丢弃 2", "discarded 2"]))
             history = terminal.text(history=True)
