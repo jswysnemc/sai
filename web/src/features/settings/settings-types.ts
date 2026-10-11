@@ -9,6 +9,7 @@ export type SettingsSectionId =
   | "agents"
   | "cli-tools"
   | "web-search"
+  | "computer-use"
   | "runtime"
   | "prompts"
   | "skills"

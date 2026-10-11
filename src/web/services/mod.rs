@@ -1,4 +1,5 @@
 pub(super) mod agent_runtime;
+pub(super) mod computer_use;
 pub(super) mod config_service;
 pub(crate) mod context_breakdown;
 pub(super) mod context_prompt;

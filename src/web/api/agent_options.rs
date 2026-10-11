@@ -22,6 +22,10 @@ struct ToolOption {
     group_settings_path: Option<String>,
     group_rank: u8,
     description: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    full_description: String,
+    #[serde(skip_serializing_if = "serde_json::Value::is_null")]
+    parameters: serde_json::Value,
 }
 
 #[derive(Serialize)]
@@ -157,5 +161,7 @@ fn tool_option(entry: tools::ToolCatalogEntry) -> ToolOption {
         group_settings_path: entry.group_settings_path.map(str::to_string),
         group_rank: entry.group_rank,
         description: entry.description,
+        full_description: entry.full_description,
+        parameters: entry.parameters,
     }
 }

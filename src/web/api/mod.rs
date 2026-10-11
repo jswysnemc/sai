@@ -3,6 +3,7 @@ mod agents;
 mod background_tasks;
 mod background_work;
 mod browser;
+mod computer_use;
 mod config;
 mod cron_jobs;
 mod engine_connection;
@@ -61,6 +62,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
     let protected = Router::new()
         .merge(workspaces::routes())
         .merge(config::routes())
+        .merge(computer_use::routes())
         .merge(onboarding::routes())
         .merge(notifications::routes())
         .merge(engine_connection::routes())

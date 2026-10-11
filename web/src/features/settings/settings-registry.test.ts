@@ -39,6 +39,8 @@ describe("settings registry", () => {
     const bySearchProvider = filterSettingsSections("tavily");
     expect(bySearchProvider.map((item) => item.id)).toEqual(["web-search"]);
     expect(resolveSettingsSectionId("web-search")).toBe("web-search");
+    const byCua = filterSettingsSections("cua");
+    expect(byCua.some((item) => item.id === "computer-use")).toBe(true);
   });
 
   it("groups sections and skips empty groups when filtered", () => {

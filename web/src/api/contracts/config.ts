@@ -1,3 +1,4 @@
+import type { ComputerUseConfig } from "./computer-use";
 import type { JevConfig } from "./jev";
 import type { NotificationConfig, PermissionConfig, SessionConfig } from "./permissions";
 import type { SandboxConfig } from "./sandbox";
@@ -257,6 +258,8 @@ export type AppConfig = {
     cross_session?: boolean;
   };
   memory?: MemoryRuntimeConfig;
+  /** 原生桌面操作；缺省时保持关闭 */
+  computer_use?: ComputerUseConfig;
   [key: string]: unknown;
 };
 

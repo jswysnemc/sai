@@ -11,6 +11,7 @@ import { ModelEndpointSettings } from "../model-endpoints/model-endpoint-setting
 import { JevSettingsSection } from "../jev/jev-settings-section";
 import { CliToolsSettingsSection } from "../cli-tools/cli-tools-settings-section";
 import { WebSearchSettingsSection } from "../web-search/web-search-settings-section";
+import { ComputerUseSettingsSection } from "../computer-use/computer-use-settings-section";
 import { RuntimeSettingsSection } from "../runtime-settings-section";
 import { MemorySettingsSection } from "../memory/memory-settings-section";
 import { HooksSettingsSection } from "../hooks-settings-section";
@@ -93,6 +94,13 @@ function renderAppConfigSection(
         <WebSearchSettingsSection
           config={config}
           secretSentinel={settings.secretSentinel}
+          onConfigChange={settings.updateConfig}
+        />
+      );
+    case "computer-use":
+      return (
+        <ComputerUseSettingsSection
+          config={config}
           onConfigChange={settings.updateConfig}
         />
       );

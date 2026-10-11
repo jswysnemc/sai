@@ -1,0 +1,42 @@
+.computer-use-settings {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.computer-use-driver {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.computer-use-driver-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  min-width: 0;
+}
+
+.computer-use-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.computer-use-path {
+  margin: 0;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+@media (max-width: 40rem) {
+  .computer-use-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+}

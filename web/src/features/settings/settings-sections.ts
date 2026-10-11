@@ -11,6 +11,7 @@ import {
   Globe,
   ImagePlus,
   KeyRound,
+  MonitorCog,
   Palette,
   PlugZap,
   Server,
@@ -184,6 +185,18 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     descriptionZh: "内置搜索路由、供应商地址与凭据",
     icon: Globe,
     searchKeys: ["web-search", "search", "tinyfish", "tavily", "firecrawl", "anysearch", "brave", "exa", "searxng", "duckduckgo", "网页", "搜索", "联网"]
+  },
+  {
+    id: "computer-use",
+    group: "agentCapabilities",
+    appConfig: "required",
+    configKeys: ["computer_use"],
+    labelEn: "Computer Use",
+    labelZh: "桌面操作",
+    descriptionEn: "Native desktop control and cua-driver installation",
+    descriptionZh: "原生桌面控制与 cua-driver 安装",
+    icon: MonitorCog,
+    searchKeys: ["computer_use", "computer-use", "cua", "cua-driver", "desktop", "driver", "install", "桌面", "驱动", "安装", "原生"]
   },
   {
     id: "jev",

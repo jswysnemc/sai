@@ -35,6 +35,7 @@
 | agents | basics | required | api.config 与 Agent 接口 |
 | cli-tools | agentCapabilities | required | api.config；CLI 助手工具 |
 | web-search | agentCapabilities | required | api.config；网页搜索与凭据 |
+| computer-use | agentCapabilities | required | api.config；桌面操作开关、驱动路径与超时；驱动安装经独立接口确认后执行 |
 | jev | agentCapabilities | required | api.config；Jev 接入与决策 |
 | skills | agentCapabilities | optional | 技能文档即时保存；技能行为通过顶栏保存 |
 | mcp | agentCapabilities | none | MCP 独立配置文档，本节保存 |
@@ -76,7 +77,7 @@ JSON 编辑器统一提供复制、格式化与全屏编辑，切换窗口保留
 - `form` 布局限宽，`wide` 布局用于对象列表和数据页。
 - `search/entries-*.ts` 按领域维护索引。`anchor` 必须匹配字段标识，
   `focus` 查询参数触发滚动与短暂高亮；条件字段未显示时提供启用或选择提示。
-- 十九个分区均组合共享组件；旧布局、字段行、对象列表和补丁样式已删除。
+- 二十个分区均组合共享组件；旧布局、字段行、对象列表和补丁样式已删除。
   移动端保留搜索输入，分类横向滚动，搜索结果纵向展示。
 
 ## 技能边界
