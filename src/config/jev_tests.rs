@@ -37,7 +37,8 @@ fn root_url_is_completed_to_systemone() {
 
 #[test]
 fn endpoint_key_is_used_before_environment() {
-    let connection = jev_connection_for(Some(&endpoint("a", JEV_OFFICIAL_ENDPOINT, " own "))).unwrap();
+    let connection =
+        jev_connection_for(Some(&endpoint("a", JEV_OFFICIAL_ENDPOINT, " own "))).unwrap();
     assert_eq!(connection.api_key, "own");
     assert_eq!(connection.info.source, JevConnectionSource::Endpoint);
 }
@@ -53,7 +54,10 @@ fn missing_env_reference_is_reported() {
 fn first_jev_endpoint_is_used_when_id_is_empty() {
     let mut config = AppConfig::default();
     assert!(config.jev_endpoint().unwrap().is_none());
-    config.model_endpoints = vec![endpoint("one", JEV_OFFICIAL_ENDPOINT, "k"), endpoint("two", JEV_OFFICIAL_ENDPOINT, "k")];
+    config.model_endpoints = vec![
+        endpoint("one", JEV_OFFICIAL_ENDPOINT, "k"),
+        endpoint("two", JEV_OFFICIAL_ENDPOINT, "k"),
+    ];
     assert_eq!(config.jev_endpoint().unwrap().unwrap().id, "one");
     config.jev.endpoint_id = "two".into();
     assert_eq!(config.jev_endpoint().unwrap().unwrap().id, "two");

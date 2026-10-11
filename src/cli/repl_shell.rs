@@ -46,21 +46,23 @@ pub(super) async fn execute_repl_shell_live(
     }
     let invocation = crate::platform::shell::command_invocation(command);
     let cwd = crate::runtime_cwd::current_dir()?;
-    let mut child = Command::new(&invocation.program)
+    let mut process = Command::new(&invocation.program);
+    process
         .args(&invocation.args)
         .current_dir(cwd)
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         // 本函数返回或异步任务被取消时都要收掉子进程，不留孤儿
-        .kill_on_drop(true)
-        .spawn()
-        .with_context(|| {
-            format!(
-                "{}: {}",
-                t("Shell command failed", "Shell 命令执行失败"),
-                invocation.program.to_string_lossy()
-            )
-        })?;
+        .kill_on_drop(true);
+    crate::platform::job_control::isolate_tokio_command(&mut process);
+    let mut child = process.spawn().with_context(|| {
+        format!(
+            "{}: {}",
+            t("Shell command failed", "Shell 命令执行失败"),
+            invocation.program.to_string_lossy()
+        )
+    })?;
     // 管道必须在等待期间并发读空：子进程写满管道缓冲区会阻塞在 write 上，
     // 而父进程阻塞在 wait() 上，二者互相等待直接死锁
     let stdout_task = tokio::spawn(read_pipe_to_vec(child.stdout.take()));

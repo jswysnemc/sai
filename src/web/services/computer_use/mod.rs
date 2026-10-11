@@ -10,6 +10,7 @@ mod release;
 mod tests;
 
 use crate::paths::SaiPaths;
+#[cfg(test)]
 use anyhow::Result;
 use serde::Serialize;
 
@@ -104,6 +105,7 @@ pub async fn status(paths: &SaiPaths, configured_path: &str) -> DriverStatus {
 ///
 /// 返回:
 /// - 安装结果
+#[cfg(test)]
 pub(crate) fn install_with_fetcher(
     paths: &SaiPaths,
     fetch: impl Fn(&str) -> Result<Vec<u8>>,

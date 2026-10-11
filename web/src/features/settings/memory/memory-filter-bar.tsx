@@ -1,4 +1,4 @@
-import { ChoicePills, SettingsField, SkTextInput } from "../kit";
+import { ChoicePills, SkTextInput } from "../kit";
 import type { MemorySummary } from "../../../api/contracts";
 import { useI18n } from "../../i18n/use-i18n";
 import {
@@ -34,9 +34,7 @@ const SCOPE_LABELS: Array<{ value: MemoryScopeFilter; en: string; zh: string }> 
 ];
 
 /**
- * 记忆列表的筛选栏：类型、作用域与关键字。
- *
- * 角标显示每个桶的条数且只按单一维度统计，切换条件时数字不跳动。
+ * 记忆列表的紧凑筛选栏：关键字、类型与作用域。
  *
  * @param props 全部条目与当前筛选条件及回调
  * @returns 筛选栏
@@ -53,9 +51,31 @@ export function MemoryFilterBar({
   const { t } = useI18n();
   const counts = countMemories(entries);
 
-  return <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,max-content)_minmax(0,max-content)]">
-    <SettingsField label={t("Search", "搜索")} anchor="memory.search" span="full"><SkTextInput type="search" value={query} onChange={onQueryChange} placeholder={t("Filter by identifier or summary", "按标识或摘要筛选")} /></SettingsField>
-    <SettingsField label={t("Memory type", "记忆类型")} anchor="memory.type"><ChoicePills value={type} onChange={onTypeChange} options={TYPE_LABELS.map((option) => ({ value: option.value, label: `${t(option.en, option.zh)} ${counts.types[option.value]}` }))} /></SettingsField>
-    <SettingsField label={t("Memory scope", "记忆作用域")} anchor="memory.scope"><ChoicePills value={scope} onChange={onScopeChange} options={SCOPE_LABELS.map((option) => ({ value: option.value, label: `${t(option.en, option.zh)} ${counts.scopes[option.value]}` }))} /></SettingsField>
-  </div>;
+  return (
+    <div className="memory-filter-bar">
+      <SkTextInput
+        type="search"
+        value={query}
+        onChange={onQueryChange}
+        placeholder={t("Filter by identifier or summary", "按标识或摘要筛选")}
+        aria-label={t("Search memories", "搜索记忆")}
+      />
+      <ChoicePills
+        value={type}
+        onChange={onTypeChange}
+        options={TYPE_LABELS.map((option) => ({
+          value: option.value,
+          label: `${t(option.en, option.zh)} ${counts.types[option.value]}`
+        }))}
+      />
+      <ChoicePills
+        value={scope}
+        onChange={onScopeChange}
+        options={SCOPE_LABELS.map((option) => ({
+          value: option.value,
+          label: `${t(option.en, option.zh)} ${counts.scopes[option.value]}`
+        }))}
+      />
+    </div>
+  );
 }

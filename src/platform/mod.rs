@@ -1,3 +1,4 @@
+pub(crate) mod job_control;
 pub(crate) mod output_encoding;
 pub(crate) mod shell;
 #[cfg(any(windows, test))]

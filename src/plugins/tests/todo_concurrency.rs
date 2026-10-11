@@ -23,7 +23,13 @@ async fn call_with_busy_retry(
             Ok(text) => return Ok(serde_json::from_str(&text)?),
             Err(error) if format!("{error:#}").contains("private data is busy") => {
                 // 2. 梯度增加休眠间隔，减少高并发时的锁饥饿
-                let delay_ms = if attempt < 32 { 2 } else if attempt < 128 { 5 } else { 10 };
+                let delay_ms = if attempt < 32 {
+                    2
+                } else if attempt < 128 {
+                    5
+                } else {
+                    10
+                };
                 tokio::time::sleep(Duration::from_millis(delay_ms)).await;
             }
             Err(error) => return Err(error),

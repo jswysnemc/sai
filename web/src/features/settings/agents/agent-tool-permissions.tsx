@@ -1,7 +1,9 @@
 import { CheckCheck, Search, Timer, X } from "../../../shared/ui/icons";
 import { useMemo, useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
+import { Modal } from "../../../shared/ui/dialog/modal";
 import { useI18n } from "../../i18n/use-i18n";
+import { SwitchField } from "../kit";
 import type { AgentToolOption } from "./agents-types";
 import {
   countToolModes,
@@ -22,6 +24,10 @@ type AgentToolPermissionsProps = {
   enabled: string[];
   /** 当前需要 load 才暴露的工具名称 */
   deferred: string[];
+  /** 独占白名单：仅所选工具可用 */
+  exclusive?: boolean;
+  /** 独占开关变化回调 */
+  onExclusiveChange?: (exclusive: boolean) => void;
   /** 工具权限变化回调 */
   onChange: (enabledTools: string[], deferredTools: string[]) => void;
 };
@@ -30,19 +36,26 @@ type AgentToolPermissionsProps = {
 type ToolStatusFilter = "all" | ToolMode;
 
 /**
- * 渲染可搜索、可分组批量设置与右侧联动详情的 Agent 工具三段权限面板。
+ * 渲染可搜索、可分组批量设置的 Agent 工具三段权限面板。
  *
  * 三段语义：on 会话开始即暴露，load 由模型按需加载，off 完全不注册。
- * 点击左侧任意工具，右侧即时展示该工具的完整参数 Schema、说明和权限操作。
+ * 点击工具后以弹窗展示参数 Schema、说明和权限操作。
  *
- * @param props 工具列表、两类已启用名称和变化回调
+ * @param props 工具列表、两类已启用名称、独占开关与变化回调
  * @returns 工具权限面板
  */
-export function AgentToolPermissions({ tools, enabled, deferred, onChange }: AgentToolPermissionsProps) {
+export function AgentToolPermissions({
+  tools,
+  enabled,
+  deferred,
+  exclusive = false,
+  onExclusiveChange,
+  onChange
+}: AgentToolPermissionsProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<ToolStatusFilter>("all");
-  const [selectedToolName, setSelectedToolName] = useState<string | null>(tools[0]?.name ?? null);
+  const [selectedToolName, setSelectedToolName] = useState<string | null>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const selection: ToolModeSelection = { enabled, deferred };
   const allNames = tools.map((tool) => tool.name);
@@ -124,9 +137,9 @@ export function AgentToolPermissions({ tools, enabled, deferred, onChange }: Age
       .filter(({ visibleItems }) => visibleItems.length > 0);
   }, [deferred, enabled, normalizedQuery, statusFilter, t, tools]);
 
-  // 当前选中的工具对象，优先从所有工具中匹配
+  // 当前选中的工具；未点击时不打开详情弹窗
   const activeTool = useMemo(() => {
-    return tools.find((tool) => tool.name === selectedToolName) ?? tools[0] ?? null;
+    return tools.find((tool) => tool.name === selectedToolName) ?? null;
   }, [selectedToolName, tools]);
 
   const activeToolMode = useMemo(() => {
@@ -142,6 +155,18 @@ export function AgentToolPermissions({ tools, enabled, deferred, onChange }: Age
 
   return (
     <div className="agent-permissions-panel agent-tool-permissions">
+      {onExclusiveChange && (
+        <SwitchField
+          className="agent-permissions-exclusive"
+          label={t("Exclusive whitelist", "独占白名单")}
+          hint={t(
+            "Only selected tools are available; an empty list disables every tool, including fallback tools.",
+            "仅提供所选工具；留空会关闭全部工具，包括兜底工具。"
+          )}
+          checked={exclusive}
+          onChange={onExclusiveChange}
+        />
+      )}
       <div className="agent-permissions-toolbar">
         <label className="agent-permissions-search">
           <Search size={14} aria-hidden="true" />
@@ -218,15 +243,25 @@ export function AgentToolPermissions({ tools, enabled, deferred, onChange }: Age
           </div>
         )}
 
-        <aside className="agent-tool-detail-column" aria-label={t("Tool details", "工具详情")}>
+      </div>
+
+      {activeTool && (
+        <Modal
+          open
+          title={activeTool.name}
+          description={`${t(activeTool.group_label_en || activeTool.group, activeTool.group_label || activeTool.group)} · ${activeTool.resident ? t("Resident", "常驻工具") : t("On demand", "按需暴露")}`}
+          size="large"
+          className="agent-tool-detail-dialog"
+          onClose={() => setSelectedToolName(null)}
+        >
           <AgentToolDetailPane
             tool={activeTool}
             mode={activeToolMode}
             modeLabels={modeLabels}
             onModeChange={(name, nextMode) => applyChange([name], nextMode)}
           />
-        </aside>
-      </div>
+        </Modal>
+      )}
     </div>
   );
 }

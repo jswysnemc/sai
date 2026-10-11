@@ -1,3 +1,12 @@
+.ssh-host-body {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ssh-host-search {
+  display: block;
+}
+
 .ssh-host-actions {
   display: flex;
   flex-wrap: wrap;

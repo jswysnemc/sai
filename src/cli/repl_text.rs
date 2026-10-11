@@ -219,8 +219,8 @@ fn visible_chars(value: &str) -> impl Iterator<Item = char> + '_ {
     std::iter::from_fn(move || {
         while index < value.len() {
             if value.as_bytes()[index] == 0x1b {
-                index = crate::render::terminal_image::escape_sequence_end(value, index)
-                    .max(index + 1);
+                index =
+                    crate::render::terminal_image::escape_sequence_end(value, index).max(index + 1);
                 continue;
             }
             let ch = value[index..].chars().next()?;

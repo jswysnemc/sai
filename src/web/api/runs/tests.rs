@@ -5,22 +5,57 @@ use axum::response::IntoResponse;
 #[tokio::test]
 async fn subscription_resets_expired_history_before_live_events() {
     let root = tempfile::tempdir().unwrap();
-    let bus = crate::runner::SessionActor::spawn(root.path().join("events.jsonl"), "workspace", "session");
+    let bus = crate::runner::SessionActor::spawn(
+        root.path().join("events.jsonl"),
+        "workspace",
+        "session",
+    );
     let journal = bus.journal();
-    journal.publish(WebEvent::new("run", "workspace", "session", "run.started", json!({"input":"question"})));
+    journal.publish(WebEvent::new(
+        "run",
+        "workspace",
+        "session",
+        "run.started",
+        json!({"input":"question"}),
+    ));
     for _ in 0..3000 {
-        journal.publish(WebEvent::new("run", "workspace", "session", "message.content.delta", json!({"text":"x"})));
+        journal.publish(WebEvent::new(
+            "run",
+            "workspace",
+            "session",
+            "message.content.delta",
+            json!({"text":"x"}),
+        ));
     }
     let stream = session_events_stream(bus.clone(), 0).await.unwrap().take(2);
-    bus.emit(WebEvent::new("run", "workspace", "session", "message.content.delta", json!({"text":"new"}))).unwrap();
+    bus.emit(WebEvent::new(
+        "run",
+        "workspace",
+        "session",
+        "message.content.delta",
+        json!({"text":"new"}),
+    ))
+    .unwrap();
     let response = Sse::new(stream).into_response();
-    let bytes = tokio::time::timeout(Duration::from_secs(5), axum::body::to_bytes(response.into_body(), 32 * 1024)).await.unwrap().unwrap();
+    let bytes = tokio::time::timeout(
+        Duration::from_secs(5),
+        axum::body::to_bytes(response.into_body(), 32 * 1024),
+    )
+    .await
+    .unwrap()
+    .unwrap();
     let body = std::str::from_utf8(&bytes).unwrap();
     assert_eq!(body.matches("event: stream.reset").count(), 1);
-    let payloads = body.lines().filter_map(|line| line.strip_prefix("data: "))
-        .map(|data| serde_json::from_str::<Value>(data).unwrap()).collect::<Vec<_>>();
+    let payloads = body
+        .lines()
+        .filter_map(|line| line.strip_prefix("data: "))
+        .map(|data| serde_json::from_str::<Value>(data).unwrap())
+        .collect::<Vec<_>>();
     assert_eq!(payloads[0]["through_sequence"], 3001);
-    assert_eq!(payloads[0]["events"][1]["payload"]["text"], "x".repeat(3000));
+    assert_eq!(
+        payloads[0]["events"][1]["payload"]["text"],
+        "x".repeat(3000)
+    );
     assert_eq!(payloads[1]["sequence"], 3002);
     assert_eq!(payloads[1]["payload"]["text"], "new");
     assert_eq!(payloads[1]["replayed"], false);
@@ -30,13 +65,29 @@ async fn subscription_resets_expired_history_before_live_events() {
 #[tokio::test]
 async fn subscription_replays_terminal_event_queued_before_attach() {
     let root = tempfile::tempdir().unwrap();
-    let bus = crate::runner::SessionActor::spawn(root.path().join("events.jsonl"), "workspace", "session");
-    bus.emit(WebEvent::new("run", "workspace", "session", "run.completed", json!({"content":"complete"}))).unwrap();
+    let bus = crate::runner::SessionActor::spawn(
+        root.path().join("events.jsonl"),
+        "workspace",
+        "session",
+    );
+    bus.emit(WebEvent::new(
+        "run",
+        "workspace",
+        "session",
+        "run.completed",
+        json!({"content":"complete"}),
+    ))
+    .unwrap();
     // 1. 当前线程还没有让出执行权，结束事件仍排在订阅命令前
     let stream = session_events_stream(bus, 0).await.unwrap().take(1);
     let response = Sse::new(stream).into_response();
-    let bytes = tokio::time::timeout(Duration::from_millis(500), axum::body::to_bytes(response.into_body(), 16 * 1024)).await
-        .expect("queued terminal event was lost during subscription").unwrap();
+    let bytes = tokio::time::timeout(
+        Duration::from_millis(500),
+        axum::body::to_bytes(response.into_body(), 16 * 1024),
+    )
+    .await
+    .expect("queued terminal event was lost during subscription")
+    .unwrap();
     let body = std::str::from_utf8(&bytes).unwrap();
     assert_eq!(body.matches("event: run.completed").count(), 1);
 }

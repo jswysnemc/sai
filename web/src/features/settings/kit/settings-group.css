@@ -1,6 +1,8 @@
 /* 【Web 设置】【分组卡片】圆角细边框、最低表面、行间细分隔；不裁切下拉 */
 
 .sk-group {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius-4);
@@ -11,9 +13,26 @@
   border-top: 1px solid var(--line);
 }
 
-/* 非字段行、非栅格的自由内容：与行相同的左右内边距 */
-.sk-group > :not(.sk-row):not(.sk-grid):not(.sk-notice) {
+/* 自由内容沿用字段行左右内边距；输入、按钮、表格、对象分区自行管理间距 */
+
+.sk-group > :not(.sk-row):not(.sk-grid):not(.sk-notice):not(.sk-table-wrap):not(.sk-md-host):not(.sk-object-nav):not(.sk-input):not(.sk-textarea):not(.sk-select):not(.sk-number):not(.ui-button) {
   padding: 0.75rem 1rem;
+}
+
+.sk-group > .sk-input,
+.sk-group > .sk-textarea,
+.sk-group > .sk-select,
+.sk-group > .sk-number,
+.sk-group > .ui-button {
+  width: calc(100% - 2rem);
+  max-width: calc(100% - 2rem);
+  margin: 0.75rem 1rem;
+}
+
+.sk-group > .ui-button {
+  width: auto;
+  max-width: none;
+  align-self: start;
 }
 
 /* 对象分区与主从布局撑满卡片，去掉额外内边距与边框，避免裁切 */
@@ -27,6 +46,13 @@
 .sk-group:has(.sk-object-nav) > :not(.sk-row) {
   padding: 0;
   border-top: 0;
+}
+
+.sk-group:has(.sk-table-wrap) > .sk-table-wrap {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 /* 卡片内的提示条沿用自身边框，不再叠一层内边距 */

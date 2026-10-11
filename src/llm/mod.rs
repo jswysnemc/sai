@@ -1,3 +1,4 @@
+mod assistant_content;
 mod http_debug;
 mod openai_compatible;
 mod stream_event;
@@ -5,7 +6,6 @@ mod thinking;
 mod tool_argument_stats;
 mod tool_call_stream;
 mod transport_retry;
-mod assistant_content;
 
 pub(crate) use assistant_content::ProviderAssistantContent;
 
@@ -89,7 +89,10 @@ pub struct FunctionDefinition {
 
 impl ChatMessage {
     /// 【模型接口】【助手原文】附加供应商内容块；参数为原始块，返回当前消息。
-    pub(crate) fn with_provider_content(mut self, content: Option<ProviderAssistantContent>) -> Self {
+    pub(crate) fn with_provider_content(
+        mut self,
+        content: Option<ProviderAssistantContent>,
+    ) -> Self {
         self.provider_content = content;
         self
     }
@@ -220,9 +223,12 @@ impl ChatResult {
     /// 【模型接口】【助手消息】为后续请求构造完整助手消息，包含原始协议块。
     /// @returns 正文、思考及工具调用；无额外参数
     pub(crate) fn assistant_message(&self) -> ChatMessage {
-        ChatMessage::assistant(self.content.clone(), (!self.tool_calls.is_empty()).then(|| self.tool_calls.clone()))
-            .with_reasoning(self.reasoning.clone())
-            .with_provider_content(self.provider_content.clone())
+        ChatMessage::assistant(
+            self.content.clone(),
+            (!self.tool_calls.is_empty()).then(|| self.tool_calls.clone()),
+        )
+        .with_reasoning(self.reasoning.clone())
+        .with_provider_content(self.provider_content.clone())
     }
 }
 

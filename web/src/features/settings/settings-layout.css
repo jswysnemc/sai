@@ -110,26 +110,72 @@
 }
 
 .settings-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 2.25rem 2.5rem 0;
+}
+
+.settings-main-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  max-width: var(--sk-form-max);
+  min-height: 0;
+  margin: 0 auto;
+}
+
+.settings-main-chrome {
+  flex: none;
+  padding-bottom: 0.5rem;
+  background: var(--paper);
+}
+
+.settings-main-body {
   flex: 1;
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  padding: 2.25rem 2.5rem 4.5rem;
+  padding-bottom: 4.5rem;
 }
 
-.settings-main-content {
-  width: 100%;
-  max-width: var(--sk-form-max);
-  margin: 0 auto;
+/* 对象分区：页头固定，列表与详情各自滚动；不含嵌套主从布局 */
+.settings-main-body:has(> .sk-md-host),
+.settings-main-body:has(.agent-settings-shell),
+.settings-main-body:has(.memory-workspace) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0;
 }
 
-.settings-page-header + .sk-notice,
-.settings-page-header + .settings-subnav {
-  margin-top: 1.25rem;
+.settings-main-body:has(> .sk-md-host) > *,
+.settings-main-body:has(.agent-settings-shell) > *,
+.settings-main-body:has(.memory-workspace) > * {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
 }
 
-.settings-page-header + .sk-notice + .settings-subnav {
+.settings-main-body > .sk-md-host,
+.settings-main-body .agent-settings-shell,
+.settings-main-body .memory-workspace {
+  flex: 1;
+  min-height: 0;
+}
+
+.settings-main-chrome .settings-page-header + .sk-notice,
+.settings-main-chrome .settings-page-header + .settings-subnav {
+  margin-top: 0.5rem;
+}
+
+.settings-main-chrome .settings-page-header + .sk-notice + .settings-subnav {
   margin-top: 0.75rem;
 }
 
@@ -188,6 +234,7 @@
   .settings-crumb-separator,
   .settings-crumb-subview { display: none; }
   .settings-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
-  .settings-main { padding: 1.25rem 1rem 4rem; }
+  .settings-main { padding: 1.25rem 1rem 0; }
+  .settings-main-body { padding-bottom: 4rem; }
   .settings-save-hint { font-size: var(--text-xs); }
 }

@@ -25,6 +25,24 @@ describe("AgentToolPermissions", () => {
     expect(html).toContain("全部启用");
     expect(html).toContain("非常驻按需");
     expect(html).toContain('aria-label="筛选工具状态"');
+    expect(html).not.toContain("agent-tool-detail-column");
+    expect(html).not.toContain("agent-tool-detail-pane");
+  });
+
+  it("提供独占开关时渲染独占白名单", () => {
+    const html = renderToStaticMarkup(
+      <AgentToolPermissions
+        tools={tools}
+        enabled={["read_file"]}
+        deferred={[]}
+        exclusive={false}
+        onExclusiveChange={vi.fn()}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(html).toContain("独占白名单");
+    expect(html).toContain("agent-permissions-exclusive");
   });
 
   it("按三段状态渲染每个工具的当前档位", () => {

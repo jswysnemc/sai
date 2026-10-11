@@ -57,7 +57,11 @@ pub(super) fn detach_if_interactive(args: &WebArgs) -> Result<bool> {
     let mut reader = BufReader::new(stdout);
     let mut line = String::new();
     let mut address = String::new();
-    while reader.read_line(&mut line).context("wait for Sai Web address")? > 0 {
+    while reader
+        .read_line(&mut line)
+        .context("wait for Sai Web address")?
+        > 0
+    {
         let trimmed = line.trim();
         if trimmed.contains("http://") || trimmed.contains("https://") {
             address = trimmed.to_string();

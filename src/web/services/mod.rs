@@ -5,14 +5,14 @@ pub(crate) mod context_breakdown;
 pub(super) mod context_prompt;
 mod context_prompt_section;
 mod context_runtime;
+mod input_template_catalog;
 #[cfg(test)]
 mod model_endpoint_config_tests;
 pub(super) mod prompt_service;
-mod input_template_catalog;
-pub(crate) mod provider_models;
 pub(crate) mod provider_identity;
 #[cfg(test)]
 mod provider_identity_tests;
+pub(crate) mod provider_models;
 pub(super) mod provider_probe;
 pub(crate) mod weixin_login;
 

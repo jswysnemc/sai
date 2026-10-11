@@ -170,12 +170,20 @@ pub(super) async fn session_events_stream(
     let replay = journal.replay_after(after);
     let latest_backlog = replay.through_sequence;
     let reset = replay.reset.map(|reset| {
-        Event::default().event("stream.reset")
+        Event::default()
+            .event("stream.reset")
             .id(reset.through_sequence.to_string())
             .data(serde_json::to_string(&reset).unwrap_or_else(|_| "{}".to_string()))
     });
     let backlog_stream = stream::iter(
-        reset.into_iter().chain(replay.events.into_iter().map(|event| sse_event(&event, true)))
+        reset
+            .into_iter()
+            .chain(
+                replay
+                    .events
+                    .into_iter()
+                    .map(|event| sse_event(&event, true)),
+            )
             .map(Ok::<_, Infallible>),
     );
     let live_stream = ReceiverStream::new(subscription.events).filter_map(move |event| {

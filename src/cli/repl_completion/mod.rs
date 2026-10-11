@@ -30,12 +30,33 @@ pub(super) fn arguments(input: &str, streaming: bool) -> Vec<ReplCommandSuggesti
             t("clear all conversation data", "清空全部对话数据"),
         )],
         "/jev" => &[
-            ("/jev status", t("show connection and switches", "查看接入与开关")),
+            (
+                "/jev status",
+                t("show connection and switches", "查看接入与开关"),
+            ),
             ("/jev test", t("test the Jev connection", "测试 Jev 连接")),
-            ("/jev routing on", t("enable tool and skill routing", "开启工具与 Skills 暴露决策")),
-            ("/jev routing off", t("disable tool and skill routing", "关闭工具与 Skills 暴露决策")),
-            ("/jev audit on", t("enable Jev permission audit", "开启 Jev 权限审核")),
-            ("/jev audit off", t("disable Jev permission audit", "关闭 Jev 权限审核")),
+            (
+                "/jev routing on",
+                t(
+                    "enable tool and skill routing",
+                    "开启工具与 Skills 暴露决策",
+                ),
+            ),
+            (
+                "/jev routing off",
+                t(
+                    "disable tool and skill routing",
+                    "关闭工具与 Skills 暴露决策",
+                ),
+            ),
+            (
+                "/jev audit on",
+                t("enable Jev permission audit", "开启 Jev 权限审核"),
+            ),
+            (
+                "/jev audit off",
+                t("disable Jev permission audit", "关闭 Jev 权限审核"),
+            ),
         ],
         _ => &[],
     };

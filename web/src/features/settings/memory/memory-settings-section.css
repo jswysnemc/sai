@@ -1,4 +1,152 @@
-/* 记忆分区：紧凑元信息行、折叠式新建表单、条目列表、底部工具区与页脚 */
+/* 记忆分区：双栏工作区，左侧导航、右侧详情 */
+
+.memory-workspace {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-4);
+  background: var(--paper-raised);
+}
+
+.memory-workspace-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  flex: none;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.memory-workspace-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.memory-workspace-body {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
+  min-height: 0;
+}
+
+.memory-workspace-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  min-height: 0;
+  padding: 0.75rem;
+  overflow: hidden;
+  border-right: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.memory-workspace-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  min-height: 0;
+  padding: 0.75rem 1rem 1rem;
+  overflow-y: auto;
+}
+
+.memory-nav {
+  display: grid;
+  flex: 1;
+  gap: 0.75rem;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.memory-nav-group h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+  margin: 0 0 0.375rem;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.memory-nav-group h3 small {
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+
+.memory-nav-list {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.memory-nav-row {
+  display: grid;
+  gap: 0.125rem;
+  width: 100%;
+  padding: 0.45rem 0.5rem;
+  border: 0;
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.memory-nav-row:hover {
+  background: var(--surface-hover);
+}
+
+.memory-nav-row.is-current {
+  background: var(--surface-selected);
+}
+
+.memory-nav-row code {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-nav-row span {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-nav-row em {
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+  font-style: normal;
+}
+
+.memory-item.is-detail {
+  border: 0;
+  padding: 0;
+}
+
+@media (max-width: 48rem) {
+  .memory-workspace-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .memory-workspace-nav {
+    max-height: 16rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}
 
 /* ---------- 元信息行：统计数字 + 工作区选择 + 存储路径 ---------- */
 
@@ -7,7 +155,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-md);
-  margin-bottom: var(--space-lg);
   font-size: var(--text-sm);
 }
 
@@ -53,8 +200,8 @@
 .memory-compose-toggle {
   display: inline-flex;
   align-items: center;
+  width: fit-content;
   gap: var(--space-2xs, 0.25rem);
-  margin-bottom: var(--space-lg);
 }
 
 .memory-compose {
@@ -151,10 +298,17 @@
 .memory-item-toggle {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: var(--space-xs);
   flex: 1;
   min-width: 0;
   text-align: left;
+}
+
+.memory-item-head .ui-button.memory-item-toggle {
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
 }
 
 .memory-item-toggle code {
@@ -171,8 +325,9 @@
 }
 
 .memory-item p {
-  margin: var(--space-xs) 0 0;
+  margin: var(--space-xs) 0 0 1.25rem;
   font-size: var(--text-sm);
+  text-align: left;
   opacity: 0.85;
 }
 
@@ -213,9 +368,11 @@
 
 .memory-tools-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
-  gap: var(--space-lg);
-  margin-top: var(--space-2xl);
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-md);
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
   align-items: start;
 }
 
@@ -364,11 +521,8 @@
 /* ---------- 筛选栏：关键字搜索 + 类型/作用域 chips ---------- */
 
 .memory-filter-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-lg);
+  display: grid;
+  gap: 0.5rem;
 }
 
 .memory-filter-bar .memory-search {

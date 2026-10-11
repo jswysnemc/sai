@@ -87,10 +87,7 @@ pub(crate) fn build_activity_as_of(records: &[UsageRecord], today: NaiveDate) ->
     }
     // 2. 连续天数与峰值只看窗口内有请求的日子
     let streaks = compute_streaks(&daily_activity);
-    let active_days = daily_activity
-        .iter()
-        .filter(|day| day.requests > 0)
-        .count() as u64;
+    let active_days = daily_activity.iter().filter(|day| day.requests > 0).count() as u64;
     let peak_activity_day = daily_activity
         .iter()
         .filter(|day| day.tokens > 0)
@@ -318,7 +315,8 @@ mod tests {
     fn window_starts_on_sunday() {
         let today = date(2026, 5, 9);
         let activity = build_activity_as_of(&[], today);
-        let start = NaiveDate::parse_from_str(&activity.daily_activity[0].date, "%Y-%m-%d").unwrap();
+        let start =
+            NaiveDate::parse_from_str(&activity.daily_activity[0].date, "%Y-%m-%d").unwrap();
         assert_eq!(start.weekday(), Weekday::Sun);
     }
 }

@@ -574,14 +574,7 @@ fn inherit_env(mut command: Command) -> Command {
 
 #[cfg(unix)]
 fn configure_process_group(command: &mut Command) {
-    unsafe {
-        command.pre_exec(|| {
-            if libc::setpgid(0, 0) == -1 {
-                return Err(std::io::Error::last_os_error());
-            }
-            Ok(())
-        });
-    }
+    crate::platform::job_control::isolate_tokio_command(command);
 }
 
 #[cfg(not(unix))]

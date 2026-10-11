@@ -145,7 +145,11 @@ fn catalog_entries(registry: ToolRegistry) -> Vec<ToolCatalogEntry> {
 }
 
 /// 将工具元数据转换为设置页目录项。
-fn catalog_entry(name: String, description: String, parameters: serde_json::Value) -> ToolCatalogEntry {
+fn catalog_entry(
+    name: String,
+    description: String,
+    parameters: serde_json::Value,
+) -> ToolCatalogEntry {
     let group = groups::group_for_tool(&name);
     // 常驻与否由基础集合决定，与用途分组无关：网格工具自成一组却仍是常驻的，
     // 前端若拿分组推断就会把它显示成"按需"，和实际行为对不上。

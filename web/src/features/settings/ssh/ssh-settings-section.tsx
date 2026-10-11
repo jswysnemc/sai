@@ -137,17 +137,19 @@ export function SshSettingsSection() {
       <Button variant="primary" onClick={startCreate}><Plus size={14} />{t("Add host", "新增主机")}</Button>
       <Button variant="secondary" onClick={() => setImportOpen(true)}><Download size={14} />{t("Import from ~/.ssh/config", "从 ~/.ssh/config 导入")}</Button>
     </>}>
-      <SkTextInput type="search" value={query} onChange={setQuery} aria-label={t("Search hosts", "搜索主机")} placeholder={t("Search name or address", "搜索名称或地址")} />
-      <DataTable label={t("SSH hosts", "SSH 主机")} rows={visible} rowKey={(host) => host.id} columns={[
-        { id: "name", header: t("Name", "名称"), sortValue: (host) => host.label, render: (host) => host.label },
-        { id: "address", header: t("Address", "地址"), sortValue: sshHostAddress, render: (host) => <span className="break-all">{sshHostAddress(host)}</span> },
-        { id: "actions", header: t("Actions", "操作"), render: (host) => <div className="flex gap-1">
-          <Button variant="ghost" size="icon" disabled={connection.busy} onClick={() => void connection.open(host)} aria-label={t(`Open ${host.label} in a terminal`, `在终端中打开 ${host.label}`)} title={t("Open in terminal", "在终端中打开")}><Terminal size={14} /></Button>
-          <Button variant="ghost" size="icon" onClick={() => startEdit(host)} aria-label={t("Edit host", "编辑主机")}><Pencil size={14} /></Button>
-          <Button variant="ghost-danger" size="icon" onClick={() => void remove(host)} aria-label={t("Remove host", "删除主机")}><Trash2 size={14} /></Button>
-        </div> }
-      ]} />
-      {error && <p className="ssh-host-error">{error}</p>}
+      <div className="ssh-host-body">
+        <SkTextInput className="ssh-host-search" type="search" value={query} onChange={setQuery} aria-label={t("Search hosts", "搜索主机")} placeholder={t("Search name or address", "搜索名称或地址")} />
+        <DataTable label={t("SSH hosts", "SSH 主机")} rows={visible} rowKey={(host) => host.id} columns={[
+          { id: "name", header: t("Name", "名称"), sortValue: (host) => host.label, render: (host) => host.label },
+          { id: "address", header: t("Address", "地址"), sortValue: sshHostAddress, render: (host) => <span className="break-all">{sshHostAddress(host)}</span> },
+          { id: "actions", header: t("Actions", "操作"), render: (host) => <div className="flex gap-1">
+            <Button variant="ghost" size="icon" disabled={connection.busy} onClick={() => void connection.open(host)} aria-label={t(`Open ${host.label} in a terminal`, `在终端中打开 ${host.label}`)} title={t("Open in terminal", "在终端中打开")}><Terminal size={14} /></Button>
+            <Button variant="ghost" size="icon" onClick={() => startEdit(host)} aria-label={t("Edit host", "编辑主机")}><Pencil size={14} /></Button>
+            <Button variant="ghost-danger" size="icon" onClick={() => void remove(host)} aria-label={t("Remove host", "删除主机")}><Trash2 size={14} /></Button>
+          </div> }
+        ]} />
+        {error && <p className="ssh-host-error">{error}</p>}
+      </div>
     </SettingsPanel>
       <Modal
         open={formOpen}

@@ -323,7 +323,11 @@ fn control_rows_are_the_fold_hint_and_the_collapse_line() {
     let collapsed = store.render_fullscreen(80, &options(), &HashSet::new());
     let text = plain(&collapsed);
     for span in &collapsed.paragraphs {
-        assert!(text[span.control].contains("hidden"), "{:?}", text[span.control]);
+        assert!(
+            text[span.control].contains("hidden"),
+            "{:?}",
+            text[span.control]
+        );
         assert!(span.control >= span.start && span.control < span.end);
     }
     let output_key = collapsed.paragraphs[1].key;
@@ -334,6 +338,9 @@ fn control_rows_are_the_fold_hint_and_the_collapse_line() {
     assert!(text[output.control].contains("Show less"), "{text:?}");
     // 收起行插在输出段末尾，命令段的控制行仍是原提示
     assert!(text[open.paragraphs[0].control].contains("hidden"));
-    assert_eq!(open.paragraph_control_at(output.control).map(|s| s.key), Some(output_key));
+    assert_eq!(
+        open.paragraph_control_at(output.control).map(|s| s.key),
+        Some(output_key)
+    );
     assert!(open.paragraph_control_at(output.start).is_none() || output.start == output.control);
 }

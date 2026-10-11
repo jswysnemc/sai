@@ -1,5 +1,5 @@
-mod http;
 mod html;
+mod http;
 mod output;
 mod request;
 #[cfg(test)]

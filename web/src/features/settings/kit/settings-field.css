@@ -23,7 +23,7 @@
   color: var(--ink-soft);
   font-size: var(--text-sm);
   line-height: 1.5;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .sk-field-hint.is-error { color: var(--danger); }

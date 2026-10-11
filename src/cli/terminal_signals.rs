@@ -21,7 +21,8 @@ pub(crate) fn install() {
     use std::sync::OnceLock;
     static INSTALLED: OnceLock<()> = OnceLock::new();
     INSTALLED.get_or_init(|| {
-        let Ok(mut signals) = signal_hook::iterator::Signals::new([SIGTERM, SIGHUP, SIGQUIT]) else {
+        let Ok(mut signals) = signal_hook::iterator::Signals::new([SIGTERM, SIGHUP, SIGQUIT])
+        else {
             return;
         };
         // 独立线程等待信号：不依赖 tokio 运行时，也不在信号处理函数里做非异步安全的事
@@ -80,9 +81,7 @@ fn exit_for_signal(signal: i32) -> ! {
 /// 返回:
 /// - 锁守卫；超时为空
 #[cfg(unix)]
-fn wait_for_paint_lock(
-    limit: std::time::Duration,
-) -> Option<std::sync::MutexGuard<'static, ()>> {
+fn wait_for_paint_lock(limit: std::time::Duration) -> Option<std::sync::MutexGuard<'static, ()>> {
     let deadline = std::time::Instant::now() + limit;
     loop {
         if let Some(guard) = crate::render::terminal_paint::try_paint_lock() {
@@ -106,7 +105,8 @@ fn wait_for_paint_lock(
 fn write_raw(mut bytes: &[u8]) {
     while !bytes.is_empty() {
         // SAFETY: 指针与长度来自同一个有效切片
-        let written = unsafe { libc::write(libc::STDOUT_FILENO, bytes.as_ptr().cast(), bytes.len()) };
+        let written =
+            unsafe { libc::write(libc::STDOUT_FILENO, bytes.as_ptr().cast(), bytes.len()) };
         if written <= 0 {
             return;
         }

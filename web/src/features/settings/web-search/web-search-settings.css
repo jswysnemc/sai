@@ -3,3 +3,47 @@
 .web-search-settings > .sk-panel { margin: 0; padding: 0; border: 0; }
 .search-provider-summary { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; color: var(--ink-soft); font-size: var(--text-sm); }
 .search-provider-summary strong { color: var(--ink); font-weight: 500; }
+
+.search-api-keys {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.75rem 1rem;
+}
+
+.search-api-keys-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.search-api-keys-list {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.search-api-key-row {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.search-api-key-row .sk-secret {
+  flex: 1;
+  min-width: 0;
+}
+
+.search-api-keys-hint {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}

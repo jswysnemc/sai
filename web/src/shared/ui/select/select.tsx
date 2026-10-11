@@ -45,7 +45,7 @@ export function Select<T extends string>({ value, options, disabled, ariaLabel, 
     open,
     anchorRef: triggerRef,
     preferredWidth: menuPreferredWidth,
-    minimumWidth: menuMinimumWidth,
+    minimumWidth: menuMinimumWidth ?? 224,
     align: menuAlign,
     maxHeight: 280
   });

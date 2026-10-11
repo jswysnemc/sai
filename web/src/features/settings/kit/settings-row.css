@@ -36,12 +36,11 @@
 }
 
 .sk-row-desc {
-  max-width: 68ch;
   margin: 0.125rem 0 0;
   color: var(--ink-soft);
   font-size: var(--text-sm);
   line-height: 1.5;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .sk-row-desc.is-error,
@@ -58,12 +57,12 @@
 
 .sk-row-control {
   display: flex;
-  flex: none;
+  flex: 0 1 auto;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 0.5rem;
-  min-width: 0;
+  min-width: min(8rem, 100%);
 }
 
 .sk-row[data-size="xs"] .sk-row-control { max-width: 6rem; }
@@ -72,10 +71,24 @@
 .sk-row[data-size="lg"] .sk-row-control { max-width: 24rem; }
 .sk-row[data-size="full"] .sk-row-control { width: 100%; max-width: none; }
 
-.sk-row.is-stack .sk-row-control {
+.sk-row.is-stack .sk-row-control,
+.sk-row.is-full .sk-row-control,
+.sk-row:has(textarea) .sk-row-control,
+.sk-row:has(.sk-object-nav) .sk-row-control,
+.sk-row:has(.sk-md-host) .sk-row-control,
+.sk-row:has(.cm-editor) .sk-row-control,
+.sk-row:has(table) .sk-row-control,
+.sk-row:has(.grid) .sk-row-control,
+.sk-row:has(.sk-list) .sk-row-control,
+.sk-row:has(.tui-fold-preview) .sk-row-control,
+.sk-row:has(.agent-prompt-preview) .sk-row-control {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
   width: 100%;
   max-width: none;
-  justify-content: flex-start;
+  min-width: 0;
 }
 
 .sk-row-footer { margin-top: 0.75rem; }
@@ -87,21 +100,11 @@
 .sk-row:has(.cm-editor) .sk-row-main,
 .sk-row:has(table) .sk-row-main,
 .sk-row:has(.grid) .sk-row-main,
-.sk-row:has(.sk-list) .sk-row-main {
+.sk-row:has(.sk-list) .sk-row-main,
+.sk-row:has(.tui-fold-preview) .sk-row-main,
+.sk-row:has(.agent-prompt-preview) .sk-row-main {
   flex-direction: column;
   align-items: stretch;
-}
-
-.sk-row:has(textarea) .sk-row-control,
-.sk-row:has(.sk-object-nav) .sk-row-control,
-.sk-row:has(.sk-md-host) .sk-row-control,
-.sk-row:has(.cm-editor) .sk-row-control,
-.sk-row:has(table) .sk-row-control,
-.sk-row:has(.grid) .sk-row-control,
-.sk-row:has(.sk-list) .sk-row-control {
-  width: 100%;
-  max-width: none;
-  justify-content: flex-start;
 }
 
 /* 卡片外的独立行（例如分区顶部的总开关）自带分组卡片外观 */

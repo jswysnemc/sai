@@ -88,6 +88,7 @@ async fn run_command_hook(hook: &HookItem, event: HookEvent, context: &HookConte
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    crate::platform::job_control::isolate_tokio_command(&mut command);
     if let Some(tool) = &context.tool_name {
         command.env("SAI_TOOL_NAME", tool);
     }

@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../../../api/client";
 import type { AppConfig, MemorySummary, MemoryWriteRequest, MemoryWriteResult } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
-import { SettingsPanel, SwitchField } from "../kit";
+import { EmptyGuide, InlineSwitch } from "../kit";
 import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import { useI18n } from "../../i18n/use-i18n";
 import { MemoryComposeForm, MemoryWriteFeedback } from "./memory-compose-form";
+import { MemoryEntryCard } from "./memory-entry-card";
 import { MemoryEntryList } from "./memory-entry-list";
 import { MemoryEvictedSearch } from "./memory-evicted-search";
 import { MemoryFilterBar } from "./memory-filter-bar";
@@ -27,11 +28,7 @@ type MemorySettingsSectionProps = {
  * 记忆管理：启停、工作区选择、筛选搜索、新建、就地编辑、链接导航、
  * 注入索引预览与逐出上下文检索。
  *
- * 空间分配以条目列表为中心：列表紧随元信息行出现在首屏，新建表单默认
- * 折叠成按钮，索引预览与逐出检索收进底部工具区，启停开关下沉到页脚。
- *
- * 项目记忆按工作区分目录存放，所有请求都带上选中的工作区标识——
- * 缺省时服务端会退回它自己的 cwd，把别的工作区的记忆显示出来。
+ * 布局对齐文件式记忆页：左侧导航、右侧详情，筛选与统计收进顶栏。
  *
  * @param props 可选 AppConfig（用于 plugins.memory.enabled）
  * @returns 记忆设置区域
@@ -42,8 +39,7 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<MemoryFilter>(EMPTY_MEMORY_FILTER);
   const [writeResult, setWriteResult] = useState<MemoryWriteResult | null>(null);
-  const [navigateTarget, setNavigateTarget] = useState<{ name: string; signal: number } | null>(null);
-  // 新建表单默认收起：录入是低频动作，不能让表单常驻挤占条目列表
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
 
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list });
@@ -51,7 +47,6 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
   const [workspaceId, setWorkspaceId] = useState<string | undefined>(undefined);
   const selectedWorkspace = workspaceId ?? workspaces.data?.active_id;
 
-  // 切换工作区时清掉上一工作区的写入提示：语境已变，残留只会误导
   useEffect(() => {
     setWriteResult(null);
   }, [selectedWorkspace]);
@@ -74,8 +69,10 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
 
   const remember = useMutation({
     mutationFn: (request: MemoryWriteRequest) => api.memory.remember(request),
-    onSuccess: async (result) => {
+    onSuccess: async (result, request) => {
       setWriteResult(result);
+      setComposing(false);
+      setSelectedKey(`${request.global ? "global" : "project"}:${request.name}`);
       await refresh();
     }
   });
@@ -90,7 +87,12 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
   });
   const reset = useMutation({ mutationFn: api.memory.reset, onSuccess: refresh });
 
-  /** 删除前确认：删除不可恢复，误触图标不该直接生效。 */
+  /**
+   * 删除前确认：删除不可恢复，误触图标不该直接生效。
+   *
+   * @param entry 待删除条目
+   * @returns 确认流程结束后返回
+   */
   const removeWithConfirm = async (entry: MemorySummary) => {
     const name = entry.name;
     const confirmed = await confirm({
@@ -105,7 +107,11 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
     if (confirmed) remove.mutate(entry);
   };
 
-  /** 清空前确认：范围是所有工作区的记忆，不只是当前工作区。 */
+  /**
+   * 清空前确认：范围是所有工作区的记忆，不只是当前工作区。
+   *
+   * @returns 确认流程结束后返回
+   */
   const resetWithConfirm = async () => {
     const confirmed = await confirm({
       title: t("Clear all memories", "清空全部记忆"),
@@ -124,24 +130,42 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
     () => filterMemories(allEntries, filter),
     [allEntries, filter]
   );
+  const selectedEntry = visibleEntries.find((entry) => `${entry.scope}:${entry.name}` === selectedKey) ?? null;
+
+  useEffect(() => {
+    if (composing) return;
+    if (selectedEntry) return;
+    const first = visibleEntries[0];
+    setSelectedKey(first ? `${first.scope}:${first.name}` : null);
+  }, [composing, selectedEntry, visibleEntries]);
 
   const error =
     entries.error || stats.error || remember.error || remove.error || reset.error || workspaces.error;
 
-  /** 链接跳转：展开目标条目；被当前筛选排除时先清筛选，否则列表不渲染它。 */
+  /**
+   * 链接跳转：选中目标条目；被当前筛选排除时先清筛选。
+   *
+   * @param name 目标标识
+   * @returns 无返回值
+   */
   const navigateToMemory = (name: string) => {
     const target = allEntries.find((entry) => entry.name === name);
     if (!target) return;
-    // 目标被类型、作用域或关键字筛选掉时必须清掉，否则跳转毫无反应
     if (filterMemories([target], filter).length === 0) {
       setFilter(EMPTY_MEMORY_FILTER);
     }
-    setNavigateTarget({ name, signal: Date.now() });
+    setComposing(false);
+    setSelectedKey(`${target.scope}:${target.name}`);
   };
 
   const enabled = (config?.plugins?.memory as { enabled?: boolean } | undefined)?.enabled !== false;
 
-  /** 切换记忆功能开关：同步写入插件与记忆两组配置，保持两侧语义一致。 */
+  /**
+   * 切换记忆功能开关：同步写入插件与记忆两组配置。
+   *
+   * @param checked 是否启用
+   * @returns 无返回值
+   */
   const toggleEnabled = (checked: boolean) => {
     if (!config || !onConfigChange) return;
     const plugins = config.plugins ?? {};
@@ -157,88 +181,118 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
   };
 
   return (
-    <SettingsPanel title={t("Stored entries", "已存条目")}>
-
-      <MemoryMetaRow
-        stats={stats.data}
-        workspaceCount={workspaceList.length}
-        selectedWorkspace={selectedWorkspace ?? workspaceList[0]?.id}
-        workspaceOptions={workspaceList.map((workspace) => ({
-          value: workspace.id,
-          label: workspace.name
-        }))}
-        notesDir={stats.data?.notes_dir}
-        onWorkspaceChange={(value) => setWorkspaceId(value || undefined)}
-      />
-
-      {composing ? (
-        <MemoryComposeForm
-          pending={remember.isPending}
-          workspace={selectedWorkspace}
-          onCollapse={() => setComposing(false)}
-          onSubmit={async (request) => {
-            try {
-              return await remember.mutateAsync(request);
-            } catch {
-              // 错误已由 error 汇总展示；返回空让表单保留输入
-              return null;
-            }
-          }}
+    <div className="memory-workspace">
+      <header className="memory-workspace-head">
+        <MemoryMetaRow
+          stats={stats.data}
+          workspaceCount={workspaceList.length}
+          selectedWorkspace={selectedWorkspace ?? workspaceList[0]?.id}
+          workspaceOptions={workspaceList.map((workspace) => ({
+            value: workspace.id,
+            label: workspace.name
+          }))}
+          notesDir={stats.data?.notes_dir}
+          onWorkspaceChange={(value) => setWorkspaceId(value || undefined)}
         />
-      ) : (
-        <Button
-          variant="secondary"
-          className="self-start"
-          onClick={() => setComposing(true)}
-        >
-          <Plus size={14} /> {t("New memory", "新建记忆")}
-        </Button>
-      )}
-      <MemoryWriteFeedback result={writeResult} />
+        <div className="memory-workspace-actions">
+          {config && onConfigChange && (
+            <InlineSwitch
+              label={t("Enable memory", "启用记忆")}
+              checked={enabled}
+              onChange={toggleEnabled}
+            />
+          )}
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setComposing(true);
+              setSelectedKey(null);
+            }}
+          >
+            <Plus size={14} />
+            {t("New memory", "新建记忆")}
+          </Button>
+          <Button
+            variant="ghost-danger"
+            onClick={() => void resetWithConfirm()}
+            disabled={reset.isPending}
+            title={t("Clears memories in every workspace, not just the selected one.", "清空的是所有工作区的记忆，不只是当前选中的工作区。")}
+          >
+            {reset.isPending ? t("Clearing…", "清空中…") : t("Clear all", "全部清空")}
+          </Button>
+        </div>
+      </header>
 
-      <MemoryFilterBar
-        entries={allEntries}
-        type={filter.type}
-        scope={filter.scope}
-        query={filter.query}
-        onTypeChange={(type) => setFilter((current) => ({ ...current, type }))}
-        onScopeChange={(scope) => setFilter((current) => ({ ...current, scope }))}
-        onQueryChange={(query) => setFilter((current) => ({ ...current, query }))}
-      />
+      <div className="memory-workspace-body">
+        <aside className="memory-workspace-nav">
+          <MemoryFilterBar
+            entries={allEntries}
+            type={filter.type}
+            scope={filter.scope}
+            query={filter.query}
+            onTypeChange={(type) => setFilter((current) => ({ ...current, type }))}
+            onScopeChange={(scope) => setFilter((current) => ({ ...current, scope }))}
+            onQueryChange={(query) => setFilter((current) => ({ ...current, query }))}
+          />
+          {filter.type !== "all" && visibleEntries.length > 0 && (
+            <Button
+              variant="ghost-danger"
+              disabled={batchDelete.pending}
+              onClick={() => void batchDelete.removeDisplayed(visibleEntries, selectedWorkspace)}
+            >
+              {t(`Delete ${visibleEntries.length} displayed entries`, `删除展示的 ${visibleEntries.length} 条记忆`)}
+            </Button>
+          )}
+          {batchDelete.error && <div className="settings-inline-error">{batchDelete.error}</div>}
+          <MemoryEntryList
+            entries={visibleEntries}
+            loading={entries.isLoading}
+            selectedKey={selectedKey}
+            onSelect={(entry) => {
+              setComposing(false);
+              setSelectedKey(`${entry.scope}:${entry.name}`);
+            }}
+          />
+        </aside>
 
-      {filter.type !== "all" && visibleEntries.length > 0 && <div>
-        <Button variant="ghost-danger" disabled={batchDelete.pending} onClick={() => void batchDelete.removeDisplayed(visibleEntries, selectedWorkspace)}>{t(`Delete ${visibleEntries.length} displayed entries`, `删除展示的 ${visibleEntries.length} 条记忆`)}</Button>
-      </div>}
-      {batchDelete.error && <div className="settings-inline-error">{batchDelete.error}</div>}
-      <MemoryEntryList
-        entries={visibleEntries}
-        loading={entries.isLoading}
-        workspace={selectedWorkspace}
-        onRemove={removeWithConfirm}
-        onNavigate={navigateToMemory}
-        navigateTarget={navigateTarget}
-      />
-
-      <MemoryToolsRow>
-        <MemoryIndexPreview workspace={selectedWorkspace} />
-        <MemoryEvictedSearch />
-      </MemoryToolsRow>
-
-      <div className="memory-footer-row">
-        {config && onConfigChange && (
-          <SwitchField label={t("Enable memory", "启用记忆")} anchor="memory.enabled" hint={t("Disabled: tools are unregistered and the index is not injected.", "关闭后不注册记忆工具，也不注入索引。") } checked={enabled} onChange={toggleEnabled} />
-        )}
-        <Button
-          variant="ghost-danger"
-          onClick={resetWithConfirm}
-          disabled={reset.isPending}
-          title={t("Clears memories in every workspace, not just the selected one.", "清空的是所有工作区的记忆，不只是当前选中的工作区。")}
-        >
-          {reset.isPending ? t("Clearing…", "清空中…") : t("Clear all memories", "清空全部记忆")}
-        </Button>
+        <section className="memory-workspace-detail">
+          {composing ? (
+            <MemoryComposeForm
+              pending={remember.isPending}
+              workspace={selectedWorkspace}
+              onCollapse={() => setComposing(false)}
+              onSubmit={async (request) => {
+                try {
+                  return await remember.mutateAsync(request);
+                } catch {
+                  return null;
+                }
+              }}
+            />
+          ) : selectedEntry ? (
+            <MemoryEntryCard
+              key={`${selectedEntry.scope}-${selectedEntry.name}`}
+              entry={selectedEntry}
+              workspace={selectedWorkspace}
+              forceOpen
+              onRemove={removeWithConfirm}
+              onNavigate={navigateToMemory}
+            />
+          ) : (
+            <EmptyGuide
+              title={t("No memory selected", "尚未选择记忆")}
+              description={t("Select an entry on the left, or create a new memory.", "在左侧选择一条记忆，或新建一条。")}
+            />
+          )}
+          <MemoryWriteFeedback result={writeResult} />
+          <MemoryToolsRow>
+            <MemoryIndexPreview workspace={selectedWorkspace} />
+            <MemoryEvictedSearch />
+          </MemoryToolsRow>
+        </section>
       </div>
 
       {error && <div className="settings-inline-error">{(error as Error).message}</div>}
-    </SettingsPanel>
+    </div>
   );
 }
