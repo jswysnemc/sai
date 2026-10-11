@@ -28,11 +28,11 @@ export type SettingsSectionId =
 export type SettingsGroupId = "basics" | "agentCapabilities" | "dataAndStats";
 
 /**
- * 分区对全局 AppConfig 的参与方式，顶栏保存、加载骨架与错误条均由此派生。
+ * 分区对全局 AppConfig 的参与方式，底部保存栏、加载骨架与错误条均由此派生。
  *
- * - required: 必须等 AppConfig 加载完成，顶栏常驻保存
- * - optional: 主体功能不依赖 AppConfig，但可能改写其中字段；有待保存修改时露出顶栏保存
- * - none: 完全不读写 AppConfig，顶栏只显示保存提示文案
+ * - required: 必须等 AppConfig 加载完成，底部保存栏在有有效草稿时可用
+ * - optional: 主体功能不依赖 AppConfig，但可能改写其中字段；有待保存修改时露出底部保存栏
+ * - none: 完全不读写 AppConfig，页头只显示保存提示文案
  */
 export type SettingsAppConfigUse = "required" | "optional" | "none";
 
@@ -94,7 +94,7 @@ export type SettingsSectionMeta = {
   icon: LucideIcon;
   /** 导航搜索关键字（中英混合字面量）。 */
   searchKeys: string[];
-  /** 顶栏保存提示（无待保存修改时展示，如「即时生效」「在本节内保存」） */
+  /** 页头保存提示（无待保存修改时展示，如「即时生效」「在本节内保存」） */
   saveHintEn?: string;
   saveHintZh?: string;
   /** 二级子页；声明后子页进入 /settings/:sectionId/:subview 路由 */

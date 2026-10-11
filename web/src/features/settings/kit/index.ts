@@ -1,13 +1,16 @@
 /*
  * 设置页基础组件出口。
  *
- * 分区只从这里组合布局与控件：面板、字段栅格、输入、开关、分段选择、
- * 状态标记、对象列表与详情、空状态、数据表和页签。
+ * 分区只从这里组合布局与控件：页头、分区标签、分组卡片、字段行、
+ * 输入、开关、分段选择、状态标记、对象列表与详情、空状态、数据表和页签。
  */
 import "./kit-tokens.css";
 
 export { cx } from "./class-names";
 export { SettingsPanel } from "./settings-panel";
+export { SettingsGroup } from "./settings-group";
+export { SettingsRow, type SettingsRowLayout } from "./settings-row";
+export { SettingsPageHeader } from "./settings-page-header";
 export { SettingsField, FieldGrid, type ControlSize } from "./settings-field";
 export { SkTextInput, SkTextArea } from "./text-input";
 export { SkListInput } from "./list-input";

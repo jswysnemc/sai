@@ -11,12 +11,12 @@
   /* 字段列间距与行间距 */
   --sk-col-gap: 1.5rem;
   --sk-row-gap: 0.875rem;
-  /* 面板之间的留白 */
-  --sk-panel-gap: 1.25rem;
+  /* 分区之间的留白，对应 13px 分区标签的节奏 */
+  --sk-panel-gap: 1.75rem;
   /* 对象列表宽度 */
   --sk-list-width: 15.5rem;
-  /* 全部设置分区共用的内容最大宽度 */
-  --sk-form-max: 80rem;
+  /* 全部设置分区共用的内容最大宽度，约 1120px */
+  --sk-form-max: 70rem;
   /* 开关尺寸 */
   --sk-switch-w: 1.75rem;
   --sk-switch-h: 1rem;

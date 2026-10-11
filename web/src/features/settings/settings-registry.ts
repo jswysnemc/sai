@@ -63,7 +63,7 @@ export function resolveSettingsSubview(
 }
 
 /**
- * 判断顶栏是否应展示全局 AppConfig 保存控件。
+ * 判断底部保存栏是否应展示全局 AppConfig 保存控件。
  *
  * required 面常驻保存；其余分区只在全局草稿有待保存修改时露出，
  * 避免在别处改了配置后切到只读分区就找不到保存入口。

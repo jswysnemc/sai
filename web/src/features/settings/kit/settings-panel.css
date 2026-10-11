@@ -1,24 +1,20 @@
-/* 【Web 设置】【面板】标题、说明、操作与字段区；面板之间以分隔线区分 */
+/* 【Web 设置】【分区】13px 次级标签、操作与分组卡片；相邻分区以间距区分 */
 
 .sk-panel {
   min-width: 0;
+  margin-top: 1.75rem;
   scroll-margin-top: var(--space-lg);
 }
 
-.sk-panel + .sk-panel {
-  margin-top: var(--sk-panel-gap);
-  padding-top: var(--sk-panel-gap);
-  border-top: 1px solid var(--line);
-}
-
-.sk-panel-grid > .sk-panel + .sk-panel { margin-top: 0; padding-top: 0; border-top: 0; }
+.sk-panel-grid > .sk-panel { margin-top: 0; }
 
 .sk-panel-head {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: var(--space-lg);
-  margin-bottom: var(--space-md);
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  padding-inline: 0.125rem;
 }
 
 .sk-panel.is-collapsed .sk-panel-head { margin-bottom: 0; }
@@ -34,21 +30,21 @@
   align-items: center;
   gap: var(--space-xs);
   margin: 0;
-  color: var(--ink);
-  font-size: var(--text-lg);
+  color: var(--ink-soft);
+  font-size: var(--text-base);
   font-weight: 600;
-  line-height: var(--leading-snug);
+  line-height: 1.25rem;
 }
 
 .sk-panel-title > svg,
 .sk-panel-title > img { flex: none; }
 
 .sk-panel-desc {
-  max-width: 64rem;
+  max-width: 68ch;
   margin: 0;
   color: var(--ink-soft);
   font-size: var(--text-sm);
-  line-height: var(--leading-snug);
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
@@ -87,13 +83,7 @@
 
 .sk-panel.is-open .sk-panel-chevron { transform: rotate(90deg); }
 
-.sk-panel-body {
-  min-width: 0;
-}
-
-.sk-panel-body > * + * { margin-top: var(--sk-row-gap); }
-
 @media (max-width: 48rem) {
-  .sk-panel-head { flex-direction: column; gap: var(--space-sm); }
+  .sk-panel-head { flex-direction: column; align-items: stretch; gap: var(--space-sm); }
   .sk-panel-actions { justify-content: flex-start; }
 }

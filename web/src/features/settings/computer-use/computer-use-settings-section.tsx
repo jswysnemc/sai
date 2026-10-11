@@ -57,7 +57,7 @@ export function ComputerUseSettingsSection({ config, onConfigChange }: ComputerU
       />
       <SettingsPanel
         title={t("Driver", "驱动")}
-        description={t("Install the official cua-driver package, then save the path with the top bar.", "安装官方 cua-driver 后，用顶栏保存路径。")}
+        description={t("Install the official cua-driver package, then save the path with the save bar.", "安装官方 cua-driver 后，用底部保存栏保存路径。")}
       >
         <ComputerUseDriverPanel driverPath={computerUse.driver_path} onInstalledPath={applyInstalledPath} />
         <FieldGrid>

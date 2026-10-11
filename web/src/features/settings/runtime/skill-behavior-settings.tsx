@@ -36,14 +36,14 @@ export function SkillBehaviorSettings({
         <p className="settings-inline-note">
           {t("Manage Skill documents in", "Skill 文档管理见")}{" "}
           <Link to="/settings/skills">{t("Skills library", "Skills 库")}</Link>
-          {t(". Save behavior changes with the top Save button.", "。行为字段请用顶栏保存。")}
+          {t(". Save behavior changes with the save bar.", "。行为字段请用底部保存栏保存。")}
         </p>
       )}
       {!showLibraryLink && (
         <p className="settings-inline-note">
           {t(
-            "These fields belong to AppConfig. Use the top Save button after editing. File create/edit uses the editor save control.",
-            "以下字段属于 AppConfig，修改后请用顶栏保存；文档新建/编辑使用编辑器内保存。"
+            "These fields belong to AppConfig. Use the save bar after editing. File create/edit uses the editor save control.",
+            "以下字段属于 AppConfig，修改后请用底部保存栏保存；文档新建/编辑使用编辑器内保存。"
           )}
         </p>
       )}

@@ -1,6 +1,4 @@
 /* 【Web 设置】【配置文档】错误提示与代码编辑器保持统一面板间距 */
-.advanced-settings .sk-panel-body {
-  display: grid;
-  gap: 0.75rem;
+.advanced-settings .sk-group {
   min-width: 0;
 }

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { fieldAnchorId } from "../search/field-anchor";
 import { cx } from "./class-names";
 import "./switch.css";
+import "./settings-row.css";
 
 type SwitchProps = {
   checked: boolean;
@@ -74,7 +75,7 @@ type SwitchFieldProps = {
 };
 
 /**
- * 渲染前置开关字段：开关在前，标签与说明在后，整行可点击。
+ * 渲染开关字段：标题与说明在左，开关固定在右，整行可点击。
  *
  * @param props 标签、说明、选中状态、配置键与锚点
  * @returns 开关字段
@@ -93,15 +94,20 @@ export function SwitchField({
 }: SwitchFieldProps) {
   return (
     <label
-      className={cx("sk-switch-field", span === "full" && "is-full", disabled && "is-disabled", className)}
+      className={cx("sk-row", "is-inline", "sk-switch-field", span === "full" && "is-full", disabled && "is-disabled", className)}
       id={anchor ? fieldAnchorId(anchor) : undefined}
       data-config-key={configKey}
       title={configKey}
     >
-      <Switch checked={checked} onChange={onChange} disabled={disabled} />
-      <span className="sk-switch-copy">
-        <span className="sk-switch-label">{label}{badge}</span>
-        {hint && <span className="sk-switch-hint">{hint}</span>}
+      <span className="sk-row-main">
+        <span className="sk-row-copy">
+          <span className="sk-row-title">
+            {label}
+            {badge}
+          </span>
+          {hint ? <span className="sk-row-desc">{hint}</span> : null}
+        </span>
+        <Switch checked={checked} onChange={onChange} disabled={disabled} />
       </span>
     </label>
   );

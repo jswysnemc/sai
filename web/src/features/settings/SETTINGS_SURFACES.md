@@ -5,7 +5,7 @@
 
 ## 配置与保存
 
-| appConfig | 数据来源 | 顶栏保存 | 加载处理 |
+| appConfig | 数据来源 | 全局保存 | 加载处理 |
 | --- | --- | --- | --- |
 | required | 全局 AppConfig | 常驻，仅在有有效草稿时可用 | 等待配置加载，失败显示恢复入口 |
 | optional | 独立接口与部分 AppConfig 字段 | 全局草稿有修改时显示 | 配置不可用时按分区降级 |
@@ -15,7 +15,7 @@
   请求期间的新编辑保留为未保存草稿；同一文档不并行发起保存。
 - `useSettingsConfig` 组合供应商、网关和完整 JSON 编辑。非法 JSON 文本跨分区保留，
   禁止保存和保存快捷键，直到修正或放弃；结构化编辑会以新的配置重建 JSON 文本。
-- 顶栏提供保存、放弃及 `Ctrl/Cmd+S`；快捷键优先保存当前独立文档。
+- 底部保存栏提供保存、放弃及 `Ctrl/Cmd+S`；快捷键优先保存当前独立文档。
   路由守卫覆盖链接及浏览器前进、后退；全局草稿仅在离开设置时确认，
   MCP 和 Skill 文档在即将卸载时确认，Skill 同路径切换对象也受保护。
 - `configKeys` 定义导航未保存标记所比较的配置路径。非法 JSON 单独标记高级分区。
@@ -27,7 +27,7 @@
 | --- | --- | --- | --- |
 | providers | basics | required | api.config；供应商、凭据、模型及探测 |
 | image-models | basics | required | api.config；生图模型端点 |
-| appearance | basics | none | 浏览器主题、语言与 Markdown 偏好，即时生效 |
+| appearance | basics | none | 浏览器主题、语言、聊天阅读列与 Markdown 偏好，即时生效 |
 | runtime | basics | required | api.config；内核、会话、权限、终端、工具、上下文与显示 |
 | prompts | basics | required | api.config；内部提示词模板，恢复前显示差异 |
 | git | basics | required | api.config；Git 与源代码管理行为 |
@@ -37,18 +37,18 @@
 | web-search | agentCapabilities | required | api.config；网页搜索与凭据 |
 | computer-use | agentCapabilities | required | api.config；桌面操作开关、驱动路径与超时；驱动安装经独立接口确认后执行 |
 | jev | agentCapabilities | required | api.config；Jev 接入与决策 |
-| skills | agentCapabilities | optional | 技能文档即时保存；技能行为通过顶栏保存 |
+| skills | agentCapabilities | optional | 技能文档即时保存；技能行为通过底部保存栏保存 |
 | mcp | agentCapabilities | none | MCP 独立配置文档，本节保存 |
 | hooks | agentCapabilities | required | api.config；生命周期 Hooks |
 | gateways | agentCapabilities | required | api.config；消息网关配置与运行操作 |
-| memory | agentCapabilities | optional | 记忆内容操作即时生效；配置字段通过顶栏保存 |
+| memory | agentCapabilities | optional | 记忆内容操作即时生效；配置字段通过底部保存栏保存 |
 | session-data | dataAndStats | none | 会话数据接口；查询与清理 |
 | usage | dataAndStats | none | 用量统计查询；日志清空为确认后即时操作 |
 | advanced | dataAndStats | required | 全局 AppConfig JSON 草稿 |
 
 运行时的网页终端字体、字号和回滚行数仅保存到浏览器，即时更新已打开终端；
-Shell 仍通过顶栏保存。SSH 设置复用终端创建与主机密钥确认，可收起或明确结束会话。
-主题悬停仅临时预览，点击才保存；Markdown 配置与效果预览在宽屏下并列。
+Shell 仍通过底部保存栏保存。SSH 设置复用终端创建与主机密钥确认，可收起或明确结束会话。
+主题悬停仅临时预览，点击才保存；聊天阅读列的字体、字号和宽度只改对话正文；Markdown 配置与效果预览在宽屏下并列。
 JSON 编辑器统一提供复制、格式化与全屏编辑，切换窗口保留光标和草稿。
 网页搜索密钥按原始数组槽位替换或清除，隐藏密钥不因其他条目删除而移动。
 
@@ -71,16 +71,19 @@ JSON 编辑器统一提供复制、格式化与全屏编辑，切换窗口保留
 
 ## 字段与布局
 
-- 分区只在顶栏显示一次名称。`SettingsPanel` 组织面板，`FieldGrid` 与
-  `SettingsField` 组织字段，`SwitchField` 提供前置开关。
+- 分区标题在内容区页头显示一次，由 `SettingsPageHeader` 渲染 22px 标题与 13px 说明。
+  顶栏只保留桌面拖拽条，不再重复分区名。
+- `SettingsPanel` 提供 13px 分区标签，并把内容包进 `SettingsGroup` 卡片。
+- `SettingsField` 默认左标题右控件；宽控件或 `span="full"` 改为上下排布。
+- `SwitchField` 标题在左、开关固定在右，整行可点击。
+- `FieldGrid` 在卡片内展开为单列细分隔行，列数属性仅保留给调用方。
 - `configKey` 只作为字段提示与检索数据；说明文字可换行。
-- `form` 布局限宽，`wide` 布局用于对象列表和数据页。
+- 主内容统一限宽约 1120px，对象列表和数据页不再单独放宽。
 - `search/entries-*.ts` 按领域维护索引。`anchor` 必须匹配字段标识，
   `focus` 查询参数触发滚动与短暂高亮；条件字段未显示时提供启用或选择提示。
-- 二十个分区均组合共享组件；旧布局、字段行、对象列表和补丁样式已删除。
-  移动端保留搜索输入，分类横向滚动，搜索结果纵向展示。
+- 二十个分区均组合共享组件。移动端保留搜索输入，分类横向滚动，搜索结果纵向展示。
 
 ## 技能边界
 
 技能扫描、文档创建与编辑属于 Skills 操作区；渐进式加载、命令执行等行为
-配置仍在 Skills 分区编辑，通过顶栏保存。运行时不重复编辑这些字段。
+配置仍在 Skills 分区编辑，通过底部保存栏保存。运行时不重复编辑这些字段。

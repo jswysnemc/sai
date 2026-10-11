@@ -1,0 +1,131 @@
+/* 【Web 设置】【字段行】左标题右控件；窄屏可叠；卡片外的独立行自带边框 */
+
+.sk-row {
+  min-width: 0;
+  min-height: 3.25rem;
+  padding: 0.75rem 1rem;
+}
+
+.sk-row-main {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.625rem 1.5rem;
+  min-width: 0;
+}
+
+.sk-row.is-stack .sk-row-main {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.sk-row-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.sk-row-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--ink);
+  font-size: var(--text-base);
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.sk-row-desc {
+  max-width: 68ch;
+  margin: 0.125rem 0 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.sk-row-desc.is-error,
+.sk-row-desc .is-error {
+  color: var(--danger);
+}
+
+.sk-row-aside {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin-top: 0.25rem;
+}
+
+.sk-row-control {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.sk-row[data-size="xs"] .sk-row-control { max-width: 6rem; }
+.sk-row[data-size="sm"] .sk-row-control { max-width: 10rem; }
+.sk-row[data-size="md"] .sk-row-control { max-width: 16rem; }
+.sk-row[data-size="lg"] .sk-row-control { max-width: 24rem; }
+.sk-row[data-size="full"] .sk-row-control { width: 100%; max-width: none; }
+
+.sk-row.is-stack .sk-row-control {
+  width: 100%;
+  max-width: none;
+  justify-content: flex-start;
+}
+
+.sk-row-footer { margin-top: 0.75rem; }
+
+/* 宽控件自动改为上下排布，避免被挤进右侧窄列 */
+.sk-row:has(textarea) .sk-row-main,
+.sk-row:has(.sk-object-nav) .sk-row-main,
+.sk-row:has(.sk-md-host) .sk-row-main,
+.sk-row:has(.cm-editor) .sk-row-main,
+.sk-row:has(table) .sk-row-main,
+.sk-row:has(.grid) .sk-row-main,
+.sk-row:has(.sk-list) .sk-row-main {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.sk-row:has(textarea) .sk-row-control,
+.sk-row:has(.sk-object-nav) .sk-row-control,
+.sk-row:has(.sk-md-host) .sk-row-control,
+.sk-row:has(.cm-editor) .sk-row-control,
+.sk-row:has(table) .sk-row-control,
+.sk-row:has(.grid) .sk-row-control,
+.sk-row:has(.sk-list) .sk-row-control {
+  width: 100%;
+  max-width: none;
+  justify-content: flex-start;
+}
+
+/* 卡片外的独立行（例如分区顶部的总开关）自带分组卡片外观 */
+.settings-main-content .sk-row:not(.sk-group .sk-row):not(.sk-object-slot .sk-row) {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-4);
+  background: var(--paper-raised);
+}
+
+/* 对象列表头部的开关保持紧凑，不额外占高 */
+.sk-object-slot .sk-row {
+  min-height: 0;
+  padding: 0;
+}
+
+@media (max-width: 48rem) {
+  .sk-row.is-responsive .sk-row-main {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sk-row.is-responsive .sk-row-control {
+    width: 100%;
+    max-width: none;
+    justify-content: flex-start;
+  }
+}

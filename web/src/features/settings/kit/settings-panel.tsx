@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { ChevronRight } from "../../../shared/ui/icons";
 import { Collapse } from "../../../shared/ui/collapse/collapse";
 import { cx } from "./class-names";
+import { SettingsGroup } from "./settings-group";
 import "./settings-panel.css";
 
 type SettingsPanelProps = {
@@ -23,12 +24,12 @@ type SettingsPanelProps = {
 };
 
 /**
- * 渲染设置面板：标题、说明与操作在上，字段区在下。
+ * 渲染设置分区：13px 次级标签在上，分组卡片包住字段行。
  *
- * 面板本身不带卡片边框，相邻面板以分隔线区分；低频面板可折叠。
+ * 低频面板可折叠；卡片本身不裁切溢出，避免行内下拉被挡住。
  *
  * @param props 标题、说明、图标、操作、折叠设置与内容
- * @returns 设置面板
+ * @returns 设置分区
  */
 export function SettingsPanel({
   title,
@@ -55,20 +56,20 @@ export function SettingsPanel({
             <ChevronRight size={14} className="sk-panel-chevron" />
             <span className="sk-panel-copy">
               {heading}
-              {description && <span className="sk-panel-desc">{description}</span>}
+              {description ? <span className="sk-panel-desc">{description}</span> : null}
             </span>
           </button>
         ) : (
           <div className="sk-panel-copy">
             {heading}
-            {description && <p className="sk-panel-desc">{description}</p>}
+            {description ? <p className="sk-panel-desc">{description}</p> : null}
           </div>
         )}
-        {actions && expanded && <div className="sk-panel-actions">{actions}</div>}
+        {actions && expanded ? <div className="sk-panel-actions">{actions}</div> : null}
       </header>
       {collapsible
-        ? <Collapse open={expanded}><div className="sk-panel-body">{children}</div></Collapse>
-        : <div className="sk-panel-body">{children}</div>}
+        ? <Collapse open={expanded}><SettingsGroup>{children}</SettingsGroup></Collapse>
+        : <SettingsGroup>{children}</SettingsGroup>}
     </section>
   );
 }
