@@ -5,10 +5,15 @@ use super::model::{
 };
 use crate::state::turns::ConversationDb;
 use crate::state::StateStore;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::Utc;
 use rusqlite::{params, OptionalExtension};
 use sha2::{Digest, Sha256};
+
+/// Linux NAME_MAX：单个路径分量上限。
+const ARCHIVE_FILE_NAME_MAX_BYTES: usize = 255;
+/// 归档文件名中可读前缀上限；后接哈希与扩展名后仍远低于 NAME_MAX。
+const ARCHIVE_ID_PREFIX_MAX_CHARS: usize = 80;
 
 impl StateStore {
     /// 返回指定轮次已经持久化的工具调用数量。
@@ -229,13 +234,11 @@ impl StateStore {
     ) -> Result<String> {
         let output_dir = self.state_dir.join("tool-results");
         std::fs::create_dir_all(&output_dir)?;
-        let file_name = format!(
-            "{}_{}.txt",
-            sanitize_reference_id(provider_call_id),
-            short_reference_hash(provider_call_id)
-        );
+        // 1. 供应商可能把 thought signature 拼进 call_id，文件名必须截断到 NAME_MAX
+        let file_name = archive_file_name(provider_call_id);
         let output_path = output_dir.join(&file_name);
-        std::fs::write(&output_path, raw_output)?;
+        std::fs::write(&output_path, raw_output)
+            .with_context(|| format!("failed to archive tool result {}", output_path.display()))?;
         Ok(format!("tool-results/{file_name}"))
     }
 }
@@ -662,6 +665,30 @@ pub(in crate::state) fn settle_pending_tool_calls_for_turns(
     Ok(updated)
 }
 
+/// 生成工具结果归档文件名。
+///
+/// 部分供应商会把加密思考签名拼进 `provider_call_id`，长度可达上万字符。
+/// 该标识只用于本地文件名，必须截断到文件系统 NAME_MAX；唯一性由完整
+/// 原始标识的短哈希保证。
+///
+/// 参数:
+/// - `provider_call_id`: provider 工具调用标识
+///
+/// 返回:
+/// - 不超过 NAME_MAX 的归档文件名
+fn archive_file_name(provider_call_id: &str) -> String {
+    let hash = short_reference_hash(provider_call_id);
+    let prefix = truncate_chars(
+        &sanitize_reference_id(provider_call_id),
+        ARCHIVE_ID_PREFIX_MAX_CHARS,
+    );
+    let file_name = format!("{prefix}_{hash}.txt");
+    if file_name.len() <= ARCHIVE_FILE_NAME_MAX_BYTES {
+        return file_name;
+    }
+    format!("{hash}.txt")
+}
+
 /// 清理 provider 调用标识为安全文件名。
 ///
 /// 参数:
@@ -685,6 +712,18 @@ fn sanitize_reference_id(value: &str) -> String {
     } else {
         sanitized
     }
+}
+
+/// 按字符截取前缀。
+///
+/// 参数:
+/// - `value`: 原始文本
+/// - `max_chars`: 最大字符数
+///
+/// 返回:
+/// - 截取后的文本
+fn truncate_chars(value: &str, max_chars: usize) -> String {
+    value.chars().take(max_chars).collect()
 }
 
 /// 生成 provider 调用标识的稳定短哈希。

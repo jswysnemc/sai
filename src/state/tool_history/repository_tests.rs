@@ -222,6 +222,66 @@ fn insert_pair(db: &ConversationDb, index: usize, output: &str) {
     .unwrap_or_else(|error| panic!("tool result {index}: {error:#}"));
 }
 
+/// 验证超长供应商调用标识仍能写入归档，且文件名不超过 NAME_MAX。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn long_provider_call_id_archives_under_name_max() {
+    let (temp, db) = test_db();
+    let store = StateStore {
+        plugin_state_root: None,
+        base_state_dir: PathBuf::new(),
+        session_id: "default".to_string(),
+        state_dir: temp.path().to_path_buf(),
+        conv_db: Arc::new(db),
+    };
+    let provider_call_id = format!("call_1__ts__{}", "A".repeat(20_000));
+
+    let result_ref = store
+        .save_clipped_tool_output_replacement(&provider_call_id, "full output", "preview")
+        .unwrap()
+        .expect("result ref");
+    let file_name = result_ref
+        .strip_prefix("tool-results/")
+        .expect("archive lives under tool-results");
+
+    assert!(file_name.len() <= super::ARCHIVE_FILE_NAME_MAX_BYTES);
+    assert!(file_name.ends_with(".txt"));
+    assert_eq!(
+        std::fs::read_to_string(temp.path().join(&result_ref)).unwrap(),
+        "full output"
+    );
+}
+
+/// 验证超长调用标识截断后仍靠哈希区分。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn archive_file_names_stay_unique_after_truncation() {
+    let left = format!("call_1__ts__{}", "A".repeat(20_000));
+    let right = format!("call_1__ts__{}", "B".repeat(20_000));
+
+    let left_name = super::archive_file_name(&left);
+    let right_name = super::archive_file_name(&right);
+
+    assert_ne!(left_name, right_name);
+    assert!(left_name.len() <= super::ARCHIVE_FILE_NAME_MAX_BYTES);
+    assert!(right_name.len() <= super::ARCHIVE_FILE_NAME_MAX_BYTES);
+    let short = super::archive_file_name("call_1");
+    assert_eq!(
+        short,
+        format!("call_1_{}.txt", super::short_reference_hash("call_1"))
+    );
+}
+
 /// 【工具历史测试】【稳定标识】读取首个供应商调用对应的两个内部记录标识。
 /// @param db 已包含首个调用与结果的数据库
 /// @returns 工具调用与工具结果的内部标识
