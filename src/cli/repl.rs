@@ -159,7 +159,7 @@ pub(super) async fn run_repl(
         runtime.update_options(config.display.repl_transcript_row_cap, transcript_options);
         runtime.set_mention_skills(super::repl_mentions::load_mention_skills(&config, paths));
         // 2. 优先执行本终端运行期间排队的消息
-        if runtime.queue_len() > 0 {
+        if runtime.has_ready_turn_submission() {
             external_events.cancel();
             external_events.resume();
             let owner_key = state.state_dir().display().to_string();
@@ -249,7 +249,7 @@ pub(super) async fn run_repl(
                     if let Some(draft) = outcome.leftover_draft {
                         prefill = Some(draft);
                     }
-                    if runtime.queue_len() > 0 {
+                    if runtime.has_ready_turn_submission() {
                         external_events.resume();
                     }
                     let exit = drain_submission_queue(
@@ -646,7 +646,7 @@ pub(super) async fn run_repl(
         .await?;
         apply_stream_mode(&runtime, &mut mode);
         // 退出请求在中断处理之前：/exit 走的就是中断路径，确认通过后直接落到循环外的收尾；
-        // 用户取消退出时按普通中断处理，恢复草稿并继续执行已入队内容
+        // 用户取消退出时按普通中断处理，恢复草稿并保留尚未执行的队列
         if outcome.exit_requested
             && confirm_repl_exit(paths, &config, &state, &mut runtime, &mut exit_armed).await?
         {
@@ -662,7 +662,7 @@ pub(super) async fn run_repl(
             } else if let Some(draft) = outcome.leftover_draft {
                 prefill = Some(draft);
             }
-            // 中断后仍执行已入队内容
+            // 【终端队列】【暂停恢复】中断后队列保持暂停，收尾流程继续恢复流式草稿
             let exit = drain_submission_queue(
                 ReplTurnContext {
                     paths,

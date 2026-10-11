@@ -55,7 +55,7 @@ use anyhow::Result;
 use crossterm::event::Event;
 use std::collections::VecDeque;
 use std::io::Write;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -90,6 +90,8 @@ pub(super) struct ReplRuntime {
     /// 用户排队提交：请求间隔由 InterMessageSource 在下次模型请求前注入，
     /// 轮次间隔在本轮结束后开新轮
     submission_queue: Arc<Mutex<VecDeque<QueuedSubmission>>>,
+    /// 失败后暂停轮次和请求间隔投递，主动提交或显式发送时恢复
+    submission_queue_paused: Arc<AtomicBool>,
     /// 运行期间输入的斜杠命令，本轮结束后按序交主循环执行
     control_queue: VecDeque<String>,
     /// 运行中权限模式热切换句柄（与 Agent 共享）
@@ -236,6 +238,7 @@ impl ReplRuntime {
             paste_image_key: PasteImageKey::default(),
             stream_draft: StreamComposerDraft::default(),
             submission_queue: Arc::new(Mutex::new(VecDeque::new())),
+            submission_queue_paused: Arc::new(AtomicBool::new(false)),
             control_queue: VecDeque::new(),
             live_mode_handle: None,
             live_session_id: None,
