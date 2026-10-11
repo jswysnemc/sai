@@ -2,28 +2,33 @@
 
 .sk-md-host {
   container: sk-md / inline-size;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 
 .sk-master-detail {
   display: grid;
+  flex: 1;
   grid-template-columns: minmax(11rem, min(22%, var(--sk-list-width))) minmax(0, 1fr);
-  align-items: start;
+  align-items: stretch;
   min-width: 0;
+  min-height: 0;
 }
 
 .sk-master {
-  position: sticky;
-  top: 0;
   display: grid;
   min-width: 0;
-  max-height: calc(100dvh - var(--toolbar-height) - var(--space-4xl));
+  min-height: 0;
+  overflow: hidden;
   padding-right: var(--space-lg);
 }
 
 .sk-detail {
   min-width: 0;
-  min-height: calc(100dvh - var(--toolbar-height) - var(--space-5xl));
+  min-height: 0;
+  overflow-y: auto;
   padding-left: var(--space-2xl);
   border-left: 1px solid var(--line);
 }

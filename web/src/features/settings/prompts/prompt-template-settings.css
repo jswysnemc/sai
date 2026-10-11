@@ -12,7 +12,6 @@
   align-items: center;
   flex-wrap: wrap;
   gap:var(--space-sm) var(--space-md);
-  margin-top:var(--space-md);
   color:var(--ink-soft);
   font-size:var(--text-sm);
 }

@@ -110,7 +110,10 @@ mod tests {
         assert_eq!(runtime.key_hint_context().notice, Some(KeyNotice::Exit));
         assert!(runtime.pending_wait().is_some());
         runtime.arm_clear_input_hint(Duration::from_secs(60));
-        assert_eq!(runtime.key_hint_context().notice, Some(KeyNotice::ClearInput));
+        assert_eq!(
+            runtime.key_hint_context().notice,
+            Some(KeyNotice::ClearInput)
+        );
         runtime.arm_clear_input_hint(Duration::ZERO);
         assert_eq!(runtime.key_hint_context().notice, None);
         assert!(runtime.key_notice_deadline().is_none());

@@ -1,7 +1,9 @@
 import { CheckCheck, Search, Timer, X } from "../../../shared/ui/icons";
 import { useMemo, useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
+import { Modal } from "../../../shared/ui/dialog/modal";
 import { useI18n } from "../../i18n/use-i18n";
+import { SwitchField } from "../kit";
 import type { AgentToolOption } from "./agents-types";
 import {
   countToolModes,
@@ -12,6 +14,7 @@ import {
   type ToolModeSelection
 } from "./agent-tool-mode-state";
 import { AgentToolModeGroup, type ToolModeLabels } from "./agent-tool-mode-group";
+import { AgentToolDetailPane } from "./agent-tool-detail-pane";
 import "./agent-permissions.css";
 
 type AgentToolPermissionsProps = {
@@ -21,6 +24,10 @@ type AgentToolPermissionsProps = {
   enabled: string[];
   /** 当前需要 load 才暴露的工具名称 */
   deferred: string[];
+  /** 独占白名单：仅所选工具可用 */
+  exclusive?: boolean;
+  /** 独占开关变化回调 */
+  onExclusiveChange?: (exclusive: boolean) => void;
   /** 工具权限变化回调 */
   onChange: (enabledTools: string[], deferredTools: string[]) => void;
 };
@@ -32,14 +39,23 @@ type ToolStatusFilter = "all" | ToolMode;
  * 渲染可搜索、可分组批量设置的 Agent 工具三段权限面板。
  *
  * 三段语义：on 会话开始即暴露，load 由模型按需加载，off 完全不注册。
+ * 点击工具后以弹窗展示参数 Schema、说明和权限操作。
  *
- * @param props 工具列表、两类已启用名称和变化回调
+ * @param props 工具列表、两类已启用名称、独占开关与变化回调
  * @returns 工具权限面板
  */
-export function AgentToolPermissions({ tools, enabled, deferred, onChange }: AgentToolPermissionsProps) {
+export function AgentToolPermissions({
+  tools,
+  enabled,
+  deferred,
+  exclusive = false,
+  onExclusiveChange,
+  onChange
+}: AgentToolPermissionsProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<ToolStatusFilter>("all");
+  const [selectedToolName, setSelectedToolName] = useState<string | null>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const selection: ToolModeSelection = { enabled, deferred };
   const allNames = tools.map((tool) => tool.name);
@@ -66,8 +82,11 @@ export function AgentToolPermissions({ tools, enabled, deferred, onChange }: Age
    * @param mode 目标状态
    */
   const applyChange = (names: string[], mode: ToolMode) => {
+    // 1. 【工具权限】【通配符展开】展开延迟通配符为明确名称列表
     const expanded = expandWildcard(selection, nonResidentNames);
+    // 2. 【工具权限】【模式计算】根据变更名称与模式计算最新的启用/延迟列表
     const next = updateToolModes(expanded, names, mode, allNames);
+    // 3. 【工具权限】【状态持久化】触发父级配置变更通知
     onChange(next.enabled, next.deferred);
   };
 
@@ -118,6 +137,16 @@ export function AgentToolPermissions({ tools, enabled, deferred, onChange }: Age
       .filter(({ visibleItems }) => visibleItems.length > 0);
   }, [deferred, enabled, normalizedQuery, statusFilter, t, tools]);
 
+  // 当前选中的工具；未点击时不打开详情弹窗
+  const activeTool = useMemo(() => {
+    return tools.find((tool) => tool.name === selectedToolName) ?? null;
+  }, [selectedToolName, tools]);
+
+  const activeToolMode = useMemo(() => {
+    if (!activeTool) return undefined;
+    return resolveToolMode(selection, activeTool.name, !!activeTool.resident);
+  }, [activeTool, selection]);
+
   if (tools.length === 0) {
     return <p className="agent-permissions-empty">{t("No tools available.", "暂无可用工具。")}</p>;
   }
@@ -126,6 +155,18 @@ export function AgentToolPermissions({ tools, enabled, deferred, onChange }: Age
 
   return (
     <div className="agent-permissions-panel agent-tool-permissions">
+      {onExclusiveChange && (
+        <SwitchField
+          className="agent-permissions-exclusive"
+          label={t("Exclusive whitelist", "独占白名单")}
+          hint={t(
+            "Only selected tools are available; an empty list disables every tool, including fallback tools.",
+            "仅提供所选工具；留空会关闭全部工具，包括兜底工具。"
+          )}
+          checked={exclusive}
+          onChange={onExclusiveChange}
+        />
+      )}
       <div className="agent-permissions-toolbar">
         <label className="agent-permissions-search">
           <Search size={14} aria-hidden="true" />
@@ -173,28 +214,53 @@ export function AgentToolPermissions({ tools, enabled, deferred, onChange }: Age
         </div>
       </div>
 
-      {groups.length === 0 ? (
-        <p className="agent-permissions-empty">{t("No matching tools.", "没有匹配的工具。")}</p>
-      ) : (
-        <div className="agent-tool-permission-groups">
-          {groups.map(({ group, label, hint, settingsHref, allItems, visibleItems }) => (
-            <AgentToolModeGroup
-              key={group}
-              group={group}
-              label={label}
-              hint={hint}
-              settingsHref={settingsHref}
-              settingsLabel={t("Configure hosts", "配置主机")}
-              allItems={allItems}
-              visibleItems={visibleItems}
-              selection={selection}
-              modeLabels={modeLabels}
-              groupAriaLabel={t(`Set permissions for the ${label} group`, `设置${label}分组的权限`)}
-              itemAriaLabel={(name) => t(`Set permissions for ${name}`, `设置 ${name} 的权限`)}
-              onChange={applyChange}
-            />
-          ))}
-        </div>
+      <div className="agent-permissions-workspace">
+        {groups.length === 0 ? (
+          <div className="agent-permissions-empty-wrapper">
+            <p className="agent-permissions-empty">{t("No matching tools.", "没有匹配的工具。")}</p>
+          </div>
+        ) : (
+          <div className="agent-tool-permission-groups">
+            {groups.map(({ group, label, hint, settingsHref, allItems, visibleItems }) => (
+              <AgentToolModeGroup
+                key={group}
+                group={group}
+                label={label}
+                hint={hint}
+                settingsHref={settingsHref}
+                settingsLabel={t("Configure hosts", "配置主机")}
+                allItems={allItems}
+                visibleItems={visibleItems}
+                selection={selection}
+                modeLabels={modeLabels}
+                selectedToolName={activeTool?.name}
+                onSelectTool={(tool) => setSelectedToolName(tool.name)}
+                groupAriaLabel={t(`Set permissions for the ${label} group`, `设置${label}分组的权限`)}
+                itemAriaLabel={(name) => t(`Set permissions for ${name}`, `设置 ${name} 的权限`)}
+                onChange={applyChange}
+              />
+            ))}
+          </div>
+        )}
+
+      </div>
+
+      {activeTool && (
+        <Modal
+          open
+          title={activeTool.name}
+          description={`${t(activeTool.group_label_en || activeTool.group, activeTool.group_label || activeTool.group)} · ${activeTool.resident ? t("Resident", "常驻工具") : t("On demand", "按需暴露")}`}
+          size="large"
+          className="agent-tool-detail-dialog"
+          onClose={() => setSelectedToolName(null)}
+        >
+          <AgentToolDetailPane
+            tool={activeTool}
+            mode={activeToolMode}
+            modeLabels={modeLabels}
+            onModeChange={(name, nextMode) => applyChange([name], nextMode)}
+          />
+        </Modal>
       )}
     </div>
   );

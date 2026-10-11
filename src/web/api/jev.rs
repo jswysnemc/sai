@@ -1,6 +1,8 @@
 use super::super::app_state::WebAppState;
 use super::super::error::{WebError, WebResult};
-use crate::config::{jev_connection_for, JevConnectionInfo, ModelEndpointConfig, ModelEndpointKind};
+use crate::config::{
+    jev_connection_for, JevConnectionInfo, ModelEndpointConfig, ModelEndpointKind,
+};
 use crate::jev::probe::{self, ProbeReport};
 use axum::extract::State;
 use axum::routing::{get, post};

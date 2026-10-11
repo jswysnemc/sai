@@ -72,7 +72,11 @@
   pointer-events: none;
 }
 
-/* 下拉：沿用共享 Select，只把高度收到设置页档位 */
+/* 下拉：沿用共享 Select，只把高度收到设置页档位；控件列再窄也不低于可读宽度 */
+.sk-select {
+  min-width: 8rem;
+}
+
 .sk-select > button {
   min-height: var(--sk-control-h);
   height: var(--sk-control-h);

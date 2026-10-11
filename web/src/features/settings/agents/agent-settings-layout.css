@@ -1,4 +1,16 @@
-.agent-settings-shell { display: grid; gap: 1rem; min-width: 0; }
+.agent-settings-shell {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+  min-height: 0;
+}
+
+.agent-settings-shell > .sk-md-host {
+  flex: 1;
+  min-height: 0;
+}
 .agent-settings-loading,
 .agent-settings-load-error {
   display: flex;

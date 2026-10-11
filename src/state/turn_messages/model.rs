@@ -47,7 +47,10 @@ impl TurnMessageKind {
     pub(crate) fn role(self) -> &'static str {
         match self {
             Self::Assistant => "assistant",
-            Self::ExternalCompletion | Self::GoalContinuation | Self::QueuedUser | Self::ContextReminder => "user",
+            Self::ExternalCompletion
+            | Self::GoalContinuation
+            | Self::QueuedUser
+            | Self::ContextReminder => "user",
         }
     }
 }

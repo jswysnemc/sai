@@ -86,6 +86,17 @@
   display: grid;
   gap: 0.0625rem;
   min-width: 0;
+  justify-items: start;
+}
+
+.sk-table .ui-button.ghost {
+  width: auto;
+  max-width: 100%;
+  min-height: 0;
+  padding: 0;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
 }
 
 .sk-cell-main strong {

@@ -425,7 +425,7 @@ impl ChromeInputPrefix {
 /// 输入提示符占用的列数（含左内边距与间隔）。
 pub(super) const CHROME_INPUT_PREFIX_COLS: usize = 3;
 /// 输入正文上下各留的空白行数。
-pub(super) const CHROME_INPUT_PAD_ROWS: u16 = 1;
+pub(super) const CHROME_INPUT_PAD_ROWS: u16 = 0;
 /// 输入条内部上下各留的背景内边距行数（增加输入框视觉厚度）。
 pub(super) const CHROME_INPUT_INNER_PAD_ROWS: u16 = 1;
 /// 底栏状态左右外边距：与输入条的文字起点对齐。

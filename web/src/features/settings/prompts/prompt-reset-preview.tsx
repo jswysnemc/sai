@@ -25,7 +25,7 @@ export function PromptResetPreview({ name, current, defaults, onClose, onConfirm
     key, changed: current[key] !== defaults[key], ...segmentLinePair(current[key], defaults[key])
   })), [current, defaults]);
   return (
-    <Modal open size="large" title={t(`Restore ${name}`, `恢复${name}`)} description={t("Review the changes before restoring. The result remains a draft until saved.", "先核对差异再恢复，恢复结果仍需通过顶栏保存。")} onClose={onClose}
+    <Modal open size="large" title={t(`Restore ${name}`, `恢复${name}`)} description={t("Review the changes before restoring. The result remains a draft until saved.", "先核对差异再恢复，恢复结果仍需通过底部保存栏保存。")} onClose={onClose}
       footer={<><Button onClick={onClose}>{t("Cancel", "取消")}</Button><Button variant="primary" onClick={onConfirm}>{t("Restore default", "恢复默认")}</Button></>}>
       {fields.map(({ key, before, after, changed }) => (
         <SettingsPanel key={key} title={key === "system" ? t("System instruction", "系统指令") : t("Input template", "输入模板")}>

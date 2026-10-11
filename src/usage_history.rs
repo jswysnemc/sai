@@ -2,8 +2,9 @@
 //!
 //! 模块按职责拆分：`record` 负责记录结构与 JSONL 读写，`query` 负责筛选，
 //! `billing` 负责缓存计价折算，`summary` / `trend` / `grouping` 负责三种维度的聚合，
-//! `stats` 负责编排出对外响应。
+//! `activity` 负责 52 周日历与连续活跃，`stats` 负责编排出对外响应。
 
+mod activity;
 mod billing;
 mod grouping;
 mod query;
@@ -113,6 +114,9 @@ mod tests {
         assert_eq!(stats.provider_stats.len(), 1);
         assert_eq!(stats.model_stats.len(), 2);
         assert_eq!(stats.total_logs, 2);
+        assert!(stats.daily_activity.len() as u64 >= 358);
+        assert!(stats.daily_activity.iter().any(|day| day.requests > 0));
+        assert!(stats.total_days >= 358);
 
         clear_all(&paths).unwrap();
         let empty = get_stats(

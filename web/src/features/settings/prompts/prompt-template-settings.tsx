@@ -104,8 +104,8 @@ export function PromptTemplateSettings({ templates, onChange }: PromptTemplateSe
           )}
         >
           <FieldGrid>
-            <SettingsField label={t("System instruction", "系统指令")} anchor={`prompts.${definition.id}.system`} configKey={`prompt.templates.${definition.id}.system`} hint={t("Defines the task, output format, and constraints.", "定义任务、输出格式和约束。")}>
-              <SkTextArea mono rows={6}
+            <SettingsField span="full" label={t("System instruction", "系统指令")} anchor={`prompts.${definition.id}.system`} configKey={`prompt.templates.${definition.id}.system`} hint={t("Defines the task, output format, and constraints.", "定义任务、输出格式和约束。")}>
+              <SkTextArea mono rows={8}
                 ref={(input) => { if (input) inputs.current.set(`${definition.id}.system`, input); else inputs.current.delete(`${definition.id}.system`); }}
                 onFocus={() => activeFields.current.set(definition.id, "system")}
                 value={templates[definition.id].system}
@@ -113,8 +113,8 @@ export function PromptTemplateSettings({ templates, onChange }: PromptTemplateSe
                 spellCheck={false}
               />
             </SettingsField>
-            <SettingsField label={t("Input template", "输入模板")} anchor={`prompts.${definition.id}.user`} configKey={`prompt.templates.${definition.id}.user`} hint={t("Required variables must appear exactly once.", "必要变量必须各保留一次。")}>
-              <SkTextArea mono rows={6}
+            <SettingsField span="full" label={t("Input template", "输入模板")} anchor={`prompts.${definition.id}.user`} configKey={`prompt.templates.${definition.id}.user`} hint={t("Required variables must appear exactly once.", "必要变量必须各保留一次。")}>
+              <SkTextArea mono rows={8}
                 ref={(input) => { if (input) inputs.current.set(`${definition.id}.user`, input); else inputs.current.delete(`${definition.id}.user`); }}
                 onFocus={() => activeFields.current.set(definition.id, "user")}
                 value={templates[definition.id].user}

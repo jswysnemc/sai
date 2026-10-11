@@ -178,7 +178,11 @@ async fn run_git_once(
         .env("GIT_EDITOR", "true")
         .env("GIT_SEQUENCE_EDITOR", "true")
         .env("LC_ALL", "C")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .kill_on_drop(true);
+    crate::platform::job_control::isolate_tokio_command(&mut command);
     timeout(command_timeout, command.output())
         .await
         .with_context(|| {
@@ -221,6 +225,7 @@ async fn run_git_with_input_once(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    crate::platform::job_control::isolate_tokio_command(&mut command);
     let mut child = command.spawn().context("failed to execute git command")?;
     if let Some(mut stdin) = child.stdin.take() {
         stdin

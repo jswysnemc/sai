@@ -2,11 +2,13 @@ use super::{QueueInsertAt, QueuedSubmission, ReplRuntime};
 use crate::agent::{InterMessage, InterMessageSource};
 use anyhow::Result;
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 /// 把 TUI 用户队列中的「请求间隔」项提供给当前模型回合。
 pub(super) struct ReplQueueSource {
     queue: Arc<Mutex<VecDeque<QueuedSubmission>>>,
+    paused: Arc<AtomicBool>,
 }
 
 impl ReplQueueSource {
@@ -16,6 +18,9 @@ impl ReplQueueSource {
 
     /// 查看下一条请求间隔消息，不改变队列。
     fn peek_request(&self) -> Option<InterMessage> {
+        if self.paused.load(Ordering::Acquire) {
+            return None;
+        }
         let queue = self.lock();
         queue.iter().find_map(|item| {
             if item.insert_at != QueueInsertAt::Request {
@@ -88,25 +93,105 @@ impl ReplRuntime {
     pub(in crate::cli) fn inter_message_source(&self) -> Arc<dyn InterMessageSource> {
         Arc::new(ReplQueueSource {
             queue: Arc::clone(&self.submission_queue),
+            paused: Arc::clone(&self.submission_queue_paused),
         })
     }
 
-    /// 取出全部轮次间隔提交，留下请求间隔项给下一次模型请求。
-    pub(in crate::cli) fn take_turn_interval_queue(&mut self) -> Vec<QueuedSubmission> {
+    /// 【终端队列】【暂停】暂停自动投递，保留全部条目供用户查看和编辑。
+    ///
+    /// 参数: 无
+    /// 返回: 无
+    pub(in crate::cli) fn pause_submission_queue(&mut self) {
+        self.submission_queue_paused.store(true, Ordering::Release);
+    }
+
+    /// 【终端队列】【恢复】用户主动继续后允许后续请求或轮次消费队列。
+    ///
+    /// 参数: 无
+    /// 返回: 无
+    pub(in crate::cli) fn resume_submission_queue(&mut self) {
+        self.submission_queue_paused.store(false, Ordering::Release);
+    }
+
+    /// 【终端队列】【主动继续】只允许用户输入解除暂停，自动续轮和后台回执不能恢复队列。
+    ///
+    /// 参数: `submission` 为即将执行的轮次输入
+    /// 返回: 无
+    pub(in crate::cli) fn resume_queue_for_submission(
+        &mut self,
+        submission: &crate::runner::RunnerSubmission,
+    ) {
+        if matches!(
+            &submission.kind,
+            crate::runner::RunnerSubmissionKind::UserInput(input) if input.automatic_input.is_none()
+        ) {
+            self.resume_submission_queue();
+        }
+    }
+
+    /// 【终端队列】【空闲调度】判断是否存在未暂停的轮次消息，避免空闲主循环重复消费失败队列。
+    ///
+    /// 参数: 无
+    /// 返回: 可以自动开始下一轮时为真；仅有请求间隔消息时为假
+    pub(in crate::cli) fn has_ready_turn_submission(&self) -> bool {
+        !self.submission_queue_paused.load(Ordering::Acquire)
+            && self
+                .lock_queue()
+                .iter()
+                .any(|item| item.insert_at == QueueInsertAt::Turn)
+    }
+
+    /// 【终端队列】【逐条执行】只取出下一条轮次间隔消息，其余消息继续留在管理面板中。
+    ///
+    /// 参数: 无
+    /// 返回: 原队列位置与待执行消息；没有轮次间隔消息时为空
+    pub(in crate::cli) fn take_next_turn_submission(
+        &mut self,
+    ) -> Option<(usize, QueuedSubmission)> {
+        if self.submission_queue_paused.load(Ordering::Acquire) {
+            return None;
+        }
         let taken = {
             let mut queue = self.lock_queue();
-            let mut taken = Vec::new();
-            let mut kept = VecDeque::new();
-            while let Some(item) = queue.pop_front() {
-                match item.insert_at {
-                    QueueInsertAt::Turn => taken.push(item),
-                    QueueInsertAt::Request => kept.push_back(item),
-                }
-            }
-            *queue = kept;
-            taken
+            let index = queue
+                .iter()
+                .position(|item| item.insert_at == QueueInsertAt::Turn)?;
+            queue.remove(index).map(|item| (index, item))
         };
         self.clamp_queue_panel();
+        taken
+    }
+
+    /// 【终端队列】【启动恢复】恢复尚未启动的提交，不改变附件、模式和插入点。
+    ///
+    /// 参数:
+    /// - `index`: 取出消息时的队列位置
+    /// - `item`: 尚未执行的完整提交
+    ///
+    /// 返回: 无
+    pub(in crate::cli) fn restore_queued_submission(
+        &mut self,
+        index: usize,
+        item: QueuedSubmission,
+    ) {
+        {
+            let mut queue = self.lock_queue();
+            let index = index.min(queue.len());
+            queue.insert(index, item);
+        }
+        self.clamp_queue_panel();
+    }
+
+    /// 【终端队列】【测试取出】重复调用正式逐条入口，返回全部轮次间隔提交。
+    ///
+    /// 参数: 无
+    /// 返回: 供测试检查的轮次消息列表，请求间隔消息保持不动
+    #[cfg(test)]
+    pub(in crate::cli) fn take_turn_interval_queue(&mut self) -> Vec<QueuedSubmission> {
+        let mut taken = Vec::new();
+        while let Some((_, item)) = self.take_next_turn_submission() {
+            taken.push(item);
+        }
         taken
     }
 }
@@ -130,6 +215,7 @@ mod tests {
     fn source_with(items: Vec<QueuedSubmission>) -> ReplQueueSource {
         ReplQueueSource {
             queue: Arc::new(Mutex::new(items.into())),
+            paused: Arc::new(AtomicBool::new(false)),
         }
     }
 

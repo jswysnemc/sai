@@ -1,4 +1,5 @@
-use super::{symbols, text::display_inline, QuestionState};
+use super::state::QuestionState;
+use super::{symbols, text::display_inline};
 use crate::{i18n::text as t, question::QuestionRequest};
 use unicode_width::UnicodeWidthStr;
 

@@ -30,7 +30,11 @@ impl TerminalInputGuard {
     pub(super) fn enable(stdout: &mut io::Stdout, show_cursor: bool) -> Result<Self> {
         // 进入 raw mode 前装好终止信号监听，被 kill 时同样能恢复终端
         super::terminal_signals::install();
-        terminal::enable_raw_mode()?;
+        crate::platform::job_control::install();
+        if let Err(err) = terminal::enable_raw_mode() {
+            crate::platform::job_control::restore();
+            return Err(err.into());
+        }
         let mode_result = if show_cursor {
             execute!(stdout, Show, EnableBracketedPaste)
         } else {
@@ -38,6 +42,7 @@ impl TerminalInputGuard {
         };
         if let Err(err) = mode_result {
             let _ = terminal::disable_raw_mode();
+            crate::platform::job_control::restore();
             return Err(err.into());
         }
         self::enable_windows_output_mode();
@@ -67,6 +72,7 @@ impl TerminalInputGuard {
         let paste_result = execute!(stdout, DisableBracketedPaste);
         self.enhancement.disable(stdout);
         let raw_result = terminal::disable_raw_mode();
+        crate::platform::job_control::restore();
         paste_result?;
         raw_result?;
         Ok(())
@@ -116,6 +122,7 @@ impl Drop for TerminalInputGuard {
         let _ = execute!(stdout, DisableBracketedPaste);
         self.enhancement.disable(&mut stdout);
         let _ = terminal::disable_raw_mode();
+        crate::platform::job_control::restore();
     }
 }
 
@@ -127,6 +134,7 @@ impl Drop for TerminalInputGuard {
 /// 返回:
 /// - 恢复是否成功
 pub(super) fn restore_stream_terminal_modes() -> Result<()> {
+    crate::platform::job_control::claim_foreground();
     terminal::enable_raw_mode()?;
     execute!(io::stdout(), EnableBracketedPaste)?;
     Ok(())
@@ -180,4 +188,5 @@ pub(crate) fn emergency_restore() {
     crate::platform::windows_console::force_restore_tui_output_mode();
     // 关闭 raw mode，让后续输出恢复正常换行
     let _ = terminal::disable_raw_mode();
+    crate::platform::job_control::restore();
 }

@@ -3,7 +3,7 @@ import type { AppConfig } from "../../../api/contracts";
 import type { AgentProfile } from "../../agents/agent-types";
 import { DEFAULT_AGENT_ID } from "../../agents/agent-options";
 import { useI18n } from "../../i18n/use-i18n";
-import { DetailHeader, InlineSwitch, LocalTabs, SettingsPanel, StatusBadge, SwitchField } from "../kit";
+import { DetailHeader, InlineSwitch, LocalTabs, SettingsPanel, StatusBadge } from "../kit";
 import type { AgentOptions } from "./agents-types";
 import { AgentSkillPermissions } from "./agent-skill-permissions";
 import { AgentToolPermissions } from "./agent-tool-permissions";
@@ -40,8 +40,14 @@ export function AgentProfileEditor({ config, profile, options, onChange, onRemov
     <LocalTabs value={tab} items={[{ id: "basic", label: t("Basics", "基础配置") }, { id: "tools", label: t("Tool permissions", "工具权限"), count: profile.enabled_tools.length }, { id: "skills", label: t("Skills", "技能"), count: skillCount }]} ariaLabel={t("Agent configuration categories", "Agent 配置分类")} onChange={(view) => setParams((current) => { const next = new URLSearchParams(current); next.set("view", view); return next; }, { replace: true })} />
     {tab === "basic" && <AgentBasicsPanel key={profile.id} config={config} profile={profile} options={options} onChange={onChange} />}
     {tab === "tools" && <SettingsPanel title={t("Tool whitelist", "工具白名单")} id={fieldAnchorId("agents.enabled_tools")}>
-      <SwitchField label={t("Exclusive whitelist", "独占白名单")} checked={profile.tools_exclusive ?? false} hint={t("Only selected tools are available; an empty list disables every tool, including fallback tools.", "仅提供所选工具；留空会关闭全部工具，包括兜底工具。")} onChange={(tools_exclusive) => onChange({ tools_exclusive })} />
-      <AgentToolPermissions tools={options.tools} enabled={profile.enabled_tools} deferred={deferred} onChange={(enabled_tools, deferred_tools) => onChange({ enabled_tools, deferred_tools })} />
+      <AgentToolPermissions
+        tools={options.tools}
+        enabled={profile.enabled_tools}
+        deferred={deferred}
+        exclusive={profile.tools_exclusive ?? false}
+        onExclusiveChange={(tools_exclusive) => onChange({ tools_exclusive })}
+        onChange={(enabled_tools, deferred_tools) => onChange({ enabled_tools, deferred_tools })}
+      />
     </SettingsPanel>}
     {tab === "skills" && <SettingsPanel title={t("Skill exposure", "技能暴露")} id={fieldAnchorId("agents.skills")}>
       <AgentSkillPermissions skills={options.skills} fullNames={profile.skills_full} namedNames={profile.skills_named} onChange={(skills_full, skills_named) => onChange({ skills_full, skills_named })} />

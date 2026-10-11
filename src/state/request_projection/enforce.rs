@@ -7,11 +7,17 @@ impl StateStore {
     /// 【请求校验】【工具配对】成功路径只校验消息结构，不复制历史或计算 token。
     /// @param turn_id 为轮次；messages 为实际请求；context_limit_tokens 为错误诊断所需预算
     /// @returns 配对校验结果；失败时沿用完整投影记录恢复信息
-    pub(crate) fn enforce_provider_messages(&self, turn_id: Option<&str>, messages: &[crate::llm::ChatMessage], context_limit_tokens: usize) -> Result<()> {
+    pub(crate) fn enforce_provider_messages(
+        &self,
+        turn_id: Option<&str>,
+        messages: &[crate::llm::ChatMessage],
+        context_limit_tokens: usize,
+    ) -> Result<()> {
         if super::validator::validate_tool_pairing(messages).is_empty() {
             return Ok(());
         }
-        let projection = super::builder::project_provider_turn_from_messages(messages, 0, context_limit_tokens);
+        let projection =
+            super::builder::project_provider_turn_from_messages(messages, 0, context_limit_tokens);
         self.enforce_provider_projection(turn_id, &projection)
     }
 

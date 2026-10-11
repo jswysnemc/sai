@@ -53,7 +53,9 @@ impl TerminalSession {
         terminal::enable_raw_mode()?;
         let mut stdout = io::stdout();
         // 2. 进入备用屏失败时 Self 未构造、Drop 不会执行，须手工回滚 raw mode
-        if let Err(err) = crate::cli::alternate_screen::enter_alternate_screen(&mut stdout).and_then(|_| execute!(stdout, Hide)) {
+        if let Err(err) = crate::cli::alternate_screen::enter_alternate_screen(&mut stdout)
+            .and_then(|_| execute!(stdout, Hide))
+        {
             let _ = terminal::disable_raw_mode();
             return Err(err.into());
         }

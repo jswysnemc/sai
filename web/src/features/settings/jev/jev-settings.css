@@ -1,6 +1,13 @@
 /* Jev 设置：接入状态行与测试结果，沿用设置页的步进间距与字号 */
 
-.jev-feature-grid > .sk-panel { margin: 0; padding: 0; border: 0; }
+.jev-feature-grid {
+  min-width: 0;
+}
+
+.jev-feature-grid > .sk-panel {
+  min-width: 0;
+  overflow: hidden;
+}
 
 .jev-status {
   display: grid;

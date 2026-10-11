@@ -13,8 +13,8 @@ type Props = { hook: HookItem; onChange: (patch: Partial<HookItem>) => void };
 export function HookActionFields({ hook, onChange }: Props) {
   const { t } = useI18n();
   if ((hook.kind ?? "command") === "command") return <SettingsPanel title={t("Shell action", "Shell 动作")}>
-    <SettingsField label={t("Script", "脚本")} anchor="hooks.script" hint={t("Available variables: SAI_HOOK_EVENT, SAI_HOOK_NAME, SAI_SESSION_ID, SAI_WORKDIR, SAI_TOOL_NAME (tool events). Runs with sh -lc.", "可用变量：SAI_HOOK_EVENT、SAI_HOOK_NAME、SAI_SESSION_ID、SAI_WORKDIR、SAI_TOOL_NAME（工具事件）。通过 sh -lc 执行。")}> 
-      <SkTextArea mono rows={6} value={hook.script ?? ""} onChange={(script) => onChange({ script })} />
+    <SettingsField span="full" label={t("Script", "脚本")} anchor="hooks.script" hint={t("Available variables: SAI_HOOK_EVENT, SAI_HOOK_NAME, SAI_SESSION_ID, SAI_WORKDIR, SAI_TOOL_NAME (tool events). Runs with sh -lc.", "可用变量：SAI_HOOK_EVENT、SAI_HOOK_NAME、SAI_SESSION_ID、SAI_WORKDIR、SAI_TOOL_NAME（工具事件）。通过 sh -lc 执行。")}>
+      <SkTextArea mono rows={10} value={hook.script ?? ""} onChange={(script) => onChange({ script })} />
     </SettingsField>
   </SettingsPanel>;
   const requests = hook.requests?.length ? hook.requests : [{ id: "1", url: "", method: "POST", headers: {}, body: "" }];

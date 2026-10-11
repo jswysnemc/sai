@@ -2,12 +2,13 @@ import type { ThemeId } from "../theme/theme";
 import { useI18n } from "../i18n/use-i18n";
 import { useMarkdownStylePreferences } from "../markdown/markdown-style-store";
 import { ChoicePills, SettingsField, SettingsPanel } from "./kit";
+import { ChatAppearanceSettings } from "./appearance/chat-appearance-settings";
 import { DisplayScaleSettings } from "./appearance/display-scale-settings";
 import { ThemeSettings } from "./appearance/theme-settings";
 import { MarkdownStyleSettings } from "./markdown-style-settings";
 
 /**
- * 【Web 设置】【界面外观】组合语言、主题和 Markdown 偏好，所有修改即时生效。
+ * 【Web 设置】【界面外观】组合语言、主题、聊天阅读列和 Markdown 偏好，所有修改即时生效。
  * @param props 当前主题及切换回调
  * @returns 当前浏览器的外观设置
  */
@@ -23,6 +24,7 @@ export function AppearanceSettingsSection({ theme, onThemeChange }: { theme: The
       </SettingsPanel>
       <ThemeSettings theme={theme} onThemeChange={onThemeChange} />
       <DisplayScaleSettings />
+      <ChatAppearanceSettings />
       <MarkdownStyleSettings preferences={markdownStyle.preferences} onPresetChange={markdownStyle.updatePreset} onTableChange={markdownStyle.updateTable} onCodeBlockChange={markdownStyle.updateCodeBlock} onReset={markdownStyle.reset} />
     </>
   );

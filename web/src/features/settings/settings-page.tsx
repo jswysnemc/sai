@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { Navigate, useLocation, useParams } from "react-router-dom";
 import { SettingsNav } from "./shell/settings-nav";
 import { SettingsTopbar } from "./shell/settings-topbar";
+import { SettingsSaveBar } from "./shell/settings-save-bar";
 import { SettingsSectionBody } from "./shell/settings-section-body";
 import { SettingsSubnav } from "./shell/settings-subnav";
 import { useFieldFocus } from "./shell/use-field-focus";
@@ -16,12 +17,12 @@ import {
 import { useSettingsConfig } from "./use-settings-config";
 import { useTheme } from "../theme/theme";
 import { useI18n } from "../i18n/use-i18n";
-import { InlineNotice } from "./kit";
+import { InlineNotice, SettingsPageHeader } from "./kit";
 import "./kit";
 import "./settings-layout.css";
 
 /**
- * 设置页壳层：顶栏、分组导航、按路由挂载 section 与子页。
+ * 设置页壳层：拖拽顶栏、分组导航、内容区页头，按路由挂载 section 与子页。
  *
  * 壳层持有全局配置草稿，并负责保存快捷键、离开确认与字段定位。
  *
@@ -89,36 +90,49 @@ function SettingsWorkspace() {
 
   return (
     <div className="settings-page">
-      <SettingsTopbar
-        meta={meta}
-        subview={subview}
-        dirty={settings.dirty}
-        saving={settings.saving}
-        saveErrorMessage={settings.saveError?.message}
-        loaded={Boolean(settings.config)}
-        validationError={settings.jsonError}
-        onSave={() => void settings.saveConfig().catch(() => undefined)}
-        onDiscard={settings.discard}
-      />
+      <SettingsTopbar />
       <div className="settings-workspace">
         <SettingsNav activeSection={section} config={settings.config} dirtySections={dirtySections} />
-        <main className="settings-main" ref={pageRef}>
-          <div className="settings-main-content" data-layout={meta?.layout ?? "form"}>
-            {missingField && <InlineNotice>{missingField.startsWith("runtime.agent.acp.")
-              ? t("This field is available when an external conversation engine is selected. Choose the engine above to configure it.", "选择外部对话内核后才会显示此字段，请在对话内核选项中选择对应内核。")
-              : t("This field is unavailable for the current selection. Select the matching object or enable its related option, then search again.", "当前选择未显示此字段。请选择对应对象或启用相关选项后重新搜索。")}</InlineNotice>}
-            {meta?.subviews && section !== "providers" && (
-              <SettingsSubnav sectionId={section} subviews={meta.subviews} />
-            )}
-            <SettingsSectionBody
-              section={section}
-              subview={subview}
-              settings={settings}
-              theme={theme.theme}
-              onThemeChange={theme.setTheme}
-            />
-          </div>
-        </main>
+        <div className="settings-main-area">
+          <main className="settings-main">
+            <div className="settings-main-content" data-testid="settings-page-frame" data-layout={meta?.layout ?? "form"}>
+              <div className="settings-main-chrome">
+                <SettingsPageHeader
+                  title={meta ? t(meta.labelEn, meta.labelZh) : t("Settings", "设置")}
+                  description={meta ? t(meta.descriptionEn, meta.descriptionZh) : undefined}
+                  action={meta?.saveHintEn && meta.saveHintZh
+                    ? <span className="settings-save-hint">{t(meta.saveHintEn, meta.saveHintZh)}</span>
+                    : undefined}
+                />
+                {missingField && <InlineNotice>{missingField.startsWith("runtime.agent.acp.")
+                  ? t("This field is available when an external conversation engine is selected. Choose the engine above to configure it.", "选择外部对话内核后才会显示此字段，请在对话内核选项中选择对应内核。")
+                  : t("This field is unavailable for the current selection. Select the matching object or enable its related option, then search again.", "当前选择未显示此字段。请选择对应对象或启用相关选项后重新搜索。")}</InlineNotice>}
+                {meta?.subviews && section !== "providers" && (
+                  <SettingsSubnav sectionId={section} subviews={meta.subviews} />
+                )}
+              </div>
+              <div className="settings-main-body" ref={pageRef}>
+                <SettingsSectionBody
+                  section={section}
+                  subview={subview}
+                  settings={settings}
+                  theme={theme.theme}
+                  onThemeChange={theme.setTheme}
+                />
+              </div>
+            </div>
+          </main>
+          <SettingsSaveBar
+            meta={meta}
+            dirty={settings.dirty}
+            saving={settings.saving}
+            saveErrorMessage={settings.saveError?.message}
+            loaded={Boolean(settings.config)}
+            validationError={settings.jsonError}
+            onSave={() => void settings.saveConfig().catch(() => undefined)}
+            onDiscard={settings.discard}
+          />
+        </div>
       </div>
     </div>
   );

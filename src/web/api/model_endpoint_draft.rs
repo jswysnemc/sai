@@ -20,7 +20,9 @@ pub(super) fn restore_endpoint_secrets(
     kind: ModelEndpointKind,
 ) -> WebResult<ModelEndpointConfig> {
     if submitted.kind != kind {
-        return Err(WebError::bad_request("model endpoint kind does not match this request"));
+        return Err(WebError::bad_request(
+            "model endpoint kind does not match this request",
+        ));
     }
     // 1. 读取已保存的同 id 接入
     let config = crate::config::AppConfig::load_or_default(&state.paths).map_err(WebError::from)?;

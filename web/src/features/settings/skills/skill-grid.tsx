@@ -2,7 +2,7 @@ import { Plus, RefreshCw } from "../../../shared/ui/icons";
 import { useMemo, useState } from "react";
 import type { ManagedSkill } from "../../../api/skill-contracts";
 import { Button } from "../../../shared/ui/button/button";
-import { ChoicePills, DataTable, EmptyGuide, SettingsPanel, SkSelect, SkTextInput, StatusBadge } from "../kit";
+import { ChoicePills, DataTable, EmptyGuide, SkSelect, SkTextInput, StatusBadge } from "../kit";
 import { useI18n } from "../../i18n/use-i18n";
 import { SkillCard } from "./skill-card";
 import { filterManagedSkills, skillScopeLabel, type SkillStatusFilter } from "./skill-list-filter";
@@ -22,6 +22,8 @@ type SkillGridProps = {
 
 /**
  * 渲染带搜索和筛选功能的响应式 Skill 网格。
+ *
+ * 标题与操作直接落在页面上，不再套一层分组卡片。
  *
  * @param props Skill 数据、筛选条件、请求状态与操作回调
  * @returns 技能库网格页
@@ -47,23 +49,32 @@ export function SkillGrid({ skills, filters, scanning, error, onFiltersChange, o
     ? String(skills.length)
     : `${visibleSkills.length}/${skills.length}`;
 
-  return <SettingsPanel title={t("Library", "技能库")} description={t(`${resultCount} results`, `${resultCount} 项`)} actions={<>
-    <ChoicePills value={layout} onChange={setLayout} ariaLabel={t("Library view", "技能库视图")} options={[{ value: "grid", label: t("Grid", "网格") }, { value: "list", label: t("List", "列表") }]} />
-    <Button variant="secondary" onClick={onScan} disabled={scanning}><RefreshCw size={14} />{t("Scan", "扫描")}</Button>
-    <Button variant="primary" onClick={onAdd}><Plus size={14} />{t("Add Skill", "新增 Skill")}</Button>
-  </>}>
-    <div className="skill-filter-toolbar">
-      <SkTextInput type="search" value={filters.query} onChange={(query) => onFiltersChange({ ...filters, query })} placeholder={t("Search name, description, or source", "搜索名称、说明或来源")} aria-label={t("Search Skills", "搜索 Skills")} />
-      <SkSelect value={filters.status} options={statusOptions} ariaLabel={t("Filter Skill status", "筛选 Skill 状态")} onChange={(status) => onFiltersChange({ ...filters, status })} />
-      <SkSelect value={filters.scope} options={scopeOptions} ariaLabel={t("Filter Skill source", "筛选 Skill 来源")} onChange={(scope) => onFiltersChange({ ...filters, scope })} />
+  return (
+    <div className="skill-library">
+      <header className="skill-library-head">
+        <div>
+          <h3>{t("Library", "技能库")}</h3>
+          <p>{t(`${resultCount} results`, `${resultCount} 项`)}</p>
+        </div>
+        <div className="skill-library-actions">
+          <ChoicePills value={layout} onChange={setLayout} ariaLabel={t("Library view", "技能库视图")} options={[{ value: "grid", label: t("Grid", "网格") }, { value: "list", label: t("List", "列表") }]} />
+          <Button variant="secondary" onClick={onScan} disabled={scanning}><RefreshCw size={14} />{t("Scan", "扫描")}</Button>
+          <Button variant="primary" onClick={onAdd}><Plus size={14} />{t("Add Skill", "新增 Skill")}</Button>
+        </div>
+      </header>
+      <div className="skill-filter-toolbar">
+        <SkTextInput type="search" value={filters.query} onChange={(query) => onFiltersChange({ ...filters, query })} placeholder={t("Search name, description, or source", "搜索名称、说明或来源")} aria-label={t("Search Skills", "搜索 Skills")} />
+        <SkSelect value={filters.status} options={statusOptions} ariaLabel={t("Filter Skill status", "筛选 Skill 状态")} onChange={(status) => onFiltersChange({ ...filters, status })} />
+        <SkSelect value={filters.scope} options={scopeOptions} ariaLabel={t("Filter Skill source", "筛选 Skill 来源")} onChange={(scope) => onFiltersChange({ ...filters, scope })} />
+      </div>
+      {error && <div className="settings-inline-error">{error}</div>}
+      {scanning && <p role="status" className="text-xs">{t("Scanning Skill directories", "正在扫描 Skill 目录")}</p>}
+      {!visibleSkills.length ? <EmptyGuide title={skills.length ? t("No matching Skills", "没有匹配的 Skill") : t("No Skills found", "尚未发现 Skill")} /> : layout === "grid" ? <ul className="skill-grid" aria-label={t("Available Skills", "可用 Skills")}>{visibleSkills.map((skill) => <SkillCard key={skill.id} skill={skill} onOpen={onOpen} />)}</ul> : <DataTable label={t("Available Skills", "可用 Skills")} rows={visibleSkills} rowKey={(skill) => skill.id} columns={[
+        { id: "name", header: t("Name", "名称"), sortValue: (skill) => skill.name, render: (skill) => <Button variant="ghost" onClick={() => onOpen(skill.id)}>{skill.name}</Button> },
+        { id: "description", header: t("Description", "说明"), render: (skill) => skill.description },
+        { id: "source", header: t("Source", "来源"), sortValue: (skill) => skill.scope, render: (skill) => skillScopeLabel(skill.scope, t) },
+        { id: "status", header: t("Status", "状态"), render: (skill) => <StatusBadge tone={skill.enabled ? "success" : "neutral"}>{skill.enabled ? t("Enabled", "已启用") : t("Disabled", "已禁用")}</StatusBadge> }
+      ]} />}
     </div>
-    {error && <div className="settings-inline-error">{error}</div>}
-    {scanning && <p role="status" className="text-xs">{t("Scanning Skill directories", "正在扫描 Skill 目录")}</p>}
-    {!visibleSkills.length ? <EmptyGuide title={skills.length ? t("No matching Skills", "没有匹配的 Skill") : t("No Skills found", "尚未发现 Skill")} /> : layout === "grid" ? <ul className="skill-grid" aria-label={t("Available Skills", "可用 Skills")}>{visibleSkills.map((skill) => <SkillCard key={skill.id} skill={skill} onOpen={onOpen} />)}</ul> : <DataTable label={t("Available Skills", "可用 Skills")} rows={visibleSkills} rowKey={(skill) => skill.id} columns={[
-      { id: "name", header: t("Name", "名称"), sortValue: (skill) => skill.name, render: (skill) => <Button variant="ghost" onClick={() => onOpen(skill.id)}>{skill.name}</Button> },
-      { id: "description", header: t("Description", "说明"), render: (skill) => skill.description },
-      { id: "source", header: t("Source", "来源"), sortValue: (skill) => skill.scope, render: (skill) => skillScopeLabel(skill.scope, t) },
-      { id: "status", header: t("Status", "状态"), render: (skill) => <StatusBadge tone={skill.enabled ? "success" : "neutral"}>{skill.enabled ? t("Enabled", "已启用") : t("Disabled", "已禁用")}</StatusBadge> }
-    ]} />}
-  </SettingsPanel>;
+  );
 }

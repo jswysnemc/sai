@@ -1,4 +1,4 @@
-/* 【Web 设置】【开关】紧凑开关与前置开关字段 */
+/* 【Web 设置】【开关】紧凑开关与右侧开关字段 */
 
 .sk-switch {
   position: relative;
@@ -51,48 +51,11 @@
   cursor: pointer;
 }
 
-/* 前置开关字段：开关与标签相邻，整行可点击 */
-.sk-switch-field {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-sm);
-  min-width: 0;
-  cursor: pointer;
-}
-
-/* 开关 16px，标签行高 13px × 1.4 ≈ 18px，下移 1px 使两者中线对齐 */
-.sk-switch-field > .sk-switch { margin-top: 0.0625rem; }
-
-.sk-switch-copy {
-  display: grid;
-  gap: 0.125rem;
-  min-width: 0;
-}
-
-.sk-switch-label {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-xs);
-  color: var(--ink);
-  font-size: var(--text-base);
-  font-weight: 500;
-  line-height: var(--leading-snug);
-  overflow-wrap: anywhere;
-}
-
-.sk-switch-hint {
-  color: var(--ink-soft);
-  font-size: var(--text-sm);
-  line-height: var(--leading-snug);
-  overflow-wrap: anywhere;
-}
-
 .sk-switch-field.is-disabled {
   cursor: not-allowed;
 }
 
-.sk-switch-field.is-disabled .sk-switch-copy { opacity: 0.6; }
+.sk-switch-field.is-disabled .sk-row-copy { opacity: 0.6; }
 
 @media (prefers-reduced-motion: reduce) {
   .sk-switch,

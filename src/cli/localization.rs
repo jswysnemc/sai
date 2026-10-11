@@ -263,10 +263,7 @@ fn localize_web_command(command: clap::Command) -> clap::Command {
             ))
         })
         .mut_arg("foreground", |arg| {
-            arg.help(t(
-                "Keep the server in this terminal",
-                "在当前终端前台运行",
-            ))
+            arg.help(t("Keep the server in this terminal", "在当前终端前台运行"))
         })
 }
 

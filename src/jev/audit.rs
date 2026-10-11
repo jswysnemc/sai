@@ -116,8 +116,12 @@ fn decide(answer: Option<&Value>, config: &JevAuditConfig) -> AuditVerdict {
         verdict.probability, verdict.confidence
     );
     match verdict.choice.as_str() {
-        "allow" => AuditVerdict::Allow(format!("Jev 判定本次操作符合用户请求和审核规则（{detail}）")),
-        "deny" => AuditVerdict::Deny(format!("Jev 判定本次操作违反用户约束或审核规则（{detail}）")),
+        "allow" => AuditVerdict::Allow(format!(
+            "Jev 判定本次操作符合用户请求和审核规则（{detail}）"
+        )),
+        "deny" => AuditVerdict::Deny(format!(
+            "Jev 判定本次操作违反用户约束或审核规则（{detail}）"
+        )),
         _ => fallback(),
     }
 }
@@ -139,8 +143,14 @@ mod tests {
     #[test]
     fn confident_answers_are_submitted() {
         let config = JevAuditConfig::default();
-        assert!(matches!(decide(Some(&answer("allow", 0.96, 0.9)), &config), AuditVerdict::Allow(_)));
-        assert!(matches!(decide(Some(&answer("deny", 0.96, 0.9)), &config), AuditVerdict::Deny(_)));
+        assert!(matches!(
+            decide(Some(&answer("allow", 0.96, 0.9)), &config),
+            AuditVerdict::Allow(_)
+        ));
+        assert!(matches!(
+            decide(Some(&answer("deny", 0.96, 0.9)), &config),
+            AuditVerdict::Deny(_)
+        ));
     }
 
     #[test]
@@ -151,7 +161,10 @@ mod tests {
             answer("allow", 0.95, 0.5),
             answer("abstain", 0.99, 0.99),
         ] {
-            assert!(matches!(decide(Some(&value), &config), AuditVerdict::Abstain(_)));
+            assert!(matches!(
+                decide(Some(&value), &config),
+                AuditVerdict::Abstain(_)
+            ));
         }
         assert!(matches!(decide(None, &config), AuditVerdict::Abstain(_)));
     }
@@ -174,7 +187,10 @@ mod tests {
             ..facts.clone()
         };
         assert!(request_parts(&plain).0.get("sandbox").is_none());
-        assert_eq!(questions[QUESTION_ID]["instructions"]["policy"], "policy text");
+        assert_eq!(
+            questions[QUESTION_ID]["instructions"]["policy"],
+            "policy text"
+        );
         assert!(questions[QUESTION_ID]["criteria"]["abstain"].is_string());
     }
 }

@@ -243,7 +243,7 @@ pub(super) fn prompt_permission_request_tui(
 /// 返回:
 /// - 是否成功提交回答
 fn prompt_question_request(pending: &crate::question::PendingQuestion) -> Result<()> {
-    let response = super::plan_review::ask(pending, false)
+    let response = super::plan_review::ask(pending, false, None)
         .unwrap_or_else(|err| crate::question::QuestionResponse::Unavailable(err.to_string()));
     crate::question::resolve_question(&pending.id, response)
 }
@@ -260,17 +260,16 @@ pub(super) fn prompt_question_request_tui(
     pending: &crate::question::PendingQuestion,
     runtime: &mut ReplRuntime,
 ) -> Result<()> {
-    // 【终端提问】【屏幕切换】先退出会话全屏视图，避免临时提问屏幕嵌套切换
-    runtime.leave_fullscreen()?;
     let mut stdout = io::stdout();
-    // 1. 独占 raw 输入，避免与主循环输入框事件竞争
+    // 1. 独占 raw 输入，避免与主循环输入框事件竞争；全屏会话保持不变
     let mut terminal_guard = terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
     runtime.prepare_question_prompt()?;
+    let placement = runtime.question_overlay_placement();
 
-    let response = super::plan_review::ask(pending, true)
+    let response = super::plan_review::ask(pending, true, Some(placement))
         .unwrap_or_else(|err| crate::question::QuestionResponse::Unavailable(err.to_string()));
 
-    // 2. 【终端提问】【恢复主屏】临时屏幕已恢复，保留历史行位置供工具结果原地更新
+    // 2. 【终端提问】【底部覆盖】清掉提问覆盖层后由 runtime 恢复输入框与历史
     let _ = terminal_guard.finish(&mut stdout);
     runtime.finish_question_prompt()?;
     crate::question::resolve_question(&pending.id, response)

@@ -2,6 +2,7 @@ import { useId, type ReactNode } from "react";
 import { fieldAnchorId } from "../search/field-anchor";
 import { cx } from "./class-names";
 import { FieldContext } from "./field-context";
+import { SettingsRow, type SettingsRowLayout } from "./settings-row";
 import "./settings-field.css";
 
 /** 控件最大宽度档位：xs 6rem、sm 10rem、md 16rem、lg 24rem、full 占满单元格。 */
@@ -20,8 +21,10 @@ type SettingsFieldProps = {
   anchor?: string;
   /** 控件最大宽度档位 */
   size?: ControlSize;
-  /** 为 full 时跨整行 */
+  /** 为 full 时跨整行，并改为上下排布 */
   span?: "full";
+  /** 强制行排布；缺省时按控件宽度选择 */
+  layout?: SettingsRowLayout;
   /** 紧跟标签的徽标，例如「仅本浏览器」 */
   badge?: ReactNode;
   /** 标签行右侧的辅助操作 */
@@ -31,7 +34,29 @@ type SettingsFieldProps = {
 };
 
 /**
- * 渲染设置字段：标签、控件与说明三段式排布。
+ * 根据字段宽度选择行排布。
+ *
+ * 1. 调用方显式传入 layout 时直接使用
+ * 2. 整行控件改为上下排布
+ * 3. 其余字段宽屏左文右控，窄屏上下叠
+ *
+ * @param layout 显式排布
+ * @param size 控件宽度档位
+ * @param span 是否跨整行
+ * @returns 行排布
+ */
+function resolveLayout(
+  layout: SettingsRowLayout | undefined,
+  size: ControlSize,
+  span?: "full"
+): SettingsRowLayout {
+  if (layout) return layout;
+  if (span === "full" || size === "full") return "stack";
+  return "responsive";
+}
+
+/**
+ * 渲染设置字段：标签、控件与说明组成一行。
  *
  * 控件通过字段上下文自动关联标签与说明，调用方无需手写 id。
  *
@@ -44,8 +69,9 @@ export function SettingsField({
   error,
   configKey,
   anchor,
-  size = "full",
+  size = "md",
   span,
+  layout,
   badge,
   aside,
   className,
@@ -56,18 +82,22 @@ export function SettingsField({
   const labelId = `${baseId}-label`;
   const message = error ?? hint;
   const hintId = message ? `${baseId}-hint` : undefined;
+  const title = badge ? <>{label}{badge}</> : label;
+  const description = error ? <span className="is-error">{error}</span> : hint;
   return (
-    <div
-      className={cx("sk-field", span === "full" && "is-full", className)}
+    <SettingsRow
       id={anchor ? fieldAnchorId(anchor) : undefined}
-      data-size={size}
-      data-config-key={configKey}
+      className={cx("sk-field", span === "full" && "is-full", className)}
+      title={title}
+      titleId={labelId}
+      description={description}
+      descriptionId={hintId}
+      aside={aside}
+      layout={resolveLayout(layout, size, span)}
+      htmlFor={controlId}
+      configKey={configKey}
+      size={size}
     >
-      <div className="sk-field-head">
-        <label className="sk-field-label" id={labelId} htmlFor={controlId} title={configKey}>{label}</label>
-        {badge}
-        {aside && <span className="sk-field-aside">{aside}</span>}
-      </div>
       <FieldContext.Provider
         value={{
           controlId,
@@ -77,12 +107,9 @@ export function SettingsField({
           labelText: typeof label === "string" ? label : undefined
         }}
       >
-        <div className="sk-field-control">{children}</div>
+        {children}
       </FieldContext.Provider>
-      {message && (
-        <p className={error ? "sk-field-hint is-error" : "sk-field-hint"} id={hintId}>{message}</p>
-      )}
-    </div>
+    </SettingsRow>
   );
 }
 
@@ -94,7 +121,9 @@ type FieldGridProps = {
 };
 
 /**
- * 渲染字段栅格：按容器宽度自动排为 1 到 columns 列。
+ * 把字段栅格子项展开为分组卡片里的独立行。
+ *
+ * 列数属性保留给调用方，视觉上统一为单列细分隔行。
  *
  * @param props 最多列数与字段节点
  * @returns 字段栅格

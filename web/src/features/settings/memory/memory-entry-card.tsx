@@ -30,6 +30,8 @@ type MemoryEntryCardProps = {
   onNavigate: (name: string) => void;
   /** 外部要求展开某条时置为真（链接跳转用） */
   expandSignal?: number;
+  /** 详情栏常开，不再提供折叠按钮 */
+  forceOpen?: boolean;
 };
 
 /**
@@ -47,12 +49,14 @@ export function MemoryEntryCard({
   workspace,
   onRemove,
   onNavigate,
-  expandSignal = 0
+  expandSignal = 0,
+  forceOpen = false
 }: MemoryEntryCardProps) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const rootRef = useRef<HTMLElement>(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(forceOpen);
+  const open = forceOpen || expanded;
   const [editing, setEditing] = useState(false);
   const [saveNote, setSaveNote] = useState<string | null>(null);
   const query: MemoryQuery = { workspace, scope: entry.scope };
@@ -60,7 +64,7 @@ export function MemoryEntryCard({
   const detail = useQuery({
     queryKey: ["memory-detail", entry.name, workspace, entry.scope],
     queryFn: () => api.memory.show(entry.name, query),
-    enabled: expanded
+    enabled: open
   });
 
   useEffect(() => {
@@ -89,24 +93,30 @@ export function MemoryEntryCard({
       : [];
 
   return (
-    <article ref={rootRef} className="memory-item" data-type={entry.type}>
+    <article ref={rootRef} className={`memory-item${forceOpen ? " is-detail" : ""}`} data-type={entry.type}>
       <header className="memory-item-head">
-        <Button
-          type="button"
-          className="memory-item-toggle"
-          onClick={() => setExpanded((value) => !value)}
-          aria-expanded={expanded}
-        >
-          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          <code>{entry.name}</code>
-        </Button>
+        {forceOpen ? (
+          <div className="memory-item-toggle">
+            <code>{entry.name}</code>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            className="memory-item-toggle"
+            onClick={() => setExpanded((value) => !value)}
+            aria-expanded={open}
+          >
+            {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            <code>{entry.name}</code>
+          </Button>
+        )}
         <span className="memory-type-badge" data-type={entry.type}>
           {t(TYPE_LABELS[entry.type].en, TYPE_LABELS[entry.type].zh)}
         </span>
         <span className="memory-scope-badge" data-scope={entry.scope}>
           {t(SCOPE_LABELS[entry.scope].en, SCOPE_LABELS[entry.scope].zh)}
         </span>
-        {expanded && !editing && (
+        {open && !editing && (
           <Button
             type="button"
             onClick={() => setEditing(true)}
@@ -121,7 +131,7 @@ export function MemoryEntryCard({
         </Button>
       </header>
       <p>{entry.description}</p>
-      {expanded && (
+      {open && (
         <div className="memory-item-body">
           {detail.isFetching && <div className="settings-muted">{t("Loading…", "读取中…")}</div>}
           {detail.data?.found && !editing && (

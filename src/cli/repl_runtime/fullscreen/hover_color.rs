@@ -132,6 +132,9 @@ mod tests {
             .map(|part| part.parse().unwrap())
             .collect();
         assert!(parts[2] - parts[1] > 40, "{lifted}");
-        assert!(parts.iter().zip([196u8, 167, 231]).all(|(new, old)| *new >= old));
+        assert!(parts
+            .iter()
+            .zip([196u8, 167, 231])
+            .all(|(new, old)| *new >= old));
     }
 }

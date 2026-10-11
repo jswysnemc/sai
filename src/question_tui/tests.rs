@@ -1,8 +1,14 @@
 use super::components::{editor_option_line, option_lines, panel_layout};
+use super::overlay::MAX_PANEL_LINES;
+use super::session::QuestionSession;
+use super::state::{handle_editing_key, submitted_answers, QuestionState};
 use super::text::{editor_view, insert_text, strip_ansi, truncate_width};
-use super::*;
 use crate::question::QuestionOption;
+use crate::question::QuestionPrompt;
+use crate::question::QuestionRequest;
 use crate::question::MAX_CUSTOM_ANSWER_CHARS;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::io;
 use unicode_width::UnicodeWidthStr;
 
 fn multi_request() -> QuestionRequest {
@@ -122,6 +128,26 @@ fn existing_multi_custom_answer_can_be_toggled_off() {
 }
 
 #[test]
+fn inactive_option_still_shows_full_description() {
+    let lines = option_lines(
+        "文档",
+        "说明新的操作方式和适用范围。",
+        false,
+        false,
+        true,
+        40,
+    );
+    let visible = lines
+        .iter()
+        .map(|line| strip_ansi(line))
+        .collect::<Vec<_>>();
+    assert_eq!(visible[0], "  □ 文档");
+    assert!(visible
+        .iter()
+        .any(|line| line.contains("说明新的操作方式和适用范围。")));
+}
+
+#[test]
 fn option_rows_have_no_numbers_and_put_description_below_title() {
     let lines = option_lines("烧烤", "烤肉串、烤鸡翅、烤韭菜", true, false, false, 16);
     let visible = lines
@@ -158,11 +184,29 @@ fn resize_recovers_panel_height_after_terminal_grows() {
         anchor_y: 8,
         panel_lines: 12,
         previous: Vec::new(),
+        owns_terminal: false,
+        overlay: false,
     });
-    session.resize_to_terminal(3);
+    session.resize_to_terminal(80, 3);
     assert_eq!(session.panel_lines, 2);
-    session.resize_to_terminal(24);
+    session.resize_to_terminal(80, 24);
     assert_eq!(session.panel_lines, MAX_PANEL_LINES);
+}
+
+/// 【终端提问】【底部覆盖】缩放时贴底重锚，不向上滚出行。
+#[test]
+fn overlay_resize_pins_panel_to_bottom() {
+    let mut session = std::mem::ManuallyDrop::new(QuestionSession {
+        stdout: io::stdout(),
+        anchor_y: 8,
+        panel_lines: 16,
+        previous: Vec::new(),
+        owns_terminal: false,
+        overlay: true,
+    });
+    session.resize_to_terminal(80, 10);
+    assert_eq!(session.panel_lines, 9);
+    assert_eq!(session.anchor_y, 1);
 }
 
 #[test]

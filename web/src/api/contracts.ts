@@ -92,6 +92,12 @@ export type {
 } from "./contracts/gateways";
 
 export type {
+  ComputerUseConfig,
+  ComputerUseDriverStatus,
+  ComputerUseInstallResult,
+} from "./contracts/computer-use";
+
+export type {
   JevAuditConfig,
   JevConfig,
   JevConnectionInfo,
@@ -202,6 +208,8 @@ export type {
   UsageSummary,
   UsageTrendPoint,
   UsageGroupStats,
+  UsageDailyActivity,
+  UsageStreaks,
   UsageStatsResponse,
   UsageStatsQuery,
 } from "./contracts/usage";

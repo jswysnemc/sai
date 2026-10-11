@@ -10,8 +10,7 @@ use anyhow::Result;
 use crossterm::{
     cursor::{Hide, Show},
     event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
-    execute,
-    terminal,
+    execute, terminal,
 };
 use std::{io, path::Path, time::Duration};
 

@@ -115,6 +115,9 @@ impl ReplRuntime {
     /// 返回:
     /// - 不超过终端高度的 composer 行数
     pub(super) fn composer_height_for(&self, size: TerminalSize) -> u16 {
+        if let Some(height) = self.question_overlay_height {
+            return height.min(size.rows);
+        }
         self.composer
             .as_ref()
             .map(|composer| composer.height(usize::from(size.cols)))

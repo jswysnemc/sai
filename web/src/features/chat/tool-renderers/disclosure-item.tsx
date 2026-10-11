@@ -17,9 +17,10 @@ type DisclosureItemProps = {
 };
 
 /**
- * 【工具结果】【可展开条目】单行标题 + 按需展开正文，用于 Jev 注入片段与 load 结果。
+ * 【工具结果】【可展开条目】行首展开箭头 + 单行标题 + 按需展开正文。
  *
- * 默认折叠，只露出名称与一句说明；点击整行展开正文，避免长文档铺满对话。
+ * 展开箭头靠左并与标题文字严格垂直居中对齐；
+ * 默认折叠，只露出名称与一句说明；点击整行展开正文。
  * `lazy` 模式下正文在首次展开时才挂载，收起后保留，避免重复请求。
  *
  * @param props 标题、说明、正文与初始状态
@@ -32,13 +33,17 @@ export function DisclosureItem({ title, meta, children, defaultOpen = false, laz
   const expandable = children !== undefined && children !== null && children !== false;
   const head = (
     <>
+      <span className="icon-label disclosure-item-chevron-slot">
+        <ChevronRight
+          size={12}
+          className={`disclosure-item-chevron${open ? " is-open" : ""}${expandable ? "" : " is-hidden"}`}
+          aria-hidden="true"
+        />
+      </span>
       <span className="disclosure-item-lead">
         <strong className="disclosure-item-title">{title}</strong>
       </span>
       <span className="disclosure-item-meta">{meta}</span>
-      <span className="icon-label disclosure-item-chevron-slot">
-        <ChevronRight size={12} className={`disclosure-item-chevron${open ? " is-open" : ""}${expandable ? "" : " is-hidden"}`} aria-hidden="true" />
-      </span>
     </>
   );
   return (
@@ -50,7 +55,9 @@ export function DisclosureItem({ title, meta, children, defaultOpen = false, laz
           aria-expanded={open}
           aria-controls={bodyId}
           onClick={() => {
+            // 1. 【可展开条目】【状态更新】首次展开时挂载详情内容
             setMounted(true);
+            // 2. 【可展开条目】【状态更新】切换折叠展开状态
             setOpen((value) => !value);
           }}
         >

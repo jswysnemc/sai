@@ -11,10 +11,13 @@
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 /// `ENABLE_PROCESSED_OUTPUT`
+#[cfg(any(windows, test))]
 const ENABLE_PROCESSED_OUTPUT: u32 = 0x0001;
 /// `ENABLE_VIRTUAL_TERMINAL_PROCESSING`
+#[cfg(any(windows, test))]
 const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
 /// `DISABLE_NEWLINE_AUTO_RETURN`
+#[cfg(any(windows, test))]
 const DISABLE_NEWLINE_AUTO_RETURN: u32 = 0x0008;
 
 #[cfg(all(windows, not(test)))]
@@ -83,6 +86,7 @@ pub(crate) fn viewport_resize(cols: u16, rows: u16) -> (u16, u16) {
 ///
 /// 返回:
 /// - 进入 TUI 后应设置的模式
+#[cfg(any(windows, test))]
 pub(crate) fn tui_output_mode(current: u32) -> u32 {
     current
         | ENABLE_PROCESSED_OUTPUT

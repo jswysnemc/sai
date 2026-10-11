@@ -33,6 +33,10 @@ pub(crate) struct ToolCatalogEntry {
     pub group_rank: u8,
     /// 工具摘要说明
     pub description: String,
+    /// 工具完整说明
+    pub full_description: String,
+    /// 参数定义 JSON Schema
+    pub parameters: serde_json::Value,
 }
 
 /// 枚举本地工具及其分组，不连接外部 MCP 服务。
@@ -53,6 +57,7 @@ pub(crate) fn tool_catalog(config: &AppConfig, paths: &SaiPaths) -> Vec<ToolCata
     entries.push(catalog_entry(
         "send_channel_message".to_string(),
         tool_description("send_channel_message", "Send a channel message."),
+        serde_json::json!({"type":"object","properties":{"message":{"type":"string"}},"required":["message"]}),
     ));
     entries.sort_by(|left, right| left.name.cmp(&right.name));
     entries.dedup_by(|left, right| left.name == right.name);
@@ -125,16 +130,26 @@ pub(crate) fn catalog_config(config: &AppConfig) -> AppConfig {
 /// 将注册表转换为排序后的目录项。
 fn catalog_entries(registry: ToolRegistry) -> Vec<ToolCatalogEntry> {
     let mut entries = registry
-        .tool_infos()
+        .definitions()
         .into_iter()
-        .map(|info| catalog_entry(info.name, info.description))
+        .map(|def| {
+            catalog_entry(
+                def.function.name,
+                def.function.description,
+                def.function.parameters,
+            )
+        })
         .collect::<Vec<_>>();
     entries.sort_by(|left, right| left.name.cmp(&right.name));
     entries
 }
 
 /// 将工具元数据转换为设置页目录项。
-fn catalog_entry(name: String, description: String) -> ToolCatalogEntry {
+fn catalog_entry(
+    name: String,
+    description: String,
+    parameters: serde_json::Value,
+) -> ToolCatalogEntry {
     let group = groups::group_for_tool(&name);
     // 常驻与否由基础集合决定，与用途分组无关：网格工具自成一组却仍是常驻的，
     // 前端若拿分组推断就会把它显示成"按需"，和实际行为对不上。
@@ -151,6 +166,8 @@ fn catalog_entry(name: String, description: String) -> ToolCatalogEntry {
         group_settings_path: meta.settings_path,
         group_rank: groups::group_rank(group),
         description: summarize_tool_description(&description),
+        full_description: description,
+        parameters,
     }
 }
 

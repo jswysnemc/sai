@@ -1,6 +1,7 @@
 import { DATA_SEARCH_ENTRIES } from "./entries-data";
 import { AGENT_CAPABILITY_ENTRIES } from "./entries-agent-capabilities";
 import { WEB_SEARCH_ENTRIES } from "./entries-web-search";
+import { COMPUTER_USE_ENTRIES } from "./entries-computer-use";
 import { MODEL_SERVICE_SEARCH_ENTRIES } from "./entries-model-services";
 import { GIT_SEARCH_ENTRIES } from "./entries-git";
 import { RUNTIME_SEARCH_ENTRIES } from "./entries-runtime";
@@ -23,5 +24,6 @@ export const SETTINGS_SEARCH_INDEX: readonly SettingsSearchEntry[] = [
   ...RUNTIME_SEARCH_ENTRIES,
   ...PERSONALIZATION_SEARCH_ENTRIES,
   ...WEB_SEARCH_ENTRIES,
+  ...COMPUTER_USE_ENTRIES,
   ...MODEL_SERVICE_SEARCH_ENTRIES
 ];

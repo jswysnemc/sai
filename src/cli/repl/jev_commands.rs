@@ -75,7 +75,10 @@ pub(super) async fn handle(
 /// 返回:
 /// - 子命令；无法识别时返回用法提示
 fn parse(rest: &str) -> std::result::Result<JevCommand, String> {
-    let words = rest.split_whitespace().map(str::to_ascii_lowercase).collect::<Vec<_>>();
+    let words = rest
+        .split_whitespace()
+        .map(str::to_ascii_lowercase)
+        .collect::<Vec<_>>();
     let words = words.iter().map(String::as_str).collect::<Vec<_>>();
     match words.as_slice() {
         [] | ["status"] => Ok(JevCommand::Status),
@@ -119,7 +122,9 @@ fn status_text(config: &AppConfig, mode: AgentMode) -> String {
             let info = crate::config::jev_connection_info_for(endpoint);
             let source = match info.source {
                 JevConnectionSource::Endpoint => info.name,
-                JevConnectionSource::Official => t("official TypeSafe", "TypeSafe 官方").to_string(),
+                JevConnectionSource::Official => {
+                    t("official TypeSafe", "TypeSafe 官方").to_string()
+                }
             };
             let key = match crate::config::jev_connection_for(endpoint) {
                 Ok(_) => t("key ready", "密钥可用").to_string(),
@@ -133,7 +138,11 @@ fn status_text(config: &AppConfig, mode: AgentMode) -> String {
     let routing = match (config.jev.routing.enabled, config.jev_routing_active()) {
         (false, _) => t("off", "关闭").to_string(),
         (true, true) => t("on", "开启").to_string(),
-        (true, false) => t("on, taken over by DeepSeek anchored mode", "开启，已由 DeepSeek 锚定模式接管").to_string(),
+        (true, false) => t(
+            "on, taken over by DeepSeek anchored mode",
+            "开启，已由 DeepSeek 锚定模式接管",
+        )
+        .to_string(),
     };
     // 3. 审核：只在自动审核权限模式下参与
     let audit = match (config.jev.audit.enabled, mode == AgentMode::AutoAudit) {

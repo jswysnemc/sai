@@ -1,6 +1,4 @@
-use crate::config::{
-    apply_agent_override, seed_default_agent_profiles, AgentSurface, AppConfig,
-};
+use crate::config::{apply_agent_override, seed_default_agent_profiles, AgentSurface, AppConfig};
 
 /// 【网页读取测试】【预设升级】无参数；完整旧预设补齐原生读取，定制和独占白名单保持不变。
 #[test]

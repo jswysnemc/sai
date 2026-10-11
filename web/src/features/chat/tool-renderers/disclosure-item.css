@@ -1,6 +1,6 @@
 /*
- * 折叠条目：固定高度行外层居中，箭头放在行尾，与工具卡头部一致。
- * 同一列表用 subgrid 共用「名称 | 说明 | 箭头」三列，名称与说明之间留出列表间距。
+ * 折叠条目：展开箭头置于行首，与文字单行绝对垂直居中对齐。
+ * 列表按「箭头 | 名称 | 说明」三列排列。
  */
 .disclosure-item {
   display: grid;
@@ -9,8 +9,8 @@
 
 .disclosure-list {
   display: grid;
-  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
-  align-items: baseline;
+  grid-template-columns: 1rem minmax(0, max-content) minmax(0, 1fr);
+  align-items: center;
   column-gap: var(--space-sm);
   row-gap: var(--space-2xs);
   margin: 0;
@@ -22,13 +22,16 @@
   display: grid;
   grid-column: 1 / -1;
   grid-template-columns: subgrid;
-  align-items: baseline;
+  align-items: center;
 }
 
 .disclosure-item-head {
-  display: flex;
-  gap: var(--space-sm);
-  align-items: baseline;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  column-gap: var(--space-sm);
+  row-gap: var(--space-2xs);
   width: 100%;
   min-height: 1.5rem;
   padding: 0 var(--space-2xs);
@@ -38,15 +41,6 @@
   color: var(--ink);
   font: 400 var(--text-sm)/1.45 var(--font-ui);
   text-align: left;
-}
-
-.disclosure-list > .disclosure-item > .disclosure-item-head {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: subgrid;
-  align-items: baseline;
-  column-gap: var(--space-sm);
-  row-gap: var(--space-2xs);
 }
 
 .disclosure-list > .disclosure-item > .ui-collapse {
@@ -61,10 +55,17 @@ button.disclosure-item-head:hover {
   background: var(--surface-hover);
 }
 
-.disclosure-item-lead {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 100%;
+.disclosure-item-chevron-slot {
+  display: grid;
+  place-items: center;
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.disclosure-item-chevron-slot svg {
+  display: block;
 }
 
 .disclosure-item-chevron {
@@ -80,6 +81,15 @@ button.disclosure-item-head:hover {
   visibility: hidden;
 }
 
+.disclosure-item-lead {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  height: 100%;
+}
+
 .disclosure-item-title {
   min-width: 0;
   overflow: hidden;
@@ -90,19 +100,17 @@ button.disclosure-item-head:hover {
 }
 
 .disclosure-item-meta {
+  display: flex;
+  align-items: center;
   flex: 1 1 0;
   min-width: 0;
+  height: 100%;
   overflow: hidden;
   color: var(--ink-soft);
   font-size: var(--text-xs);
   line-height: 1.45;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.disclosure-item-chevron-slot {
-  justify-self: end;
-  align-self: center;
 }
 
 .disclosure-item-body {
@@ -125,7 +133,7 @@ button.disclosure-item-head:hover {
 
 @media (max-width: 40rem) {
   .disclosure-list {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: 1rem minmax(0, 1fr);
   }
 
   .disclosure-item-head {
@@ -133,13 +141,8 @@ button.disclosure-item-head:hover {
   }
 
   .disclosure-list > .disclosure-item > .disclosure-item-head > .disclosure-item-meta {
-    grid-column: 1 / -1;
+    grid-column: 2 / -1;
     grid-row: 2;
-  }
-
-  .disclosure-list > .disclosure-item > .disclosure-item-head > .disclosure-item-chevron-slot {
-    grid-column: 2;
-    grid-row: 1;
   }
 
   .disclosure-item-meta {

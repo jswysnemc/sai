@@ -441,6 +441,8 @@ impl super::ReplRuntime {
                     self.clamp_queue_panel();
                     return Ok(QueuePanelOutcome::Consumed);
                 };
+                // 1. 【终端队列】【显式发送】用户选择立即发送时解除失败暂停
+                self.resume_submission_queue();
                 if streaming {
                     // 先取出再入队首，中间不能 clamp：只剩一项时会误判为空而退出
                     item.insert_at = QueueInsertAt::Request;

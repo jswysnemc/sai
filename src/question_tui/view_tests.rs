@@ -1,6 +1,6 @@
+use super::state::{submitted_answers, QuestionState};
 use super::text::strip_ansi;
-use super::*;
-use crate::question::QuestionOption;
+use crate::question::{QuestionOption, QuestionPrompt, QuestionRequest};
 use unicode_width::UnicodeWidthStr;
 
 /// 【终端提问】【测试请求】无参数，返回包含中文说明的多选问题。
@@ -30,13 +30,13 @@ fn request() -> QuestionRequest {
     }
 }
 
-/// 【终端提问】【页面回归】标题、勾选状态与当前说明分层显示；无参数或返回值。
+/// 【终端提问】【页面回归】标题、勾选状态与全部细则同时显示；无参数或返回值。
 #[test]
-fn question_frame_shows_progress_and_only_focused_description() {
+fn question_frame_shows_progress_and_all_descriptions() {
     let request = request();
     let mut state = QuestionState::new(&request);
     state.toggle_current(&request).unwrap();
-    let frame = super::view::compose(&request, &mut state, 80, 12);
+    let frame = super::view::compose(&request, &mut state, 80, 16);
     let plain = frame
         .lines
         .iter()
@@ -46,9 +46,8 @@ fn question_frame_shows_progress_and_only_focused_description() {
     assert!(plain.contains("1/1"));
     assert!(plain.contains("› ■ 1. 修改实现与测试"));
     assert!(plain.contains("修复行为，并补充回归测试。"));
-    assert!(!plain.contains("说明新的操作方式和适用范围。"));
+    assert!(plain.contains("说明新的操作方式和适用范围。"));
     assert!(plain.contains("更新使用文档"));
-    println!("{plain}");
 }
 
 /// 【终端提问】【小窗口回归】各种尺寸下可见行和光标都不越界；无参数或返回值。

@@ -30,7 +30,7 @@ export function AgentBasicsPanel({ config, profile, options, onChange }: Props) 
       </FieldGrid>
     </SettingsPanel>
     <SettingsPanel title={t("System prompt", "系统提示词")} actions={<Button variant="secondary" onClick={() => setPromptOpen(true)}><Pencil size={14} />{t("Edit prompt", "编辑提示词")}</Button>}>
-      <SettingsField label={t("Preview", "预览")} anchor="agents.system_prompt" hint={t(`${profile.system_prompt.length} characters configured`, `已配置 ${profile.system_prompt.length} 字符`)}>
+      <SettingsField span="full" label={t("Preview", "预览")} anchor="agents.system_prompt" hint={t(`${profile.system_prompt.length} characters configured`, `已配置 ${profile.system_prompt.length} 字符`)}>
         <div className="agent-prompt-preview">{promptPreviewText(profile.system_prompt) || t("No system prompt yet.", "尚未配置系统提示词。")}</div>
       </SettingsField>
       <AgentPromptEditorDialog open={promptOpen} value={profile.system_prompt} onClose={() => setPromptOpen(false)} onApply={(system_prompt) => onChange({ system_prompt })} />

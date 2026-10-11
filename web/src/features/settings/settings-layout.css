@@ -1,6 +1,6 @@
 @import "./settings-navigation.css";
 
-/* 【Web 设置】【页面框架】页面容器、吸顶顶栏、两栏工作区与主体宽度 */
+/* 【Web 设置】【页面框架】纸色两栏工作区、1120px 主框与共用顶栏样式 */
 
 .settings-page {
   display: grid;
@@ -27,7 +27,7 @@
 .settings-back:hover { background: var(--surface-hover); color: var(--ink); }
 .settings-back:focus-visible { outline: none; box-shadow: var(--ring-focus); }
 
-/* ---------- 吸顶顶栏：分区路径与保存区 ---------- */
+/* ---------- 吸顶顶栏：桌面拖拽条；定时任务与网关页仍使用完整标题行 ---------- */
 
 .settings-topbar {
   position: sticky;
@@ -83,27 +83,6 @@
   margin-left: auto;
 }
 
-.settings-save-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.settings-save-bar .ui-button { min-height: 1.5rem; }
-
-.settings-save-state {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2xs);
-  margin-right: var(--space-2xs);
-  color: var(--ink-soft);
-  font-size: var(--text-sm);
-  white-space: nowrap;
-}
-
-.settings-save-state.is-dirty { color: var(--warning); }
-.settings-save-state.is-failed { color: var(--danger); }
-
 .settings-save-hint {
   display: inline-flex;
   align-items: center;
@@ -121,20 +100,84 @@
   min-height: 0;
 }
 
+.settings-main-area {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .settings-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 2.25rem 2.5rem 0;
+}
+
+.settings-main-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  max-width: var(--sk-form-max);
+  min-height: 0;
+  margin: 0 auto;
+}
+
+.settings-main-chrome {
+  flex: none;
+  padding-bottom: 0.5rem;
+  background: var(--paper);
+}
+
+.settings-main-body {
+  flex: 1;
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  padding: var(--space-2xl) var(--space-4xl) var(--space-5xl);
+  padding-bottom: 4.5rem;
 }
 
-.settings-main-content {
-  width: 100%;
-  max-width: var(--sk-form-max);
-  margin: 0 auto;
+/* 对象分区：页头固定，列表与详情各自滚动；不含嵌套主从布局 */
+.settings-main-body:has(> .sk-md-host),
+.settings-main-body:has(.agent-settings-shell),
+.settings-main-body:has(.memory-workspace) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0;
 }
 
+.settings-main-body:has(> .sk-md-host) > *,
+.settings-main-body:has(.agent-settings-shell) > *,
+.settings-main-body:has(.memory-workspace) > * {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.settings-main-body > .sk-md-host,
+.settings-main-body .agent-settings-shell,
+.settings-main-body .memory-workspace {
+  flex: 1;
+  min-height: 0;
+}
+
+.settings-main-chrome .settings-page-header + .sk-notice,
+.settings-main-chrome .settings-page-header + .settings-subnav {
+  margin-top: 0.5rem;
+}
+
+.settings-main-chrome .settings-page-header + .sk-notice + .settings-subnav {
+  margin-top: 0.75rem;
+}
 
 .settings-error,
 .settings-state {
@@ -182,7 +225,7 @@
 /* ---------- 响应式 ---------- */
 
 @media (max-width: 75rem) {
-  .settings-main { padding-inline: var(--space-2xl); }
+  .settings-main { padding-inline: 1.5rem; }
 }
 
 /* 手机端：顶栏保持单行紧凑，分类导航降级为吸顶横向滚动页签 */
@@ -190,10 +233,8 @@
   .settings-topbar-inner { gap: var(--space-sm); padding-inline: var(--space-lg); }
   .settings-crumb-separator,
   .settings-crumb-subview { display: none; }
-  .settings-save-state > span,
-  .settings-save-label { display: none; }
-  .settings-save-state { margin-right: 0; }
   .settings-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
-  .settings-main { padding: var(--space-lg) var(--space-lg) var(--space-5xl); }
+  .settings-main { padding: 1.25rem 1rem 0; }
+  .settings-main-body { padding-bottom: 4rem; }
   .settings-save-hint { font-size: var(--text-xs); }
 }

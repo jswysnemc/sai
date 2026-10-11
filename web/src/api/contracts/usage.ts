@@ -74,6 +74,25 @@ export type UsageGroupStats = {
   last_used_at?: number | null;
 };
 
+export type UsageDailyActivity = {
+  date: string;
+  requests: number;
+  sessions: number;
+  tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  billable_input_tokens: number;
+};
+
+export type UsageStreaks = {
+  current_streak: number;
+  longest_streak: number;
+  current_streak_start?: string | null;
+  longest_streak_start?: string | null;
+  longest_streak_end?: string | null;
+};
+
 export type UsageStatsResponse = {
   summary: UsageSummary;
   trend: UsageTrendPoint[];
@@ -84,6 +103,12 @@ export type UsageStatsResponse = {
   total_sessions: number;
   total_logs: number;
   skipped_records: number;
+  /** 52 周连续日历，空日也占位 */
+  daily_activity: UsageDailyActivity[];
+  streaks: UsageStreaks;
+  active_days: number;
+  total_days: number;
+  peak_activity_day?: string | null;
 };
 
 export type UsageStatsQuery = {

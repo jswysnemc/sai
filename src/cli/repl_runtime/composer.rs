@@ -318,7 +318,7 @@ impl ReplRuntime {
         }
         let mode = self.stream_draft.mode.unwrap_or(fallback_mode);
         // 斜杠命令与 shell 不是聊天正文：进控制队列等本轮结束后由主循环执行。
-        // 混进消息队列会被当成提问发给模型，且会连带丢弃其后的排队消息。
+        // 混进消息队列会被当成提问发给模型，或阻塞后续排队消息
         // 立即执行与退出命令已在 handle_stream_key 层拦截，这里只收置灰命令
         if is_stream_command_text(&text) {
             self.control_queue.push_back(text);
@@ -412,6 +412,7 @@ impl ReplRuntime {
         }
         self.lock_queue().clear();
         self.control_queue.clear();
+        self.resume_submission_queue();
         self.queue_panel.deactivate();
         self.redraw_stream_composer()?;
         self.sync_transcript(false)?;

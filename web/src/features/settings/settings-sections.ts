@@ -11,6 +11,7 @@ import {
   Globe,
   ImagePlus,
   KeyRound,
+  MonitorCog,
   Palette,
   PlugZap,
   Server,
@@ -79,10 +80,10 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     saveHintZh: "即时生效",
     labelEn: "Appearance",
     labelZh: "外观",
-    descriptionEn: "Language, theme, colors, and Markdown rendering",
-    descriptionZh: "界面语言、主题、颜色与 Markdown 渲染",
+    descriptionEn: "Language, theme, conversation reading, and Markdown rendering",
+    descriptionZh: "界面语言、主题、对话阅读列与 Markdown 渲染",
     icon: Palette,
-    searchKeys: ["theme", "language", "locale", "appearance", "markdown", "table", "code", "主题", "语言", "配色", "表格", "代码块"]
+    searchKeys: ["theme", "language", "locale", "appearance", "markdown", "table", "code", "font", "width", "chat", "主题", "语言", "配色", "表格", "代码块", "字体", "字号", "列宽", "阅读"]
   },
   {
     id: "runtime",
@@ -184,6 +185,18 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     descriptionZh: "内置搜索路由、供应商地址与凭据",
     icon: Globe,
     searchKeys: ["web-search", "search", "tinyfish", "tavily", "firecrawl", "anysearch", "brave", "exa", "searxng", "duckduckgo", "网页", "搜索", "联网"]
+  },
+  {
+    id: "computer-use",
+    group: "agentCapabilities",
+    appConfig: "required",
+    configKeys: ["computer_use"],
+    labelEn: "Computer Use",
+    labelZh: "桌面操作",
+    descriptionEn: "Native desktop control and cua-driver installation",
+    descriptionZh: "原生桌面控制与 cua-driver 安装",
+    icon: MonitorCog,
+    searchKeys: ["computer_use", "computer-use", "cua", "cua-driver", "desktop", "driver", "install", "桌面", "驱动", "安装", "原生"]
   },
   {
     id: "jev",

@@ -34,6 +34,10 @@ type AgentToolModeGroupProps = {
   selection: ToolModeSelection;
   /** 三段切换档位文案 */
   modeLabels: ToolModeLabels;
+  /** 当前选中的工具名称 */
+  selectedToolName?: string | null;
+  /** 选中工具变更回调 */
+  onSelectTool?: (tool: AgentToolOption) => void;
   /** 批量选择的可访问名称模板 */
   groupAriaLabel: string;
   /** 单项选择的可访问名称构造函数 */
@@ -45,9 +49,9 @@ type AgentToolModeGroupProps = {
 /**
  * 渲染单个用途分组的工具三段权限。
  *
- * 分组头部提供批量切换，逐项行提供独立切换，两者共用同一套档位文案。
+ * 分组头部提供批量切换，逐项行提供独立切换，点击条目打开工具详情弹窗。
  *
- * @param props 分组信息、当前选择与变化回调
+ * @param props 分组信息、当前选择、选中工具与变化回调
  * @returns 分组权限面板
  */
 export function AgentToolModeGroup({
@@ -60,6 +64,8 @@ export function AgentToolModeGroup({
   visibleItems,
   selection,
   modeLabels,
+  selectedToolName,
+  onSelectTool,
   groupAriaLabel,
   itemAriaLabel,
   onChange
@@ -96,23 +102,27 @@ export function AgentToolModeGroup({
       <div className="agent-tool-permission-items">
         {visibleItems.map((tool) => {
           const mode = resolveToolMode(selection, tool.name, tool.group === "base");
+          const isSelected = selectedToolName === tool.name;
           return (
             <div
               key={tool.name}
-              className="agent-tool-permission-item"
+              className={`agent-tool-permission-item${isSelected ? " is-selected" : ""}`}
               data-mode={mode}
               title={tool.description || tool.name}
+              onClick={() => onSelectTool?.(tool)}
             >
               <span className="agent-tool-permission-copy">
                 <strong>{tool.name}</strong>
                 {tool.description && <small>{tool.description}</small>}
               </span>
-              <ToolModeSwitch
-                value={mode}
-                options={modeLabels}
-                ariaLabel={itemAriaLabel(tool.name)}
-                onChange={(next) => onChange([tool.name], next)}
-              />
+              <div className="agent-tool-permission-switch-wrapper" onClick={(event) => event.stopPropagation()}>
+                <ToolModeSwitch
+                  value={mode}
+                  options={modeLabels}
+                  ariaLabel={itemAriaLabel(tool.name)}
+                  onChange={(next) => onChange([tool.name], next)}
+                />
+              </div>
             </div>
           );
         })}

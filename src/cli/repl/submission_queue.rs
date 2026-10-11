@@ -1,6 +1,6 @@
 use crate::agent::{Agent, AgentMode};
-use crate::cli::repl_runtime::ReplRuntime;
-use crate::cli::repl_turn::execute_repl_turn;
+use crate::cli::repl_runtime::{QueuedSubmission, ReplRuntime, StreamComposerDraft};
+use crate::cli::repl_turn::{execute_repl_turn, ReplTurnOutcome};
 use crate::cli::repl_turn_context::ReplTurnContext;
 use crate::cli::{build_repl_tool_registry, stream_render_options};
 use crate::{clipboard, render};
@@ -65,90 +65,116 @@ pub(super) async fn drain_submission_queue(
     reasoning_mode: render::ReasoningDisplayMode,
     tool_call_mode: render::ToolCallDisplayMode,
 ) -> Result<bool> {
+    // 1. 【终端队列】【逐条执行】尚未开始的消息始终留在运行期，错误返回不会销毁局部批次
+    while let Some((position, item)) = runtime.take_next_turn_submission() {
+        *mode = item.mode;
+        if is_queued_control_command(item.text.trim()) {
+            restore_control_submission(runtime, position, item)?;
+            notify_preserved_queue(runtime)?;
+            return Ok(false);
+        }
+        let outcome = execute_queued_turn(
+            &context,
+            agent,
+            runtime,
+            &item,
+            input_history,
+            reasoning_mode,
+            tool_call_mode,
+        )
+        .await;
+        let outcome = match outcome {
+            Ok(Some(outcome)) => outcome,
+            Ok(None) => continue,
+            Err(error) => {
+                // 2. 【终端队列】【启动恢复】准备或启动失败时连当前条目一起恢复，先恢复数据再绘制错误
+                runtime.restore_queued_submission(position, item);
+                runtime.pause_submission_queue();
+                runtime
+                    .record_failure(super::super::repl_turn_failure::turn_failure_text(&error))?;
+                notify_preserved_queue(runtime)?;
+                return Ok(false);
+            }
+        };
+        apply_stream_mode(runtime, mode);
+        restore_leftover_draft(runtime, outcome.leftover_draft);
+        if outcome.exit_requested {
+            return Ok(true);
+        }
+        if outcome.interrupted || outcome.result.is_err() {
+            if let Err(error) = outcome.result {
+                runtime.record_failure(if outcome.interrupted {
+                    super::super::repl_turn_failure::interrupted_failure_text(&error)
+                } else {
+                    super::super::repl_turn_failure::turn_failure_text(&error)
+                })?;
+            }
+            // 3. 【终端队列】【失败保留】停止自动消费，不清除后续消息，也不覆盖尚未提交的草稿
+            notify_preserved_queue(runtime)?;
+            return Ok(false);
+        }
+    }
+    Ok(false)
+}
+
+/// 【终端队列】【单轮执行】还原附件、准备会话并执行一条排队提交。
+///
+/// 参数:
+/// - `context`: 应用路径、配置和会话所有权键
+/// - `agent`: 当前智能体
+/// - `runtime`: 终端运行期
+/// - `item`: 保留原始文本和附件的待执行消息
+/// - `input_history`: 输入历史
+/// - `reasoning_mode`: 推理展示方式
+/// - `tool_call_mode`: 工具展示方式
+///
+/// 返回: 单轮结果；空消息返回空值，启动失败返回错误供调用方恢复条目
+async fn execute_queued_turn(
+    context: &ReplTurnContext<'_>,
+    agent: &mut Agent,
+    runtime: &mut ReplRuntime,
+    item: &QueuedSubmission,
+    input_history: &mut Vec<crate::state::input_history::InputHistoryEntry>,
+    reasoning_mode: render::ReasoningDisplayMode,
+    tool_call_mode: render::ToolCallDisplayMode,
+) -> Result<Option<ReplTurnOutcome>> {
     let ReplTurnContext {
         paths,
         config,
         owner_key,
-    } = context;
-    loop {
-        let queued = runtime.take_turn_interval_queue();
-        if queued.is_empty() {
-            break;
-        }
-        let mut pending = queued.into_iter();
-        while let Some(item) = pending.next() {
-            *mode = item.mode;
-            let text = item.text.trim().to_string();
-            // 斜杠命令不能作为聊天消息发给模型：/model 这类输入原先会被
-            // 当成普通文本发出去。队列没有主循环的命令分发能力，
-            // 此处交还输入框由用户确认执行，并丢弃其后的排队项保持顺序语义
-            if is_queued_control_command(&text) {
-                runtime.record_meta(crate::i18n::text(
-                    "slash commands are not run from the queue; the text was returned to the input box",
-                    "斜杠命令不会从队列执行，已交还输入框",
-                ).to_string())?;
-                restore_leftover_draft(runtime, Some(text));
-                discard_remaining_queue(runtime, pending)?;
-                return Ok(false);
-            }
-            // 剪贴板附件在此还原：图片与长文本占位块换回真实内容
-            let echo = item.clipboard.echo_text_for_submit(&text);
-            let mut chat_input = item.clipboard.to_chat_input(&text);
-            chat_input.message = crate::cli::repl_mentions::expand_skill_mentions(
-                &chat_input.message,
-                config,
-                paths,
-            );
-            if chat_input.message.trim().is_empty() && chat_input.image_url.is_none() {
-                continue;
-            }
-            crate::cli::repl_input::history::remember_history(
-                paths,
-                input_history,
-                item.clipboard.history_entry(&item.text),
-            );
-            runtime.record_input(*mode, echo.clone())?;
-            if agent.installed_mode() != *mode {
-                let registry = build_repl_tool_registry(config, paths, *mode)?;
-                agent.switch_mode(*mode, registry)?;
-            }
-            agent.prepare_for_turn()?;
-            // 用户主动发话：清除积压的未消费回执，避免上一轮遗留整包注入
-            let _ = agent.discard_stale_external_completion_notices().await;
-            let runner_submission = repl_runner_submission(
-                chat_input,
-                *mode,
-                reasoning_mode,
-                tool_call_mode,
-                stream_render_options(config),
-                false,
-            );
-            let outcome =
-                execute_repl_turn(paths, config, agent, runtime, owner_key, runner_submission)
-                    .await?;
-            apply_stream_mode(runtime, mode);
-            if outcome.exit_requested {
-                discard_remaining_queue(runtime, pending)?;
-                return Ok(true);
-            }
-            if outcome.interrupted || outcome.result.is_err() {
-                if let Err(error) = outcome.result {
-                    runtime.record_meta(if outcome.interrupted {
-                        super::super::repl_turn_failure::interrupted_failure_text(&error)
-                    } else {
-                        super::super::repl_turn_failure::turn_failure_text(&error)
-                    })?;
-                }
-                restore_leftover_draft(runtime, outcome.leftover_draft);
-                discard_remaining_queue(runtime, pending)?;
-                return Ok(false);
-            }
-            // 半截草稿只回填输入框等待用户提交，不再作为正式消息自动发送
-            restore_leftover_draft(runtime, outcome.leftover_draft);
-            // 本轮执行中新入队的项目由外层循环继续处理
-        }
+    } = *context;
+    let text = item.text.trim();
+    let mut chat_input = item.clipboard.to_chat_input(text);
+    chat_input.message =
+        crate::cli::repl_mentions::expand_skill_mentions(&chat_input.message, config, paths);
+    if chat_input.message.trim().is_empty() && chat_input.image_url.is_none() {
+        return Ok(None);
     }
-    Ok(false)
+    // 1. 【终端队列】【单轮执行】准备成功后再记录提交，启动失败时原消息仍可恢复
+    if agent.installed_mode() != item.mode {
+        let registry = build_repl_tool_registry(config, paths, item.mode)?;
+        agent.switch_mode(item.mode, registry)?;
+    }
+    agent.prepare_for_turn()?;
+    crate::cli::repl_input::history::remember_history(
+        paths,
+        input_history,
+        item.clipboard.history_entry(&item.text),
+    );
+    runtime.record_input(item.mode, item.clipboard.echo_text_for_submit(text))?;
+    // 2. 【终端队列】【单轮执行】主动提交清除旧回执，再由统一轮次入口处理流式事件
+    let _ = agent.discard_stale_external_completion_notices().await;
+    let submission = repl_runner_submission(
+        chat_input,
+        item.mode,
+        reasoning_mode,
+        tool_call_mode,
+        stream_render_options(config),
+        false,
+    );
+    execute_repl_turn(paths, config, agent, runtime, owner_key, submission)
+        .await
+        .map(Some)
 }
 
 /// 判断排队文本是否为需要主循环执行的斜杠命令或 shell。
@@ -167,29 +193,59 @@ fn is_queued_control_command(text: &str) -> bool {
     super::super::repl_commands::is_stream_command_text(text)
 }
 
-/// 丢弃中断或失败后剩余的排队项，并向用户说明数量。
+/// 【终端队列】【失败提示】说明尚未执行的消息仍可在队列管理面板中查看或发送。
 ///
 /// 参数:
 /// - `runtime`: TUI 运行期
-/// - `remaining`: 尚未执行的排队项
 ///
 /// 返回:
 /// - 记录是否成功
-fn discard_remaining_queue(
-    runtime: &mut ReplRuntime,
-    remaining: impl Iterator<Item = crate::cli::repl_runtime::QueuedSubmission>,
-) -> Result<()> {
-    let count = remaining.count();
+fn notify_preserved_queue(runtime: &mut ReplRuntime) -> Result<()> {
+    runtime.pause_submission_queue();
+    let count = runtime.queue_len();
     if count == 0 {
         return Ok(());
     }
-    // 中断意图是停止一切，滞留的旧队列在下次对话后自动触发反而更意外；
-    // 丢弃但必须留痕，用户可自行重新提交
     runtime.record_meta(if crate::i18n::is_zh() {
-        format!("已丢弃 {count} 条未执行的排队消息")
+        format!("已保留 {count} 条未执行的排队消息，可按 Ctrl+↑ 管理")
     } else {
-        format!("discarded {count} queued messages that had not run yet")
+        format!("kept {count} queued messages that have not run; use Ctrl+Up to manage them")
     })
+}
+
+/// 【终端队列】【命令恢复】把控制命令连同附件交回空输入框，不覆盖现有草稿。
+///
+/// 参数:
+/// - `runtime`: TUI 运行期
+/// - `position`: 命令原队列位置
+/// - `item`: 带原始附件的控制命令
+///
+/// 返回: 提示记录结果；已有草稿时命令继续留在队列中
+fn restore_control_submission(
+    runtime: &mut ReplRuntime,
+    position: usize,
+    item: QueuedSubmission,
+) -> Result<()> {
+    let message = if runtime.stream_draft().text.trim().is_empty() {
+        *runtime.stream_draft_mut() = StreamComposerDraft {
+            cursor: item.text.chars().count(),
+            text: item.text,
+            clipboard: item.clipboard,
+            mode: Some(item.mode),
+            ..StreamComposerDraft::default()
+        };
+        crate::i18n::text(
+            "slash commands are not run from the queue; the text was returned to the input box",
+            "斜杠命令不会从队列执行，已交还输入框",
+        )
+    } else {
+        runtime.restore_queued_submission(position, item);
+        crate::i18n::text(
+            "the input box has a draft; the command remains in the queue",
+            "输入框已有草稿，控制命令继续保留在队列中",
+        )
+    };
+    runtime.record_meta(message.to_string())
 }
 
 /// 恢复中断或失败后留下的流式草稿。
@@ -246,6 +302,10 @@ pub(super) fn repl_runner_submission(
         ))
         .with_final_summary(true)
 }
+
+#[cfg(test)]
+#[path = "submission_queue_tests.rs"]
+mod recovery_tests;
 
 #[cfg(test)]
 mod tests {

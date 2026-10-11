@@ -13,6 +13,10 @@ export type AgentToolOption = {
   group_settings_path?: string | null;
   group_rank?: number;
   description?: string;
+  /** 完整用途说明 */
+  full_description?: string;
+  /** 工具参数定义 Schema */
+  parameters?: Record<string, unknown>;
 };
 
 /** Skill 选项，含名称与描述。 */

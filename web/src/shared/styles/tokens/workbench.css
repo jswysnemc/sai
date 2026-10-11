@@ -9,8 +9,11 @@
   --statusbar-height: 1.625rem;
   --control-height: 1.625rem;
   --shadow-composer: 0 2px 10px rgb(var(--shadow-hue) / 4%);
-  --chat-column-width: 52rem;
+  /* 标准阅读列 50rem；宽栏与铺满由聊天外观写入同一变量 */
+  --chat-column-width: 50rem;
   --chat-column-gutter: 1.25rem;
   --chat-content-width: calc(var(--chat-column-width) - var(--chat-column-gutter) * 2);
+  --chat-font-family: var(--font-ui);
+  --chat-font-size: 15px;
   --chat-header-height: var(--toolbar-height);
 }

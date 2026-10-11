@@ -142,6 +142,8 @@ pub(super) async fn execute_repl_turn(
     owner_key: &str,
     submission: crate::runner::RunnerSubmission,
 ) -> Result<ReplTurnOutcome> {
+    // 1. 【终端队列】【主动继续】普通提交恢复队列，自动续轮和后台回执不解除失败暂停
+    runtime.resume_queue_for_submission(&submission);
     let runner = crate::runner::SessionRunner::new(paths)
         .with_config(config.clone())
         .with_inter_message_source(runtime.inter_message_source());
@@ -229,6 +231,10 @@ pub(super) async fn execute_repl_turn(
         }
     }
     .await;
+    // 2. 【终端队列】【失败暂停】先暂停投递再恢复终端，避免空闲循环立即开始剩余消息
+    if interrupted || result.is_err() {
+        runtime.pause_submission_queue();
+    }
     if pager.is_some() || runtime.overlay_open() {
         if let Some(mut screen) = pager.take() {
             let _ = screen.leave();

@@ -1,6 +1,8 @@
 .jev-capability {
   display: grid;
-  gap: var(--space-xs);
+  grid-template-columns: auto minmax(6rem, max-content) minmax(0, 1fr);
+  column-gap: var(--space-sm);
+  row-gap: var(--space-xs);
   padding: var(--space-sm) var(--space-md) var(--space-sm);
   color: var(--ink);
   font-family: var(--font-ui);
@@ -8,6 +10,7 @@
 
 .jev-capability-need,
 .jev-capability-empty {
+  grid-column: 1 / -1;
   margin: 0;
 }
 
@@ -23,9 +26,18 @@
   font: 400 var(--text-2xs)/1.4 var(--font-ui);
 }
 
+/* 工具与 Skills 跨分区共用外层三列网格，确保名称列与说明列全局对齐 */
 .jev-capability section {
   display: grid;
-  gap: var(--space-2xs);
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  row-gap: var(--space-2xs);
+}
+
+.jev-capability section > h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
 }
 
 .jev-capability h3,
@@ -36,6 +48,26 @@
 
 .jev-capability ul {
   list-style: none;
+}
+
+.jev-capability .disclosure-list {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  row-gap: var(--space-2xs);
+}
+
+.jev-capability .disclosure-list > .disclosure-item {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.jev-capability .disclosure-list > .disclosure-item > .disclosure-item-head {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  column-gap: var(--space-sm);
 }
 
 /* 工具与 Skill 展开详情：说明、参数表与 Skill 正文 */

@@ -61,7 +61,7 @@ impl ReplRuntime {
         }
         match effect {
             Effect::Repaint => {
-                self.paint_fullscreen()?;
+                self.paint_fullscreen_interaction()?;
                 Ok(FullscreenEvent::Consumed)
             }
             Effect::Nothing => Ok(FullscreenEvent::Consumed),
@@ -216,18 +216,8 @@ impl ReplRuntime {
                         true
                     }
                     Some(selection) => {
-                        let lines = state
-                            .document
-                            .lines
-                            .iter()
-                            .map(|line| {
-                                crate::render::activity_animation::strip_ansi_for_test(
-                                    line.as_str(),
-                                )
-                            })
-                            .collect::<Vec<_>>();
                         let text = selection::selected_text(
-                            &lines,
+                            &state.document.lines,
                             &selection,
                             usize::from(layout.content_width),
                         );

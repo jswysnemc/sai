@@ -3,13 +3,15 @@
 .tui-fold-preview {
   display: grid;
   gap: var(--space-sm);
+  width: 100%;
   margin-top: var(--space-xs);
+  justify-items: start;
 }
 
 .tui-fold-tape {
   display: grid;
   gap: 0.125rem;
-  max-width: 16rem;
+  width: min(20rem, 100%);
 }
 
 .tui-fold-line {

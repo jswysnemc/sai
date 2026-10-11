@@ -1,10 +1,25 @@
-use super::*;
+use super::overlay::{OverlayPlacement, MAX_PANEL_LINES};
+use super::summary::answered_card_lines;
+use crate::i18n::text as t;
+use crate::question::{QuestionAnswers, QuestionRequest};
+use anyhow::Result;
+use crossterm::cursor::{Hide, MoveTo, Show};
+use crossterm::event::{DisableBracketedPaste, EnableBracketedPaste};
+use crossterm::terminal::{self, Clear, ClearType};
+use crossterm::{execute, queue};
+use std::io::{self, Write};
+
+const BAR: &str = " ";
 
 pub(super) struct QuestionSession {
     pub(super) stdout: io::Stdout,
     pub(super) anchor_y: u16,
     pub(super) panel_lines: u16,
     pub(super) previous: Vec<String>,
+    /// 是否由本会话启用 raw mode 与括号粘贴
+    pub(super) owns_terminal: bool,
+    /// 是否为底部覆盖层；结束时只清覆盖区，不写摘要卡片
+    pub(super) overlay: bool,
 }
 
 impl QuestionSession {
@@ -31,6 +46,22 @@ impl QuestionSession {
             anchor_y,
             panel_lines,
             previous: Vec::new(),
+            owns_terminal: true,
+            overlay: false,
+        })
+    }
+
+    /// 【终端提问】【底部覆盖】参数为覆盖区域，返回不开关 raw mode 的会话。
+    pub(super) fn start_overlay(placement: OverlayPlacement) -> Result<Self> {
+        let mut stdout = io::stdout();
+        execute!(stdout, Hide)?;
+        Ok(Self {
+            stdout,
+            anchor_y: placement.anchor_y,
+            panel_lines: placement.panel_lines,
+            previous: Vec::new(),
+            owns_terminal: false,
+            overlay: true,
         })
     }
 
@@ -47,14 +78,12 @@ impl QuestionSession {
         request: &QuestionRequest,
         answers: &QuestionAnswers,
     ) -> Result<()> {
+        if self.overlay {
+            return self.finish_overlay();
+        }
         self.clear()?;
         let width = terminal::size().map(|(cols, _)| cols).unwrap_or(80) as usize;
-        let lines = super::summary::answered_card_lines(
-            request,
-            answers,
-            width,
-            usize::from(self.panel_lines),
-        );
+        let lines = answered_card_lines(request, answers, width, usize::from(self.panel_lines));
         crate::render::terminal_rows::paint_changed_rows(
             &mut self.stdout,
             self.anchor_y,
@@ -83,6 +112,9 @@ impl QuestionSession {
     /// 返回:
     /// - 输出成功时返回空结果
     pub(super) fn finish_cancelled(&mut self) -> Result<()> {
+        if self.overlay {
+            return self.finish_overlay();
+        }
         self.clear()?;
         queue!(
             self.stdout,
@@ -95,6 +127,14 @@ impl QuestionSession {
             Clear(ClearType::CurrentLine),
             Show
         )?;
+        self.stdout.flush()?;
+        Ok(())
+    }
+
+    /// 【终端提问】【底部覆盖】无参数，只清覆盖区并显示光标，不写摘要。
+    fn finish_overlay(&mut self) -> Result<()> {
+        self.clear()?;
+        queue!(self.stdout, Show)?;
         self.stdout.flush()?;
         Ok(())
     }
@@ -115,15 +155,26 @@ impl QuestionSession {
         Ok(())
     }
 
-    /// 根据终端新高度调整面板尺寸和锚点。
+    /// 根据终端新尺寸调整面板尺寸和锚点。
     ///
     /// 参数:
+    /// - `cols`: 终端总列数
     /// - `rows`: 终端总行数
     ///
     /// 返回:
     /// - 无
-    pub(super) fn resize_to_terminal(&mut self, rows: u16) {
+    pub(super) fn resize_to_terminal(&mut self, cols: u16, rows: u16) {
         self.previous.clear();
+        if self.overlay {
+            // 1. 【终端提问】【底部覆盖】先清旧区，再按新尺寸贴底
+            if !cfg!(test) {
+                let _ = self.clear();
+            }
+            let placement = OverlayPlacement::bottom(cols, rows);
+            self.anchor_y = placement.anchor_y;
+            self.panel_lines = placement.panel_lines;
+            return;
+        }
         self.panel_lines = rows.saturating_sub(1).clamp(1, MAX_PANEL_LINES);
         self.anchor_y = self.anchor_y.min(rows.saturating_sub(self.panel_lines));
     }
@@ -131,7 +182,11 @@ impl QuestionSession {
 
 impl Drop for QuestionSession {
     fn drop(&mut self) {
-        let _ = execute!(self.stdout, DisableBracketedPaste, Show);
-        let _ = terminal::disable_raw_mode();
+        if self.owns_terminal {
+            let _ = execute!(self.stdout, DisableBracketedPaste, Show);
+            let _ = terminal::disable_raw_mode();
+            return;
+        }
+        let _ = execute!(self.stdout, Show);
     }
 }

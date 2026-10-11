@@ -1,0 +1,41 @@
+/* 【Web 对话】【阅读外观】仅作用于聊天正文，不改界面根字号与工具卡片 */
+
+.assistant-message,
+.chat-reading-markdown,
+.user-message .message-content,
+.user-markdown .markdown-body {
+  font-family: var(--chat-font-family);
+  font-size: var(--chat-font-size);
+}
+
+.assistant-message {
+  line-height: 1.7;
+}
+
+.assistant-message .markdown-body,
+.chat-reading-markdown .markdown-body {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.chat-reading-markdown :is(p, li, blockquote) {
+  font-size: 1em;
+  line-height: 1.7;
+}
+
+.chat-reading-markdown :is(h1, h2, h3, h4, h5, h6) {
+  font-family: inherit;
+}
+
+.chat-reading-markdown h1 { font-size: calc(var(--chat-font-size) + 7px); }
+.chat-reading-markdown :is(h2, h3) { font-size: calc(var(--chat-font-size) + 3px); }
+.chat-reading-markdown :is(h4, h5, h6) { font-size: 1em; }
+
+.chat-reading-markdown table {
+  font-size: calc(var(--chat-font-size) - 2px);
+}
+
+.chat-reading-markdown code {
+  font-family: var(--font-code);
+  font-size: calc(var(--chat-font-size) - 2px);
+}

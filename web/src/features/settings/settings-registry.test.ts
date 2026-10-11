@@ -39,6 +39,8 @@ describe("settings registry", () => {
     const bySearchProvider = filterSettingsSections("tavily");
     expect(bySearchProvider.map((item) => item.id)).toEqual(["web-search"]);
     expect(resolveSettingsSectionId("web-search")).toBe("web-search");
+    const byCua = filterSettingsSections("cua");
+    expect(byCua.some((item) => item.id === "computer-use")).toBe(true);
   });
 
   it("groups sections and skips empty groups when filtered", () => {
@@ -47,7 +49,7 @@ describe("settings registry", () => {
     expect(grouped.some((entry) => entry.group.id === "agentCapabilities")).toBe(true);
   });
 
-  it("derives topbar save from the appConfig participation model", () => {
+  it("derives save-bar visibility from the appConfig participation model", () => {
     // required 常驻保存；其余分区只在全局草稿有修改时露出
     expect(showsAppConfigSave("required", false)).toBe(true);
     expect(showsAppConfigSave("required", true)).toBe(true);
