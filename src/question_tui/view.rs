@@ -1,6 +1,6 @@
 use super::components::{editor_option_line, option_lines, panel_layout};
+use super::state::QuestionState;
 use super::text::{display_inline, editor_view, wrap_display_text};
-use super::QuestionState;
 use crate::i18n::text as t;
 use crate::question::QuestionRequest;
 

@@ -1,8 +1,13 @@
 use crate::question::{PendingQuestion, QuestionResponse};
+use crate::question_tui::OverlayPlacement;
 use anyhow::Result;
 
-/// 【计划模式】【终端审阅】参数为待审批请求与是否使用临时屏幕，返回用户决定；正文先在可滚动 Markdown 预览中完整展示。
-pub(super) fn ask(pending: &PendingQuestion, overlay: bool) -> Result<QuestionResponse> {
+/// 【计划模式】【终端审阅】参数为待审批请求、是否底部覆盖与覆盖区域，返回用户决定。
+pub(super) fn ask(
+    pending: &PendingQuestion,
+    overlay: bool,
+    placement: Option<OverlayPlacement>,
+) -> Result<QuestionResponse> {
     if let Some(plan) = &pending.plan {
         if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
             return Ok(QuestionResponse::Unavailable(
@@ -21,7 +26,11 @@ pub(super) fn ask(pending: &PendingQuestion, overlay: bool) -> Result<QuestionRe
         })?;
     }
     if overlay {
-        super::question_screen::ask(&pending.request)
+        let placement = placement.unwrap_or_else(|| {
+            let (cols, rows) = crossterm::terminal::size().unwrap_or((80, 24));
+            OverlayPlacement::bottom(cols, rows)
+        });
+        super::question_screen::ask(&pending.request, placement)
     } else {
         crate::question_tui::ask(&pending.request)
     }

@@ -1,4 +1,9 @@
-use super::*;
+use super::text::{insert_text, remove_at_cursor, remove_before_cursor};
+use crate::i18n::text as t;
+use crate::question::{validate_answers, QuestionAnswers, QuestionPrompt, QuestionRequest};
+use anyhow::{bail, Result};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::time::Instant;
 
 pub(super) struct QuestionState {
     pub(super) tab: usize,

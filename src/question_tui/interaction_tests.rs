@@ -1,4 +1,5 @@
-use super::{state::handle_editing_key, text::strip_ansi, QuestionState};
+use super::state::{handle_editing_key, QuestionState};
+use super::text::strip_ansi;
 use crate::question::{parse_ask_request, validate_answers};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 

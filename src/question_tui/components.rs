@@ -102,8 +102,8 @@ pub(super) fn option_lines(
             content_width,
         ));
     }
-    // 1. 【终端提问】【选项说明】仅展开当前选项的说明，避免长描述淹没其他选择
-    if active && !description.trim().is_empty() {
+    // 1. 【终端提问】【选项说明】全部细则默认展开，不随焦点切换
+    if !description.trim().is_empty() {
         lines.extend(
             wrap_display_text(&display_inline(description), width)
                 .into_iter()
