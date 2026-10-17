@@ -11,5 +11,5 @@ pub enum ClipboardPayload {
 #[derive(Debug, Clone)]
 pub struct ClipboardChatInput {
     pub message: String,
-    pub image_url: Option<String>,
+    pub image_urls: Vec<String>,
 }

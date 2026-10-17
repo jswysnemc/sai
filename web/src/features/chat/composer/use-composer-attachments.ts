@@ -11,6 +11,7 @@ import {
   writeComposerAttachmentDraft,
   type ComposerAttachmentDraft
 } from "./composer-attachments-draft";
+import { isImageFile } from "./clipboard-images";
 
 export type ComposerAttachment = ComposerAttachmentDraft;
 
@@ -48,7 +49,7 @@ export function useComposerAttachments(sessionId?: string | null) {
    * @returns 插入后的光标位置
    */
   const addFiles = async (files: File[], selectionStart: number, selectionEnd: number): Promise<number | undefined> => {
-    const images = files.filter((file) => file.type.startsWith("image/"));
+    const images = files.filter(isImageFile);
     if (images.length === 0) return undefined;
     const violation = attachmentLimitViolation(attachments.length, images);
     if (violation === "too_many") {

@@ -269,11 +269,8 @@ pub(super) async fn run_chat_with_options(paths: &SaiPaths, options: ChatRunOpti
         tool_call_mode,
         render_options.clone(),
     );
-    let user_input = match chat_input.image_url {
-        Some(image_url) => crate::runner::UserInputSubmission::new(chat_input.message, mode)
-            .with_image_url(image_url),
-        None => crate::runner::UserInputSubmission::new(chat_input.message, mode),
-    };
+    let user_input = crate::runner::UserInputSubmission::new(chat_input.message, mode)
+        .with_image_urls(chat_input.image_urls);
     let submission = crate::runner::RunnerSubmission::user_input(source, user_input)
         .with_render_policy(render_policy)
         .with_final_summary(show_final_summary && !plain);

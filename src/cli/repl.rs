@@ -599,7 +599,7 @@ pub(super) async fn run_repl(
         let mut chat_input = submission.chat_input;
         chat_input.message =
             super::repl_mentions::expand_skill_mentions(&chat_input.message, &config, paths);
-        if chat_input.message.trim().is_empty() && chat_input.image_url.is_none() {
+        if chat_input.message.trim().is_empty() && chat_input.image_urls.is_empty() {
             continue;
         }
         if !goal_continuation && !input.trim().is_empty() {

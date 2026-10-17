@@ -146,7 +146,7 @@ fn image_submission_is_rejected_before_text_delivery() {
         "describe image".into(),
         &Default::default(),
     );
-    submission.chat_input.image_url = Some("data:image/png;base64,AA==".into());
+    submission.chat_input.image_urls = vec!["data:image/png;base64,AA==".into()];
     let result = crate::cli::repl::subagent_input::deliver_viewed_submission(
         &mut fixture.runtime,
         &fixture.owner,

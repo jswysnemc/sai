@@ -6,6 +6,7 @@ import { ComposerTextarea } from "./composer-textarea";
 import type { ComposerAttachment } from "./use-composer-attachments";
 import "../chat-composer.css";
 import "./composer-surface.css";
+import { imageFilesFromTransfer } from "./clipboard-images";
 
 export type ComposerSurfaceVariant = "full" | "compact";
 
@@ -88,7 +89,7 @@ export function ComposerSurface({
    */
   const handleDrop = (event: DragEvent<HTMLFormElement>) => {
     setDragging(false);
-    const files = Array.from(event.dataTransfer.files).filter((file) => file.type.startsWith("image/"));
+    const files = imageFilesFromTransfer(event.dataTransfer);
     if (disabled || files.length === 0 || !onPasteImages) return;
     event.preventDefault();
     void onPasteImages(files, value.length, value.length);

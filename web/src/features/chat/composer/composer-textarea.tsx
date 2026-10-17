@@ -22,6 +22,7 @@ import { ComposerEditHistory, isRedoShortcut, isUndoShortcut } from "./composer-
 import type { InputHistoryState } from "./input-history";
 import { useI18n } from "../../i18n/use-i18n";
 import { FOCUS_COMPOSER_EVENT } from "./composer-events";
+import { imageFilesFromTransfer, isImageFile } from "./clipboard-images";
 
 import type { TemplateScope } from "../../prompt-templates/template-client";
 
@@ -347,7 +348,7 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
    */
   const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
     const editor = event.currentTarget;
-    const files = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+    const files = imageFilesFromTransfer(event.clipboardData);
     const selection = readEditorTextSelection(editor) ?? { start: props.value.length, end: props.value.length };
     event.preventDefault();
     if (files.length > 0) {
@@ -392,14 +393,13 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
    * @returns 无返回值
    */
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    const files = Array.from(event.dataTransfer.files);
-    if (files.length === 0 || props.disabled) return;
+    const images = imageFilesFromTransfer(event.dataTransfer);
+    const others = Array.from(event.dataTransfer.files).filter((file) => !isImageFile(file));
+    if ((images.length === 0 && others.length === 0) || props.disabled) return;
     const editor = event.currentTarget;
     const selection = readEditorTextSelection(editor) ?? { start: props.value.length, end: props.value.length };
     event.preventDefault();
     event.stopPropagation();
-    const images = files.filter((file) => file.type.startsWith("image/"));
-    const others = files.filter((file) => !file.type.startsWith("image/"));
     if (images.length > 0 && props.onPasteImages) {
       void props.onPasteImages(images, selection.start, selection.end).then((caret) => {
         if (caret === undefined) return;

@@ -19,7 +19,7 @@ pub(super) fn prepare_clipboard_chat_input(
     if !clipb {
         return Ok(clipboard::ClipboardChatInput {
             message,
-            image_url: None,
+            image_urls: Vec::new(),
         });
     }
     let payload = clipboard::read_clipboard_payload()?;

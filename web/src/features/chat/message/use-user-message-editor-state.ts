@@ -12,6 +12,7 @@ import {
   toEditableImages,
   type EditableImage
 } from "./user-message-editor-model";
+import { isImageFile } from "../composer/clipboard-images";
 
 /**
  * 管理用户消息编辑态的正文与图片。
@@ -37,7 +38,7 @@ export function useUserMessageEditorState(initialContent: string, initialImageUr
    * @returns 无返回值
    */
   const addFiles = async (files: File[]) => {
-    const picked = files.filter((file) => file.type.startsWith("image/"));
+    const picked = files.filter(isImageFile);
     if (picked.length === 0) return;
     // 1. 数量沿用输入区限制；单张体积交给上游接口拒绝
     const violation = attachmentLimitViolation(images.length, picked);

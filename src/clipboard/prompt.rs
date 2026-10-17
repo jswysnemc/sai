@@ -14,11 +14,11 @@ pub fn apply_clipboard_payload(message: String, payload: ClipboardPayload) -> Cl
     match payload {
         ClipboardPayload::Text(text) => ClipboardChatInput {
             message: inject_clipboard_text(&message, &text),
-            image_url: None,
+            image_urls: Vec::new(),
         },
         ClipboardPayload::ImageDataUrl { data_url, .. } => ClipboardChatInput {
             message: image_prompt(&message),
-            image_url: Some(data_url),
+            image_urls: vec![data_url],
         },
     }
 }
@@ -67,7 +67,7 @@ mod tests {
             ClipboardPayload::Text("内容".to_string()),
         );
         assert_eq!(input.message, "总结\n\n<clipboard>\n内容\n</clipboard>");
-        assert!(input.image_url.is_none());
+        assert!(input.image_urls.is_empty());
     }
 
     #[test]
@@ -75,7 +75,7 @@ mod tests {
         let input =
             apply_clipboard_payload(String::new(), ClipboardPayload::Text("内容".to_string()));
         assert_eq!(input.message, "内容");
-        assert!(input.image_url.is_none());
+        assert!(input.image_urls.is_empty());
     }
 
     #[test]
@@ -89,9 +89,6 @@ mod tests {
             },
         );
         assert_eq!(input.message, "描述图片");
-        assert_eq!(
-            input.image_url.as_deref(),
-            Some("data:image/png;base64,abc")
-        );
+        assert_eq!(input.image_urls, ["data:image/png;base64,abc"]);
     }
 }

@@ -24,7 +24,7 @@ pub(in crate::cli) fn deliver_viewed_submission(
 /// 参数: owner_key 为父会话作用域，id 为子代理 ID，submission 为用户提交
 /// 返回: 投递结果；校验失败不修改任何会话或收件箱
 fn deliver(owner_key: &str, id: &str, submission: &ReplInputSubmission) -> Result<()> {
-    if submission.chat_input.image_url.is_some() {
+    if !submission.chat_input.image_urls.is_empty() {
         bail!(t(
             "Subagent messages currently support text only; remove the image and retry.",
             "子代理留言目前仅支持文本，请移除图片后重试。"

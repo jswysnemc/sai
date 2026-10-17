@@ -59,7 +59,7 @@ impl ReplClipboardState {
     /// 返回: 文本消息及可选图片
     pub(in crate::cli) fn to_chat_input(&self, input: &str) -> ClipboardChatInput {
         let mut message = String::new();
-        let mut image_url = None;
+        let mut image_urls = Vec::new();
         let mut pasted = Vec::new();
         let mut cursor = 0;
         for (range, item) in self.item_ranges(input) {
@@ -67,7 +67,7 @@ impl ReplClipboardState {
             match item {
                 ReplClipboardItem::Text { text, .. } => pasted.push(text.clone()),
                 ReplClipboardItem::Image { data_url, .. } => {
-                    image_url.get_or_insert_with(|| data_url.clone());
+                    image_urls.push(data_url.clone());
                 }
                 ReplClipboardItem::Reference { text, .. } => message.push_str(text),
             }
@@ -79,9 +79,9 @@ impl ReplClipboardState {
             message =
                 clipboard::apply_clipboard_payload(message, ClipboardPayload::Text(text)).message;
         }
-        if message.is_empty() && image_url.is_some() {
+        if message.is_empty() && !image_urls.is_empty() {
             message = "请根据剪贴板图片回答。".to_string();
         }
-        ClipboardChatInput { message, image_url }
+        ClipboardChatInput { message, image_urls }
     }
 }

@@ -30,7 +30,7 @@ fn regression_history_restores_pasted_text_and_image() {
     let entries = crate::state::input_history::load_input_history_entries(&paths).unwrap();
     let restored = crate::cli::repl_input::history::restore_history_entry(entries.last().unwrap());
     let actual = restored.clipboard_state.to_chat_input(&restored.text);
-    assert_eq!(actual.image_url, expected.image_url, "历史图片丢失");
+    assert_eq!(actual.image_urls, expected.image_urls, "历史图片丢失");
     assert_eq!(actual.message, expected.message, "历史正文丢失");
     assert_eq!(
         restored
@@ -131,8 +131,8 @@ fn mixed_atoms_survive_submission_and_expand_without_guessing_labels() {
     let expanded = render_input_atoms(&echo.text, &echo.atoms, true);
     assert!(expanded.contains(body.trim()));
     assert_eq!(
-        state.to_chat_input(&input).image_url.as_deref(),
-        Some("data:image/png;base64,abc")
+        state.to_chat_input(&input).image_urls,
+        ["data:image/png;base64,abc"]
     );
 }
 

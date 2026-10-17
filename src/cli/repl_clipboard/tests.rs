@@ -140,7 +140,32 @@ fn image_pastes_as_marker_and_submits_data_url() {
 
     assert_eq!(input, "[image 1 800x600]");
     assert_eq!(chat.message, "请根据剪贴板图片回答。");
-    assert_eq!(chat.image_url.as_deref(), Some("data:image/png;base64,abc"));
+    assert_eq!(chat.image_urls, ["data:image/png;base64,abc"]);
+}
+
+#[test]
+fn multiple_image_pastes_keep_every_data_url() {
+    let mut state = ReplClipboardState::default();
+    let mut input = String::new();
+    let mut cursor = 0;
+    for data_url in ["data:image/png;base64,one", "data:image/png;base64,two"] {
+        state.insert_payload(
+            &mut input,
+            &mut cursor,
+            ClipboardPayload::ImageDataUrl {
+                data_url: data_url.to_string(),
+                width: 8,
+                height: 8,
+            },
+        );
+    }
+
+    let chat = state.to_chat_input(&input);
+
+    assert_eq!(
+        chat.image_urls,
+        ["data:image/png;base64,one", "data:image/png;base64,two"]
+    );
 }
 
 #[test]
@@ -161,7 +186,7 @@ fn backspace_removes_whole_marker() {
     assert!(state.remove_block_before_cursor(&mut input, &mut cursor));
     assert!(input.is_empty());
     assert_eq!(cursor, 0);
-    assert!(state.to_chat_input(&input).image_url.is_none());
+    assert!(state.to_chat_input(&input).image_urls.is_empty());
 }
 
 #[test]

@@ -112,8 +112,8 @@ fn restored_submission_keeps_position_and_all_attachments() {
     let chat = items[1].clipboard.to_chat_input(&items[1].text);
     assert!(chat.message.contains(entry.attachments[0].content.trim()));
     assert_eq!(
-        chat.image_url.as_deref(),
-        Some("data:image/png;base64,AAAA")
+        chat.image_urls,
+        ["data:image/png;base64,AAAA"]
     );
     assert_eq!(items[2].text, "later");
 }
@@ -170,7 +170,7 @@ async fn paused_queue_waits_for_a_user_submission() {
         let submission = repl_runner_submission(
             clipboard::ClipboardChatInput {
                 message: "continue".to_string(),
-                image_url: None,
+                image_urls: Vec::new(),
             },
             AgentMode::Yolo,
             render::ReasoningDisplayMode::Summary,

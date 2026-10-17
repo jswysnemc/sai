@@ -27,13 +27,13 @@ impl ReplQueueSource {
                 return None;
             }
             let chat = item.clipboard.to_chat_input(&item.text);
-            if chat.message.trim().is_empty() && chat.image_url.is_none() {
+            if chat.message.trim().is_empty() && chat.image_urls.is_empty() {
                 return None;
             }
             Some(InterMessage::queued_user(
                 item.id.clone(),
                 chat.message,
-                chat.image_url.into_iter().collect(),
+                chat.image_urls,
             ))
         })
     }

@@ -49,7 +49,7 @@ impl ReplInputSubmission {
             raw_input: command,
             chat_input: clipboard::ClipboardChatInput {
                 message: String::new(),
-                image_url: None,
+                image_urls: Vec::new(),
             },
             echo: InputEcho::default(),
         }

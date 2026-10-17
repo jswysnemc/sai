@@ -147,7 +147,7 @@ async fn execute_queued_turn(
     let mut chat_input = item.clipboard.to_chat_input(text);
     chat_input.message =
         crate::cli::repl_mentions::expand_skill_mentions(&chat_input.message, config, paths);
-    if chat_input.message.trim().is_empty() && chat_input.image_url.is_none() {
+    if chat_input.message.trim().is_empty() && chat_input.image_urls.is_empty() {
         return Ok(None);
     }
     // 1. 【终端队列】【单轮执行】准备成功后再记录提交，启动失败时原消息仍可恢复
@@ -285,11 +285,8 @@ pub(super) fn repl_runner_submission(
     render_options: render::StreamRenderOptions,
     goal_continuation: bool,
 ) -> crate::runner::RunnerSubmission {
-    let mut user_input = match chat_input.image_url {
-        Some(image_url) => crate::runner::UserInputSubmission::new(chat_input.message, mode)
-            .with_image_url(image_url),
-        None => crate::runner::UserInputSubmission::new(chat_input.message, mode),
-    };
+    let mut user_input = crate::runner::UserInputSubmission::new(chat_input.message, mode)
+        .with_image_urls(chat_input.image_urls);
     if goal_continuation {
         user_input = user_input.with_goal_continuation();
     }
@@ -350,7 +347,7 @@ mod tests {
         let submission = repl_runner_submission(
             clipboard::ClipboardChatInput {
                 message: "继续".to_string(),
-                image_url: Some("data:image/png;base64,AAAA".to_string()),
+                image_urls: vec!["data:image/png;base64,AAAA".to_string()],
             },
             AgentMode::Yolo,
             render::ReasoningDisplayMode::Summary,
