@@ -1,14 +1,14 @@
 use super::manager::TerminalInfo;
 use anyhow::{Context, Result};
 use portable_pty::{native_pty_system, Child, MasterPty, PtySize};
-use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
 use tokio::sync::broadcast;
 
+use super::replay::{ReplayBuffer, TerminalChunk};
+
 const TERMINAL_BROADCAST_CAPACITY: usize = 256;
-const TERMINAL_REPLAY_BYTES: usize = 1024 * 1024;
 
 /// 单个 PTY 会话及其输入输出通道。
 pub(crate) struct TerminalSession {
@@ -18,8 +18,8 @@ pub(crate) struct TerminalSession {
     master: Mutex<Box<dyn MasterPty + Send>>,
     writer: Mutex<Box<dyn Write + Send>>,
     child: Mutex<Box<dyn Child + Send>>,
-    output: broadcast::Sender<Vec<u8>>,
-    replay: Arc<Mutex<VecDeque<u8>>>,
+    output: broadcast::Sender<TerminalChunk>,
+    replay: Arc<Mutex<ReplayBuffer>>,
 }
 
 impl TerminalSession {
@@ -68,7 +68,7 @@ impl TerminalSession {
         drop(pair.slave);
         let (output, _) = broadcast::channel(TERMINAL_BROADCAST_CAPACITY);
         let output_thread = output.clone();
-        let replay = Arc::new(Mutex::new(VecDeque::new()));
+        let replay = Arc::new(Mutex::new(ReplayBuffer::new()));
         let replay_thread = replay.clone();
         std::thread::Builder::new()
             .name(format!("sai-terminal-{id}"))
@@ -125,16 +125,31 @@ impl TerminalSession {
     }
 
     /// 订阅终端输出。
-    pub(super) fn subscribe(&self) -> broadcast::Receiver<Vec<u8>> {
+    pub(super) fn subscribe(&self) -> broadcast::Receiver<TerminalChunk> {
         self.output.subscribe()
     }
 
     /// 返回连接前已经产生的终端输出。
+    #[allow(dead_code)]
     pub(super) fn replay(&self) -> Vec<u8> {
         self.replay
             .lock()
-            .map(|buffer| buffer.iter().copied().collect())
+            .map(|buffer| buffer.snapshot().0)
             .unwrap_or_default()
+    }
+
+    /// 返回指定偏移之后仍保留的输出，以及最新累计偏移。
+    ///
+    /// 参数:
+    /// - `cursor`: 连接已经写给前端的字节偏移
+    ///
+    /// 返回:
+    /// - 需要补写的字节和补写后的累计偏移
+    pub(super) fn replay_since(&self, cursor: u64) -> (Vec<u8>, u64) {
+        self.replay
+            .lock()
+            .map(|buffer| buffer.since(cursor))
+            .unwrap_or((Vec::new(), cursor))
     }
 
     /// 写入终端输入。
@@ -187,21 +202,22 @@ impl TerminalSession {
 /// 持续读取 PTY 输出并广播给浏览器。
 fn read_terminal_output(
     reader: &mut Box<dyn Read + Send>,
-    output: &broadcast::Sender<Vec<u8>>,
-    replay: &Arc<Mutex<VecDeque<u8>>>,
+    output: &broadcast::Sender<TerminalChunk>,
+    replay: &Arc<Mutex<ReplayBuffer>>,
 ) {
     let mut buffer = [0u8; 8192];
     loop {
         match reader.read(&mut buffer) {
             Ok(0) | Err(_) => break,
             Ok(read) => {
-                let chunk = buffer[..read].to_vec();
-                if let Ok(mut replay) = replay.lock() {
-                    replay.extend(chunk.iter().copied());
-                    while replay.len() > TERMINAL_REPLAY_BYTES {
-                        replay.pop_front();
+                let chunk = if let Ok(mut replay) = replay.lock() {
+                    replay.push(&buffer[..read])
+                } else {
+                    TerminalChunk {
+                        start: 0,
+                        bytes: buffer[..read].to_vec(),
                     }
-                }
+                };
                 let _ = output.send(chunk);
             }
         }

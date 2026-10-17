@@ -4,12 +4,12 @@ use crate::web::ssh::{connect_ssh_session, HostKey, KnownHostStatus, SshConnectO
 use anyhow::Result;
 use russh::client;
 use russh::ChannelMsg;
-use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, RwLock};
 use tokio::sync::broadcast;
 
+use super::replay::{ReplayBuffer, TerminalChunk};
+
 const TERMINAL_BROADCAST_CAPACITY: usize = 256;
-const TERMINAL_REPLAY_BYTES: usize = 1024 * 1024;
 
 /// 建立 SSH 终端会话的结果。
 pub(crate) enum SshCreateOutcome {
@@ -29,8 +29,8 @@ pub(crate) struct SshTerminalSession {
     size: Arc<RwLock<(u16, u16)>>,
     /// 通道写半部，输入与改窗经由它；读半部交由后台任务独占，避免读写互相阻塞
     writer: tokio::sync::Mutex<russh::ChannelWriteHalf<client::Msg>>,
-    output: broadcast::Sender<Vec<u8>>,
-    replay: Arc<Mutex<VecDeque<u8>>>,
+    output: broadcast::Sender<TerminalChunk>,
+    replay: Arc<Mutex<ReplayBuffer>>,
     /// 持有连接句柄，drop 后连接随之关闭
     _handle: client::Handle<crate::web::ssh::SshClientHandler>,
 }
@@ -75,7 +75,7 @@ impl SshTerminalSession {
         }
 
         let (output, _) = broadcast::channel(TERMINAL_BROADCAST_CAPACITY);
-        let replay = Arc::new(Mutex::new(VecDeque::new()));
+        let replay = Arc::new(Mutex::new(ReplayBuffer::new()));
 
         // 4. 拆分读写两半，读半部独占给后台任务，写半部留给输入与改窗
         let (reader, writer) = channel.split();
@@ -127,16 +127,31 @@ impl SshTerminalSession {
     }
 
     /// 订阅终端输出。
-    pub(super) fn subscribe(&self) -> broadcast::Receiver<Vec<u8>> {
+    pub(super) fn subscribe(&self) -> broadcast::Receiver<TerminalChunk> {
         self.output.subscribe()
     }
 
     /// 返回连接前已经产生的终端输出。
+    #[allow(dead_code)]
     pub(super) fn replay(&self) -> Vec<u8> {
         self.replay
             .lock()
-            .map(|buffer| buffer.iter().copied().collect())
+            .map(|buffer| buffer.snapshot().0)
             .unwrap_or_default()
+    }
+
+    /// 返回指定偏移之后仍保留的输出，以及最新累计偏移。
+    ///
+    /// 参数:
+    /// - `cursor`: 连接已经写给前端的字节偏移
+    ///
+    /// 返回:
+    /// - 需要补写的字节和补写后的累计偏移
+    pub(super) fn replay_since(&self, cursor: u64) -> (Vec<u8>, u64) {
+        self.replay
+            .lock()
+            .map(|buffer| buffer.since(cursor))
+            .unwrap_or((Vec::new(), cursor))
     }
 
     /// 写入终端输入。
@@ -188,21 +203,22 @@ impl SshTerminalSession {
 /// - `replay`: 回放缓冲
 fn spawn_reader(
     mut reader: russh::ChannelReadHalf,
-    output: broadcast::Sender<Vec<u8>>,
-    replay: Arc<Mutex<VecDeque<u8>>>,
+    output: broadcast::Sender<TerminalChunk>,
+    replay: Arc<Mutex<ReplayBuffer>>,
 ) {
     tokio::spawn(async move {
         while let Some(message) = reader.wait().await {
             match message {
                 // stdout 与 stderr 都直接送往终端，远端已按 PTY 合流
                 ChannelMsg::Data { data } | ChannelMsg::ExtendedData { data, .. } => {
-                    let chunk = data.to_vec();
-                    if let Ok(mut replay) = replay.lock() {
-                        replay.extend(chunk.iter().copied());
-                        while replay.len() > TERMINAL_REPLAY_BYTES {
-                            replay.pop_front();
+                    let chunk = if let Ok(mut replay) = replay.lock() {
+                        replay.push(&data)
+                    } else {
+                        TerminalChunk {
+                            start: 0,
+                            bytes: data.to_vec(),
                         }
-                    }
+                    };
                     let _ = output.send(chunk);
                 }
                 ChannelMsg::Eof | ChannelMsg::Close => break,

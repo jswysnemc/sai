@@ -1,5 +1,6 @@
 mod kind;
 mod manager;
+mod replay;
 mod session;
 mod socket;
 mod ssh_session;

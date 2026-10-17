@@ -4,6 +4,8 @@ use super::ssh_session::SshTerminalSession;
 use anyhow::Result;
 use tokio::sync::broadcast;
 
+use super::replay::TerminalChunk;
+
 /// 终端会话的两种承载方式。
 ///
 /// 本地会话跑在 PTY 上，读写是同步阻塞调用；SSH 会话跑在 russh 通道上，
@@ -37,7 +39,7 @@ impl TerminalKind {
     }
 
     /// 订阅终端输出。
-    pub(crate) fn subscribe(&self) -> broadcast::Receiver<Vec<u8>> {
+    pub(crate) fn subscribe(&self) -> broadcast::Receiver<TerminalChunk> {
         match self {
             Self::Local(session) => session.subscribe(),
             Self::Ssh(session) => session.subscribe(),
@@ -45,10 +47,25 @@ impl TerminalKind {
     }
 
     /// 返回连接前已经产生的终端输出。
+    #[allow(dead_code)]
     pub(crate) fn replay(&self) -> Vec<u8> {
         match self {
             Self::Local(session) => session.replay(),
             Self::Ssh(session) => session.replay(),
+        }
+    }
+
+    /// 返回指定偏移之后仍保留的输出，以及最新累计偏移。
+    ///
+    /// 参数:
+    /// - `cursor`: 连接已经写给前端的字节偏移
+    ///
+    /// 返回:
+    /// - 需要补写的字节和补写后的累计偏移
+    pub(crate) fn replay_since(&self, cursor: u64) -> (Vec<u8>, u64) {
+        match self {
+            Self::Local(session) => session.replay_since(cursor),
+            Self::Ssh(session) => session.replay_since(cursor),
         }
     }
 
