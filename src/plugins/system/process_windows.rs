@@ -45,7 +45,11 @@ impl ProcessGroup {
         if configured == 0 {
             return Err(std::io::Error::last_os_error()).context("configure plugin process job");
         }
-        command.as_std_mut().creation_flags(CREATE_SUSPENDED);
+        // CREATE_NO_WINDOW 必须与 CREATE_SUSPENDED 一起设置，单独调用会覆盖挂起标志
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command
+            .as_std_mut()
+            .creation_flags(CREATE_SUSPENDED | CREATE_NO_WINDOW);
         Ok(Self { job: Some(job) })
     }
 

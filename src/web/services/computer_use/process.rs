@@ -4,7 +4,6 @@ use anyhow::{Context, Result};
 use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
-use tokio::process::Command;
 
 const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -18,7 +17,7 @@ const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 pub(crate) async fn probe_version(path: &Path) -> Result<String> {
     let directory = path.parent().unwrap_or_else(|| Path::new("."));
     // 1. 启动 --version，工作目录设为二进制所在目录以便解析辅助文件
-    let child = Command::new(path)
+    let child = crate::platform::job_control::tokio_command_without_console(path)
         .arg("--version")
         .current_dir(directory)
         .stdout(Stdio::piped())

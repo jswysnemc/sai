@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::io::IsTerminal;
 use std::path::Path;
-use std::process::Command;
 
 const STATE_OPEN: &str = "<context-state>";
 const STATE_CLOSE: &str = "</context-state>";
@@ -404,7 +403,7 @@ fn message_text(message: &ChatMessage) -> Option<String> {
 /// 返回:
 /// - 分支名称；非 Git 目录或 detached HEAD 返回 None
 pub(crate) fn git_branch(cwd: &Path) -> Option<String> {
-    let output = Command::new("git")
+    let output = crate::platform::job_control::command_without_console("git")
         .args(["symbolic-ref", "--quiet", "--short", "HEAD"])
         .env("GIT_OPTIONAL_LOCKS", "0")
         .current_dir(cwd)

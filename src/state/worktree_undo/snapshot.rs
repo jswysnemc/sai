@@ -191,7 +191,7 @@ pub(super) fn git_text(repository_root: &Path, args: &[&str]) -> Result<String> 
 
 /// 执行 Git 命令并返回原始标准输出。
 pub(super) fn git_bytes(repository_root: &Path, args: &[&str]) -> Result<Vec<u8>> {
-    let output = Command::new("git")
+    let output = crate::platform::job_control::command_without_console("git")
         .args(args)
         .current_dir(repository_root)
         .output()?;
@@ -246,7 +246,7 @@ fn repository_root_with_program(workspace: &Path, program: &str) -> Result<Optio
 
 /// 读取当前 HEAD；尚无提交时返回空。
 fn current_head(repository_root: &Path) -> Result<Option<String>> {
-    let output = Command::new("git")
+    let output = crate::platform::job_control::command_without_console("git")
         .args(["rev-parse", "--verify", "HEAD"])
         .current_dir(repository_root)
         .output()?;

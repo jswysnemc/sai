@@ -578,7 +578,12 @@ fn configure_process_group(command: &mut Command) {
 }
 
 #[cfg(not(unix))]
-fn configure_process_group(_command: &mut Command) {}
+fn configure_process_group(command: &mut Command) {
+    #[cfg(windows)]
+    crate::platform::job_control::isolate_tokio_command(command);
+    #[cfg(not(windows))]
+    let _ = command;
+}
 
 #[cfg(unix)]
 fn process_group_id(pid: u32) -> Option<i32> {
@@ -604,9 +609,12 @@ pub(crate) fn process_exists(pid: u32) -> bool {
     }
     #[cfg(windows)]
     {
-        std::process::Command::new("tasklist")
-            .args(["/FI", &format!("PID eq {pid}"), "/NH"])
-            .output()
+        {
+            let mut command = std::process::Command::new("tasklist");
+            command.args(["/FI", &format!("PID eq {pid}"), "/NH"]);
+            crate::platform::job_control::suppress_console_window(&mut command);
+            command.output()
+        }
             .map(|output| {
                 crate::platform::output_encoding::decode_output(&output.stdout)
                     .contains(&pid.to_string())

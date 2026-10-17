@@ -2,7 +2,7 @@ use super::{BRANCH_PREFIX, WORKTREE_DIR_MARKER};
 use std::collections::BTreeSet;
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 /// 按应用路径重建 worktree 暂存区。
 ///
@@ -237,7 +237,7 @@ fn split_nul_paths(raw: &str) -> impl Iterator<Item = &str> {
 /// 返回:
 /// - 命令标准输出或错误文本
 pub(super) fn run_git(cwd: &Path, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = crate::platform::job_control::command_without_console("git")
         .current_dir(cwd)
         .args(args)
         .output()
@@ -257,7 +257,7 @@ pub(super) fn run_git(cwd: &Path, args: &[&str]) -> Result<String, String> {
 /// 返回:
 /// - 原始标准输出文本或错误文本
 pub(super) fn run_git_raw(cwd: &Path, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = crate::platform::job_control::command_without_console("git")
         .current_dir(cwd)
         .args(args)
         .output()
@@ -277,7 +277,7 @@ pub(super) fn run_git_raw(cwd: &Path, args: &[&str]) -> Result<String, String> {
 /// 返回:
 /// - 去除边界空白的标准输出或错误文本
 pub(super) fn run_git_owned(cwd: &Path, args: Vec<String>) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = crate::platform::job_control::command_without_console("git")
         .current_dir(cwd)
         .args(args)
         .output()
@@ -297,7 +297,7 @@ pub(super) fn run_git_owned(cwd: &Path, args: Vec<String>) -> Result<String, Str
 /// 返回:
 /// - 原始标准输出字节或错误文本
 fn run_git_owned_bytes(cwd: &Path, args: Vec<String>) -> Result<Vec<u8>, String> {
-    let output = Command::new("git")
+    let output = crate::platform::job_control::command_without_console("git")
         .current_dir(cwd)
         .args(args)
         .output()
@@ -318,7 +318,7 @@ fn run_git_owned_bytes(cwd: &Path, args: Vec<String>) -> Result<Vec<u8>, String>
 /// 返回:
 /// - 去除边界空白的标准输出或错误文本
 fn run_git_with_input(cwd: &Path, args: &[&str], input: &str) -> Result<String, String> {
-    let mut child = Command::new("git")
+    let mut child = crate::platform::job_control::command_without_console("git")
         .current_dir(cwd)
         .args(args)
         .stdin(Stdio::piped())
@@ -350,7 +350,7 @@ fn run_git_with_input(cwd: &Path, args: &[&str], input: &str) -> Result<String, 
 /// 返回:
 /// - 合并后的命令输出或错误文本
 fn run_git_with_input_output(cwd: &Path, args: &[&str], input: &str) -> Result<String, String> {
-    let mut child = Command::new("git")
+    let mut child = crate::platform::job_control::command_without_console("git")
         .current_dir(cwd)
         .args(args)
         .stdin(Stdio::piped())

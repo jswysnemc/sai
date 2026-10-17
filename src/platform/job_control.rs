@@ -71,6 +71,62 @@ pub(crate) fn claim_foreground() {
 pub(crate) fn isolate_tokio_command(command: &mut tokio::process::Command) {
     #[cfg(unix)]
     isolate_std_command(command.as_std_mut());
+    #[cfg(windows)]
+    suppress_console_window(command.as_std_mut());
+}
+
+/// 【进程】【隐藏控制台】桌面端没有控制台，Windows 会为每个控制台子进程弹出窗口。
+///
+/// `git`、`cmd`、`rg` 这类短命令在网页桌面版里会被反复拉起，不带该标志就会不停闪窗。
+/// Unix 上没有对应窗口，调用为空操作。
+///
+/// 参数:
+/// - `command`: 待启动命令
+///
+/// 返回:
+/// - 无
+pub(crate) fn suppress_console_window(command: &mut std::process::Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // CREATE_NO_WINDOW：不为控制台子系统程序分配可见窗口
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = command;
+    }
+}
+
+/// 【进程】【隐藏控制台】创建不会在 Windows 桌面端弹出控制台的标准库命令。
+///
+/// 参数:
+/// - `program`: 可执行文件
+///
+/// 返回:
+/// - 已设置隐藏窗口标志的命令；Unix 上与普通命令相同
+pub(crate) fn command_without_console(
+    program: impl AsRef<std::ffi::OsStr>,
+) -> std::process::Command {
+    let mut command = std::process::Command::new(program);
+    suppress_console_window(&mut command);
+    command
+}
+
+/// 【进程】【隐藏控制台】创建不会在 Windows 桌面端弹出控制台的 tokio 命令。
+///
+/// 参数:
+/// - `program`: 可执行文件
+///
+/// 返回:
+/// - 已隔离并隐藏窗口的命令
+pub(crate) fn tokio_command_without_console(
+    program: impl AsRef<std::ffi::OsStr>,
+) -> tokio::process::Command {
+    let mut command = tokio::process::Command::new(program);
+    isolate_tokio_command(&mut command);
+    command
 }
 
 /// 【终端】【作业控制】让标准库子进程脱离控制终端。

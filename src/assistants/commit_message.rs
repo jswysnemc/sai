@@ -102,7 +102,7 @@ pub(crate) async fn collect_repo_change_summary(repo: &Path) -> Result<(String, 
 }
 
 async fn run_git(repo: &Path, args: &[&str]) -> Result<String> {
-    let output = tokio::process::Command::new("git")
+    let output = crate::platform::job_control::tokio_command_without_console("git")
         .args(args)
         .current_dir(repo)
         .output()

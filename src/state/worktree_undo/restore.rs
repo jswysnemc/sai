@@ -5,7 +5,7 @@ use super::WorktreeUndoOutcome;
 use anyhow::{bail, Context, Result};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 /// 恢复当前会话最近一轮记录的 Git 工作树状态。
 ///
@@ -81,7 +81,7 @@ pub(crate) fn restore_snapshot_paths(
         paths,
     )?;
     for path in paths {
-        let _ = Command::new("git")
+        let _ = crate::platform::job_control::command_without_console("git")
             .args(["restore", "--worktree", "--", path])
             .current_dir(&repository_root)
             .status();
@@ -122,7 +122,7 @@ fn validate_current_state(repository_root: &Path, record: &SnapshotRecord) -> Re
 /// 返回:
 /// - 恢复是否成功
 fn restore_tracked_files(repository_root: &Path) -> Result<()> {
-    let status = Command::new("git")
+    let status = crate::platform::job_control::command_without_console("git")
         .args([
             "restore",
             "--source=HEAD",
@@ -147,7 +147,7 @@ fn restore_tracked_files(repository_root: &Path) -> Result<()> {
 /// 返回:
 /// - 删除是否成功
 fn remove_current_untracked(repository_root: &Path) -> Result<()> {
-    let output = Command::new("git")
+    let output = crate::platform::job_control::command_without_console("git")
         .args(["ls-files", "--others", "--exclude-standard", "-z"])
         .current_dir(repository_root)
         .output()?;
@@ -177,7 +177,7 @@ fn remove_current_untracked(repository_root: &Path) -> Result<()> {
 /// 返回:
 /// - 恢复是否成功
 fn restore_worktree_from_index(repository_root: &Path) -> Result<()> {
-    let status = Command::new("git")
+    let status = crate::platform::job_control::command_without_console("git")
         .args(["restore", "--worktree", "--", "."])
         .current_dir(repository_root)
         .status()?;
@@ -207,7 +207,7 @@ fn apply_patch(
     if patch.is_empty() {
         return Ok(());
     }
-    let mut command = Command::new("git");
+    let mut command = crate::platform::job_control::command_without_console("git");
     command.args(["apply", "--binary", "--whitespace=nowarn"]);
     if cached {
         command.arg("--cached");
@@ -244,7 +244,7 @@ fn apply_patch(
 /// - 是否成功
 fn restore_path_to_head(repository_root: &Path, path: &str) -> Result<()> {
     let absolute = repository_root.join(path);
-    let tracked = Command::new("git")
+    let tracked = crate::platform::job_control::command_without_console("git")
         .args(["ls-files", "--error-unmatch", "--", path])
         .current_dir(repository_root)
         .stdout(Stdio::null())
@@ -253,7 +253,7 @@ fn restore_path_to_head(repository_root: &Path, path: &str) -> Result<()> {
         .map(|status| status.success())
         .unwrap_or(false);
     if tracked {
-        let status = Command::new("git")
+        let status = crate::platform::job_control::command_without_console("git")
             .args([
                 "restore",
                 "--source=HEAD",

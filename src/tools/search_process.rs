@@ -41,6 +41,7 @@ pub(super) async fn run_search_command_with_timeout(
     mut command: Command,
     timeout_seconds: u64,
 ) -> Result<SearchRun> {
+    crate::platform::job_control::isolate_tokio_command(&mut command);
     // 1. 改用 spawn 以便超时后能拿到子进程句柄并主动终止，
     //    output() 超时只会丢弃 future，子进程会继续跑成孤儿
     let mut child = match command
