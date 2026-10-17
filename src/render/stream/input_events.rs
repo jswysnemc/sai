@@ -142,9 +142,11 @@ impl StreamRenderer {
         if aligned.trim().is_empty() {
             return Ok(());
         }
+        // 此时文本已经折行并加上引导缩进，按终端整宽计行。
+        // 再用正文宽度会把写满一行的尾部多算一行，清行时把上一行已提交正文擦掉。
         let rows = crate::render::rendered_visual_rows(
             &aligned,
-            crate::render::content_indent::cli_content_width(),
+            crate::render::terminal_width(),
         );
         let mut stdout = io::stdout();
         write!(stdout, "{aligned}")?;

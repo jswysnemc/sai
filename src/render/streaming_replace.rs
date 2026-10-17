@@ -83,6 +83,14 @@ mod tests {
         assert_eq!(raw_visual_rows(&line, 80), 2);
     }
 
+    /// 已缩进的整行按终端整宽计为 1 行；按更窄的正文宽度会多算一行。
+    #[test]
+    fn indented_full_line_is_one_row_at_terminal_width() {
+        let line = format!("  {}\n", "x".repeat(20));
+        assert_eq!(rendered_visual_rows(&line, 20), 2);
+        assert_eq!(rendered_visual_rows(&line, 22), 1);
+    }
+
     /// 多行文本按行累加。
     #[test]
     fn rendered_visual_rows_sums_per_line() {

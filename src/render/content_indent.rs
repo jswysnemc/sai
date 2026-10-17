@@ -210,7 +210,10 @@ pub(crate) fn align_cli_stream_block(text: &str) -> String {
 /// 返回:
 /// - 按当前终端正文宽度插入软换行后的文本
 pub(crate) fn wrap_cli_stream_block(text: &str) -> String {
-    wrap_cli_stream_block_with_width(text, cli_content_width())
+    // 对齐还会再占引导列。再空出最后一列，避免写满终端宽度触发自动换行，
+    // 光标多停一行后，下一帧清行会把已经提交的上一行擦掉。
+    let width = cli_content_width().saturating_sub(1).max(1);
+    wrap_cli_stream_block_with_width(text, width)
 }
 
 /// 【终端】【CLI 换行】按指定正文宽度插入软换行。
