@@ -7,6 +7,7 @@ import { languageForPath } from "./editor-language";
 import { FOCUS_COMPOSER_EVENT, INSERT_TERMINAL_SELECTION_EVENT } from "../chat/composer/composer-events";
 import { useI18n } from "../i18n/use-i18n";
 import type { EditorGitLine, EditorGitLineKind } from "./editor-git-decorations";
+import { monacoFontOptions, useMonacoEditorFont } from "../theme/font-preferences";
 
 type MonacoCodeEditorProps = {
   path: string;
@@ -52,6 +53,7 @@ export function MonacoCodeEditor({ path, value, onChange, loadingLabel, gitLines
   pathRef.current = path;
   toggleWrapRef.current = onToggleWordWrap;
   const gitDecorationsRef = useRef<ReturnType<Parameters<OnMount>[0]["createDecorationsCollection"]> | null>(null);
+  const editorFont = useMonacoEditorFont(areaRef, mountVersion === 0 ? null : editorRef.current);
 
   useEffect(() => {
     let active = true;
@@ -199,9 +201,7 @@ export function MonacoCodeEditor({ path, value, onChange, loadingLabel, gitLines
           theme={isDarkTheme(theme) ? "sai-dark" : "sai-light"}
           options={{
             minimap: { enabled: false },
-            fontFamily: "Fira Code",
-            fontSize: 13,
-            lineHeight: 21,
+            ...monacoFontOptions(editorFont),
             padding: { top: 12 },
             automaticLayout: false,
             scrollBeyondLastLine: false,

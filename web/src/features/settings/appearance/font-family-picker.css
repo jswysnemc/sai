@@ -1,0 +1,31 @@
+.font-family-picker-menu {
+  display: flex;
+  flex-direction: column;
+  padding-top: 0;
+}
+
+.font-family-picker-search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 2rem;
+  margin: 0.25rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 var(--text-sm) / var(--leading-control) var(--font-ui);
+}
+
+.font-family-picker-search:focus {
+  border-color: var(--ink-soft);
+  outline: none;
+}
+
+.font-family-picker-empty {
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  color: var(--ink-soft);
+  font: 400 var(--text-xs) / var(--leading-snug) var(--font-ui);
+}

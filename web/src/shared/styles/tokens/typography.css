@@ -49,27 +49,31 @@
   /*
    * 字族
    *
-   * 中文首选自托管的 Noto Sans SC（main.tsx 按 unicode-range 切片加载
-   * 400/500/600 三档）：字形、字重在所有平台与浏览器上完全一致，
-   * 不再依赖系统字体，也避免各浏览器对缺失字重的合成加粗差异。
-   * 系统 CJK 字族仅作网络异常时的兜底。
+   * 中文默认使用等宽字族，便于代码和界面按列对齐。
+   * 自托管的 Noto Sans SC（main.tsx 按 unicode-range 切片加载 400/500/600）
+   * 只在系统没有等宽中文字族时兜底，保证字形仍然能显示。
    *
    * 西文回退排在 CJK 之前：字体匹配逐字进行，西文字符命中前面的西文字族，
    * 落不到字形的 CJK 字符才继续向后寻找，两段互不干扰。
    */
-  --font-cjk: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+  --font-cjk-proportional: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
     "Source Han Sans SC", "WenQuanYi Micro Hei";
   /*
-   * 等宽场景的 CJK 另起一栈：代码块与 diff 靠列对齐传达结构，
-   * 比例字族的标点与拉丁部分会让含中文注释的行错位，因此优先取真正的等宽 CJK，
-   * 系统没有装时才退回上面的比例字族——至少字形正确。
+   * 中文默认走等宽字族，让代码注释和界面里的汉字按列对齐。
+   * 系统没有这些字族时，再退回已加载的比例字族，保证字形仍能显示。
    */
   --font-cjk-mono: "Sarasa Mono SC", "Noto Sans Mono CJK SC", "Source Han Mono SC",
-    var(--font-cjk);
-  --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Noto Sans Mono CJK";
+  --font-cjk: var(--font-cjk-mono), var(--font-cjk-proportional);
+  --font-ui-builtin: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     var(--font-cjk), sans-serif;
+  --font-ui: var(--font-ui-builtin);
   --font-code: "Fira Code", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
-    "Liberation Mono", var(--font-cjk-mono), monospace;
+    "Liberation Mono", var(--font-cjk), monospace;
+  /* 编辑器字族与字号。未单独配置时字族跟随代码字族，字号默认 13px */
+  --font-editor: var(--font-code);
+  --editor-font-size: 13px;
+  --editor-line-height: 21px;
 }
 
 /*

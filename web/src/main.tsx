@@ -24,6 +24,7 @@ import { bootstrapSession, fetchAuthMode, hasActiveSession } from "./api/client"
 import { PasswordLogin } from "./features/auth/password-login";
 import { initializeChatAppearance } from "./features/chat/chat-appearance";
 import { initializeTheme } from "./features/theme/theme";
+import { initializeFontPreferences } from "./features/theme/font-preferences";
 import { detectInitialLocale, text } from "./features/i18n/locale";
 import { enableAutoHideScrollbars } from "./shared/styles/auto-hide-scrollbar";
 import { enableDesktopChrome } from "./features/desktop/desktop-chrome";
@@ -57,6 +58,7 @@ function Root({ authenticated }: { authenticated: boolean }) {
  */
 async function start() {
   initializeTheme();
+  initializeFontPreferences();
   initializeChatAppearance();
   // 滚动条默认隐藏，滚动/悬停时短暂显示
   enableAutoHideScrollbars();

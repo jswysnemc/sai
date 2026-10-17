@@ -1,4 +1,4 @@
-const { ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
 
 /** 工作台顶行里可拖动窗口的区域；与 Web 端 desktop-chrome.css 保持一致 */
 const DRAG_ROWS = '.chat-header, .workspace-tab-bar, .settings-topbar, .sidebar-heading';
@@ -72,4 +72,10 @@ if (process.isMainFrame) {
       if (target?.closest(DRAG_ROWS) && !target.closest(INTERACTIVE)) ipcRenderer.send('desktop:toggle-maximize');
     });
   }
+}
+
+if (process.isMainFrame) {
+  contextBridge.exposeInMainWorld('saiLocalFonts', {
+    list: () => ipcRenderer.invoke('desktop:fonts'),
+  });
 }

@@ -5,6 +5,7 @@ import { ChoicePills, SettingsField, SettingsPanel } from "./kit";
 import { ChatAppearanceSettings } from "./appearance/chat-appearance-settings";
 import { DisplayScaleSettings } from "./appearance/display-scale-settings";
 import { ThemeSettings } from "./appearance/theme-settings";
+import { FontPreferencesSettings } from "./appearance/font-preferences-settings";
 import { MarkdownStyleSettings } from "./markdown-style-settings";
 
 /**
@@ -24,6 +25,7 @@ export function AppearanceSettingsSection({ theme, onThemeChange }: { theme: The
       </SettingsPanel>
       <ThemeSettings theme={theme} onThemeChange={onThemeChange} />
       <DisplayScaleSettings />
+      <FontPreferencesSettings />
       <ChatAppearanceSettings />
       <MarkdownStyleSettings preferences={markdownStyle.preferences} onPresetChange={markdownStyle.updatePreset} onTableChange={markdownStyle.updateTable} onCodeBlockChange={markdownStyle.updateCodeBlock} onReset={markdownStyle.reset} />
     </>

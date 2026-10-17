@@ -6,6 +6,7 @@ const { createChromeLayout, CONTROLS_WIDTH } = require('./window-chrome.cjs');
 
 // ===== 新增 import =====
 const { controlsBackground } = require('./caption-hit-test.cjs');
+const { installLocalFontCatalog } = require('./local-font-catalog.cjs');
 
 const MAC = process.platform === 'darwin';
 
@@ -64,8 +65,10 @@ async function createWindow(url, logger) {
     if (color) controls.setBackgroundColor(color);
   };
   const cleanup = installControls(window, view.webContents, controls?.webContents ?? null, url.origin, chrome, syncControlsBackground);
+  const cleanupFonts = installLocalFontCatalog(view.webContents, url.origin);
   window.once('closed', () => {
     cleanup();
+    cleanupFonts();
     for (const child of [view, controls].filter(Boolean)) {
       if (!child.webContents.isDestroyed()) child.webContents.close();
     }

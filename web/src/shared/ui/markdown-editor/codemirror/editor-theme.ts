@@ -51,8 +51,8 @@ const liveTheme = EditorView.theme({
 
 /** 源码模式：等宽字体，保留完整语法标记。 */
 const sourceTheme = EditorView.theme({
-  "&": { fontSize: "var(--text-sm)" },
-  ".cm-scroller": { fontFamily: "var(--font-code)" },
+  "&": { fontSize: "var(--editor-font-size)", lineHeight: "var(--editor-line-height)" },
+  ".cm-scroller": { fontFamily: "var(--font-editor)" },
   ".cm-content": { padding: "0 var(--space-sm)" },
 });
 

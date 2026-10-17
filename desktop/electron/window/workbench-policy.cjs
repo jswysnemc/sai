@@ -11,7 +11,7 @@ const { isInternal, isExternal } = require('../navigation.cjs');
 async function configureWorkbench(contents, url, logger) {
   const partition = contents.session;
   await partition.setProxy({ mode: 'system', proxyBypassRules: '<local>;127.0.0.1;[::1]' });
-  const allowed = new Set(['clipboard-read', 'clipboard-sanitized-write', 'fullscreen']);
+  const allowed = new Set(['clipboard-read', 'clipboard-sanitized-write', 'fullscreen', 'local-fonts']);
   partition.setPermissionCheckHandler((page, permission, origin) =>
     Boolean(page === contents && isInternal(page.getURL(), url.origin) && isInternal(origin, url.origin) && allowed.has(permission)));
   partition.setPermissionRequestHandler((page, permission, callback, details) =>

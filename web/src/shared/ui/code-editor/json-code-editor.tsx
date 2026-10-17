@@ -8,6 +8,7 @@ import "./json-code-editor.css";
 import { useI18n } from "../../../features/i18n/use-i18n";
 import { Button } from "../button/button";
 import { Toast, useToast } from "../notify/notify";
+import { monacoFontOptions, useMonacoEditorFont } from "../../../features/theme/font-preferences";
 
 /** 编辑器对外提供的错误位置。 */
 export type JsonEditorDiagnostic = { message: string; line: number; column: number };
@@ -36,6 +37,8 @@ export function JsonCodeEditor({ value, height = 420, ariaLabel, onChange, onDia
   const viewState = useRef<import("monaco-editor").editor.ICodeEditorViewState | null>(null);
   const [ready, setReady] = useState(false);
   const [editor, setEditor] = useState<import("monaco-editor").editor.IStandaloneCodeEditor | null>(null);
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const editorFont = useMonacoEditorFont(surfaceRef, editor);
 
   useEffect(() => {
     let active = true;
@@ -74,8 +77,8 @@ export function JsonCodeEditor({ value, height = 420, ariaLabel, onChange, onDia
         <Button variant="ghost" size="small" onClick={() => void editor?.getAction("editor.action.formatDocument")?.run()} disabled={!editor}><WandSparkles size={14} />{t("Format", "格式化")}</Button>
         <Button variant="ghost" size="small" onClick={() => expand(!fullscreen)}>{fullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}{fullscreen ? t("Collapse", "收起") : t("Expand", "全屏编辑")}</Button>
       </div></header>
-      <div className="json-editor-surface" style={{ height: fullscreen ? "100%" : height }}>
-        {ready ? <Editor language="json" value={value} theme={dark ? "vs-dark" : "light"} onChange={(next) => onChange(next ?? "")} onMount={(instance) => { setEditor(instance); if (viewState.current) instance.restoreViewState(viewState.current); if (fullscreen) instance.focus(); }} onValidate={(markers) => onDiagnostics?.(markers.filter((marker) => marker.severity >= 8).map((marker) => ({ message: marker.message, line: marker.startLineNumber, column: marker.startColumn })))} options={{ automaticLayout: true, minimap: { enabled: false }, fontFamily: "Fira Code", fontSize: 12, lineHeight: 20, scrollBeyondLastLine: false, folding: true, bracketPairColorization: { enabled: true }, formatOnPaste: true, padding: { top: 10, bottom: 10 }, ariaLabel: resolvedAriaLabel }} /> : <div className="editor-state">{t("Loading JSON editor", "加载 JSON 编辑器")}</div>}
+      <div className="json-editor-surface" ref={surfaceRef} style={{ height: fullscreen ? "100%" : height }}>
+        {ready ? <Editor language="json" value={value} theme={dark ? "vs-dark" : "light"} onChange={(next) => onChange(next ?? "")} onMount={(instance) => { setEditor(instance); if (viewState.current) instance.restoreViewState(viewState.current); if (fullscreen) instance.focus(); }} onValidate={(markers) => onDiagnostics?.(markers.filter((marker) => marker.severity >= 8).map((marker) => ({ message: marker.message, line: marker.startLineNumber, column: marker.startColumn })))} options={{ automaticLayout: true, minimap: { enabled: false }, ...monacoFontOptions(editorFont), scrollBeyondLastLine: false, folding: true, bracketPairColorization: { enabled: true }, formatOnPaste: true, padding: { top: 10, bottom: 10 }, ariaLabel: resolvedAriaLabel }} /> : <div className="editor-state">{t("Loading JSON editor", "加载 JSON 编辑器")}</div>}
       </div>
       <Toast notice={notice} onDismiss={dismissToast} />
     </div>

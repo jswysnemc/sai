@@ -5,6 +5,10 @@ import type { SettingsSearchEntry } from "./settings-search-types";
 const APPEARANCE_FIELDS = [
   ["locale", "Interface language", "界面语言"],
   ["theme", "Workspace theme", "工作区主题"],
+  ["uiFont", "Interface font", "界面字体"],
+  ["editorFont", "Editor font", "编辑器字体"],
+  ["cjkFont", "Chinese font", "中文字体"],
+  ["editorFontSize", "Editor font size", "编辑器字号"],
   ["chat.font", "Chat font", "对话字体"],
   ["chat.fontSize", "Chat font size", "对话字号"],
   ["chat.width", "Conversation width", "对话列宽"],
