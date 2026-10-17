@@ -122,7 +122,7 @@ pub(crate) fn install_with_fetcher(
 fn download(url: &str) -> Result<Vec<u8>> {
     let client = reqwest::blocking::Client::builder()
         .timeout(DOWNLOAD_TIMEOUT)
-        .user_agent("sai-computer-use/0.2.9")
+        .user_agent("sai-computer-use/0.2.10")
         .build()?;
     let response = client
         .get(url)

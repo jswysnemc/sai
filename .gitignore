@@ -1,5 +1,7 @@
 /target/
 /docs/*
+!/docs/releases/
+!/docs/releases/*
 !/docs/computer-use.md
 /web/dist/
 /.idea/
