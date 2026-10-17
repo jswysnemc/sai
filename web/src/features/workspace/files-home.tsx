@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Eraser, FileText, FilePlus2, FolderOpen, FolderSearch, XCircle } from "../../shared/ui/icons";
+import { Copy, Eraser, FileText, FilePlus2, FolderOpen, FolderSearch, Globe, XCircle } from "../../shared/ui/icons";
 import { useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
@@ -10,6 +10,7 @@ import { WorkspaceFileSearch } from "./workspace-file-search";
 import { ContextActionMenu } from "../../shared/ui/menu/context-action-menu";
 import { absoluteWorkspacePath } from "./file-tree-clipboard";
 import { filesHomeMenuItems, type FilesHomeMenuTarget } from "./files-home-menu";
+import { requestOpenHtmlInBrowser } from "./html-file";
 import "./files-home.css";
 
 /** 让已经打开的文件树展开并聚焦这个路径。 */
@@ -83,6 +84,7 @@ export function FilesHome({ recentFiles, onSelectFile, onBrowseFiles, onForgetRe
 
   const menuItems = menu ? filesHomeMenuItems(menu, {
     open: openRow,
+    openInBrowser: requestOpenHtmlInBrowser,
     reveal,
     copyPath: (path, absolute) => void navigator.clipboard?.writeText(absolute ? absoluteWorkspacePath(workspaceRoot, path) : path),
     forget: (path) => onForgetRecent?.(path),
@@ -91,7 +93,7 @@ export function FilesHome({ recentFiles, onSelectFile, onBrowseFiles, onForgetRe
     clearRecents: () => onClearRecents?.(),
     hasRecents: recents.length > 0 && Boolean(onClearRecents),
     icons: {
-      open: <FileText size={14} />, reveal: <FolderOpen size={14} />, copy: <Copy size={14} />,
+      open: <FileText size={14} />, browser: <Globe size={14} />, reveal: <FolderOpen size={14} />, copy: <Copy size={14} />,
       remove: <XCircle size={14} />, create: <FilePlus2 size={14} />, browse: <FolderSearch size={14} />, clear: <Eraser size={14} />
     }
   }, t) : [];

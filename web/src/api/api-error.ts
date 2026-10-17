@@ -156,7 +156,8 @@ export function localizeApiMessage(message: string, locale: Locale): string {
     "this Weixin account is already linked, but no new credentials were returned; start the service directly if the account is saved locally": "该微信账号已绑定，但未返回新凭证；如本机已保存账号可直接启动服务",
     "login succeeded but credentials are missing": "登录成功但响应缺少凭证",
     "login successful": "登录成功",
-    "login timed out; request a new QR code": "登录超时，请重新获取二维码"
+    "login timed out; request a new QR code": "登录超时，请重新获取二维码",
+    "only HTML files can be opened in the built-in browser": "只有 HTML 文件可以在内置浏览器中打开"
   };
   if (exact[message]) return exact[message];
 

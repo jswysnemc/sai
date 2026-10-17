@@ -1,4 +1,4 @@
-import { Copy, EyeOff, FileDiff, FileText, FolderSearch, GitCompareArrows, GitMerge, Minus, Pin, Plus, RotateCcw, Trash2 } from "../../../shared/ui/icons";
+import { Copy, EyeOff, FileDiff, FileText, FolderSearch, GitCompareArrows, GitMerge, Globe, Minus, Pin, Plus, RotateCcw, Trash2 } from "../../../shared/ui/icons";
 import { useEffect, useRef } from "react";
 import type { GitStatusEntry } from "../../../api/contracts";
 import type { GitOperationAction } from "../../../api/git-contracts";
@@ -7,6 +7,7 @@ import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import { useI18n } from "../../i18n/use-i18n";
 import type { RunGitOperation } from "../types";
 import type { ChangeSectionKind } from "./change-section";
+import { isHtmlFile, requestOpenHtmlInBrowser } from "../../workspace/html-file";
 
 type ChangeContextMenuProps = {
   x: number;
@@ -100,6 +101,11 @@ export function ChangeContextMenu(props: ChangeContextMenuProps) {
   return (
     <div ref={rootRef} className="git-change-context-menu" role="menu" style={{ left: props.x, top: props.y }}>
       <Button onClick={() => openFile(false)}><FileText size={12} />{t("Open File", "打开文件")}</Button>
+      {props.entries.length === 1 && isHtmlFile(primary.path) && (
+        <Button onClick={() => { requestOpenHtmlInBrowser(absoluteRepositoryPath(props.repoRoot, primary.path)); props.onClose(); }}>
+          <Globe size={12} />{t("Open in Built-in Browser", "在内置浏览器中打开")}
+        </Button>
+      )}
       <Button onClick={() => { props.onOpenChanges(primary.path, props.section); props.onClose(); }}><FileDiff size={12} />{t("Open Changes", "打开变更")}</Button>
       {primary.conflicted && <Button onClick={() => { props.onOpenChanges(primary.path, "merge"); props.onClose(); }}><GitMerge size={12} />{t("Open in Merge Editor", "在合并编辑器中打开")}</Button>}
       <Button onClick={() => { props.onSelectForCompare(primary.path); props.onClose(); }}><Pin size={12} />{t("Select for Compare", "选择以进行比较")}</Button>

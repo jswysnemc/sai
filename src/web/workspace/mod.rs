@@ -1,8 +1,10 @@
 mod file_write_lock;
 mod files;
 mod git_diff;
+mod html_preview;
 mod path_guard;
 
+pub(crate) use html_preview::{html_preview_url, read_html_preview};
 pub(crate) use files::{
     create_entry, delete_entry, read_file, read_image, read_tree, rename_entry, write_file,
     FileContent, FileMutation, FileNode, FileVersionConflict,

@@ -12,6 +12,7 @@ mod gateways;
 mod generated_images;
 mod goals;
 mod health;
+mod html_preview;
 mod image_generation;
 mod input_history;
 mod jev;
@@ -103,6 +104,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         .merge(usage_stats::routes())
         .merge(terminal::routes())
         .merge(browser::routes())
+        .merge(html_preview::protected_routes())
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::require_auth,
@@ -111,6 +113,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         .route("/api/health", get(health::health))
         // 生图结果由浏览器的原生 img 请求读取，不能依赖 API 客户端附加的认证头；文件名为随机缓存名。
         .merge(generated_images::routes())
+        .merge(html_preview::public_routes())
         .route("/api/auth/mode", get(auth::auth_mode))
         .route("/api/auth/session", post(auth::create_session))
         .route("/api/auth/password", post(auth::password_login))

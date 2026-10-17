@@ -19,6 +19,8 @@ type FileTreeContextMenuProps = {
   onPaste: () => void;
   onRename: () => void;
   onDelete: () => void;
+  /** HTML 文件才提供；在内置浏览器中打开 */
+  onOpenInBrowser?: () => void;
   onClose: () => void;
 };
 
@@ -50,6 +52,8 @@ export function FileTreeContextMenu(props: FileTreeContextMenuProps) {
   }
   return (
     <div ref={ref} className="file-tree-context-menu" style={position} role="menu">
+      {props.onOpenInBrowser && <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onOpenInBrowser?.(); }}>{t("Open in Built-in Browser", "在内置浏览器中打开")}</button>}
+      {props.onOpenInBrowser && <div className="file-tree-context-separator" role="separator" />}
       {rooted && <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onOpenContaining(); }}>{t("Open Containing Folder", "打开所在文件夹")}</button>}
       <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onCreate("file"); }}>{t("New File", "新建文件")}</button>
       <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onCreate("directory"); }}>{t("New Folder", "新建文件夹")}</button>

@@ -15,6 +15,7 @@ import { BrowserToolbarActions } from "./browser-toolbar-actions";
 import { BrowserViewport } from "./browser-viewport";
 import { useBrowserPageEvents } from "./use-browser-page-events";
 import { useBrowserSession, type BrowserActivity } from "./use-browser-session";
+import { useBrowserPreviewNavigation } from "./use-browser-preview-navigation";
 import "./browser-pane.css";
 
 /** Agent 操作提示在最后一步后保留的时长。 */
@@ -34,6 +35,7 @@ export function BrowserPane() {
   const { t } = useI18n();
   const confirm = useConfirm();
   const session = useBrowserSession();
+  useBrowserPreviewNavigation(session.status, session.send);
   const page = useBrowserPageEvents(session.setPageHandler, session.send);
   const responsive = useResponsiveViewport();
   const agentActivity = useRecentActivity(session.activity);

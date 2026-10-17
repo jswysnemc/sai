@@ -408,6 +408,11 @@ export const api = {
         body: JSON.stringify({ path })
       }),
     diff: () => apiRequest<GitDiff>("/api/workspace/diff"),
+    htmlPreview: (path: string) =>
+      apiRequest<{ path: string }>("/api/workspace/html-preview", {
+        method: "POST",
+        body: JSON.stringify({ path })
+      }),
     gitAction: (action: "init" | "stage" | "unstage" | "discard" | "commit", paths: string[] = [], message?: string) =>
       apiRequest<GitDiff>("/api/workspace/git", {
         method: "POST",

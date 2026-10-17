@@ -1,4 +1,4 @@
-import { Copy, Save, WrapText } from "../../shared/ui/icons";
+import { Copy, Globe, Save, WrapText } from "../../shared/ui/icons";
 import { useEffect, useRef } from "react";
 import { useI18n } from "../i18n/use-i18n";
 import { useClampedMenuPosition } from "./menu-position";
@@ -13,6 +13,8 @@ type EditorContextMenuProps = {
   canSave: boolean;
   onToggleWordWrap: () => void;
   onSave: () => void;
+  /** HTML 文件才提供 */
+  onOpenInBrowser?: () => void;
   onClose: () => void;
 };
 
@@ -36,6 +38,11 @@ export function EditorContextMenu(props: EditorContextMenuProps) {
 
   return (
     <div ref={ref} className="editor-context-menu" style={position} role="menu">
+      {props.onOpenInBrowser && (
+        <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onOpenInBrowser?.(); }}>
+          <Globe size={14} />{t("Open in Built-in Browser", "在内置浏览器中打开")}
+        </button>
+      )}
       <button type="button" role="menuitem" onClick={copyPath}><Copy size={14} />{t("Copy path", "复制路径")}</button>
       {props.wordWrap !== null && (
         <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onToggleWordWrap(); }}>

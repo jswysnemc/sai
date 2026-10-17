@@ -17,6 +17,8 @@ import type { SideConversationRequest } from "../side-conversation/side-conversa
 import { useWorkspaceGitEntries } from "./use-workspace-git-entries";
 import { useFileNavigationHistory } from "./use-file-navigation-history";
 import { selectExistingWorkspacePanel } from "./workspace-panel-selection";
+import { useOpenHtmlInBrowser } from "./use-open-html-in-browser";
+import { Toast } from "../../shared/ui/notify/notify";
 
 // 1. 【前端性能】【面板加载】空工作区只加载导航，各功能在创建面板后加载
 const EditorPane = lazy(() => import("./editor-pane").then((module) => ({ default: module.EditorPane })));
@@ -81,6 +83,7 @@ export function WorkspacePane({
   // 标签徽标、编辑器行装饰共享同一份 Git 状态查询
   const { entries: gitEntries } = useWorkspaceGitEntries();
   const navigation = useFileNavigationHistory(selectedFile, onSelectFile);
+  const htmlPreview = useOpenHtmlInBrowser(setTabs, setActiveTabId, onActiveTypeChange);
 
   useEffect(() => {
     if (fileTreeRequestId <= 0) return;
@@ -445,6 +448,7 @@ export function WorkspacePane({
         onClose={() => setSshPickerOpen(false)}
         onPick={openSshTerminal}
       />
+      <Toast notice={htmlPreview.notice} onDismiss={htmlPreview.dismissToast} />
     </div>
   );
 }

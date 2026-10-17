@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { ActionMenuItem } from "../../shared/ui/menu/action-menu";
+import { isHtmlFile } from "./html-file";
 
 /** 右键菜单落点：条目菜单带路径，空白处菜单不带。 */
 export type FilesHomeMenuTarget = {
@@ -15,6 +16,7 @@ type Translate = (en: string, zh: string) => string;
 
 type FilesHomeMenuActions = {
   open: (path: string, directory: boolean) => void;
+  openInBrowser: (path: string) => void;
   reveal: (path: string) => void;
   copyPath: (path: string, absolute: boolean) => void;
   forget: (path: string) => void;
@@ -22,7 +24,7 @@ type FilesHomeMenuActions = {
   browse: () => void;
   clearRecents: () => void;
   hasRecents: boolean;
-  icons: { open: ReactNode; reveal: ReactNode; copy: ReactNode; remove: ReactNode; create: ReactNode; browse: ReactNode; clear: ReactNode };
+  icons: { open: ReactNode; browser: ReactNode; reveal: ReactNode; copy: ReactNode; remove: ReactNode; create: ReactNode; browse: ReactNode; clear: ReactNode };
 };
 
 /**
@@ -41,6 +43,7 @@ export function filesHomeMenuItems(target: FilesHomeMenuTarget, actions: FilesHo
   if (path) {
     return [
       { id: "open", label: directory ? t("Open in File Tree", "在文件树中展开") : t("Open", "打开"), icon: actions.icons.open, onSelect: () => actions.open(path, directory) },
+      ...(!directory && isHtmlFile(path) ? [{ id: "open-browser", label: t("Open in Built-in Browser", "在内置浏览器中打开"), icon: actions.icons.browser, onSelect: () => actions.openInBrowser(path) }] : []),
       ...(!directory ? [{ id: "reveal", label: t("Reveal in File Tree", "在文件树中定位"), icon: actions.icons.reveal, onSelect: () => actions.reveal(path) }] : []),
       { id: "copy-path", label: t("Copy Path", "复制路径"), icon: actions.icons.copy, separator: true, onSelect: () => actions.copyPath(path, true) },
       { id: "copy-relative", label: t("Copy Relative Path", "复制相对路径"), onSelect: () => actions.copyPath(path, false) },

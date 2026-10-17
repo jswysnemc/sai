@@ -5,6 +5,7 @@ import { MarkdownModeToggle } from "../../shared/ui/markdown-editor/markdown-mod
 import type { MarkdownEditorMode } from "../../shared/ui/markdown-editor/markdown-editor-mode";
 import { EditorBreadcrumbs } from "./editor-breadcrumbs";
 import { EditorContextMenu } from "./editor-context-menu";
+import { isHtmlFile, requestOpenHtmlInBrowser } from "./html-file";
 import { useI18n } from "../i18n/use-i18n";
 
 /** 文件访问历史导航状态与动作。 */
@@ -139,6 +140,7 @@ export function EditorHeader({
           canSave={canSave}
           onToggleWordWrap={onToggleWordWrap}
           onSave={onSave}
+          onOpenInBrowser={isHtmlFile(path) ? () => requestOpenHtmlInBrowser(path) : undefined}
           onClose={() => setMenu(null)}
         />
       )}

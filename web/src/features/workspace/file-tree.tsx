@@ -27,6 +27,7 @@ import { absoluteWorkspacePath, pasteTargetPath, uniqueCopyPath, type TreeClipbo
 import { dropDirectory, droppedFiles, isNestedDrop, readInternalDrag, setInternalDrag } from "./file-tree-drag";
 import { REVEAL_FILE_TREE_PATH_EVENT } from "./files-home";
 import { FileTreeContextMenu } from "./file-tree-context-menu";
+import { isHtmlFile, requestOpenHtmlInBrowser } from "./html-file";
 import { FileTreeSelectionBar } from "./file-tree-selection-bar";
 import { outermostPaths } from "./file-tree-selection";
 import { useFileTreeSelection } from "./use-file-tree-selection";
@@ -629,6 +630,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose, sho
           onPaste={() => void pasteInto(treeMenu.directory ? treeMenu.path : parentFilePath(treeMenu.path))}
           onRename={() => beginRename(treeMenu.path)}
           onDelete={() => void (treeMenu.paths.length > 1 ? deleteMany(treeMenu.paths) : deleteFocused(treeMenu.path))}
+          onOpenInBrowser={!treeMenu.directory && treeMenu.paths.length <= 1 && isHtmlFile(treeMenu.path) ? () => requestOpenHtmlInBrowser(treeMenu.path) : undefined}
           onClose={() => setTreeMenu(null)}
         />
       )}
