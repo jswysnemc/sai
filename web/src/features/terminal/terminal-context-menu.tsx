@@ -2,6 +2,7 @@ import { Clipboard, ClipboardPaste, MessageSquareText, ScanText } from "../../sh
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../i18n/use-i18n";
+import { fixedClientPoint, fixedViewportBox } from "../theme/display-scale";
 
 type TerminalContextMenuProps = {
   x: number;
@@ -40,8 +41,10 @@ export function TerminalContextMenu(props: TerminalContextMenuProps) {
     };
   }, [props.onClose]);
 
-  const left = Math.max(8, Math.min(props.x, window.innerWidth - 196));
-  const top = Math.max(8, Math.min(props.y, window.innerHeight - 174));
+  const point = fixedClientPoint(props.x, props.y);
+  const view = fixedViewportBox();
+  const left = Math.max(8, Math.min(point.x, view.width - 196));
+  const top = Math.max(8, Math.min(point.y, view.height - 174));
   return createPortal(
     <div ref={menuRef} className="terminal-context-menu" role="menu" style={{ left, top }}>
       <button type="button" role="menuitem" disabled={!props.hasSelection} onClick={props.onCopy}>

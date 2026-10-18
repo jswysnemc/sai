@@ -4,6 +4,9 @@ import { Button } from "../button/button";
 import type { ActionMenuItem } from "./action-menu";
 import "./action-menu.css";
 
+// ===== 新增 import =====
+import { fixedClientPoint, fixedViewportBox } from "../../../features/theme/display-scale";
+
 type ContextActionMenuProps = {
   label: string;
   x: number;
@@ -26,9 +29,11 @@ const MENU_ITEM_HEIGHT = 36;
 export function ContextActionMenu({ label, x, y, items, onClose }: ContextActionMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const id = useId();
-  const left = Math.max(8, Math.min(x, window.innerWidth - MENU_WIDTH - 8));
+  const point = fixedClientPoint(x, y);
+  const view = fixedViewportBox();
+  const left = Math.max(8, Math.min(point.x, view.width - MENU_WIDTH - 8));
   const estimatedHeight = items.length * MENU_ITEM_HEIGHT + 16;
-  const top = Math.max(8, Math.min(y, window.innerHeight - estimatedHeight - 8));
+  const top = Math.max(8, Math.min(point.y, view.height - estimatedHeight - 8));
 
   useEffect(() => {
     menuRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();

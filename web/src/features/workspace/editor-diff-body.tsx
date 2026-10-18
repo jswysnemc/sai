@@ -1,7 +1,7 @@
 import { ChevronUp, X } from "../../shared/ui/icons";
 import { useMemo, useState, type CSSProperties } from "react";
 import { api } from "../../api/client";
-import { highlightSource, splitHighlightedLines } from "../chat/syntax-highlighter";
+import { highlightSource, splitHighlightedLines, useSyntectHighlightRevision } from "../chat/syntax-highlighter";
 import { contextLinesFromFile } from "../chat/tool-renderers/diff/diff-fold-lines";
 import { highlightDiffLines } from "../chat/tool-renderers/diff/diff-highlight";
 import type { DiffFile, DiffLine } from "../chat/tool-renderers/diff/diff-model";
@@ -25,7 +25,8 @@ type EditorDiffBodyProps = {
 export function EditorDiffBody({ file, path, language, showHeader = true }: EditorDiffBodyProps) {
   const { t } = useI18n();
   const segments = useMemo(() => buildEditorDiffSegments(file.lines), [file.lines]);
-  const highlights = useMemo(() => highlightDiffLines(file.lines, language), [file.lines, language]);
+  const highlightRevision = useSyntectHighlightRevision();
+  const highlights = useMemo(() => highlightDiffLines(file.lines, language), [file.lines, language, highlightRevision]);
   const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
   const lastGap = segments.reduce((found, segment, index) => segment.kind === "gap" ? index : found, -1);
   const lastLine = file.lines.reduce((max, line) => Math.max(max, line.oldLine ?? 0, line.newLine ?? 0), 1);
@@ -158,10 +159,11 @@ function ExpandedGap({ language, segment, loaded }: {
  * @returns 代码行列表
  */
 function FoldLines({ lines, language }: { lines: DiffLine[]; language?: string }) {
+  const highlightRevision = useSyntectHighlightRevision();
   const html = useMemo(() => {
     if (lines.length === 0) return [];
     return splitHighlightedLines(highlightSource(lines.map((line) => line.text).join("\n"), language).value);
-  }, [lines, language]);
+  }, [lines, language, highlightRevision]);
   return lines.map((line, index) => <EditorDiffRow key={index} line={line} html={html[index]} />);
 }
 

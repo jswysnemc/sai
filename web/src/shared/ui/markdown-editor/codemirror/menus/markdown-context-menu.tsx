@@ -7,6 +7,9 @@ import type { MenuEntry } from "./context-menu-entries";
 import { FormatToolbar } from "./format-toolbar";
 import "./editor-menus.css";
 
+// ===== 新增 import =====
+import { fixedClientPoint, fixedViewportBox } from "../../../../../features/theme/display-scale";
+
 type MarkdownContextMenuProps = {
   view: EditorView;
   x: number;
@@ -32,9 +35,10 @@ const EDGE = 8;
  */
 function clampIntoViewport(element: HTMLElement, x: number, y: number, flipFrom?: number): void {
   const { width, height } = element.getBoundingClientRect();
+  const view = fixedViewportBox();
   let left = x;
-  if (left + width > window.innerWidth - EDGE) left = flipFrom !== undefined ? flipFrom - width : window.innerWidth - width - EDGE;
-  const top = Math.min(y, window.innerHeight - height - EDGE);
+  if (left + width > view.width - EDGE) left = flipFrom !== undefined ? flipFrom - width : view.width - width - EDGE;
+  const top = Math.min(y, view.height - height - EDGE);
   element.style.left = `${Math.max(EDGE, left)}px`;
   element.style.top = `${Math.max(EDGE, top)}px`;
 }
@@ -191,7 +195,10 @@ export function MarkdownContextMenu({ view, x, y, toolbar, entries, label, onClo
   const ref = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
-    if (ref.current) clampIntoViewport(ref.current, x, y);
+    if (ref.current) {
+      const point = fixedClientPoint(x, y);
+      clampIntoViewport(ref.current, point.x, point.y);
+    }
     ref.current?.querySelector<HTMLButtonElement>(".md-menu-item:not(:disabled)")?.focus({ preventScroll: true });
   }, [x, y]);
 

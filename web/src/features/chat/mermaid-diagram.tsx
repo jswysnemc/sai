@@ -1,28 +1,18 @@
 import { Check, Code2, Copy, Eye, Maximize2 } from "../../shared/ui/icons";
-import { memo, useEffect, useId, useState } from "react";
-import { toDisplayError } from "../../api/api-error";
+import { memo, useEffect, useId, useRef, useState } from "react";
 import { ImageLightbox } from "../../shared/ui/image-lightbox";
 import { SegmentedControl, type SegmentedControlOption } from "../../shared/ui/segmented-control";
 import { useI18n } from "../i18n/use-i18n";
-import { useThemeAppearance, type ThemeAppearance } from "../theme/use-theme-appearance";
-
-/**
- * 按界面明暗外观选择 mermaid 内置主题。
- *
- * mermaid 把配色烘焙进渲染出的 SVG，无法用 CSS 变量事后覆盖，
- * 因此必须在渲染时就按明暗选定；返回值参与缓存键，切换主题时不会命中旧 SVG。
- *
- * @param appearance 当前明暗外观
- * @returns mermaid 主题标识
- */
-function mermaidTheme(appearance: ThemeAppearance): "neutral" | "dark" {
-  return appearance === "dark" ? "dark" : "neutral";
-}
+import { renderPeleDiagram } from "./pele-render";
+import "./pele-theme.css";
 
 /** 渲染结果缓存上限，超出时丢弃最旧条目 */
 const CACHE_LIMIT = 50;
 
-/** 模块级渲染缓存，键为主题加源码，值为渲染出的 SVG 字符串 */
+/** 放大图需要烘焙的颜色变量。自定义属性里的 var() 在 data URL 中不会继续解析。 */
+const PELE_BAKE_TOKENS = ["--ink", "--ink-soft", "--paper", "--line", "--danger"] as const;
+
+/** 模块级渲染缓存，键为源码，值为渲染出的 SVG 字符串 */
 const svgCache = new Map<string, string>();
 
 /**
@@ -58,12 +48,13 @@ function writeCache(key: string, value: string): void {
 }
 
 /**
- * 把渲染出的 SVG 序列化为可缩放的 data URL。
+ * 把当前界面颜色写进 SVG，供脱离文档的放大图使用。
  *
  * @param svg SVG 字符串
+ * @param host 带 Pele 变量的容器
  * @returns data:image/svg+xml URL，解析失败时返回 null
  */
-function toSvgDataUrl(svg: string): string | null {
+function toSvgDataUrl(svg: string, host: HTMLElement): string | null {
   // 1. 解析 SVG 文本，确认结构合法
   const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
   const root = doc.documentElement;
@@ -78,9 +69,18 @@ function toSvgDataUrl(svg: string): string | null {
       root.setAttribute("height", String(parts[3]));
     }
   }
-  // 3. 移除 Mermaid 注入的 max-width 内联样式并补上浅色背景，避免图片被压缩或在深色遮罩上不可读
+  // 3. 把继承的颜色烘焙成具体值，避免放大图丢失 CSS 变量
+  const computed = getComputedStyle(host);
+  const baked = PELE_BAKE_TOKENS.map((token) => computed.getPropertyValue(token).trim());
+  root.style.setProperty("--pele-bg", "transparent");
+  root.style.setProperty("--pele-fg", baked[0] || "#202526");
+  root.style.setProperty("--pele-muted", baked[1] || baked[0] || "#6d7572");
+  root.style.setProperty("--pele-line", baked[0] || "#202526");
+  root.style.setProperty("--pele-surface", baked[2] || "#f3f5f5");
+  root.style.setProperty("--pele-surface-alt", baked[2] || "#f3f5f5");
+  root.style.setProperty("--pele-border", baked[3] || "#d5dbd8");
+  root.style.setProperty("--pele-error", baked[4] || "#b42318");
   root.style.removeProperty("max-width");
-  root.style.setProperty("background", "#ffffff");
 
   // 4. 序列化并编码为 data URL
   const serialized = new XMLSerializer().serializeToString(root);
@@ -96,11 +96,9 @@ function toSvgDataUrl(svg: string): string | null {
 export const MermaidDiagram = memo(function MermaidDiagram({ source }: { source: string }) {
   const { t } = useI18n();
   const reactId = useId().replace(/:/g, "");
-  const appearance = useThemeAppearance();
-  const theme = mermaidTheme(appearance);
-  const cacheKey = `${theme}\u0000${source}`;
-  const [svg, setSvg] = useState(() => readCache(cacheKey) ?? "");
-  const [error, setError] = useState<Error | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const [svg, setSvg] = useState(() => readCache(source) ?? "");
+  const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"preview" | "source">("preview");
   const [copied, setCopied] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -110,36 +108,29 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source }: { source:
   ];
 
   useEffect(() => {
-    // 1. 命中缓存时直接同步展示，跳过异步渲染
-    const cached = readCache(cacheKey);
+    // 1. 命中缓存时直接同步展示，跳过渲染
+    const cached = readCache(source);
     if (cached !== undefined) {
       setSvg(cached);
       setError(null);
       return;
     }
-    // 2. 未命中时延迟触发 mermaid 异步渲染
+    // 2. 未命中时用 Pele 渲染。颜色走 CSS 变量，切换主题不必重绘
     let active = true;
-    const timer = window.setTimeout(() => {
-      import("mermaid").then(({ default: mermaid }) => {
-        mermaid.initialize({ startOnLoad: false, theme, securityLevel: "strict" });
-        return mermaid.render(`sai-mermaid-${reactId}`, source);
-      })
-        .then((result) => {
-          // 3. 渲染成功后写入缓存并更新展示
-          writeCache(cacheKey, result.svg);
-          if (!active) return;
-          setSvg(result.svg);
-          setError(null);
-        })
-        .catch((reason: unknown) => {
-          if (active) setError(toDisplayError(reason, "Failed to render Mermaid diagram", "Mermaid 渲染失败"));
-        });
-    }, 120);
+    void renderPeleDiagram(source, `sai-mermaid-${reactId}`).then((result) => {
+      if (!active) return;
+      if ("svg" in result) {
+        writeCache(source, result.svg);
+        setSvg(result.svg);
+        setError(null);
+        return;
+      }
+      setError(result.error);
+    });
     return () => {
       active = false;
-      window.clearTimeout(timer);
     };
-  }, [cacheKey, reactId, source, t, theme]);
+  }, [reactId, source]);
 
   useEffect(() => {
     if (!copied) return;
@@ -155,8 +146,9 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source }: { source:
 
   /** 把当前 SVG 序列化为 data URL 并打开放大查看层。 */
   const openLightbox = () => {
-    if (!svg) return;
-    const url = toSvgDataUrl(svg);
+    const host = previewRef.current;
+    if (!svg || !host) return;
+    const url = toSvgDataUrl(svg, host);
     if (url) setLightboxUrl(url);
   };
 
@@ -170,8 +162,8 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source }: { source:
       </div>
       {view === "source" || error || !svg
         ? <pre className="mermaid-source"><code>{source}</code></pre>
-        : <div className="mermaid-preview" dangerouslySetInnerHTML={{ __html: svg }} />}
-      {error && <div className="mermaid-error">{error.message}</div>}
+        : <div ref={previewRef} className="mermaid-preview pele" dangerouslySetInnerHTML={{ __html: svg }} />}
+      {error && <div className="mermaid-error">{error}</div>}
       {lightboxUrl && <ImageLightbox src={lightboxUrl} alt={t("Mermaid diagram", "Mermaid 图表")} onClose={() => setLightboxUrl(null)} />}
     </div>
   );

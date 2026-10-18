@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { rememberSyntectHtml } from "../../syntax-highlighter";
 import { highlightDiffLines, markChangedText } from "./diff-highlight";
 import { parseDiff } from "./diff-parser";
 
 describe("diff syntax highlighting", () => {
   it("字符差异不会覆盖修改行的语法着色", () => {
     const file = parseDiff("--- a/app.ts\n+++ b/app.ts\n@@ -1 +1 @@\n-const total = 1;\n+const total = 2;")[0];
+    rememberSyntectHtml("const total = 2;", "ts", '<span class="hljs-keyword">const</span> total = <span class="hljs-number">2</span>;');
     const highlighted = highlightDiffLines(file.lines, "ts");
     const added = file.lines.find((line) => line.kind === "added")!;
     expect(highlighted.get(added)?.new).toContain('class="hljs-keyword"');
@@ -15,6 +17,8 @@ describe("diff syntax highlighting", () => {
   it("连续行保留跨行注释的语法状态", () => {
     const file = parseDiff("--- a/app.ts\n+++ b/app.ts\n@@ -1,3 +1,3 @@\n /* explanation\n- old text\n+ new text\n  */")[0];
     const added = file.lines.find((line) => line.kind === "added")!;
+    const source = file.lines.filter((line) => line.kind !== "hunk" && line.kind !== "removed" && line.kind !== "no-newline").map((line) => line.text).join("\n");
+    rememberSyntectHtml(source, "ts", `<span class="hljs-comment">${source}</span>`);
     expect(highlightDiffLines(file.lines, "ts").get(added)?.new).toContain('class="hljs-comment"');
   });
 

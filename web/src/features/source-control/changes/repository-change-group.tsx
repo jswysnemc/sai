@@ -147,8 +147,8 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
     const paths = selection.selectedPaths.has(path) ? [...selection.selectedPaths] : [path];
     selection.selectForContext(path);
     setContextMenu({
-      x: Math.max(8, Math.min(event.clientX, window.innerWidth - 17 * 16)),
-      y: Math.max(8, Math.min(event.clientY, window.innerHeight - 24 * 16)),
+      x: event.clientX,
+      y: event.clientY,
       paths,
       primaryPath: path,
       section

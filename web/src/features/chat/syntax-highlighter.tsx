@@ -1,37 +1,6 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useSyncExternalStore } from "react";
+import { api } from "../../api/client";
 import { lineNumberDigitsStyle } from "./line-number-gutter";
-import hljs from "highlight.js/lib/core";
-import bash from "highlight.js/lib/languages/bash";
-import css from "highlight.js/lib/languages/css";
-import diff from "highlight.js/lib/languages/diff";
-import go from "highlight.js/lib/languages/go";
-import ini from "highlight.js/lib/languages/ini";
-import java from "highlight.js/lib/languages/java";
-import javascript from "highlight.js/lib/languages/javascript";
-import json from "highlight.js/lib/languages/json";
-import markdown from "highlight.js/lib/languages/markdown";
-import python from "highlight.js/lib/languages/python";
-import rust from "highlight.js/lib/languages/rust";
-import sql from "highlight.js/lib/languages/sql";
-import typescript from "highlight.js/lib/languages/typescript";
-import xml from "highlight.js/lib/languages/xml";
-import yaml from "highlight.js/lib/languages/yaml";
-
-hljs.registerLanguage("bash", bash);
-hljs.registerLanguage("css", css);
-hljs.registerLanguage("diff", diff);
-hljs.registerLanguage("go", go);
-hljs.registerLanguage("ini", ini);
-hljs.registerLanguage("java", java);
-hljs.registerLanguage("javascript", javascript);
-hljs.registerLanguage("json", json);
-hljs.registerLanguage("markdown", markdown);
-hljs.registerLanguage("python", python);
-hljs.registerLanguage("rust", rust);
-hljs.registerLanguage("sql", sql);
-hljs.registerLanguage("typescript", typescript);
-hljs.registerLanguage("xml", xml);
-hljs.registerLanguage("yaml", yaml);
 
 const LANGUAGE_ALIASES: Record<string, string> = {
   cjs: "javascript",
@@ -45,7 +14,6 @@ const LANGUAGE_ALIASES: Record<string, string> = {
   rs: "rust",
   shell: "bash",
   sh: "bash",
-  toml: "ini",
   ts: "typescript",
   tsx: "typescript",
   yml: "yaml"
@@ -66,7 +34,8 @@ export const SyntaxHighlighter = memo(function SyntaxHighlighter({
   source: string;
   showLineNumbers?: boolean;
 }) {
-  const result = useMemo(() => highlightSource(source, language), [source, language]);
+  const revision = useSyntectHighlightRevision();
+  const result = useMemo(() => highlightSource(source, language), [source, language, revision]);
   const lines = useMemo(() => showLineNumbers ? splitHighlightedLines(result.value) : [], [result, showLineNumbers]);
   const className = `hljs${result.language ? ` language-${result.language}` : ""}`;
   if (!showLineNumbers) {
@@ -94,12 +63,79 @@ export const SyntaxHighlighter = memo(function SyntaxHighlighter({
  * @returns 经过转义的着色 HTML 及已确认的语言名称
  */
 export function highlightSource(source: string, language?: string): { value: string; language: string } {
-  const normalized = normalizeLanguage(language);
-  const resolved = normalized && hljs.getLanguage(normalized) ? normalized : detectLanguage(source);
-  const result = resolved
-    ? hljs.highlight(source, { language: resolved, ignoreIllegals: true })
-    : hljs.highlightAuto(source, AUTO_DETECT_LANGUAGES);
-  return { value: result.value, language: resolved };
+  const normalized = normalizeLanguage(language) || detectLanguage(source);
+  if (source.length > 200_000) return { value: escapeHtml(source), language: normalized };
+  const key = `${normalized}\u0000${source}`;
+  const cached = htmlCache.get(key);
+  if (cached !== undefined) return { value: cached, language: normalized };
+  requestSyntectHighlight(source, normalized, key);
+  return { value: escapeHtml(source), language: normalized };
+}
+
+/**
+ * 把 syntect 返回的 HTML 写入缓存，供测试和已经着色过的文本复用。
+ *
+ * @param source 原始代码
+ * @param language 语言标识
+ * @param html syntect 生成的安全 HTML
+ * @returns 无
+ */
+export function rememberSyntectHtml(source: string, language: string | undefined, html: string): void {
+  const normalized = normalizeLanguage(language) || detectLanguage(source);
+  htmlCache.set(`${normalized}\u0000${source}`, html);
+  revision += 1;
+  listeners.forEach((listener) => listener());
+}
+
+/**
+ * 订阅着色缓存更新，结果返回后刷新正在显示的代码。
+ *
+ * @returns 递增的缓存版本
+ */
+export function useSyntectHighlightRevision(): number {
+  return useSyncExternalStore(subscribeHighlight, () => revision, () => 0);
+}
+
+const htmlCache = new Map<string, string>();
+const pending = new Set<string>();
+const listeners = new Set<() => void>();
+let revision = 0;
+
+function subscribeHighlight(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/**
+ * 向后端请求 syntect 着色。测试环境不发请求。
+ *
+ * @param source 源码
+ * @param language 规范化语言
+ * @param key 缓存键
+ * @returns 无
+ */
+function requestSyntectHighlight(source: string, language: string, key: string): void {
+  if (pending.has(key) || import.meta.env.VITEST) return;
+  pending.add(key);
+  void api.highlight.code(source, language).then((result) => {
+    htmlCache.set(key, result.html);
+  }).catch(() => {
+    htmlCache.set(key, escapeHtml(source));
+  }).finally(() => {
+    pending.delete(key);
+    revision += 1;
+    listeners.forEach((listener) => listener());
+  });
+}
+
+/**
+ * 在着色结果返回前转义源码，避免把原文当成 HTML。
+ *
+ * @param source 源码
+ * @returns 转义后的文本
+ */
+function escapeHtml(source: string): string {
+  return source.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
 /**
@@ -148,26 +184,6 @@ export function splitHighlightedLines(html: string): string[] {
 
   return lines;
 }
-
-/**
- * 自动检测时允许参与的语言。
- *
- * 刻意排除 diff：它的特征是"行首是 + 或 -"，几乎任何缩进文本都能碰上，
- * 一旦误判，整段内容会被套上 hljs-addition 的绿色底纹（读文件结果曾因此长满色块）。
- * 无扩展名的路径本来就走自动检测，所以必须在候选集合这一层挡掉。
- */
-const AUTO_DETECT_LANGUAGES = [
-  "json",
-  "bash",
-  "yaml",
-  "typescript",
-  "javascript",
-  "python",
-  "rust",
-  "go",
-  "xml",
-  "markdown"
-];
 
 /**
  * 在没有可靠语言标识时按内容特征判定语言。

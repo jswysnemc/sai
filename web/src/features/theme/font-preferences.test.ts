@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   adjustEditorFontSize,
   applyFontPreferences,
+  EDITOR_FONT_WHEEL_OPTIONS,
   editorFontWheelDelta,
   loadFontPreferences,
   monacoFontOptions,
@@ -68,6 +69,7 @@ describe("font preferences", () => {
     expect(editorFontWheelDelta({ ctrlKey: false, metaKey: false, deltaY: -10 })).toBe(0);
     expect(editorFontWheelDelta({ ctrlKey: true, metaKey: true, deltaY: -10 })).toBe(0);
     expect(editorFontWheelDelta({ ctrlKey: true, metaKey: false, deltaY: -10 })).toBe(1);
+    expect(EDITOR_FONT_WHEEL_OPTIONS).toMatchObject({ capture: true, passive: false });
 
     adjustEditorFontSize(1);
     expect(loadFontPreferences().editorFontSize).toBe(14);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useSyncExternalStore, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useSyncExternalStore, type RefObject } from "react";
 
 export const FONT_PREFERENCES_STORAGE_KEY = "sai.font-preferences";
 export const EDITOR_FONT_SIZE_MIN = 8;
@@ -188,33 +188,43 @@ export function saveFontPreferences(preferences: FontPreferences): void {
  * 按增量调整编辑器字号并保存。
  *
  * @param delta 字号增量，通常为 1 或 -1
- * @returns 无
+ * @returns 调整后的字号
  */
-export function adjustEditorFontSize(delta: number): void {
-  if (delta === 0) return;
+export function adjustEditorFontSize(delta: number): number {
   const current = currentSnapshot ?? loadFontPreferences();
-  saveFontPreferences({ ...current, editorFontSize: current.editorFontSize + delta });
+  if (delta === 0) return current.editorFontSize;
+  const next = normalizeFontPreferences({ ...current, editorFontSize: current.editorFontSize + delta });
+  saveFontPreferences(next);
+  return next.editorFontSize;
 }
 
+/** 在窗口捕获阶段监听，避免 Monaco 在冒泡前吞掉滚轮。 */
+export const EDITOR_FONT_WHEEL_OPTIONS: AddEventListenerOptions = { capture: true, passive: false };
+
 /**
- * 在编辑器容器上监听 Ctrl+滚轮。
+ * 在编辑器容器上监听 Ctrl+滚轮，并在同一轮事件里改字号。
  *
  * @param target 编辑器根节点
+ * @param apply 字号写入偏好后的同步回调，供 Monaco 立刻重排
  * @returns 解除监听的函数
  */
-export function bindEditorFontWheel(target: EventTarget): () => void {
+export function bindEditorFontWheel(target: EventTarget, apply?: (size: number) => void): () => void {
+  const host = target instanceof Node ? target : null;
   const onWheel = (event: Event) => {
     const wheel = event as WheelEvent;
+    // 1. 只处理落在编辑区里的滚轮，窗口捕获早于编辑器自己的监听
+    if (host && wheel.target instanceof Node && !host.contains(wheel.target)) return;
     const delta = editorFontWheelDelta(wheel);
     if (delta === 0) return;
-    // 1. 拦住浏览器和桌面壳的整页缩放
+    // 2. 拦住浏览器和桌面壳的整页缩放，也不让编辑器把这次滚轮当成滚动
     wheel.preventDefault();
     wheel.stopPropagation();
-    // 2. 只改编辑器字号
-    adjustEditorFontSize(delta);
+    // 3. 先写入偏好，再把新字号交给当前编辑器实例
+    const size = adjustEditorFontSize(delta);
+    apply?.(size);
   };
-  target.addEventListener("wheel", onWheel, { passive: false });
-  return () => target.removeEventListener("wheel", onWheel);
+  window.addEventListener("wheel", onWheel, EDITOR_FONT_WHEEL_OPTIONS);
+  return () => window.removeEventListener("wheel", onWheel, EDITOR_FONT_WHEEL_OPTIONS);
 }
 
 /**
@@ -255,7 +265,7 @@ export function useFontPreferences() {
 }
 
 /**
- * 让 Monaco 实例跟随编辑器字体，并在容器上响应 Ctrl+滚轮。
+ * 让 Monaco 实例跟随编辑器字体，并在编辑区用 Ctrl+滚轮实时改字号。
  *
  * @param hostRef 编辑器容器
  * @param editor 已挂载的 Monaco 实例，未就绪时为 null
@@ -271,8 +281,10 @@ export function useMonacoEditorFont(
   }, [editor, preferences]);
   useEffect(() => {
     const host = hostRef.current;
-    if (!host) return;
-    return bindEditorFontWheel(host);
+    if (!host || !editor) return;
+    return bindEditorFontWheel(host, (size) => {
+      editor.updateOptions(monacoFontOptions({ ...getSnapshot(), editorFontSize: size }));
+    });
   }, [editor, hostRef]);
   return preferences;
 }
@@ -282,12 +294,19 @@ export function useMonacoEditorFont(
  *
  * @param hostRef 编辑器容器
  * @param enabled 是否接管滚轮；预览模式关闭，避免改到看不见的源码字号
+ * @param apply 字号变化后的同步回调
  * @returns 无
  */
-export function useEditorFontWheel(hostRef: RefObject<HTMLElement | null>, enabled = true): void {
+export function useEditorFontWheel(
+  hostRef: RefObject<HTMLElement | null>,
+  enabled = true,
+  apply?: (size: number) => void
+): void {
+  const applyRef = useRef(apply);
+  applyRef.current = apply;
   useEffect(() => {
     const host = hostRef.current;
     if (!enabled || !host) return;
-    return bindEditorFontWheel(host);
+    return bindEditorFontWheel(host, (size) => applyRef.current?.(size));
   }, [enabled, hostRef]);
 }

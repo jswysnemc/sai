@@ -46,6 +46,7 @@ mod workspace;
 mod workspace_git;
 mod workspace_git_events;
 mod workspaces;
+mod highlight;
 use super::app_state::WebAppState;
 use super::auth;
 use axum::middleware;
@@ -105,6 +106,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         .merge(terminal::routes())
         .merge(browser::routes())
         .merge(html_preview::protected_routes())
+        .merge(highlight::routes())
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::require_auth,

@@ -16,6 +16,7 @@ import { cellRefOf } from "./wysiwyg-table-actions";
 import "./markdown-text-editor.css";
 import "./wysiwyg-blocks.css";
 import { useEditorFontWheel } from "../../../../features/theme/font-preferences";
+import "../../../../features/chat/pele-theme.css";
 
 /** 对外暴露的命令句柄。 */
 export type MarkdownTextEditorHandle = {
@@ -80,7 +81,7 @@ export function MarkdownTextEditor({
   const [view, setView] = useState<EditorView | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const bubble = useSelectionBubble(view, live && !readOnly);
-  useEditorFontWheel(hostRef, !live);
+  useEditorFontWheel(hostRef, !live, () => viewRef.current?.requestMeasure());
   latest.current.onUpdate = (update) => {
     if (update.selectionSet || update.docChanged || update.focusChanged) bubble.refresh();
   };

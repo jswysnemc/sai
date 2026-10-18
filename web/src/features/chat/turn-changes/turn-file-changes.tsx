@@ -13,6 +13,9 @@ import { formatDisplayPath } from "../../workspace/workspace-path-utils";
 import { FileTypeIcon } from "../../../shared/ui/file-icon";
 import "./turn-file-changes.css";
 
+// ===== 新增 import =====
+import { fixedClientPoint } from "../../theme/display-scale";
+
 type TurnFileChangesProps = {
   changes: TurnFileChange[];
   /** 本轮工具列表，用于生成 diff 预览 */
@@ -319,6 +322,7 @@ type TurnFileContextMenuProps = {
 function TurnFileContextMenu(props: TurnFileContextMenuProps) {
   const { t } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
+  const point = fixedClientPoint(props.x, props.y);
   useEffect(() => {
     const close = (event: PointerEvent) => { if (!ref.current?.contains(event.target as Node)) props.onClose(); };
     const escape = (event: KeyboardEvent) => { if (event.key === "Escape") props.onClose(); };
@@ -333,7 +337,7 @@ function TurnFileContextMenu(props: TurnFileContextMenuProps) {
   };
 
   return (
-    <div ref={ref} className="turn-file-context-menu" style={{ left: props.x, top: props.y }} role="menu">
+    <div ref={ref} className="turn-file-context-menu" style={{ left: point.x, top: point.y }} role="menu">
       <button type="button" role="menuitem" onClick={() => choose(props.onOpen)}><FileText size={14} />{t("Open file", "打开文件")}</button>
       <button type="button" role="menuitem" onClick={() => choose(props.onReview)}><FileDiff size={14} />{t("Review changes", "审阅改动")}</button>
       <button type="button" role="menuitem" onClick={() => choose(props.onReveal)}><FolderSearch size={14} />{t("Reveal in file tree", "在文件树中显示")}</button>

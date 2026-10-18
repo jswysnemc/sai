@@ -1,0 +1,14 @@
+/*
+ * Pele 用 CSS 变量上色，主题切换不必重新渲染。
+ * 变量写在容器上，SVG 内部的 var() 会继承。
+ */
+.pele {
+  --pele-bg: transparent;
+  --pele-fg: var(--ink);
+  --pele-muted: var(--ink-soft);
+  --pele-line: var(--ink);
+  --pele-surface: var(--paper);
+  --pele-surface-alt: var(--code-surface, var(--paper));
+  --pele-border: var(--line);
+  --pele-error: var(--danger);
+}

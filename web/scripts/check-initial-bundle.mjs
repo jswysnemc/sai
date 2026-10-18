@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const outputDirectory = process.argv[2]
   ? resolve(process.argv[2])
   : fileURLToPath(new URL("../dist", import.meta.url));
-const heavyChunk = /\/(?:monaco|mermaid(?:\.core)?|codemirror|terminal)-[^/]+\.js$/u;
+const heavyChunk = /\/(?:monaco|mermaid(?:\.core)?|pele|codemirror|terminal)-[^/]+\.js$/u;
 const checks = [
   { entry: "index.html", name: "index", label: "登录页", maxBytes: 500_000 },
   { entry: "src/features/workspace/coding-page.tsx", name: "coding-page", label: "工作台", maxBytes: 2_000_000 }

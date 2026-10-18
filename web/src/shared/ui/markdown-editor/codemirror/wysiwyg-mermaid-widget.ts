@@ -1,5 +1,8 @@
 import { EditorView, WidgetType } from "@codemirror/view";
 
+// ===== 新增 import =====
+import { renderPeleDiagram } from "../../../../features/chat/pele-render";
+
 /** 渲染结果缓存上限，超出时丢弃最旧条目。 */
 const CACHE_LIMIT = 30;
 
@@ -9,10 +12,7 @@ const PREVIEW_DEBOUNCE_MS = 260;
 /** 模块级缓存：键为主题加源码，值为 SVG 或错误信息。 */
 const cache = new Map<string, { svg: string } | { error: string }>();
 
-/** mermaid.initialize 是全局配置，渲染必须串行，避免不同主题的调用互相覆盖。 */
-let queue: Promise<unknown> = Promise.resolve();
-
-/** 渲染序号，保证每次调用 mermaid.render 的元素 id 唯一。 */
+/** 渲染序号，保证每张图的无障碍标识唯一。 */
 let sequence = 0;
 
 /**
@@ -22,22 +22,12 @@ let sequence = 0;
  * @param dark 是否为深色主题
  * @returns SVG 或错误信息
  */
-function renderMermaid(source: string, dark: boolean): Promise<{ svg: string } | { error: string }> {
-  const key = `${dark ? "dark" : "light"}\u0000${source}`;
+function renderMermaid(source: string, _dark: boolean): Promise<{ svg: string } | { error: string }> {
+  const key = source;
   const cached = cache.get(key);
   if (cached) return Promise.resolve(cached);
-  const task = queue.then(async () => {
-    const { default: mermaid } = await import("mermaid");
-    mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "neutral", securityLevel: "strict" });
-    sequence += 1;
-    try {
-      const { svg } = await mermaid.render(`sai-md-mermaid-${sequence}`, source);
-      return { svg };
-    } catch (reason) {
-      return { error: reason instanceof Error ? reason.message : String(reason) };
-    }
-  });
-  queue = task.catch(() => undefined);
+  sequence += 1;
+  const task = renderPeleDiagram(source, `sai-md-mermaid-${sequence}`);
   return task.then((result) => {
     cache.set(key, result);
     if (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value as string);
@@ -54,7 +44,7 @@ function renderMermaid(source: string, dark: boolean): Promise<{ svg: string } |
  */
 function paint(element: HTMLElement, result: { svg: string } | { error: string }): void {
   if ("svg" in result) {
-    // 1. mermaid 以 strict 安全级别输出，SVG 内不含脚本与事件属性
+    // 1. Pele 输出 SVG，颜色由容器上的 CSS 变量决定
     element.innerHTML = result.svg;
     element.classList.remove("is-error");
   } else {
@@ -133,7 +123,7 @@ export class MermaidWidget extends WidgetType {
    */
   toDOM(view: EditorView) {
     const element = document.createElement("div");
-    element.className = this.preview ? "cm-md-mermaid is-preview is-pending" : "cm-md-mermaid is-pending";
+    element.className = this.preview ? "cm-md-mermaid pele is-preview is-pending" : "cm-md-mermaid pele is-pending";
     this.bind(element, view);
     schedule(element, this.source, this.dark, view, 0);
     return element;

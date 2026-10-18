@@ -87,8 +87,8 @@ export function CommitGraph(props: CommitGraphProps) {
     event.preventDefault();
     setMenu({
       commit,
-      x: Math.max(8, Math.min(event.clientX, window.innerWidth - 17 * 16)),
-      y: Math.max(8, Math.min(event.clientY, window.innerHeight - 25 * 16))
+      x: event.clientX,
+      y: event.clientY
     });
   };
 

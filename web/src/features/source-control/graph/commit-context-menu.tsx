@@ -1,5 +1,9 @@
 import { CheckCircle2, Cherry, Copy, GitBranch, LogOut, RotateCcw } from "../../../shared/ui/icons";
 import { useEffect, useRef } from "react";
+
+// ===== 新增 import =====
+import { createPortal } from "react-dom";
+import { useClampedMenuPosition } from "../../workspace/menu-position";
 import type { GitCommitSummary } from "../../../api/contracts";
 import type { GitOperationAction } from "../../../api/git-contracts";
 import { Button } from "../../../shared/ui/button/button";
@@ -26,6 +30,7 @@ type CommitContextMenuProps = {
 export function CommitContextMenu(props: CommitContextMenuProps) {
   const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
+  const position = useClampedMenuPosition(props.x, props.y, rootRef);
 
   useEffect(() => {
     /** 点击菜单外部或按 Escape 时关闭菜单。 */
@@ -70,8 +75,8 @@ export function CommitContextMenu(props: CommitContextMenuProps) {
     }
   };
 
-  return (
-    <div ref={rootRef} className="git-commit-context-menu" role="menu" style={{ left: props.x, top: props.y }}>
+  return createPortal(
+    <div ref={rootRef} className="git-commit-context-menu" role="menu" style={{ left: position.left, top: position.top }}>
       <Button onClick={() => { props.onView(); props.onClose(); }}><CheckCircle2 size={12} />{t("View Changes", "查看变更")}</Button>
       <Button disabled={props.busy} onClick={() => void run("checkout_commit")}><LogOut size={12} />{t("Checkout (Detached)", "检出（分离状态）")}</Button>
       <Button disabled={props.busy} onClick={() => { props.onCreateBranch(); props.onClose(); }}><GitBranch size={12} />{t("Create Branch From...", "从此处创建分支…")}</Button>
@@ -93,6 +98,7 @@ export function CommitContextMenu(props: CommitContextMenuProps) {
       <span>{t("Copy", "复制")}</span>
       <Button onClick={() => void copy(props.commit.sha)}><Copy size={12} />{t("Copy Commit ID", "复制提交 ID")}</Button>
       <Button onClick={() => void copy(props.commit.subject)}><Copy size={12} />{t("Copy Commit Message", "复制提交说明")}</Button>
-    </div>
+    </div>,
+    document.body
   );
 }

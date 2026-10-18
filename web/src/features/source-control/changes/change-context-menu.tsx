@@ -9,6 +9,10 @@ import type { RunGitOperation } from "../types";
 import type { ChangeSectionKind } from "./change-section";
 import { isHtmlFile, requestOpenHtmlInBrowser } from "../../workspace/html-file";
 
+// ===== 新增 import =====
+import { createPortal } from "react-dom";
+import { useClampedMenuPosition } from "../../workspace/menu-position";
+
 type ChangeContextMenuProps = {
   x: number;
   y: number;
@@ -35,6 +39,7 @@ export function ChangeContextMenu(props: ChangeContextMenuProps) {
   const { t } = useI18n();
   const confirm = useConfirm();
   const rootRef = useRef<HTMLDivElement>(null);
+  const position = useClampedMenuPosition(props.x, props.y, rootRef);
   const primary = props.entries.find((entry) => entry.path === props.primaryPath) ?? props.entries[0];
   const stagePaths = props.entries
     .filter((entry) => entry.untracked || entry.conflicted || entry.worktree_status !== ".")
@@ -98,8 +103,8 @@ export function ChangeContextMenu(props: ChangeContextMenuProps) {
 
   if (!primary) return null;
   const untrackedPaths = props.entries.filter((entry) => entry.untracked).map((entry) => entry.path);
-  return (
-    <div ref={rootRef} className="git-change-context-menu" role="menu" style={{ left: props.x, top: props.y }}>
+  return createPortal(
+    <div ref={rootRef} className="git-change-context-menu" role="menu" style={{ left: position.left, top: position.top }}>
       <Button onClick={() => openFile(false)}><FileText size={12} />{t("Open File", "打开文件")}</Button>
       {props.entries.length === 1 && isHtmlFile(primary.path) && (
         <Button onClick={() => { requestOpenHtmlInBrowser(absoluteRepositoryPath(props.repoRoot, primary.path)); props.onClose(); }}>
@@ -126,7 +131,8 @@ export function ChangeContextMenu(props: ChangeContextMenuProps) {
       <Button onClick={() => openFile(true)}><FolderSearch size={12} />{t("Reveal in Explorer", "在资源管理器中显示")}</Button>
       <Button onClick={() => void copyPath(false)}><Copy size={12} />{t("Copy Path", "复制路径")}</Button>
       <Button onClick={() => void copyPath(true)}><Copy size={12} />{t("Copy Relative Path", "复制相对路径")}</Button>
-    </div>
+    </div>,
+    document.body
   );
 }
 

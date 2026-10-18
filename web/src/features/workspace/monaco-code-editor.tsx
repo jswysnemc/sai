@@ -205,6 +205,7 @@ export function MonacoCodeEditor({ path, value, onChange, loadingLabel, gitLines
             padding: { top: 12 },
             automaticLayout: false,
             scrollBeyondLastLine: false,
+            mouseWheelZoom: false,
             wordWrap: wordWrap ? "on" : "off",
           }}
         />

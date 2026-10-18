@@ -703,6 +703,13 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ enabled })
       })
+  },
+  highlight: {
+    code: (source: string, language?: string) =>
+      apiRequest<{ html: string; language: string }>("/api/highlight", {
+        method: "POST",
+        body: JSON.stringify({ source, language })
+      })
   }
 };
 

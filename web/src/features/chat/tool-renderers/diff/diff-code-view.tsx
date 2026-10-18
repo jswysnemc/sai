@@ -8,6 +8,7 @@ import { foldPlan } from "./diff-blocks";
 import { DiffCodeRows } from "./diff-code-rows";
 import { DiffHunkFold } from "./diff-hunk-fold";
 import { highlightDiffLines } from "./diff-highlight";
+import { useSyntectHighlightRevision } from "../../syntax-highlighter";
 import type { DiffFile } from "./diff-model";
 import "./diff-code-view.css";
 
@@ -26,7 +27,8 @@ type DiffCodeViewProps = {
 export function DiffCodeView({ file, language, layout, wrap = true }: DiffCodeViewProps) {
   const { t } = useI18n();
   const blocks = useMemo(() => buildDiffCodeBlocks(file.lines), [file.lines]);
-  const highlights = useMemo(() => highlightDiffLines(file.lines, language), [file.lines, language]);
+  const highlightRevision = useSyntectHighlightRevision();
+  const highlights = useMemo(() => highlightDiffLines(file.lines, language), [file.lines, language, highlightRevision]);
   const changes = useMemo(() => blocks.flatMap((block, index) => block.kind === "change" ? [index] : []), [blocks]);
   const foldable = useMemo(() => blocks.flatMap((block, index) =>
     block.kind === "context" && foldPlan(block.lines.length).foldCount > 0 ? [index] : []), [blocks]);

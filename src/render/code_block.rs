@@ -36,7 +36,7 @@ pub(crate) fn render_code_footer(_lines: &[String]) -> String {
 /// 长命令按终端宽度折成多个显示行后逐行高亮，若不延续未闭合的
 /// 引号与注释上下文，续行会被从头重新 token 化：字符串中段的数字
 /// 被染成数字色、普通词被染成命令色。
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Default)]
 pub(crate) struct CodeLineHighlightState {
     /// 未闭合的引号字符（`"`、`'` 或反引号）
     open_quote: Option<char>,
@@ -44,6 +44,29 @@ pub(crate) struct CodeLineHighlightState {
     escaped: bool,
     /// 是否仍处于延续到逻辑行尾的行注释中
     in_comment: bool,
+    /// syntect 跨显示行的解析状态；不参与相等比较
+    syntect: Option<Box<super::syntect_highlight::Carry>>,
+}
+
+impl PartialEq for CodeLineHighlightState {
+    fn eq(&self, other: &Self) -> bool {
+        self.open_quote == other.open_quote
+            && self.escaped == other.escaped
+            && self.in_comment == other.in_comment
+    }
+}
+
+impl Eq for CodeLineHighlightState {}
+
+impl std::fmt::Debug for CodeLineHighlightState {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CodeLineHighlightState")
+            .field("open_quote", &self.open_quote)
+            .field("escaped", &self.escaped)
+            .field("in_comment", &self.in_comment)
+            .finish()
+    }
 }
 
 /// 对单行代码做轻量语法高亮。
@@ -72,6 +95,39 @@ pub(crate) fn highlight_code_line(lang: &str, line: &str) -> String {
 /// 返回:
 /// - 带 ANSI 样式的代码行
 pub(crate) fn highlight_code_line_continued(
+    lang: &str,
+    line: &str,
+    state: &mut CodeLineHighlightState,
+) -> String {
+    paint_code_line(lang, line, state)
+}
+
+/// 用 syntect 着色；关闭时退回原来的词法扫描。
+///
+/// 参数:
+/// - `lang`: 语言标识
+/// - `line`: 显示行文本
+/// - `state`: 跨行高亮状态
+///
+/// 返回:
+/// - 带 ANSI 样式的代码行
+fn paint_code_line(lang: &str, line: &str, state: &mut CodeLineHighlightState) -> String {
+    // 1. 原扫描器继续推进折行状态，供调用方判断引号和注释是否闭合
+    let legacy = highlight_code_line_legacy(lang, line, state);
+    // 2. syntect 负责实际颜色；解析失败时保留原扫描结果
+    super::syntect_highlight::paint(lang, line, &mut state.syntect).unwrap_or(legacy)
+}
+
+/// 以显式跨行状态对单个显示行做词法扫描。
+///
+/// 参数:
+/// - `lang`: 语言标识
+/// - `line`: 显示行文本
+/// - `state`: 跨行高亮状态，本行扫描后原地更新
+///
+/// 返回:
+/// - 带 ANSI 样式的代码行
+fn highlight_code_line_legacy(
     lang: &str,
     line: &str,
     state: &mut CodeLineHighlightState,
