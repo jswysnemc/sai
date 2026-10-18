@@ -10,10 +10,14 @@ on:
         required: false
         type: string
       target:
-        description: "Desktop platforms to build. CLI binaries are always built."
+        description: "Platforms to build. CLI follows the same choice; all still builds every CLI binary."
         type: choice
         default: all
         options: [all, linux-x64, linux-arm64, win-x64, mac-x64, mac-arm64]
+      publish:
+        description: "Create or update the GitHub Release. Tag pushes always publish."
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -43,6 +47,14 @@ jobs:
             rename: target/release/sai-macos-arm64
 
     runs-on: ${{ matrix.os }}
+    if: >-
+      github.event_name == 'push' ||
+      inputs.target == 'all' ||
+      inputs.target == '' ||
+      (inputs.target == 'win-x64' && matrix.asset == 'sai-windows-x86_64') ||
+      (inputs.target == 'linux-x64' && matrix.asset == 'sai-linux-x86_64') ||
+      (inputs.target == 'linux-arm64' && matrix.asset == 'sai-linux-x86_64') ||
+      (startsWith(inputs.target, 'mac') && matrix.asset == 'sai-macos-arm64')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -226,6 +238,7 @@ jobs:
   publish:
     name: Publish GitHub Release
     needs: [build, desktop]
+    if: github.event_name == 'push' || inputs.publish || inputs.tag != ''
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
