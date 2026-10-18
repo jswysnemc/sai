@@ -32,29 +32,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            asset: sai-linux-x86_64
-            binary: target/release/sai
-            rename: target/release/sai-linux-x86_64
-          - os: windows-latest
-            asset: sai-windows-x86_64
-            binary: target/release/sai.exe
-            rename: target/release/sai-windows-x86_64.exe
-          - os: macos-latest
-            asset: sai-macos-arm64
-            binary: target/release/sai
-            rename: target/release/sai-macos-arm64
-
+        include: ${{ fromJSON((github.event_name == 'push' || inputs.target == 'all' || inputs.target == '' || inputs.target == null) && '[{"os":"ubuntu-latest","asset":"sai-linux-x86_64","binary":"target/release/sai","rename":"target/release/sai-linux-x86_64"},{"os":"windows-latest","asset":"sai-windows-x86_64","binary":"target/release/sai.exe","rename":"target/release/sai-windows-x86_64.exe"},{"os":"macos-latest","asset":"sai-macos-arm64","binary":"target/release/sai","rename":"target/release/sai-macos-arm64"}]' || (inputs.target == 'win-x64') && '[{"os":"windows-latest","asset":"sai-windows-x86_64","binary":"target/release/sai.exe","rename":"target/release/sai-windows-x86_64.exe"}]' || startsWith(inputs.target, 'linux') && '[{"os":"ubuntu-latest","asset":"sai-linux-x86_64","binary":"target/release/sai","rename":"target/release/sai-linux-x86_64"}]' || '[{"os":"macos-latest","asset":"sai-macos-arm64","binary":"target/release/sai","rename":"target/release/sai-macos-arm64"}]') }}
     runs-on: ${{ matrix.os }}
-    if: >-
-      github.event_name == 'push' ||
-      inputs.target == 'all' ||
-      inputs.target == '' ||
-      (inputs.target == 'win-x64' && matrix.asset == 'sai-windows-x86_64') ||
-      (inputs.target == 'linux-x64' && matrix.asset == 'sai-linux-x86_64') ||
-      (inputs.target == 'linux-arm64' && matrix.asset == 'sai-linux-x86_64') ||
-      (startsWith(inputs.target, 'mac') && matrix.asset == 'sai-macos-arm64')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
