@@ -55,6 +55,7 @@ mod streaming_asset_block;
 mod streaming_replace;
 mod style;
 pub(crate) mod syntect_highlight;
+mod syntect_plain;
 mod table;
 pub(crate) mod terminal_frame;
 pub(crate) mod terminal_image;

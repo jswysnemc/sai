@@ -267,11 +267,16 @@ fn code_block_content_has_default_color() {
     assert!(!output.contains('─'));
 }
 
+/// 【代码着色】【变量回归】代码块中的普通变量保持主色，不依赖 Syntect 提供变量作用域。
+/// 参数: 无；返回: 无。
 #[test]
 fn code_block_variables_use_primary_color() {
     let mut renderer = MarkdownStreamRenderer::new();
     let output = renderer.push("```rust\nlet msg = String::from(\"hi\");\n```\n");
-    assert!(output.contains(&format!("{PRIMARY_STYLE}msg{CODE_TOKEN_RESET}")));
+    assert!(
+        output.contains(&format!("{PRIMARY_STYLE}msg{CODE_TOKEN_RESET}")),
+        "output={output:?}"
+    );
 }
 
 #[test]

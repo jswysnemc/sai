@@ -45,7 +45,11 @@ pub(crate) fn paint(lang: &str, line: &str, carry: &mut Option<Box<Carry>>) -> O
     }
     let syntax = find_syntax(&lang)?;
     let session = session_for(carry, &lang, syntax);
-    // 1. 折行切断的行注释没有换行符，解析器会把它当成已经结束
+    // 1. 【代码着色】【纯文本边界】更新语言会话但不着色，避免文件原文被插入 ANSI 序列
+    if syntax.scope == syntaxes().find_syntax_plain_text().scope {
+        return Some(line.to_owned());
+    }
+    // 2. 【代码着色】【注释续行】折行切断的行注释没有换行符，解析器会把它当成已经结束
     if session.carry_comment {
         return Some(paint_span(CODE_COMMENT_STYLE, line));
     }
@@ -145,7 +149,7 @@ fn paint_ops_ansi(line: &str, ops: Vec<(usize, ScopeStackOp)>, session: &mut Car
         if index > cursor {
             let style = ansi_style(&session.stack);
             ended_as_comment = style == CODE_COMMENT_STYLE;
-            push_ansi(
+            push_syntax_ansi(
                 &mut output,
                 &mut open_style,
                 style,
@@ -158,7 +162,7 @@ fn paint_ops_ansi(line: &str, ops: Vec<(usize, ScopeStackOp)>, session: &mut Car
     if cursor < line.len() {
         let style = ansi_style(&session.stack);
         ended_as_comment = style == CODE_COMMENT_STYLE;
-        push_ansi(
+        push_syntax_ansi(
             &mut output,
             &mut open_style,
             style,
@@ -332,6 +336,23 @@ fn push_ansi(output: &mut String, open_style: &mut &'static str, style: &'static
     }
     output.push_str(text);
     *open_style = style;
+}
+
+/// 【代码着色】【语法片段】保留已分类 token 的颜色，仅为未分类片段补充标识符主色。
+/// 参数: `output` 为 ANSI 缓冲，`open_style` 为当前颜色，`style` 为语法颜色，`text` 为原文；返回: 无。
+fn push_syntax_ansi(
+    output: &mut String,
+    open_style: &mut &'static str,
+    style: &'static str,
+    text: &str,
+) {
+    if style.is_empty() {
+        super::syntect_plain::emit_spans(text, |style, text| {
+            push_ansi(output, open_style, style, text);
+        });
+    } else {
+        push_ansi(output, open_style, style, text);
+    }
 }
 
 /// 写入一段转义后的 HTML。
@@ -638,60 +659,5 @@ fn name_has_token_prefix(name: &str, lang: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// 【代码着色】【网页】关键字进入现有 class，标签文本被转义。
-    #[test]
-    fn html_highlight_marks_keywords_and_escapes_tags() {
-        let (html, lang) = highlight_html("const total = 1;\n<script>", "ts");
-        assert_eq!(lang, "ts");
-        assert!(
-            html.contains("class=\"hljs-keyword\""),
-            "html={html} syntax={:?}",
-            find_syntax("ts").map(|item| item.name.as_str())
-        );
-        assert!(html.contains("const"));
-        assert!(html.contains("&lt;script&gt;"));
-        assert!(!html.contains("<script>"));
-    }
-
-    /// 【代码着色】【网页】块注释跨行后仍保持注释 class。
-    #[test]
-    fn html_highlight_keeps_block_comments_across_lines() {
-        let (html, _) = highlight_html("/* explanation\n new text\n */", "ts");
-        assert!(html.contains("class=\"hljs-comment\""));
-        assert!(html.contains("new text"));
-    }
-
-    /// 【代码着色】【语法包】每个可见语法都能用自己的名字找到。
-    #[test]
-    fn every_visible_syntax_is_reachable_by_its_name() {
-        for syntax in syntaxes().syntaxes().iter().filter(|syntax| !syntax.hidden) {
-            let token = syntax.name.to_ascii_lowercase();
-            let found = find_syntax(&token).unwrap_or_else(|| panic!("missing {}", syntax.name));
-            assert_eq!(found.name, syntax.name, "token={token}");
-        }
-    }
-
-    /// 【代码着色】【语法包】扩展名和常见别名落到对应语法，原有别名保持不变。
-    #[test]
-    fn pack_extensions_and_aliases_resolve() {
-        assert_eq!(find_syntax("kt").unwrap().name, "Kotlin");
-        assert_eq!(find_syntax("dockerfile").unwrap().name, "Dockerfile");
-        assert_eq!(find_syntax("csharp").unwrap().name, "C#");
-        assert_eq!(find_syntax("golang").unwrap().name, "Go");
-        assert_eq!(find_syntax("vue").unwrap().name, "Vue Component");
-        assert_eq!(find_syntax("xml").unwrap().name, "XML");
-        assert_eq!(find_syntax("svg").unwrap().name, "XML");
-        assert_eq!(find_syntax("c").unwrap().name, "C");
-        assert_eq!(find_syntax("h").unwrap().name, "C");
-        assert_eq!(find_syntax("cpp").unwrap().name, "C++");
-        assert_eq!(find_syntax("tsx").unwrap().name, "TypeScriptReact");
-        assert_eq!(find_syntax("fish").unwrap().name, "Fish");
-        assert_eq!(find_syntax("php").unwrap().name, "PHP");
-        assert_eq!(find_syntax("graphviz").unwrap().name, "Graphviz (DOT)");
-        let (html, _) = highlight_html("fun main() {}", "kotlin");
-        assert!(html.contains("class=\"hljs-keyword\""), "{html}");
-    }
-}
+#[path = "syntect_highlight_tests.rs"]
+mod tests;
