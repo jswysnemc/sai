@@ -43,6 +43,9 @@ pub(crate) struct WelcomeCell {
 /// 返回:
 /// - 不需要再次换行的 ANSI 行
 pub(crate) fn display_lines(cell: &WelcomeCell, width: usize) -> Vec<AnsiLine> {
+    if crate::render::tui_style::is_deepseek() {
+        return super::deepseek::welcome_lines(cell, width);
+    }
     // 1. 按内容自然宽度与终端上限决定面板宽度，不再固定铺到 76 列
     let max_inner_width = width.saturating_sub(2).max(1);
     let logo_reserved = LOGO_WIDTH + LOGO_CONTENT_GAP;

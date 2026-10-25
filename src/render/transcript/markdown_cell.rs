@@ -20,7 +20,7 @@ pub(crate) fn render(cell: &MarkdownCell) -> String {
     renderer.set_table_layouts(cell.table_layouts.clone(), None);
     let mut output = renderer.push(&cell.source);
     output.push_str(&renderer.flush());
-    output.trim_end_matches('\n').to_string()
+    crate::render::terminal_image::trim_trailing_image_newlines(&output)
 }
 
 /// 渲染完整 Markdown 快照，包括没有换行符的最后一行。
@@ -54,5 +54,5 @@ pub(crate) fn render_completed_parts(
     let open = renderer.snapshot_open_structures();
     output.push_str(&open);
     *layouts = renderer.take_table_layouts();
-    output.trim_end_matches('\n').to_string()
+    crate::render::terminal_image::trim_trailing_image_newlines(&output)
 }

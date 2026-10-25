@@ -3,7 +3,7 @@
 //! Skills 全局开关已迁至主菜单 Skills 管理页。
 
 use super::context_settings::edit_context_settings;
-use crate::config::{AppConfig, FoldPreviewMode};
+use crate::config::{AppConfig, FoldPreviewMode, TuiStyle};
 use crate::i18n::text as t;
 use anyhow::Result;
 use crossterm::event::KeyCode;
@@ -362,6 +362,11 @@ fn edit_display_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Res
             t("Fold tail lines", "折叠保留结尾行数"),
             config.display.fold_tail_lines.to_string(),
         ),
+        Field::new(
+            t("Terminal style", "终端样式"),
+            config.display.tui_style.as_str().to_string(),
+        )
+        .choices(&["classic", "deepseek"]),
     ];
     loop {
         if !run_form(stdout, t(" DISPLAY ", " 显示偏好 "), &mut fields)? {
@@ -377,8 +382,15 @@ fn edit_display_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Res
     }
 }
 
-/// 将显示小节表单值写入配置；任一字段解析失败时不写入。
+/// 【终端】【显示配置】将显示小节表单值写入配置；任一字段解析失败时不写入。
+/// 参数: `config` 为应用配置，`fields` 为显示表单；返回: 验证与更新结果。
 fn apply_display_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()> {
+    let tui_style = TuiStyle::parse(&fields[12].value).ok_or_else(|| {
+        anyhow::anyhow!(t(
+            "terminal style must be classic or deepseek",
+            "终端样式必须为 classic 或 deepseek"
+        ))
+    })?;
     let transcript_row_cap = parse_number_field::<usize>(fields[5].label, &fields[5].value)?;
     let readable_names = parse_bool_field(&fields[2].value)?;
     let wait_model = parse_bool_field(&fields[3].value)?;
@@ -389,6 +401,7 @@ fn apply_display_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()> 
     let fold_head = parse_number_field::<usize>(fields[10].label, &fields[10].value)?;
     let fold_tail = parse_number_field::<usize>(fields[11].label, &fields[11].value)?;
     config.display.reasoning = fields[0].value.trim().to_string();
+    config.display.tui_style = tui_style;
     config.display.tool_calls = fields[1].value.trim().to_string();
     config.display.fullscreen = fullscreen;
     config.display.math_images = math_images;
@@ -402,6 +415,10 @@ fn apply_display_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()> 
     config.display.fold_tail_lines = crate::config::DisplayConfig::clamp_tail(fold_tail);
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "display_style_tests.rs"]
+mod style_tests;
 
 /// 编辑会话网格跨会话开关。
 fn edit_mesh_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {

@@ -16,7 +16,7 @@ impl ComposerFrame {
         let display_lines = if self.input.is_empty() {
             match &self.placeholder_override {
                 Some(text) => vec![format!("\x1b[2m{text}\x1b[0m")],
-                None => vec![placeholder_text()],
+                None => vec![placeholder_text(self.streaming, content_cols)],
             }
         } else {
             lines.clone()
@@ -42,10 +42,18 @@ impl ComposerFrame {
         // 1. 【终端】【输入视口】先折行再裁剪，光标和绘制共用视觉行坐标
         let (cursor_col, cursor_row) =
             repl_cursor_position_for_cols("", &self.input, self.cursor, content_cols);
-        let visual_lines = styled_display_lines
-            .iter()
-            .flat_map(|line| super::styled_line::wrap_styled_line(line, content_cols))
-            .collect::<Vec<_>>();
+        // 2. 【终端】【占位布局】默认提示不是输入内容，光标停在行首，不为提示末尾保留额外行
+        let visual_lines = if self.input.is_empty()
+            && self.placeholder_override.is_none()
+            && crate::render::tui_style::is_deepseek()
+        {
+            styled_display_lines
+        } else {
+            styled_display_lines
+                .iter()
+                .flat_map(|line| super::styled_line::wrap_styled_line(line, content_cols))
+                .collect::<Vec<_>>()
+        };
         let (styled_display_lines, cursor_row_offset) = super::input_viewport::select_rows(
             &visual_lines,
             usize::from(cursor_row),
@@ -80,13 +88,15 @@ impl ComposerFrame {
     }
 }
 
-/// 返回空输入框的灰色提示文本。
-///
-/// 返回:
-/// - 包含快捷操作说明的 ANSI 文本
-fn placeholder_text() -> String {
-    // 静态提示，避免空输入时底栏因轮询闪烁
-    format!("\x1b[2m{}\x1b[0m", static_placeholder_tip())
+/// 【终端】【输入引导】简洁样式只提示当前输入动作，经典样式保留静态轮换提示。
+/// 参数: `streaming` 为是否正在工作，`width` 为输入净宽；返回: 灰色提示文本。
+fn placeholder_text(streaming: bool, width: usize) -> String {
+    let text = if crate::render::tui_style::is_deepseek() {
+        super::input_hint::placeholder(streaming, width)
+    } else {
+        static_placeholder_tip()
+    };
+    format!("\x1b[2m{text}\x1b[0m")
 }
 
 /// 返回当前轮次的占位提示。

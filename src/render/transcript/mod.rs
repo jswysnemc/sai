@@ -1,11 +1,16 @@
+mod activity_region;
+mod activity_snapshot;
 mod assistant_body;
 mod cell;
 pub(crate) mod command_output;
+mod deepseek;
+mod deepseek_timeline;
 mod diff_cell;
 mod fullscreen_activity;
 mod fullscreen_parts;
 mod fullscreen_view;
 mod line;
+mod list_wrap;
 mod markdown_cell;
 mod markdown_stream_cache;
 mod meta_cell;
@@ -21,6 +26,7 @@ mod subagent_view;
 mod tool_cell;
 pub(crate) mod unified_diff;
 mod user_echo_cell;
+mod user_image_preview;
 mod welcome_cell;
 mod window;
 
@@ -33,12 +39,17 @@ mod blockquote_tests;
 #[cfg(test)]
 mod layout_hierarchy_tests;
 #[cfg(test)]
+mod list_wrap_tests;
+#[cfg(test)]
+mod svg_layout_tests;
+#[cfg(test)]
 mod test_support;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod work_status_tests;
 
+pub(crate) use activity_region::ActivityRegion;
 pub(crate) use cell::TranscriptMode;
 pub(crate) use command_output::{ExpandableBlock, ExpandableBlockKind};
 pub(crate) use fullscreen_parts::ParagraphKey;

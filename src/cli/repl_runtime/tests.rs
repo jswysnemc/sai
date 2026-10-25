@@ -144,13 +144,14 @@ fn external_output_restarts_managed_region() {
     assert!(runtime.stream.on_screen() >= 1);
 }
 
-/// 验证自动输入事件以蓝色圆点消息写入 TUI 历史。
+/// 【终端】【续轮通知测试】自动输入使用工具通知，而非蓝色用户消息。
+/// 参数: 无；返回: 无。
 #[test]
-fn automatic_input_event_is_rendered_as_blue_message() {
+fn automatic_input_event_is_rendered_as_a_tool_notice() {
     let mut runtime = ReplRuntime::new(5_000, options());
     runtime
         .record_runner_event(&RunnerEvent::AutomaticInput(AutomaticInputEvent::new(
-            AutomaticInputKind::ExternalCompletion,
+            AutomaticInputKind::GoalContinuation,
             "后台任务已完成".to_string(),
         )))
         .unwrap();
@@ -161,7 +162,11 @@ fn automatic_input_event_is_rendered_as_blue_message() {
         .iter()
         .map(|line| line.as_str())
         .collect::<String>();
-    assert!(rendered.contains("\x1b[38;5;39m●"));
+    assert!(!rendered.contains("\x1b[38;5;39m●"));
+    assert!(
+        crate::render::activity_animation::strip_ansi_for_test(&rendered)
+            .contains("Continuing goal")
+    );
     assert!(rendered.contains("后台任务已完成"));
 }
 

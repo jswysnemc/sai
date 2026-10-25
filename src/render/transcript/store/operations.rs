@@ -51,6 +51,7 @@ impl TranscriptStore {
             work_status_started: None,
             row_cap: row_cap.max(1),
             cache: RenderCache::default(),
+            recent_details: Default::default(),
             dirty_from_cell: None,
             latest_todo: Vec::new(),
             view: super::TranscriptView::Main,
@@ -385,6 +386,7 @@ impl TranscriptStore {
             ))));
         }
         self.active_tool_index = Some(index);
+        self.start_current_tool_timer();
     }
 
     /// 记录历史工具调用，复用工具类型分派以保留子任务身份。
@@ -397,6 +399,7 @@ impl TranscriptStore {
     /// - 无
     pub(crate) fn push_history_tool_call(&mut self, name: String, arguments: String) {
         self.push_tool_call(name, arguments);
+        self.clear_restored_tool_timer();
     }
 
     /// 记录工具结果。
@@ -564,6 +567,7 @@ impl TranscriptStore {
     /// 返回:
     /// - 无
     pub(crate) fn clear(&mut self) {
+        self.recent_details = Default::default();
         self.cells.clear();
         self.live_tail = None;
         self.live_tool_call = None;

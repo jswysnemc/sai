@@ -98,6 +98,12 @@ fn apply_chinese_help_template(mut command: clap::Command) -> clap::Command {
 
 fn localize_top_args(command: clap::Command) -> clap::Command {
     command
+        .mut_arg("style", |arg| {
+            arg.help(t(
+                "Select terminal style for this launch: classic or deepseek",
+                "选择本次启动的终端样式：classic 或 deepseek",
+            ))
+        })
         .mut_arg("lang", |arg| {
             arg.help(t(
                 "Interface language: en-US or zh-CN",

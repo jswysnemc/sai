@@ -38,7 +38,13 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
     if view.outcome.is_none() {
         let label =
             tool_event_label_tense("todo", Some(&view.arguments), ToolVerbTense::Progressive);
-        return Some(tool_event_text(&label, "run"));
+        let mut output = tool_event_text(&label, "run");
+        if mode == ToolCallDisplayMode::Full && !view.arguments.trim().is_empty() {
+            for line in super::structured_payload::format_preview(&view.arguments).lines() {
+                output.push_str(&format!("\n    {line}"));
+            }
+        }
+        return Some(output);
     }
     let outcome = view.outcome.as_ref()?;
     let label = tool_event_label_tense("todo", Some(&view.arguments), ToolVerbTense::Perfect);
@@ -207,7 +213,7 @@ mod tests {
         assert!(rendered.contains("补测试"));
         assert!(rendered.contains("1/3"));
         assert!(!rendered.contains('█') && !rendered.contains('░'));
-        assert!(rendered.contains('◐'));
+        assert!(rendered.contains('→'));
     }
 
     /// 更新结果使用条目内容和状态，不暴露内部 ID（标签动词为 Marked/Marking 等）。
@@ -257,7 +263,7 @@ mod tests {
     #[test]
     fn status_marker_covers_common_states() {
         assert!(status_marker("completed").contains('✓'));
-        assert!(status_marker("in_progress").contains('◐'));
+        assert!(status_marker("in_progress").contains('→'));
         assert!(status_marker("pending").contains('○'));
     }
 }

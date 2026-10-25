@@ -159,6 +159,7 @@ impl std::error::Error for SilentExit {}
 pub async fn run(cli: Cli) -> Result<()> {
     // raw mode 或备用屏内 panic 时先恢复终端，否则用户 shell 不可用
     terminal_restore::install_panic_hook();
+    render::tui_style::set_override(cli.style);
     let paths = SaiPaths::new()?;
     let thinking_override = cli.thinking.clone();
     let mode_override = cli_mode_override(&cli);

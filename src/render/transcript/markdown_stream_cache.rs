@@ -54,7 +54,6 @@ impl MarkdownStreamCache {
         let mut output = String::with_capacity(self.stable.len() + self.preview.len());
         output.push_str(&self.stable);
         output.push_str(&self.preview);
-        output.truncate(output.trim_end_matches('\n').len());
-        output
+        crate::render::terminal_image::trim_trailing_image_newlines(&output)
     }
 }

@@ -57,6 +57,7 @@ const EXTRA_REPL_COMMANDS: &[&str] = &[
     "/plugin",
     "/jev",
     "/sandbox",
+    "/style",
 ];
 
 /// 其中只切换权限模式的命令：等价于 Shift+Tab 热切换，可立即生效。
@@ -304,6 +305,10 @@ fn command_description(command: &str) -> &'static str {
         "/subagents" => t("list session subagents", "列出会话子智能体"),
         "/msg" => t("leave a message on a subagent", "给子智能体留言"),
         "/thinking" => t("set reasoning effort", "设置思考等级"),
+        "/style" => t(
+            "switch terminal style (classic / deepseek)",
+            "切换终端样式（classic / deepseek）",
+        ),
         "/plan" => t("switch to read-only planning mode", "切换到只读计划模式"),
         "/audit" => t(
             "switch to audited workspace sandbox mode",

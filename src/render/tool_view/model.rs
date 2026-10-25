@@ -20,6 +20,7 @@ pub(crate) struct ToolView {
     command_stdout: CommandOutputBuffer,
     command_stderr: CommandOutputBuffer,
     pub(crate) command_expanded: bool,
+    pub(super) timing: Option<super::timing::ToolTiming>,
 }
 
 /// 附着在既有工具视图中的权限审计状态。
@@ -98,6 +99,7 @@ impl ToolView {
             command_stdout: CommandOutputBuffer::default(),
             command_stderr: CommandOutputBuffer::default(),
             command_expanded: false,
+            timing: None,
         }
     }
 
@@ -191,6 +193,9 @@ impl ToolView {
     /// - `ok`: 工具是否成功
     /// - `output`: 工具输出
     pub(crate) fn finish(&mut self, ok: bool, output: String) {
+        if let Some(timing) = self.timing.as_mut() {
+            timing.finish();
+        }
         self.outcome = Some(ToolOutcome { ok, output });
     }
 

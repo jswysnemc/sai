@@ -1,3 +1,4 @@
+mod deepseek;
 mod footer;
 #[cfg(test)]
 mod plugin_tests;
@@ -462,7 +463,9 @@ pub(super) fn chrome_input_pad_row(cols: usize) -> String {
     format!("{CHROME_PANEL_BG}{}\x1b[0m", " ".repeat(cols.max(1)))
 }
 
-/// 截断含 ANSI 的文本到指定显示宽度。
+/// 【终端】【输入截断】截断 ANSI 文本，并恢复共用输入框的背景。
+/// 参数: `text` 为正文，`width` 为最大宽度
+/// 返回: 不超过指定列宽的 ANSI 文本。
 fn truncate_ansi_to_width(text: &str, width: usize) -> String {
     use unicode_width::UnicodeWidthChar;
     if width == 0 {
@@ -490,7 +493,7 @@ fn truncate_ansi_to_width(text: &str, width: usize) -> String {
         used = used.saturating_add(char_width);
         index += ch.len_utf8();
     }
-    // 截断后恢复面板底色，避免后续 padding 丢背景
+    // 1. 【终端】【输入截断】恢复面板底色，避免后续留白丢失背景
     out.push_str("\x1b[0m");
     out.push_str(CHROME_PANEL_BG);
     out

@@ -522,7 +522,7 @@ fn render_markdown_line_with_math_mode(line: &str, math_mode: InlineMathMode) ->
         .or_else(|| trimmed.strip_prefix("+ "))
     {
         return format!(
-            "{indent}{MD_LIST_MARKER_STYLE}-{RESET} {}",
+            "{indent}{MD_LIST_MARKER_STYLE}•{RESET} {}",
             render_inline_for_mode(rest, math_mode)
         );
     }

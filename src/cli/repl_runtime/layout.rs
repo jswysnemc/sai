@@ -120,7 +120,11 @@ impl ReplRuntime {
         }
         self.composer
             .as_ref()
-            .map(|composer| composer.height(usize::from(size.cols)))
+            .map(|composer| {
+                crate::render::tui_presentation::with_locale(|| {
+                    composer.height(usize::from(size.cols))
+                })
+            })
             .unwrap_or(0)
             .min(size.rows)
     }

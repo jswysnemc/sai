@@ -46,6 +46,10 @@ impl ReplClipboardState {
                 range: start..echo.text.len(),
                 label: item.marker().to_string(),
                 kind: item.kind(),
+                image_source: match item {
+                    ReplClipboardItem::Image { data_url, .. } => Some(data_url.clone()),
+                    _ => None,
+                },
             });
             cursor = range.end;
         }
@@ -82,6 +86,9 @@ impl ReplClipboardState {
         if message.is_empty() && !image_urls.is_empty() {
             message = "请根据剪贴板图片回答。".to_string();
         }
-        ClipboardChatInput { message, image_urls }
+        ClipboardChatInput {
+            message,
+            image_urls,
+        }
     }
 }

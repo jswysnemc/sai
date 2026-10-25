@@ -149,13 +149,20 @@ fn replay_remaining_messages(
 ) {
     for message in &messages[start..] {
         append_reasoning(transcript, message.reasoning.as_deref());
-        if message.content.trim().is_empty() {
+        if message.content.trim().is_empty() && message.image_urls.is_empty() {
             continue;
         }
         if message.role == "assistant" {
             append_content(transcript, &message.content);
+        } else if message.image_urls.is_empty() && message.kind == "external_completion" {
+            transcript.push_background_notice(message.content.clone());
         } else {
-            transcript.push_automatic_echo(message.content.clone());
+            let kind = if message.kind == "goal_continuation" {
+                crate::render::ConversationNoticeKind::GoalContinuation
+            } else {
+                crate::render::ConversationNoticeKind::QueuedUser
+            };
+            transcript.push_conversation_notice(kind, message.content.clone(), &message.image_urls);
         }
     }
 }
@@ -225,6 +232,59 @@ mod tests {
             error: None,
             injected_content: None,
         }
+    }
+
+    /// 【终端】【通知历史测试】轮次内的纯文本完成回执按类型恢复，只有真实用户输入加入导航。
+    /// 参数: 无；返回: 无。
+    #[test]
+    fn replayed_external_completion_is_a_tool_without_a_navigation_anchor() {
+        for style in [
+            crate::config::TuiStyle::Classic,
+            crate::config::TuiStyle::Deepseek,
+        ] {
+            crate::render::tui_style::set_override(Some(style));
+            let mut turn = turn_with_tools(None, "done", Vec::new());
+            for (sequence, kind, content) in [
+                (1, "external_completion", "Background work completed; continuing the conversation automatically\n\n后台命令：echo result（task-1）\n状态：completed"),
+                (2, "queued_user", "QUEUED-USER"),
+                (3, "goal_continuation", "Goal 自动续轮：Inspect history"),
+            ] {
+                turn.messages.push(crate::state::TimelineTurnMessage {
+                    id: format!("message-{sequence}"), seq: sequence, after_tool_seq: 0,
+                    kind: kind.into(), role: "user".into(), content: content.into(),
+                    reasoning: None, image_urls: Vec::new(), created_at: String::new(),
+                });
+            }
+            let mut transcript = TranscriptStore::new(200);
+            append_timeline(&mut transcript, &[turn]);
+            let full = TranscriptRenderOptions {
+                tool_call_mode: ToolCallDisplayMode::Full,
+                ..options()
+            };
+            let document = transcript.render_fullscreen(
+                120,
+                &full,
+                &std::collections::HashSet::from([
+                    crate::render::transcript::ParagraphKey::whole(1),
+                    crate::render::transcript::ParagraphKey::whole(2),
+                    crate::render::transcript::ParagraphKey::whole(3),
+                ]),
+            );
+            assert_eq!(document.anchors.len(), 1, "{style:?}");
+            let plain = document
+                .lines
+                .iter()
+                .map(|line| strip_ansi_for_test(line.as_str()))
+                .collect::<Vec<_>>()
+                .join("\n");
+            assert!(plain.contains("Background command completed"), "{plain}");
+            assert!(plain.contains("Command: echo result"), "{plain}");
+            assert!(plain.contains("QUEUED-USER"), "{plain}");
+            assert!(plain.contains("Queued message delivered"), "{plain}");
+            assert!(plain.contains("Continuing goal"), "{plain}");
+            assert!(plain.contains("Inspect history"), "{plain}");
+        }
+        crate::render::tui_style::set_override(None);
     }
 
     /// 【终端】【历史重放】分轮思考应按「思考 → 工具 → 思考 → 工具 → 正文」重放。

@@ -84,10 +84,9 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
     );
     let mut bottom_button = None;
     // 4. 悬停在折叠提示或收起行上时只提亮该行；回到底部按钮被悬停时让位给按钮
-    let hovered_rows = state
+    let hovered_span = state
         .hovered_paragraph()
-        .filter(|_| !super::bottom_button::is_hovered(state, content_width, body_height))
-        .map(|span| (span.control, span.control + 1));
+        .filter(|_| !super::bottom_button::is_hovered(state, content_width, body_height));
     for (row, line) in window.iter().enumerate() {
         let line = line.as_str();
         let body = match &preview {
@@ -97,9 +96,9 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
             _ => fit(line, content_width),
         };
         let document_row = state.scroll + row;
-        let body = match hovered_rows {
-            Some((start, end)) if document_row >= start && document_row < end => {
-                super::hover::tint_line(&body)
+        let body = match hovered_span {
+            Some(span) if document_row == span.control => {
+                super::hover::tint_line(&super::guide_button::render(&body, span.expanded))
             }
             _ => body,
         };
@@ -170,6 +169,14 @@ fn header_line(state: &FullscreenState, layout: &FullscreenLayout) -> String {
         } else {
             format!("{HEADER_COPIED}Copied {count} characters")
         }
+    } else if cols >= 100 && crate::render::tui_style::is_deepseek() {
+        format!(
+            "{HEADER_HINT}{}",
+            t(
+                "Alt+PgUp/PgDn steps · Click to toggle · Drag to copy · Ctrl+O exit",
+                "Alt+PgUp/PgDn 浏览步骤 · 点击展开或收起 · 拖动复制 · Ctrl+O 退出"
+            )
+        )
     } else if cols >= 100 {
         format!(
             "{HEADER_HINT}{}",

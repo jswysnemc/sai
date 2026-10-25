@@ -36,6 +36,24 @@ pub(crate) struct DiffCell {
 }
 
 impl DiffCell {
+    /// 【终端】【编辑状态】读取冻结编辑结果的状态语义，供执行链着色共用。
+    /// 参数: 无；返回: 成功、失败或仍在执行的状态。
+    pub(crate) fn health(&self) -> ToolHealth {
+        match self.completed {
+            Some(true) => ToolHealth::Ok,
+            Some(false) => ToolHealth::Err,
+            None => ToolHealth::Pending,
+        }
+    }
+
+    /// 【终端】【编辑审批】判断是否需要保留可操作的审批详情。
+    /// 参数: 无；返回: 是否仍等待审批决定。
+    pub(crate) fn has_pending_permission(&self) -> bool {
+        self.permission
+            .as_ref()
+            .is_some_and(|permission| permission.decision.is_none())
+    }
+
     /// 在工具执行前构造 diff 快照。
     ///
     /// 参数:
@@ -242,12 +260,36 @@ impl DiffCell {
         self.name.clone()
     }
 
+    /// 【终端】【编辑摘要】为线性执行链提供可读动作、路径和冻结统计，不暴露内部工具标识。
+    /// 参数: 无；返回: 与编辑正文一致的语义摘要。
+    pub(crate) fn timeline_summary(&self) -> String {
+        let label = tool_event_label_tense(
+            &self.name,
+            Some(&self.arguments),
+            ToolVerbTense::from_done(self.completed.is_some()),
+        );
+        match &self.stats {
+            Some(stats) => format!("{label} · {stats}"),
+            None => label,
+        }
+    }
+
     /// 返回已渲染的完整 diff 正文（去掉旧式标题行）。
     ///
     /// 返回:
     /// - 可直接写入 pager 的 ANSI 文本
     pub(crate) fn pager_body(&self) -> String {
         strip_leading_bullet_header(&self.rendered)
+    }
+
+    /// 【终端】【编辑正文】复用差异正文和审批状态，不重复工具摘要。
+    /// 参数: 无；返回: 带审批控件的 ANSI 正文。
+    pub(crate) fn timeline_details(&self) -> String {
+        format!(
+            "{}{}",
+            self.pager_body(),
+            crate::render::tool_view::render_permission(self.permission.as_ref())
+        )
     }
 }
 

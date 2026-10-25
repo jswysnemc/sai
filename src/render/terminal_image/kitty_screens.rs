@@ -1,6 +1,14 @@
 /// 可在切屏后补传的图片数据上限；超出后最早登记的图片不再补传。
 const KITTY_REPLAY_LIMIT: usize = 256;
 
+/// 【终端图片】【缓冲补传】登记可重放载荷但不标记已发送，裁切首行后仍能补传。
+/// 参数: `image_id` 为图片标识，`payload` 为完整传输协议；返回: 无。
+fn remember_kitty_transmission(image_id: u32, payload: &str) {
+    if let Ok(mut state) = kitty_screens().lock() {
+        state.remember(image_id, payload);
+    }
+}
+
 /// 【终端图片】【分屏传输】Kitty 协议的主屏与备用屏各有一份图片存储。
 ///
 /// 图片数据按 image_id 只传一次，后续只打放置序列；进入 Ctrl+O 全屏（备用屏）
@@ -38,6 +46,13 @@ impl KittyScreens {
     /// 返回:
     /// - 是否需要在当前屏幕传输
     fn register(&mut self, image_id: u32, payload: &str) -> bool {
+        self.remember(image_id, payload);
+        self.sent_mut().insert(image_id)
+    }
+
+    /// 【终端图片】【重放缓存】保存载荷，不改变当前屏幕传输状态。
+    /// 参数: `image_id` 为图片标识，`payload` 为载荷；返回: 无。
+    fn remember(&mut self, image_id: u32, payload: &str) {
         if let std::collections::hash_map::Entry::Vacant(entry) = self.payloads.entry(image_id) {
             entry.insert(payload.to_string());
             self.order.push_back(image_id);
@@ -47,7 +62,6 @@ impl KittyScreens {
                 }
             }
         }
-        self.sent_mut().insert(image_id)
     }
 
     /// 返回文本中引用、但当前屏幕尚未传输的图片载荷，并标记为已传输。
@@ -73,8 +87,7 @@ impl KittyScreens {
 
 /// 返回进程级分屏传输状态。
 fn kitty_screens() -> &'static std::sync::Mutex<KittyScreens> {
-    static STATE: std::sync::OnceLock<std::sync::Mutex<KittyScreens>> =
-        std::sync::OnceLock::new();
+    static STATE: std::sync::OnceLock<std::sync::Mutex<KittyScreens>> = std::sync::OnceLock::new();
     STATE.get_or_init(|| std::sync::Mutex::new(KittyScreens::default()))
 }
 
@@ -180,6 +193,18 @@ fn placement_image_ids(text: &str) -> Vec<u32> {
 #[cfg(test)]
 mod kitty_screen_tests {
     use super::*;
+
+    /// 【终端图片】【补传测试】登记缓冲图片后，首次可见的裁剪放置仍获取传输数据。
+    /// 参数: 无；返回: 无。
+    #[test]
+    fn buffered_payload_is_not_marked_sent_before_first_placement() {
+        let mut screens = KittyScreens::default();
+        screens.remember(47, "<buffered-data>");
+        assert!(screens.main_sent.is_empty());
+        let cropped = "\x1b_Ga=p,q=2,C=1,i=47,p=22,c=12,r=3,y=32,h=48\x1b\\";
+        assert_eq!(screens.missing_for(cropped), "<buffered-data>");
+        assert!(screens.missing_for(cropped).is_empty());
+    }
 
     /// 验证只提取放置序列的 image_id，传输序列被忽略。
     #[test]

@@ -47,7 +47,7 @@ fn todo_result_renders_items_instead_of_raw_json() {
     assert!(output.contains("构建项目"));
     assert!(output.lines().next().unwrap_or_default().contains("1/2"));
     assert_eq!(output.matches("Todo").count(), 1);
-    assert!(output.contains('✓') && output.contains('◐'));
+    assert!(output.contains('✓') && output.contains('→'));
     // 1. 进度合并到标题，条目自带状态符，不再重复统计行
     assert!(!output.contains('├') && !output.contains("└─"));
     assert!(!output.contains("\"items\""));

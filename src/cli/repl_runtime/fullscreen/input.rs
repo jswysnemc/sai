@@ -3,7 +3,7 @@
 use super::overview::{mark_at_row, rail_marks};
 use super::paint::scroll_for_track_row;
 use super::selection;
-use super::state::WHEEL_STEP;
+use super::state::{ActivityNavigation, WHEEL_STEP};
 use crate::cli::repl_runtime::ReplRuntime;
 use anyhow::Result;
 use crossterm::event::{
@@ -89,6 +89,18 @@ impl ReplRuntime {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let state = &mut session.state;
         let changed = match key.code {
+            KeyCode::PageUp if alt && !ctrl => state
+                .navigate_activity(ActivityNavigation::Page(false), height)
+                .unwrap_or_else(|| state.scroll_by(-page, height)),
+            KeyCode::PageDown if alt && !ctrl => state
+                .navigate_activity(ActivityNavigation::Page(true), height)
+                .unwrap_or_else(|| state.scroll_by(page, height)),
+            KeyCode::Home if alt && !ctrl && !state.document.activities.is_empty() => state
+                .navigate_activity(ActivityNavigation::Top, height)
+                .unwrap_or(false),
+            KeyCode::End if alt && !ctrl && !state.document.activities.is_empty() => state
+                .navigate_activity(ActivityNavigation::Latest, height)
+                .unwrap_or(false),
             KeyCode::PageUp => state.scroll_by(-page, height),
             KeyCode::PageDown => state.scroll_by(page, height),
             KeyCode::Up if alt => state.jump_relative(false, height),
@@ -145,8 +157,20 @@ impl ReplRuntime {
         let body_row = usize::from(mouse.row.saturating_sub(layout.body_top));
         let state = &mut session.state;
         let changed = match mouse.kind {
-            MouseEventKind::ScrollUp => state.scroll_by(-(WHEEL_STEP as isize), height),
-            MouseEventKind::ScrollDown => state.scroll_by(WHEEL_STEP as isize, height),
+            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
+                let delta = if mouse.kind == MouseEventKind::ScrollUp {
+                    -(WHEEL_STEP as isize)
+                } else {
+                    WHEEL_STEP as isize
+                };
+                if layout.in_body(mouse.row) && mouse.column < layout.content_width {
+                    state
+                        .scroll_activity_at(state.scroll + body_row, delta)
+                        .unwrap_or_else(|| state.scroll_by(delta, height))
+                } else {
+                    state.scroll_by(delta, height)
+                }
+            }
             // 1. 悬停：只在指向的概览标记或可展开段落变化时重绘
             MouseEventKind::Moved => {
                 let hover = if layout.in_body(mouse.row) && layout.in_rail(mouse.column) {
@@ -238,6 +262,13 @@ impl ReplRuntime {
                             || press.col != usize::from(mouse.column)
                         {
                             return Effect::Nothing;
+                        }
+                        if let Some(changed) = state.resume_activity_at(press.row) {
+                            return if changed {
+                                Effect::Repaint
+                            } else {
+                                Effect::Nothing
+                            };
                         }
                         match state.toggle_at(press.row) {
                             Some(anchor) => {

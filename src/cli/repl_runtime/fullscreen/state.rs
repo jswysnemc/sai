@@ -9,9 +9,16 @@ pub(super) const WHEEL_STEP: usize = 3;
 /// 跳转到用户消息时，消息上方保留的上下文行数。
 const JUMP_CONTEXT_ROWS: usize = 1;
 
+pub(super) enum ActivityNavigation {
+    Page(bool),
+    Top,
+    Latest,
+}
+
 /// 全屏视图状态；只描述“看哪里”，不持有终端资源。
 #[derive(Default)]
 pub(super) struct FullscreenState {
+    pub(super) activity: super::activity_viewport::ActivityViewports,
     /// 正文首行在文档中的行号
     pub(super) scroll: usize,
     /// 是否跟随最新输出（停在底部）
@@ -76,11 +83,12 @@ impl FullscreenState {
     pub(super) fn apply_document(&mut self, document: FullscreenDocument, body_height: usize) {
         let grew = document.lines.len() > self.document.lines.len();
         // 1. 清掉已不存在的展开键（/clear 或会话切换后）
-        let live_keys = document
+        let mut live_keys = document
             .paragraphs
             .iter()
             .map(|span| span.key)
             .collect::<HashSet<_>>();
+        live_keys.extend(document.retained_keys.iter().copied());
         self.expanded.retain(|key| live_keys.contains(key));
         self.document = document;
         // 2. 跟随时贴底；否则保持位置，只在内容增长时提示有新输出
@@ -115,6 +123,78 @@ impl FullscreenState {
             self.scroll.saturating_add(delta as usize)
         };
         self.scroll_to(target, body_height)
+    }
+
+    /// 【终端】【链内输入】命中子视口时只滚动链内列表，不移动会话或输入区。
+    /// 参数: `row` 为文档行，`delta` 为偏移；返回: 命中后的变化状态，未命中返回空值。
+    pub(super) fn scroll_activity_at(&mut self, row: usize, delta: isize) -> Option<bool> {
+        let key = self
+            .document
+            .activities
+            .iter()
+            .find(|region| region.scrollable && row >= region.start && row < region.end)?
+            .key;
+        Some(self.scroll_activity(key, delta))
+    }
+
+    /// 【终端】【链内键盘】优先浏览已操作的可见链，否则使用最近的可见链。
+    /// 参数: `navigation` 为翻页或首尾操作，`body_height` 为正文高度；返回: 是否命中并改变位置。
+    pub(super) fn navigate_activity(
+        &mut self,
+        navigation: ActivityNavigation,
+        body_height: usize,
+    ) -> Option<bool> {
+        let visible = |region: &&crate::render::transcript::ActivityRegion| {
+            region.scrollable
+                && region.end > self.scroll
+                && region.start < self.scroll + body_height
+        };
+        let key = self
+            .document
+            .activities
+            .iter()
+            .filter(visible)
+            .find(|region| Some(region.key) == self.activity.selected)
+            .or_else(|| self.document.activities.iter().filter(visible).next_back())?
+            .key;
+        let delta = match navigation {
+            ActivityNavigation::Top => isize::MIN,
+            ActivityNavigation::Latest => isize::MAX,
+            ActivityNavigation::Page(forward) => {
+                let page = self.activity.page(key) as isize;
+                if forward {
+                    page
+                } else {
+                    -page
+                }
+            }
+        };
+        Some(self.scroll_activity(key, delta))
+    }
+
+    /// 【终端】【链内跟随】提示行单击恢复跟随，不折叠节点，也不移动外层会话。
+    /// 参数: `row` 为文档行；返回: 是否命中并改变位置。
+    pub(super) fn resume_activity_at(&mut self, row: usize) -> Option<bool> {
+        let key = self
+            .document
+            .activities
+            .iter()
+            .find(|region| region.footer == Some(row))?
+            .key;
+        Some(self.scroll_activity(key, isize::MAX))
+    }
+
+    /// 【终端】【链内状态】应用独立滚动并清理已失效选区。
+    /// 参数: `key` 为链键，`delta` 为偏移；返回: 位置是否改变。
+    fn scroll_activity(&mut self, key: ParagraphKey, delta: isize) -> bool {
+        let changed = self.activity.scroll(key, delta);
+        if changed {
+            self.document = self.activity.project();
+            self.press = None;
+            self.selection = None;
+            self.copied = None;
+        }
+        changed
     }
 
     /// 滚动到指定首行，滚到底部时恢复跟随。
@@ -201,7 +281,7 @@ impl FullscreenState {
         }
     }
 
-    /// 切换段落展开状态，并记录段落标题相对正文顶部的位置用于重排后锚定。
+    /// 切换段落展开状态，执行链使用分组标题锚定，其他内容使用段落标题。
     ///
     /// 折叠时只响应提示行；展开后整段均可收起，拖选由输入层优先处理。
     ///
@@ -219,9 +299,24 @@ impl FullscreenState {
         if !self.expanded.remove(&span.key) {
             self.expanded.insert(span.key);
         }
+        self.activity.focus(span.key);
         // 切换后停止跟随，否则展开的内容会被新输出推走
         self.follow = false;
-        Some((span.key, span.start as isize - self.scroll as isize))
+        Some((
+            span.key,
+            self.toggle_anchor_row(span.start) as isize - self.scroll as isize,
+        ))
+    }
+
+    /// 【终端】【折叠锚定】节点展开收起只影响链内窗口，不推动外层会话。
+    /// 参数: `row` 为段落标题行；返回: 应保持屏幕位置的分组或段落标题行。
+    fn toggle_anchor_row(&self, row: usize) -> usize {
+        self.document
+            .activities
+            .iter()
+            .find(|region| row >= region.start && row < region.end)
+            .map(|region| region.start)
+            .unwrap_or(row)
     }
 
     /// 重排后让被切换段落的标题行停在原来的屏幕位置。
@@ -245,7 +340,8 @@ impl FullscreenState {
         let Some(span) = self.document.paragraphs.iter().find(|span| span.key == key) else {
             return;
         };
-        let target = (span.start as isize - screen_offset.max(0)).max(0) as usize;
+        let target =
+            (self.toggle_anchor_row(span.start) as isize - screen_offset.max(0)).max(0) as usize;
         let max = self.max_scroll(body_height);
         self.scroll = target.min(max);
         self.follow = self.scroll == max && !span.expanded;

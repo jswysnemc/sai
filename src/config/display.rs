@@ -46,6 +46,8 @@ impl FoldPreviewMode {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DisplayConfig {
+    /// 终端展示样式；旧配置默认保留 classic
+    pub tui_style: super::TuiStyle,
     /// TUI 启动时使用全局渲染，Ctrl+O 可临时切换
     pub fullscreen: bool,
     /// 将终端公式渲染成图片
@@ -77,6 +79,8 @@ pub struct DisplayConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 struct RawDisplayConfig {
+    #[serde(default)]
+    tui_style: super::TuiStyle,
     #[serde(default)]
     fullscreen: Option<bool>,
     #[serde(default)]
@@ -154,6 +158,7 @@ impl<'de> Deserialize<'de> for DisplayConfig {
             }
         });
         Ok(Self {
+            tui_style: raw.tui_style,
             fullscreen: raw.fullscreen.unwrap_or(true),
             math_images: raw.math_images.unwrap_or(true),
             mermaid_images: raw.mermaid_images.unwrap_or(true),

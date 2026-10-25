@@ -9,8 +9,8 @@ import threading
 class MockToolModel:
     """提供逐段控制的工具参数流，隔离真实模型和用户文件。"""
 
-    def __init__(self, tool_name):
-        """tool_name 为工具名称；初始化参数队列和本地服务器。"""
+    def __init__(self, tool_name, reasoning=""):
+        """tool_name 为工具名称，reasoning 为可选前置思考；初始化模型替身，返回无。"""
         self.fragments = queue.Queue()
         self.ready = threading.Event()
         model = self
@@ -29,6 +29,10 @@ class MockToolModel:
                 self.send_header("Connection", "close")
                 self.end_headers()
                 try:
+                    if reasoning:
+                        data = {"choices": [{"index": 0, "delta": {"reasoning_content": reasoning}, "finish_reason": None}]}
+                        self.wfile.write(("data: " + json.dumps(data) + "\n\n").encode())
+                        self.wfile.flush()
                     self.emit({"index": 0, "id": "fixture-tool", "type": "function",
                                "function": {"name": tool_name, "arguments": ""}})
                     model.ready.set()

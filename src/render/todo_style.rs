@@ -12,19 +12,21 @@
 pub(crate) fn status_marker(status: &str) -> &'static str {
     match status {
         "completed" => "\x1b[32m✓\x1b[0m",
-        "in_progress" => "\x1b[36m◐\x1b[0m",
+        "in_progress" => "\x1b[36m→\x1b[0m",
         "cancelled" => "\x1b[2m–\x1b[0m",
         _ => "\x1b[2m○\x1b[0m",
     }
 }
 
-/// 渲染当前状态的动画标记；参数为状态和帧号，返回单列 ANSI 图形。
+/// 【终端】【待办动效】保持进行中箭头的字形，仅复用原有状态色和亮度变化。
+/// 参数: `status` 为条目状态，`frame` 为动画帧号；返回: 单列 ANSI 状态标记。
 pub(crate) fn status_marker_framed(status: &str, frame: usize) -> String {
     if status == "in_progress" {
         crate::render::activity_animation::render_activity_guide_with_color(
             frame,
             Some((86, 182, 194)),
         )
+        .replace(crate::render::activity_animation::ACTIVITY_GUIDE, "→")
     } else {
         status_marker(status).to_string()
     }
@@ -152,7 +154,14 @@ mod tests {
     #[test]
     fn in_progress_marker_is_not_user_or_tool_bullet() {
         let marker = status_marker("in_progress");
-        assert!(marker.contains('◐'));
+        assert!(marker.contains('→'));
+        for frame in [0, 10, 30, 50] {
+            let animated = status_marker_framed("in_progress", frame);
+            assert_eq!(
+                crate::render::activity_animation::strip_ansi_for_test(&animated),
+                "→"
+            );
+        }
         assert!(!marker.contains('●'));
         assert!(!marker.contains('•'));
     }

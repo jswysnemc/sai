@@ -30,6 +30,8 @@ pub(crate) struct InputAtom {
     pub(crate) range: Range<usize>,
     pub(crate) label: String,
     pub(crate) kind: InputAtomKind,
+    /// 图片原始数据 URL；其他类型不携带图片来源
+    pub(crate) image_source: Option<String>,
 }
 
 /// 提交后的完整正文与原子块来源；普通方括号文本不携带原子块元数据。
@@ -37,6 +39,32 @@ pub(crate) struct InputAtom {
 pub(crate) struct InputEcho {
     pub(crate) text: String,
     pub(crate) atoms: Vec<InputAtom>,
+}
+
+impl InputEcho {
+    /// 【终端】【历史附件】恢复持久化图片来源，并给正文追加可展开的附件标签。
+    /// 参数: `text` 为用户正文，`sources` 为图片 URL；返回: 保留正文和图片元数据的回显。
+    pub(crate) fn with_images(text: String, sources: &[String]) -> Self {
+        let mut echo = Self {
+            text,
+            atoms: Vec::new(),
+        };
+        for (index, source) in sources.iter().enumerate() {
+            if !echo.text.is_empty() {
+                echo.text.push('\n');
+            }
+            let label = format!("[image {}]", index + 1);
+            let start = echo.text.len();
+            echo.text.push_str(&label);
+            echo.atoms.push(InputAtom {
+                range: start..echo.text.len(),
+                label,
+                kind: InputAtomKind::Image,
+                image_source: Some(source.clone()),
+            });
+        }
+        echo
+    }
 }
 
 /// 渲染已登记的原子块，保留其间的普通正文。

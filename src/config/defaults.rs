@@ -77,6 +77,7 @@ impl Default for PromptConfig {
 impl Default for DisplayConfig {
     fn default() -> Self {
         Self {
+            tui_style: super::TuiStyle::default(),
             fullscreen: true,
             math_images: true,
             mermaid_images: true,

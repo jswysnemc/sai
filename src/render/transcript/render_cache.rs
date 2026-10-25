@@ -7,6 +7,7 @@ use super::TranscriptRenderOptions;
 #[derive(Clone, Debug)]
 struct CachedRender {
     width: usize,
+    style: crate::config::TuiStyle,
     options: TranscriptRenderOptions,
     lines: Vec<AnsiLine>,
 }
@@ -82,7 +83,10 @@ impl RenderCache {
             self.entries.push(None);
         }
         if let Some(cached) = &self.entries[index] {
-            if cached.width == width && cached.options == *options {
+            if cached.width == width
+                && cached.options == *options
+                && cached.style == crate::render::tui_style::current()
+            {
                 return cached.lines.len();
             }
         }
@@ -90,6 +94,7 @@ impl RenderCache {
         let count = lines.len();
         self.entries[index] = Some(CachedRender {
             width,
+            style: crate::render::tui_style::current(),
             options: *options,
             lines,
         });
@@ -123,7 +128,10 @@ impl RenderCache {
             self.entries.push(None);
         }
         if let Some(cached) = &self.entries[index] {
-            if cached.width == width && cached.options == *options {
+            if cached.width == width
+                && cached.options == *options
+                && cached.style == crate::render::tui_style::current()
+            {
                 return cached.lines.clone();
             }
         }
@@ -131,6 +139,7 @@ impl RenderCache {
         let lines = cell.display_lines(width, options);
         self.entries[index] = Some(CachedRender {
             width,
+            style: crate::render::tui_style::current(),
             options: *options,
             lines: lines.clone(),
         });

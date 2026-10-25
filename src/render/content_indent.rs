@@ -97,6 +97,10 @@ fn is_turn_rule_line(text: &str) -> bool {
 /// 返回:
 /// - 引导符号位于左侧，普通正文位于右侧的终端行
 pub(crate) fn align_to_guide_column(text: &str) -> String {
+    if text.trim_start().starts_with("\x1b[2;39m•\x1b[0m ") {
+        let indent = CONTENT_LEFT_INDENT.saturating_sub(text.len() - text.trim_start().len());
+        return format!("{}{text}", " ".repeat(indent));
+    }
     let normalized = normalize_guide_marker(text);
     let text = normalized.as_str();
     let (leading_spaces, first_visible) = visible_line_start(text);

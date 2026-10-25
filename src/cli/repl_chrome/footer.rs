@@ -39,21 +39,29 @@ impl ReplChrome {
                 true,
             );
         }
-        let left_plain = match activity.filter(|text| !text.is_empty()) {
-            Some(activity) => format!(
-                "{activity}  {}  {}  {}  {}",
-                self.mode_plain(),
-                self.context_status(),
-                self.model,
-                self.thinking
-            ),
-            None => format!(
-                "{}  {}  {}  {}",
-                self.mode_plain(),
-                self.context_status(),
-                self.model,
-                self.thinking
-            ),
+        let left_plain = if crate::render::tui_style::is_deepseek() {
+            let status = super::deepseek::footer_left(self, cols.saturating_sub(6).max(1));
+            match activity.filter(|text| !text.is_empty()) {
+                Some(activity) => format!("{activity}  {status}"),
+                None => status,
+            }
+        } else {
+            match activity.filter(|text| !text.is_empty()) {
+                Some(activity) => format!(
+                    "{activity}  {}  {}  {}  {}",
+                    self.mode_plain(),
+                    self.context_status(),
+                    self.model,
+                    self.thinking
+                ),
+                None => format!(
+                    "{}  {}  {}  {}",
+                    self.mode_plain(),
+                    self.context_status(),
+                    self.model,
+                    self.thinking
+                ),
+            }
         };
         self.compose_footer_line(cols, &left_plain, &self.right_plain(), false)
     }

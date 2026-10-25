@@ -17,6 +17,7 @@ struct Placement {
     placement_id: u32,
     cols: Option<usize>,
     rows: usize,
+    source_y: usize,
 }
 
 /// 【全屏视图】【图片窗口】取出可见行，并按窗口边界改写跨行图片的放置序列。
@@ -129,7 +130,7 @@ fn cropped(placement: &Placement, skip_rows: usize, visible_rows: usize, cell_ph
     // 源矩形：块级图片已补齐到整格像素，y/h 按格高换算
     control.push_str(&format!(
         ",r={visible_rows},y={},h={}",
-        skip_rows * cell_ph,
+        placement.source_y + skip_rows * cell_ph,
         visible_rows * cell_ph
     ));
     format!("\x1b_G{control}\x1b\\")
@@ -155,13 +156,18 @@ fn derived_placement_id(original: u32, skip_rows: usize, visible_rows: usize) ->
 fn parse_placements(line: &str) -> Vec<Placement> {
     let mut placements = Vec::new();
     let mut col = 0usize;
+    let mut saved_col = 0usize;
     let mut index = 0usize;
     while index < line.len() {
         if line.as_bytes()[index] != 0x1b {
             let Some(ch) = line[index..].chars().next() else {
                 break;
             };
-            col += unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+            if ch == '\r' {
+                col = 0;
+            } else {
+                col += unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+            }
             index += ch.len_utf8();
             continue;
         }
@@ -170,6 +176,26 @@ fn parse_placements(line: &str) -> Vec<Placement> {
             .min(line.len());
         if let Some(placement) = parse_placement(&line[index..end], index, end, col) {
             placements.push(placement);
+        }
+        let sequence = &line[index..end];
+        match sequence {
+            "\x1b7" => saved_col = col,
+            "\x1b8" => col = saved_col,
+            _ => {
+                if let Some(control) = sequence.strip_prefix("\x1b[") {
+                    if let Some(columns) = control
+                        .strip_suffix('C')
+                        .and_then(|value| value.parse::<usize>().ok())
+                    {
+                        col += columns.max(1);
+                    } else if let Some(column) = control
+                        .strip_suffix('G')
+                        .and_then(|value| value.parse::<usize>().ok())
+                    {
+                        col = column.saturating_sub(1);
+                    }
+                }
+            }
         }
         index = end;
     }
@@ -203,6 +229,10 @@ fn parse_placement(sequence: &str, start: usize, end: usize, col: usize) -> Opti
             .get("r")
             .and_then(|value| value.parse().ok())
             .unwrap_or(1),
+        source_y: fields
+            .get("y")
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(0),
     })
 }
 

@@ -54,6 +54,10 @@ pub(crate) struct FullscreenDocument {
     pub(crate) lines: Vec<AnsiLine>,
     pub(crate) paragraphs: Vec<ParagraphSpan>,
     pub(crate) anchors: Vec<UserAnchor>,
+    /// 分组收起后仍保留子步骤的手动展开状态
+    pub(crate) retained_keys: Vec<ParagraphKey>,
+    /// 线性执行链的子视口范围，经典样式不登记
+    pub(crate) activities: Vec<super::ActivityRegion>,
 }
 
 impl FullscreenDocument {
@@ -114,10 +118,19 @@ impl TranscriptStore {
         let content_width = width.saturating_sub(padding).max(1);
         let mut document = self.render_document(content_width, options, expanded);
         // 2. 全屏中 Ctrl+O 是退出键：折叠提示改为点击展开，再把引导列补回
-        for line in &mut document.lines {
+        let mut activities = document.activities.iter().peekable();
+        for (row, line) in document.lines.iter_mut().enumerate() {
             let rewritten = rewrite_fold_hint_for_fullscreen(line.as_str());
             let source = rewritten.as_deref().unwrap_or(line.as_str());
-            *line = AnsiLine::new(align_to_guide_column_with_width(source, padding));
+            while activities.peek().is_some_and(|region| row >= region.end) {
+                activities.next();
+            }
+            let in_activity = activities.peek().is_some_and(|region| row >= region.start);
+            *line = AnsiLine::new(if in_activity {
+                source.to_string()
+            } else {
+                align_to_guide_column_with_width(source, padding)
+            });
         }
         document
     }
@@ -138,6 +151,11 @@ impl TranscriptStore {
         expanded: &HashSet<ParagraphKey>,
     ) -> FullscreenDocument {
         let width = width.max(1);
+        if crate::render::tui_style::is_deepseek() && self.view == TranscriptView::Main {
+            return crate::render::tui_presentation::with_locale(|| {
+                self.render_deepseek_document(width, options, expanded)
+            });
+        }
         // 1. 【全屏视图】【静态正文】运行工具保留静态标题，动效统一由固定面板绘制
         let frame = 0;
         // 1. 子智能体视图整体替换正文，没有可折叠段落和用户锚点
@@ -314,7 +332,7 @@ fn push_segmented(
 ///
 /// 返回:
 /// - 段落范围
-fn make_span(
+pub(super) fn make_span(
     lines: &[AnsiLine],
     key: ParagraphKey,
     start: usize,
@@ -352,7 +370,7 @@ fn fold_hint_row(lines: &[AnsiLine], start: usize, end: usize) -> Option<usize> 
 ///
 /// 返回:
 /// - 与折叠提示同样式的「收起」行
-fn render_collapse_line() -> String {
+pub(super) fn render_collapse_line() -> String {
     format!(
         "  \x1b[2m\x1b[36m{EXPANDED_MARKER} {}\x1b[0m",
         crate::render::terminal_text("Show less · click to collapse", "收起 · 点击折叠")
@@ -367,7 +385,7 @@ fn render_collapse_line() -> String {
 ///
 /// 返回:
 /// - 首个非空行；整段为空时返回起始行
-fn first_content_row(lines: &[AnsiLine], start: usize) -> usize {
+pub(super) fn first_content_row(lines: &[AnsiLine], start: usize) -> usize {
     lines[start..]
         .iter()
         .position(|line| {

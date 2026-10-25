@@ -33,6 +33,12 @@ pub(crate) fn render_framed(view: &ToolView, mode: ToolCallDisplayMode, frame: u
     if mode == ToolCallDisplayMode::Hidden {
         return String::new();
     }
+    if let Some(rendered) = super::background_notice::render(view, mode) {
+        return rendered;
+    }
+    if let Some(rendered) = super::conversation_notice::render(view, mode) {
+        return rendered;
+    }
 
     if view.name == "ask_question" {
         return super::question::render(view, mode, frame);
@@ -57,6 +63,9 @@ pub(crate) fn render_framed(view: &ToolView, mode: ToolCallDisplayMode, frame: u
         }
     }
     if view.name == "read_file" {
+        if let Some(rendered) = super::read_image::render(view, mode) {
+            return rendered;
+        }
         if let Some(rendered) = super::read_file::render(view, mode) {
             return rendered;
         }
@@ -325,7 +334,7 @@ fn permission_denied(permission: Option<&PermissionAuditView>) -> bool {
 ///
 /// 返回:
 /// - 不重复工具内容的权限交互文本
-pub(super) fn render_permission(permission: Option<&PermissionAuditView>) -> String {
+pub(crate) fn render_permission(permission: Option<&PermissionAuditView>) -> String {
     let Some(permission) = permission else {
         return String::new();
     };
@@ -423,10 +432,7 @@ fn render_payload(label: &str, payload: &str) -> String {
     use crate::render::fold_text::{
         fold_preview_lines, terminal_wrap_width, wrap_display_lines, FoldedDisplayLine,
     };
-    let formatted = serde_json::from_str::<Value>(payload)
-        .ok()
-        .and_then(|value| serde_json::to_string_pretty(&value).ok())
-        .unwrap_or_else(|| payload.trim().to_string());
+    let formatted = super::structured_payload::format(payload.trim());
     // 【终端】【工具载荷】1. 保留原文，仅按显示行折叠，全文模式可还原全部内容
     let wrapped = wrap_display_lines(&formatted, terminal_wrap_width().saturating_sub(8).max(8));
     let visible = fold_preview_lines(&wrapped, false);

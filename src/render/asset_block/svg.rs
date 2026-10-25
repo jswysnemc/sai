@@ -17,7 +17,7 @@ const MAX_EDGE_PX: f32 = 2048.0;
 pub(super) fn render_terminal(source: &str) -> Result<String> {
     let temp_dir = tempfile::tempdir().context("failed to create temporary render directory")?;
     let image = render_image(source, &temp_dir)?;
-    terminal_image::render_terminal_image(&image)
+    terminal_image::render_buffered_image(&image, None)
 }
 
 /// 使用 resvg 将独立 SVG 文档光栅化为透明 PNG。

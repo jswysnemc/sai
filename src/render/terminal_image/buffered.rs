@@ -7,7 +7,7 @@ use super::{
 use anyhow::{Context, Result};
 use std::path::Path;
 
-/// 【终端图片】【缓冲渲染】完整生成图片协议，不写入终端或消耗传输缓存。
+/// 【终端图片】【缓冲渲染】完整生成图片协议，登记补传载荷但不写入终端或标记已发送。
 /// @param path 图片路径；size 为可选单元格上限
 /// @returns 可以丢弃或一次提交的完整图片内容
 pub(crate) fn render_buffered_image(path: &Path, size: Option<&str>) -> Result<String> {
@@ -41,7 +41,7 @@ fn bounded_limits(requested: &TerminalImageSize) -> (usize, usize, usize, usize)
 
 /// 【终端图片】【Kitty 缓冲】传输与放置都放入返回值，丢弃结果不会影响下一次显示。
 /// @param path 已处理的 PNG；columns、rows 为实际单元格尺寸
-/// @returns 完整传输和放置协议，不改变全局传输记录
+/// @returns 完整传输和放置协议，不改变屏幕已发送记录
 fn encode_kitty_buffered(
     path: &Path,
     columns: Option<usize>,
@@ -50,6 +50,7 @@ fn encode_kitty_buffered(
     let bytes = std::fs::read(path).context("read buffered terminal image")?;
     let image_id = kitty_image_id(&bytes);
     let mut output = kitty_transmission_payload(image_id, &bytes);
+    super::remember_kitty_transmission(image_id, &output);
     output.push_str(&kitty_placement_payload(
         image_id,
         next_kitty_placement_id(),

@@ -86,6 +86,18 @@ impl TranscriptStore {
                 dirty_from: start,
             };
         }
+        if crate::render::tui_style::is_deepseek() {
+            let document =
+                self.render_deepseek_document(width, options, &std::collections::HashSet::new());
+            let total = document.lines.len();
+            let start = total.saturating_sub(min_rows).min(max_start).min(total);
+            return DisplayWindow {
+                total,
+                start,
+                lines: document.lines.into_iter().skip(start).collect(),
+                dirty_from: start,
+            };
+        }
         let frame = self.live_animation_frame();
         // 1. 【终端】【长表格】保留全部已完成行，超过预算只固定布局，不删除前缀
         let mut live = self.render_live_tail(width, options, live_cap);

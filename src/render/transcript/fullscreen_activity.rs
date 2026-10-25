@@ -29,6 +29,12 @@ impl TranscriptStore {
                 Vec::new()
             };
         }
+        if crate::render::tui_style::is_deepseek() {
+            return self
+                .work_status
+                .map(|status| status_row(&status.render_line(frame, elapsed), width))
+                .unwrap_or_default();
+        }
         let mut lines = Vec::new();
         // 2. 【全屏视图】【参数进度】尚未定稿的工具参数摘要不参与历史区排版
         if let Some(call) = &self.live_tool_call {

@@ -77,7 +77,7 @@ fn append_compaction(transcript: &mut TranscriptStore, compaction: &SessionTimel
     transcript.push_compaction_finished(compaction.applied, None, None, Some(summary.to_string()));
 }
 
-/// 追加历史用户输入，自动轮次使用蓝色圆点。
+/// 追加历史用户输入，所有自动轮次使用工具通知，真实用户消息保留普通回显。
 ///
 /// 参数:
 /// - `transcript`: 当前 TUI transcript
@@ -86,15 +86,29 @@ fn append_compaction(transcript: &mut TranscriptStore, compaction: &SessionTimel
 /// 返回:
 /// - 无
 fn append_user_message(transcript: &mut TranscriptStore, turn: &SessionTimelineTurn) {
-    if turn.user.content.trim().is_empty() {
+    if turn.user.content.trim().is_empty() && turn.user.image_urls.is_empty() {
         return;
     }
-    let mode = if turn.automatic {
-        TranscriptMode::Automatic
-    } else {
-        TranscriptMode::Yolo
-    };
-    transcript.push_user_echo(mode, history_user_text(turn));
+    if turn.automatic {
+        if turn.user.image_urls.is_empty() && crate::render::is_external_notice(&turn.user.content)
+        {
+            transcript.push_background_notice(turn.user.content.clone());
+        } else {
+            transcript.push_conversation_notice(
+                crate::render::ConversationNoticeKind::GoalContinuation,
+                history_user_text(turn),
+                &turn.user.image_urls,
+            );
+        }
+        return;
+    }
+    transcript.push_user_input(
+        TranscriptMode::Yolo,
+        crate::render::input_atom::InputEcho::with_images(
+            history_user_text(turn),
+            &turn.user.image_urls,
+        ),
+    );
 }
 
 /// 将内部自动输入转换为不暴露控制标记的历史文本。
@@ -109,6 +123,9 @@ fn history_user_text(turn: &SessionTimelineTurn) -> String {
         return turn.user.content.clone();
     }
     let content = turn.user.content.trim();
+    if content.starts_with("Goal 自动续轮") || content.starts_with("Goal continuation:") {
+        return content.to_string();
+    }
     const EXTERNAL_OPEN: &str = "<external-completion-events>";
     const EXTERNAL_CLOSE: &str = "</external-completion-events>";
     if let Some(inner) = content
@@ -170,6 +187,30 @@ mod tests {
     use crate::render::transcript::{TranscriptRenderOptions, TranscriptStore};
     use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
     use crate::state::{SessionTimelineTurn, TimelineMessage, TimelineToolEntry};
+
+    /// 【终端】【历史图片测试】仅含图片的历史轮次也恢复用户回显和可展开段落。
+    /// 参数: 无；返回: 无。
+    #[test]
+    fn history_restores_image_only_user_message() {
+        let mut turn = turn(false, "");
+        turn.user
+            .image_urls
+            .push("data:image/png;base64,fixture".into());
+        let mut transcript = TranscriptStore::new(100);
+        append_user_message(&mut transcript, &turn);
+        let document =
+            transcript.render_fullscreen(80, &options(), &std::collections::HashSet::new());
+        assert_eq!(document.anchors.len(), 1);
+        assert_eq!(document.paragraphs.len(), 1);
+        let text = document
+            .lines
+            .iter()
+            .map(|line| line.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("[image 1]"));
+        assert!(!text.contains("data:image"));
+    }
 
     fn options() -> TranscriptRenderOptions {
         TranscriptRenderOptions {
@@ -266,7 +307,7 @@ mod tests {
     }
 
     #[test]
-    fn history_uses_blue_mode_for_automatic_turns() {
+    fn history_restores_background_notice_without_a_user_navigation_point() {
         let mut transcript = TranscriptStore::new(100);
         append_timeline(
             &mut transcript,
@@ -281,9 +322,25 @@ mod tests {
             .map(|line| line.as_str())
             .collect::<String>();
 
-        assert!(rendered.contains("\x1b[38;5;39m●"));
-        assert!(rendered.contains("子 Agent 已完成"));
-        assert!(rendered.contains("已完成"));
+        assert!(!rendered.contains("\x1b[38;5;39m●"));
+        assert!(transcript
+            .render_fullscreen(120, &options(), &std::collections::HashSet::new())
+            .anchors
+            .is_empty());
+        assert!(
+            crate::render::activity_animation::strip_ansi_for_test(&rendered)
+                .contains("Background work completed")
+        );
+        let full = TranscriptRenderOptions {
+            tool_call_mode: ToolCallDisplayMode::Full,
+            ..options()
+        };
+        let details = transcript
+            .display_tail(120, &full)
+            .iter()
+            .map(|line| line.as_str())
+            .collect::<String>();
+        assert!(details.contains("子 Agent 已完成"));
     }
 
     #[test]
@@ -298,5 +355,23 @@ mod tests {
 
         assert!(rendered.contains("\x1b[38;5;208m●"));
         assert!(rendered.contains("检查项目"));
+    }
+
+    /// 【终端】【自动历史测试】目标续轮及带目标前缀的完成回执均恢复为工具，不能产生用户导航点。
+    /// 参数: 无；返回: 无。
+    #[test]
+    fn automatic_history_messages_never_add_user_navigation_anchors() {
+        for (source, expected) in [
+            ("Goal 自动续轮：Inspect layout", "Continuing goal"),
+            ("Goal context\n\n<external-completion-events>\n后台命令：echo done\n状态：completed\n</external-completion-events>", "Background command completed"),
+        ] {
+            let mut transcript = TranscriptStore::new(200);
+            append_user_message(&mut transcript, &turn(true, source));
+            let document = transcript.render_fullscreen(100, &options(), &std::collections::HashSet::new());
+            assert!(document.anchors.is_empty());
+            let plain = document.lines.iter().map(|line| crate::render::activity_animation::strip_ansi_for_test(line.as_str())).collect::<Vec<_>>().join("\n");
+            assert!(plain.contains(expected), "{plain}");
+            assert!(!plain.contains("Goal context"), "{plain}");
+        }
     }
 }

@@ -24,7 +24,16 @@ impl ReplRuntime {
                 self.next_live_refresh = None;
                 self.live_sync_pending = false;
                 self.transcript.finalize_live_tail();
-                self.transcript.push_automatic_echo(input.content.clone());
+                if input.kind == crate::runner::AutomaticInputKind::ExternalCompletion {
+                    self.transcript
+                        .push_background_notice(input.content.clone());
+                } else {
+                    self.transcript.push_conversation_notice(
+                        crate::render::ConversationNoticeKind::GoalContinuation,
+                        input.content.clone(),
+                        &[],
+                    );
+                }
                 self.transcript.set_work_status(WorkStatus::WaitingResponse);
                 self.arm_live_ticker();
                 return self.sync_transcript(true);
@@ -74,7 +83,31 @@ impl ReplRuntime {
             AgentEvent::InterMessage(message) => {
                 self.clamp_queue_panel();
                 self.transcript.finalize_live_tail();
-                self.transcript.push_automatic_echo(message.content.clone());
+                match message.kind {
+                    crate::agent::InterMessageKind::ExternalCompletion => self
+                        .transcript
+                        .push_background_notice(message.content.clone()),
+                    crate::agent::InterMessageKind::GoalContinuation => {
+                        self.transcript.push_conversation_notice(
+                            crate::render::ConversationNoticeKind::GoalContinuation,
+                            message.content.clone(),
+                            &[],
+                        )
+                    }
+                    crate::agent::InterMessageKind::QueuedUser => {
+                        let sources = self
+                            .queued_items()
+                            .into_iter()
+                            .find(|item| item.id == message.id)
+                            .map(|item| item.clipboard.to_chat_input(&item.text).image_urls)
+                            .unwrap_or_default();
+                        self.transcript.push_conversation_notice(
+                            crate::render::ConversationNoticeKind::QueuedUser,
+                            message.content.clone(),
+                            &sources,
+                        );
+                    }
+                }
                 self.transcript.set_work_status(WorkStatus::WaitingResponse);
                 self.arm_live_ticker();
                 self.sync_transcript(true)

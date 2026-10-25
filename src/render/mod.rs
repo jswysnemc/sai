@@ -7,6 +7,7 @@ mod asset_block;
 /// 参数:
 /// - `config`: 显示配置
 pub(crate) fn configure_display_rendering(config: &crate::config::DisplayConfig) {
+    tui_style::configure(config.tui_style);
     asset_block::preferences::configure(config);
     fold_text::configure_fold_preview(config);
 }
@@ -15,7 +16,6 @@ pub(crate) mod background_promotion;
 pub(crate) mod brand_logo;
 mod cli_command_preview;
 mod code_block;
-pub(crate) mod syntect_highlight;
 mod command_output;
 mod command_result_block;
 pub(crate) mod content_indent;
@@ -24,6 +24,7 @@ mod engine_notice;
 mod error;
 pub(crate) mod expandable;
 pub(crate) mod fold_text;
+mod image_preview;
 pub(crate) mod input_atom;
 mod jev_preselect;
 mod live_tool_status;
@@ -53,6 +54,7 @@ mod stream_tool_status;
 mod streaming_asset_block;
 mod streaming_replace;
 mod style;
+pub(crate) mod syntect_highlight;
 mod table;
 pub(crate) mod terminal_frame;
 pub(crate) mod terminal_image;
@@ -65,6 +67,8 @@ mod tool_event_line;
 mod tool_names;
 mod tool_view;
 pub(crate) mod transcript;
+pub(crate) mod tui_presentation;
+pub(crate) mod tui_style;
 mod wait_spinner;
 pub(crate) mod work_status;
 
@@ -83,6 +87,7 @@ pub use stream::StreamRenderer;
 pub use stream_config::{ReasoningDisplayMode, StreamRenderOptions, ToolCallDisplayMode};
 pub use stream_output::print_assistant_response;
 pub(crate) use streaming_replace::{rendered_visual_rows, terminal_width};
+pub(crate) use tool_view::{is_external_notice, ConversationNoticeKind};
 
 /// 终端聊天渲染统一使用英文文案。
 ///

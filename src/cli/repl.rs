@@ -24,6 +24,8 @@ mod session_commands;
 mod session_resume;
 mod session_support;
 mod settings_commands;
+mod startup;
+mod style_commands;
 pub(super) mod subagent_commands;
 pub(super) mod subagent_input;
 mod submission_queue;
@@ -59,50 +61,7 @@ pub(super) async fn run_repl(
     let mut input_history = crate::state::input_history::load_input_history_entries(paths)?;
     let mut prefill = None::<String>;
     let mut prefill_clipboard = None;
-    let initial_transcript_options = render::transcript::TranscriptRenderOptions {
-        reasoning_mode: render::ReasoningDisplayMode::from_config(&config.display.reasoning),
-        tool_call_mode: render::ToolCallDisplayMode::from_config(&config.display.tool_calls),
-    };
-    // 【终端】【颜色探测】在光标查询和键盘事件读取之前缓存默认前景与背景
-    render::terminal_palette::initialize_terminal_palette();
-    // 光标不在行首时先换行，避免受管区域首行覆盖 shell 残留输出
-    if crossterm::cursor::position()
-        .map(|(col, _)| col != 0)
-        .unwrap_or(false)
-    {
-        println!();
-    }
-    let mut runtime = ReplRuntime::new(
-        config.display.repl_transcript_row_cap,
-        initial_transcript_options,
-    );
-    // 1. 【终端】【全局渲染】启动时应用显示偏好，后续 Ctrl+O 只改变当前会话
-    if config.display.fullscreen {
-        runtime.toggle_fullscreen()?;
-    }
-    render::configure_display_rendering(&config.display);
-    runtime.set_paste_image_key(config.input.paste_image_key);
-    runtime.record_welcome(
-        env!("CARGO_PKG_VERSION").to_string(),
-        repl_welcome_model(&config),
-        crate::runtime_cwd::current_dir()
-            .map(|path| super::repl_chrome::compress_home_prefix(&path.display().to_string()))
-            .unwrap_or_else(|_| "~".to_string()),
-        sandbox_commands::welcome_mode_label(mode),
-    )?;
-    // 按键说明由输入框下方的按键提示行常驻展示，启动时不再单独打印一行
-    // 使用外部内核时明确告知：对话交给了谁、哪些 sai 功能因此停用，
-    // 否则压缩与记忆静默失效，用起来像是出了故障
-    if let Some(notice) = crate::render::engine_notice(&config.agent) {
-        runtime.record_meta(notice)?;
-    }
-    record_repl_history(&mut runtime, &state)?;
-    // 1. 重量级初始化前先呈现输入框，避免版本信息后长时间没有输入区
-    {
-        let chrome = ReplChrome::from_runtime(&config, paths, &state, mode);
-        runtime.update_composer(&chrome, "", 0, false, Vec::new(), 0)?;
-        runtime.draw_composer()?;
-    }
+    let mut runtime = startup::initialize_runtime(&config, paths, &state, mode)?;
     // 2. 本地工具立即可用，MCP 动态工具在后台发现，避免阻塞输入框
     let initial_registry = build_repl_tool_registry_without_mcp_for_session(
         &config,
@@ -157,6 +116,10 @@ pub(super) async fn run_repl(
         };
         render::configure_display_rendering(&config.display);
         runtime.update_options(config.display.repl_transcript_row_cap, transcript_options);
+        // 【终端】【执行链视图】独占命令界面结束后恢复可点击视图，不改变经典样式的全屏偏好
+        if render::tui_style::is_deepseek() {
+            runtime.enter_fullscreen()?;
+        }
         runtime.set_mention_skills(super::repl_mentions::load_mention_skills(&config, paths));
         // 2. 优先执行本终端运行期间排队的消息
         if runtime.has_ready_turn_submission() {
@@ -295,6 +258,11 @@ pub(super) async fn run_repl(
         external_events.resume();
         apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
         let input = submission.raw_input.trim();
+        if style_commands::handle(input, paths, &mut config, &mut runtime)? {
+            pending_undo = false;
+            exit_armed = false;
+            continue;
+        }
         // 斜杠命令可能打开选择器、配置界面等独占终端的界面，先退出全屏视图
         if input.starts_with('/') {
             runtime.leave_fullscreen()?;

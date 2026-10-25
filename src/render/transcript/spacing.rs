@@ -10,7 +10,9 @@ use crate::render::activity_animation::{strip_ansi_for_test, ACTIVITY_GUIDE};
 /// 返回:
 /// - 去掉 ANSI 后没有非空白字符时为 true
 pub(super) fn is_visual_blank(line: &AnsiLine) -> bool {
-    strip_ansi_for_test(line.as_str()).trim().is_empty()
+    !line.as_str().contains("\x1b_Ga=p")
+        && !line.as_str().contains("\x1b]1337;File=")
+        && strip_ansi_for_test(line.as_str()).trim().is_empty()
 }
 
 /// 去掉块首连续的视觉空行。
@@ -34,7 +36,16 @@ pub(super) fn trim_leading_visual_blanks(lines: &mut Vec<AnsiLine>) {
 /// 返回:
 /// - 无
 pub(super) fn trim_trailing_visual_blanks(lines: &mut Vec<AnsiLine>) {
-    while lines.last().is_some_and(is_visual_blank) {
+    let reserved_end = lines
+        .iter()
+        .enumerate()
+        .filter_map(|(index, line)| {
+            crate::render::terminal_image::reserved_image_rows(line.as_str())
+                .map(|rows| index + rows)
+        })
+        .max()
+        .unwrap_or(0);
+    while lines.len() > reserved_end && lines.last().is_some_and(is_visual_blank) {
         lines.pop();
     }
 }

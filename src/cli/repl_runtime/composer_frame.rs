@@ -1,3 +1,4 @@
+mod input_hint;
 mod input_viewport;
 mod key_hints;
 mod layout;

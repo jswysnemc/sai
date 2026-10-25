@@ -3,7 +3,12 @@
 //! 所有绘制仍经过 `ReplRuntime` 的既有入口（`sync_transcript`、`replay`、
 //! `queue_composer`），全屏时这些入口改走本模块的整屏绘制；输入编辑逻辑不变。
 
+mod activity_scroll_anchor;
+mod activity_viewport;
+mod activity_viewport_hints;
+mod activity_window;
 mod bottom_button;
+mod guide_button;
 mod hover;
 mod hover_color;
 mod image_window;
@@ -11,6 +16,8 @@ mod input;
 mod layout;
 mod overview;
 mod paint;
+#[cfg(test)]
+mod presentation_tests;
 mod selection;
 mod state;
 
@@ -128,7 +135,7 @@ impl ReplRuntime {
     /// 返回:
     /// - 绘制结果
     pub(super) fn paint_fullscreen(&mut self) -> Result<()> {
-        self.paint_fullscreen_view(true)
+        crate::render::tui_presentation::with_locale(|| self.paint_fullscreen_view(true))
     }
 
     /// 【全屏视图】【交互重绘】滚动和拖选复用正文，仅在尺寸或展开状态变化时重新排版。
@@ -136,7 +143,7 @@ impl ReplRuntime {
     /// 参数: 无
     /// 返回: 可见区域绘制结果
     pub(super) fn paint_fullscreen_interaction(&mut self) -> Result<()> {
-        self.paint_fullscreen_view(false)
+        crate::render::tui_presentation::with_locale(|| self.paint_fullscreen_view(false))
     }
 
     /// 【全屏视图】【分区绘制】按来源决定是否更新正文，再绘制可见行与固定输入区。
@@ -177,6 +184,11 @@ impl ReplRuntime {
                 &session.state.expanded,
             );
             self.transcript.clear_dirty();
+            let document = session.state.activity.update(
+                document,
+                body_height,
+                usize::from(layout.content_width),
+            );
             session.state.apply_document(document, body_height);
         }
         if let Some((key, offset)) = session.pending_toggle.take() {

@@ -152,6 +152,15 @@ pub(crate) fn render(view: &super::model::ToolView, mode: ToolCallDisplayMode) -
     if mode == ToolCallDisplayMode::Summary {
         return Some(output);
     }
+    output.push('\n');
+    output.push_str(&render_body(&page, &arguments));
+    Some(output)
+}
+
+/// 【终端】【读取正文】单独渲染带行号正文，供已有摘要的布局复用。
+/// 参数: `page` 为读取页，`arguments` 为工具参数；返回: 保留语法颜色的正文。
+pub(crate) fn render_body(page: &ReadPageView, arguments: &Value) -> String {
+    let mut output = String::new();
     let path = if page.path.is_empty() {
         arguments
             .get("path")
@@ -169,8 +178,10 @@ pub(crate) fn render(view: &super::model::ToolView, mode: ToolCallDisplayMode) -
         .saturating_add(page.content.len().saturating_sub(1))
         .to_string()
         .len();
-    for line in &page.content {
-        output.push('\n');
+    for (index, line) in page.content.iter().enumerate() {
+        if index > 0 {
+            output.push('\n');
+        }
         output.push_str(&render_content_line(line, number_width, language));
     }
     if page.truncated {
@@ -181,7 +192,7 @@ pub(crate) fn render(view: &super::model::ToolView, mode: ToolCallDisplayMode) -
             ));
         }
     }
-    Some(output)
+    output
 }
 
 /// 生成状态行的阅读进度徽标。
@@ -237,13 +248,43 @@ fn render_content_line(line: &str, number_width: usize, language: &str) -> Strin
     };
     // 1. 【全屏代码】【正文着色】行号保持中性灰，正文按文件语言着色后交给 ANSI 折行器
     let code = crate::render::code_block::highlight_code_line(language, rest);
-    format!("\x1b[2m\x1b[38;5;{LINE_NUMBER_COLOR}m{number:>number_width$}\x1b[0m  {code}")
+    format!("\x1b[2m\x1b[38;5;{LINE_NUMBER_COLOR}m{number:<number_width$}\x1b[0m  {code}")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::render::activity_animation::strip_ansi_for_test;
+
+    /// 【终端】【行号对齐测试】跨越行号位数边界时行号左侧和正文起始列均不移动。
+    /// 参数: 无；返回: 无。
+    #[test]
+    fn number_and_code_columns_align_across_digit_boundaries() {
+        let lines = [
+            "9\tlet first = 1;",
+            "10\tlet second = 2;",
+            "100\tlet third = 3;",
+        ];
+        let rendered: Vec<_> = lines
+            .iter()
+            .map(|line| render_content_line(line, 3, "rs"))
+            .collect();
+        let plain: Vec<_> = rendered
+            .iter()
+            .map(|line| {
+                strip_ansi_for_test(&crate::render::content_indent::align_to_guide_column(line))
+            })
+            .collect();
+        assert!(
+            plain.iter().all(|line| line.find("let") == Some(7)),
+            "{plain:?}"
+        );
+        assert!(plain.iter().all(|line| line
+            .chars()
+            .position(|character| character.is_ascii_digit())
+            == Some(2)));
+        assert!(rendered.iter().all(|line| line.contains("\x1b[38;5;244m")));
+    }
 
     /// 【终端】【读取工具测试】完成后只显示实际返回区间，不能重复请求起点与行数。
     #[test]

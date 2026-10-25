@@ -19,9 +19,11 @@ import pyte
 class TerminalSession:
     """提供按键输入、尺寸变化和完整屏幕断言所需的伪终端。"""
 
-    def __init__(self, config=None, columns=80, rows=24, prepare=None, arguments=None, workspace=None, ready=None, kitty_keyboard=False):
-        """config 为配置，columns/rows 为尺寸；prepare 初始化数据，arguments/workspace 指定启动参数与目录，ready 指定就绪条件；kitty_keyboard 为真时应答键盘增强协议查询。"""
+    def __init__(self, config=None, columns=80, rows=24, prepare=None, arguments=None, workspace=None, ready=None, kitty_keyboard=False, kitty_graphics=False):
+        """config 为配置，columns/rows 为尺寸；prepare 初始化数据，arguments/workspace 指定启动参数与目录，ready 指定就绪条件；kitty_keyboard 应答键盘协议，kitty_graphics 启用图片协议并保留原始载荷。"""
         self.kitty_keyboard = kitty_keyboard
+        self.kitty_graphics = kitty_graphics
+        self.graphics_pending = ""
         self.directory = tempfile.TemporaryDirectory(prefix="sai-terminal-test-")
         self.root = Path(self.directory.name)
         self.ready = ready
@@ -37,6 +39,8 @@ class TerminalSession:
         environment.update(TERM="xterm-256color", LANG="en_US.UTF-8", LC_ALL="C.UTF-8")
         for key in ["KITTY_WINDOW_ID", "WEZTERM_PANE", "TERM_PROGRAM"]:
             environment.pop(key, None)
+        if kitty_graphics:
+            environment.update(TERM="xterm-kitty", KITTY_WINDOW_ID="1")
         config = config or {"active_provider": "test", "providers": [{
             "id": "test", "display_name": "Test", "base_url": "http://127.0.0.1:1/v1",
             "api_key": "local-fixture", "models": ["test"], "default_model": "test"}]}
@@ -110,7 +114,8 @@ class TerminalSession:
             if not data:
                 return
             self.raw.extend(data)
-            self.stream.feed(self.decoder.decode(data))
+            decoded = self.decoder.decode(data)
+            self.stream.feed(self.filter_graphics(decoded) if self.kitty_graphics else decoded)
             if b"\x1b[6n" in data:
                 self.send(f"\x1b[{self.screen.cursor.y + 1};{self.screen.cursor.x + 1}R".encode())
             if b"\x1b]11;?" in data:
@@ -118,6 +123,25 @@ class TerminalSession:
             if self.kitty_keyboard and b"\x1b[?u" in data:
                 # 应答键盘增强协议查询与主设备属性，让 sai 真正启用协议
                 self.send(b"\x1b[?0u\x1b[?62;22c")
+
+    def filter_graphics(self, text):
+        """【终端】【协议过滤】参数 text 为解码输出；保留原始协议证据，仅从 pyte 文本输入中移除跨块 APC。"""
+        self.graphics_pending += text
+        output = []
+        while self.graphics_pending:
+            start = self.graphics_pending.find("\x1b_")
+            if start < 0:
+                partial = self.graphics_pending.endswith("\x1b")
+                output.append(self.graphics_pending[:-1] if partial else self.graphics_pending)
+                self.graphics_pending = "\x1b" if partial else ""
+                break
+            output.append(self.graphics_pending[:start])
+            self.graphics_pending = self.graphics_pending[start:]
+            end = self.graphics_pending.find("\x1b\\")
+            if end < 0:
+                break
+            self.graphics_pending = self.graphics_pending[end + 2:]
+        return "".join(output)
 
     def wait_for(self, predicate, timeout=10):
         """等待 predicate 成立，timeout 为秒数；超时包含屏幕证据。"""

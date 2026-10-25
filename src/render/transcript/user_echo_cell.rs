@@ -11,7 +11,7 @@ use crate::render::input_atom::{render_input_atoms, InputAtom, InputAtomKind, In
 pub(crate) struct UserEchoCell {
     pub(crate) mode: TranscriptMode,
     pub(crate) text: String,
-    /// 是否展开完整正文；仅 `fold == true` 时有意义。
+    /// 是否展开完整正文及图片附件
     pub(crate) expanded: bool,
     /// 粘贴长文本才做思考式折叠；普通键入长消息保持全文。
     pub(crate) fold: bool,
@@ -77,7 +77,7 @@ impl UserEchoCell {
 
 /// 渲染用户提交后的输入回显。
 ///
-/// 已登记附件显示标签，长文本通过 Ctrl+O 展开；旧记录沿用首尾预览。
+/// 已登记附件默认显示标签，长文本和图片通过展开查看；旧文本记录沿用首尾预览。
 /// 普通键入消息无论多长都全文展示。
 ///
 /// 参数:
@@ -145,6 +145,11 @@ pub(crate) fn render(cell: &UserEchoCell) -> String {
             ));
         }
     }
+    lines.extend(super::user_image_preview::lines(
+        &cell.atoms,
+        expanded,
+        wrap,
+    ));
     // 轮次前空一行，和上一轮总览/响应隔开
     format!("\n{}", lines.join("\n"))
 }
@@ -157,6 +162,9 @@ pub(crate) fn render(cell: &UserEchoCell) -> String {
 /// 返回:
 /// - 粘贴长文本且默认宽度下会省略中间行时为 true
 pub(crate) fn would_fold(cell: &UserEchoCell) -> bool {
+    if super::user_image_preview::has_images(&cell.atoms) {
+        return true;
+    }
     if cell
         .atoms
         .iter()

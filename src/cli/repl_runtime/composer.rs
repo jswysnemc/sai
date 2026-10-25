@@ -92,6 +92,12 @@ impl ReplRuntime {
     /// 返回:
     /// - 面板 ANSI 行；无内容时为空
     pub(super) fn bottom_panel_lines(&self, cols: usize) -> Vec<String> {
+        crate::render::tui_presentation::with_locale(|| self.render_bottom_panel_lines(cols))
+    }
+
+    /// 【终端】【辅助面板语言】在调用方语言作用域内组装队列、任务与临时输入提示。
+    /// 参数: `cols` 为可用列数；返回: 保留原始消息内容的面板行。
+    fn render_bottom_panel_lines(&self, cols: usize) -> Vec<String> {
         let queued = self.queued_items();
         let queue_lines = self.queue_panel.panel_lines(&queued, self.stream_active);
         let mut agent_lines = self.agent_panel.panel_lines(
@@ -121,7 +127,7 @@ impl ReplRuntime {
             self.todo_panel_compact,
             self.transcript.live_animation_frame(),
         );
-        // 1. 【全屏视图】【固定状态】仅全屏模式把临时动效放在输入框上方，普通模式不变
+        // 1. 【终端】【执行链】新样式在正文链内展示当前步骤，不再添加底部详情面板
         if self.fullscreen.is_some() {
             lines.extend(
                 self.transcript
@@ -226,6 +232,12 @@ impl ReplRuntime {
     /// 返回:
     /// - 绘制结果
     pub(in crate::cli) fn queue_composer(&mut self) -> Result<()> {
+        crate::render::tui_presentation::with_locale(|| self.queue_composer_in_locale())
+    }
+
+    /// 【终端】【输入重绘语言】在统一语言作用域内计算输入与底栏，并保留原有差异绘制。
+    /// 参数: 无；返回: 当前帧组装结果。
+    fn queue_composer_in_locale(&mut self) -> Result<()> {
         let viewport = self.drawing_viewport();
         let Some(composer) = &self.composer else {
             return Ok(());
