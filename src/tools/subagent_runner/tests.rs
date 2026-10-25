@@ -7,6 +7,42 @@ use std::sync::{
 };
 use std::time::Duration;
 
+/// 【桌面测试】【执行器隔离】直接构造子代理也会移除桌面工具族，不依赖调用方白名单。
+/// 参数: 无；返回: 无。
+#[test]
+fn subagent_constructor_excludes_the_computer_use_family() {
+    let root = tempfile::tempdir().unwrap();
+    let mut provider = ProviderConfig::new_openai_compatible();
+    provider.id = "desktop-policy-test".into();
+    provider.enabled = true;
+    provider.base_url = "http://127.0.0.1:9/v1".into();
+    provider.api_key = Some("fixture".into());
+    provider.default_model = "test-model".into();
+    let config = AppConfig {
+        active_provider: provider.id.clone(),
+        providers: vec![provider],
+        ..Default::default()
+    };
+    let client =
+        OpenAiCompatibleClient::from_config(&config, &SaiPaths::for_tests(root.path())).unwrap();
+    let mut tools = ToolRegistry::new();
+    crate::tools::computer_use::register(&mut tools, &config.computer_use);
+    let parent_names = tools
+        .tool_infos()
+        .into_iter()
+        .map(|tool| tool.name)
+        .collect::<Vec<_>>();
+    let runner = SubagentRunner::new(
+        client,
+        "fixture",
+        tools,
+        SubagentProgress::new(ToolProgress::default(), ProgressMode::Hidden, false),
+    );
+    for name in parent_names {
+        assert!(!runner.tools.contains(&name), "{name}");
+    }
+}
+
 /// 【子任务】【循环测试】本地模型接口与无副作用工具，记录真实请求及执行次数。
 struct Harness {
     runner: SubagentRunner,

@@ -112,7 +112,7 @@ pub(crate) fn group_for_tool(name: &str) -> &'static str {
         "ssh_list_hosts" | "ssh_run_command" | "ssh_upload_file" | "ssh_download_file" => "ssh",
         "mcp_manager" => "mcp",
         _ if crate::tools::browser::BROWSER_TOOL_NAMES.contains(&name) => "browser",
-        "computer_use" => "computer_use",
+        _ if crate::tools::computer_use::is_tool(name) => "computer_use",
         "session_probe" | "agent_probe" | "mesh_send" => "mesh",
         _ if name.starts_with("mcp_") => "mcp",
         _ if name.starts_with("lua__") => "plugins",
@@ -282,7 +282,7 @@ pub(crate) fn group_meta(group: &str) -> ToolGroupMeta {
             label_zh: "桌面操作",
             hint_en: "Native app automation through cua-driver. Disabled by default; enable computer_use.enabled in Sai configuration and grant the driver's OS permissions. No frontmost-app fallback.",
             hint_zh: "通过 cua-driver 操作原生应用。默认关闭；需在 Sai 配置中开启 computer_use.enabled，并授予驱动所需的系统权限。不会默认操作前台应用。",
-            model_description: "Native desktop apps: discover apps/windows, inspect accessibility state and window screenshots, then use snapshot-bound element handles or window pixels to click, type, press keys, scroll, drag and set values. Requires explicit user enablement; the built-in browser remains a separate tool.",
+            model_description: "Native desktop apps: computer_apps/windows discover explicit targets; computer_screenshot returns a crop/downscale-aware frame; computer_ui/ui_action inspect and invoke snapshot-bound controls. Use computer_click/type/key/scroll/drag with a fresh snapshot or from_frame. computer_stop closes only this session; computer_status is configuration-only. The original computer_use action interface remains available. Requires explicit user enablement; no desktop-global input or subagent access.",
             settings_path: None,
         },
         "mcp" => ToolGroupMeta {

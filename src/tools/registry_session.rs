@@ -54,7 +54,7 @@ impl ToolRegistry {
             .filter(|name| *name != "subagent")
             .collect::<Vec<_>>();
         // 子代理初始注册发生在主会话网格、提问、目标与渐进网关之前，重绑保持同样边界
-        let inherited = refreshed.clone_filtered(&enabled).clone_excluding(&[
+        let mut inherited = refreshed.clone_filtered(&enabled).clone_excluding(&[
             "session_probe",
             "agent_probe",
             "mesh_send",
@@ -68,6 +68,7 @@ impl ToolRegistry {
             crate::tools::INVOKE_NAME,
             crate::tools::REQUEST_CAPABILITY_NAME,
         ]);
+        crate::tools::computer_use::exclude_from_subagent(&mut inherited);
         if self.contains("subagent") {
             crate::tools::subagent::register(
                 &mut refreshed,

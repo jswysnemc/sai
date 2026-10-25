@@ -33,6 +33,9 @@ pub(crate) fn render_framed(view: &ToolView, mode: ToolCallDisplayMode, frame: u
     if mode == ToolCallDisplayMode::Hidden {
         return String::new();
     }
+    if let Some(rendered) = super::computer_use::render(view, mode) {
+        return rendered;
+    }
     if let Some(rendered) = super::background_notice::render(view, mode) {
         return rendered;
     }

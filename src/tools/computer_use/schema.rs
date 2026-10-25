@@ -11,7 +11,8 @@ pub(super) fn parameters() -> Value {
         "properties": {
             "action":{"type":"string","enum":[
                 "status","reset","list_apps","list_windows","get_app_state",
-                "click","scroll","drag","press_key","type_text","set_value"
+                "click","scroll","drag","press_key","type_text","set_value",
+                "invoke","show_menu","get_value","get_text","locate_text"
             ]},
             "app":{"type":"string","minLength":1,"maxLength":512,
                 "description":"Explicit target: a positive process id from list_apps, or an exact, unambiguous running app name/bundle_id. Never defaults to the frontmost app."},
@@ -38,7 +39,15 @@ pub(super) fn parameters() -> Value {
             "modifiers":{"type":"array","maxItems":4,"uniqueItems":true,
                 "items":{"type":"string","enum":["ctrl","alt","shift","super","cmd","option","meta"]}},
             "query":{"type":"string","maxLength":512},
+            "name":{"type":"string","minLength":1,"maxLength":512},
             "max_elements":{"type":"integer","minimum":1,"maximum":2000},
+            "max_image_dimension":{"type":"integer","minimum":64,"maximum":4096},
+            "scale":{"type":"number","minimum":0.1,"maximum":1.0,
+                "description":"Optional screenshot downscale. Input coordinates still refer to the delivered image; Sai projects them back to the window."},
+            "region":{"type":"object","required":["x","y","width","height"],"additionalProperties":false,
+                "properties":{"x":{"type":"integer","minimum":0},"y":{"type":"integer","minimum":0},
+                    "width":{"type":"integer","minimum":1},"height":{"type":"integer","minimum":1}},
+                "description":"Optional crop in the original window screenshot's pixels, not desktop coordinates."},
             "include_screenshot":{"type":"boolean","description":"Defaults to true. Without a screenshot, only element/keyboard actions are available."}
         },
         "required":["action"],
@@ -46,13 +55,18 @@ pub(super) fn parameters() -> Value {
         "oneOf":[
             shape(&["status","reset","list_apps"], &[], &[]),
             shape(&["list_windows"], &["app"], &[]),
-            shape(&["get_app_state"], &["app","window_id"], &["query","max_elements","include_screenshot"]),
+            shape(&["get_app_state"], &["app","window_id"], &["query","max_elements","include_screenshot","max_image_dimension","scale","region"]),
             input_shape("click", &[], &["element_index","x","y","button","click_count","modifiers"]),
             input_shape("scroll", &["direction"], &["element_index","x","y","amount","by"]),
             input_shape("drag", &["from_x","from_y","to_x","to_y"], &["button","duration_ms"]),
             input_shape("press_key", &["key"], &["modifiers","element_index","x","y"]),
             input_shape("type_text", &["text"], &["element_index","x","y"]),
-            input_shape("set_value", &["element_index","value"], &[])
+            input_shape("set_value", &["element_index","value"], &[]),
+            input_shape("invoke", &["element_index"], &[]),
+            input_shape("show_menu", &["element_index"], &[]),
+            input_shape("get_value", &["element_index"], &[]),
+            input_shape("get_text", &["element_index"], &[]),
+            input_shape("locate_text", &["name"], &[])
         ]
     })
 }
@@ -94,6 +108,11 @@ pub(super) fn validate(args: &Value) -> Result<()> {
         .validate(args)
         .map_err(|error| anyhow::anyhow!("{error}"))
         .context("invalid computer_use arguments")?;
+    if args["include_screenshot"] == false
+        && (args.get("scale").is_some() || args.get("region").is_some())
+    {
+        bail!("scale and region require include_screenshot=true");
+    }
     let point = args.get("x").is_some() || args.get("y").is_some();
     if point && (args.get("x").is_none() || args.get("y").is_none()) {
         bail!("x and y must be supplied together");

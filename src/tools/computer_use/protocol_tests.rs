@@ -170,6 +170,64 @@ async fn registry_mcp_round_trip_keeps_images_and_reuses_the_connection() {
     call(&registry, json!({"action":"reset"})).await.unwrap();
 }
 
+/// 【桌面测试】【分动作协议】分动作截图、查询和帧点击复用 MCP 连接并投影回原图坐标。
+/// 参数: 无；返回: 无。
+#[tokio::test]
+async fn named_frame_and_accessibility_tools_complete_a_real_mcp_round_trip() {
+    let fixture = Fixture::start(2000).await;
+    let registry = fixture.registry();
+    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let observed = registry
+        .call_with_progress(
+            "computer_screenshot",
+            &json!({
+                "app":"42", "window_id":101,
+                "region":{"x":20,"y":10,"width":60,"height":40}, "scale":0.5
+            })
+            .to_string(),
+            sender,
+        )
+        .await
+        .unwrap();
+    assert_eq!(observed.model_attachments.len(), 1);
+    assert!(observed.content.contains("Screenshot: 30x20"));
+    let mut query = input_args(&observed.content, "get_text");
+    query["element_index"] = json!("g1:0");
+    assert!(registry
+        .call("computer_ui_action", &query.to_string())
+        .await
+        .unwrap()
+        .contains("Apply"));
+    assert_eq!(fixture.count("tools/call", Some("get_window_state")), 1);
+    let mut click = input_args(&observed.content, "click");
+    let fields = click.as_object_mut().unwrap();
+    let frame = fields.remove("snapshot_id").unwrap();
+    fields.remove("action");
+    fields.insert("from_frame".into(), frame);
+    click["x"] = json!(15);
+    click["y"] = json!(10);
+    registry
+        .call("computer_click", &click.to_string())
+        .await
+        .unwrap();
+    assert!(registry
+        .call("computer_ui_action", &query.to_string())
+        .await
+        .is_err());
+    assert_eq!(fixture.count("initialize", None), 1);
+    assert_eq!(fixture.count("tools/call", Some("click")), 1);
+    let requests = fixture.state.requests.lock().unwrap();
+    let native = requests
+        .iter()
+        .find(|request| request["params"]["name"] == "click")
+        .unwrap();
+    let arguments = &native["params"]["arguments"];
+    assert_eq!(arguments["x"], 50.0);
+    assert_eq!(arguments["y"], 30.0);
+    assert_eq!(arguments["capture_id"], "capture-fixture");
+    assert_eq!(arguments["delivery_mode"], "background");
+}
+
 /// 【桌面测试】【取消闭环】取消后快照不可复用，下一次观察重新建连且不重放输入。
 #[tokio::test]
 async fn cancelling_a_call_discards_connection_and_snapshot() {

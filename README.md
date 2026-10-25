@@ -98,7 +98,7 @@ Run `sai config` to open the hierarchical configurator covering providers, model
   - File precision editing: Exact line replacements (`str_replace`), read exploration (`read_file`), full write (`write_file`), safe trash recycling (`trash_path`);
   - Process execution & background management: Foreground execution and background command supervisor (`run_command` / `background_command`), with auto-demotion and status updates;
   - Native web tools: Read-only `web_search` (with TinyFish, Tavily, Firecrawl, AnySearch, SearXNG, DuckDuckGo failover) and `web_fetch` (direct page text/markdown extraction without Python dependencies);
-  - [Native desktop control](docs/computer-use.md) (`computer_use`): App/window discovery, accessibility snapshots, screenshots and snapshot-bound input through `cua-driver`; disabled by default and separate from the built-in browser;
+  - [Native desktop control](docs/computer-use.md) (`computer_use` tool family): App/window discovery, accessibility queries, cropped/scaled screenshot frames and snapshot-bound background input through `cua-driver`; disabled by default, excluded from subagents and separate from the built-in browser;
   - Structured queries (`ask_question`): Card-based single/multi-choice selection with custom inputs.
 - **Subagents**:
   - Independent LLM loops governed by `max_steps` budgets;

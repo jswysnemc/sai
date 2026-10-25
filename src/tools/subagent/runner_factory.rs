@@ -87,6 +87,7 @@ pub(super) fn build_subagent_runner(
         crate::tools::INVOKE_NAME,
         crate::tools::REQUEST_CAPABILITY_NAME,
     ]);
+    crate::tools::computer_use::exclude_from_subagent(&mut tools);
     // 【插件】【子任务隔离】独立 VM 保留父任务权限配置，但不继承父任务 Lua 全局状态
     tools.start_plugin_session(&format!("{}/subagent/{subagent_id}", context.session_id))?;
     crate::tools::progressive::register_loader(&mut tools, &profile.deferred_tools);

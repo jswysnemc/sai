@@ -229,6 +229,7 @@ impl SubagentRunner {
         mut tools: ToolRegistry,
         progress: SubagentProgress,
     ) -> Self {
+        crate::tools::computer_use::exclude_from_subagent(&mut tools);
         tools.set_plugin_model_client(&client);
         Self {
             client,

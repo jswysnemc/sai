@@ -2,6 +2,7 @@ mod background;
 mod background_notice;
 mod capability;
 pub(crate) mod command_output_buffer;
+mod computer_use;
 mod context_compression;
 mod conversation_notice;
 mod formatter;
@@ -17,6 +18,8 @@ mod todo;
 
 #[cfg(test)]
 mod background_notice_tests;
+#[cfg(test)]
+mod computer_use_tests;
 #[cfg(test)]
 mod conversation_notice_tests;
 #[cfg(test)]

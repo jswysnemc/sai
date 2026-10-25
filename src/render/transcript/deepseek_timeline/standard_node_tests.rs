@@ -104,3 +104,51 @@ fn preparing_command_reuses_standard_header_without_json() {
     }
     tui_style::set_override(None);
 }
+
+/// 【终端】【桌面链测试】桌面工具复用语义化普通样式，近期详情与手动收起均保留同一标题。
+/// 参数: 无；返回: 无。
+#[test]
+fn computer_use_steps_reuse_semantic_rendering_inside_the_chain() {
+    tui_style::set_override(Some(TuiStyle::Deepseek));
+    let mut store = TranscriptStore::new(200);
+    store.push_cell(HistoryCell::reasoning("Inspect the target window".into()));
+    store.push_tool_call(
+        "computer_screenshot".into(),
+        r#"{"app":"42","window_id":101}"#.into(),
+    );
+    store.push_tool_result(
+        "computer_screenshot".into(),
+        true,
+        "Screenshot: 100x60".into(),
+    );
+    let document = store.render_fullscreen(80, &options(), &HashSet::new());
+    let plain = document
+        .lines
+        .iter()
+        .map(|line| crate::render::activity_animation::strip_ansi_for_test(line.as_str()))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_eq!(plain.matches("Captured window").count(), 1, "{plain}");
+    assert!(plain.contains("Screenshot: 100x60"));
+    assert!(!plain.contains("{\""));
+    let collapsed = store.render_fullscreen(
+        80,
+        &options(),
+        &HashSet::from([ParagraphKey::activity(1, false)]),
+    );
+    let collapsed_plain = collapsed
+        .lines
+        .iter()
+        .map(|line| crate::render::activity_animation::strip_ansi_for_test(line.as_str()))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        collapsed_plain.contains("Captured window"),
+        "{collapsed_plain}"
+    );
+    assert!(!collapsed
+        .lines
+        .iter()
+        .any(|line| line.as_str().contains("Screenshot: 100x60")));
+    tui_style::set_override(None);
+}

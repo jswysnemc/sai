@@ -1,16 +1,28 @@
 //! 原生桌面操作入口：参考应用定向、快照句柄和窗口像素契约。
 
+mod accessibility;
 mod driver;
+mod family;
+mod frame;
 mod response;
 mod schema;
 mod session;
+mod snapshot_data;
 
+#[cfg(test)]
+mod accessibility_tests;
+#[cfg(test)]
+mod family_tests;
+#[cfg(test)]
+mod frame_tests;
 #[cfg(all(test, unix))]
 mod protocol_stdio_tests;
 #[cfg(test)]
 mod protocol_tests;
 #[cfg(test)]
 mod session_tests;
+#[cfg(test)]
+mod snapshot_data_tests;
 #[cfg(test)]
 mod test_support;
 #[cfg(test)]
@@ -24,6 +36,30 @@ use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
 
 pub(super) const TOOL_NAME: &str = "computer_use";
+
+/// 【桌面操作】【工具识别】统一识别原有入口和分动作入口，避免遗漏权限或渐进分组。
+/// 参数: `name` 为工具名；返回: 是否属于内置桌面工具族。
+pub(crate) fn is_tool(name: &str) -> bool {
+    name == TOOL_NAME || family::TOOLS.iter().any(|tool| tool.0 == name)
+}
+
+/// 【桌面操作】【动作名称】提供分动作入口的规范动作，供目录与终端复用。
+/// 参数: `name` 为分动作工具名；返回: 规范动作，统一入口或未知工具返回空。
+pub(crate) fn canonical_action(name: &str) -> Option<&'static str> {
+    family::TOOLS
+        .iter()
+        .find(|tool| tool.0 == name)
+        .map(|tool| tool.1)
+}
+
+/// 【桌面操作】【子任务隔离】移除桌面工具族，阻止子代理继承真实窗口和输入权限。
+/// 参数: `registry` 为子代理候选工具表；返回: 无。
+pub(crate) fn exclude_from_subagent(registry: &mut ToolRegistry) {
+    registry.remove(TOOL_NAME);
+    for (name, _, _) in family::TOOLS {
+        registry.remove(name);
+    }
+}
 
 /// 【桌面操作】【工具注册】注册延迟启动的原生工具，桌面访问沿用 Sai 的权限审核。
 /// @param registry 为工具表；config 为用户显式桌面配置
@@ -48,9 +84,35 @@ fn register_session(
 ) {
     let config = config.clone();
     let session = Arc::new(Mutex::new(session));
+    // 1. 【桌面操作】【工具族注册】所有命名入口共享会话，只有配置状态查询免桌面授权
+    for (name, _, description) in family::TOOLS {
+        let config = config.clone();
+        let session = session.clone();
+        let name = *name;
+        let tool = ToolSpec::new_with_output(name,
+            format!("{description} Requires explicit computer_use.enabled and OS permissions. All input is window-targeted, background-only and must use a fresh observation. Never retry uncertain input; observe again."),
+            family::parameters(name), move |args| {
+                let config = config.clone();
+                let session = session.clone();
+                async move {
+                    let args = family::normalize(name, args)?;
+                    schema::validate(&args)?;
+                    if args["action"] == "status" { return Ok(status(&config)); }
+                    ensure_enabled(&config)?;
+                    let mut session = session.try_lock().map_err(|_| anyhow::anyhow!("computer_use_busy: another request owns this session; wait and observe again"))?;
+                    session.execute(args).await
+                }
+            });
+        registry.register(if name == "computer_status" {
+            tool
+        } else {
+            tool.writes()
+        });
+    }
+    // 2. 【桌面操作】【兼容入口】保留统一动作接口，与命名入口共享快照消费边界
     registry.register(ToolSpec::new_with_output(
         TOOL_NAME,
-        "Control native desktop applications through the local cua-driver (not the built-in browser). Requires computer_use.enabled=true in user configuration and OS permissions; never change those settings yourself. Start with list_apps, then list_windows with an explicit app, then get_app_state with app and window_id. The state returns an accessibility tree, opaque element_index handles, a snapshot_id and a window screenshot. Every input must copy app, window_id and snapshot_id from that observation. Prefer element handles; x/y and drag coordinates are pixels in that exact screenshot, never screen coordinates. Each input consumes the snapshot: observe again before another action. Inputs use background delivery only; unavailable capture/input fails without foreground fallback. status inspects configuration without starting a driver; reset closes only this session. Do not retry uncertain actions after a timeout, cancellation or disconnect.",
+        "Control native desktop applications through the local cua-driver (not the built-in browser). Requires computer_use.enabled=true in user configuration and OS permissions; never change those settings yourself. Start with list_apps, then list_windows with an explicit app, then get_app_state with app and window_id. The state returns an accessibility tree, opaque element_index handles, a snapshot_id/frame_id and a window screenshot. Optional region and scale crop/downscale the screenshot; input points still refer to the delivered image and Sai projects them back to the original window. Every input must copy app, window_id and snapshot_id from that observation. Prefer element handles; never use desktop coordinates. Use get_value/get_text/locate_text to inspect current controls, or invoke/show_menu/set_value to interact with a returned handle. Each input consumes the snapshot: observe again before another action. Inputs use background delivery only; unavailable capture/input fails without foreground fallback. status inspects configuration without starting a driver; reset closes only this session. Do not retry uncertain actions after a timeout, cancellation or disconnect.",
         schema::parameters(),
         move |args| {
             let session = session.clone();

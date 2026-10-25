@@ -6,8 +6,8 @@ use crate::permission::{PermissionProfile, PermissionProfileMode};
 fn native_tool_is_registered_as_its_own_deferred_group() {
     let mut registry = ToolRegistry::new();
     register(&mut registry, &ComputerUseConfig::default());
-    assert_eq!(registry.tool_infos().len(), 1);
-    assert_eq!(registry.tool_infos()[0].name, TOOL_NAME);
+    assert_eq!(registry.tool_infos().len(), family::TOOLS.len() + 1);
+    assert!(registry.contains(TOOL_NAME));
     assert_eq!(
         crate::tools::groups::group_for_tool(TOOL_NAME),
         "computer_use"

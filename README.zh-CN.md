@@ -110,7 +110,7 @@ DeepSeek 执行链与用户消息的引导列对齐，子步骤仍保持两列�
   - 文件精准编辑：行级精确定位替换（`str_replace`）、只读探测（`read_file`）、全量写入（`write_file`）、安全移入回收站（`trash_path`）；
   - 命令与后台进程：支持前台运行与后台任务管理（`run_command` / `background_command`），长任务自动降级与状态通知；
   - 内置网络探测：提供原生只读 `web_search`（内置 TinyFish、Tavily、Firecrawl、AnySearch、SearXNG、DuckDuckGo 故障转移）与 `web_fetch`（网页内容智能抽取，无须 Python 依赖）；
-  - [原生桌面操作](docs/computer-use.md)（`computer_use`）：通过 `cua-driver` 发现应用和窗口、读取可访问性状态与截图，并执行绑定快照的输入操作；默认关闭，与内置浏览器相互独立；
+  - [原生桌面操作](docs/computer-use.md)（`computer_use` 工具族）：通过 `cua-driver` 发现应用和窗口、查询无障碍控件、裁剪缩放截图，并执行绑定快照的后台输入；默认关闭，子代理不可继承，与内置浏览器相互独立；
   - 交互式问答（`ask_question`）：结构化单选、多选与自定义补充输入。
 - **子智能体（Subagents）体系**：
   - 独立上下文循环与执行步数上限（`max_steps`）；
