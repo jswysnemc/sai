@@ -126,18 +126,29 @@ pub(super) fn render_live(
     Some(finish(AnsiLine::wrap_block(&text, width), width, open))
 }
 
-/// 【终端】【节点边界】仅移除布局边界留白，折叠时保留普通视图首行，极窄窗口避免宽字符越界。
-/// 参数: `lines` 为普通视图，`width` 为净宽，`open` 为展开状态；返回: 可直接接入链内的节点。
+/// 【终端】【节点边界】移除留白并在超宽时保留 ANSI 样式截断。
+///
+/// 参数:
+/// - `lines`: 待处理终端行
+/// - `width`: 允许的最大列宽
+/// - `open`: 是否展开
+///
+/// 返回:
+/// - 满足列宽边界的渲染节点
 fn finish(mut lines: Vec<AnsiLine>, width: usize, open: bool) -> RenderedNode {
+    // 1. 【终端】【留白清理】去除收尾无效空行
     spacing::trim_leading_visual_blanks(&mut lines);
     spacing::trim_trailing_visual_blanks(&mut lines);
+
+    // 2. 【终端】【折叠裁切】非展开状态只保留首行摘要
     if !open {
         lines.truncate(1);
     }
+
+    // 3. 【终端】【安全截断】逐行检查列宽并使用 ANSI 安全函数截断
     for line in &mut lines {
-        let plain = crate::render::activity_animation::strip_ansi_for_test(line.as_str());
-        if unicode_width::UnicodeWidthStr::width(plain.as_str()) > width {
-            *line = AnsiLine::new(crate::render::clip_to_width(&plain, width, ""));
+        if crate::render::ansi_clip::ansi_visible_width(line.as_str()) > width {
+            *line = AnsiLine::new(crate::render::ansi_clip::clip_ansi_to_width(line.as_str(), width, ""));
         }
     }
     RenderedNode { lines, open }

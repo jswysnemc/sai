@@ -12,8 +12,16 @@ pub(in crate::render::transcript) struct RecentDetails {
 
 impl RecentDetails {
     /// 【终端】【详情窗口】从末尾向前渲染节点，只在较新内容占满十行后自动收起旧详情。
-    /// 参数: `index` 为稳定节点下标，`newer_rows` 为较新节点行数，`required` 为强制展开状态，
-    /// `expanded` 为手动操作键，`render` 为节点渲染函数；返回: 点击键和渲染节点。
+    ///
+    /// 参数:
+    /// - `index`: 节点稳定下标
+    /// - `newer_rows`: 累积的较新节点物理行数
+    /// - `required`: 是否必须强制展开
+    /// - `expanded`: 手动展开/收起集合
+    /// - `render`: 节点渲染闭包
+    ///
+    /// 返回:
+    /// - 对应的点击段落键和已渲染节点
     pub(super) fn render(
         &mut self,
         index: usize,
@@ -30,10 +38,19 @@ impl RecentDetails {
         let active_key = ParagraphKey::activity(index, false);
         let history_key = ParagraphKey::whole(index);
         let key = if recent { active_key } else { history_key };
-        // 2. 【终端】【详情窗口】近期节点允许手动收起，历史节点允许手动展开
-        let open = required
-            || expanded.contains(&history_key)
-            || (recent && !expanded.contains(&active_key));
+
+        // 2. 【终端】【状态互通】显式手动展开与手动收起优先级高于生命周期默认值
+        let open = if required {
+            true
+        } else if expanded.contains(&history_key) {
+            true
+        } else if expanded.contains(&active_key) {
+            false
+        } else {
+            recent
+        };
+
+        // 3. 【终端】【正文生成】执行渲染并累加较新行计数
         let node = render(open);
         *newer_rows = newer_rows.saturating_add(node.lines.len().max(1));
         (key, node)

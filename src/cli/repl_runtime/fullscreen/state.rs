@@ -125,8 +125,14 @@ impl FullscreenState {
         self.scroll_to(target, body_height)
     }
 
-    /// 【终端】【链内输入】命中子视口时只滚动链内列表，不移动会话或输入区。
-    /// 参数: `row` 为文档行，`delta` 为偏移；返回: 命中后的变化状态，未命中返回空值。
+    /// 【终端】【链内输入】命中子视口时优先滚动链内列表；达到边界无法滚动时返回空值，允许外层主会话平滑接管滚动。
+    ///
+    /// 参数:
+    /// - `row`: 鼠标命中的文档物理行
+    /// - `delta`: 滚轮位移
+    ///
+    /// 返回:
+    /// - 若链内产生位移返回 Some(true)；未命中或已达边界返回 None 以触发冒泡回退
     pub(super) fn scroll_activity_at(&mut self, row: usize, delta: isize) -> Option<bool> {
         let key = self
             .document
@@ -134,7 +140,13 @@ impl FullscreenState {
             .iter()
             .find(|region| region.scrollable && row >= region.start && row < region.end)?
             .key;
-        Some(self.scroll_activity(key, delta))
+        let changed = self.scroll_activity(key, delta);
+        if changed {
+            Some(true)
+        } else {
+            // 链内已触顶或触底，返回 None 允许外部主会话继续滚动
+            None
+        }
     }
 
     /// 【终端】【链内键盘】优先浏览已操作的可见链，否则使用最近的可见链。

@@ -74,6 +74,7 @@ pub(crate) struct TranscriptStore {
     pub(super) work_status_started: Option<Instant>,
     pub(super) row_cap: usize,
     pub(super) cache: RenderCache,
+    pub(super) timeline_cache: super::deepseek_timeline::cache::TimelineNodeCache,
     pub(super) recent_details: super::deepseek_timeline::recent_details::RecentDetails,
     pub(super) dirty_from_cell: Option<usize>,
     /// 最近一次 todo 工具结果携带的全量清单快照

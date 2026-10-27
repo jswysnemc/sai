@@ -104,8 +104,9 @@ pub(super) fn render(
             nodes.push((key, node, !single));
         }
     }
+    let (cells, timeline_cache) = (&store.cells, &mut store.timeline_cache);
     for (position, index) in indices.iter().copied().enumerate().rev() {
-        let cell = &store.cells[index];
+        let cell = &cells[index];
         if matches!(cell, HistoryCell::Reasoning(_)) {
             thoughts += 1;
         } else {
@@ -118,7 +119,15 @@ pub(super) fn render(
             &mut newer_rows,
             single || awaiting,
             expanded,
-            |open| node::render_cell(cell, node_width, active, open),
+            |open| {
+                if !active && !awaiting {
+                    timeline_cache.get_or_render(index, node_width, open, || {
+                        node::render_cell(cell, node_width, false, open)
+                    })
+                } else {
+                    node::render_cell(cell, node_width, active, open)
+                }
+            },
         );
         retained_keys.extend([
             ParagraphKey::activity(index, false),

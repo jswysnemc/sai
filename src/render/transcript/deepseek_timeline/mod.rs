@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod activity_alignment_tests;
 mod appearance;
+pub(in crate::render::transcript) mod cache;
 #[cfg(test)]
 mod compact_tests;
 mod details;
@@ -23,6 +24,7 @@ mod summary;
 mod summary_tests;
 #[cfg(test)]
 mod tests;
+mod tool_summary;
 
 use super::cell::HistoryCell;
 use super::fullscreen_parts::ParagraphKey;

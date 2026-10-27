@@ -1,5 +1,5 @@
 use super::super::{cell::HistoryCell, tool_cell::ToolCell};
-use super::{appearance, file_summary};
+use super::{appearance, file_summary, tool_summary};
 use crate::render::status_style::ToolHealth;
 use crate::render::terminal_text as t;
 use crate::render::tool_event_line::{tool_event_label_tense, ToolVerbTense};
@@ -33,6 +33,7 @@ pub(super) fn for_cell(cell: &HistoryCell, width: usize, approval: bool) -> Stri
                 })
                 .unwrap_or_default();
             let label = file_summary::label(view, &elapsed, width.saturating_sub(2), approval)
+                .or_else(|| tool_summary::label(view, &elapsed, width.saturating_sub(2), approval))
                 .unwrap_or_else(|| {
                     let label = tool_event_label_tense(
                         &view.name,

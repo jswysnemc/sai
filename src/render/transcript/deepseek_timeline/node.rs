@@ -7,6 +7,7 @@ use crate::render::status_style::ToolHealth;
 use crate::render::terminal_text as t;
 use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
 
+#[derive(Clone)]
 pub(super) struct RenderedNode {
     pub(super) lines: Vec<AnsiLine>,
     pub(super) open: bool,
@@ -139,9 +140,18 @@ pub(super) fn render_live(
     )
 }
 
-/// 【终端】【节点缩进】标题保持一行，正文以两列空白缩进排布，不添加连接线。
-/// 参数: `title` 为标题，`body` 为正文，`width` 为净宽，`open` 为展开状态，
-/// `health` 为结果状态，`thinking` 为是否思考；返回: 节点。
+/// 【终端】【节点渲染】拼接步骤标题与带层级缩进的正文，超宽时保留 ANSI 样式截断。
+///
+/// 参数:
+/// - `title`: 单行纯文本摘要
+/// - `body`: 展开的正文行列表
+/// - `width`: 节点可用总宽度
+/// - `open`: 是否处于展开状态
+/// - `health`: 步骤执行健康状态
+/// - `thinking`: 是否为思考过程
+///
+/// 返回:
+/// - 渲染后的节点数据结构
 fn render(
     title: &str,
     body: Vec<AnsiLine>,
@@ -150,13 +160,15 @@ fn render(
     health: ToolHealth,
     thinking: bool,
 ) -> RenderedNode {
+    // 1. 【终端】【标题生成】渲染带状态着色的单行标题
     let mut lines = vec![appearance::title(title, health, thinking, width)];
     let indent = width.saturating_sub(1).min(2);
+    let available = width.saturating_sub(indent);
+
+    // 2. 【终端】【正文缩进】为展开正文逐行追加缩进并在超宽时保留 ANSI 样式截断
     for line in body {
-        let plain = crate::render::activity_animation::strip_ansi_for_test(line.as_str());
-        let available = width.saturating_sub(indent);
-        let text = if unicode_width::UnicodeWidthStr::width(plain.as_str()) > available {
-            crate::render::clip_to_width(&plain, available, "")
+        let text = if crate::render::ansi_clip::ansi_visible_width(line.as_str()) > available {
+            crate::render::ansi_clip::clip_ansi_to_width(line.as_str(), available, "")
         } else {
             line.as_str().to_string()
         };

@@ -201,13 +201,15 @@ impl ActivityViewports {
                 }
                 visible.scrollable = region.active || window.max > 0;
                 if visible.scrollable {
+                    let focused = self.selected == Some(region.key);
                     visible.footer = Some(projection.len());
-                    projection.push(activity_viewport_hints::footer(
+                    projection.push(activity_viewport_hints::footer_with_focus(
                         window.offset + 1,
                         window.offset + window.rows.len(),
                         region.end - region.start - 1,
                         position.follow,
                         self.width,
+                        focused,
                     ));
                 }
             }

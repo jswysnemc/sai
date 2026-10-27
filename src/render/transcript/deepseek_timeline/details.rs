@@ -72,13 +72,19 @@ fn invocation(view: &ToolView, cell: &HistoryCell, width: usize, title_width: us
             &visible_title,
         )
     } else {
-        let mut body = remaining_arguments(&view.arguments, &visible_title);
+        let args = remaining_arguments(&view.arguments, &visible_title);
         let output = view
             .outcome
             .as_ref()
             .map(|outcome| format_payload(&outcome.output))
             .unwrap_or_default();
-        append(&mut body, &output);
+        let body = if !args.is_empty() && !output.is_empty() {
+            format!("\x1b[2m▸ Input:\x1b[0m\n{args}\n\x1b[2m▸ Output:\x1b[0m\n{output}")
+        } else if !args.is_empty() {
+            args
+        } else {
+            output
+        };
         body
     };
     if let Some(progress) = view

@@ -3,12 +3,36 @@ use crate::render::transcript::AnsiLine;
 
 /// 【终端】【链内提示】按可用宽度优先显示位置和恢复跟随入口，不重复长操作说明。
 /// 参数: `first`、`last` 为可见源行，`count` 为总行数，`follow` 为跟随状态，`width` 为净宽；返回: 提示行。
+#[cfg(test)]
 pub(super) fn footer(
     first: usize,
     last: usize,
     count: usize,
     follow: bool,
     width: usize,
+) -> AnsiLine {
+    footer_with_focus(first, last, count, follow, width, false)
+}
+
+/// 【终端】【带焦点链内提示】当视口被键盘选中时突出焦点标记。
+///
+/// 参数:
+/// - `first`: 起始可见行
+/// - `last`: 结束可见行
+/// - `count`: 链内总行数
+/// - `follow`: 是否跟随最新
+/// - `width`: 净宽
+/// - `focused`: 是否当前键盘选中
+///
+/// 返回:
+/// - 提示行 ANSI Line
+pub(super) fn footer_with_focus(
+    first: usize,
+    last: usize,
+    count: usize,
+    follow: bool,
+    width: usize,
+    focused: bool,
 ) -> AnsiLine {
     let position = format!("{first}–{last}/{count}");
     let action = if follow {
@@ -28,14 +52,15 @@ pub(super) fn footer(
         format!("{position} · {compact}"),
         position,
     ];
-    let budget = width.saturating_sub(2);
+    let budget = width.saturating_sub(if focused { 4 } else { 2 });
     let text = candidates
         .iter()
         .find(|text| unicode_width::UnicodeWidthStr::width(text.as_str()) <= budget)
         .unwrap_or(&candidates[3]);
+    let prefix = if focused { "  ● " } else { "  " };
     AnsiLine::new(format!(
         "\x1b[2m{}\x1b[0m",
-        crate::render::clip_to_width(&format!("  {text}"), width, "")
+        crate::render::clip_to_width(&format!("{prefix}{text}"), width, "")
     ))
 }
 

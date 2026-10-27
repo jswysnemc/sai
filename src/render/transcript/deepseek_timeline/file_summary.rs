@@ -16,7 +16,7 @@ pub(super) fn label(
         return None;
     }
     if let Some(path) = crate::render::tool_view::image_read_path(view) {
-        let path = crate::render::activity_animation::strip_ansi_for_test(&path)
+        let path = crate::render::ansi_clip::strip_ansi(&path)
             .replace(['\n', '\r', '\t'], " ");
         return Some(fit(
             &path,
@@ -39,7 +39,7 @@ pub(super) fn label(
         .map(|page| page.path.as_str())
         .filter(|path| !path.is_empty())
         .unwrap_or(requested_path);
-    let path = crate::render::activity_animation::strip_ansi_for_test(path)
+    let path = crate::render::ansi_clip::strip_ansi(path)
         .replace(['\n', '\r', '\t'], " ");
     let range = if let Some(page) = page {
         line_range(page.offset as u64, page.content.len() as u64)

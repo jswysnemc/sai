@@ -1,4 +1,5 @@
 pub(crate) mod activity_animation;
+pub(crate) mod ansi_clip;
 pub(crate) mod ansi_style;
 mod asset_block;
 
@@ -90,7 +91,7 @@ pub use stream_output::print_assistant_response;
 pub(crate) use streaming_replace::{rendered_visual_rows, terminal_width};
 pub(crate) use tool_view::{is_external_notice, ConversationNoticeKind};
 
-/// 终端聊天渲染统一使用英文文案。
+/// 终端聊天与执行流渲染统一使用英文文案。
 ///
 /// 参数:
 /// - `english`: 英文文本

@@ -51,6 +51,7 @@ impl TranscriptStore {
             work_status_started: None,
             row_cap: row_cap.max(1),
             cache: RenderCache::default(),
+            timeline_cache: Default::default(),
             recent_details: Default::default(),
             dirty_from_cell: None,
             latest_todo: Vec::new(),
@@ -89,6 +90,7 @@ impl TranscriptStore {
     /// - 无
     pub(in crate::render::transcript) fn mark_dirty(&mut self, index: usize) {
         self.cache.invalidate(index);
+        self.timeline_cache.invalidate(index);
         self.dirty_from_cell = Some(match self.dirty_from_cell {
             Some(existing) => existing.min(index),
             None => index,
@@ -358,6 +360,7 @@ impl TranscriptStore {
         let index = self.cells.len();
         self.cells.push(cell);
         self.cache.push_slot();
+        self.timeline_cache.push_slot();
         self.mark_dirty(index);
     }
 
@@ -555,6 +558,7 @@ impl TranscriptStore {
         let index = self.cells.len();
         self.cells.push(tail.into_cell(duration));
         self.cache.push_slot();
+        self.timeline_cache.push_slot();
         self.mark_dirty(index);
         true
     }
@@ -574,6 +578,7 @@ impl TranscriptStore {
         self.live_animation_started = None;
         self.active_tool_index = None;
         self.cache.clear();
+        self.timeline_cache.clear();
         self.dirty_from_cell = None;
         self.latest_todo.clear();
     }
