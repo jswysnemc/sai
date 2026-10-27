@@ -244,7 +244,7 @@ fn allowed_tools(
 /// @returns 有剩余额度时成功
 pub(super) fn charge(counter: &AtomicUsize, limit: usize, kind: &str) -> mlua::Result<()> {
     counter
-        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+        .try_update(Ordering::AcqRel, Ordering::Acquire, |count| {
             (count < limit).then_some(count + 1)
         })
         .map(|_| ())

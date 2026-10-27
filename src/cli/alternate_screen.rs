@@ -58,7 +58,7 @@ pub(super) fn push_enhancement<W: Write>(writer: &mut W) -> io::Result<()> {
 /// - 写出结果
 pub(super) fn pop_enhancement<W: Write>(writer: &mut W) -> io::Result<()> {
     let popped = PUSHED
-        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |value| {
+        .try_update(Ordering::SeqCst, Ordering::SeqCst, |value| {
             value.checked_sub(1)
         })
         .is_ok();

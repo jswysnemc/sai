@@ -63,7 +63,7 @@ pub(super) fn install(
 pub(crate) fn charge(control: &CallControl, limit: usize) -> mlua::Result<()> {
     control
         .system_calls
-        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+        .try_update(Ordering::AcqRel, Ordering::Acquire, |count| {
             (count < limit).then_some(count + 1)
         })
         .map(|_| ())

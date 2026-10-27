@@ -11,6 +11,7 @@ use std::{
 pub(super) struct Target {
     pub directory: Dir,
     pub name: OsString,
+    #[cfg(target_os = "linux")]
     pub canonical: PathBuf,
     pub metadata: Metadata,
 }
@@ -44,6 +45,7 @@ impl Target {
         Ok(Some(Self {
             directory,
             name,
+            #[cfg(target_os = "linux")]
             canonical,
             metadata,
         }))

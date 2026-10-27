@@ -101,7 +101,7 @@ impl BinaryBudget {
     fn charge(&self, size: usize) -> Result<()> {
         if self
             .retained
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |used| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |used| {
                 used.checked_add(size).filter(|next| *next <= self.limit)
             })
             .is_err()

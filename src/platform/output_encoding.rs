@@ -16,9 +16,12 @@ pub(crate) fn decode_output(bytes: &[u8]) -> String {
     #[cfg(windows)]
     {
         let (text, _, _) = encoding_rs::GBK.decode(bytes);
-        return text.into_owned();
+        text.into_owned()
     }
-    String::from_utf8_lossy(bytes).into_owned()
+    #[cfg(not(windows))]
+    {
+        String::from_utf8_lossy(bytes).into_owned()
+    }
 }
 
 /// 跨读取块保持编码边界的命令输出解码器。

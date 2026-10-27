@@ -24,7 +24,7 @@ impl ExecutionBudget {
             return Err(mlua::Error::runtime("plugin execution timed out"));
         }
         self.remaining
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
                 value.checked_sub(units)
             })
             .map_err(|_| mlua::Error::runtime("plugin instruction budget exceeded"))?;
