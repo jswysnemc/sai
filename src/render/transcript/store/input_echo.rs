@@ -41,6 +41,7 @@ impl TranscriptStore {
     ///
     /// 返回:
     /// - 无
+    #[cfg(test)]
     pub(crate) fn push_user_echo(&mut self, mode: TranscriptMode, text: String) {
         self.push_user_echo_with_fold(mode, text, false);
     }
@@ -75,6 +76,7 @@ impl TranscriptStore {
     ///
     /// 返回:
     /// - 无
+    #[cfg(test)]
     pub(crate) fn push_automatic_echo(&mut self, text: String) {
         self.push_user_echo(TranscriptMode::Automatic, text);
     }

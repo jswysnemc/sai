@@ -56,11 +56,42 @@ pub(super) fn awaiting_permission(cell: &HistoryCell) -> bool {
 pub(super) fn render_cell(
     cell: &HistoryCell,
     width: usize,
-    _active: bool,
+    active: bool,
     open: bool,
 ) -> RenderedNode {
+    let animate = |mut node: RenderedNode| {
+        let icon = match cell {
+            HistoryCell::Tool(ToolCell::Invocation(view)) => {
+                Some(crate::render::guide_symbols::tool(&view.name))
+            }
+            HistoryCell::Diff(_) => Some(crate::render::guide_symbols::EDIT),
+            HistoryCell::Shell(_) => Some(crate::render::guide_symbols::COMMAND),
+            HistoryCell::Tool(ToolCell::Subagent(_)) => Some(crate::render::guide_symbols::AGENTS),
+            HistoryCell::Tool(
+                ToolCell::CompactionStarted { .. } | ToolCell::CompactionFinished { .. },
+            ) => Some(crate::render::guide_symbols::tool("compress_context")),
+            _ => None,
+        };
+        if let Some(icon) = icon {
+            let marker = if active
+                && appearance::health(cell) == ToolHealth::Pending
+                && !awaiting_permission(cell)
+            {
+                crate::render::guide_symbols::pulse(
+                    icon,
+                    crate::render::activity_animation::activity_frame_at(
+                        crate::render::activity_animation::activity_started_at().elapsed(),
+                    ),
+                )
+            } else {
+                icon.to_string()
+            };
+            super::pulse::apply_marker(&mut node.lines, &marker);
+        }
+        node
+    };
     if let Some(node) = super::standard_node::render_cell(cell, width, open) {
-        return node;
+        return animate(node);
     }
     let title = summary::for_cell(cell, width, awaiting_permission(cell));
     let body_width = width.saturating_sub(2).max(1);
@@ -69,14 +100,14 @@ pub(super) fn render_cell(
     } else {
         Vec::new()
     };
-    render(
+    animate(render(
         &title,
         body,
         width,
         open,
         appearance::health(cell),
         matches!(cell, HistoryCell::Reasoning(_)),
-    )
+    ))
 }
 
 /// 【终端】【实时节点】实时思考和工具参数显示在链内，不再占用输入区上方的固定面板。
@@ -87,7 +118,20 @@ pub(super) fn render_live(
     width: usize,
     open: bool,
 ) -> RenderedNode {
-    if let Some(node) = super::standard_node::render_live(store, &kind, width, open) {
+    let elapsed = store
+        .work_status_started
+        .or(store.live_animation_started)
+        .map(|started| started.elapsed())
+        .unwrap_or_default();
+    if let Some(mut node) = super::standard_node::render_live(store, &kind, width, open) {
+        let icon = match kind {
+            LiveNode::Thought => super::pulse::thinking_pulse_icon(elapsed).to_string(),
+            LiveNode::Tool => crate::render::guide_symbols::pulse(
+                crate::render::guide_symbols::tool(&store.live_tool_call.as_ref().unwrap().name),
+                crate::render::activity_animation::activity_frame_at(elapsed),
+            ),
+        };
+        super::pulse::apply_marker(&mut node.lines, &icon);
         return node;
     }
     let options = TranscriptRenderOptions {
@@ -97,12 +141,9 @@ pub(super) fn render_live(
     let title = match kind {
         LiveNode::Thought => {
             let tail = store.live_tail.as_ref().unwrap();
-            let elapsed = store
-                .work_status_started
-                .map(|started| started.elapsed())
-                .unwrap_or_default();
+            let icon = super::pulse::thinking_pulse_icon(elapsed);
             format!(
-                "◇ {} · {} {} · {:.1}s",
+                "{icon} {} · {} {} · {:.1}s",
                 t("Thinking", "思考中"),
                 crate::token_counter::count(&tail.source),
                 t("tokens", "词元"),
@@ -111,9 +152,9 @@ pub(super) fn render_live(
         }
         LiveNode::Tool => {
             let call = store.live_tool_call.as_ref().unwrap();
+            let icon = crate::render::guide_symbols::tool(&call.name);
             format!(
-                "{} {} · {}",
-                summary::tool_icon(&call.name),
+                "{icon} {} · {}",
                 t("Preparing tool call", "准备工具调用"),
                 call.name
             )
@@ -126,18 +167,27 @@ pub(super) fn render_live(
             ),
             LiveNode::Thought => store.activity_snapshot(&options).details,
         };
-        AnsiLine::wrap_block(&details, width.saturating_sub(2).max(1))
+        super::aligned_wrap::wrap_aligned_block(&details, width.saturating_sub(2).max(1))
     } else {
         Vec::new()
     };
-    render(
+    let mut node = render(
         &title,
         body,
         width,
         open,
         ToolHealth::Pending,
         matches!(kind, LiveNode::Thought),
-    )
+    );
+    if matches!(kind, LiveNode::Tool) {
+        let icon = crate::render::guide_symbols::tool(&store.live_tool_call.as_ref().unwrap().name);
+        let marker = crate::render::guide_symbols::pulse(
+            icon,
+            crate::render::activity_animation::activity_frame_at(elapsed),
+        );
+        super::pulse::apply_marker(&mut node.lines, &marker);
+    }
+    node
 }
 
 /// 【终端】【节点渲染】拼接步骤标题与带层级缩进的正文，超宽时保留 ANSI 样式截断。

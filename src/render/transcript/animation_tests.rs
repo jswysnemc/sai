@@ -38,7 +38,10 @@ fn tool_guides_pulse_only_while_running() {
         let later = store.cells[0].display_lines_framed(80, &options(), 8);
         let first_title = strip_ansi_for_test(first[0].as_str());
         let later_title = strip_ansi_for_test(later[0].as_str());
-        assert!(first_title.starts_with('●'), "{first_title}");
+        assert!(
+            first_title.starts_with(crate::render::guide_symbols::tool(name)),
+            "{first_title}"
+        );
         assert_eq!(first_title, later_title);
         assert_ne!(first[0], later[0]);
         assert_eq!(first.len(), later.len());

@@ -14,7 +14,7 @@ const RESET: &str = "\x1b[0m";
 ///
 /// 返回:
 /// - 带悬停提亮的行
-pub(super) fn tint_line(line: &str) -> String {
+pub(in crate::cli::repl_runtime) fn tint_line(line: &str) -> String {
     let mut output = String::with_capacity(line.len() + 64);
     output.push_str(HOVER_DEFAULT_FG);
     let mut index = 0usize;

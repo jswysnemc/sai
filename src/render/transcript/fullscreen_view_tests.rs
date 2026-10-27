@@ -260,7 +260,7 @@ fn expanded_reasoning_keeps_fenced_code_colors() {
     assert!(!plain(&expanded).join("\n").contains("```"));
 }
 
-/// 【提问展示】【全屏回归】实际展开路径保留问题、答案与选项说明，不显示原始协议；无参数和返回值。
+/// 【提问展示】【全屏回归】实际展开路径保留问题和选项答案，移除重复说明，不显示原始协议；无参数和返回值。
 #[test]
 fn expanded_question_uses_readable_answers() {
     for width in [40, 80] {
@@ -274,7 +274,8 @@ fn expanded_question_uses_readable_answers() {
         assert!(
             text.contains("Asked")
                 && text.contains("Select a module")
-                && text.contains("Option details"),
+                && text.contains("UI")
+                && !text.contains("Option details"),
             "{text}"
         );
         assert!(

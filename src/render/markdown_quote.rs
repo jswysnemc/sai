@@ -1,6 +1,6 @@
 use super::content_indent::CONTENT_LEFT_INDENT;
 use super::style::{MD_QUOTE_BAR_STYLE, RESET};
-use super::transcript::AnsiLine;
+
 use unicode_width::UnicodeWidthStr;
 
 /// 【终端】【引用解析】读取连续引用标记，兼容相邻或以空格分隔的嵌套层级。
@@ -36,7 +36,7 @@ pub(super) fn render(indent: &str, depth: usize, body: &str) -> String {
         .saturating_sub(indent_width + visible_depth * 2)
         .max(1);
     // 3. 【终端】【引用折行】只折正文，结构样式在正文前重置，避免引用线影响加粗与代码
-    AnsiLine::wrap_block(body, body_width)
+    super::transcript::list_wrap::wrap(body, body_width, 0)
         .into_iter()
         .map(|line| format!("{MD_QUOTE_BAR_STYLE}{gutter}{RESET}{}", line.as_str()))
         .collect::<Vec<_>>()

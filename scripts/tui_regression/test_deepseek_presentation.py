@@ -28,7 +28,7 @@ class DeepseekPresentationTests(unittest.TestCase):
                 terminal.wait_for(lambda: "Thought" in terminal.text())
                 self.assertIn("● 用户消息", terminal.text())
                 self.assertNotIn("› 用户消息", terminal.text())
-                self.assertIn("1 tool · 1 thought", terminal.text())
+                self.assertIn("1 read · 1 thought", terminal.text())
                 self.assertIn("Read file", terminal.text())
                 self.assertIn("Ctrl+O exit", terminal.text())
                 self.assertNotIn("已思考", terminal.text())

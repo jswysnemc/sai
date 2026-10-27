@@ -109,10 +109,10 @@ fn latest_style_waiting_status_is_fixed_above_input() {
     tui_style::set_override(None);
 }
 
-/// 【终端】【悬停按钮测试】悬停折叠标题时替换行首符号，展开状态显示收起按钮，移开后恢复。
+/// 【终端】【悬停按钮测试】悬停标题时保留语义图标并显示下划线，移开后恢复。
 /// 参数: 无；返回: 无。
 #[test]
-fn latest_style_hover_replaces_the_guide_without_moving_text() {
+fn latest_style_hover_preserves_the_guide_without_moving_text() {
     let layout = FullscreenLayout::compute(80, 24, 5);
     for expanded in [false, true] {
         let mut state = FullscreenState::new();
@@ -134,14 +134,8 @@ fn latest_style_hover_replaces_the_guide_without_moving_text() {
         state.pointer_col = Some(2);
         let hovered = paint::compose(&state, &layout);
         let plain = strip_ansi_for_test(&hovered.rows[usize::from(layout.body_top)]);
-        assert!(
-            plain.trim_start().starts_with(if expanded {
-                "▾ Ran command"
-            } else {
-                "▸ Ran command"
-            }),
-            "{plain:?}"
-        );
+        assert!(plain.trim_start().starts_with("> Ran command"), "{plain:?}");
+        assert!(hovered.rows[usize::from(layout.body_top)].contains(">"));
         state.pointer_row = None;
         let restored = paint::compose(&state, &layout);
         let normal = strip_ansi_for_test(&restored.rows[usize::from(layout.body_top)]);

@@ -30,12 +30,12 @@ fn reasoning_cell_lines_fit_display_width() {
                 display_width <= width,
                 "width={width} line {index} overflows: {plain:?}"
             );
-            // 区块前空行与箭头标题行跳过；正文必须带 gutter（`  └ ` 或四空格）
-            if plain.is_empty() || plain.starts_with('›') {
+            // 区块前空行与菱形标题行跳过；正文必须带 gutter（`  │ `）
+            if plain.is_empty() || plain.starts_with('◇') {
                 continue;
             }
             assert!(
-                plain.starts_with("  └ ") || plain.starts_with("    "),
+                plain.starts_with("  │ "),
                 "width={width} line {index} lost gutter: {plain:?}"
             );
         }

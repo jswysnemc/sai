@@ -42,10 +42,10 @@ class FullscreenActivityTests(unittest.TestCase):
             terminal.wait_for(lambda: "click to expand" in terminal.text())
             hint_row = next(index for index, line in enumerate(lines(terminal)) if "click to expand" in line)
             click(terminal, 5, hint_row)
-            terminal.wait_for(lambda: "THINK-ALPHA-6" in terminal.text())
-            body_row = next(index for index, line in enumerate(lines(terminal)) if "THINK-ALPHA-6" in line)
+            terminal.wait_for(lambda: "THINK-ALPHA-4" in terminal.text())
+            body_row = next(index for index, line in enumerate(lines(terminal)) if "THINK-ALPHA-4" in line)
             click(terminal, 8, body_row)
-            terminal.wait_for(lambda: "THINK-ALPHA-6" not in terminal.text())
+            terminal.wait_for(lambda: "THINK-ALPHA-4" not in terminal.text())
             self.assertIn("click to expand", terminal.text())
 
 

@@ -89,6 +89,7 @@ pub(crate) fn render(cell: &UserEchoCell) -> String {
     let prefix = match cell.mode {
         TranscriptMode::Yolo => "\x1b[38;5;208m●\x1b[0m ",
         TranscriptMode::Plan => "\x1b[36m●\x1b[0m ",
+        #[cfg(test)]
         TranscriptMode::Automatic => "\x1b[38;5;39m●\x1b[0m ",
     };
     let expanded = crate::render::render_expand::resolve_expanded(cell.expanded);

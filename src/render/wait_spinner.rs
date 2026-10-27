@@ -398,7 +398,7 @@ mod tests {
         assert!(frame.contains("model gpt"));
     }
 
-    /// 【终端】【等待状态测试】验证等待状态与工作状态共用主题流光和脉冲圆点。
+    /// 【终端】【等待状态测试】验证等待状态与工作状态共用主题流光和脉冲线段。
     ///
     /// 参数:
     /// - 无
@@ -416,7 +416,7 @@ mod tests {
 
         assert!(plain.contains("Thinking"));
         assert!(plain.contains("0s"));
-        assert!(plain.starts_with("● "));
+        assert!(plain.starts_with("─ "));
         assert!(!plain.contains('·'));
         assert_ne!(first, second);
         assert_eq!(lines, 1);

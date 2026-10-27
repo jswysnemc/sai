@@ -12,12 +12,12 @@ fn list_bullets_do_not_restyle_or_shift_tool_status_markers() {
     let aligned = align_to_guide_column(&list);
     assert_eq!(
         crate::render::activity_animation::strip_ansi_for_test(&aligned),
-        "  • item"
+        "  - item"
     );
     let nested = crate::render::markdown::render_markdown_line("    - nested");
     assert_eq!(
         crate::render::activity_animation::strip_ansi_for_test(&align_to_guide_column(&nested)),
-        "    • nested"
+        "    – nested"
     );
     assert_eq!(
         crate::render::activity_animation::strip_ansi_for_test(&align_to_guide_column(
@@ -27,7 +27,7 @@ fn list_bullets_do_not_restyle_or_shift_tool_status_markers() {
     );
 }
 
-/// 【终端】【视觉引导测试】脉冲圆点始终停在引导列，窄终端按可用空间压缩间隔。
+/// 【终端】【视觉引导测试】脉冲线段始终停在引导列，窄终端按可用空间压缩间隔。
 /// 参数：无；返回：无。
 #[test]
 fn animated_guides_stay_aligned_at_every_supported_width() {
@@ -35,7 +35,7 @@ fn animated_guides_stay_aligned_at_every_supported_width() {
 
     for frame in [0, 12, 31, 62] {
         let line = render_activity_line("Working", "", frame);
-        for (width, expected) in [(2, "● Working"), (1, "●Working"), (0, "Working")] {
+        for (width, expected) in [(2, "─ Working"), (1, "─Working"), (0, "Working")] {
             let aligned = align_to_guide_column_with_width(&line, width);
             assert_eq!(strip_ansi_for_test(&aligned), expected);
         }

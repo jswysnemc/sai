@@ -96,7 +96,12 @@ pub(super) fn live_opens_with_tool(lines: &[AnsiLine]) -> bool {
         .is_some_and(|line| {
             strip_ansi_for_test(line.as_str())
                 .trim_start()
-                .starts_with(['•', ACTIVITY_GUIDE, '◐', '◓', '◑', '◒'])
+                .chars()
+                .next()
+                .is_some_and(|ch| {
+                    crate::render::guide_symbols::is_semantic(ch)
+                        || matches!(ch, '•' | ACTIVITY_GUIDE | '╶' | '╴')
+                })
         })
 }
 

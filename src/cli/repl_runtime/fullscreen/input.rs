@@ -21,6 +21,7 @@ pub(in crate::cli) enum FullscreenEvent {
 
 /// 一次交互造成的变化。
 enum Effect {
+    Refresh,
     /// 视图位置或展开状态变化，需要重绘
     Repaint,
     /// 已处理但画面不变
@@ -44,10 +45,17 @@ impl ReplRuntime {
         if self.fullscreen.is_none() {
             return Ok(FullscreenEvent::Pass);
         }
+        let cleared = matches!(event, Event::Key(key) if key.kind != KeyEventKind::Release)
+            && self.composer_selection.clear();
         let effect = match event {
             Event::Mouse(mouse) => self.fullscreen_mouse(*mouse),
             Event::Key(key) if key.kind != KeyEventKind::Release => self.fullscreen_key(*key),
             _ => Effect::Pass,
+        };
+        let effect = if cleared && matches!(effect, Effect::Nothing) {
+            Effect::Repaint
+        } else {
+            effect
         };
         // 1. 选区复制经 OSC 52 写入终端剪贴板，随下一帧一起送出
         if let Some(text) = self
@@ -60,6 +68,10 @@ impl ReplRuntime {
             self.commit_frame()?;
         }
         match effect {
+            Effect::Refresh => {
+                self.paint_fullscreen()?;
+                Ok(FullscreenEvent::Consumed)
+            }
             Effect::Repaint => {
                 self.paint_fullscreen_interaction()?;
                 Ok(FullscreenEvent::Consumed)
@@ -126,26 +138,43 @@ impl ReplRuntime {
     /// 返回:
     /// - 处理效果
     fn fullscreen_mouse(&mut self, mouse: MouseEvent) -> Effect {
-        // 1. 【全屏视图】【待办切换】只响应可见 TODO 标题，不把输入区或被裁掉的标题当作按钮
-        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
-            && self
-                .transcript
-                .latest_todo_items()
-                .iter()
-                .any(|item| matches!(item.status.as_str(), "pending" | "in_progress"))
-            && self
-                .last_composer_signature
+        let input = self.composer_selection.handle(
+            mouse,
+            self.last_composer_signature
                 .as_ref()
-                .is_some_and(|signature| signature.hits_panel_header(mouse.column, mouse.row))
-        {
+                .and_then(|signature| signature.input_geometry.as_ref()),
+        );
+        if input.handled {
             if let Some(session) = self.fullscreen.as_mut() {
                 session.state.press = None;
                 session.state.selection = None;
-                session.state.copied = None;
-                session.state.dragging = false;
+                if let Some(text) = input.copy {
+                    session.state.copied = Some(text.chars().count());
+                    session.pending_copy = Some(text);
+                }
             }
-            self.toggle_todo_panel_compact();
-            return Effect::Repaint;
+            return if input.changed {
+                Effect::Repaint
+            } else {
+                Effect::Nothing
+            };
+        }
+        let panel_changed = matches!(mouse.kind, MouseEventKind::Moved)
+            && self.move_panel_pointer(mouse.column, mouse.row);
+        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
+            if let Some(action) = self.panel_target_at(mouse.column, mouse.row) {
+                if let Some(session) = self.fullscreen.as_mut() {
+                    if matches!(action, super::super::panel_mouse::PanelAction::Agent(_)) {
+                        session.state = super::state::FullscreenState::new();
+                    }
+                    session.state.press = None;
+                    session.state.selection = None;
+                    session.state.copied = None;
+                    session.state.dragging = false;
+                }
+                self.apply_panel_action(action);
+                return Effect::Refresh;
+            }
         }
         let Some(session) = self.fullscreen.as_mut() else {
             return Effect::Pass;
@@ -173,6 +202,8 @@ impl ReplRuntime {
             }
             // 1. 悬停：只在指向的概览标记或可展开段落变化时重绘
             MouseEventKind::Moved => {
+                let header_hover = mouse.row < layout.body_top && state.current_anchor().is_some();
+                let before_footer = state.hovered_activity_footer();
                 let hover = if layout.in_body(mouse.row) && layout.in_rail(mouse.column) {
                     let marks = rail_marks(state.document.anchors.len(), height);
                     mark_at_row(&marks, body_row).map(|mark| mark.anchor)
@@ -190,15 +221,20 @@ impl ReplRuntime {
                 state.pointer_row = in_body.then_some(body_row);
                 state.pointer_col = in_body.then_some(mouse.column);
                 let after = state.hovered_paragraph().map(|span| span.key);
+                let after_footer = state.hovered_activity_footer();
                 let after_button = session.bottom_button.is_some_and(|(start, end)| {
                     state.pointer_row == Some(height.saturating_sub(1))
                         && state
                             .pointer_col
                             .is_some_and(|col| col >= start && col < end)
                 });
-                let changed =
-                    hover != state.hover || before != after || before_button != after_button;
+                let changed = hover != state.hover
+                    || before != after
+                    || before_button != after_button
+                    || header_hover != state.header_hover
+                    || before_footer != after_footer;
                 state.hover = hover;
+                state.header_hover = header_hover;
                 changed
             }
             MouseEventKind::Drag(MouseButton::Left) if state.dragging => {
@@ -263,7 +299,7 @@ impl ReplRuntime {
                         {
                             return Effect::Nothing;
                         }
-                        if let Some(changed) = state.resume_activity_at(press.row) {
+                        if let Some(changed) = state.resume_activity_at(press.row, height) {
                             return if changed {
                                 Effect::Repaint
                             } else {
@@ -328,7 +364,7 @@ impl ReplRuntime {
             }
             _ => false,
         };
-        if changed {
+        if changed || panel_changed || input.changed {
             Effect::Repaint
         } else {
             Effect::Nothing

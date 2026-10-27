@@ -153,11 +153,11 @@ fn shimmer_preserves_short_and_unicode_labels() {
     assert!(render_shimmer_at("", Duration::ZERO, DARK).is_empty());
 }
 
-/// 【终端】【引导符测试】圆点全周期保持统一单列字形，不通过粗体改变轮廓。
+/// 【终端】【引导符测试】线段全周期保持统一单列字形，不通过粗体改变轮廓。
 /// 参数：无；返回：无。
 #[test]
-fn guide_keeps_the_existing_circle_and_column_width() {
-    assert_eq!(ACTIVITY_GUIDE, crate::render::style::GUIDE_FILLED);
+fn guide_keeps_a_line_segment_and_column_width() {
+    assert_eq!(ACTIVITY_GUIDE, '─');
     for palette in [
         DARK,
         LIGHT,
@@ -169,7 +169,7 @@ fn guide_keeps_the_existing_circle_and_column_width() {
         for frame in 0..50 {
             let rendered = render_guide_at(frame, None, palette);
             let plain = strip_ansi_for_test(&rendered);
-            assert_eq!(plain, "●");
+            assert_eq!(plain, "─");
             assert_eq!(UnicodeWidthStr::width(plain.as_str()), 1);
             assert!(!rendered.contains("\x1b[1m"));
             assert_eq!(rendered, render_guide_at(frame + 50, None, palette));
@@ -224,11 +224,11 @@ fn colored_guides_keep_status_colors_in_both_color_modes() {
             };
             assert_eq!(
                 render_guide_at(0, Some(color), fallback),
-                format!("\x1b[22m\x1b[{ansi}m\x1b[2m●{RESET}")
+                format!("\x1b[22m\x1b[{ansi}m\x1b[2m─{RESET}")
             );
             assert_eq!(
                 render_guide_at(8, Some(color), fallback),
-                format!("\x1b[22m\x1b[{ansi}m●{RESET}")
+                format!("\x1b[22m\x1b[{ansi}m─{RESET}")
             );
         }
     }
@@ -252,11 +252,11 @@ fn activity_line_keeps_labels_and_details() {
     for frame in 0..126 {
         assert_eq!(
             strip_ansi_for_test(&render_activity_line("Working", "2s", frame)),
-            "● Working 2s"
+            "─ Working 2s"
         );
         assert_eq!(
             strip_ansi_for_test(&render_activity_line("Working", "", frame)),
-            "● Working"
+            "─ Working"
         );
     }
     assert_eq!(blend_color((0, 0, 0), (1, 3, 5), 0.5), (0, 1, 2));

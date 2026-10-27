@@ -6,7 +6,7 @@ import unittest
 
 from mock_activity_model import ActivityModel
 from terminal import TerminalSession
-from test_fullscreen import click, lines
+from test_fullscreen import click, content_lines, lines
 
 
 class DeepseekStandardStyleTests(unittest.TestCase):
@@ -39,7 +39,7 @@ class DeepseekStandardStyleTests(unittest.TestCase):
                     self.assertEqual(len(line) - len(line.lstrip()), 6, repr(line))
 
     def test_command_transitions_keep_region_and_input_stable(self):
-        """无参数；准备、执行、完成和历史展开不显示 JSON，不移动分组标题或输入框。"""
+        """无参数；准备、执行和完成保持标题位置，输入框始终固定且不显示 JSON。"""
         with ActivityModel() as model:
             with TerminalSession(model.config(), columns=100, rows=34,
                     arguments=["--lang", "en-US"]) as terminal:
@@ -54,23 +54,28 @@ class DeepseekStandardStyleTests(unittest.TestCase):
                 model.advance.set()
                 terminal.wait_for(model.preparing.is_set)
                 terminal.wait_for(lambda: "Preparing" in terminal.text())
-                group, composer = self.row_of(terminal, "⌄"), self.row_of(terminal, "→")
+                group, composer = self.row_of(terminal, "▾"), self.row_of(terminal, "→")
                 self.assertNotIn('"command":', terminal.text())
                 model.resume_preparation.set()
-                terminal.wait_for(lambda: any(line.strip() == "└ RUNNING-OUT" for line in lines(terminal)))
-                self.assertEqual(self.row_of(terminal, "⌄"), group)
+                terminal.wait_for(lambda: any(line.strip() == "└ RUNNING-OUT" for line in content_lines(terminal)))
+                self.assertEqual(self.row_of(terminal, "▾"), group)
                 self.assertEqual(self.row_of(terminal, "→"), composer)
                 self.assertNotIn('"command":', terminal.text())
                 gate.touch()
                 terminal.wait_for(lambda: "ANSWER-END" in terminal.text())
-                self.assertEqual(self.row_of(terminal, "⌄"), group)
+                self.assertEqual(self.row_of(terminal, "▾"), group)
+                self.assertLess(self.row_of(terminal, "▾"), self.row_of(terminal, "Ran"))
+                last_output = next(index for index, line in enumerate(content_lines(terminal))
+                                   if line.strip() == "FINAL-OUT")
+                self.assertLessEqual(self.row_of(terminal, "ANSWER-END") - last_output, 2)
+                self.assertNotIn("Following latest", terminal.text())
                 self.assertEqual(self.row_of(terminal, "→"), composer)
-                self.assertTrue(any(line.strip() == "└ RUNNING-OUT" for line in lines(terminal)))
+                self.assertTrue(any(line.strip() == "└ RUNNING-OUT" for line in content_lines(terminal)))
                 self.assertIn("FINAL-OUT", terminal.text())
                 click(terminal, 6, self.row_of(terminal, "Ran"))
                 terminal.wait_for(lambda: "FINAL-OUT" not in terminal.text())
                 click(terminal, 6, self.row_of(terminal, "Ran"))
-                terminal.wait_for(lambda: any(line.strip() == "└ RUNNING-OUT" for line in lines(terminal)))
+                terminal.wait_for(lambda: any(line.strip() == "└ RUNNING-OUT" for line in content_lines(terminal)))
                 self.assertIn("FINAL-OUT", terminal.text())
                 self.assertNotIn('"command":', terminal.text())
                 self.assertEqual(self.row_of(terminal, "→"), composer)

@@ -1,19 +1,19 @@
 use super::{blend_color, RESET};
 use crate::render::terminal_palette::{terminal_palette, TerminalPalette};
 
-/// 复用现有实心圆，整个周期保持单列轮廓与基线
-pub(crate) const ACTIVITY_GUIDE: char = crate::render::style::GUIDE_FILLED;
+/// 活动线段固定占一列，亮度变化不移动文字
+pub(crate) const ACTIVITY_GUIDE: char = '─';
 /// 每轮 1.6 秒，两个亮度脉冲之后短暂停歇
 const GUIDE_CYCLE_FRAMES: usize = 50;
 const GUIDE_MIN_CONTRAST: f32 = 0.6;
 
-/// 【终端】【状态动效】渲染与终端前景同色的双脉冲圆点。
+/// 【终端】【状态动效】渲染与终端前景同色的双脉冲线段。
 /// 参数：`frame` 为动画帧号；返回：带亮度变化的单列 ANSI 引导符。
 pub(crate) fn render_activity_guide(frame: usize) -> String {
     render_activity_guide_with_color(frame, None)
 }
 
-/// 【终端】【状态动效】使用原有状态颜色渲染双脉冲圆点。
+/// 【终端】【状态动效】使用原有状态颜色渲染双脉冲线段。
 /// 参数：`frame` 为动画帧号，`color` 为可选 RGB 状态色；返回：单列 ANSI 引导符。
 pub(crate) fn render_activity_guide_with_color(
     frame: usize,
@@ -22,8 +22,8 @@ pub(crate) fn render_activity_guide_with_color(
     render_guide_at(frame, color, terminal_palette())
 }
 
-/// 【终端】【状态动效】在深浅主题中保持轮廓和最低对比度，仅改变圆点亮度。
-/// 参数：`frame` 为帧号，`color` 为状态色，`palette` 为终端颜色；返回：ANSI 圆点。
+/// 【终端】【状态动效】在深浅主题中保持轮廓和最低对比度，仅改变线段亮度。
+/// 参数：`frame` 为帧号，`color` 为状态色，`palette` 为终端颜色；返回：ANSI 线段。
 pub(super) fn render_guide_at(
     frame: usize,
     color: Option<(u8, u8, u8)>,

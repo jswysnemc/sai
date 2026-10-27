@@ -26,7 +26,7 @@ pub(crate) fn render_activity_detail(text: &str) -> String {
     format!("\x1b[22m\x1b[39m\x1b[2m{text}{RESET}")
 }
 
-/// 【终端】【状态动效】组合脉冲圆点、流光标题和弱化详情。
+/// 【终端】【状态动效】组合脉冲线段、流光标题和弱化详情。
 /// 参数：`label` 为状态文字，`detail` 为可选详情，`frame` 为动画帧号；返回：完整 ANSI 状态行。
 pub(crate) fn render_activity_line(label: &str, detail: &str, frame: usize) -> String {
     let mut output = format!(

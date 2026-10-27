@@ -12,7 +12,7 @@ use crate::render::{
 /// 参数: `cell` 为单元，`width` 为净宽，`open` 为展开状态；返回: 普通样式节点，其他单元为空。
 pub(super) fn render_cell(cell: &HistoryCell, width: usize, open: bool) -> Option<RenderedNode> {
     let supported = matches!(cell, HistoryCell::Reasoning(_) | HistoryCell::Shell(_))
-        || matches!(cell, HistoryCell::Tool(ToolCell::Invocation(view)) if matches!(view.name.as_str(), "run_command" | "todo" | "background_notice" | "conversation_notice") || crate::tools::computer_use::is_tool(&view.name));
+        || matches!(cell, HistoryCell::Tool(ToolCell::Invocation(view)) if matches!(view.name.as_str(), "run_command" | "todo" | "ask_question" | "background_notice" | "conversation_notice") || crate::tools::computer_use::is_tool(&view.name));
     if !supported {
         return None;
     }
@@ -32,7 +32,7 @@ pub(super) fn render_cell(cell: &HistoryCell, width: usize, open: bool) -> Optio
                     HistoryCell::Tool(ToolCell::Invocation(view))
                         if matches!(
                             view.name.as_str(),
-                            "todo" | "background_notice" | "conversation_notice"
+                            "todo" | "ask_question" | "background_notice" | "conversation_notice"
                         ) || crate::tools::computer_use::is_tool(&view.name) =>
                     {
                         crate::render::tool_view::render(view, ToolCallDisplayMode::Summary)
@@ -148,7 +148,11 @@ fn finish(mut lines: Vec<AnsiLine>, width: usize, open: bool) -> RenderedNode {
     // 3. 【终端】【安全截断】逐行检查列宽并使用 ANSI 安全函数截断
     for line in &mut lines {
         if crate::render::ansi_clip::ansi_visible_width(line.as_str()) > width {
-            *line = AnsiLine::new(crate::render::ansi_clip::clip_ansi_to_width(line.as_str(), width, ""));
+            *line = AnsiLine::new(crate::render::ansi_clip::clip_ansi_to_width(
+                line.as_str(),
+                width,
+                "",
+            ));
         }
     }
     RenderedNode { lines, open }

@@ -58,36 +58,41 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -
             .or_else(|| answer.and_then(|value| value["question"].as_str()))
             .unwrap_or("");
         let selected = answer_values(answer);
-        if !header.is_empty() {
-            lines.push(format!("  \x1b[1m{}\x1b[0m", clean(header)));
-        }
-        push_text(&mut lines, "  ", body, "");
+        push_text(
+            &mut lines,
+            "  ",
+            if body.is_empty() { header } else { body },
+            "",
+        );
         if mode == ToolCallDisplayMode::Full {
             if let Some(question) = question {
                 for (option_index, option) in question.options.iter().enumerate() {
                     let picked = selected.iter().any(|value| value == option.answer_value());
-                    let marker = match (question.multiple, picked) {
-                        (false, false) => "○",
-                        (false, true) => "●",
-                        (true, false) => "□",
-                        (true, true) => "■",
-                    };
+                    let marker = if picked { "●" } else { "○" };
                     let style = if picked { "\x1b[36m" } else { "\x1b[2m" };
                     push_text(
                         &mut lines,
                         "    ",
-                        &format!("{marker} {}. {}", option_index + 1, option.label),
+                        &format!("{}. {marker} {}", option_index + 1, option.label),
                         style,
                     );
-                    if !option.description.is_empty() {
-                        push_text(&mut lines, "      ", &option.description, "\x1b[2m");
-                    }
                 }
             }
         }
         for value in selected {
+            // 2. 【提问展示】【答案去重】展开列表已经标出标准答案，仅额外保留自定义内容
+            if mode == ToolCallDisplayMode::Full
+                && question.is_some_and(|question| {
+                    question
+                        .options
+                        .iter()
+                        .any(|option| option.answer_value() == value)
+                })
+            {
+                continue;
+            }
             let label = answer_label(question, &value);
-            push_text(&mut lines, "  › ", &label, "\x1b[36m");
+            push_text(&mut lines, "  ● ", &label, "\x1b[36m");
         }
         if let Some(count) = answer
             .and_then(|value| value["image_count"].as_u64())

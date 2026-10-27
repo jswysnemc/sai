@@ -5,6 +5,56 @@ use crate::render::{
     render_expand::with_force_expand, tui_style, ReasoningDisplayMode, ToolCallDisplayMode,
 };
 
+/// 【终端】【问答回归】执行链直接展示问题与答案，不展开协议字段；无参数和返回值。
+#[test]
+fn question_timeline_uses_compact_semantic_details() {
+    let mut view = crate::render::tool_view::ToolView::running(
+        "ask_question".into(),
+        serde_json::json!({"questions":[{
+            "header":"报告内容选择", "question":"报告包含哪些内容？", "multiple":true,
+            "options":[{"label":"调用矩阵","description":"重复说明","value":"matrix"},
+                       {"label":"异常用例","description":"另一说明"}]
+        }]})
+        .to_string(),
+    );
+    view.finish(
+        true,
+        serde_json::json!({"status":"answered","answers":[{
+        "question":"报告包含哪些内容？","answer":["matrix"]
+    }],"instruction":"INTERNAL_INSTRUCTION"})
+        .to_string(),
+    );
+    let cell = HistoryCell::Tool(super::super::tool_cell::ToolCell::Invocation(Box::new(
+        view,
+    )));
+    let node = node::render_cell(&cell, 80, false, true);
+    let plain = crate::render::activity_animation::strip_ansi_for_test(
+        &node
+            .lines
+            .iter()
+            .map(|line| line.as_str())
+            .collect::<Vec<_>>()
+            .join("\n"),
+    );
+    assert!(plain.contains("报告包含哪些内容？"), "{plain}");
+    assert_eq!(plain.matches("调用矩阵").count(), 1, "{plain}");
+    assert!(plain.contains("●") && plain.contains("○"), "{plain}");
+    for redundant in [
+        "Header:",
+        "Multiple:",
+        "Description:",
+        "Label:",
+        "Input:",
+        "Output:",
+        "INTERNAL_INSTRUCTION",
+        "重复说明",
+        "□",
+        "■",
+    ] {
+        assert!(!plain.contains(redundant), "{redundant}: {plain}");
+    }
+}
+
 /// 【终端】【普通节点测试】渲染普通样式的完整单元，去掉布局边界空行。
 /// 参数: `cell` 为历史单元，`width` 为净宽；返回: 普通样式的完整物理行。
 fn standard_lines(cell: &HistoryCell, width: usize) -> Vec<AnsiLine> {

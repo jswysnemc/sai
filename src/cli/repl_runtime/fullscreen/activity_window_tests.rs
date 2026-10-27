@@ -123,3 +123,105 @@ fn activity_window_handles_single_row() {
     assert_eq!(window.context, None);
     assert_eq!(window.rows, 21..22);
 }
+
+/// 【终端】【固定入口夹具】在长工具正文前加入类型化的较早步骤控件。
+/// 参数: 无；返回: 完整文档及执行链范围。
+fn source_with_older_steps() -> (FullscreenDocument, ActivityRegion) {
+    let (mut document, mut region) = source();
+    document
+        .lines
+        .insert(1, AnsiLine::new("Show 47 earlier steps".into()));
+    for span in &mut document.paragraphs {
+        span.start += 1;
+        span.end += 1;
+        span.control += 1;
+    }
+    document.paragraphs.insert(
+        0,
+        ParagraphSpan {
+            key: ParagraphKey {
+                cell: 0,
+                part: ParagraphPart::OlderActivity,
+            },
+            start: 1,
+            end: 2,
+            expanded: false,
+            control: 1,
+        },
+    );
+    region.end += 1;
+    document.activities.push(region.clone());
+    (document, region)
+}
+
+/// 【终端】【固定入口测试】首部、中部与尾部都固定入口，控件与节点标题共同占用既有高度。
+/// 参数: 无；返回: 无。
+#[test]
+fn older_steps_control_stays_fixed_and_clickable_at_every_offset() {
+    let (source, region) = source_with_older_steps();
+    for offset in [0, 3, 12, usize::MAX] {
+        let window = ActivityWindow::at(&source, &region, offset, 10);
+        assert_eq!(window.pinned_control, Some(1));
+        assert!(window.rows.start >= 2);
+        assert_eq!(
+            window.rows.len() + usize::from(window.context.is_some()) + 1,
+            10
+        );
+        let mut projection = DocumentProjection::new(&source);
+        projection.copy(0..1);
+        projection.copy(1..2);
+        if let Some(row) = window.context {
+            projection.copy(row..row + 1);
+        }
+        projection.copy(window.rows.clone());
+        let visible = projection.finish();
+        assert_eq!(visible.lines[1].as_str(), "Show 47 earlier steps");
+        assert_eq!(
+            visible
+                .lines
+                .iter()
+                .filter(|line| line.as_str().contains("earlier steps"))
+                .count(),
+            1
+        );
+        assert_eq!(
+            visible.paragraph_control_at(1).unwrap().key.part,
+            ParagraphPart::OlderActivity
+        );
+        if offset == usize::MAX {
+            assert_eq!(visible.lines.last().unwrap().as_str(), "line-21");
+            assert_eq!(window.context, Some(2));
+        }
+    }
+}
+
+/// 【终端】【固定入口边界测试】短内容不增加页脚，链首滚轮不被固定入口的偏移吞掉。
+/// 参数: 无；返回: 无。
+#[test]
+fn pinned_control_preserves_short_height_and_scroll_boundaries() {
+    use super::super::activity_viewport::ActivityViewports;
+    let (source, region) = source_with_older_steps();
+    let mut views = ActivityViewports::default();
+    let short = views.update(source.clone(), 40, 80, 40);
+    assert_eq!(short.lines.len(), source.lines.len());
+    assert_eq!(short.activities[0].footer, None);
+    views.update(source, 10, 80, 10);
+    assert!(views.scroll(region.key, isize::MIN));
+    assert!(!views.scroll(region.key, -1));
+    assert!(views.scroll(region.key, isize::MAX));
+    assert!(!views.scroll(region.key, 1));
+}
+
+/// 【终端】【固定入口窄窗测试】两行窗口容纳入口与正文，单行窗口优先保留实际内容。
+/// 参数: 无；返回: 无。
+#[test]
+fn pinned_control_leaves_room_for_content_in_tiny_windows() {
+    let (source, region) = source_with_older_steps();
+    let two = ActivityWindow::at(&source, &region, usize::MAX, 2);
+    assert_eq!(two.pinned_control, Some(1));
+    assert_eq!(two.context, None);
+    assert_eq!(two.rows.len(), 1);
+    let one = ActivityWindow::at(&source, &region, usize::MAX, 1);
+    assert_eq!(one.pinned_control, None);
+    assert_eq!(one.rows.len(), 1);
+}

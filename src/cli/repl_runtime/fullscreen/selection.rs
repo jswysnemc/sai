@@ -125,7 +125,7 @@ fn slice_cols(text: &str, from: usize, to: usize) -> String {
 ///
 /// 返回:
 /// - 带高亮的屏幕行
-pub(super) fn highlight_cols(line: &str, from: usize, to: usize) -> String {
+pub(in crate::cli::repl_runtime) fn highlight_cols(line: &str, from: usize, to: usize) -> String {
     let mut output = String::with_capacity(line.len() + 16);
     let mut col = 0usize;
     let mut active = false;

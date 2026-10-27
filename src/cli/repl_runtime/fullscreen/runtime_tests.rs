@@ -156,7 +156,13 @@ fn clicking_a_paragraph_toggles_it() {
         .iter()
         .map(|line| crate::render::activity_animation::strip_ansi_for_test(line.as_str()))
         .collect::<Vec<_>>();
-    assert!(text.join("\n").contains("turn-0-think-10"));
+    assert_eq!(
+        text.iter()
+            .filter(|line| line.contains("turn-0-think-"))
+            .count(),
+        5
+    );
+    assert!(!text.join("\n").contains("turn-0-think-10"));
     // 2. 展开段保留末尾收起行，同时正文任意可见行也能收起
     let reopened = session.state.document.paragraphs[0].clone();
     assert!(

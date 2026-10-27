@@ -3,6 +3,112 @@ use crate::cli::repl_runtime::composer_frame::ComposerFrame;
 use crate::cli::repl_runtime::viewport::{InlineViewport, TerminalSize};
 use crossterm::event::{MouseButton, MouseEventKind};
 
+/// 【终端】【待办悬停回归】仅标题出现大于号，移开恢复且布局不变；无参数和返回值。
+#[test]
+fn todo_hover_matches_click_target_without_resizing() {
+    let mut runtime = runtime(1);
+    runtime.transcript.push_tool_result(
+        "todo".into(),
+        true,
+        r#"{"items":[{"text":"current","status":"in_progress"}]}"#.into(),
+    );
+    runtime
+        .update_composer(&chrome(), "draft", 5, false, Vec::new(), 0)
+        .unwrap();
+    runtime.enter_fullscreen().unwrap();
+    let top = runtime.viewport.composer_top();
+    let height = runtime.viewport.composer_height();
+    runtime
+        .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 4, top))
+        .unwrap();
+    assert_eq!(
+        runtime.panel_target_at(4, top),
+        Some(crate::cli::repl_runtime::panel_mouse::PanelAction::Todo)
+    );
+    let signature = runtime.last_composer_signature.as_ref().unwrap();
+    assert!(signature.panel_line(0).unwrap().contains(">"));
+    assert_eq!(runtime.viewport.composer_top(), top);
+    assert_eq!(runtime.viewport.composer_height(), height);
+    runtime
+        .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 4, top + 2))
+        .unwrap();
+    assert!(!runtime
+        .last_composer_signature
+        .as_ref()
+        .unwrap()
+        .panel_line(0)
+        .unwrap()
+        .contains(">"));
+}
+
+/// 【终端】【子代理鼠标回归】点击标题展开，点击条目进入会话，返回主会话仍可用；无参数和返回值。
+#[test]
+fn subagent_panel_hover_and_click_share_visible_rows() {
+    use crate::cli::repl_runtime::panel_mouse::PanelAction;
+    let mut runtime = runtime(1);
+    runtime.transcript.push_tool_call(
+        "subagent".into(),
+        r#"{"action":"start","description":"task"}"#.into(),
+    );
+    runtime.transcript.push_tool_result(
+        "subagent".into(),
+        true,
+        r#"{"subagent":{"id":"hover-fixture","status":"completed"}}"#.into(),
+    );
+    runtime
+        .update_composer(&chrome(), "draft", 5, false, Vec::new(), 0)
+        .unwrap();
+    runtime.enter_fullscreen().unwrap();
+    let top = runtime.viewport.composer_top();
+    assert_eq!(
+        runtime.panel_target_at(4, top),
+        Some(PanelAction::AgentsToggle)
+    );
+    runtime
+        .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 4, top))
+        .unwrap();
+    assert!(runtime
+        .last_composer_signature
+        .as_ref()
+        .unwrap()
+        .panel_line(0)
+        .unwrap()
+        .contains(">"));
+    runtime
+        .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 4, top))
+        .unwrap();
+    assert!(runtime.agent_panel.is_active());
+    let top = runtime.viewport.composer_top();
+    let action = runtime.panel_target_at(8, top + 2).unwrap();
+    assert!(matches!(action, PanelAction::Agent(Some(_))));
+    runtime
+        .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 8, top + 2))
+        .unwrap();
+    assert!(runtime
+        .last_composer_signature
+        .as_ref()
+        .unwrap()
+        .panel_line(2)
+        .unwrap()
+        .contains(">"));
+    runtime
+        .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 8, top + 2))
+        .unwrap();
+    assert_eq!(
+        runtime.transcript.viewing_subagent_id(),
+        Some("hover-fixture")
+    );
+    let top = runtime.viewport.composer_top();
+    runtime
+        .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 4, top))
+        .unwrap();
+    let top = runtime.viewport.composer_top();
+    runtime
+        .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 8, top + 1))
+        .unwrap();
+    assert_eq!(runtime.transcript.viewing_subagent_id(), None);
+}
+
 /// 【全屏视图】【待办回归】点击可见标题展开和收起，正文条目不触发切换；无参数或返回值。
 #[test]
 fn todo_header_click_toggles_without_selecting_text() {

@@ -4,6 +4,7 @@ mod background_logs;
 mod bottom_panel;
 mod composer;
 mod composer_frame;
+mod composer_selection;
 mod event_loop;
 mod fullscreen;
 mod history;
@@ -15,6 +16,7 @@ mod layout;
 mod live_usage;
 mod mention_completion;
 mod mention_panel;
+mod panel_mouse;
 mod placeholder_tips;
 mod question_handoff;
 mod queue_panel;
@@ -77,6 +79,7 @@ pub(super) struct ReplRuntime {
     reflow: ReflowState,
     stream: StreamState,
     composer: Option<ComposerFrame>,
+    composer_selection: composer_selection::ComposerSelection,
     next_live_refresh: Option<Instant>,
     live_sync_pending: bool,
     desynced: bool,
@@ -101,6 +104,7 @@ pub(super) struct ReplRuntime {
     last_chrome: Option<ReplChrome>,
     /// 底部主/子 agent 切换面板状态
     agent_panel: agent_panel::AgentPanelState,
+    panel_pointer: Option<(u16, u16)>,
     /// 当前子代理输入错误，绑定目标 ID，切换视图后不显示旧目标错误
     subagent_input_error: Option<(String, String)>,
     /// 用户消息队列管理面板状态
@@ -231,6 +235,7 @@ impl ReplRuntime {
             reflow,
             stream: StreamState::default(),
             composer: None,
+            composer_selection: composer_selection::ComposerSelection::default(),
             next_live_refresh: None,
             live_sync_pending: false,
             desynced: false,
@@ -246,6 +251,7 @@ impl ReplRuntime {
             live_session_id: None,
             last_chrome: None,
             agent_panel: agent_panel::AgentPanelState::default(),
+            panel_pointer: None,
             subagent_input_error: None,
             queue_panel: queue_panel::QueuePanelState::default(),
             last_cursor_row: None,

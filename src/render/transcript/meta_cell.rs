@@ -42,7 +42,18 @@ pub(crate) fn render(cell: &MetaCell) -> String {
         // 整行失败色：终端若缺 ✗ 字形，至少标题仍是醒目的红色引导
         MetaKind::Failure => format!("\x1b[31m✗ {first}\x1b[0m"),
         // 总览正常情况下自带样式走上方 verbatim 分支；纯文本兜底按中性提示排版
-        MetaKind::Notice | MetaKind::Summary => format!("\x1b[2m› {first}\x1b[0m"),
+        MetaKind::Notice | MetaKind::Summary => crate::render::guide_symbols::notice(
+            if first.starts_with("created session:")
+                || first.starts_with("已创建会话:")
+                || first.starts_with("current session:")
+                || first.starts_with("当前会话:")
+            {
+                crate::render::guide_symbols::SESSION
+            } else {
+                crate::render::guide_symbols::INFO
+            },
+            first,
+        ),
     };
     for line in lines {
         let styled = match cell.kind {
@@ -80,7 +91,13 @@ mod tests {
             kind: MetaKind::Notice,
         });
 
-        assert_eq!(rendered, "\x1b[2m› 已切换模型\x1b[0m");
+        assert_eq!(
+            rendered,
+            format!(
+                "\x1b[2m{} 已切换模型\x1b[0m",
+                crate::render::guide_symbols::INFO
+            )
+        );
     }
 
     /// 自带 ANSI 样式的内容原样输出，不重复包装。

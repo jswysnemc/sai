@@ -141,7 +141,7 @@ fn inactive_option_still_shows_full_description() {
         .iter()
         .map(|line| strip_ansi(line))
         .collect::<Vec<_>>();
-    assert_eq!(visible[0], "  □ 文档");
+    assert_eq!(visible[0], "  ○ 文档");
     assert!(visible
         .iter()
         .any(|line| line.contains("说明新的操作方式和适用范围。")));
@@ -163,7 +163,7 @@ fn option_rows_have_no_numbers_and_put_description_below_title() {
 #[test]
 fn multi_option_rows_keep_checkbox_without_number() {
     let lines = option_lines("代码", "修改实现和测试", true, true, true, 18);
-    assert_eq!(strip_ansi(&lines[0]), "› ■ 代码");
+    assert_eq!(strip_ansi(&lines[0]), "› ● 代码");
     assert!(strip_ansi(&lines[1]).starts_with("    "));
 }
 

@@ -4,12 +4,18 @@ use super::activity_window::{ActivityWindow, DocumentProjection};
 use crate::render::transcript::{ActivityRegion, AnsiLine, FullscreenDocument, ParagraphKey};
 use std::collections::{HashMap, HashSet};
 
-const MAX_BODY_ROWS: usize = 10;
-
 #[derive(Clone)]
 struct ScrollPosition {
     offset: usize,
     follow: bool,
+    height_limit: Option<usize>,
+}
+
+/// 【终端】【点击锚点】保存节点在链内的位置，以及标题下方可以展开的空间。
+struct ActivityFocus {
+    key: ParagraphKey,
+    body_offset: usize,
+    height_limit: Option<usize>,
 }
 
 impl Default for ScrollPosition {
@@ -19,6 +25,7 @@ impl Default for ScrollPosition {
         Self {
             offset: 0,
             follow: true,
+            height_limit: None,
         }
     }
 }
@@ -30,18 +37,26 @@ pub(super) struct ActivityViewports {
     positions: HashMap<ParagraphKey, ScrollPosition>,
     body_rows: usize,
     width: usize,
-    focus: Option<ParagraphKey>,
+    terminal_height: usize,
+    focus: Option<ActivityFocus>,
     pub(super) selected: Option<ParagraphKey>,
 }
 
 impl ActivityViewports {
-    /// 【终端】【链内视口】换入源文档，运行区固定高度，已完成的短链不保留大片留白。
-    /// 参数: `source` 为完整文档，`height` 为正文高度，`width` 为净宽；返回: 可见文档。
+    /// 【终端】【跟随状态】参数为执行链键；返回是否已跟随末尾，用于区分状态和按钮。
+    pub(super) fn is_following(&self, key: ParagraphKey) -> bool {
+        self.positions
+            .get(&key)
+            .is_none_or(|position| position.follow)
+    }
+    /// 【终端】【链内视口】换入源文档，运行与完成共用自然高度，长详情受八成高度预算限制。
+    /// 参数: `source` 为完整文档，`height` 为正文高度，`width` 为净宽，`terminal_height` 为终端总行数；返回: 可见文档。
     pub(super) fn update(
         &mut self,
         source: FullscreenDocument,
         height: usize,
         width: usize,
+        terminal_height: usize,
     ) -> FullscreenDocument {
         let mut keys = source.retained_keys.iter().copied().collect::<HashSet<_>>();
         keys.extend(source.paragraphs.iter().map(|span| span.key));
@@ -52,6 +67,12 @@ impl ActivityViewports {
             self.source = FullscreenDocument::default();
             self.focus = None;
             return source;
+        }
+        // 1. 【终端】【尺寸变化】只有真实终端缩放才释放点击时的高度限制，状态栏变化不重置阅读位置
+        if self.width != width || self.terminal_height != terminal_height {
+            for position in self.positions.values_mut() {
+                position.height_limit = None;
+            }
         }
         if self.width != width {
             for region in &source.activities {
@@ -81,26 +102,47 @@ impl ActivityViewports {
         self.body_rows = if height < 4 {
             0
         } else {
-            ((height - 2) / 2).min(MAX_BODY_ROWS)
+            // 【终端】【高度预算】以终端总高度计算八成，给分组标题和页脚留出空间
+            (terminal_height.saturating_mul(8) / 10).min(height.saturating_sub(2))
         };
         self.width = width;
+        self.terminal_height = terminal_height;
         self.source = source;
-        if let Some(key) = self.focus.take() {
-            if let Some(span) = self.source.paragraphs.iter().find(|span| span.key == key) {
-                if let Some(region) = self.source.activities.iter().find(|region| {
-                    region.key != key && span.start > region.start && span.start < region.end
-                }) {
+        if let Some(focus) = self.focus.take() {
+            if let Some(span) = self
+                .source
+                .paragraphs
+                .iter()
+                .find(|span| span.key == focus.key)
+            {
+                if let Some(region) = self
+                    .source
+                    .activities
+                    .iter()
+                    .find(|region| span.start >= region.start && span.start < region.end)
+                {
                     self.selected = Some(region.key);
-                    self.positions.insert(
-                        region.key,
-                        ScrollPosition {
-                            offset: span.start - region.start - 1,
-                            follow: key.is_active()
-                                && region.active
-                                && span.expanded
-                                && span.end == region.end,
-                        },
+                    let height = self
+                        .body_rows
+                        .min(focus.height_limit.unwrap_or(self.body_rows))
+                        .min(region.end.saturating_sub(region.start + 1));
+                    let pinned = usize::from(
+                        ActivityWindow::at(&self.source, region, 0, height)
+                            .pinned_control
+                            .is_some(),
                     );
+                    let position = self.positions.entry(region.key).or_default();
+                    position.height_limit = focus.height_limit;
+                    if region.key != focus.key {
+                        position.offset = span
+                            .control
+                            .saturating_sub(region.start + 1)
+                            .saturating_sub(focus.body_offset.saturating_sub(pinned));
+                        position.follow = focus.key.is_active()
+                            && region.active
+                            && span.expanded
+                            && span.end == region.end;
+                    }
                 }
             }
         }
@@ -109,8 +151,24 @@ impl ActivityViewports {
 
     /// 【终端】【链内定位】展开或折叠后保留操作节点的位置。
     /// 参数: `key` 为节点键；返回: 无。
+    #[cfg(test)]
     pub(super) fn focus(&mut self, key: ParagraphKey) {
-        self.focus = Some(key);
+        self.focus_at(key, 0, None);
+    }
+
+    /// 【终端】【点击定位】记录原节点行位置，只在标题下方剩余空间中展开详情。
+    /// 参数: `key` 为节点键，`body_offset` 为节点相对链正文的行数，`height_limit` 为可用详情高度；返回: 无。
+    pub(super) fn focus_at(
+        &mut self,
+        key: ParagraphKey,
+        body_offset: usize,
+        height_limit: Option<usize>,
+    ) {
+        self.focus = Some(ActivityFocus {
+            key,
+            body_offset,
+            height_limit,
+        });
     }
 
     /// 【终端】【链内翻页】计算留有上下文重叠的页高。
@@ -120,7 +178,15 @@ impl ActivityViewports {
             .activities
             .iter()
             .find(|region| region.key == key)
-            .map(|region| self.height(region).saturating_sub(2).max(1))
+            .map(|region| {
+                let height = self.height(region);
+                let pinned = usize::from(
+                    ActivityWindow::at(&self.source, region, 0, height)
+                        .pinned_control
+                        .is_some(),
+                );
+                height.saturating_sub(2 + pinned).max(1)
+            })
             .unwrap_or(1)
     }
 
@@ -135,25 +201,33 @@ impl ActivityViewports {
         else {
             return false;
         };
-        let max = ActivityWindow::at(&self.source, region, usize::MAX, self.height(region)).max;
+        let height = self.height(region);
         let position = self.positions.entry(key).or_default();
-        let next = position.offset.saturating_add_signed(delta).min(max);
+        let window = ActivityWindow::at(
+            &self.source,
+            region,
+            position.offset.saturating_add_signed(delta),
+            height,
+        );
+        let next = window.offset;
         let changed = next != position.offset;
         position.offset = next;
-        position.follow = next == max;
+        position.follow = next == window.max;
         self.selected = Some(key);
         changed
     }
 
-    /// 【终端】【链内高度】只有运行中的短链填满窗口，历史短链使用自然高度。
+    /// 【终端】【链内高度】短内容不填充空白，展开时受原标题下方可用空间限制。
     /// 参数: `region` 为链范围；返回: 正文行数。
     fn height(&self, region: &ActivityRegion) -> usize {
-        if region.active {
-            self.body_rows
-        } else {
-            self.body_rows
-                .min(region.end.saturating_sub(region.start + 1))
-        }
+        self.body_rows
+            .min(
+                self.positions
+                    .get(&region.key)
+                    .and_then(|position| position.height_limit)
+                    .unwrap_or(self.body_rows),
+            )
+            .min(region.end.saturating_sub(region.start + 1))
     }
 
     /// 【终端】【链内裁切】保留分组标题和被滚过的节点标题，映射点击与消息锚点。
@@ -168,7 +242,7 @@ impl ActivityViewports {
         }
         let mut projection = DocumentProjection::new(&self.source);
         let mut cursor = 0;
-        // 1. 【终端】【链内裁切】审批始终完整显示，普通链按运行状态决定是否保留固定高度
+        // 1. 【终端】【链内裁切】审批始终完整显示，普通链只在内容溢出时启用独立滚动
         for region in &self.source.activities {
             projection.copy(cursor..region.start);
             let mut visible = region.clone();
@@ -191,22 +265,26 @@ impl ActivityViewports {
                 );
                 position.offset = window.offset;
                 position.follow = window.offset == window.max;
+                if let Some(control) = window.pinned_control {
+                    projection.copy(control..control + 1);
+                }
                 if let Some(context) = window.context {
                     projection.copy(context..context + 1);
                 }
                 projection.copy(window.rows.clone());
-                let rendered = window.rows.len() + usize::from(window.context.is_some());
+                let pinned = usize::from(window.pinned_control.is_some());
+                let rendered = window.rows.len() + usize::from(window.context.is_some()) + pinned;
                 for _ in rendered..height {
                     projection.push(AnsiLine::new(String::new()));
                 }
-                visible.scrollable = region.active || window.max > 0;
+                visible.scrollable = window.max > window.min;
                 if visible.scrollable {
                     let focused = self.selected == Some(region.key);
                     visible.footer = Some(projection.len());
                     projection.push(activity_viewport_hints::footer_with_focus(
-                        window.offset + 1,
-                        window.offset + window.rows.len(),
-                        region.end - region.start - 1,
+                        window.offset + 1 - pinned,
+                        window.offset + window.rows.len() - pinned,
+                        region.end - region.start - 1 - pinned,
                         position.follow,
                         self.width,
                         focused,

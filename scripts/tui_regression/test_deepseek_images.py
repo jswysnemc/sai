@@ -51,7 +51,9 @@ class DeepseekImageTests(unittest.TestCase):
                     before = len(terminal.raw)
                     terminal.send(key)
                     terminal.pump(.4)
-                    self.assertIn(b"\x1b_Ga=p", terminal.raw[before:])
+                    # 1. 【终端图片】【放置复用】无位移时复用原放置，删除旧图后必须重新放置
+                    if b"\x1b_Ga=d" in terminal.raw[before:]:
+                        self.assertIn(b"\x1b_Ga=p", terminal.raw[before:])
                     self.assertIn("Viewed image", terminal.text())
                 terminal.resize(65, 30)
                 terminal.pump(.5)
@@ -64,8 +66,8 @@ class DeepseekImageTests(unittest.TestCase):
                 self.assertNotIn(b"\x1b_Ga=p", terminal.raw[before:])
                 self.assertIn("ANSWER-END", terminal.text())
 
-    def test_round_bullets_and_digit_boundary_alignment(self):
-        """无参数；真实文本读取保持行号与代码对齐，模型无序列表显示圆点。"""
+    def test_list_markers_and_digit_boundary_alignment(self):
+        """无参数；真实文本读取保持行号与代码对齐，模型无序列表区分层级标记。"""
         with ActivityModel("read_file", {}) as model:
             model.answer = "ANSWER-END\n- first item\n* second item\n  + nested item"
             with TerminalSession(model.config(), columns=100, rows=32,
@@ -77,9 +79,9 @@ class DeepseekImageTests(unittest.TestCase):
                 terminal.wait_for(model.ready.is_set)
                 model.advance.set()
                 terminal.wait_for(lambda: "second item" in terminal.text())
-                self.assertIn("\u2022 first item", terminal.text())
-                self.assertIn("\u2022 second item", terminal.text())
-                self.assertIn("\u2022 nested item", terminal.text())
+                self.assertIn("- first item", terminal.text())
+                self.assertIn("- second item", terminal.text())
+                self.assertIn("· nested item", terminal.text())
                 terminal.wait_for(lambda: "value_10" in terminal.text())
                 code = [line for line in lines(terminal) if re.search(r"\b(?:8|9|10|11)\s+let value_", line)]
                 self.assertEqual(len(code), 4)

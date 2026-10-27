@@ -30,7 +30,7 @@ pub(super) fn render(cell: &HistoryCell, width: usize, title_width: usize) -> Ve
                     .join("\n"),
                 _ => String::new(),
             };
-            let mut lines = AnsiLine::wrap_block(&body, width);
+            let mut lines = super::aligned_wrap::wrap_aligned_block(&body, width);
             super::super::spacing::trim_leading_visual_blanks(&mut lines);
             super::super::spacing::trim_trailing_visual_blanks(&mut lines);
             lines
@@ -81,7 +81,7 @@ fn invocation(view: &ToolView, cell: &HistoryCell, width: usize, title_width: us
         let body = if !args.is_empty() && !output.is_empty() {
             format!("\x1b[2m▸ Input:\x1b[0m\n{args}\n\x1b[2m▸ Output:\x1b[0m\n{output}")
         } else if !args.is_empty() {
-            args
+            format!("\x1b[2m▸ Input:\x1b[0m\n{args}")
         } else {
             output
         };

@@ -102,6 +102,11 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
             }
             _ => body,
         };
+        let body = if state.hovered_activity_footer().is_some() && state.pointer_row == Some(row) {
+            super::hover::tint_line(&super::guide_button::render(&body, false))
+        } else {
+            body
+        };
         // 5. 拖动选区以反色标出
         let body = match state
             .selection
@@ -113,7 +118,10 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
         // 6. 离开底部时在紧贴输入框的正文末行居中叠加“回到底部”按钮；悬停预览所在行不叠加
         let is_last = row + 1 == body_height;
         let hovered_here = matches!(&preview, Some((preview_row, _)) if *preview_row == row);
-        let body = if is_last && !hovered_here {
+        let body = if is_last
+            && !hovered_here
+            && !super::bottom_button::conflicts_with_activity_footer(state, body_height)
+        {
             let (line, cols) =
                 super::bottom_button::overlay(&body, state, content_width, state.pointer_col);
             bottom_button = cols;
@@ -187,6 +195,11 @@ fn header_line(state: &FullscreenState, layout: &FullscreenLayout) -> String {
         )
     } else {
         format!("{HEADER_HINT}{}", t("Ctrl+O exit", "Ctrl+O 退出"))
+    };
+    let left = if state.header_hover {
+        super::hover::tint_line(&super::guide_button::render(&left, false))
+    } else {
+        left
     };
     let right_width = visible_width(&right);
     let left_budget = cols.saturating_sub(right_width + 3).max(1);

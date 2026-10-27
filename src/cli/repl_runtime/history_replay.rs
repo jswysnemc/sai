@@ -308,13 +308,15 @@ mod tests {
             .map(|line| strip_ansi_for_test(line.as_str()))
             .collect::<Vec<_>>();
         let look = plain.iter().position(|line| line.contains("look around"));
-        let first_tool = plain.iter().position(|line| line.contains('•'));
+        let first_tool = plain
+            .iter()
+            .position(|line| line.contains(crate::render::guide_symbols::READ));
         let check = plain.iter().position(|line| line.contains("check tests"));
         let second_tool = plain
             .iter()
             .enumerate()
             .rev()
-            .find(|(_, line)| line.contains('•'))
+            .find(|(_, line)| line.contains(crate::render::guide_symbols::READ))
             .map(|(index, _)| index);
         let final_think = plain.iter().position(|line| line.contains("final report"));
         let body = plain.iter().position(|line| line.contains("done"));
@@ -343,7 +345,9 @@ mod tests {
             .map(|line| strip_ansi_for_test(line.as_str()))
             .collect::<Vec<_>>();
         let think = plain.iter().position(|line| line.contains("legacy think"));
-        let tool_line = plain.iter().position(|line| line.contains('•'));
+        let tool_line = plain
+            .iter()
+            .position(|line| line.contains(crate::render::guide_symbols::READ));
         let body = plain.iter().position(|line| line.contains("done"));
         assert!(think < tool_line, "{plain:?}");
         assert!(tool_line < body, "{plain:?}");

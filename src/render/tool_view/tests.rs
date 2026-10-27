@@ -199,7 +199,7 @@ fn web_search_summary_shows_result_count_and_provider() {
     ));
     assert_eq!(
         plain.trim(),
-        "• Searched the web for rust 2 results · Brave"
+        "\u{f002} Searched the web for rust 2 results · Brave"
     );
 }
 
@@ -222,7 +222,7 @@ fn file_search_summary_shows_match_and_file_counts() {
     ));
     assert_eq!(
         plain.trim(),
-        "• Searched files for main 3+ matches in 2 files"
+        "\u{f002} Searched files for main 3+ matches in 2 files"
     );
     // 无命中时明确写 no matches
     let mut empty = ToolView::running("grep".into(), r#"{"pattern":"zzz"}"#.into());

@@ -1,3 +1,4 @@
+mod input_geometry;
 mod input_hint;
 mod input_viewport;
 mod key_hints;
@@ -11,6 +12,7 @@ mod styled_line;
 mod tests;
 
 use super::mention_panel::MentionPanel;
+use super::panel_mouse::PanelAction;
 use super::shell_hint_panel::{bang_ghost_suffix, ShellHintPanel};
 use super::slash_panel::SlashPanel;
 use super::viewport::InlineViewport;
@@ -27,6 +29,7 @@ use anyhow::Result;
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::queue;
 use crossterm::terminal::{Clear, ClearType};
+pub(super) use input_geometry::InputGeometry;
 use std::io::Write;
 
 /// composer 一次绘制的完整内容签名。
@@ -35,26 +38,61 @@ use std::io::Write;
 /// 两次签名相同即代表重绘不会改变任何像素。
 #[derive(Clone, PartialEq, Eq)]
 pub(super) struct ComposerSignature {
+    pub(super) input_geometry: Option<InputGeometry>,
     top: u16,
     height: u16,
     cols: usize,
     lines: Vec<String>,
     cursor_col: u16,
     cursor_row: u16,
-    /// 首个面板标题仍可见时的显示宽度，裁剪后为零
-    panel_header_width: usize,
+    /// 原始面板行宽与裁掉的顶部行数，供鼠标命中映射
+    panel_widths: Vec<usize>,
+    panel_actions: Vec<(usize, PanelAction)>,
+    hidden_rows: usize,
 }
 
 impl ComposerSignature {
+    /// 【终端】【操作快照】按最后一帧的可见行查询操作，不在鼠标移动时重新扫描会话。
+    /// 参数: `column` 与 `row` 为屏幕坐标；返回: 与显示内容对应的操作。
+    pub(super) fn panel_action_at(&self, column: u16, row: u16) -> Option<PanelAction> {
+        let index = self.panel_row_at(column, row)?;
+        self.panel_actions
+            .iter()
+            .find(|(candidate, _)| *candidate == index)
+            .map(|(_, action)| *action)
+    }
+    /// 【终端】【面板测试】参数为源面板行号；返回实际绘制行，仅供断言。
+    #[cfg(test)]
+    pub(super) fn panel_line(&self, row: usize) -> Option<&str> {
+        self.lines
+            .get(row.checked_sub(self.hidden_rows)?)
+            .map(String::as_str)
+    }
+    /// 【终端】【面板命中】按实际裁切行和显示宽度定位，空白及不可见行不命中。
+    /// 参数: `column` 与 `row` 为屏幕坐标；返回: 原面板行号。
+    pub(super) fn panel_row_at(&self, column: u16, row: u16) -> Option<usize> {
+        let relative = row.checked_sub(self.top)?;
+        if relative >= self.height {
+            return None;
+        }
+        let index = usize::from(relative) + self.hidden_rows;
+        self.panel_widths
+            .get(index)
+            .filter(|width| usize::from(column) < **width)
+            .map(|_| index)
+    }
+
     /// 【全屏视图】【面板点击】参数为终端列与行，返回是否命中实际可见的首个面板标题。
+    #[cfg(test)]
     pub(in crate::cli::repl_runtime) fn hits_panel_header(&self, column: u16, row: u16) -> bool {
-        row == self.top && usize::from(column) < self.panel_header_width
+        self.panel_row_at(column, row) == Some(0)
     }
 }
 
 /// 可从输入 source 按当前终端宽度重绘的 REPL composer。
 #[derive(Clone)]
 pub(super) struct ComposerFrame {
+    selection: super::composer_selection::ComposerSelection,
     chrome: ReplChrome,
     input: String,
     cursor: usize,
@@ -64,6 +102,8 @@ pub(super) struct ComposerFrame {
     mention_candidates: Vec<MentionSuggestion>,
     /// 输入框上方的沉底面板行（todo 快照 / 排队消息 / agent 提示）
     panel_lines: Vec<String>,
+    panel_pointer: Option<(u16, u16)>,
+    panel_actions: Vec<(usize, PanelAction)>,
     /// 是否已用 Esc 收起补全面板（slash / @ / #）
     ///
     /// 面板完全由输入内容推导，没有独立开关；Esc 收起后必须记住状态，
@@ -82,6 +122,25 @@ pub(super) struct ComposerFrame {
 }
 
 impl ComposerFrame {
+    /// 【终端】【输入选区】同步源码选区，绘制时再映射实际屏幕坐标。
+    /// 参数: `selection` 为当前选区；返回: 无。
+    pub(super) fn set_selection(
+        &mut self,
+        selection: super::composer_selection::ComposerSelection,
+    ) {
+        self.selection = selection;
+    }
+    /// 【终端】【面板反馈】保存指针和可操作行，绘制时使用实际几何计算悬停。
+    /// 参数: `pointer` 为屏幕坐标，`actions` 为可点击面板行；返回: 无。
+    pub(super) fn set_panel_pointer(
+        &mut self,
+        pointer: Option<(u16, u16)>,
+        actions: Vec<(usize, PanelAction)>,
+    ) {
+        self.panel_pointer = pointer;
+        self.panel_actions = actions;
+    }
+
     /// 创建当前输入状态的 composer source。
     ///
     /// 参数:
@@ -103,6 +162,7 @@ impl ComposerFrame {
         slash_selection: usize,
     ) -> Self {
         Self {
+            selection: Default::default(),
             chrome,
             input,
             cursor,
@@ -110,6 +170,8 @@ impl ComposerFrame {
             slash_selection,
             mention_candidates: Vec::new(),
             panel_lines: Vec::new(),
+            panel_pointer: None,
+            panel_actions: Vec::new(),
             panels_dismissed: false,
             streaming: false,
             placeholder_override: None,
@@ -292,6 +354,7 @@ pub(super) use key_hints::{KeyHintContext, KeyNotice};
 
 /// composer 在单一终端宽度下的计算结果。
 struct ComposerLayout {
+    first_visual_row: usize,
     styled_display_lines: Vec<String>,
     input_rows: u16,
     slash_panel: SlashPanel,

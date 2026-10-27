@@ -29,6 +29,11 @@ pub(crate) struct SubagentOverviewEntry {
 }
 
 impl TranscriptStore {
+    /// 【终端】【子代理可用性】尚未绑定任务标识的创建中条目不能进入会话。
+    /// 参数: `cell_index` 为源记录下标；返回: 是否存在可查看的子代理标识。
+    pub(crate) fn can_view_subagent(&self, cell_index: usize) -> bool {
+        matches!(self.cells.get(cell_index), Some(HistoryCell::Tool(ToolCell::Subagent(cell))) if cell.subagent_id().is_some())
+    }
     /// 枚举底部 agent 面板可切换的子智能体。
     ///
     /// 同一个子智能体的每次工具调用（start / wait / send / result）都会

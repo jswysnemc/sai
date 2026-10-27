@@ -16,6 +16,7 @@ use super::TranscriptRenderOptions;
 pub(crate) enum TranscriptMode {
     Plan,
     Yolo,
+    #[cfg(test)]
     Automatic,
 }
 
@@ -87,6 +88,24 @@ impl HistoryCell {
                 }
             }),
         };
+        // 1. 【终端】【工具标记】旧 diff、子代理与本地命令同样使用语义图标
+        let icon = match self {
+            Self::Diff(_) => Some(crate::render::guide_symbols::EDIT),
+            Self::Shell(_) => Some(crate::render::guide_symbols::COMMAND),
+            Self::Tool(ToolCell::Subagent(_)) => Some(crate::render::guide_symbols::AGENTS),
+            Self::Tool(
+                ToolCell::CompactionStarted { .. } | ToolCell::CompactionFinished { .. },
+            ) => Some(crate::render::guide_symbols::tool("compress_context")),
+            _ => None,
+        };
+        if let Some(icon) = icon {
+            if let Some(line) = lines
+                .iter_mut()
+                .find(|line| !spacing::is_visual_blank(line))
+            {
+                *line = AnsiLine::new(crate::render::guide_symbols::replace(line.as_str(), icon));
+            }
+        }
         // 【终端】【状态动效】运行中的命令、编辑和工具共用引导符动画
         if frame > 0 && self.is_animating() {
             if let Some(line) = lines

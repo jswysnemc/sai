@@ -2,6 +2,7 @@ mod render;
 #[cfg(test)]
 mod tests;
 
+use super::panel_mouse::PanelAction;
 use crate::i18n::text as t;
 use crate::render::transcript::SubagentOverviewEntry;
 use crossterm::event::KeyCode;
@@ -143,19 +144,40 @@ impl AgentPanelState {
         entries: &[SubagentOverviewEntry],
         frame: usize,
     ) -> Vec<String> {
+        self.panel_layout(entries, frame).0
+    }
+
+    /// 【终端】【面板命中】统一生成显示行和操作映射，详情及窗口提示不登记为按钮。
+    /// 参数: `entries` 为子代理概览，`frame` 为帧号；返回: 显示行及可点击行操作。
+    pub(super) fn panel_layout(
+        &self,
+        entries: &[SubagentOverviewEntry],
+        frame: usize,
+    ) -> (Vec<String>, Vec<(usize, PanelAction)>) {
         if entries.is_empty() {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         }
         if self.active {
             self.active_lines(entries, frame)
         } else {
-            vec![idle_line(entries, frame)]
+            (
+                vec![idle_line(entries, frame)],
+                vec![(0, PanelAction::AgentsToggle)],
+            )
         }
     }
 
     /// 焦点态：引导点标题 + 主智能体 + 全部子智能体。
-    fn active_lines(&self, entries: &[SubagentOverviewEntry], frame: usize) -> Vec<String> {
+    fn active_lines(
+        &self,
+        entries: &[SubagentOverviewEntry],
+        frame: usize,
+    ) -> (Vec<String>, Vec<(usize, PanelAction)>) {
         let col_width = status_column_width(entries);
+        let mut targets = vec![
+            (0, PanelAction::AgentsToggle),
+            (1, PanelAction::Agent(None)),
+        ];
         let mut lines = vec![format!(
             "{} \x1b[2m{} · ↑↓ {} · Enter {} · ↑ {}\x1b[0m",
             guide_dot(entries, frame),
@@ -185,6 +207,7 @@ impl AgentPanelState {
             } else {
                 String::new()
             };
+            targets.push((lines.len(), PanelAction::Agent(Some(entry.cell_index))));
             lines.push(selection_line(
                 self.selected == position + 1,
                 &render_entry_left(entry, col_width, frame),
@@ -209,7 +232,7 @@ impl AgentPanelState {
                 t("browse", "浏览")
             ));
         }
-        lines
+        (lines, targets)
     }
 }
 

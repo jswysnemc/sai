@@ -16,6 +16,17 @@ const RESET: &str = "\x1b[0m";
 /// 按钮两侧至少保留的正文列数，过窄时不显示按钮。
 const SIDE_MARGIN: usize = 2;
 
+/// 【终端】【页脚避让】执行链页脚有独立跟随入口，不能让外层悬浮按钮覆盖文字和点击区域。
+/// 参数: `state` 为全屏状态，`body_height` 为正文高度；返回: 末行是否已有执行链页脚。
+pub(super) fn conflicts_with_activity_footer(state: &FullscreenState, body_height: usize) -> bool {
+    let row = state.scroll + body_height.saturating_sub(1);
+    state
+        .document
+        .activities
+        .iter()
+        .any(|region| region.footer == Some(row))
+}
+
 /// 返回按钮文字；有新输出时一并提示。
 ///
 /// 参数:
@@ -90,7 +101,10 @@ pub(super) fn overlay(
 /// 返回:
 /// - 指针在按钮上时为 true
 pub(super) fn is_hovered(state: &FullscreenState, width: usize, body_height: usize) -> bool {
-    if state.follow || state.pointer_row != Some(body_height.saturating_sub(1)) {
+    if state.follow
+        || conflicts_with_activity_footer(state, body_height)
+        || state.pointer_row != Some(body_height.saturating_sub(1))
+    {
         return false;
     }
     let button_width = visible_width(label(state));

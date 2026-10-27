@@ -39,7 +39,7 @@ fn completed_group_shows_latest_ten_and_folds_older_steps() {
     let mut store = completed_tools(12);
     let document = store.render_fullscreen(100, &options(), &HashSet::new());
     let plain = text(&document);
-    assert!(plain.contains("12 tools"), "{plain}");
+    assert!(plain.contains("12 reads"), "{plain}");
     assert!(plain.contains("Show 2 earlier steps"), "{plain}");
     for index in 0..2 {
         assert!(!plain.contains(&format!("step-{index:02}.txt")), "{plain}");
@@ -86,7 +86,7 @@ fn older_steps_control_keeps_the_same_column_in_both_states() {
         let plain = text(&document);
         let group = plain
             .lines()
-            .find(|line| line.contains("12 tools"))
+            .find(|line| line.contains("12 reads"))
             .unwrap();
         let control = plain
             .lines()
@@ -144,7 +144,7 @@ fn older_steps_toggle_preserves_child_expansion_and_group_count() {
     assert!(folded.retained_keys.contains(&child));
     let restored = store.render_fullscreen(100, &options(), &expanded);
     assert!(text(&restored).contains("CONTENT-00"));
-    assert!(text(&restored).contains("12 tools"));
+    assert!(text(&restored).contains("12 reads"));
     tui_style::set_override(None);
 }
 

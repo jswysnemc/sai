@@ -33,7 +33,7 @@ fn deepseek_timeline_uses_english_labels_under_chinese_locale() {
             &HashSet::from([ParagraphKey::whole(0), ParagraphKey::whole(1)]),
         );
         let visible = text(&document);
-        assert!(visible.contains("1 tool · 1 thought"), "{visible}");
+        assert!(visible.contains("1 read · 1 thought"), "{visible}");
         assert!(visible.contains("Thought"), "{visible}");
         assert!(visible.contains("Read file"), "{visible}");
         assert!(visible.contains("原始思考"), "{visible}");
@@ -67,11 +67,11 @@ fn deepseek_timeline_matches_linear_collapsed_structure() {
             ]),
         );
         let visible = text(&document);
-        assert!(visible.contains("⌄ 1 tool · 1 thought"));
+        assert!(visible.contains("▾ 1 read · 1 thought"));
         assert!(!visible.contains('│'));
         assert_eq!(document.lines.len(), 3);
         assert!(visible.contains("Thought"));
-        assert!(visible.contains("• Read"));
+        assert!(visible.contains("\u{f15c} Read"));
         assert!(visible.contains("fixture.rs (L1–2)"));
         assert!(!visible.contains("OLD-THOUGHT"));
         assert!(!visible.contains("OLD-OUTPUT"));
@@ -224,11 +224,15 @@ fn deepseek_timeline_colors_and_labels_match_state() {
         store.push_tool_call("read_file".into(), r#"{"path":"fixture.rs"}"#.into());
         assert_eq!(appearance::health(&store.cells[0]), ToolHealth::Pending);
         let running = node::render_cell(&store.cells[0], 80, true, false);
-        assert!(running.lines[0].as_str().contains("\x1b[33m•"));
+        assert!(running.lines[0].as_str().contains("\x1b[33m"));
+        assert!(
+            crate::render::ansi_clip::strip_ansi(running.lines[0].as_str())
+                .starts_with(crate::render::guide_symbols::READ)
+        );
         assert!(running.lines[0].as_str().contains("Reading file"));
         store.push_tool_result("read_file".into(), true, "done".into());
         let done = node::render_cell(&store.cells[0], 80, false, false);
-        assert!(done.lines[0].as_str().contains("\x1b[32m•"));
+        assert!(done.lines[0].as_str().contains("\x1b[32m\u{f15c}"));
         store.push_tool_call("run_command".into(), "{}".into());
         store.push_tool_result("run_command".into(), false, "error".into());
         let failed = node::render_cell(&store.cells[1], 80, false, false);
@@ -255,4 +259,26 @@ fn deepseek_timeline_colors_and_labels_match_state() {
         assert!(thought.as_str().contains("\x1b[36m◇"));
         assert!(thought.as_str().contains("\x1b[2m · 12 tokens\x1b[0m"));
     });
+}
+
+/// 【终端】【分类测试】验证同时包含动作命令、只读检索与思考时，正确展示三项组合计数。
+#[test]
+fn deepseek_timeline_group_counts_three_categories() {
+    tui_style::set_override(Some(TuiStyle::Deepseek));
+    let mut store = TranscriptStore::new(200);
+    // 1. 【终端】【思考记录】追加思考单元
+    store.push_cell(HistoryCell::reasoning("Plan the work".into()));
+    // 2. 【终端】【动作记录】追加命令执行
+    store.push_tool_call("run_command".into(), r#"{"command":"cargo build"}"#.into());
+    store.push_tool_result("run_command".into(), true, "ok".into());
+    // 3. 【终端】【只读记录】追加文件读取与搜索
+    store.push_tool_call("read_file".into(), r#"{"path":"src/main.rs"}"#.into());
+    store.push_tool_result("read_file".into(), true, "1\tfn main(){}".into());
+    store.push_tool_call("grep".into(), r#"{"pattern":"main"}"#.into());
+    store.push_tool_result("grep".into(), true, "match".into());
+
+    let document = store.render_fullscreen(100, &options(), &HashSet::new());
+    let plain = text(&document);
+    assert!(plain.contains("1 tool · 2 reads · 1 thought"), "{plain}");
+    tui_style::set_override(None);
 }

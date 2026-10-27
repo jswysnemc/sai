@@ -139,7 +139,7 @@ fn activity_group_and_single_step_align_with_user_marker() {
         .find(|span| span.key.part == ParagraphPart::ActivityGroup)
         .unwrap();
     assert_eq!(
-        strip_ansi_for_test(grouped.lines[group.start].as_str()).find('⌄'),
+        strip_ansi_for_test(grouped.lines[group.start].as_str()).find('▾'),
         Some(0)
     );
     tui_style::set_override(None);

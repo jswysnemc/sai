@@ -9,8 +9,8 @@ use std::time::Duration;
 
 const THINKING_LABEL: &str = "Thinking";
 const THOUGHT_LABEL: &str = "Thought";
-/// 思考与系统提示共用单列箭头（CLI Summary / Full / 非流式共用）。
-pub(crate) const THINKING_MARKER: char = crate::render::style::GUIDE_PROMPT;
+/// 思考使用独立菱形标记，与折叠按钮和系统提示区分。
+pub(crate) const THINKING_MARKER: char = '◇';
 
 /// reasoning 内容的原始 source 数据。
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -103,7 +103,7 @@ pub(crate) fn render_live(
     )
     .trim_start()
     .to_string();
-    // 【终端】【思考状态】1. 活动思考使用呼吸圆点，定稿后使用统一箭头
+    // 【终端】【思考状态】1. 活动思考使用状态线段，定稿后使用独立菱形
     let title = render_activity_line(THINKING_LABEL, &detail, frame);
     match mode {
         ReasoningDisplayMode::Hidden => String::new(),
@@ -207,7 +207,7 @@ fn render_thinking_body_with_cols(
     terminal_cols: usize,
 ) -> String {
     let tokens = token_counter::count(source);
-    // 【终端】【思考状态】定稿标题使用弱化箭头，保留标题层级
+    // 【终端】【思考状态】定稿标题使用弱化菱形，保留标题层级
     let title = format!(
         "\x1b[2m\x1b[36m{THINKING_MARKER}\x1b[0m \x1b[2m{}\x1b[0m\x1b[2m{}\x1b[0m",
         thought_label(duration),
@@ -261,7 +261,7 @@ fn render_thinking_body_with_title(
     let visible = fold_preview_lines(&lines, expanded);
 
     let mut output = title;
-    let mut content_index = 0usize;
+
     for line in visible {
         let line = match line {
             FoldedDisplayLine::Omitted { omitted, .. } => {
@@ -274,8 +274,7 @@ fn render_thinking_body_with_title(
             }
             FoldedDisplayLine::Line(line) => line,
         };
-        let prefix = if content_index == 0 { "  └ " } else { "    " };
-        content_index += 1;
+        let prefix = "  │ ";
         output.push_str(&format!("\n\x1b[2m\x1b[36m{prefix}{line}\x1b[0m"));
     }
     output
@@ -411,7 +410,7 @@ mod tests {
         );
         assert!(rendered.contains("Thought"));
         assert!(!rendered.contains("Thinking"));
-        assert!(rendered.contains("└"));
+        assert!(rendered.contains("│"));
         assert!(rendered.contains("line one"));
         assert!(rendered.contains("line two"));
         assert!(rendered.contains("tokens"));
@@ -470,8 +469,8 @@ mod tests {
         let mut body_lines = plain.lines().skip(1);
         let first = body_lines.next().expect("first gutter line");
         assert!(
-            first.starts_with("  └ "),
-            "first body line should use tree gutter: {first}"
+            first.starts_with("  │ "),
+            "first body line should use vertical gutter: {first}"
         );
         for line in std::iter::once(first).chain(body_lines) {
             let width = visible_width(line);
@@ -480,7 +479,7 @@ mod tests {
         // 2. 续行保留 gutter 缩进，而不是被二次折行挤成无缩进碎片
         let continuation = plain.lines().nth(2).expect("continuation line");
         assert!(
-            continuation.starts_with("    "),
+            continuation.starts_with("  │ "),
             "continuation should keep gutter indent: {continuation}"
         );
     }

@@ -24,10 +24,34 @@ pub(crate) const DIFF_BLOCK_INSET: usize = CONTENT_LEFT_INDENT + DIFF_NESTED_IND
 /// 返回:
 /// - 是否保留在引导线列
 fn is_guide_marker(ch: char) -> bool {
-    matches!(
-        ch,
-        ACTIVITY_GUIDE | '○' | '•' | '◦' | '✗' | '›' | '◐' | '◓' | '◑' | '◒'
-    )
+    crate::render::guide_symbols::is_semantic(ch)
+        || matches!(
+            ch,
+            ACTIVITY_GUIDE
+                | '○'
+                | '•'
+                | '◦'
+                | '✗'
+                | '›'
+                | '╶'
+                | '╴'
+                | '●'
+                | '◇'
+                | '◈'
+                | '◆'
+                | '\u{f0ad}'
+        )
+}
+
+/// 【终端】【引导区分】活动线段后必须有内容，不能把 Markdown 分隔线当作运行标题。
+/// 参数: `text` 为整行，`first` 为首个可见字符；返回: 是否为带语义的引导行。
+fn is_guide_line(text: &str, first: Option<char>) -> bool {
+    first.is_some_and(is_guide_marker)
+        && (first != Some(ACTIVITY_GUIDE)
+            || !crate::render::activity_animation::strip_ansi_for_test(text)
+                .trim()
+                .chars()
+                .all(|ch| ch == ACTIVITY_GUIDE))
 }
 
 /// 【终端】【视觉引导】统一历史与实时标题的引导字形，保留原有状态颜色。
@@ -52,16 +76,16 @@ pub(crate) fn normalize_guide_marker(text: &str) -> String {
 /// 返回: 带脉冲圆点的标题行
 pub(crate) fn animate_guide_marker(text: &str, frame: usize) -> String {
     let Some(marker) =
-        first_non_space_visible_char(text).filter(|marker| is_guide_marker(marker.ch))
+        first_non_space_visible_char(text).filter(|marker| is_guide_line(text, Some(marker.ch)))
     else {
         return text.to_string();
     };
-    format!(
-        "{}{}{}",
-        &text[..marker.start],
-        crate::render::activity_animation::render_activity_guide(frame),
-        &text[marker.end..]
-    )
+    let guide = if crate::render::guide_symbols::is_semantic(marker.ch) {
+        crate::render::guide_symbols::pulse(&marker.ch.to_string(), frame)
+    } else {
+        crate::render::activity_animation::render_activity_guide(frame)
+    };
+    format!("{}{}{}", &text[..marker.start], guide, &text[marker.end..])
 }
 
 /// 判断是否为会话 turn 水平分隔线（纯 `─`，可带 ANSI 弱化样式）。
@@ -97,14 +121,14 @@ fn is_turn_rule_line(text: &str) -> bool {
 /// 返回:
 /// - 引导符号位于左侧，普通正文位于右侧的终端行
 pub(crate) fn align_to_guide_column(text: &str) -> String {
-    if text.trim_start().starts_with("\x1b[2;39m•\x1b[0m ") {
+    if crate::render::transcript::list_wrap::content_column(text).is_some() {
         let indent = CONTENT_LEFT_INDENT.saturating_sub(text.len() - text.trim_start().len());
         return format!("{}{text}", " ".repeat(indent));
     }
     let normalized = normalize_guide_marker(text);
     let text = normalized.as_str();
     let (leading_spaces, first_visible) = visible_line_start(text);
-    if first_visible.is_some_and(is_guide_marker) {
+    if is_guide_line(text, first_visible) {
         // 引导符必须顶格：diff 块缩进曾误伤标题行的 `•`，这里拉回第 0 列
         if leading_spaces == 0 {
             return text.to_string();
@@ -183,7 +207,7 @@ pub(crate) fn align_to_guide_column_with_width(text: &str, guide_width: usize) -
 
     // 【终端】【响应式引导】2. 引导符号行压缩符号与正文之间的间隔
     let (_, first_visible) = visible_line_start(&aligned);
-    if first_visible.is_some_and(is_guide_marker) {
+    if is_guide_line(&aligned, first_visible) {
         return compact_marker_guide(&aligned, guide_width);
     }
     // 【终端】【响应式引导】3. 普通正文与续行按目标引导区宽度移除前导空格
@@ -369,7 +393,7 @@ fn indent_lines(text: &str, columns: usize) -> String {
                 None => (line, ""),
             };
             let (_, first) = visible_line_start(content);
-            if first.is_some_and(is_guide_marker) {
+            if is_guide_line(content, first) {
                 format!("{content}{newline}")
             } else {
                 format!("{indent}{content}{newline}")

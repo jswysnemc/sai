@@ -55,7 +55,7 @@ impl OlderSteps {
         let noun = if self.count == 1 { "step" } else { "steps" };
         let label = format!(
             "{} {} {} earlier {noun}",
-            if self.open { "⌄" } else { "›" },
+            if self.open { "▾" } else { "▸" },
             if self.open { "Hide" } else { "Show" },
             self.count
         );

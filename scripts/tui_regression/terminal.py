@@ -14,6 +14,7 @@ import termios
 import time
 
 import pyte
+from binary_build import resolve_test_binary
 
 
 class TerminalSession:
@@ -52,9 +53,7 @@ class TerminalSession:
         target = self.root / "config/sai/config.jsonc"
         target.parent.mkdir(parents=True)
         target.write_text(json.dumps(config))
-        binary = Path(os.environ.get("SAI_TEST_BINARY", Path(__file__).resolve().parents[2] / "target/debug/sai")).resolve()
-        if not binary.is_file():
-            raise FileNotFoundError(f"Build sai first: {binary}")
+        binary = resolve_test_binary()
         self.environment = environment
         self.binary = binary
         if prepare is not None:

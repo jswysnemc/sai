@@ -249,7 +249,11 @@ impl ReplRuntime {
                 if let Some(line) =
                     crate::render::format_jev_preselect(phase.as_str(), detail.as_str())
                 {
-                    self.transcript.push_meta(line);
+                    self.transcript
+                        .push_meta(crate::render::guide_symbols::notice(
+                            crate::render::guide_symbols::ROUTING,
+                            &line,
+                        ));
                     self.sync_transcript(true)
                 } else {
                     Ok(())

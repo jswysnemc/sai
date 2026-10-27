@@ -10,9 +10,7 @@ pub(crate) use crate::render::markdown_inline::render_table_cell_content;
 use crate::render::markdown_inline::{render_inline_with_math_mode, InlineMathMode};
 use crate::render::markdown_quote;
 use crate::render::streaming_asset_block::StreamingAssetBlock;
-use crate::render::style::{
-    FOOTNOTE_DEF_STYLE, MD_H1_STYLE, MD_H2_STYLE, MD_H3_STYLE, MD_LIST_MARKER_STYLE, RESET,
-};
+use crate::render::style::{FOOTNOTE_DEF_STYLE, MD_H1_STYLE, MD_H2_STYLE, MD_H3_STYLE, RESET};
 use crate::render::table;
 use crate::render::table::streaming::StreamingTable;
 
@@ -112,10 +110,17 @@ impl MarkdownStreamRenderer {
         {
             return None;
         }
-        Some(format!(
-            "{}\n",
-            render_markdown_line_with_math_mode(tail, self.line_renderer.inline_math_mode)
-        ))
+        let mut lists = self.line_renderer.lists.clone();
+        let rendered = lists
+            .render(
+                tail,
+                self.line_renderer.inline_math_mode,
+                self.line_renderer.pending_blank_lines > 0,
+            )
+            .unwrap_or_else(|| {
+                render_markdown_line_with_math_mode(tail, self.line_renderer.inline_math_mode)
+            });
+        Some(format!("{rendered}\n"))
     }
 
     /// 刷新剩余 Markdown 缓冲。
@@ -158,6 +163,7 @@ impl MarkdownStreamRenderer {
 }
 
 struct MarkdownLineRenderer {
+    lists: super::markdown_list::ListLayout,
     in_code_block: bool,
     in_math_block: bool,
     in_svg_block: bool,
@@ -180,6 +186,7 @@ impl MarkdownLineRenderer {
     /// - 新的按行渲染器
     fn new(replace_streamed_table_rows: bool) -> Self {
         Self {
+            lists: super::markdown_list::ListLayout::default(),
             in_code_block: false,
             in_math_block: false,
             in_svg_block: false,
@@ -242,6 +249,7 @@ impl MarkdownLineRenderer {
     /// - 当前可输出的终端文本
     fn render_line_inner(&mut self, line: &str) -> String {
         if line.trim_start().starts_with("```") {
+            self.lists.reset();
             if self.in_code_block {
                 self.in_code_block = false;
                 let lang = std::mem::take(&mut self.code_lang);
@@ -282,6 +290,7 @@ impl MarkdownLineRenderer {
         } else if self.in_svg_block {
             self.push_svg_line(line)
         } else if asset_block::looks_like_svg_start(line) {
+            self.lists.reset();
             let pending = self.flush();
             self.in_svg_block = true;
             self.svg_buffer.clear();
@@ -296,18 +305,24 @@ impl MarkdownLineRenderer {
             self.pending_blank_lines += 1;
             output
         } else if let Some(output) = self.render_display_math_line(line) {
+            self.lists.reset();
             output
         } else if table::looks_like_table_row(line) {
+            self.lists.reset();
             let gap = self.take_pending_blank_lines();
             gap + &self.table.push_line(line)
         } else {
+            let separated = self.pending_blank_lines > 0;
             let mut output = self.flush();
-            let rendered = match self.inline_math_mode {
-                InlineMathMode::TerminalImage => render_markdown_line(line),
-                InlineMathMode::Source => {
-                    render_markdown_line_with_math_mode(line, self.inline_math_mode)
-                }
-            };
+            let rendered = self
+                .lists
+                .render(line, self.inline_math_mode, separated)
+                .unwrap_or_else(|| match self.inline_math_mode {
+                    InlineMathMode::TerminalImage => render_markdown_line(line),
+                    InlineMathMode::Source => {
+                        render_markdown_line_with_math_mode(line, self.inline_math_mode)
+                    }
+                });
             output.push_str(&rendered);
             output.push('\n');
             output
@@ -514,32 +529,15 @@ fn render_markdown_line_with_math_mode(line: &str, math_mode: InlineMathMode) ->
         );
     }
     if let Some((depth, rest)) = markdown_quote::parse(trimmed) {
-        return markdown_quote::render(indent, depth, &render_inline_for_mode(rest, math_mode));
-    }
-    if let Some(rest) = trimmed
-        .strip_prefix("- ")
-        .or_else(|| trimmed.strip_prefix("* "))
-        .or_else(|| trimmed.strip_prefix("+ "))
-    {
-        return format!(
-            "{indent}{MD_LIST_MARKER_STYLE}•{RESET} {}",
-            render_inline_for_mode(rest, math_mode)
-        );
-    }
-    let digits = trimmed.chars().take_while(|ch| ch.is_ascii_digit()).count();
-    if digits > 0
-        && trimmed.as_bytes().get(digits) == Some(&b'.')
-        && trimmed.as_bytes().get(digits + 1) == Some(&b' ')
-    {
-        let marker = &trimmed[..=digits];
-        let rest = &trimmed[digits + 2..];
-        return format!(
-            "{indent}{MD_LIST_MARKER_STYLE}{marker}{RESET} {}",
-            render_inline_for_mode(rest, math_mode)
-        );
+        let body = super::markdown_list::render_line(rest, math_mode)
+            .unwrap_or_else(|| render_inline_for_mode(rest, math_mode));
+        return markdown_quote::render(indent, depth, &body);
     }
     if markdown_blocks::is_horizontal_rule(trimmed) {
         return markdown_blocks::horizontal_rule();
+    }
+    if let Some(list) = super::markdown_list::render_line(line, math_mode) {
+        return list;
     }
     render_inline_for_mode(line, math_mode)
 }
@@ -552,7 +550,7 @@ fn render_markdown_line_with_math_mode(line: &str, math_mode: InlineMathMode) ->
 ///
 /// 返回:
 /// - 带 ANSI 样式的行内文本
-fn render_inline_for_mode(text: &str, math_mode: InlineMathMode) -> String {
+pub(super) fn render_inline_for_mode(text: &str, math_mode: InlineMathMode) -> String {
     match math_mode {
         InlineMathMode::TerminalImage => render_inline(text),
         InlineMathMode::Source => render_inline_with_math_mode(text, math_mode),

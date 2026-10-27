@@ -1,15 +1,19 @@
-use crate::render::transcript::{ActivityRegion, AnsiLine, FullscreenDocument, ParagraphSpan};
+use crate::render::transcript::{
+    ActivityRegion, AnsiLine, FullscreenDocument, ParagraphPart, ParagraphSpan,
+};
 use std::ops::Range;
 
 pub(super) struct ActivityWindow {
     pub(super) rows: Range<usize>,
     pub(super) context: Option<usize>,
+    pub(super) pinned_control: Option<usize>,
     pub(super) offset: usize,
+    pub(super) min: usize,
     pub(super) max: usize,
 }
 
 impl ActivityWindow {
-    /// 【终端】【链内窗口】详情滚动越过标题时保留同一节点的标题，不另设详情面板。
+    /// 【终端】【链内窗口】固定较早步骤入口，并在剩余空间中保留当前节点标题和正文。
     /// 参数: `source` 为完整文档，`region` 为链范围，`offset` 为目标位置，`height` 为窗口高度；返回: 行范围和上下文。
     pub(super) fn at(
         source: &FullscreenDocument,
@@ -19,19 +23,35 @@ impl ActivityWindow {
     ) -> Self {
         let body = region.start + 1;
         let nodes = node_spans(source, region);
-        let tail_context = height > 1
+        // 1. 【终端】【固定入口】使用段落类型识别控件；至少为正文保留一行，不按显示文本匹配
+        let pinned_control = (height > 1)
+            .then(|| {
+                nodes
+                    .iter()
+                    .find(|span| {
+                        span.key.part == ParagraphPart::OlderActivity
+                            && span.start == body
+                            && span.end == body + 1
+                            && span.control == body
+                    })
+                    .map(|span| span.start)
+            })
+            .flatten();
+        let min = usize::from(pinned_control.is_some());
+        let scrolling_height = height.saturating_sub(min);
+        let tail_context = scrolling_height > 1
             && nodes.iter().any(|span| {
                 span.start >= body
                     && span.end == region.end
                     && span.expanded
                     && span.control == span.start
-                    && span.end - span.start > height
+                    && span.end - span.start > scrolling_height
             });
-        let capacity = height.saturating_sub(usize::from(tail_context));
-        let max = region.end.saturating_sub(body + capacity);
-        let offset = offset.min(max);
+        let capacity = scrolling_height.saturating_sub(usize::from(tail_context));
+        let max = region.end.saturating_sub(body + capacity).max(min);
+        let offset = offset.clamp(min, max);
         let first = body + offset;
-        let context = (height > 1)
+        let context = (scrolling_height > 1)
             .then(|| {
                 nodes
                     .iter()
@@ -45,11 +65,14 @@ impl ActivityWindow {
                     .map(|span| span.start)
             })
             .flatten();
-        let last = (first + height.saturating_sub(usize::from(context.is_some()))).min(region.end);
+        let last = (first + scrolling_height.saturating_sub(usize::from(context.is_some())))
+            .min(region.end);
         Self {
             rows: first..last,
             context,
+            pinned_control,
             offset,
+            min,
             max,
         }
     }
@@ -124,9 +147,50 @@ impl<'a> DocumentProjection<'a> {
         self.document.activities.push(region);
     }
 
+    /// 【终端】【区域映射】将源区间映射到连续可见区间，隐藏行不占空间。
+    /// 参数: `start` 与 `end` 为源边界；返回: 可见边界，完全不可见时为空。
+    fn visible_range(&self, start: usize, end: usize) -> Option<Range<usize>> {
+        let first = self.chunks.partition_point(|(range, _)| range.end <= start);
+        let mut result: Option<Range<usize>> = None;
+        for (range, target) in self.chunks[first..]
+            .iter()
+            .take_while(|(range, _)| range.start < end)
+        {
+            let visible = target + start.max(range.start) - range.start
+                ..target + end.min(range.end) - range.start;
+            if let Some(result) = result.as_mut() {
+                result.end = visible.end;
+            } else {
+                result = Some(visible);
+            }
+        }
+        result
+    }
+
+    /// 【终端】【嵌套窗口】思考裁切后重新计算执行链边界，供外层视口继续投影。
+    /// 参数: 无；返回: 无。
+    pub(super) fn remap_activities(&mut self) {
+        for region in &self.source.activities {
+            if let Some(range) = self.visible_range(region.start, region.end) {
+                let mut visible = region.clone();
+                visible.start = range.start;
+                visible.end = range.end;
+                self.document.activities.push(visible);
+            }
+        }
+    }
+
     /// 【终端】【坐标映射】合并保留标题与正文的点击范围，并保留不可见节点状态。
     /// 参数: 无；返回: 完整可见文档。
     pub(super) fn finish(mut self) -> FullscreenDocument {
+        for region in &self.source.reasonings {
+            if let Some(range) = self.visible_range(region.start, region.end) {
+                let mut visible = region.clone();
+                visible.start = range.start;
+                visible.end = range.end;
+                self.document.reasonings.push(visible);
+            }
+        }
         self.document.retained_keys = self.source.retained_keys.clone();
         self.document
             .retained_keys

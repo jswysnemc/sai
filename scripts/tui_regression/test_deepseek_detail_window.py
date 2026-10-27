@@ -27,9 +27,10 @@ class DeepseekDetailWindowTests(unittest.TestCase):
                         self.assertIn("THINK-CURRENT", terminal.text())
                         self.assertIn("Detailed current reasoning.", terminal.text())
                     else:
-                        header = next(index for index, line in enumerate(lines(terminal)) if "1 tool · 1 thought" in line)
-                        footer = next(index for index, line in enumerate(lines(terminal)) if "Following latest" in line)
-                        self.assertEqual(footer - header - 1, 10)
+                        header = next(index for index, line in enumerate(lines(terminal)) if "1 read · 1 thought" in line)
+                        last = next(index for index, line in enumerate(lines(terminal)) if f"DETAIL-{count - 1:02}" in line)
+                        self.assertEqual(last - header, count + 2)
+                        self.assertNotIn("Following latest", terminal.text())
                         terminal.send(b"\x1b[1;3H")
                         terminal.wait_for(lambda: "Thought" in terminal.text())
                         self.assertNotIn("THINK-CURRENT", terminal.text())

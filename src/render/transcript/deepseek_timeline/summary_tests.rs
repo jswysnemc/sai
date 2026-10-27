@@ -3,19 +3,26 @@ use super::node;
 use crate::render::tool_view::ToolView;
 use unicode_width::UnicodeWidthStr;
 
-/// 【终端】【读取引导测试】读取类工具沿用普通圆点，不因名称包含 command 使用命令引导。
+/// 【终端】【工具图标测试】读取、执行、搜索与变更使用各自语义图标且均占一列。
 /// 参数: 无；返回: 无。
 #[test]
-fn read_tools_use_the_ordinary_tool_guide() {
-    for name in ["read", "read_file", "read_command_output", "mcp__read_file"] {
-        assert_eq!(
-            super::summary::tool_icon(name),
-            crate::render::style::TOOL_BULLET,
-            "{name}"
-        );
+fn tools_use_distinct_semantic_guides() {
+    use crate::render::guide_symbols as icons;
+    for (name, expected) in [
+        ("read_file", icons::READ),
+        ("mcp__read_file", icons::READ),
+        ("run_command", icons::COMMAND),
+        ("background_command", icons::COMMAND),
+        ("grep", icons::SEARCH),
+        ("glob", icons::SEARCH),
+        ("write_file", icons::EDIT),
+        ("custom_tool", icons::TOOL),
+        ("ask_question", icons::ASK),
+        ("trash_path", icons::TRASH),
+    ] {
+        assert_eq!(super::summary::tool_icon(name), expected, "{name}");
+        assert_eq!(UnicodeWidthStr::width(expected), 1);
     }
-    assert_eq!(super::summary::tool_icon("run_command"), "$");
-    assert_eq!(super::summary::tool_icon("background_command"), "$");
 }
 
 /// 【终端】【摘要测试】读取折叠节点标题，排除颜色序列对断言的影响。
@@ -160,9 +167,10 @@ fn command_summary_uses_command_success_instead_of_transport_success() {
             } else {
                 ToolHealth::Err
             };
-            assert!(node.lines[0]
-                .as_str()
-                .contains(&crate::render::status_style::tool_bullet(health)));
+            assert!(node.lines[0].as_str().contains(
+                &crate::render::status_style::tool_bullet(health)
+                    .replace("•", crate::render::guide_symbols::COMMAND)
+            ));
         }
     });
 }

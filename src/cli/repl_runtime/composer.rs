@@ -239,6 +239,11 @@ impl ReplRuntime {
     /// 参数: 无；返回: 当前帧组装结果。
     fn queue_composer_in_locale(&mut self) -> Result<()> {
         let viewport = self.drawing_viewport();
+        let actions = self.panel_targets();
+        if let Some(composer) = self.composer.as_mut() {
+            composer.set_selection(self.composer_selection.clone());
+            composer.set_panel_pointer(self.panel_pointer, actions);
+        }
         let Some(composer) = &self.composer else {
             return Ok(());
         };

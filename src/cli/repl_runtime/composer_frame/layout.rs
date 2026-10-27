@@ -77,6 +77,7 @@ impl ComposerFrame {
         let shell_hint =
             ShellHintPanel::new(&self.input, &self.chrome.model, &self.chrome.directory);
         ComposerLayout {
+            first_visual_row: usize::from(cursor_row.saturating_sub(cursor_row_offset)),
             styled_display_lines,
             input_rows,
             slash_panel,

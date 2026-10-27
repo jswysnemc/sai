@@ -27,6 +27,15 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
 
 /// 渲染工具生命周期；进行中且 `frame > 0` 时用扫光代替静态 `run` 徽标。
 pub(crate) fn render_framed(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -> String {
+    crate::render::guide_symbols::replace(
+        &render_body(view, mode, frame),
+        crate::render::guide_symbols::tool(&view.name),
+    )
+}
+
+/// 【终端】【工具内容】各专用视图只生成内容，统一入口负责最终语义标记。
+/// 参数: `view` 为工具数据，`mode` 为显示模式，`frame` 为帧号；返回: 工具标题及正文。
+fn render_body(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -> String {
     if view.name == "compress_context" {
         return super::context_compression::render(view, frame);
     }

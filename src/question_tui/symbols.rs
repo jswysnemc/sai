@@ -2,12 +2,11 @@
 pub(super) const OPTION_PREFIX_WIDTH: usize = 4;
 
 /// 【终端提问】【选项标记】参数为题型与选中状态，返回单列几何标记。
-pub(super) fn choice(multiple: bool, picked: bool) -> &'static str {
-    match (multiple, picked) {
-        (false, false) => "○",
-        (false, true) => "●",
-        (true, false) => "□",
-        (true, true) => "■",
+pub(super) fn choice(_multiple: bool, picked: bool) -> &'static str {
+    if picked {
+        "●"
+    } else {
+        "○"
     }
 }
 

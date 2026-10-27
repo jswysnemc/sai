@@ -75,7 +75,7 @@ class DeepseekScrollTests(unittest.TestCase):
                 terminal.send(b"Read fixture.txt\r")
                 terminal.wait_for(lambda: "ANSWER-END" in terminal.text(), timeout=15)
                 terminal.pump(.3)
-                group = self.row_of(terminal, "⌄ 1 tool · 1 thought")
+                group = self.row_of(terminal, "▾ 1 read · 1 thought")
                 answer = self.row_of(terminal, "ANSWER-END")
                 self.assertLessEqual(answer - group, 10)
                 self.assertIn("Thought", terminal.text())
@@ -99,15 +99,15 @@ class DeepseekScrollTests(unittest.TestCase):
                     terminal.pump(.3)
                 terminal.send(b"\x1b[1;5H")
                 terminal.wait_for(lambda: "Thought" in terminal.text())
-                group = self.row_of(terminal, "1 tool · 1 thought")
+                group = self.row_of(terminal, "1 read · 1 thought")
                 terminal.send(b"\x1b[1;3H")
                 terminal.wait_for(lambda: "THINK-ALPHA-0" in terminal.text())
                 terminal.send(f"\x1b[<65;8;{group + 5}M".encode())
-                terminal.wait_for(lambda: "Click to follow latest" in terminal.text())
+                terminal.wait_for(lambda: "THINK-ALPHA-3" in terminal.text() and "THINK-ALPHA-0" not in terminal.text())
                 click(terminal, 6, self.row_of(terminal, "Thought"))
-                terminal.wait_for(lambda: "THINK-ALPHA-0" not in terminal.text())
+                terminal.wait_for(lambda: "THINK-ALPHA-" not in terminal.text())
                 terminal.pump(.2)
-                self.assertEqual(self.row_of(terminal, "1 tool · 1 thought"), group)
+                self.assertEqual(self.row_of(terminal, "1 read · 1 thought"), group)
 
     def test_resize_preserves_paused_reading_content(self):
         """无参数；暂停浏览后往返缩放保留同一内容，不跳到早期输出或恢复尾部跟随。"""

@@ -30,10 +30,10 @@ fn mixed_cells_use_distinct_markers_and_section_gaps() {
     assert!(snapshot[0][0].is_empty());
     assert!(snapshot[0][1].starts_with('●'));
 
-    // reasoning: 仅前空行与箭头，避免与后续 Markdown 前空行叠成两行
+    // reasoning: 仅前空行与菱形，避免与后续 Markdown 前空行叠成两行
     assert!(snapshot[1][0].is_empty());
     assert!(
-        snapshot[1][1].starts_with('›'),
+        snapshot[1][1].starts_with('◇'),
         "thinking marker: {:?}",
         snapshot[1][1]
     );
@@ -46,7 +46,7 @@ fn mixed_cells_use_distinct_markers_and_section_gaps() {
 
     // tool: 自身无前空行，紧跟思考标题/正文
     assert!(
-        snapshot[2][0].starts_with('●') || snapshot[2][0].starts_with('•'),
+        snapshot[2][0].starts_with(crate::render::guide_symbols::READ),
         "tool marker: {:?}",
         snapshot[2][0]
     );
@@ -63,7 +63,7 @@ fn mixed_cells_use_distinct_markers_and_section_gaps() {
     // meta: 区块空行 + ›
     assert!(snapshot[4][0].is_empty());
     assert!(
-        snapshot[4][1].starts_with('›'),
+        snapshot[4][1].starts_with(crate::render::guide_symbols::INFO),
         "meta marker: {:?}",
         snapshot[4][1]
     );

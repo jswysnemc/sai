@@ -37,6 +37,7 @@ impl ComposerFrame {
             usize::from(layout.cursor_row_offset),
             available,
         );
+        layout.first_visual_row += usize::from(layout.cursor_row_offset.saturating_sub(cursor));
         layout.styled_display_lines = visible;
         layout.cursor_row_offset = cursor;
         let mut lines = self.visual_lines(&layout, cols);
@@ -58,21 +59,60 @@ impl ComposerFrame {
                 .saturating_sub(hidden_rows)
                 .min(usize::from(height.saturating_sub(1))) as u16,
         );
-        let signature = ComposerSignature {
+        let mut signature = ComposerSignature {
+            input_geometry: (!self.input.is_empty()).then(|| {
+                let hidden_input = hidden_rows
+                    .saturating_sub(cursor_offset - usize::from(layout.cursor_row_offset));
+                InputGeometry::new(
+                    &self.input,
+                    chrome_input_content_cols(cols),
+                    layout.first_visual_row + hidden_input,
+                    top + (cursor_offset - usize::from(layout.cursor_row_offset))
+                        .saturating_sub(hidden_rows) as u16,
+                    CHROME_INPUT_PREFIX_COLS,
+                    layout
+                        .styled_display_lines
+                        .len()
+                        .saturating_sub(hidden_input),
+                )
+            }),
             top,
             height,
             cols,
             lines,
             cursor_col,
             cursor_row,
-            panel_header_width: if hidden_rows == 0 && height > 0 {
-                self.panel_lines.first().map_or(0, |line| {
-                    crate::cli::repl_text::visible_width(line).min(cols)
-                })
-            } else {
-                0
-            },
+            hidden_rows,
+            panel_actions: self.panel_actions.clone(),
+            panel_widths: self
+                .panel_lines
+                .iter()
+                .map(|line| crate::cli::repl_text::visible_width(line).min(cols))
+                .collect(),
         };
+        if let Some(geometry) = &signature.input_geometry {
+            if let Some(range) = self.selection.range(geometry) {
+                for (offset, line) in signature.lines.iter_mut().enumerate() {
+                    if let Some(columns) = geometry.columns(top + offset as u16, &range) {
+                        *line = super::super::fullscreen::selection::highlight_cols(
+                            line,
+                            columns.start,
+                            columns.end,
+                        );
+                    }
+                }
+            }
+        }
+        if let Some(index) = self
+            .panel_pointer
+            .and_then(|(column, row)| signature.panel_row_at(column, row))
+            .filter(|index| self.panel_actions.iter().any(|(row, _)| row == index))
+        {
+            let line = &mut signature.lines[index - hidden_rows];
+            *line = super::super::fullscreen::hover::tint_line(
+                &super::super::fullscreen::guide_button::render(line, false),
+            );
+        }
         let same_geometry =
             previous.filter(|old| old.top == top && old.height == height && old.cols == cols);
         let previous_lines = same_geometry.map(|old| old.lines.as_slice());

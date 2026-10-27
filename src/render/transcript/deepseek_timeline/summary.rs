@@ -46,7 +46,8 @@ pub(super) fn for_cell(cell: &HistoryCell, width: usize, approval: bool) -> Stri
         }
         HistoryCell::Diff(cell) => {
             format!(
-                "▤ {}",
+                "{} {}",
+                crate::render::guide_symbols::EDIT,
                 with_status(cell.timeline_summary(), health, approval)
             )
         }
@@ -59,7 +60,11 @@ pub(super) fn for_cell(cell: &HistoryCell, width: usize, approval: bool) -> Stri
             }
         }
         HistoryCell::Tool(ToolCell::Subagent(cell)) => {
-            format!("◇ {}", with_status(cell.overview().label, health, false))
+            format!(
+                "{} {}",
+                crate::render::guide_symbols::AGENTS,
+                with_status(cell.overview().label, health, false)
+            )
         }
         HistoryCell::Tool(ToolCell::CompactionStarted { .. }) => {
             format!("◇ {}", t("Compacting context", "压缩上下文"))
@@ -83,17 +88,8 @@ fn with_status(label: String, health: ToolHealth, approval: bool) -> String {
     }
 }
 
-/// 【终端】【工具标记】使用单色文本符号区分文件、命令和其他工具。
+/// 【终端】【工具标记】普通调用采用单色扳手，文件变更保留文档标记。
 /// 参数: `name` 为工具名称；返回: 单列标记。
 pub(super) fn tool_icon(name: &str) -> &'static str {
-    let name = name.rsplit("__").next().unwrap_or(name);
-    if matches!(name, "run_command" | "background_command") {
-        "$"
-    } else if name == "read" || name.starts_with("read_") {
-        crate::render::style::TOOL_BULLET
-    } else if name.contains("file") || name == "str_replace" {
-        "▤"
-    } else {
-        "·"
-    }
+    crate::render::guide_symbols::tool(name)
 }

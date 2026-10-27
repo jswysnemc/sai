@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod activity_alignment_tests;
+mod aligned_wrap;
 mod appearance;
 pub(in crate::render::transcript) mod cache;
 #[cfg(test)]
@@ -11,9 +12,13 @@ mod node;
 mod older_steps;
 #[cfg(test)]
 mod older_steps_tests;
+pub(crate) mod progress_bar;
+mod pulse;
 pub(in crate::render::transcript) mod recent_details;
 #[cfg(test)]
 mod recent_details_tests;
+#[cfg(test)]
+mod rendering_regression_tests;
 #[cfg(test)]
 mod semantic_tool_tests;
 mod standard_node;
@@ -149,6 +154,11 @@ fn append_group(document: &mut FullscreenDocument, mut group: FullscreenDocument
     document.lines.extend(group.lines);
     document.paragraphs.extend(group.paragraphs);
     document.retained_keys.extend(group.retained_keys);
+    for mut region in group.reasonings {
+        region.start += offset;
+        region.end += offset;
+        document.reasonings.push(region);
+    }
     for mut region in group.activities {
         region.start += offset;
         region.end += offset;

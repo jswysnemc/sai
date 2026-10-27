@@ -30,7 +30,11 @@ pub(super) fn assistant_lines(rendered: &str, width: usize) -> Vec<AnsiLine> {
         .map(|line| {
             if !marked && !line.as_str().trim().is_empty() {
                 marked = true;
-                AnsiLine::new(format!("\x1b[36m●\x1b[0m {}", line.as_str()))
+                if super::list_wrap::content_column(line.as_str()).is_some() {
+                    AnsiLine::new(format!("{prefix}{}", line.as_str()))
+                } else {
+                    AnsiLine::new(format!("\x1b[36m●\x1b[0m {}", line.as_str()))
+                }
             } else {
                 AnsiLine::new(format!("{prefix}{}", line.as_str()))
             }

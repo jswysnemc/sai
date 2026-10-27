@@ -48,6 +48,15 @@ pub(crate) struct UserAnchor {
     pub(crate) summary: String,
 }
 
+/// 【终端】【思考窗口】思考标题和完整正文的物理行范围，末行不含折叠控件。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ReasoningRegion {
+    pub(crate) key: ParagraphKey,
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+    pub(crate) live: bool,
+}
+
 /// 全屏视图一帧的完整正文。
 #[derive(Clone, Debug, Default)]
 pub(crate) struct FullscreenDocument {
@@ -58,6 +67,7 @@ pub(crate) struct FullscreenDocument {
     pub(crate) retained_keys: Vec<ParagraphKey>,
     /// 线性执行链的子视口范围，经典样式不登记
     pub(crate) activities: Vec<super::ActivityRegion>,
+    pub(crate) reasonings: Vec<ReasoningRegion>,
 }
 
 impl FullscreenDocument {
@@ -81,6 +91,7 @@ impl FullscreenDocument {
     ///
     /// 返回:
     /// - 控制行命中的段落；展开正文的点击范围由 paragraph_at 单独判断
+    #[cfg(test)]
     pub(crate) fn paragraph_control_at(&self, row: usize) -> Option<&ParagraphSpan> {
         self.paragraphs.iter().find(|span| span.control == row)
     }
@@ -204,6 +215,14 @@ impl TranscriptStore {
                     .lines_for(index, &self.cells[index], width, options, frame)
             };
             document.lines.extend(lines);
+            if matches!(self.cells[index], HistoryCell::Reasoning(_)) && open {
+                document.reasonings.push(ReasoningRegion {
+                    key,
+                    start: first_content_row(&document.lines, start),
+                    end: document.lines.len(),
+                    live: false,
+                });
+            }
             // 3. 展开段末尾保留明确的「收起」入口，正文同样支持点击收起
             if open {
                 document.lines.push(AnsiLine::new(render_collapse_line()));
@@ -264,6 +283,14 @@ impl TranscriptStore {
         spacing::ensure_live_tool_gap(&mut live, self.cells.last());
         let start = document.lines.len();
         document.lines.extend(live);
+        if reasoning && open {
+            document.reasonings.push(ReasoningRegion {
+                key: LIVE_PARAGRAPH_KEY,
+                start: first_content_row(&document.lines, start),
+                end: document.lines.len(),
+                live: true,
+            });
+        }
         if open {
             document.lines.push(AnsiLine::new(render_collapse_line()));
         }

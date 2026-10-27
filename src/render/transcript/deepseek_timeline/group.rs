@@ -34,6 +34,7 @@ pub(super) fn render(
 ) -> FullscreenDocument {
     let mut nodes = Vec::new();
     let mut tools = 0;
+    let mut reads = 0;
     let mut thoughts = 0;
     let indices = range
         .clone()
@@ -78,7 +79,12 @@ pub(super) fn render(
         );
     // 1. 【终端】【执行链分组】从末尾累计实际行数，实时与定稿节点使用相同下标
     if live_call {
-        tools += 1;
+        let call_name = &store.live_tool_call.as_ref().unwrap().name;
+        if is_read_name(call_name) {
+            reads += 1;
+        } else {
+            tools += 1;
+        }
         let (key, node) = details.render(call_index, &mut newer_rows, single, expanded, |open| {
             node::render_live(store, LiveNode::Tool, node_width, open)
         });
@@ -109,6 +115,8 @@ pub(super) fn render(
         let cell = &cells[index];
         if matches!(cell, HistoryCell::Reasoning(_)) {
             thoughts += 1;
+        } else if is_read_cell(cell) {
+            reads += 1;
         } else {
             tools += 1;
         }
@@ -140,17 +148,17 @@ pub(super) fn render(
     store.recent_details = details;
     nodes.reverse();
     let mut document = FullscreenDocument::default();
-    if tools + thoughts == 0 {
+    if tools + reads + thoughts == 0 {
         return document;
     }
     let key = group_key;
     let open = group_open;
     document.retained_keys.extend(retained_keys);
     // 2. 【终端】【执行链分组】标题单独可点击，不能抢占子节点的点击范围
-    let counts = counts_title(tools, thoughts);
+    let counts = counts_title(tools, reads, thoughts);
     if !single {
         document.lines.push(appearance::group_title(
-            &format!("{} {counts}", if open { "⌄" } else { "›" }),
+            &format!("{} {counts}", if open { "▾" } else { "▸" }),
             width,
         ));
     }
@@ -167,11 +175,23 @@ pub(super) fn render(
     let details_open = nodes.iter().any(|(_, node, _)| node.open);
     for (key, node, interactive) in nodes {
         let start = document.lines.len();
+        let reasoning = matches!(store.cells.get(key.cell), Some(HistoryCell::Reasoning(_)))
+            || (live_thought && key.cell == thought_index);
         document.lines.extend(
             node.lines
                 .into_iter()
                 .map(|line| AnsiLine::new(format!("{}{}", " ".repeat(inset), line.as_str()))),
         );
+        if reasoning && node.open {
+            document
+                .reasonings
+                .push(super::super::fullscreen_view::ReasoningRegion {
+                    key,
+                    start,
+                    end: document.lines.len(),
+                    live: live_thought && key.cell == thought_index,
+                });
+        }
         if interactive {
             document.paragraphs.push(ParagraphSpan {
                 key,
@@ -199,14 +219,57 @@ pub(super) fn render(
     document
 }
 
-/// 【终端】【分组计数】只显示组内实际存在的步骤类型，避免零计数占用标题空间。
-/// 参数: `tools` 为工具数量，`thoughts` 为思考数量；返回: 英文分组标题。
-fn counts_title(tools: usize, thoughts: usize) -> String {
+/// 【终端】【只读判断】判断工具是否属于只读/检索操作。
+///
+/// 参数:
+/// - `name`: 工具标识名称
+///
+/// 返回:
+/// - 若为读取/搜索/文件检查工具返回 true，否则返回 false
+fn is_read_name(name: &str) -> bool {
+    let base = name.rsplit("__").next().unwrap_or(name);
+    matches!(base, "read_file" | "read_image" | "read" | "grep" | "glob")
+        || base.starts_with("read_")
+}
+
+/// 【终端】【单元只读判断】判断源单元是否属于只读工具调用。
+///
+/// 参数:
+/// - `cell`: 历史单元
+///
+/// 返回:
+/// - 是否为只读调用
+fn is_read_cell(cell: &HistoryCell) -> bool {
+    match cell {
+        HistoryCell::Tool(crate::render::transcript::tool_cell::ToolCell::Invocation(view)) => {
+            is_read_name(&view.name)
+        }
+        _ => false,
+    }
+}
+
+/// 【终端】【分组计数】显示动作工具、只读检索与思考数量，避免零计数占用标题空间。
+///
+/// 参数:
+/// - `tools`: 动作/命令工具调用数量
+/// - `reads`: 只读检索工具调用数量
+/// - `thoughts`: 思考过程数量
+///
+/// 返回:
+/// - 英文分组标题，如 `23 tools · 20 reads · 13 thoughts`
+fn counts_title(tools: usize, reads: usize, thoughts: usize) -> String {
+    // 1. 【终端】【分类汇总】按工具、读取、思考的顺序组装非零项
     let mut parts = Vec::new();
     if tools > 0 {
         parts.push(format!(
             "{tools} {}",
             crate::render::terminal_text(if tools == 1 { "tool" } else { "tools" }, "工具")
+        ));
+    }
+    if reads > 0 {
+        parts.push(format!(
+            "{reads} {}",
+            crate::render::terminal_text(if reads == 1 { "read" } else { "reads" }, "读取")
         ));
     }
     if thoughts > 0 {
@@ -218,5 +281,7 @@ fn counts_title(tools: usize, thoughts: usize) -> String {
             )
         ));
     }
+
+    // 2. 【终端】【标点连接】用居中点号组合多类统计
     parts.join(" · ")
 }

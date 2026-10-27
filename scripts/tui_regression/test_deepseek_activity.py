@@ -6,7 +6,7 @@ import unittest
 from mock_activity_model import ActivityModel
 from mock_tool_model import MockToolModel
 from terminal import TerminalSession
-from test_fullscreen import TurnModel, click, lines
+from test_fullscreen import TurnModel, click, content_lines, lines
 
 
 class DeepseekActivityTests(unittest.TestCase):
@@ -31,13 +31,13 @@ class DeepseekActivityTests(unittest.TestCase):
             self.assertNotIn("Execution details", terminal.text())
             model.advance.set()
             terminal.wait_for(lambda: "1 tool · 1 thought" in terminal.text(), timeout=15)
-            terminal.wait_for(lambda: any(line.strip() == "└ CURRENT-STDOUT" for line in lines(terminal)))
+            terminal.wait_for(lambda: any(line.strip() == "└ CURRENT-STDOUT" for line in content_lines(terminal)))
             self.assertIn("THINK-CURRENT", terminal.text())
             self.assertIn("Thought", terminal.text())
             gate.touch()
             terminal.wait_for(lambda: "ANSWER-END" in terminal.text(), timeout=15)
             terminal.pump(.4)
-            self.assertTrue(any(line.strip() == "└ CURRENT-STDOUT" for line in lines(terminal)))
+            self.assertTrue(any(line.strip() == "└ CURRENT-STDOUT" for line in content_lines(terminal)))
             self.assertIn("FINAL-STDOUT", terminal.text())
             click(terminal, 5, self.row_of(terminal, "Thought"))
             terminal.wait_for(lambda: "THINK-CURRENT" not in terminal.text())
@@ -58,35 +58,35 @@ class DeepseekActivityTests(unittest.TestCase):
 
     def test_file_read_summary_matches_reference_layout(self):
         """无参数；文件与思考以折叠链排列，摘要显示路径、行范围和实际耗时。"""
-        with ActivityModel("read_file", {"path": "fixture.txt", "offset": 1, "limit": 20}) as model:
+        with ActivityModel("read_file", {"path": "fixture.txt", "offset": 1, "limit": 60}) as model:
             model.advance.set()
             with TerminalSession(model.config(), columns=100, rows=30,
                     arguments=["--lang", "en-US"]) as terminal:
-                (terminal.root / "fixture.txt").write_text("\n".join(f"FILE-CONTENT-{index}" for index in range(20)))
+                (terminal.root / "fixture.txt").write_text("\n".join(f"FILE-CONTENT-{index}" for index in range(60)))
                 terminal.send(b"Read the fixture\r")
                 terminal.wait_for(lambda: "ANSWER-END" in terminal.text(), timeout=15)
                 terminal.pump(.4)
                 terminal.send(b"\x1b[1;3H")
                 terminal.wait_for(lambda: "Thought" in terminal.text())
-                group = self.row_of(terminal, "⌄ 1 tool · 1 thought")
+                group = self.row_of(terminal, "▾ 1 read · 1 thought")
                 thought = self.row_of(terminal, "Thought")
-                tool = self.row_of(terminal, "• Read file")
+                tool = self.row_of(terminal, "\uf15c Read file")
                 self.assertLess(group, thought)
                 self.assertLess(thought, tool)
                 self.assertEqual(thought, group + 1)
                 self.assertEqual(tool, thought + 1)
-                self.assertIn("fixture.txt (L1–20)", lines(terminal)[tool])
+                self.assertIn("fixture.txt (L1–60)", lines(terminal)[tool])
                 self.assertIn("ms", lines(terminal)[tool])
-                symbol_column = lines(terminal)[tool].index("•")
+                symbol_column = lines(terminal)[tool].index("\uf15c")
                 self.assertEqual(terminal.screen.buffer[tool][symbol_column].fg, "green")
-                self.assertNotIn("FILE-CONTENT-10", terminal.text())
+                self.assertNotIn("FILE-CONTENT-30", terminal.text())
                 self.assertNotIn("THINK-CURRENT", terminal.text())
                 self.assertNotIn("Execution details", terminal.text())
                 terminal.send(b"\x1b[1;3F")
-                terminal.wait_for(lambda: "FILE-CONTENT-19" in terminal.text())
+                terminal.wait_for(lambda: "FILE-CONTENT-59" in terminal.text())
                 terminal.send(b"\x1b[5;3~")
-                terminal.wait_for(lambda: "FILE-CONTENT-10" in terminal.text())
-                self.assertIn("• Read file", terminal.text())
+                terminal.wait_for(lambda: "FILE-CONTENT-30" in terminal.text())
+                self.assertIn("\uf15c Read file", terminal.text())
 
     def test_nested_wheel_scroll_keeps_group_and_composer_fixed(self):
         """无参数；链内滚动可回看详情，新增输出不打断浏览，滚动到底部恢复跟随。"""
@@ -140,7 +140,7 @@ class DeepseekActivityTests(unittest.TestCase):
                 self.assertLess(terminal.screen.cursor.y, 18)
 
     def test_single_historical_reasoning_stays_expanded(self):
-        """无参数；唯一思考直接展示全文，点击正文不会折叠，回答不受影响。"""
+        """无参数；唯一思考使用五行窗口，滚轮可查看其余正文，点击正文不会折叠。"""
         with TurnModel() as model:
             config = model.config()
             config["display"]["tui_style"] = "deepseek"
@@ -151,7 +151,14 @@ class DeepseekActivityTests(unittest.TestCase):
                 terminal.pump(.4)
                 terminal.send(b"\x1b[1;5H")
                 terminal.wait_for(lambda: "Thought" in terminal.text())
+                terminal.wait_for(lambda: "THINK-ALPHA-0" in terminal.text())
+                title = self.row_of(terminal, "Thought")
+                composer = self.row_of(terminal, "→")
+                self.assertEqual(sum("THINK-ALPHA-" in line for line in lines(terminal)), 5)
+                terminal.send(f"\x1b[<65;8;{title + 3}M".encode())
                 terminal.wait_for(lambda: "THINK-ALPHA-6" in terminal.text())
+                self.assertEqual(self.row_of(terminal, "Thought"), title)
+                self.assertEqual(self.row_of(terminal, "→"), composer)
                 self.assertNotIn("1 thought", terminal.text())
                 click(terminal, 8, self.row_of(terminal, "THINK-ALPHA-6"))
                 terminal.pump(.3)

@@ -76,6 +76,11 @@ def lines(terminal):
     return terminal.text().splitlines()
 
 
+def content_lines(terminal):
+    """参数 terminal 为宽屏全屏会话；返回不含右侧三列导航轨道的正文行。"""
+    return [line[:terminal.screen.columns - 3].rstrip() for line in lines(terminal)]
+
+
 class FullscreenTests(unittest.TestCase):
     """真实终端中完成一次全屏浏览与继续对话。"""
 
@@ -103,7 +108,7 @@ class FullscreenTests(unittest.TestCase):
             fold_hint = next(row for row, line in enumerate(lines(terminal))
                              if row > 0 and ("lines hidden" in line or "行已折叠" in line))
             click(terminal, 4, fold_hint)
-            terminal.wait_for(lambda: "THINK-ALPHA-6" in terminal.text())
+            terminal.wait_for(lambda: "THINK-ALPHA-4" in terminal.text())
             # 4. 滚轮向下离开该位置，Ctrl+↓ 回到底部
             click(terminal, 10, 5, kind=65)
             terminal.send(b"\x1b[1;5B")

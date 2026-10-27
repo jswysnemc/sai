@@ -109,7 +109,10 @@ fn render_todo_section(
         .find(|item| item.status == "in_progress")
         .or_else(|| todos.iter().find(|item| item.status == "pending"));
     // 左侧引导点与队列、智能体同一套沉底装饰，避免「计划」顶格成一块标签
-    let mut header = format!("\x1b[2m● Todo {done}/{total}\x1b[0m");
+    let mut header = format!(
+        "\x1b[2m{} Todo {done}/{total}\x1b[0m",
+        crate::render::guide_symbols::TODO
+    );
     // 单行时才把当前项挂在标题旁；展开后条目与其它待办对齐，不再升成标题
     if compact {
         if let Some(item) = active {
@@ -267,7 +270,7 @@ mod tests {
         let current_at = body.find("current").unwrap();
         let next_at = body.find("next").unwrap();
         assert!(current_at < next_at && next_at < done_at);
-        assert!(plain.contains('●'));
+        assert!(plain.contains(crate::render::guide_symbols::TODO));
         assert!(!plain.contains('├') && !plain.contains('└'));
         assert!(
             !lines.join("\n").contains("\x1b[9m"),

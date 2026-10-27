@@ -6,10 +6,11 @@
 mod activity_scroll_anchor;
 mod activity_viewport;
 mod activity_viewport_hints;
+mod activity_visibility;
 mod activity_window;
 mod bottom_button;
-mod guide_button;
-mod hover;
+pub(super) mod guide_button;
+pub(super) mod hover;
 mod hover_color;
 mod image_window;
 mod input;
@@ -18,7 +19,8 @@ mod overview;
 mod paint;
 #[cfg(test)]
 mod presentation_tests;
-mod selection;
+mod reasoning_viewport;
+pub(super) mod selection;
 mod state;
 
 pub(in crate::cli) use input::FullscreenEvent;
@@ -184,10 +186,15 @@ impl ReplRuntime {
                 &session.state.expanded,
             );
             self.transcript.clear_dirty();
+            let document = session
+                .state
+                .reasoning
+                .update(document, usize::from(layout.content_width));
             let document = session.state.activity.update(
                 document,
                 body_height,
                 usize::from(layout.content_width),
+                usize::from(size.rows),
             );
             session.state.apply_document(document, body_height);
         }
