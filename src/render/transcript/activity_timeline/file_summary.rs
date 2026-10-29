@@ -4,14 +4,9 @@ use serde_json::Value;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-/// 【终端】【文件摘要】保留文件名和实际行范围，空间不足时依次省略目录、耗时与较长动作。
-/// 参数: `view` 为工具，`elapsed` 为耗时，`width` 为净宽，`approval` 为审批状态；返回: 摘要或空值。
-pub(super) fn label(
-    view: &ToolView,
-    elapsed: &str,
-    width: usize,
-    approval: bool,
-) -> Option<String> {
+/// 【终端】【文件摘要】保留文件名和实际行范围，空间不足时依次省略目录与较长动作。
+/// 参数: `view` 为工具，`width` 为净宽，`approval` 为审批状态；返回: 不含耗时的摘要或空值。
+pub(super) fn label(view: &ToolView, width: usize, approval: bool) -> Option<String> {
     if view.name != "read_file" {
         return None;
     }
@@ -22,7 +17,6 @@ pub(super) fn label(
             "",
             t("Viewed image", "已查看图片"),
             t("Image", "图片"),
-            elapsed,
             width,
         ));
     }
@@ -66,7 +60,7 @@ pub(super) fn label(
     } else {
         (t("Reading file", "读取文件"), t("Reading", "读取"))
     };
-    Some(fit(&path, &range, action, short, elapsed, width))
+    Some(fit(&path, &range, action, short, width))
 }
 
 /// 【终端】【文件范围】单行使用单个行号，空页不显示范围。
@@ -79,10 +73,10 @@ fn line_range(start: u64, count: u64) -> String {
     }
 }
 
-/// 【终端】【文件裁剪】先缩短目录，必要时移除耗时，最后裁剪文件名中段而保留扩展名。
-/// 参数: `path` 为路径，`range` 为行范围，`action` 和 `short` 为动作，`elapsed` 为耗时，`width` 为净宽。
+/// 【终端】【文件裁剪】先缩短目录与动作，最后裁剪文件名中段而保留扩展名。
+/// 参数: `path` 为路径，`range` 为行范围，`action` 和 `short` 为动作，`width` 为净宽。
 /// 返回: 不超过显示列数的摘要。
-fn fit(path: &str, range: &str, action: &str, short: &str, elapsed: &str, width: usize) -> String {
+fn fit(path: &str, range: &str, action: &str, short: &str, width: usize) -> String {
     let filename = path.rsplit(['/', '\\']).next().unwrap_or(path);
     let abbreviated = if filename == path {
         filename.to_string()
@@ -90,11 +84,7 @@ fn fit(path: &str, range: &str, action: &str, short: &str, elapsed: &str, width:
         format!("…/{filename}")
     };
     // 1. 【终端】【文件裁剪】完整路径优先，宽度不足时仍保证文件名与行范围完整
-    for prefix in [
-        format!("{action}{elapsed} · "),
-        format!("{action} · "),
-        format!("{short} · "),
-    ] {
+    for prefix in [format!("{action} · "), format!("{short} · ")] {
         for candidate in [path, abbreviated.as_str(), filename] {
             let label = format!("{prefix}{candidate}{range}");
             if UnicodeWidthStr::width(label.as_str()) <= width {

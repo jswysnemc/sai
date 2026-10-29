@@ -57,7 +57,7 @@ class ActivityChainTests(unittest.TestCase):
             terminal.wait_for(lambda: "FINAL-STDOUT" not in terminal.text())
 
     def test_file_read_summary_matches_reference_layout(self):
-        """无参数；文件与思考以折叠链排列，摘要显示路径、行范围和实际耗时。"""
+        """无参数；文件与思考以折叠链排列，摘要显示路径和行范围，不显示读取耗时。"""
         with ActivityModel("read_file", {"path": "fixture.txt", "offset": 1, "limit": 60}) as model:
             model.advance.set()
             with TerminalSession(model.config(), columns=100, rows=30,
@@ -76,7 +76,7 @@ class ActivityChainTests(unittest.TestCase):
                 self.assertEqual(thought, group + 1)
                 self.assertEqual(tool, thought + 1)
                 self.assertIn("fixture.txt (L1–60)", lines(terminal)[tool])
-                self.assertIn("ms", lines(terminal)[tool])
+                self.assertNotRegex(lines(terminal)[tool], r" · \d+(?:\.\d+)?(?:ms|s)(?: ·|$)")
                 symbol_column = lines(terminal)[tool].index("\uf15c")
                 self.assertEqual(terminal.screen.buffer[tool][symbol_column].fg, "green")
                 self.assertNotIn("FILE-CONTENT-30", terminal.text())

@@ -2,6 +2,7 @@ mod animation;
 mod background_logs;
 mod input_echo;
 mod live_reasoning;
+mod live_tail;
 mod operations;
 mod subagent_panel;
 mod todo_snapshot;
@@ -27,6 +28,8 @@ pub(crate) struct TranscriptRenderOptions {
 /// 仍在生成中的文本 source。
 pub(super) struct LiveTail {
     pub(super) kind: ChatStreamKind,
+    pub(super) started: Instant,
+    pub(super) finished: Option<std::time::Duration>,
     pub(super) source: String,
     pub(super) expanded: bool,
     pub(super) table_layouts: crate::render::table::live_layout::TableLayouts,

@@ -96,6 +96,45 @@ fn wide_read_summary_preserves_path_and_legacy_range() {
         let summary = title(&cell, 100);
         assert!(summary.contains("actual/source.rs (L12–13)"), "{summary}");
         assert!(!summary.contains("requested/source.rs"), "{summary}");
+        assert!(!summary.contains("ms"), "{summary}");
+    });
+}
+
+/// 【终端】【读取耗时回归】文本、图片和无法解析参数的读取均隐藏耗时，其他工具仍显示计时。
+/// 参数：无；返回：无，读取标题含耗时或其他工具计时丢失时断言失败。
+#[test]
+fn read_summaries_omit_elapsed_time_without_changing_other_tools() {
+    crate::i18n::with_locale(crate::i18n::Locale::En, || {
+        for (arguments, ok, output) in [
+            (r#"{"path":"source.rs"}"#, true, "1\tfirst"),
+            (r#"{"path":"source.rs"}"#, false, "not found"),
+            (
+                r#"{"path":"fixture.png"}"#,
+                true,
+                "[Image: source: fixture.png, image/png]",
+            ),
+            ("{}", true, "done"),
+        ] {
+            let mut view = ToolView::running("read_file".into(), arguments.into());
+            view.start_timer();
+            view.finish(ok, output.into());
+            assert!(view.elapsed().is_some());
+            let duration = super::summary::for_cell(
+                &HistoryCell::Tool(ToolCell::Invocation(Box::new(view))),
+                120,
+                false,
+            );
+            assert!(!duration.contains("ms"), "{duration}");
+        }
+        let mut view = ToolView::running("custom_tool".into(), "{}".into());
+        view.start_timer();
+        view.finish(true, "done".into());
+        let duration = super::summary::for_cell(
+            &HistoryCell::Tool(ToolCell::Invocation(Box::new(view))),
+            120,
+            false,
+        );
+        assert!(duration.contains("ms"), "{duration}");
     });
 }
 

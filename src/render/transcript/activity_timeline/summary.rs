@@ -24,6 +24,7 @@ pub(super) fn for_cell(cell: &HistoryCell, width: usize, approval: bool) -> Stri
         HistoryCell::Tool(ToolCell::Invocation(view)) => {
             let elapsed = view
                 .elapsed()
+                .filter(|_| view.name != "read_file")
                 .map(|duration| {
                     if duration.as_millis() < 1000 {
                         format!(" · {}ms", duration.as_millis())
@@ -32,7 +33,7 @@ pub(super) fn for_cell(cell: &HistoryCell, width: usize, approval: bool) -> Stri
                     }
                 })
                 .unwrap_or_default();
-            let label = file_summary::label(view, &elapsed, width.saturating_sub(2), approval)
+            let label = file_summary::label(view, width.saturating_sub(2), approval)
                 .or_else(|| tool_summary::label(view, &elapsed, width.saturating_sub(2), approval))
                 .unwrap_or_else(|| {
                     let label = tool_event_label_tense(

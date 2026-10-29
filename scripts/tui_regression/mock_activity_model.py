@@ -17,6 +17,7 @@ class ActivityModel:
         self.arguments = arguments
         self.answer = "ANSWER-END"
         self.reasoning = "THINK-CURRENT\nDetailed current reasoning."
+        self.reasoning_gate = None
         self.answer_gate = None
         self.answer_ready = threading.Event()
         self.argument_chunks = None
@@ -46,6 +47,8 @@ class ActivityModel:
                             return
                         self.emit({"content": model.answer}, "stop")
                     else:
+                        if model.reasoning_gate is not None and not model.reasoning_gate.wait(20):
+                            return
                         self.emit({"reasoning_content": model.reasoning})
                         model.ready.set()
                         if not model.advance.wait(20):
@@ -87,6 +90,8 @@ class ActivityModel:
     def __exit__(self, *_args):
         """参数为异常信息；解除暂停并关闭服务器，返回无。"""
         self.advance.set()
+        if self.reasoning_gate is not None:
+            self.reasoning_gate.set()
         self.resume_preparation.set()
         if self.answer_gate is not None:
             self.answer_gate.set()

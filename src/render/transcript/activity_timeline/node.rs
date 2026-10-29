@@ -147,7 +147,7 @@ pub(super) fn render_live(
                 t("Thinking", "思考中"),
                 crate::token_counter::count(&tail.source),
                 t("tokens", "词元"),
-                elapsed.as_secs_f64()
+                tail.reasoning_duration().unwrap_or_default().as_secs_f64()
             )
         }
         LiveNode::Tool => {

@@ -256,10 +256,7 @@ impl TranscriptStore {
                     assistant_body::display_lines(&rendered, width)
                 }
                 ChatStreamKind::Reasoning => {
-                    let elapsed = self
-                        .work_status_started
-                        .map(|started| started.elapsed())
-                        .unwrap_or_default();
+                    let elapsed = tail.reasoning_duration().unwrap_or_default();
                     let rendered = crate::render::render_width::with_render_width(width, || {
                         if activity {
                             reasoning_cell::render_live(

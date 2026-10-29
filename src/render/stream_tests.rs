@@ -1,6 +1,34 @@
 use super::*;
 use crate::llm::ToolCallStreamProgress;
 
+/// 【思考计时】【CLI 参数边界回归】首个工具参数事件立即结束思考，后续参数片段不继续计时。
+/// 参数：无；返回：无，工具参数到达后思考缓冲或计时器仍活动时断言失败。
+#[test]
+fn first_tool_argument_chunk_finishes_full_reasoning_timer() {
+    let mut renderer = StreamRenderer::new(
+        ReasoningDisplayMode::Full,
+        ToolCallDisplayMode::Hidden,
+        false,
+        StreamRenderOptions::default(),
+    );
+    renderer.mode = Some(ChatStreamKind::Reasoning);
+    renderer.reasoning_full_buffer = "CLI 思考片段".into();
+    renderer.reasoning_started = Some(Instant::now());
+    let progress = ToolCallStreamProgress {
+        index: 0,
+        name: Some("read_file".into()),
+        edit_diff_counts: None,
+        arguments_chars: 0,
+        arguments_bytes: 0,
+        arguments_preview: String::new(),
+    };
+    renderer.write_tool_call_progress(&progress).unwrap();
+    assert!(renderer.reasoning_started.is_none());
+    assert!(renderer.reasoning_full_buffer.is_empty());
+    renderer.write_tool_call_progress(&progress).unwrap();
+    assert!(renderer.reasoning_started.is_none());
+}
+
 #[test]
 fn tool_status_prefers_running_for_single_active_call() {
     let stats = ToolStats {

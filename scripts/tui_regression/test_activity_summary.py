@@ -22,12 +22,16 @@ class ActivitySummaryTests(unittest.TestCase):
                 fixture.write_text("first\nsecond\nthird\n")
                 terminal.send(b"Read the short fixture\r")
                 terminal.wait_for(lambda: "ANSWER-END" in terminal.text(), timeout=15)
+                summary = next(line for line in lines(terminal) if "Read file" in line)
+                self.assertIn("source-file.rs (L1–3)", summary)
+                self.assertNotRegex(summary, r" · \d+(?:\.\d+)?(?:ms|s)(?: ·|$)")
                 output_size = len(terminal.raw)
                 terminal.resize(50, 24)
                 terminal.wait_for(lambda: len(terminal.raw) > output_size + 500)
                 summary = next(line for line in lines(terminal) if "Read file" in line)
                 self.assertIn("source-file.rs (L1–3)", summary)
                 self.assertNotIn("L1–20", summary)
+                self.assertNotRegex(summary, r" · \d+(?:\.\d+)?(?:ms|s)(?: ·|$)")
 
     def test_narrow_command_summary_keeps_failure_visible(self):
         """无参数；长命令失败后，折叠标题优先显示失败状态而不是仅改变颜色。"""

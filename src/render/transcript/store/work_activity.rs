@@ -11,6 +11,11 @@ impl TranscriptStore {
     /// 返回:
     /// - 状态是否发生变化
     pub(crate) fn set_work_status(&mut self, status: WorkStatus) -> bool {
+        if status != WorkStatus::Thinking {
+            if let Some(tail) = self.live_tail.as_mut() {
+                tail.finish_reasoning();
+            }
+        }
         if self.work_status == Some(status) {
             return false;
         }

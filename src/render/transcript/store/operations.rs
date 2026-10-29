@@ -5,33 +5,6 @@ use crate::render::transcript::subagent_cell::SubagentCell;
 use crate::render::transcript::tool_cell::ToolCell;
 use crate::render::transcript::welcome_cell::WelcomeCell;
 
-impl LiveTail {
-    /// 将临时流式文本转换为可重放 history cell。
-    ///
-    /// 参数:
-    /// - `self`: 当前临时流式文本
-    ///
-    /// 返回:
-    /// - 对应的历史 cell
-    fn into_cell(self, duration: Option<std::time::Duration>) -> HistoryCell {
-        match self.kind {
-            ChatStreamKind::Content => {
-                HistoryCell::Markdown(super::super::markdown_cell::MarkdownCell {
-                    source: self.source,
-                    table_layouts: self.table_layouts,
-                })
-            }
-            ChatStreamKind::Reasoning => {
-                let mut cell =
-                    crate::render::transcript::reasoning_cell::ReasoningCell::new(self.source);
-                cell.expanded = self.expanded;
-                cell.duration = duration;
-                HistoryCell::Reasoning(cell)
-            }
-        }
-    }
-}
-
 impl TranscriptStore {
     /// 创建空 transcript。
     ///
@@ -305,30 +278,23 @@ impl TranscriptStore {
     /// 返回:
     /// - 无
     pub(crate) fn push_chunk(&mut self, chunk: &ChatStreamChunk) {
+        if chunk.text.is_empty() {
+            return;
+        }
         match self.live_tail.as_mut() {
-            Some(tail) if tail.kind == chunk.kind => tail.source.push_str(&chunk.text),
+            Some(tail) if tail.kind == chunk.kind && tail.finished.is_none() => {
+                tail.source.push_str(&chunk.text)
+            }
             Some(_) => {
                 self.finalize_live_tail();
                 self.live_animation_started =
                     Some(crate::render::activity_animation::activity_started_at());
-                self.live_tail = Some(LiveTail {
-                    kind: chunk.kind,
-                    source: chunk.text.clone(),
-                    expanded: false,
-                    table_layouts: Default::default(),
-                    markdown_cache: Default::default(),
-                });
+                self.live_tail = Some(LiveTail::new(chunk.kind, chunk.text.clone()));
             }
             None => {
                 self.live_animation_started =
                     Some(crate::render::activity_animation::activity_started_at());
-                self.live_tail = Some(LiveTail {
-                    kind: chunk.kind,
-                    source: chunk.text.clone(),
-                    expanded: false,
-                    table_layouts: Default::default(),
-                    markdown_cache: Default::default(),
-                });
+                self.live_tail = Some(LiveTail::new(chunk.kind, chunk.text.clone()));
             }
         }
     }
@@ -341,6 +307,9 @@ impl TranscriptStore {
     /// 返回:
     /// - 无
     pub(crate) fn push_tool_call_progress(&mut self, progress: &ToolCallStreamProgress) {
+        if let Some(tail) = self.live_tail.as_mut() {
+            tail.finish_reasoning();
+        }
         self.live_tool_call = Some(LiveToolCall {
             name: progress.name.clone().unwrap_or_else(|| "tool".to_string()),
             arguments_preview: progress.arguments_preview.clone(),
@@ -544,11 +513,6 @@ impl TranscriptStore {
         if tail.source.is_empty() {
             return cleared_tool_preview;
         }
-        let duration = if tail.kind == ChatStreamKind::Reasoning {
-            self.work_status_started.map(|started| started.elapsed())
-        } else {
-            None
-        };
         // 思考定稿后标题改过去式；状态行不能再闪 Thinking
         if tail.kind == ChatStreamKind::Reasoning
             && self.work_status == Some(crate::render::work_status::WorkStatus::Thinking)
@@ -556,7 +520,7 @@ impl TranscriptStore {
             self.work_status = Some(crate::render::work_status::WorkStatus::WaitingResponse);
         }
         let index = self.cells.len();
-        self.cells.push(tail.into_cell(duration));
+        self.cells.push(tail.into_cell());
         self.cache.push_slot();
         self.timeline_cache.push_slot();
         self.mark_dirty(index);

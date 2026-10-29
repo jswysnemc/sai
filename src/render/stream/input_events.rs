@@ -257,6 +257,10 @@ impl StreamRenderer {
         if progress.name.as_deref() == Some("compress_context") {
             return self.write_context_compression_progress(true);
         }
+        // 1. 【思考计时】【参数边界】收到工具参数即结束思考，不能把后续参数传输时间计入思考
+        if self.mode == Some(ChatStreamKind::Reasoning) {
+            self.finalize_reasoning_summary()?;
+        }
         let progress_name = progress.name.as_deref().unwrap_or("tool");
         self.set_work_status(
             crate::render::work_status::status_for_tool(progress_name),

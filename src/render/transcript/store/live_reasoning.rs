@@ -73,3 +73,105 @@ impl TranscriptStore {
         false
     }
 }
+
+#[cfg(test)]
+mod timing_tests {
+    use super::*;
+    use crate::llm::ChatStreamChunk;
+    use crate::render::work_status::WorkStatus;
+    use std::time::{Duration, Instant};
+
+    /// 【思考计时】【轮次隔离回归】本轮工作已持续 115 秒时，新思考段不能沿用整轮耗时。
+    /// 参数：无；返回：无，实时标题或定稿思考使用工作时钟时断言失败。
+    #[test]
+    fn reasoning_duration_excludes_work_before_first_reasoning_chunk() {
+        let mut store = TranscriptStore::new(200);
+        store.set_work_status(WorkStatus::Thinking);
+        store.work_status_started = Instant::now().checked_sub(Duration::from_secs(115));
+        store.push_chunk(&ChatStreamChunk {
+            kind: ChatStreamKind::Reasoning,
+            text: "短思考".into(),
+        });
+        let rendered = store
+            .display_live_tail(
+                100,
+                &crate::render::transcript::store::TranscriptRenderOptions {
+                    reasoning_mode: crate::render::ReasoningDisplayMode::Full,
+                    tool_call_mode: crate::render::ToolCallDisplayMode::Full,
+                },
+            )
+            .iter()
+            .map(|line| line.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(!rendered.contains("1m 55s"), "{rendered}");
+        store.finalize_live_tail();
+        let HistoryCell::Reasoning(cell) = &store.cells[0] else {
+            panic!("expected reasoning cell")
+        };
+        assert!(
+            cell.duration
+                .is_some_and(|duration| duration < Duration::from_secs(1)),
+            "{:?}",
+            cell.duration
+        );
+        assert!(store.work_status_started.unwrap().elapsed() >= Duration::from_secs(115));
+    }
+
+    /// 【思考计时】【阶段冻结回归】工具参数到达时冻结思考，工具等待后开启下一段独立计时。
+    /// 参数：无；返回：无，参数传输延长思考或下一段沿用旧计时时断言失败。
+    #[test]
+    fn tool_argument_progress_freezes_reasoning_and_next_segment_restarts() {
+        let mut store = TranscriptStore::new(200);
+        store.push_chunk(&ChatStreamChunk {
+            kind: ChatStreamKind::Reasoning,
+            text: "first".into(),
+        });
+        store.live_tail.as_mut().unwrap().started = Instant::now() - Duration::from_secs(2);
+        store.push_tool_call_progress(&crate::llm::ToolCallStreamProgress {
+            index: 0,
+            name: Some("read_file".into()),
+            edit_diff_counts: None,
+            arguments_chars: 0,
+            arguments_bytes: 0,
+            arguments_preview: String::new(),
+        });
+        let duration = store
+            .live_tail
+            .as_ref()
+            .unwrap()
+            .reasoning_duration()
+            .unwrap();
+        store.live_tail.as_mut().unwrap().started = Instant::now() - Duration::from_secs(115);
+        assert_eq!(
+            store.live_tail.as_ref().unwrap().reasoning_duration(),
+            Some(duration)
+        );
+        store.push_chunk(&ChatStreamChunk {
+            kind: ChatStreamKind::Reasoning,
+            text: "second".into(),
+        });
+        let HistoryCell::Reasoning(first) = &store.cells[0] else {
+            panic!("expected first thought")
+        };
+        assert_eq!(first.source, "first");
+        assert_eq!(first.duration, Some(duration));
+        assert!(
+            store
+                .live_tail
+                .as_ref()
+                .unwrap()
+                .reasoning_duration()
+                .unwrap()
+                < Duration::from_secs(1)
+        );
+        store.set_work_status(WorkStatus::WaitingExternal);
+        let second = store.live_tail.as_ref().unwrap().reasoning_duration();
+        store.live_tail.as_mut().unwrap().started = Instant::now() - Duration::from_secs(115);
+        store.finalize_live_tail();
+        let HistoryCell::Reasoning(cell) = &store.cells[1] else {
+            panic!("expected second thought")
+        };
+        assert_eq!(cell.duration, second);
+    }
+}
