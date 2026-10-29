@@ -68,7 +68,7 @@ class ActivityChainTests(unittest.TestCase):
                 terminal.pump(.4)
                 terminal.send(b"\x1b[1;3H")
                 terminal.wait_for(lambda: "Thought" in terminal.text())
-                group = self.row_of(terminal, "\uf15c 1 read · \uf0eb 1 thought")
+                group = self.row_of(terminal, "\uf03a 1 read · \uf0eb 1 thought")
                 thought = self.row_of(terminal, "Thought")
                 tool = self.row_of(terminal, "\uf15c Read file")
                 self.assertLess(group, thought)

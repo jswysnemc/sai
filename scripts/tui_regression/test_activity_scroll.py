@@ -75,7 +75,7 @@ class ActivityScrollTests(unittest.TestCase):
                 terminal.send(b"Read fixture.txt\r")
                 terminal.wait_for(lambda: "ANSWER-END" in terminal.text(), timeout=15)
                 terminal.pump(.3)
-                group = self.row_of(terminal, "\uf15c 1 read · \uf0eb 1 thought")
+                group = self.row_of(terminal, "\uf03a 1 read · \uf0eb 1 thought")
                 answer = self.row_of(terminal, "ANSWER-END")
                 self.assertLessEqual(answer - group, 10)
                 self.assertIn("Thought", terminal.text())
