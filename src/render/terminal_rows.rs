@@ -6,6 +6,9 @@ use crossterm::terminal::{Clear, ClearType};
 use std::io::{self, Write};
 use unicode_width::UnicodeWidthStr;
 
+mod diff;
+mod styled_row;
+
 /// 【终端】【逐行绘制】只输出发生变化的视觉行，并在写完内容后清除旧行尾。
 ///
 /// 参数: `output` 为帧缓冲，`top` 为首行位置，`cols` 为列数，`lines` 为新行，`previous` 为同位置旧行
@@ -29,6 +32,17 @@ pub(crate) fn paint_changed_rows<W: Write>(
             started = true;
         }
         let line = lines.get(index).map(String::as_str).unwrap_or_default();
+        if let Some(previous) = previous.get(index) {
+            if diff::paint_append(
+                output,
+                top.saturating_add(index as u16),
+                cols,
+                previous,
+                line,
+            )? {
+                continue;
+            }
+        }
         queue!(
             output,
             MoveTo(0, top.saturating_add(index as u16)),
@@ -76,46 +90,4 @@ pub(crate) fn park_if_full_line<W: Write>(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// 【终端】【逐行绘制】缩短正文后清理行尾，但不能清空整屏或重写相同行。
-    /// 参数: 无
-    /// 返回: 无，顺序或绘制范围错误时断言失败
-    #[test]
-    fn paints_only_changes_before_erasing_stale_suffixes() {
-        let previous = vec!["stable".into(), "old long value".into()];
-        let current = vec!["stable".into(), "new".into()];
-        let mut output = Vec::new();
-        paint_changed_rows(&mut output, 3, 40, &current, Some(&previous)).unwrap();
-        let output = String::from_utf8(output).unwrap();
-        assert!(!output.contains("stable"));
-        assert!(!output.contains("\x1b[2J") && !output.contains("\x1b[2K"));
-        assert!(output.find("new").unwrap() < output.find("\x1b[K").unwrap());
-    }
-
-    /// 【终端】【逐行绘制】满宽文本不能在最后一列执行清行，否则最后一个字符会消失。
-    /// 参数: 无
-    /// 返回: 无，覆盖最后一列时断言失败
-    #[test]
-    fn full_width_row_does_not_erase_its_last_character() {
-        let mut output = Vec::new();
-        paint_changed_rows(&mut output, 0, 4, &["abcd".into()], None).unwrap();
-        assert!(!String::from_utf8(output).unwrap().contains("\x1b[K"));
-    }
-
-    /// 【终端】【逐行绘制】满宽行在恢复自动换行前把光标钉回行尾，取消延迟换行。
-    /// 参数: 无
-    /// 返回: 无，光标定位晚于恢复换行时断言失败
-    #[test]
-    fn full_width_row_parks_cursor_before_wrap_is_restored() {
-        let mut output = Vec::new();
-        paint_changed_rows(&mut output, 0, 4, &["abcd".into()], None).unwrap();
-        let output = String::from_utf8(output).unwrap();
-        let park = output
-            .find("\x1b[1;4H")
-            .expect("cursor parked on last cell");
-        let restore = output.find("\x1b[?7h").expect("autowrap restored");
-        assert!(park < restore);
-    }
-}
+mod tests;

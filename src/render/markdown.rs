@@ -14,6 +14,8 @@ use crate::render::style::{FOOTNOTE_DEF_STYLE, MD_H1_STYLE, MD_H2_STYLE, MD_H3_S
 use crate::render::table;
 use crate::render::table::streaming::StreamingTable;
 
+mod preview;
+
 pub(crate) struct MarkdownStreamRenderer {
     buffer: String,
     line_renderer: MarkdownLineRenderer,

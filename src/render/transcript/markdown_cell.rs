@@ -51,7 +51,7 @@ pub(crate) fn render_completed_parts(
     // 1. 【终端】【流式正文】推入已完成行，闭合表格沿用对应序号的固定布局
     let mut output = renderer.push(source);
     // 2. 【终端】【流式正文】追加完整开放表格，保存其布局供下次预览和定稿复用
-    let open = renderer.snapshot_open_structures();
+    let open = renderer.snapshot_live_preview();
     output.push_str(&open);
     *layouts = renderer.take_table_layouts();
     crate::render::terminal_image::trim_trailing_image_newlines(&output)

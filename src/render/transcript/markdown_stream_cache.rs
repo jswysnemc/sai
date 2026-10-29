@@ -42,7 +42,7 @@ impl MarkdownStreamCache {
             let delta = &source[self.source.len()..];
             let renderer = self.renderer.as_mut().expect("initialized renderer");
             self.stable.push_str(&renderer.push(delta));
-            self.preview = renderer.snapshot_open_structures();
+            self.preview = renderer.snapshot_live_preview();
             *layouts = renderer.take_table_layouts();
             renderer.set_table_layouts(layouts.clone(), Some(budget));
             #[cfg(test)]
