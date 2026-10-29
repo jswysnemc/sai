@@ -4,7 +4,7 @@ use flate2::write::GzEncoder;
 use flate2::Compression;
 use sha2::{Digest, Sha256};
 use std::io::{Cursor, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// 【桌面测试】【路径集合】构造仅含数据目录的测试路径。
 ///
@@ -218,7 +218,7 @@ fn resolve_prefers_configured_file() {
 #[tokio::test]
 async fn probe_reads_version_from_script() {
     let temp = tempfile::tempdir().unwrap();
-    let script: PathBuf = temp.path().join("cua-driver");
+    let script = temp.path().join("cua-driver");
     std::fs::write(&script, "#!/bin/sh\necho 'cua-driver 0.34.1'\n").unwrap();
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
