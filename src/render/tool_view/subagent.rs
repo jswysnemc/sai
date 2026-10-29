@@ -6,6 +6,13 @@ use crate::render::{
 };
 use serde_json::Value;
 
+#[path = "subagent_metrics.rs"]
+mod metrics;
+
+#[cfg(test)]
+#[path = "subagent_tests.rs"]
+mod tests;
+
 /// 【终端】【子任务标题】优先读取结果描述，历史缺少参数时也保留任务名称。
 /// 参数: 参数、可选结果及完成状态；返回: 带动作的任务标题。
 pub(crate) fn title(arguments: &str, output: Option<&str>, done: bool) -> String {
@@ -16,6 +23,13 @@ pub(crate) fn title(arguments: &str, output: Option<&str>, done: bool) -> String
     let description = result_card::text(&result["subagent"], "description")
         .or_else(|| result_card::text(&args, "description"))
         .or_else(|| result_card::text(&args, "prompt"));
+    if done && result["subagent"].is_object() {
+        return format!(
+            "Subagent {}{}",
+            result_card::short(description.as_deref().unwrap_or("Untitled task"), 64),
+            metrics::suffix(&result["subagent"])
+        );
+    }
     if let Some(description) = description {
         if let Some(fields) = args.as_object_mut() {
             let description = Value::String(result_card::short(&description, 64));
@@ -56,7 +70,9 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
     };
     if let Some(task) = task {
         let status = task["status"].as_str().unwrap_or("unknown");
-        title.push_str(&format!(" · {status}"));
+        if status != "completed" {
+            title.push_str(&format!(" · {status}"));
+        }
         if matches!(status, "failed" | "interrupted") {
             health = ToolHealth::Err;
         } else if matches!(status, "running" | "idle" | "cancelled") {
@@ -88,11 +104,16 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
             "Result truncated; more details are available in the subagent conversation.".into(),
         );
     }
-    Some(result_card::render(
-        view,
-        mode,
-        &title,
-        health,
-        &body.join("\n"),
-    ))
+    let body = body.join("\n");
+    let body = if task.is_some() && !body.is_empty() {
+        let mut lines = body.lines();
+        let mut tree = format!("└ {}", lines.next().unwrap_or_default());
+        for line in lines {
+            tree.push_str(&format!("\n  {line}"));
+        }
+        tree
+    } else {
+        body
+    };
+    Some(result_card::render(view, mode, &title, health, &body))
 }

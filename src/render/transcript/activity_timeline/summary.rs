@@ -63,7 +63,7 @@ pub(super) fn for_cell(cell: &HistoryCell, width: usize, approval: bool) -> Stri
             format!(
                 "{} {}",
                 crate::render::guide_symbols::AGENTS,
-                with_status(cell.overview().label, health, false)
+                with_status(cell.timeline_summary(), health, false)
             )
         }
         HistoryCell::Tool(ToolCell::CompactionStarted { .. }) => {

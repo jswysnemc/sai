@@ -35,6 +35,7 @@ pub(crate) mod subagent_goal;
 mod subagent_persistence;
 mod subagent_progress;
 mod subagent_runner;
+pub(crate) use subagent_runner::format_token_count;
 #[cfg(test)]
 pub(crate) use subagent_runner::{ProgressMode, SubagentProgress, SubagentRunner};
 #[cfg(test)]

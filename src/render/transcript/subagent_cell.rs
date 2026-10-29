@@ -216,6 +216,46 @@ impl SubagentCell {
         self.outcome.is_none() && self.subagent_id.is_none()
     }
 
+    /// 【子任务卡片】【完成视图】终态优先读取持久化统计，进行中仍沿用实时进度视图。
+    /// 参数：无；返回：终态工具视图，尚未结束或没有结果时为空。
+    fn completed_view(&self) -> Option<crate::render::tool_view::ToolView> {
+        let snapshot = self
+            .subagent_id
+            .as_deref()
+            .and_then(|id| crate::tools::subagent_state::subagent_snapshot(id).ok());
+        let (ok, output) = if let Some(snapshot) = snapshot {
+            if snapshot.status == "running" {
+                return None;
+            }
+            (
+                matches!(snapshot.status.as_str(), "completed" | "idle"),
+                serde_json::json!({"subagent":snapshot}).to_string(),
+            )
+        } else {
+            self.outcome.clone()?
+        };
+        let mut view =
+            crate::render::tool_view::ToolView::running("subagent".into(), self.arguments.clone());
+        view.finish(ok, output);
+        Some(view)
+    }
+
+    /// 【子任务卡片】【执行链摘要】完成后复用带真实统计的卡片标题，不改变面板任务名称。
+    /// 参数：无；返回：不含行首图标的执行链标题。
+    pub(crate) fn timeline_summary(&self) -> String {
+        self.completed_view()
+            .map(|view| {
+                let rendered =
+                    crate::render::tool_view::render(&view, ToolCallDisplayMode::Summary);
+                let line = crate::render::ansi_clip::strip_ansi(
+                    rendered.lines().next().unwrap_or_default(),
+                );
+                line.split_once(' ')
+                    .map_or_else(|| line.clone(), |(_, title)| title.to_string())
+            })
+            .unwrap_or_else(|| self.overview().label)
+    }
+
     /// 【终端】【子任务正文】从实际结果或持久化快照读取结论，复用精简工具视图。
     /// 参数: 无；返回: 不含标题和内部快照字段的正文。
     pub(crate) fn timeline_details(&self) -> String {
@@ -284,6 +324,9 @@ impl SubagentCell {
 pub(super) fn render(cell: &SubagentCell, mode: ToolCallDisplayMode) -> String {
     if mode == ToolCallDisplayMode::Hidden {
         return String::new();
+    }
+    if let Some(view) = cell.completed_view() {
+        return crate::render::tool_view::render(&view, mode);
     }
     // 【TUI】【子智能体渲染】1. 优先使用后台持久化快照，工具内进度仅作前台兼容
     let snapshot = cell
@@ -494,6 +537,48 @@ fn parse_subtool_result(payload: &str) -> Option<SubagentPart> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 【子任务卡片】【快照回归】任务结束但没有 wait 回执时，历史卡片和执行链也显示真实统计。
+    /// 参数：无；返回：无，持久化终态未采用新卡片或统计丢失时断言失败。
+    #[test]
+    fn completed_snapshot_uses_metrics_in_card_and_timeline_summary() {
+        let owner = format!("subagent-card-test-{}", uuid::Uuid::new_v4());
+        let (snapshot, _cancel) = crate::tools::subagent_state::create_subagent_for_owner(
+            &owner,
+            "评估缓存架构".into(),
+            "general".into(),
+            0,
+        );
+        let mut cell = SubagentCell::new(
+            serde_json::json!({"action":"wait","subagent_id":snapshot.id}).to_string(),
+        );
+        crate::tools::subagent_state::finish_subagent(
+            &snapshot.id,
+            "completed",
+            Some("推荐 Redis 架构".into()),
+            None,
+            Some(
+                serde_json::json!({"tool_calls":4,"total_tokens":1200,"token_estimate":1200,"token_estimate_is_actual":true}),
+            ),
+        );
+        cell.finish(
+            true,
+            serde_json::json!({"subagent":{"id":snapshot.id,"status":"completed"}}).to_string(),
+        );
+        let full = crate::render::ansi_clip::strip_ansi(&render(&cell, ToolCallDisplayMode::Full));
+        let summary = cell.timeline_summary();
+        crate::tools::subagent_state::clear_subagents_for_owner(&owner);
+        for text in [&full, &summary] {
+            assert!(
+                text.contains("Subagent 评估缓存架构")
+                    && text.contains("4 tool calls")
+                    && text.contains("1.2k tokens"),
+                "{text}"
+            );
+        }
+        assert!(full.contains("└ 推荐 Redis 架构"), "{full}");
+        assert!(!summary.contains(""), "{summary}");
+    }
 
     #[test]
     fn renders_compact_status_without_response_body() {
