@@ -102,7 +102,7 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -
             if body.is_empty() { header } else { body },
             "",
         );
-        if mode == ToolCallDisplayMode::Full {
+        if view.outcome.is_none() && mode == ToolCallDisplayMode::Full {
             if let Some(question) = question {
                 for (option_index, option) in question.options.iter().enumerate() {
                     let picked = selected.iter().any(|value| value == option.answer_value());
@@ -118,17 +118,7 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -
             }
         }
         for value in selected {
-            // 2. 【提问展示】【答案去重】展开列表已经标出标准答案，仅额外保留自定义内容
-            if mode == ToolCallDisplayMode::Full
-                && question.is_some_and(|question| {
-                    question
-                        .options
-                        .iter()
-                        .any(|option| option.answer_value() == value)
-                })
-            {
-                continue;
-            }
+            // 2. 【提问展示】【完成答案】只显示最终答案，标准值映射回标签，自定义内容保留原文
             let label = answer_label(question, &value);
             push_text(&mut lines, "  ● ", &label, "\x1b[36m");
         }

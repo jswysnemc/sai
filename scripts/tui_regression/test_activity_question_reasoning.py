@@ -41,7 +41,7 @@ class ActivityCompactContentTests(unittest.TestCase):
                     self.assertEqual(self.row_of(terminal, "Thinking"), title)
 
     def test_question_uses_round_choices_and_no_protocol_dump(self):
-        """无参数；多选使用圆形，完成记录仅显示问题、选项及选中状态，返回无。"""
+        """无参数；多选等待时显示全部选项，完成记录只保留问题与已选答案，返回无。"""
         arguments = {"questions": [{"header": "Report scope", "question": "Choose report sections",
             "multiple": True, "options": [
                 {"label": "Call matrix", "description": "Matrix explanation"},
@@ -55,6 +55,7 @@ class ActivityCompactContentTests(unittest.TestCase):
                 terminal.wait_for(lambda: "Space toggle" in terminal.text())
                 self.assertIn("○", terminal.text())
                 self.assertNotIn("□", terminal.text())
+                self.assertIn("Suggestions", terminal.text())
                 terminal.send(b"12")
                 terminal.wait_for(lambda: sum("●" in line for line in lines(terminal)
                                              if "Call matrix" in line or "Failure cases" in line) == 2)
@@ -63,10 +64,10 @@ class ActivityCompactContentTests(unittest.TestCase):
                 terminal.send(b"\r")
                 terminal.wait_for(lambda: "ANSWER-END" in terminal.text())
                 rendered = terminal.text()
-                for text in ["Choose report sections", "Call matrix", "Failure cases", "Suggestions"]:
+                for text in ["Choose report sections", "Call matrix", "Failure cases"]:
                     self.assertEqual(rendered.count(text), 1, rendered)
                 for text in ["Header:", "Multiple:", "Description:", "Label:", "Input:", "Output:",
-                             "Matrix explanation", "Failure explanation", "□", "■"]:
+                             "Matrix explanation", "Failure explanation", "Suggestions", "○", "□", "■"]:
                     self.assertNotIn(text, rendered)
 
 

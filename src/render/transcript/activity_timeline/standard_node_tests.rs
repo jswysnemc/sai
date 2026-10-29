@@ -38,7 +38,8 @@ fn question_timeline_uses_compact_semantic_details() {
     );
     assert!(plain.contains("报告包含哪些内容？"), "{plain}");
     assert_eq!(plain.matches("调用矩阵").count(), 1, "{plain}");
-    assert!(plain.contains("●") && plain.contains("○"), "{plain}");
+    assert!(plain.contains("●") && !plain.contains("○"), "{plain}");
+    assert!(!plain.contains("异常用例"), "{plain}");
     for redundant in [
         "Header:",
         "Multiple:",

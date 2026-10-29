@@ -25,6 +25,8 @@ fn question_completed_card_shows_answers_without_raw_json() {
         assert!(text.contains("Asked"));
         assert!(text.contains("这次修改哪些模块？"), "{text}");
         assert!(text.contains("只改界面"), "{text}");
+        assert!(!text.contains("全部模块"), "{text}");
+        assert!(!text.contains('○'), "{text}");
         assert!(
             !text.contains("args:")
                 && !text.contains("output:")
@@ -32,6 +34,49 @@ fn question_completed_card_shows_answers_without_raw_json() {
             "{text}"
         );
     }
+}
+
+/// 【提问展示】【选择过滤回归】多选与自定义答案保留最终选择，未选项不出现在任何完成模式中。
+/// 参数：无；返回：无，所选标签丢失、答案重复或未选项残留时断言失败。
+#[test]
+fn completed_multiple_choice_keeps_selected_and_custom_answers_only() {
+    let mut view = ToolView::running(
+        "ask_question".into(),
+        serde_json::json!({"questions":[{
+            "header":"运行时", "question":"选择运行时", "multiple":true,
+            "options":[{"label":"Node.js","description":"LTS","value":"node"},
+                {"label":"Bun","description":"Fast","value":"bun"},
+                {"label":"Rust Native","description":"Native","value":"rust"}]
+        }]})
+        .to_string(),
+    );
+    view.finish(
+        true,
+        serde_json::json!({"status":"answered","answers":[{
+            "answer":["rust","node","自定义说明"],"image_count":1
+        }]})
+        .to_string(),
+    );
+    for mode in [ToolCallDisplayMode::Summary, ToolCallDisplayMode::Full] {
+        let text = strip_ansi_for_test(&render(&view, mode));
+        for selected in ["Rust Native", "Node.js", "自定义说明"] {
+            assert_eq!(text.matches(selected).count(), 1, "{text}");
+        }
+        assert!(!text.contains("Bun") && !text.contains('○'), "{text}");
+        assert!(text.contains("1 attached images"), "{text}");
+    }
+}
+
+/// 【提问展示】【等待回归】回答之前仍保留所有选项，不能提前隐藏尚未选择的内容。
+/// 参数：无；返回：无，等待状态选项丢失时断言失败。
+#[test]
+fn pending_question_keeps_all_options() {
+    let text = strip_ansi_for_test(&render(&question_view(), ToolCallDisplayMode::Full));
+    assert!(
+        text.contains("只改界面") && text.contains("全部模块"),
+        "{text}"
+    );
+    assert_eq!(text.matches('○').count(), 2, "{text}");
 }
 
 /// 【提问展示】【异常回归】取消时显示明确原因，展开也不回退 JSON；无参数和返回值。
