@@ -42,11 +42,15 @@ pub(crate) fn clip_ansi_to_width(text: &str, max_width: usize, ellipsis: &str) -
     let mut active_sgr = String::new();
     let mut index = 0usize;
 
-    // 1. 【终端】【ANSI 扫描】遇到转义序列更新样式状态且不计入列数预算
+    // 1. 【终端】【ANSI 扫描】丢弃孤立 ESC，完整序列更新样式且不计入列宽，避免截断后吞掉样式重置
     while index < text.len() {
         let ch = text[index..].chars().next().unwrap_or_default();
         if ch == '\x1b' {
             let end = crate::render::terminal_image::escape_sequence_end(text, index);
+            if end == index + 1 {
+                index = end;
+                continue;
+            }
             let sequence = &text[index..end];
             if sequence.ends_with('m') {
                 update_active_sgr(&mut active_sgr, sequence);
@@ -105,6 +109,30 @@ pub(crate) fn ansi_visible_width(text: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 【终端】【崩溃回归】复现字节位置 18 落在替换字符内部的输入，清除时保留可见正文。
+    /// 参数：无；返回：无，UTF-8 切片越界或正文丢失时断言失败。
+    #[test]
+    fn strip_preserves_replacement_character_after_escape() {
+        let text = "0123456789abcdef\x1b\u{fffd}tail";
+        assert_eq!(strip_ansi(text), "0123456789abcdef\u{fffd}tail");
+    }
+
+    /// 【终端】【裁剪边界回归】混合样式、中文和损坏转义时，宽度计算及截断均保留完整字符。
+    /// 参数：无；返回：无，可见列数或截断内容不符时断言失败。
+    #[test]
+    fn malformed_escape_is_safe_for_width_and_clipping() {
+        let text = "\x1b[32m前\x1b\u{fffd}后\x1b[0m";
+        assert_eq!(ansi_visible_width(text), 5);
+        for (width, expected) in [(0, ""), (2, "前"), (3, "前\u{fffd}"), (5, "前\u{fffd}后")] {
+            let clipped = clip_ansi_to_width(text, width, "");
+            assert_eq!(strip_ansi(&clipped), expected);
+            assert!(ansi_visible_width(&clipped) <= width);
+            assert!(clipped.ends_with("\x1b[0m"));
+        }
+        let clipped = clip_ansi_to_width(text, 4, "…");
+        assert_eq!(strip_ansi(&clipped), "前\u{fffd}…");
+    }
 
     #[test]
     fn test_clip_ansi_preserves_style_and_resets() {

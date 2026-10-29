@@ -7,7 +7,7 @@
 /// - `start`: ESC 所在字节位置
 ///
 /// 返回:
-/// - 转义序列后第一个字节位置
+/// - 转义序列后第一个字节位置；ESC 后不是 ASCII 类型时仅跳过 ESC，保留完整字符
 pub(crate) fn escape_sequence_end(text: &str, start: usize) -> usize {
     let bytes = text.as_bytes();
     if bytes.get(start) != Some(&0x1b) {
@@ -16,6 +16,10 @@ pub(crate) fn escape_sequence_end(text: &str, start: usize) -> usize {
     let Some(kind) = bytes.get(start + 1).copied() else {
         return start + 1;
     };
+    // 1. 【终端】【UTF-8 边界】多字节字符不能作为转义类型，固定跳过两字节会切断其编码
+    if !kind.is_ascii() {
+        return start + 1;
+    }
     match kind {
         b'[' => csi_end(bytes, start + 2),
         b']' => osc_end(bytes, start + 2),
@@ -85,6 +89,51 @@ fn string_control_end(bytes: &[u8], mut index: usize) -> usize {
 #[cfg(test)]
 mod escape_tests {
     use super::*;
+
+    /// 【终端】【UTF-8 边界回归】ESC 后的多字节字符不是转义类型，不得跳进字符编码内部。
+    /// 参数：无；返回：无，扫描位置越界或吞掉可见字符时断言失败。
+    #[test]
+    fn unknown_escape_preserves_multibyte_follower() {
+        for character in ['\u{fffd}', '中', 'é', '\u{1d11e}', '\u{0301}'] {
+            let text = format!("prefix\x1b{character}tail");
+            let start = "prefix".len();
+            let end = escape_sequence_end(&text, start);
+            assert_eq!(end, start + 1, "{text:?}");
+            assert_eq!(&text[end..], format!("{character}tail"));
+        }
+    }
+
+    /// 【终端】【截断边界回归】完整或截断控制序列只能返回合法 UTF-8 字符边界。
+    /// 参数：无；返回：无，任意序列前缀产生非法切片位置时断言失败。
+    #[test]
+    fn every_sequence_prefix_ends_at_a_character_boundary() {
+        for text in [
+            "前\x1b\u{fffd}后",
+            "\x1b[31m中文\x1b[0m",
+            "\x1b[31\u{fffd}",
+            "\x1b]caption中文\x07后",
+            "\x1b]caption中文\x1b\\后",
+            "\x1b_Gpayload中文\x1b\\后",
+            "\x1bPpayloadé\x1b\\后",
+            "\x1b^payload\u{1d11e}\x1b\\后",
+            "\x1b(中文\x1b\\",
+        ] {
+            for limit in (0..=text.len()).filter(|index| text.is_char_boundary(*index)) {
+                let prefix = &text[..limit];
+                for (start, character) in prefix.char_indices() {
+                    if character != '\x1b' {
+                        continue;
+                    }
+                    let end = escape_sequence_end(prefix, start);
+                    assert!(
+                        end > start && end <= prefix.len(),
+                        "{prefix:?}: {start}..{end}"
+                    );
+                    assert!(prefix.is_char_boundary(end), "{prefix:?}: {start}..{end}");
+                }
+            }
+        }
+    }
 
     #[test]
     fn consumes_kitty_payload_as_one_sequence() {

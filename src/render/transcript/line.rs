@@ -184,6 +184,11 @@ fn wrap_line(
         let ch = text[index..].chars().next().unwrap_or_default();
         if ch == '\x1b' {
             let end = crate::render::terminal_image::escape_sequence_end(text, index);
+            // 1. 【终端】【控制符过滤】孤立 ESC 不写入正文，避免终端吞掉紧随其后的可见字符
+            if end == index + 1 {
+                index = end;
+                continue;
+            }
             let sequence = &text[index..end];
             match sequence.chars().last() {
                 Some('m') => {
@@ -343,6 +348,27 @@ fn finish_line(
 #[cfg(test)]
 mod tests {
     use super::AnsiLine;
+
+    /// 【终端】【UTF-8 输出回归】折行时过滤孤立 ESC，不能把后续多字节字符当成终端控制参数。
+    /// 参数：无；返回：无，损坏控制符仍被输出或正文丢失时断言失败。
+    #[test]
+    fn wrapping_discards_isolated_escape_without_losing_text() {
+        for source in [
+            "\x1b[32m0123456789abcdef\x1b\u{fffd}tail\x1b[0m",
+            "0123456789abcdef\u{fffd}tail\x1b",
+        ] {
+            for width in [1, 10, 80] {
+                let lines = AnsiLine::wrap_block(source, width);
+                let joined = lines.iter().map(AnsiLine::as_str).collect::<String>();
+                assert_eq!(
+                    crate::render::ansi_clip::strip_ansi(&joined),
+                    "0123456789abcdef\u{fffd}tail"
+                );
+                assert!(!joined.contains("\x1b\u{fffd}"));
+                assert!(!joined.ends_with('\x1b'));
+            }
+        }
+    }
 
     /// 真实着色空格占满内容列，终端重排时不依赖擦除命令生成的空白。
     #[test]
