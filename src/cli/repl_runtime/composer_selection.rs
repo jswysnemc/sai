@@ -5,11 +5,20 @@ use std::ops::Range;
 /// 【终端】【输入选区】源码字节区间独立于面板高度和软折行位置。
 #[derive(Clone, Default, PartialEq, Eq)]
 pub(super) struct ComposerSelection {
+    target: SelectionTarget,
     source: String,
     anchor: usize,
     head: usize,
     pressed: bool,
     dragged: bool,
+}
+
+/// 【终端】【选区目标】输入源码和底栏快照分开匹配，避免相同文字导致高亮串区。
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum SelectionTarget {
+    #[default]
+    Input,
+    Footer,
 }
 
 #[cfg(test)]
@@ -27,6 +36,80 @@ mod tests {
         }
     }
 
+    /// 【终端】【底栏拖选回归】两行底栏正反向拖选均复制纯文本，输入区域不出现高亮。
+    /// 参数：无；返回：无，跨行复制内容错误或选区串入输入时断言失败。
+    #[test]
+    fn footer_selection_copies_both_rows_and_stays_separate_from_input() {
+        let input = InputGeometry::new("yolo test", 40, 0, 10, 3, 1);
+        let footer = InputGeometry::from_rendered_lines(
+            &[
+                "   \x1b[32myolo test\x1b[0m  ".into(),
+                "   Enter send".into(),
+            ],
+            40,
+            12,
+        );
+        for (start, end) in [((3, 12), (8, 13)), ((8, 13), (3, 12))] {
+            let mut selection = ComposerSelection::default();
+            assert!(
+                selection
+                    .handle(
+                        mouse(MouseEventKind::Down(MouseButton::Left), start.0, start.1),
+                        Some(&input),
+                        Some(&footer)
+                    )
+                    .handled
+            );
+            assert!(
+                selection
+                    .handle(
+                        mouse(MouseEventKind::Drag(MouseButton::Left), end.0, end.1),
+                        Some(&input),
+                        Some(&footer)
+                    )
+                    .changed
+            );
+            let result = selection.handle(
+                mouse(MouseEventKind::Up(MouseButton::Left), end.0, end.1),
+                Some(&input),
+                Some(&footer),
+            );
+            assert_eq!(result.copy.as_deref(), Some("yolo test\n   Enter"));
+            assert!(selection.range(&input).is_none());
+            assert!(selection.footer_range(&footer).is_some());
+            assert_eq!(input.text, "yolo test");
+        }
+    }
+
+    /// 【终端】【底栏更新回归】状态内容变化或底栏被隐藏时清除旧选区，不复制过期文本。
+    /// 参数：无；返回：无，旧状态被复制或选区未清除时断言失败。
+    #[test]
+    fn footer_changes_invalidate_pending_copy() {
+        let footer = InputGeometry::from_rendered_lines(&["yolo".into()], 40, 12);
+        let changed = InputGeometry::from_rendered_lines(&["plan".into()], 40, 12);
+        for current in [Some(&changed), None] {
+            let mut selection = ComposerSelection::default();
+            selection.handle(
+                mouse(MouseEventKind::Down(MouseButton::Left), 0, 12),
+                None,
+                Some(&footer),
+            );
+            selection.handle(
+                mouse(MouseEventKind::Drag(MouseButton::Left), 4, 12),
+                None,
+                Some(&footer),
+            );
+            let result = selection.handle(
+                mouse(MouseEventKind::Up(MouseButton::Left), 4, 12),
+                None,
+                current,
+            );
+            assert!(result.changed);
+            assert!(result.copy.is_none());
+            assert!(selection.footer_range(&footer).is_none());
+        }
+    }
+
     /// 【终端】【拖选回归】正反向选择都复制相同文本，单击不复制；无参数和返回值。
     #[test]
     fn selection_copies_in_both_directions_without_mutating_input() {
@@ -37,7 +120,8 @@ mod tests {
                 selection
                     .handle(
                         mouse(MouseEventKind::Down(MouseButton::Left), start, 10),
-                        Some(&geometry)
+                        Some(&geometry),
+                        None,
                     )
                     .handled
             );
@@ -45,13 +129,15 @@ mod tests {
                 selection
                     .handle(
                         mouse(MouseEventKind::Drag(MouseButton::Left), end, 10),
-                        Some(&geometry)
+                        Some(&geometry),
+                        None,
                     )
                     .changed
             );
             let result = selection.handle(
                 mouse(MouseEventKind::Up(MouseButton::Left), end, 10),
                 Some(&geometry),
+                None,
             );
             assert_eq!(result.copy.as_deref(), Some("alpha"));
             assert_eq!(geometry.text, "alpha beta");
@@ -59,11 +145,13 @@ mod tests {
             selection.handle(
                 mouse(MouseEventKind::Down(MouseButton::Left), start, 10),
                 Some(&geometry),
+                None,
             );
             assert!(selection
                 .handle(
                     mouse(MouseEventKind::Up(MouseButton::Left), start, 10),
-                    Some(&geometry)
+                    Some(&geometry),
+                    None,
                 )
                 .copy
                 .is_none());
@@ -90,43 +178,78 @@ impl ComposerSelection {
     /// 【终端】【输入范围】仅在草稿仍与选择时相同时返回区间，避免高亮转移到新输入。
     /// 参数: `geometry` 为当前输入映射；返回: 非空源码选区。
     pub(super) fn range(&self, geometry: &InputGeometry) -> Option<Range<usize>> {
-        (self.source == geometry.text && self.anchor != self.head)
+        (self.target == SelectionTarget::Input
+            && self.source == geometry.text
+            && self.anchor != self.head)
+            .then_some(self.anchor.min(self.head)..self.anchor.max(self.head))
+    }
+
+    /// 【终端】【底栏范围】仅对选择时的底栏文本返回区间，状态变化后不高亮其他文字。
+    /// 参数：geometry 为当前底栏映射；返回：非空 UTF-8 字节选区。
+    pub(super) fn footer_range(&self, geometry: &InputGeometry) -> Option<Range<usize>> {
+        (self.target == SelectionTarget::Footer
+            && self.source == geometry.text
+            && self.anchor != self.head)
             .then_some(self.anchor.min(self.head)..self.anchor.max(self.head))
     }
 
     /// 【终端】【输入拖选】按下记录锚点，拖动高亮，释放复制；不改写输入和光标。
-    /// 参数: `mouse` 为鼠标事件，`geometry` 为最近绘制的输入映射；返回: 消费状态、重绘需求及待复制文本。
+    /// 参数: `mouse` 为鼠标事件，`geometry/footer` 为最近绘制的输入与底栏映射；返回: 消费状态、重绘需求及待复制文本。
     pub(super) fn handle(
         &mut self,
         mouse: MouseEvent,
         geometry: Option<&InputGeometry>,
+        footer: Option<&InputGeometry>,
     ) -> MouseEffect {
+        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
+            let changed = self.clear();
+            let hit = geometry
+                .and_then(|geometry| {
+                    geometry
+                        .hit(mouse.column, mouse.row, false)
+                        .map(|position| (SelectionTarget::Input, geometry, position))
+                })
+                .or_else(|| {
+                    footer.and_then(|geometry| {
+                        geometry
+                            .hit(mouse.column, mouse.row, false)
+                            .map(|position| (SelectionTarget::Footer, geometry, position))
+                    })
+                });
+            if let Some((target, geometry, position)) = hit {
+                self.target = target;
+                self.source = geometry.text.clone();
+                self.anchor = position;
+                self.head = position;
+                self.pressed = true;
+                return MouseEffect {
+                    handled: true,
+                    changed,
+                    copy: None,
+                };
+            }
+            return MouseEffect {
+                changed,
+                ..MouseEffect::default()
+            };
+        }
+        let geometry = match self.target {
+            SelectionTarget::Input => geometry,
+            SelectionTarget::Footer => footer,
+        };
         let Some(geometry) = geometry else {
-            return MouseEffect::default();
+            return MouseEffect {
+                changed: self.clear(),
+                ..MouseEffect::default()
+            };
         };
         if self.source != geometry.text {
-            self.clear();
+            return MouseEffect {
+                changed: self.clear(),
+                ..MouseEffect::default()
+            };
         }
         match mouse.kind {
-            MouseEventKind::Down(MouseButton::Left) => {
-                let changed = self.clear();
-                if let Some(position) = geometry.hit(mouse.column, mouse.row, false) {
-                    self.source = geometry.text.clone();
-                    self.anchor = position;
-                    self.head = position;
-                    self.pressed = true;
-                    MouseEffect {
-                        handled: true,
-                        changed,
-                        copy: None,
-                    }
-                } else {
-                    MouseEffect {
-                        changed,
-                        ..MouseEffect::default()
-                    }
-                }
-            }
             MouseEventKind::Drag(MouseButton::Left) if self.pressed => {
                 let before = self.head;
                 self.head = geometry
@@ -146,9 +269,9 @@ impl ComposerSelection {
                         .hit(mouse.column, mouse.row, true)
                         .unwrap_or(self.head);
                 }
-                let copy = self
-                    .range(geometry)
-                    .map(|range| self.source[range].to_string());
+                let copy = (self.anchor != self.head).then(|| {
+                    self.source[self.anchor.min(self.head)..self.anchor.max(self.head)].to_string()
+                });
                 MouseEffect {
                     handled: true,
                     changed: true,

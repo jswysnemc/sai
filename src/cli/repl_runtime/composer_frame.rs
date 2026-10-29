@@ -39,6 +39,7 @@ use std::io::Write;
 #[derive(Clone, PartialEq, Eq)]
 pub(super) struct ComposerSignature {
     pub(super) input_geometry: Option<InputGeometry>,
+    pub(super) footer_geometry: Option<InputGeometry>,
     top: u16,
     height: u16,
     cols: usize,

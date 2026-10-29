@@ -24,6 +24,26 @@ pub(in crate::cli::repl_runtime) struct InputGeometry {
 }
 
 impl InputGeometry {
+    /// 【终端】【底栏坐标】从已绘制行建立纯文本映射，保留行首空白和真实换行。
+    /// 参数：lines 为底栏可见行，cols 为终端列数，top 为首行坐标；返回：可供拖选的文本映射。
+    pub(in crate::cli::repl_runtime) fn from_rendered_lines(
+        lines: &[String],
+        cols: usize,
+        top: u16,
+    ) -> Self {
+        let text = lines
+            .iter()
+            .map(|line| {
+                crate::render::ansi_clip::strip_ansi(line)
+                    .trim_end()
+                    .to_string()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        // 1. 【终端】【物理行边界】已折行文本无需再次折行，满宽行也不能多生成一行光标占位
+        Self::new(&text, cols.saturating_add(1), 0, top, 0, lines.len())
+    }
+
     /// 【终端】【输入坐标】与输入折行使用相同列宽、制表位和满行光标规则。
     /// 参数: `input` 为草稿，`width` 为净宽，`first` 为首个视觉行，`top/left` 为屏幕原点，`visible` 为可见行数；返回: 坐标映射。
     pub(in crate::cli::repl_runtime) fn new(
@@ -160,6 +180,24 @@ impl InputGeometry {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 【终端】【底栏映射回归】满宽行不插入视觉空行，中文和组合字符保持合法边界。
+    /// 参数：无；返回：无，底栏行号偏移、样式泄漏或字符边界错误时断言失败。
+    #[test]
+    fn rendered_footer_rows_preserve_columns_and_physical_line_breaks() {
+        let lines = [
+            "\x1b[32mabcdefgh\x1b[0m".to_string(),
+            " 中文e\u{301}  ".to_string(),
+        ];
+        let geometry = InputGeometry::from_rendered_lines(&lines, 8, 20);
+        assert_eq!(geometry.text, "abcdefgh\n 中文e\u{301}");
+        assert_eq!(geometry.hit(1, 21, false), Some(10));
+        let start = geometry.hit(2, 21, false).unwrap();
+        let end = geometry.hit(6, 21, true).unwrap();
+        assert_eq!(&geometry.text[start..end], "中文e\u{301}");
+        assert_eq!(geometry.columns(21, &(start..end)), Some(1..6));
+        assert!(geometry.hit(30, 21, false).is_none());
+    }
 
     /// 【终端】【输入映射回归】软折行复制不插入换行，真正的换行仍保留；无参数和返回值。
     #[test]

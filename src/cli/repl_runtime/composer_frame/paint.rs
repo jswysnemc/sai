@@ -41,6 +41,13 @@ impl ComposerFrame {
         layout.styled_display_lines = visible;
         layout.cursor_row_offset = cursor;
         let mut lines = self.visual_lines(&layout, cols);
+        let footer_rows = usize::from(KEY_HINT_ROWS)
+            + usize::from(
+                !layout.mention_panel.is_visible()
+                    && !layout.slash_panel.is_visible()
+                    && !layout.shell_hint.is_visible(),
+            );
+        let footer_start = lines.len().saturating_sub(footer_rows);
         let cursor_offset = self.top_lines(cols).len()
             + usize::from(CHROME_INPUT_PAD_ROWS + CHROME_INPUT_INNER_PAD_ROWS)
             + usize::from(layout.cursor_row_offset);
@@ -49,6 +56,8 @@ impl ComposerFrame {
             .saturating_sub(usize::from(height))
             .min(cursor_offset);
         lines.drain(..hidden_rows);
+        let footer_end = lines.len().min(usize::from(height));
+        let footer_start = footer_start.saturating_sub(hidden_rows).min(footer_end);
         lines.resize(usize::from(height), String::new());
         let cursor_col = layout
             .cursor_col
@@ -60,6 +69,11 @@ impl ComposerFrame {
                 .min(usize::from(height.saturating_sub(1))) as u16,
         );
         let mut signature = ComposerSignature {
+            footer_geometry: Some(InputGeometry::from_rendered_lines(
+                &lines[footer_start..footer_end],
+                cols,
+                top.saturating_add(footer_start as u16),
+            )),
             input_geometry: (!self.input.is_empty()).then(|| {
                 let hidden_input = hidden_rows
                     .saturating_sub(cursor_offset - usize::from(layout.cursor_row_offset));
@@ -92,6 +106,19 @@ impl ComposerFrame {
         };
         if let Some(geometry) = &signature.input_geometry {
             if let Some(range) = self.selection.range(geometry) {
+                for (offset, line) in signature.lines.iter_mut().enumerate() {
+                    if let Some(columns) = geometry.columns(top + offset as u16, &range) {
+                        *line = super::super::fullscreen::selection::highlight_cols(
+                            line,
+                            columns.start,
+                            columns.end,
+                        );
+                    }
+                }
+            }
+        }
+        if let Some(geometry) = &signature.footer_geometry {
+            if let Some(range) = self.selection.footer_range(geometry) {
                 for (offset, line) in signature.lines.iter_mut().enumerate() {
                     if let Some(columns) = geometry.columns(top + offset as u16, &range) {
                         *line = super::super::fullscreen::selection::highlight_cols(

@@ -143,6 +143,9 @@ impl ReplRuntime {
             self.last_composer_signature
                 .as_ref()
                 .and_then(|signature| signature.input_geometry.as_ref()),
+            self.last_composer_signature
+                .as_ref()
+                .and_then(|signature| signature.footer_geometry.as_ref()),
         );
         if input.handled {
             if let Some(session) = self.fullscreen.as_mut() {
