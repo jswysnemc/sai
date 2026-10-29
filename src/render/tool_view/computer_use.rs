@@ -34,14 +34,14 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
             ("Inspecting accessibility", "Inspected accessibility")
         }
         "get_app_state" => ("Capturing window", "Captured window"),
-        "click" => ("Clicking control", "Clicked control"),
-        "drag" => ("Dragging in window", "Dragged in window"),
-        "scroll" => ("Scrolling window", "Scrolled window"),
-        "type_text" => ("Typing text", "Typed text"),
+        "click" => ("Clicking control", "Sent click"),
+        "drag" => ("Dragging in window", "Sent drag"),
+        "scroll" => ("Scrolling window", "Sent scroll"),
+        "type_text" => ("Typing text", "Sent text"),
         "press_key" => ("Sending key", "Sent key"),
-        "set_value" => ("Setting control value", "Set control value"),
-        "invoke" => ("Invoking control", "Invoked control"),
-        "show_menu" => ("Opening control menu", "Opened control menu"),
+        "set_value" => ("Setting control value", "Sent value change"),
+        "invoke" => ("Invoking control", "Sent control action"),
+        "show_menu" => ("Opening control menu", "Sent menu action"),
         "get_value" => ("Reading control value", "Read control value"),
         "get_text" => ("Reading control text", "Read control text"),
         "locate_text" => ("Locating controls", "Located controls"),
@@ -62,32 +62,31 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
     {
         label = format!("Awaiting approval · {label}");
     }
-    if let Some(app) = args["app"].as_str() {
-        label.push_str(&format!(" · app {}", app.replace(['\n', '\r', '\t'], " ")));
-    }
-    if let Some(window) = args.get("window_id") {
-        label.push_str(&format!(" · window {window}"));
+    if let Some(target) = super::interaction_target::desktop(
+        &args,
+        view.outcome.as_ref().map(|outcome| outcome.output.as_str()),
+    ) {
+        label.push_str(&format!(" · {target}"));
     }
     // 2. 【终端】【详情展示】隐藏重复目标与快照证明，仅展开可读参数和操作结果
     let mut output = tool_status_line(&label, "", health);
-    if mode == ToolCallDisplayMode::Full {
+    if mode == ToolCallDisplayMode::Full || health == ToolHealth::Err {
         let mut details = args.clone();
         if let Some(fields) = details.as_object_mut() {
-            for field in [
-                "action",
-                "app",
-                "window_id",
-                "snapshot_id",
-                "from_frame",
-                "include_screenshot",
-            ] {
+            for field in ["action", "snapshot_id", "from_frame", "include_screenshot"] {
                 fields.remove(field);
             }
             if !fields.is_empty() {
-                output.push_str(&format!("\n{}", structured_payload::format_value(&details)));
+                output.push_str(&format!(
+                    "\n{}",
+                    super::safe_text::plain(&structured_payload::format_value(&details))
+                ));
             }
         }
         if let Some(outcome) = &view.outcome {
+            if outcome.ok && super::interaction_target::is_input(action) {
+                output.push_str("\n  Input sent · effect not verified");
+            }
             let body = result_body(&outcome.output);
             if !body.trim().is_empty() {
                 output.push_str(&format!("\n{body}"));
@@ -97,19 +96,22 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
             output.push_str(&format!("\n{}", structured_payload::format(progress)));
         }
     }
-    output.push_str(&super::formatter::render_permission(
-        view.permission.as_ref(),
-    ));
     Some(output)
 }
 
 /// 【终端】【窗口状态】解包状态区域中的逐行数据，保留控件与截图信息，隐藏重复目标及模型提示。
 /// 参数: `payload` 为桌面工具结果；返回: 不含 JSON 容器和协议包装的语义化正文。
 fn result_body(payload: &str) -> String {
-    if let Ok(value) = serde_json::from_str::<Value>(payload) {
-        return structured_payload::format_value(&value);
+    let mut prefix = String::new();
+    let mut tail = payload;
+    if payload.trim_start().starts_with(['{', '[']) {
+        let mut values = serde_json::Deserializer::from_str(payload).into_iter::<Value>();
+        if let Some(Ok(value)) = values.next() {
+            prefix = super::safe_text::plain(&structured_payload::format_value(&value));
+            tail = &payload[values.byte_offset()..];
+        }
     }
-    payload
+    let tail = tail
         .lines()
         .filter_map(|line| {
             let line = line.trim();
@@ -124,6 +126,7 @@ fn result_body(payload: &str) -> String {
                 || line.starts_with("snapshot_id: ")
                 || line.starts_with("Each input consumes")
                 || line.starts_with("Call get_app_state for the updated state")
+                || line.starts_with("Target: ")
             {
                 return None;
             }
@@ -164,8 +167,15 @@ fn result_body(payload: &str) -> String {
                     return Some(row);
                 }
             }
-            Some(structured_payload::format(line))
+            Some(super::safe_text::plain(&structured_payload::format(line)))
         })
         .collect::<Vec<_>>()
-        .join("\n")
+        .join("\n");
+    super::safe_text::plain(
+        &[prefix, tail]
+            .into_iter()
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
 }

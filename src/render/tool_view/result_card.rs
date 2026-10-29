@@ -7,19 +7,19 @@ use serde_json::Value;
 /// 【终端】【结果卡片】统一标题、详情折叠及权限审计，避免专用视图重复布局。
 /// 参数: 工具视图、显示模式、标题、状态及正文；返回: ANSI 卡片。
 pub(super) fn render(
-    view: &ToolView,
+    _view: &ToolView,
     mode: ToolCallDisplayMode,
     title: &str,
     health: ToolHealth,
     body: &str,
 ) -> String {
-    let title = crate::render::ansi_clip::strip_ansi(title).replace(['\n', '\r', '\t'], " ");
+    let title = super::safe_text::plain(title).replace(['\n', '\r', '\t'], " ");
     let mut output = tool_status_line(&title, "", health);
     if !body.is_empty() && (mode == ToolCallDisplayMode::Full || health == ToolHealth::Err) {
         let width = crate::render::fold_text::terminal_wrap_width()
             .saturating_sub(2)
             .max(1);
-        let wrapped = crate::render::fold_text::wrap_display_lines(body, width);
+        let wrapped = super::result_rows::wrap(body, width);
         for line in crate::render::fold_text::fold_preview_lines(&wrapped, false) {
             output.push('\n');
             output.push_str("  ");
@@ -32,9 +32,6 @@ pub(super) fn render(
             }
         }
     }
-    output.push_str(&super::formatter::render_permission(
-        view.permission.as_ref(),
-    ));
     output
 }
 
@@ -44,14 +41,14 @@ pub(super) fn text(value: &Value, key: &str) -> Option<String> {
     value
         .get(key)?
         .as_str()
-        .map(crate::render::ansi_clip::strip_ansi)
+        .map(super::safe_text::plain)
         .filter(|text| !text.trim().is_empty())
 }
 
 /// 【终端】【摘要文本】清理控制序列与换行，并按显示列数截取单行主题。
 /// 参数: 原始文本和列宽；返回: 可安全放入标题的短文本。
 pub(super) fn short(text: &str, width: usize) -> String {
-    let text = crate::render::ansi_clip::strip_ansi(text)
+    let text = super::safe_text::plain(text)
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ");
@@ -61,8 +58,9 @@ pub(super) fn short(text: &str, width: usize) -> String {
 /// 【终端】【结果正文】复用完整 Markdown 渲染，不把结果中的标记原样显示。
 /// 参数: 结果正文；返回: ANSI 文本。
 pub(super) fn markdown(text: &str) -> String {
+    let text = super::safe_text::plain(text);
     let mut renderer = crate::render::markdown::MarkdownStreamRenderer::new_stable();
-    let mut output = renderer.push(text);
+    let mut output = renderer.push(&text);
     output.push_str(&renderer.flush());
     output.trim_end().to_string()
 }

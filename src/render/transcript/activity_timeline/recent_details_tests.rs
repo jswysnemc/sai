@@ -112,7 +112,7 @@ fn exactly_ten_newer_rows_fold_the_previous_detail() {
     for newer in [9, 10] {
         let mut details = recent_details::RecentDetails::default();
         let mut rows = newer;
-        let (key, node) = details.render(0, &mut rows, false, &HashSet::new(), |open| {
+        let (key, node) = details.render(0, &mut rows, false, false, &HashSet::new(), |open| {
             node::RenderedNode {
                 lines: vec![AnsiLine::new("old".into()); if open { 3 } else { 1 }],
                 open,
@@ -130,7 +130,7 @@ fn folded_details_do_not_reopen_when_newer_content_shrinks() {
     let mut details = recent_details::RecentDetails::default();
     for newer in [10, 1] {
         let mut rows = newer;
-        let (_, node) = details.render(0, &mut rows, false, &HashSet::new(), |open| {
+        let (_, node) = details.render(0, &mut rows, false, false, &HashSet::new(), |open| {
             node::RenderedNode {
                 lines: vec![AnsiLine::new("old".into())],
                 open,

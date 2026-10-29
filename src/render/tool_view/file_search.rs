@@ -1,7 +1,7 @@
 use super::{result_card, ToolView};
 use crate::render::{status_style::ToolHealth, ToolCallDisplayMode};
 use serde_json::Value;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// 【终端】【文件搜索】以命中摘要和定位行呈现本地搜索，不展示成功协议字段。
 /// 参数: 工具视图及显示模式；返回: 可识别结果的专用卡片。
@@ -13,9 +13,8 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
     let value: Value = serde_json::from_str(&outcome.output).ok()?;
     let stdout = value.get("stdout")?.as_str()?;
     let args: Value = serde_json::from_str(&view.arguments).unwrap_or_default();
-    let query = result_card::text(&args, "pattern")
-        .unwrap_or_default()
-        .replace(['\n', '\r', '\t'], " ");
+    let pattern = args["pattern"].as_str().unwrap_or_default();
+    let query = crate::render::ansi_clip::strip_ansi(pattern).replace(['\n', '\r', '\t'], " ");
     let success = outcome.ok
         && value["ok"] != false
         && value["success"] != false
@@ -66,6 +65,10 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
         format!(" · \"{query}\"")
     };
     let title = format!("{action} · {badge}{query}");
+    if success && mode == ToolCallDisplayMode::Summary {
+        return Some(result_card::render(view, mode, &title, ToolHealth::Ok, ""));
+    }
+    let matcher = regex::Regex::new(pattern).ok();
     let mut body = Vec::new();
     if let Some(path) = result_card::text(&args, "path") {
         body.push(format!("\x1b[2mScope: {path}\x1b[0m"));
@@ -73,21 +76,55 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
     if let Some(include) = result_card::text(&args, "include") {
         body.push(format!("\x1b[2mFilter: {include}\x1b[0m"));
     }
-    // 1. 【终端】【搜索定位】路径与行号独占定位行，匹配正文保留原始文本和冒号
-    for line in matches {
+    // 1. 【终端】【搜索定位】按文件分组，行号和高亮正文构成第二级，保留正文冒号
+    let folded = crate::render::fold_text::fold_preview_lines(
+        &matches
+            .iter()
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>(),
+        false,
+    );
+    let mut grouped = BTreeMap::<&str, Vec<(&str, &str)>>::new();
+    for line in &folded {
+        let line = match line {
+            crate::render::fold_text::FoldedDisplayLine::Line(line) => line.as_str(),
+            crate::render::fold_text::FoldedDisplayLine::Omitted { omitted, .. } => {
+                body.push(crate::render::omitted_line::render_fold_hint(
+                    &format!("{omitted} matches hidden"),
+                    Some(crate::render::omitted_line::FOLD_SHORTCUT),
+                ));
+                continue;
+            }
+        };
         if let Some((path, number, content)) = location(line) {
-            let place = if path.is_empty() {
-                format!("Line {number}")
-            } else {
-                format!("{path}:{number}")
-            };
-            body.push(format!(
-                "\x1b[36m{}\x1b[0m\n  {}",
-                crate::render::ansi_clip::strip_ansi(&place),
-                crate::render::ansi_clip::strip_ansi(content)
-            ));
+            grouped.entry(path).or_default().push((number, content));
         } else {
             body.push(crate::render::ansi_clip::strip_ansi(line));
+        }
+    }
+    for (path, hits) in grouped {
+        if !path.is_empty() {
+            body.push(format!(
+                "\x1b[36m{}\x1b[0m",
+                crate::render::ansi_clip::strip_ansi(path)
+            ));
+        }
+        for (number, content) in hits {
+            let line = format!("  {number}: {}", highlight(content, matcher.as_ref()));
+            let width = crate::render::fold_text::terminal_wrap_width()
+                .saturating_sub(2)
+                .max(1);
+            for line in crate::render::fold_text::fold_preview_lines(
+                &super::result_rows::wrap(&line, width),
+                false,
+            ) {
+                body.push(match line {
+                    crate::render::fold_text::FoldedDisplayLine::Line(line) => line,
+                    crate::render::fold_text::FoldedDisplayLine::Omitted { omitted, .. } => {
+                        crate::render::omitted_line::render_omitted_line(omitted, true)
+                    }
+                });
+            }
         }
     }
     // 2. 【终端】【搜索诊断】只在需要时呈现截断、错误输出和异常退出码
@@ -102,17 +139,43 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
     if !success {
         body.push(format!("Exit code: {}", value["exit_code"]));
     }
-    Some(result_card::render(
-        view,
-        mode,
-        &title,
-        if success {
-            ToolHealth::Ok
-        } else {
-            ToolHealth::Err
-        },
-        &body.join("\n"),
-    ))
+    // 3. 【终端】【分组边界】命中和长正文已各自折叠，禁止再次折叠文件分组头
+    Some(crate::render::render_expand::with_force_expand(|| {
+        result_card::render(
+            view,
+            mode,
+            &title,
+            if success {
+                ToolHealth::Ok
+            } else {
+                ToolHealth::Err
+            },
+            &body.join("\n"),
+        )
+    }))
+}
+
+/// 【终端】【搜索高亮】使用搜索正则强调命中片段，非法表达式与零宽匹配保持原文。
+/// 参数: `content` 为命中正文，`matcher` 为可选正则；返回: 安全的 ANSI 正文。
+fn highlight(content: &str, matcher: Option<&regex::Regex>) -> String {
+    let content = super::safe_text::plain(content);
+    let Some(matcher) = matcher else {
+        return content;
+    };
+    let mut output = String::new();
+    let mut start = 0;
+    for matched in matcher
+        .find_iter(&content)
+        .filter(|matched| !matched.is_empty())
+    {
+        output.push_str(&content[start..matched.start()]);
+        output.push_str("\x1b[1;33m");
+        output.push_str(matched.as_str());
+        output.push_str("\x1b[0m");
+        start = matched.end();
+    }
+    output.push_str(&content[start..]);
+    output
 }
 
 /// 【终端】【搜索定位】识别文件或单文件命中格式，兼容 Windows 盘符与正文冒号。

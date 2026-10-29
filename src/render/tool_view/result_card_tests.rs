@@ -50,7 +50,9 @@ fn search_expands_all_matches_without_protocol_noise() {
     );
     let preview = render_expand::with_force_collapse(|| render(&view, ToolCallDisplayMode::Full));
     assert!(!preview.contains("matched-20"));
-    let full = render_expand::with_force_expand(|| render(&view, ToolCallDisplayMode::Full));
+    let full = plain(&render_expand::with_force_expand(|| {
+        render(&view, ToolCallDisplayMode::Full)
+    }));
     for n in 1..=40 {
         assert!(full.contains(&format!("matched-{n}")), "{n}");
     }

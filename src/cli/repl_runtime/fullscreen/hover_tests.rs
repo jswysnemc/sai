@@ -89,6 +89,15 @@ fn moving_from_expanded_header_to_body_restores_icon() {
         );
     }
     runtime.enter_fullscreen().unwrap();
+    // 1. 【终端】【全文悬停】搜索默认是紧凑预览，此测试明确展开首个工具
+    runtime
+        .fullscreen
+        .as_mut()
+        .unwrap()
+        .state
+        .expanded
+        .insert(crate::render::transcript::ParagraphKey::whole(0));
+    runtime.paint_fullscreen().unwrap();
     runtime
         .handle_fullscreen_event(&Event::Key(KeyEvent::new(
             KeyCode::Home,

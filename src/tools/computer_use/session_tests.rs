@@ -23,6 +23,7 @@ async fn observation_and_element_action_keep_the_native_contract() {
     let output = session.execute(click.clone()).await.unwrap();
     assert!(output.content.contains("applied"));
     assert!(output.content.contains("get_app_state"));
+    assert!(output.content.contains("Target: button Apply"));
     let calls = driver.calls.lock().unwrap().clone();
     assert_eq!(calls[0].0, "get_window_state");
     assert_eq!(calls[0].1["max_image_dimension"], 1568);

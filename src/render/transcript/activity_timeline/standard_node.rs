@@ -11,6 +11,8 @@ use crate::render::{
 /// 【终端】【普通节点】把普通命令和思考视图放入执行链，不添加第二份标题或 JSON 正文。
 /// 参数: `cell` 为单元，`width` 为净宽，`open` 为展开状态；返回: 普通样式节点，其他单元为空。
 pub(super) fn render_cell(cell: &HistoryCell, width: usize, open: bool) -> Option<RenderedNode> {
+    let preview = matches!(cell, HistoryCell::Tool(ToolCell::Invocation(view)) if crate::render::tool_view::has_preview_details(&view.name));
+    let full = render_expand::expand_override();
     let supported = matches!(cell, HistoryCell::Reasoning(_) | HistoryCell::Shell(_))
         || matches!(cell, HistoryCell::Tool(ToolCell::Invocation(view)) if matches!(view.name.as_str(), "run_command" | "todo" | "ask_question" | "background_notice" | "conversation_notice") || crate::tools::computer_use::is_tool(&view.name) || crate::render::tool_view::has_compact_result_view(&view.name));
     if !supported {
@@ -20,9 +22,20 @@ pub(super) fn render_cell(cell: &HistoryCell, width: usize, open: bool) -> Optio
         if open {
             let options = super::super::store::TranscriptRenderOptions {
                 reasoning_mode: ReasoningDisplayMode::Full,
-                tool_call_mode: ToolCallDisplayMode::Full,
+                tool_call_mode: if preview
+                    && !full
+                    && matches!(cell, HistoryCell::Tool(ToolCell::Invocation(view)) if view.name == "todo")
+                {
+                    ToolCallDisplayMode::Summary
+                } else {
+                    ToolCallDisplayMode::Full
+                },
             };
-            render_expand::with_force_expand(|| cell.display_lines_framed(width, &options, 0))
+            if preview && !full {
+                render_expand::with_force_collapse(|| cell.display_lines_framed(width, &options, 0))
+            } else {
+                render_expand::with_force_expand(|| cell.display_lines_framed(width, &options, 0))
+            }
         } else {
             render_expand::with_force_collapse(|| {
                 let text = match cell {
@@ -41,18 +54,27 @@ pub(super) fn render_cell(cell: &HistoryCell, width: usize, open: bool) -> Optio
                     HistoryCell::Tool(ToolCell::Invocation(view)) => {
                         let health = super::appearance::health(cell);
                         let action = if super::node::awaiting_permission(cell) {
-                            "Awaiting approval"
+                            "Awaiting approval".to_string()
                         } else if health == ToolHealth::Err {
-                            "Failed · Ran"
+                            view.outcome
+                                .as_ref()
+                                .and_then(|outcome| {
+                                    crate::render::command_result_block::command_failure_action(
+                                        &outcome.output,
+                                        outcome.ok,
+                                    )
+                                })
+                                .unwrap_or_else(|| "Failed · Ran".to_string())
                         } else {
                             tool_event_line::tool_verb(
                                 "run_command",
                                 tool_event_line::ToolVerbTense::from_done(view.outcome.is_some()),
                             )
+                            .to_string()
                         };
                         crate::render::command_output::render_command_block_with_action(
                             &view.arguments,
-                            action,
+                            &action,
                             health,
                         )
                     }

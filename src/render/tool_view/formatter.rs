@@ -27,10 +27,13 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
 
 /// 渲染工具生命周期；进行中且 `frame > 0` 时用扫光代替静态 `run` 徽标。
 pub(crate) fn render_framed(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -> String {
-    crate::render::guide_symbols::replace(
-        &render_body(view, mode, frame),
-        crate::render::guide_symbols::tool(&view.name),
-    )
+    if mode == ToolCallDisplayMode::Hidden && view.name != "compress_context" {
+        return String::new();
+    }
+    let mut body = render_body(view, mode, frame);
+    body.push_str(&super::permission_context::render(view));
+    body.push_str(&render_permission(view.permission.as_ref()));
+    crate::render::guide_symbols::replace(&body, crate::render::guide_symbols::tool(&view.name))
 }
 
 /// 【终端】【工具内容】各专用视图只生成内容，统一入口负责最终语义标记。
@@ -68,7 +71,7 @@ fn render_body(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -> Stri
     {
         return rendered;
     }
-    if let Some(rendered) = super::background::render(view, frame) {
+    if let Some(rendered) = super::background::render(view, mode, frame) {
         return rendered;
     }
     if let Some(rendered) = super::image::render(view, mode, frame) {
@@ -114,11 +117,22 @@ fn render_body(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -> Stri
     let is_edit = crate::render::stream_text::is_file_edit_tool(&view.name);
     // 进行中的普通工具用流光标题，不再在行尾挂 preparing/running 静态徽标
     if view.outcome.is_none() && !is_edit {
+        let label = if view
+            .permission
+            .as_ref()
+            .is_some_and(|audit| audit.decision.is_none())
+        {
+            format!(
+                "{} · {label}",
+                crate::render::terminal_text("Awaiting approval", "等待审批")
+            )
+        } else {
+            label
+        };
         let mut output = render_activity_line(&label, "", frame);
         if let Some(progress) = visible_progress(view.progress.as_deref()) {
             output.push_str(&render_progress_note(progress));
         }
-        output.push_str(&render_permission(view.permission.as_ref()));
         return output;
     }
     // 编辑类：徽标用 +N -M 顶替 run/ok，参数流阶段数字跳动、定稿后钉死最终值；
@@ -151,7 +165,6 @@ fn render_body(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -> Stri
                 output.push_str(&render_payload("output", &outcome.output));
             }
         }
-        output.push_str(&render_permission(view.permission.as_ref()));
         return output;
     }
 
@@ -179,7 +192,6 @@ fn render_body(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -> Stri
             output.push_str(&render_payload("output", &outcome.output));
         }
     }
-    output.push_str(&render_permission(view.permission.as_ref()));
     output
 }
 
@@ -219,15 +231,16 @@ fn render_command_tool(view: &ToolView, mode: ToolCallDisplayMode) -> String {
         }
     }
     let tense = ToolVerbTense::from_done(view.outcome.is_some());
-    let action = tool_verb("run_command", tense);
+    let failure = view.outcome.as_ref().and_then(|outcome| {
+        crate::render::command_result_block::command_failure_action(&outcome.output, outcome.ok)
+    });
+    let action = failure
+        .clone()
+        .unwrap_or_else(|| tool_verb("run_command", tense).to_string());
     // 圆点以命令语义为准：结果 JSON 的 success 优先，非 JSON 时退回工具层 ok
     let health = match &view.outcome {
-        Some(outcome) => {
-            let command_ok =
-                crate::render::command_result_block::command_result_streams(&outcome.output)
-                    .map(|(success, _, _)| success)
-                    .unwrap_or(outcome.ok);
-            if command_ok {
+        Some(_) => {
+            if failure.is_none() {
                 ToolHealth::Ok
             } else {
                 ToolHealth::Err
@@ -235,7 +248,7 @@ fn render_command_tool(view: &ToolView, mode: ToolCallDisplayMode) -> String {
         }
         None => ToolHealth::Pending,
     };
-    let mut output = render_command_block_with_action(&view.arguments, action, health)
+    let mut output = render_command_block_with_action(&view.arguments, &action, health)
         .trim_end()
         .to_string();
     if let Some(progress) = visible_progress(view.progress.as_deref()) {
@@ -283,7 +296,6 @@ fn render_command_tool(view: &ToolView, mode: ToolCallDisplayMode) -> String {
             output.push_str(&preview);
         }
     }
-    output.push_str(&render_permission(view.permission.as_ref()));
     output
 }
 

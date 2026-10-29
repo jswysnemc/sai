@@ -63,6 +63,9 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
     if let Some(provider) = provider.filter(|provider| !provider.is_empty()) {
         title.push_str(&format!(" · {provider}"));
     }
+    if mode == ToolCallDisplayMode::Summary {
+        return Some(result_card::render(view, mode, &title, ToolHealth::Ok, ""));
+    }
     let body = items
         .into_iter()
         .enumerate()
@@ -73,7 +76,18 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
                 result_card::markdown(&item.title)
             )];
             if !item.url.is_empty() {
-                lines.push(format!("   \x1b[36m{}\x1b[0m", item.url));
+                let domain = reqwest::Url::parse(&item.url)
+                    .ok()
+                    .and_then(|url| url.host_str().map(str::to_string));
+                if let Some(domain) = domain {
+                    lines.push(format!("   \x1b[36m{domain}\x1b[0m"));
+                }
+                if crate::render::render_expand::expand_override() {
+                    lines.push(format!(
+                        "   URL: {}",
+                        crate::render::ansi_clip::strip_ansi(&item.url)
+                    ));
+                }
             }
             if !item.snippet.is_empty() {
                 lines.push(format!("   {}", result_card::markdown(&item.snippet)));
@@ -100,7 +114,7 @@ fn direct_url(raw: &str) -> String {
         raw.into()
     };
     let Ok(url) = reqwest::Url::parse(&normalized) else {
-        return result_card::short(raw, 512);
+        return String::new();
     };
     if matches!(
         url.host_str(),
@@ -115,5 +129,9 @@ fn direct_url(raw: &str) -> String {
             }
         }
     }
-    normalized
+    if matches!(url.scheme(), "http" | "https") {
+        url.to_string()
+    } else {
+        String::new()
+    }
 }

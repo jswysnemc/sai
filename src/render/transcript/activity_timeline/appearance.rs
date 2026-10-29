@@ -8,9 +8,11 @@ pub(super) fn health(cell: &HistoryCell) -> ToolHealth {
         HistoryCell::Tool(ToolCell::Invocation(view)) => match &view.outcome {
             Some(outcome) => {
                 let ok = if view.name == "run_command" {
-                    crate::render::command_result_block::command_result_streams(&outcome.output)
-                        .map(|(success, _, _)| success)
-                        .unwrap_or(outcome.ok)
+                    crate::render::command_result_block::command_failure_action(
+                        &outcome.output,
+                        outcome.ok,
+                    )
+                    .is_none()
                 } else {
                     outcome.ok
                 };

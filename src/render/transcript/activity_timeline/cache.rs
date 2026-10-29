@@ -5,6 +5,7 @@ use super::node::RenderedNode;
 struct CachedTimelineNode {
     width: usize,
     open: bool,
+    full: bool,
     node: RenderedNode,
 }
 
@@ -67,9 +68,10 @@ impl TimelineNodeCache {
         open: bool,
         render: impl FnOnce() -> RenderedNode,
     ) -> RenderedNode {
+        let full = crate::render::render_expand::expand_override();
         // 1. 【终端】【缓存命中】检查当前槽位宽度与展开状态
         if let Some(Some(cached)) = self.entries.get(index) {
-            if cached.width == width && cached.open == open {
+            if cached.width == width && cached.open == open && cached.full == full {
                 return cached.node.clone();
             }
         }
@@ -84,6 +86,7 @@ impl TimelineNodeCache {
         self.entries[index] = Some(CachedTimelineNode {
             width,
             open,
+            full,
             node: node.clone(),
         });
 

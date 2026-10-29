@@ -1,8 +1,8 @@
 use super::model::ToolView;
-use crate::render::tool_event_line::{tool_event_label_tense, tool_event_text, ToolVerbTense};
+use crate::render::tool_event_line::{tool_event_label_tense, tool_status_line, ToolVerbTense};
 use crate::render::ToolCallDisplayMode;
+use crate::render::{status_style::ToolHealth, terminal_text as t};
 use serde_json::Value;
-use std::path::Path;
 
 /// 判断工具是否为专用或旧插件生图工具。
 pub(crate) fn is_image_generation_tool(name: &str) -> bool {
@@ -30,24 +30,61 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode, _frame: usize) 
     let Some(outcome) = &view.outcome else {
         return None;
     };
-    let status = if outcome.ok { "ok" } else { "err" };
-    let mut output = tool_event_text(&label, status);
+    let mut output = tool_status_line(
+        &label,
+        "",
+        if outcome.ok {
+            ToolHealth::Ok
+        } else {
+            ToolHealth::Err
+        },
+    );
     if !outcome.ok {
         return Some(format!("{output}\n  └ {}", outcome.output));
     }
     let Some(images) = parse_images(&outcome.output) else {
-        return Some(output);
+        return Some(format!(
+            "{output}\n  {}",
+            t("No saved image path returned", "未返回图片保存路径")
+        ));
     };
-    for image in images {
-        let path = Path::new(&image.path);
-        match crate::render::terminal_image::render_buffered_image(path, Some("80x30")) {
-            Ok(rendered) => {
-                output.push('\n');
-                output.push_str(&rendered);
-            }
-            Err(_) => {
-                output.push_str(&format!("\n  └ 图片已保存：{}", image.path));
-            }
+    output = tool_status_line(
+        &format!(
+            "{label} · {} {}",
+            images.len(),
+            t("images saved", "张图片已保存")
+        ),
+        "",
+        ToolHealth::Ok,
+    );
+    // 1. 【终端】【图片路径】路径始终保留，即使终端支持图像协议也不隐藏保存位置
+    for image in &images {
+        output.push_str(&format!(
+            "\n  {}: {}",
+            t("Saved", "已保存"),
+            super::safe_text::plain(&image.path)
+        ));
+    }
+    if mode == ToolCallDisplayMode::Full {
+        let expanded = crate::render::render_expand::expand_override();
+        let width = crate::render::fold_text::terminal_wrap_width().saturating_sub(2);
+        // 2. 【终端】【图片预览】默认只显示首张有界缩略图，展开后追加其他图片
+        for image in images.iter().take(if expanded { usize::MAX } else { 1 }) {
+            output.push('\n');
+            output.push_str(&crate::render::image_preview::render(&image.path, width));
+        }
+        if !expanded && images.len() > 1 {
+            output.push_str(&format!(
+                "\n  {}",
+                crate::render::omitted_line::render_fold_hint(
+                    &format!(
+                        "{} {}",
+                        images.len() - 1,
+                        t("more image previews", "张预览已折叠")
+                    ),
+                    Some(crate::render::omitted_line::FOLD_SHORTCUT)
+                )
+            ));
         }
     }
     Some(output)
@@ -58,6 +95,8 @@ struct ImageReference {
     path: String,
 }
 
+/// 【终端】【图片引用】兼容原生多图结果和旧插件单图路径。
+/// 参数: `output` 为工具 JSON；返回: 可用的本地图片引用。
 fn parse_images(output: &str) -> Option<Vec<ImageReference>> {
     let value = serde_json::from_str::<Value>(output).ok()?;
     let is_native = value

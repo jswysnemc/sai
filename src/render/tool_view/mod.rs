@@ -1,5 +1,6 @@
 mod background;
 mod background_cleanup;
+mod background_list;
 mod background_notice;
 mod browser;
 mod capability;
@@ -11,14 +12,18 @@ mod file_search;
 mod formatter;
 mod goal;
 mod image;
+mod interaction_target;
 mod loading;
 mod mcp_manager;
 mod model;
 mod path_search;
+mod permission_context;
 mod question;
 mod read_file;
 mod read_image;
 mod result_card;
+mod result_rows;
+mod safe_text;
 pub(crate) mod structured_payload;
 mod subagent;
 mod system_info;
@@ -36,6 +41,8 @@ mod concise_results_tests;
 #[cfg(test)]
 mod conversation_notice_tests;
 #[cfg(test)]
+mod optimization_tests;
+#[cfg(test)]
 mod result_card_tests;
 #[cfg(test)]
 mod structured_payload_tests;
@@ -52,6 +59,7 @@ pub(crate) use formatter::edit_stat_status;
 pub(crate) use formatter::{render, render_call, render_framed, render_permission, render_result};
 pub(crate) use image::is_image_generation_tool;
 pub(crate) use model::{PermissionAuditView, ToolView};
+pub(crate) use permission_context::render as render_permission_context;
 pub(crate) use read_file::parse_read_page;
 pub(crate) use read_file::render_body as render_read_body;
 pub(crate) use read_image::{image_read_path, render_preview as render_read_image_preview};
@@ -83,9 +91,18 @@ pub(crate) fn has_compact_result_view(name: &str) -> bool {
     ) || is_image_generation_tool(name)
 }
 
+/// 【终端】【紧凑详情】近期卡片默认显示预览，显式展开才显示完整结果。
+/// 参数: `name` 为工具名；返回: 是否区分预览和全文。
+pub(crate) fn has_preview_details(name: &str) -> bool {
+    matches!(
+        name,
+        "grep" | "search_text" | "web_search" | "browser" | "background_command" | "todo"
+    ) || is_image_generation_tool(name)
+}
+
 #[cfg(test)]
-mod question_tests;
+mod comparison_demo_tests;
 #[cfg(test)]
 mod demo_tests;
 #[cfg(test)]
-mod comparison_demo_tests;
+mod question_tests;

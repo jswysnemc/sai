@@ -4,6 +4,7 @@ mod accessibility;
 mod driver;
 mod family;
 mod frame;
+mod input_target;
 mod response;
 mod schema;
 mod session;

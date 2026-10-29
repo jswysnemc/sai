@@ -31,6 +31,8 @@ mod summary;
 mod summary_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tool_preview_tests;
 mod tool_summary;
 
 use super::cell::HistoryCell;

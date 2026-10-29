@@ -1,5 +1,5 @@
 use crate::render::ansi_style::{sgr_sets_background, update_active_sgr};
-use unicode_width::UnicodeWidthChar;
+use unicode_segmentation::UnicodeSegmentation;
 
 const TAB_STOP_COLUMNS: usize = 4;
 
@@ -236,7 +236,8 @@ fn wrap_line(
             continue;
         }
 
-        let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+        let grapheme = text[index..].graphemes(true).next().unwrap_or_default();
+        let char_width = unicode_width::UnicodeWidthStr::width(grapheme);
         if current_width > 0 && current_width.saturating_add(char_width) > width {
             lines.push(finish_line(
                 &current,
@@ -258,9 +259,9 @@ fn wrap_line(
                 continue;
             }
         }
-        current.push(ch);
+        current.push_str(grapheme);
         current_width = current_width.saturating_add(char_width);
-        index += ch.len_utf8();
+        index += grapheme.len();
     }
 
     if !current.is_empty() || lines.is_empty() {

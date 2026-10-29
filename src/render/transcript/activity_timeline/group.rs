@@ -3,6 +3,7 @@ use super::super::fullscreen_parts::ParagraphKey;
 use super::super::fullscreen_view::{FullscreenDocument, ParagraphSpan};
 use super::super::line::AnsiLine;
 use super::super::store::{TranscriptRenderOptions, TranscriptStore};
+use super::super::tool_cell::ToolCell;
 use super::appearance;
 use super::node::{self, LiveNode};
 use crate::llm::ChatStreamKind;
@@ -85,9 +86,14 @@ pub(super) fn render(
         } else {
             tools += 1;
         }
-        let (key, node) = details.render(call_index, &mut newer_rows, false, expanded, |open| {
-            node::render_live(store, LiveNode::Tool, node_width, open)
-        });
+        let (key, node) = details.render(
+            call_index,
+            &mut newer_rows,
+            false,
+            false,
+            expanded,
+            |open| node::render_live(store, LiveNode::Tool, node_width, open),
+        );
         retained_keys.extend([
             ParagraphKey::activity(call_index, false),
             ParagraphKey::whole(call_index),
@@ -98,9 +104,14 @@ pub(super) fn render(
     }
     if live_thought {
         thoughts += 1;
-        let (key, node) = details.render(thought_index, &mut newer_rows, false, expanded, |open| {
-            node::render_live(store, LiveNode::Thought, node_width, open)
-        });
+        let (key, node) = details.render(
+            thought_index,
+            &mut newer_rows,
+            false,
+            false,
+            expanded,
+            |open| node::render_live(store, LiveNode::Thought, node_width, open),
+        );
         retained_keys.extend([
             ParagraphKey::activity(thought_index, false),
             ParagraphKey::whole(thought_index),
@@ -121,7 +132,8 @@ pub(super) fn render(
         }
         let awaiting = node::awaiting_permission(cell);
         let active = store.active_tool_index == Some(index) && !newer;
-        let (key, rendered) = details.render(index, &mut newer_rows, awaiting, expanded, |open| {
+        let preview = matches!(cell, HistoryCell::Tool(ToolCell::Invocation(view)) if crate::render::tool_view::has_preview_details(&view.name));
+        let mut render = |open| {
             if !active && !awaiting {
                 timeline_cache.get_or_render(index, node_width, open, || {
                     node::render_cell(cell, node_width, false, open)
@@ -129,7 +141,21 @@ pub(super) fn render(
             } else {
                 node::render_cell(cell, node_width, active, open)
             }
-        });
+        };
+        let (key, rendered) = details.render(
+            index,
+            &mut newer_rows,
+            awaiting,
+            preview,
+            expanded,
+            |open| {
+                if expanded.contains(&ParagraphKey::whole(index)) {
+                    crate::render::render_expand::with_force_expand(|| render(open))
+                } else {
+                    crate::render::render_expand::with_force_collapse(|| render(open))
+                }
+            },
+        );
         retained_keys.extend([
             ParagraphKey::activity(index, false),
             ParagraphKey::whole(index),
@@ -183,11 +209,12 @@ pub(super) fn render(
                 });
         }
         if interactive {
+            let preview = matches!(store.cells.get(key.cell), Some(HistoryCell::Tool(ToolCell::Invocation(view))) if crate::render::tool_view::has_preview_details(&view.name));
             document.paragraphs.push(ParagraphSpan {
                 key,
                 start,
                 end: document.lines.len(),
-                expanded: node.open,
+                expanded: node.open && (!preview || expanded.contains(&key)),
                 control: start,
             });
         }

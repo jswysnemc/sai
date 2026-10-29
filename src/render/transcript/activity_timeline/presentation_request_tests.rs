@@ -29,7 +29,10 @@ fn requested_search_presentation() {
         true,
     ));
     assert!(output.contains("1 match"), "{output}");
-    assert!(output.contains("sample.txt:5"), "{output}");
+    assert!(
+        output.contains("sample.txt") && output.contains("5: line 5"),
+        "{output}"
+    );
     assert!(output.contains("line 5: delta appended"), "{output}");
     assert!(
         !output.contains("Success:") && !output.contains("Input:"),

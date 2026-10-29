@@ -12,7 +12,7 @@ fn computer_use_observation_has_a_semantic_header_and_compact_controls() {
     view.finish(true, "Computer Use state\napp: 42\nwindow_id: 101\nsnapshot_id: 12345678-private\n<app_state>\n{\"app_name\":\"Fixture\"}\n{\"element_index\":\"g1:0\",\"role\":\"button\",\"label\":\"Apply\",\"enabled\":true}\n</app_state>\nframe_id: 12345678-private\nScreenshot: 50x30; use pixels from this exact image.\nEach input consumes this snapshot.".into());
     let full = strip_ansi_for_test(&render(&view, ToolCallDisplayMode::Full));
     assert!(
-        full.contains("Captured window · app 42 · window 101"),
+        full.contains("Captured window · Fixture") && full.contains("Window id: 101"),
         "{full}"
     );
     assert!(full.contains("• button Apply [g1:0]"), "{full}");
@@ -67,5 +67,28 @@ fn computer_use_result_without_arguments_does_not_guess_the_action() {
         "Input applied",
         ToolCallDisplayMode::Summary,
     ));
-    assert!(named.contains("Clicked control"), "{named}");
+    assert!(named.contains("Sent click"), "{named}");
+}
+
+/// 【终端】【驱动正文回归】容器加说明的正文不递归解析，解码控制符不能操作终端。
+/// 参数: 无；返回: 无。
+#[test]
+fn desktop_json_prefix_is_bounded_and_sanitized() {
+    let output = super::computer_use::render(
+        &{
+            let mut view = ToolView::running("computer_click".into(), "{}".into());
+            view.finish(
+                true,
+                format!(
+                    "{{\"status\":\"\\u001b[2Jdanger\\r\"}}{}",
+                    "{}".repeat(50_000)
+                ),
+            );
+            view
+        },
+        ToolCallDisplayMode::Full,
+    )
+    .unwrap();
+    assert!(!output.contains("\x1b[2J") && !output.contains('\r'));
+    assert!(output.contains("danger\\r"));
 }

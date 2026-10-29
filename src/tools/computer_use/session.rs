@@ -219,6 +219,7 @@ impl ComputerSession {
         let snapshot = self.current_snapshot(args)?;
         let action = args["action"].as_str().unwrap();
         let payload = input_payload(args, snapshot)?;
+        let target = super::input_target::describe(args, &snapshot.element_data);
         // 1. 【桌面操作】【先行失效】无论驱动成功、拒绝还是取消，本次输入都不能自动重放
         self.snapshot = None;
         self.coordinator.epoch.fetch_add(1, Ordering::SeqCst);
@@ -229,8 +230,11 @@ impl ComputerSession {
         };
         let result = self.driver.call(native_action, payload).await?;
         response::check_error(&result)?;
+        let target = target
+            .map(|target| format!("\nTarget: {target}"))
+            .unwrap_or_default();
         Ok(ToolOutput::text(format!(
-            "{}\nCall get_app_state for the updated state before choosing another action. The previous snapshot has been consumed.",
+            "{}{target}\nCall get_app_state for the updated state before choosing another action. The previous snapshot has been consumed.",
             response::text(&result)
         )))
     }

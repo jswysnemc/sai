@@ -111,6 +111,25 @@ pub(crate) fn command_result_streams(output: &str) -> Option<(bool, String, Stri
     Some((result.success, result.stdout, result.stderr))
 }
 
+/// 【终端】【命令失败】为标题提供明确失败状态和退出码，不把工具传输成功当作命令成功。
+/// 参数: `output` 为结果，`tool_ok` 为工具状态；返回: 失败标题，命令成功时返回空。
+pub(crate) fn command_failure_action(output: &str, tool_ok: bool) -> Option<String> {
+    #[derive(serde::Deserialize)]
+    struct Status {
+        success: bool,
+        exit_code: Option<i64>,
+    }
+    let result = serde_json::from_str::<Status>(output).ok();
+    let success = result.as_ref().map_or(tool_ok, |result| result.success);
+    if success {
+        return None;
+    }
+    Some(stderr_label(
+        false,
+        result.and_then(|result| result.exit_code),
+    ))
+}
+
 /// 将命令工具 JSON 结果渲染为 stdout/stderr 代码块（供 TUI 工具视图复用）。
 ///
 /// 参数:
@@ -222,13 +241,19 @@ fn render_command_result_view_with_options(
     let denial = crate::render::render_sandbox_denial(output);
     let mut blocks = Vec::new();
     let stdout_empty = result.stdout.trim().is_empty();
+    let stderr_empty = result.stderr.trim().is_empty();
     if !stdout_empty {
-        blocks.push((t("output", "输出").to_string(), result.stdout));
+        let label = if !result.success && stderr_empty {
+            stderr_label(false, result.exit_code)
+        } else {
+            t("output", "输出").to_string()
+        };
+        blocks.push((label, result.stdout));
     }
     if !result.stderr.trim().is_empty() {
         let label = stderr_label(result.success, result.exit_code);
         blocks.push((label, result.stderr));
-    } else if !result.success {
+    } else if !result.success && stdout_empty {
         let label = stderr_label(false, result.exit_code);
         blocks.push((
             label,
@@ -304,7 +329,12 @@ pub(crate) fn render_completed_command_output(
     let line_limit = preview_line_limit(expanded);
     let mut blocks = Vec::new();
     if !stdout.is_empty() {
-        blocks.push((t("output", "输出").to_string(), stdout.to_string()));
+        let label = if stderr.is_empty() && result.as_ref().is_some_and(|result| !result.success) {
+            stderr_label(false, result.as_ref().and_then(|result| result.exit_code))
+        } else {
+            t("output", "输出").to_string()
+        };
+        blocks.push((label, stdout.to_string()));
     }
     if !stderr.is_empty() {
         let label = result
@@ -312,7 +342,7 @@ pub(crate) fn render_completed_command_output(
             .map(|result| stderr_label(result.success, result.exit_code))
             .unwrap_or_else(|| stderr_label(false, None));
         blocks.push((label, stderr.to_string()));
-    } else if result.as_ref().is_some_and(|result| !result.success) {
+    } else if stdout.is_empty() && result.as_ref().is_some_and(|result| !result.success) {
         let label = stderr_label(false, result.as_ref().and_then(|result| result.exit_code));
         blocks.push((
             label,
@@ -444,7 +474,11 @@ fn render_output_block_limited_with_hint(
         };
         // Codex 输出 gutter：首行 `  └ `，续行四空格，整体 dim
         let prefix = if lines.is_empty() { "  └ " } else { "    " };
-        lines.push(format!("\x1b[2m{prefix}{line}\x1b[0m"));
+        if is_error || is_stderr {
+            lines.push(format!("\x1b[2m{prefix}\x1b[0m{line}"));
+        } else {
+            lines.push(format!("\x1b[2m{prefix}{line}\x1b[0m"));
+        }
     }
     if lines.is_empty() {
         lines.push("\x1b[2m  └ (no output)\x1b[0m".to_string());

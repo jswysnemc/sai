@@ -39,6 +39,13 @@ pub(super) fn render(cell: &HistoryCell, width: usize, title_width: usize) -> Ve
 /// 【终端】【工具正文】使用类型化读取和命令结果，并保留审批控件。
 /// 参数: `view` 为工具，`cell` 为摘要来源，`width` 为正文宽度，`title_width` 为摘要宽度；返回: ANSI 正文。
 fn invocation(view: &ToolView, cell: &HistoryCell, width: usize, title_width: usize) -> String {
+    if super::node::awaiting_permission(cell) {
+        return format!(
+            "{}{}",
+            tool_view::render_permission_context(view),
+            tool_view::render_permission(view.permission.as_ref())
+        );
+    }
     let arguments = serde_json::from_str::<Value>(&view.arguments).unwrap_or_default();
     let title = super::summary::for_cell(cell, title_width, super::node::awaiting_permission(cell));
     let visible_title = crate::render::clip_to_width(&title, title_width, "");

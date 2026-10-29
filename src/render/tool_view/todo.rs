@@ -1,6 +1,6 @@
 use super::model::ToolView;
 use crate::render::status_style::{color_status, ToolHealth};
-use crate::render::todo_style::{colorize_item, status_marker, status_rank};
+use crate::render::todo_style::{colorize_item, status_marker};
 use crate::render::tool_event_line::{
     tool_event_label_tense, tool_event_text, tool_status_line, ToolVerbTense,
 };
@@ -10,6 +10,8 @@ use serde::Deserialize;
 /// TODO 工具返回的待办条目。
 #[derive(Deserialize)]
 struct TodoItemView {
+    #[serde(default)]
+    id: String,
     text: String,
     status: String,
 }
@@ -74,7 +76,19 @@ pub(crate) fn render_todo_output(
         return Some(String::new());
     }
     let result = serde_json::from_str::<TodoResultView>(result_json).ok()?;
-    let display_label = changed_item_label(label, &result.changed);
+    let display_label = if mode == ToolCallDisplayMode::Full && !result.changed.is_empty() {
+        format!(
+            "{} todo · {} changed",
+            label.split_whitespace().next().unwrap_or("Updated"),
+            result.changed.len()
+        )
+    } else {
+        let mut label = changed_item_label(label, &result.changed);
+        if result.changed.len() > 1 {
+            label.push_str(&format!(" · {} more changes", result.changed.len() - 1));
+        }
+        label
+    };
 
     let total = result.items.len();
     let completed = result
@@ -95,7 +109,7 @@ pub(crate) fn render_todo_output(
     let pending = total.saturating_sub(completed + in_progress + cancelled);
 
     // 摘要行走统一 gutter：x/x 计数（与沉底面板同一视觉语言，不画进度条）
-    let mut stats = format!("Todo {completed}/{total}");
+    let mut stats = format!("Todo {completed}/{}", total.saturating_sub(cancelled));
     if in_progress > 0 {
         stats.push_str(&format!(" · {in_progress} active"));
     }
@@ -153,16 +167,50 @@ pub(crate) fn render_todo_output(
         return Some(output);
     }
 
-    // Full 模式：扁平列表，进行中置顶；条目自带状态符，缩进对齐 gutter 续行列
-    let mut items = result.items;
-    items.sort_by_key(|item| status_rank(&item.status));
-
-    for item in &items {
+    // 2. 【终端】【计划顺序】全量清单保持计划原序，变更标注在条目旁，正文只出现一次
+    if !result.items.is_empty() {
+        output.push_str("\n  Plan:");
+    }
+    for item in &result.items {
         let marker = status_marker(&item.status);
         let colored = colorize_item(&item.status, &item.text);
         output.push_str(&format!("\n    {marker} {colored}"));
+        if result
+            .changed
+            .iter()
+            .any(|changed| same_item(changed, item) && changed.status == item.status)
+        {
+            output.push_str("\x1b[2m · changed\x1b[0m");
+        }
+    }
+    // 3. 【终端】【变更记录】删除与完成后归档都会离开活动计划，必须按操作动词区分
+    let absent = result
+        .changed
+        .iter()
+        .filter(|changed| !result.items.iter().any(|item| same_item(item, changed)));
+    for item in absent {
+        let action = if label.starts_with("Removed") || label.starts_with("Removing") {
+            "Removed"
+        } else {
+            "Changed"
+        };
+        output.push_str(&format!(
+            "\n  {action}: {} {}",
+            status_marker(&item.status),
+            item.text
+        ));
     }
     Some(output)
+}
+
+/// 【终端】【待办身份】真实结果使用内部标识区分同名条目，旧结果缺少标识时兼容文本。
+/// 参数: 两个待办条目；返回: 是否代表同一任务。
+fn same_item(left: &TodoItemView, right: &TodoItemView) -> bool {
+    if !left.id.is_empty() && !right.id.is_empty() {
+        left.id == right.id
+    } else {
+        left.text == right.text
+    }
 }
 
 /// 使用工具返回的变更条目替换内部 ID。

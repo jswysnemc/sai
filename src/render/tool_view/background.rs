@@ -3,6 +3,7 @@ use crate::render::command_output::render_command_block_with_action;
 use crate::render::command_result_block::render_live_command_output;
 use crate::render::status_style::ToolHealth;
 use crate::render::terminal_text as t;
+use crate::render::ToolCallDisplayMode;
 use serde_json::Value;
 
 impl ToolView {
@@ -70,8 +71,14 @@ fn streams(view: &ToolView, value: &Value) -> (String, String) {
     )
 }
 
-/// 映射后台进程状态；参数为状态键，返回自然文案及颜色语义。
-fn state_label(status: &str) -> (&'static str, ToolHealth) {
+/// 映射后台进程状态；参数为任务记录（状态与退出码），返回自然文案及颜色语义。
+pub(super) fn state_label(task: &Value) -> (&'static str, ToolHealth) {
+    let status = task["status"].as_str().unwrap_or_default();
+    if matches!(status, "exited" | "completed")
+        && task["exit_code"].as_i64().is_some_and(|code| code != 0)
+    {
+        return (t("Failed", "执行失败"), ToolHealth::Err);
+    }
     match status {
         "running" => (
             t("Running in background", "后台运行中"),
@@ -88,9 +95,9 @@ fn state_label(status: &str) -> (&'static str, ToolHealth) {
 
 /// 【终端】【后台日志】按命令卡片渲染后台启动、输出、等待和停止结果。
 ///
-/// 参数: `view` 为工具生命周期，`frame` 为当前动画帧
+/// 参数: `view` 为工具生命周期，`mode` 为显示模式，`frame` 为当前动画帧
 /// 返回: 后台命令专用视图；其他工具返回空
-pub(super) fn render(view: &ToolView, frame: usize) -> Option<String> {
+pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -> Option<String> {
     let value = result_value(view);
     let promoted = view.name == "run_command"
         && value
@@ -119,40 +126,12 @@ pub(super) fn render(view: &ToolView, frame: usize) -> Option<String> {
     };
     let Some(task) = value.get("task").filter(|task| task.is_object()) else {
         if let Some(tasks) = value.get("tasks").and_then(Value::as_array) {
-            let mut output = crate::render::tool_event_line::tool_event_text(
-                &format!("{} · {}", t("Background commands", "后台命令"), tasks.len()),
-                "ok",
-            );
-            for task in tasks
-                .iter()
-                .take(if crate::render::render_expand::expand_override() {
-                    usize::MAX
-                } else {
-                    5
-                })
-            {
-                output.push_str(&format!(
-                    "\n  {} · {}\n    $ {}",
-                    task["id"].as_str().unwrap_or_default(),
-                    state_label(task["status"].as_str().unwrap_or_default()).0,
-                    task["command"].as_str().unwrap_or_default()
-                ));
-            }
-            if tasks.len() > 5 && !crate::render::render_expand::expand_override() {
-                output.push_str(&format!(
-                    "\n  {}",
-                    crate::render::omitted_line::render_fold_hint(
-                        &format!("{} {}", tasks.len() - 5, t("tasks hidden", "项任务已折叠")),
-                        Some(crate::render::omitted_line::FOLD_SHORTCUT)
-                    )
-                ));
-            }
-            return Some(output);
+            return Some(super::background_list::render(view, mode, &value, tasks));
         }
         return None;
     };
     let status = task["status"].as_str().unwrap_or("running");
-    let (label, health) = state_label(status);
+    let (label, health) = state_label(task);
     let command = background_task_command(view);
     let mut output = render_command_block_with_action(
         &serde_json::json!({"command": command}).to_string(),
@@ -165,7 +144,21 @@ pub(super) fn render(view: &ToolView, frame: usize) -> Option<String> {
         output = crate::render::content_indent::animate_guide_marker(&output, frame);
     }
     let id = task["id"].as_str().unwrap_or_default();
-    output.push_str(&format!("\n\x1b[2m  {id} · /ps\x1b[0m"));
+    let display_id = if crate::render::render_expand::expand_override() {
+        id.to_string()
+    } else {
+        super::background_list::short_id(id, &[id])
+    };
+    output.push_str(&format!(
+        "\n\x1b[2m  {display_id} · {}\x1b[0m",
+        t(
+            "/ps to inspect logs or stop tasks",
+            "在 /ps 查看日志或停止任务"
+        )
+    ));
+    if let Some(code) = task["exit_code"].as_i64() {
+        output.push_str(&format!("\n  {}: {code}", t("Exit code", "退出码")));
+    }
     let (stdout, stderr) = streams(view, &value);
     let body = render_live_command_output(&stdout, &stderr, view.command_expanded);
     if !body.trim().is_empty() {
@@ -195,9 +188,6 @@ pub(super) fn render(view: &ToolView, frame: usize) -> Option<String> {
             )
         ));
     }
-    output.push_str(&super::formatter::render_permission(
-        view.permission.as_ref(),
-    ));
     Some(output)
 }
 
@@ -219,7 +209,9 @@ pub(crate) fn background_pager_body(view: &ToolView) -> Option<String> {
         parts.push(format!("── stderr ──\n{stderr}"));
     }
     if parts.is_empty() {
-        return crate::render::render_expand::with_expanded_render(|| render(view, 0));
+        return crate::render::render_expand::with_expanded_render(|| {
+            render(view, ToolCallDisplayMode::Full, 0)
+        });
     }
     Some(parts.join("\n\n"))
 }
@@ -236,7 +228,7 @@ mod tests {
             "background_command".into(),
             r#"{"action":"start","command":"cargo check"}"#.into(),
         );
-        let rendered = strip_ansi_for_test(&render(&view, 1).unwrap());
+        let rendered = strip_ansi_for_test(&render(&view, ToolCallDisplayMode::Full, 1).unwrap());
         assert!(rendered.contains("$ cargo check"));
         assert!(!rendered.contains("\"action\""));
     }
@@ -251,7 +243,7 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         view.finish(true, serde_json::json!({"ok":true,"task":{"id":"task","command":"cargo check","status":"running"},"stdout":log}).to_string());
-        let rendered = strip_ansi_for_test(&render(&view, 0).unwrap());
+        let rendered = strip_ansi_for_test(&render(&view, ToolCallDisplayMode::Full, 0).unwrap());
         assert!(rendered.contains("$ cargo check"));
         assert!(rendered.contains("Ctrl+O"));
         assert!(!rendered.contains("log-15"));
@@ -264,7 +256,7 @@ mod tests {
     fn promotion_preserves_both_output_streams() {
         let mut view = ToolView::running("run_command".into(), r#"{"command":"build"}"#.into());
         view.finish(true, serde_json::json!({"mode":"background","task_id":"task","task":{"id":"task","status":"running"},"partial_stdout":"working","partial_stderr":"diagnostic"}).to_string());
-        let rendered = strip_ansi_for_test(&render(&view, 1).unwrap());
+        let rendered = strip_ansi_for_test(&render(&view, ToolCallDisplayMode::Full, 1).unwrap());
         assert!(rendered.contains("$ build"));
         assert!(rendered.contains("working") && rendered.contains("diagnostic"));
         assert!(view.is_running_background());

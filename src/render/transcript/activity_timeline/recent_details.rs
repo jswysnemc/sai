@@ -17,6 +17,7 @@ impl RecentDetails {
     /// - `index`: 节点稳定下标
     /// - `newer_rows`: 累积的较新节点物理行数
     /// - `required`: 是否必须强制展开
+    /// - `preview`: 是否默认保留预览，并用整块键控制全文展开
     /// - `expanded`: 手动展开/收起集合
     /// - `render`: 节点渲染闭包
     ///
@@ -27,6 +28,7 @@ impl RecentDetails {
         index: usize,
         newer_rows: &mut usize,
         required: bool,
+        preview: bool,
         expanded: &HashSet<ParagraphKey>,
         render: impl FnOnce(bool) -> RenderedNode,
     ) -> (ParagraphKey, RenderedNode) {
@@ -37,7 +39,11 @@ impl RecentDetails {
         let recent = !self.folded.contains(&index);
         let active_key = ParagraphKey::activity(index, false);
         let history_key = ParagraphKey::whole(index);
-        let key = if recent { active_key } else { history_key };
+        let key = if recent && !preview {
+            active_key
+        } else {
+            history_key
+        };
 
         // 2. 【终端】【状态互通】显式手动展开与手动收起优先级高于生命周期默认值
         let open = if required {

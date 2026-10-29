@@ -12,12 +12,41 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
     if view.name != "browser" {
         return None;
     }
-    let outcome = view.outcome.as_ref().filter(|outcome| outcome.ok)?;
+    let outcome = view.outcome.as_ref()?;
     let args: Value = serde_json::from_str(&view.arguments).unwrap_or_default();
     let action = args["action"].as_str().unwrap_or_default();
-    let mut title =
-        tool_event_label_tense("browser", Some(&view.arguments), ToolVerbTense::Perfect);
+    let mut label_args = args.clone();
+    if let Some(fields) = label_args.as_object_mut() {
+        for field in ["ref", "id", "selector"] {
+            fields.remove(field);
+        }
+    }
+    let mut title = tool_event_label_tense(
+        "browser",
+        Some(&label_args.to_string()),
+        ToolVerbTense::Perfect,
+    );
     let mut body = Vec::new();
+    if !outcome.ok {
+        title = format!("Browser action failed · {action}");
+        body.push(crate::render::ansi_clip::strip_ansi(&outcome.output));
+        return Some(result_card::render(
+            view,
+            mode,
+            &title,
+            ToolHealth::Err,
+            &body.join("\n"),
+        ));
+    }
+    if super::interaction_target::is_input(action) {
+        title = format!("Sent browser {}", action.replace('_', " "));
+        body.push("Input sent · effect not verified".into());
+    }
+    for key in ["ref", "id", "selector"] {
+        if let Some(value) = result_card::text(&args, key) {
+            body.push(format!("{key}: {value}"));
+        }
+    }
     if action == "screenshot"
         || outcome
             .output
@@ -39,9 +68,6 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
                 .then_some(part)
             })
             .next_back();
-        if let Some(reference) = args["ref"].as_str() {
-            title.push_str(&format!(" · {reference}"));
-        }
         if let Some(dimensions) = dimensions {
             title.push_str(&format!(" · {dimensions}"));
         }
