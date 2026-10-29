@@ -60,6 +60,7 @@ mod knowledge_commands;
 mod knowledge_contract;
 mod knowledge_embedding;
 mod knowledge_host;
+mod knowledge_http_wait;
 mod knowledge_limits;
 mod knowledge_permissions;
 mod knowledge_recovery;

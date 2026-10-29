@@ -1,3 +1,4 @@
+use super::knowledge_http_wait::{wait_for_http, CONCURRENCY_TIMEOUT};
 use super::{knowledge_host::KnowledgeHost, knowledge_support::*};
 use sai_plugin_runtime::{
     host::{HttpResponse, ScheduledStatus},
@@ -7,7 +8,6 @@ use serde_json::{json, Value};
 use std::{
     path::Path,
     sync::{atomic::Ordering, Arc, Mutex},
-    time::Duration,
 };
 
 /// 【知识库嵌入测试】【响应队列】输入宿主、状态码和正文；返回无，追加固定 HTTP 响应
@@ -166,13 +166,13 @@ async fn knowledge_reindex_cannot_publish_vectors_after_concurrent_edit_or_remov
         host.pause_http.store(true, Ordering::SeqCst);
         respond(&host, 200, r#"{"data":[{"embedding":[1,0]}]}"#);
         let directory = root.path().to_path_buf();
-        let job =
+        let mut job =
             tokio::spawn(
                 async move { command(&plugin, &directory, "embed-reindex", json!({})).await },
             );
-        tokio::time::timeout(Duration::from_secs(3), host.http_started.notified())
+        wait_for_http(&host, &mut job)
             .await
-            .unwrap();
+            .expect("reindex should pause at the HTTP barrier before the concurrent mutation");
         let second = configured(
             root.path(),
             &embedding_config(),
@@ -190,7 +190,7 @@ async fn knowledge_reindex_cannot_publish_vectors_after_concurrent_edit_or_remov
             )
         };
         tokio::time::timeout(
-            Duration::from_secs(3),
+            CONCURRENCY_TIMEOUT,
             call(&second, root.path(), name, args, true),
         )
         .await
@@ -236,11 +236,11 @@ async fn knowledge_background_jobs_coalesce_scheduled_work_but_follow_running_wo
         respond(&host, 200, r#"{"data":[{"embedding":[1,0]}]}"#);
     }
     let directory = root.path().to_path_buf();
-    let running =
+    let mut running =
         tokio::spawn(async move { command(&worker, &directory, "embed-reindex", args).await });
-    tokio::time::timeout(Duration::from_secs(3), host.http_started.notified())
+    wait_for_http(&host, &mut running)
         .await
-        .unwrap();
+        .expect("background worker should reach the HTTP barrier before editing");
     call(
         &plugin,
         root.path(),
@@ -310,11 +310,11 @@ async fn knowledge_embedding_cancellation_preserves_old_index_and_releases_busy_
     let (plugin, host) = fixture(root.path());
     host.pause_http.store(true, Ordering::SeqCst);
     let directory = root.path().to_path_buf();
-    let task =
+    let mut task =
         tokio::spawn(async move { command(&plugin, &directory, "embed-reindex", json!({})).await });
-    tokio::time::timeout(Duration::from_secs(3), host.http_started.notified())
+    wait_for_http(&host, &mut task)
         .await
-        .unwrap();
+        .expect("reindex should reach the HTTP barrier before cancellation");
     let (second, other) = fixture(root.path());
     assert_eq!(
         command(&second, root.path(), "embed-reindex", json!({}))
