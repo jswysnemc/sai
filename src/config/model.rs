@@ -232,6 +232,9 @@ impl ProviderModelChoice {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContextConfig {
+    /// 明确选择比例或预留；旧配置缺省保留双条件计算
+    #[serde(default, skip_serializing_if = "super::CompactionMode::is_legacy")]
+    pub compaction_mode: super::CompactionMode,
     /// 【上下文】【局部压缩】启用可精确回读的工具结果摘要试验，默认关闭
     #[serde(default)]
     pub experimental_context_blocks: bool,

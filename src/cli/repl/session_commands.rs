@@ -1,5 +1,19 @@
 use super::*;
 
+/// 【上下文】【命令分类】识别可以在当前画布中显示的上下文命令及别名。
+/// 参数：input 为完整用户命令；返回：命令是否使用内联上下文面板。
+pub(super) fn uses_context_panel(input: &str) -> bool {
+    matches!(
+        crate::control_commands::parse_control_command(
+            input,
+            crate::control_commands::ControlSurface::Repl
+        ),
+        Ok(Some(
+            crate::control_commands::ControlCommand::Context { .. }
+        ))
+    )
+}
+
 /// 【REPL】【上下文命令】处理 `/context`：查看上下文占用，或打开压缩策略编辑界面。
 ///
 /// 参数:
@@ -18,11 +32,10 @@ pub(super) fn handle_context(
     input: &str,
     runtime: &mut ReplRuntime,
 ) -> Result<()> {
-    // 1. 编辑压缩策略：打开独立配置界面，返回后整屏重绘
+    // 1. 【上下文】【策略编辑】卡片接替输入区域，退出后恢复当前视图
     if update == Some(crate::control_commands::ContextPolicyUpdate::Edit) {
         runtime.record_user(mode, input.to_string(), false)?;
-        let result = crate::config_tui::compaction::run_session(paths);
-        runtime.redraw()?;
+        let result = runtime.edit_context_policy(paths);
         return runtime.record_meta(result.unwrap_or_else(|error| error.to_string()));
     }
     // 2. 【上下文】【浮层入口】只读查询不写入会话记录，关闭或报错后恢复底层界面
@@ -58,5 +71,29 @@ pub(super) fn deliver_subagent_message(
     ) {
         Ok(notice) => runtime.record_meta(notice),
         Err(error) => runtime.record_meta(error.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::uses_context_panel;
+
+    /// 【上下文】【命令分类回归】编辑、查看、恢复及别名均保留当前视图，其他命令仍独占画布。
+    /// 参数：无；返回：无，分类不符时断言失败。
+    #[test]
+    fn context_commands_preserve_the_active_surface() {
+        for input in [
+            "/context",
+            "/context edit",
+            "/content edit",
+            "/context reset",
+            "/context 85% 8k",
+            "/CONTEXT ",
+        ] {
+            assert!(uses_context_panel(input), "{input}");
+        }
+        for input in ["/config", "/help", "/context invalid", "ordinary text"] {
+            assert!(!uses_context_panel(input), "{input}");
+        }
     }
 }

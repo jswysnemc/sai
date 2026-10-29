@@ -87,7 +87,7 @@ class ConfigurationTests(unittest.TestCase):
         with TerminalSession() as terminal:
             terminal.send(b"/content edit\r")
             terminal.wait_for(lambda: "占用比例" in terminal.text() or "Usage ratio" in terminal.text())
-            terminal.send(b"\r85")
+            terminal.send(b"e85")
             terminal.wait_for(lambda: "85|" in terminal.text())
             terminal.send(b"\r")
             terminal.wait_for(lambda: "85%" in terminal.text())

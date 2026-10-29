@@ -10,6 +10,11 @@ const POLICY_FILE: &str = "compaction-policy.json";
 /// 落在会话目录上的自动压缩策略。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionCompactionPolicy {
+    #[serde(
+        default,
+        skip_serializing_if = "crate::config::CompactionMode::is_legacy"
+    )]
+    pub compaction_mode: crate::config::CompactionMode,
     pub compaction_ratio: f32,
     pub compaction_reserve_tokens: usize,
 }
@@ -49,6 +54,7 @@ pub fn load_session_policy(state_dir: &Path) -> Result<Option<SessionCompactionP
     let saved = serde_json::from_str::<SessionCompactionPolicy>(&raw)
         .with_context(|| format!("invalid JSON in {}", path.display()))?;
     Ok(Some(SessionCompactionPolicy {
+        compaction_mode: saved.compaction_mode,
         compaction_ratio: clamp_compaction_ratio(saved.compaction_ratio),
         compaction_reserve_tokens: saved.compaction_reserve_tokens,
     }))
@@ -64,13 +70,23 @@ pub fn load_session_policy(state_dir: &Path) -> Result<Option<SessionCompactionP
 /// 返回:
 /// - 写入是否成功
 pub fn save_session_policy(state_dir: &Path, ratio: f32, reserve_tokens: usize) -> Result<()> {
+    save_budget_policy(
+        state_dir,
+        CompactionBudgetPolicy::from_context(ratio, reserve_tokens),
+    )
+}
+
+/// 【上下文】【策略保存】原子保存模式和数值，旧调用仍通过双条件入口写入。
+/// 参数：`state_dir` 为会话目录，`policy` 为已确认策略；返回：保存结果。
+fn save_budget_policy(state_dir: &Path, policy: CompactionBudgetPolicy) -> Result<()> {
     let path = policy_path(state_dir);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
     let value = SessionCompactionPolicy {
-        compaction_ratio: clamp_compaction_ratio(ratio),
-        compaction_reserve_tokens: reserve_tokens,
+        compaction_mode: policy.mode,
+        compaction_ratio: clamp_compaction_ratio(policy.ratio),
+        compaction_reserve_tokens: policy.reserve_tokens,
     };
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
@@ -112,7 +128,8 @@ pub fn resolve_compaction_policy(
             policy: CompactionBudgetPolicy::from_context(
                 saved.compaction_ratio,
                 saved.compaction_reserve_tokens,
-            ),
+            )
+            .with_mode(saved.compaction_mode),
             session_override: true,
         });
     }
@@ -120,12 +137,18 @@ pub fn resolve_compaction_policy(
         policy: CompactionBudgetPolicy::from_context(
             fallback.clamped_compaction_ratio(),
             fallback.compaction_reserve_tokens,
-        ),
+        )
+        .with_mode(fallback.compaction_mode),
         session_override: false,
     })
 }
 
 impl crate::state::StateStore {
+    /// 【上下文】【策略保存】保存编辑器确认的单条件模式和参数。
+    /// 参数：`policy` 为策略草稿；返回：持久化结果。
+    pub fn save_compaction_budget_policy(&self, policy: CompactionBudgetPolicy) -> Result<()> {
+        save_budget_policy(self.state_dir(), policy)
+    }
     /// 读取当前会话生效的自动压缩策略。
     ///
     /// 参数:
@@ -165,6 +188,49 @@ impl crate::state::StateStore {
 mod tests {
     use super::*;
     use crate::config::ContextConfig;
+
+    /// 【上下文】【单条件回归】保存重载、全局回退和旧文件分别保留明确模式与旧语义。
+    /// 参数：无；返回：无。
+    #[test]
+    fn explicit_modes_round_trip_without_changing_legacy_policies() {
+        use crate::config::CompactionMode;
+        let temp = tempfile::tempdir().unwrap();
+        let fallback = ContextConfig::default();
+        let base = CompactionBudgetPolicy::from_context(0.9, 50_000);
+        for (mode, trigger) in [
+            (CompactionMode::Ratio, 72_000),
+            (CompactionMode::Reserve, 30_000),
+        ] {
+            save_budget_policy(temp.path(), base.with_mode(mode)).unwrap();
+            let resolved = resolve_compaction_policy(temp.path(), &fallback).unwrap();
+            assert_eq!(resolved.policy.mode, mode);
+            assert_eq!(resolved.policy.trigger_chars(80_000), trigger);
+        }
+        save_session_policy(temp.path(), 0.9, 50_000).unwrap();
+        let resolved = resolve_compaction_policy(temp.path(), &fallback).unwrap();
+        assert_eq!(resolved.policy.mode, CompactionMode::Legacy);
+        assert_eq!(resolved.policy.trigger_chars(80_000), 72_000);
+        clear_session_policy(temp.path()).unwrap();
+        let fallback = ContextConfig {
+            compaction_mode: CompactionMode::Reserve,
+            ..fallback
+        };
+        assert_eq!(
+            resolve_compaction_policy(temp.path(), &fallback)
+                .unwrap()
+                .policy
+                .trigger_chars(80_000),
+            30_000
+        );
+        for reserve in [0, 80_000, 100_000] {
+            assert_eq!(
+                CompactionBudgetPolicy::from_context(0.9, reserve)
+                    .with_mode(CompactionMode::Reserve)
+                    .trigger_chars(80_000),
+                80_000
+            );
+        }
+    }
 
     #[test]
     fn missing_file_falls_back_to_global() {

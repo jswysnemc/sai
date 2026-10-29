@@ -264,8 +264,8 @@ pub(super) async fn run_repl(
             exit_armed = false;
             continue;
         }
-        // 斜杠命令可能打开选择器、配置界面等独占终端的界面，先退出全屏视图
-        if input.starts_with('/') && !input.eq_ignore_ascii_case("/context") {
+        // 1. 【终端】【命令交接】独占界面退出全屏；上下文查看、编辑与别名沿用当前画布
+        if input.starts_with('/') && !session_commands::uses_context_panel(input) {
             restore_fullscreen_after_command = runtime.fullscreen_active();
             runtime.leave_fullscreen()?;
         }

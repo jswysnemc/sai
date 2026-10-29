@@ -8,6 +8,7 @@ mod app_prompts;
 mod app_validation;
 mod cli_tool_defaults;
 mod cli_tools;
+mod compaction_mode;
 mod computer_use;
 pub mod defaults;
 mod display;
@@ -41,6 +42,7 @@ mod tool_whitelist;
 mod tui_mode;
 mod web_search;
 
+pub use compaction_mode::CompactionMode;
 pub use computer_use::ComputerUseConfig;
 pub use tui_mode::TuiMode;
 pub use web_search::WebSearchConfig;

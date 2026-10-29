@@ -13,6 +13,9 @@ impl Draft {
     /// 【上下文】【数值编辑】处理组合键和普通按键。
     /// 参数: key 为键盘事件；返回: 保存或取消操作
     pub(super) fn handle_event(&mut self, key: KeyEvent) -> Option<super::draft::Outcome> {
+        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
+            return Some(super::draft::Outcome::Cancel);
+        }
         if self.input.is_some() && key.modifiers.contains(KeyModifiers::CONTROL) {
             match key.code {
                 KeyCode::Char('a') => self.input_selected = true,
@@ -41,7 +44,7 @@ impl Draft {
                     self.input = None;
                     self.reset = false;
                     if key == KeyCode::Tab {
-                        self.selected = (self.selected + 1) % 5;
+                        self.selected = 1 - self.selected;
                     }
                 }
                 Err(error) => self.error = Some(error.to_string()),

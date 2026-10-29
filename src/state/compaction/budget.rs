@@ -18,13 +18,14 @@ pub const STALE_TOOL_SNIP_RATIO: f32 = 0.6;
 
 /// 会话级自动压缩触发策略。
 ///
-/// 比例决定小窗口何时压缩；预留决定大窗口至少留多少空位。
-/// 两者取更晚到达的那个，避免小窗口被固定 40k/50k 预留过早压缩。
+/// 明确模式仅按选定条件计算；兼容模式保留比例与预留中较晚的触发点。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CompactionBudgetPolicy {
+    /// 单条件模式或兼容旧配置的双条件模式
+    pub mode: crate::config::CompactionMode,
     /// 占用达到窗口的该比例时触发，范围 0.50–0.99
     pub ratio: f32,
-    /// 至少留出的 token；0 表示只按比例
+    /// 预留 token；0 在预留模式中关闭预留，在兼容模式中仅按比例计算
     pub reserve_tokens: usize,
 }
 
@@ -37,6 +38,7 @@ impl Default for CompactionBudgetPolicy {
 impl CompactionBudgetPolicy {
     /// 内置默认：90% 或预留 50k，按窗口取更晚到达的条件。
     pub const DEFAULT: Self = Self {
+        mode: crate::config::CompactionMode::Legacy,
         ratio: AUTO_COMPACTION_RATIO,
         reserve_tokens: RESERVED_CONTEXT_CHARS,
     };
@@ -51,9 +53,17 @@ impl CompactionBudgetPolicy {
     /// - 夹紧后的策略
     pub fn from_context(ratio: f32, reserve_tokens: usize) -> Self {
         Self {
+            mode: crate::config::CompactionMode::Legacy,
             ratio: clamp_compaction_ratio(ratio),
             reserve_tokens,
         }
+    }
+
+    /// 【上下文】【策略模式】附加明确模式，同时保留两个参数供编辑器切换。
+    /// 参数：`mode` 为计算模式；返回：携带模式的策略。
+    pub fn with_mode(mut self, mode: crate::config::CompactionMode) -> Self {
+        self.mode = mode;
+        self
     }
 
     /// 计算自动压缩触发点。
@@ -67,7 +77,18 @@ impl CompactionBudgetPolicy {
         if context_limit_chars == 0 {
             return 0;
         }
+        // 1. 【上下文】【单条件触发】预留关闭或超出窗口时不扣减，阈值为完整窗口
+        if self.mode == crate::config::CompactionMode::Reserve {
+            return if self.reserve_tokens < context_limit_chars {
+                context_limit_chars - self.reserve_tokens
+            } else {
+                context_limit_chars
+            };
+        }
         let ratio_trigger = ((context_limit_chars as f32) * self.ratio).max(1.0) as usize;
+        if self.mode == crate::config::CompactionMode::Ratio {
+            return ratio_trigger;
+        }
         if self.reserve_tokens == 0 || self.reserve_tokens >= context_limit_chars {
             return ratio_trigger.max(1);
         }

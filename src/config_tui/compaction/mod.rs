@@ -1,4 +1,6 @@
+mod card;
 mod draft;
+mod gauge;
 mod inline;
 mod input_edit;
 #[cfg(test)]
@@ -22,7 +24,8 @@ pub(super) fn edit_defaults(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
     let policy = CompactionBudgetPolicy::from_context(
         config.context.compaction_ratio,
         config.context.compaction_reserve_tokens,
-    );
+    )
+    .with_mode(config.context.compaction_mode);
     let context = PreviewContext {
         window: config.active_context_window_tokens().unwrap_or(0),
         used: None,
@@ -31,7 +34,6 @@ pub(super) fn edit_defaults(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
             "全局默认 · 当前模型窗口预览",
         )
         .to_string(),
-        session: false,
     };
     let next = match edit(stdout, &context, policy, CompactionBudgetPolicy::DEFAULT)? {
         Outcome::Save(next) => next,
@@ -40,13 +42,17 @@ pub(super) fn edit_defaults(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
     };
     config.context.compaction_ratio = next.ratio;
     config.context.compaction_reserve_tokens = next.reserve_tokens;
+    config.context.compaction_mode = next.mode;
     Ok(())
 }
 
 /// 【上下文】【会话设置】打开当前会话策略面板并保存会话覆盖
 /// 参数: paths 为应用存储路径
 /// 返回: 保存或取消提示，外部内核直接返回说明
-pub(crate) fn run_session(paths: &SaiPaths) -> Result<String> {
+pub(crate) fn run_session(
+    paths: &SaiPaths,
+    place: impl FnMut(u16) -> Result<crate::question_tui::OverlayPlacement>,
+) -> Result<String> {
     let config = AppConfig::load_or_default(paths)?;
     if config.agent.engine.is_external() {
         return Ok(t(
@@ -60,7 +66,8 @@ pub(crate) fn run_session(paths: &SaiPaths) -> Result<String> {
     let defaults = CompactionBudgetPolicy::from_context(
         config.context.compaction_ratio,
         config.context.compaction_reserve_tokens,
-    );
+    )
+    .with_mode(config.context.compaction_mode);
     let snapshot =
         state.session_snapshot(config.active_context_window_tokens().unwrap_or(128_000))?;
     let context = PreviewContext {
@@ -78,14 +85,13 @@ pub(crate) fn run_session(paths: &SaiPaths) -> Result<String> {
             )
         }
         .to_string(),
-        session: true,
     };
     // 1. 【上下文】【面板交互】在当前画面底部打开内联面板，不切换备用屏
-    let outcome = inline::run(&context, current.policy, defaults);
+    let outcome = inline::run(&context, current.policy, defaults, place);
     // 2. 【上下文】【面板交互】用户确认后才写入会话配置，取消与中断均不写入
     match outcome {
         Ok(Outcome::Save(policy)) => {
-            state.save_compaction_policy(policy.ratio, policy.reserve_tokens)?;
+            state.save_compaction_budget_policy(policy)?;
             Ok(t("Session compaction policy saved", "本会话压缩策略已保存").to_string())
         }
         Ok(Outcome::Reset) => {

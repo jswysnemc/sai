@@ -249,6 +249,7 @@ impl Agent {
                     self.config.context.clamped_compaction_ratio(),
                     self.config.context.compaction_reserve_tokens,
                 )
+                .with_mode(self.config.context.compaction_mode)
             })
     }
 }

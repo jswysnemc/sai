@@ -195,7 +195,8 @@ async fn usage(
             policy: crate::state::CompactionBudgetPolicy::from_context(
                 base_config.context.clamped_compaction_ratio(),
                 base_config.context.compaction_reserve_tokens,
-            ),
+            )
+            .with_mode(base_config.context.compaction_mode),
             session_override: false,
         });
     let compaction_trigger_tokens = resolved.policy.trigger_chars(context_window_tokens.max(1));

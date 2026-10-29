@@ -1,8 +1,10 @@
-use crate::config::{parse_compaction_ratio_text, parse_context_chars};
+use crate::config::{parse_compaction_ratio_text, parse_context_chars, CompactionMode};
 use crate::i18n::text as t;
 use crate::state::CompactionBudgetPolicy;
 use anyhow::{bail, Result};
 use crossterm::event::KeyCode;
+
+pub(super) const RESERVE_PRESETS: [usize; 4] = [0, 8_000, 50_000, 100_000];
 
 /// 【上下文】【策略编辑】保存尚未提交的策略与键盘交互状态
 pub(super) struct Draft {
@@ -31,7 +33,7 @@ impl Draft {
         Self {
             policy,
             defaults,
-            selected: 0,
+            selected: usize::from(policy.mode == CompactionMode::Reserve),
             input: None,
             input_cursor: 0,
             input_selected: false,
@@ -43,6 +45,9 @@ impl Draft {
     /// 【上下文】【策略编辑】解析当前输入用于实时预览
     /// 返回: 校验后的草稿策略；非法输入返回错误
     pub fn preview(&self) -> Result<CompactionBudgetPolicy> {
+        if self.reset && self.input.is_none() {
+            return Ok(self.defaults);
+        }
         let mut policy = self.policy;
         if let Some(input) = &self.input {
             if input.trim().is_empty() {
@@ -62,7 +67,11 @@ impl Draft {
                     .unwrap_or(0);
             }
         }
-        Ok(policy)
+        Ok(policy.with_mode(if self.selected == 0 {
+            CompactionMode::Ratio
+        } else {
+            CompactionMode::Reserve
+        }))
     }
 
     /// 【上下文】【策略编辑】处理按键，只在保存或取消时返回操作
@@ -77,37 +86,44 @@ impl Draft {
         // 2. 【上下文】【策略编辑】导航、数值微调与快捷档均只更新内存草稿
         match key {
             KeyCode::Esc | KeyCode::Char('q') => return Some(Outcome::Cancel),
-            KeyCode::BackTab => self.selected = (self.selected + 4) % 5,
-            KeyCode::Up | KeyCode::Char('k') => self.selected = self.selected.saturating_sub(1),
-            KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab => {
-                self.selected = (self.selected + 1) % 5
+            KeyCode::BackTab | KeyCode::Up | KeyCode::Down | KeyCode::Tab => {
+                self.selected = 1 - self.selected;
+                self.reset = false;
             }
-            KeyCode::Left | KeyCode::Right if self.selected < 2 => {
-                let increase = key == KeyCode::Right;
+            KeyCode::Left | KeyCode::Right | KeyCode::Char('h' | 'l') => {
+                let increase = matches!(key, KeyCode::Right | KeyCode::Char('l'));
                 if self.selected == 0 {
                     let delta = if increase { 1.0 } else { -1.0 };
                     self.policy.ratio =
                         ((self.policy.ratio * 100.0 + delta).clamp(50.0, 99.0)) / 100.0;
-                } else if increase {
-                    self.policy.reserve_tokens = self.policy.reserve_tokens.saturating_add(1_000);
                 } else {
-                    self.policy.reserve_tokens = self.policy.reserve_tokens.saturating_sub(1_000);
+                    self.policy.reserve_tokens = if increase {
+                        RESERVE_PRESETS
+                            .iter()
+                            .copied()
+                            .find(|value| *value > self.policy.reserve_tokens)
+                    } else {
+                        RESERVE_PRESETS
+                            .iter()
+                            .rev()
+                            .copied()
+                            .find(|value| *value < self.policy.reserve_tokens)
+                    }
+                    .unwrap_or(self.policy.reserve_tokens);
                 }
                 self.reset = false;
             }
-            KeyCode::Char(ch @ '0'..='3') if self.selected == 1 => {
-                self.policy.reserve_tokens =
-                    [0, 8_000, 50_000, 100_000][ch as usize - '0' as usize];
+            KeyCode::Char(ch @ '0'..='3') => {
+                self.selected = 1;
+                self.policy.reserve_tokens = RESERVE_PRESETS[ch as usize - '0' as usize];
                 self.reset = false;
             }
             KeyCode::Char('r') => self.restore_defaults(),
-            KeyCode::Char('s') => return Some(self.outcome()),
-            KeyCode::Enter => match self.selected {
+            KeyCode::Char('s' | 'S') | KeyCode::Enter => return Some(self.outcome()),
+            KeyCode::Char('e' | 'i') => match self.selected {
                 0 => self.begin_input(format_percent(self.policy.ratio)),
                 1 => self.begin_input(self.policy.reserve_tokens.to_string()),
-                2 => self.restore_defaults(),
-                3 => return Some(self.outcome()),
-                _ => return Some(Outcome::Cancel),
+                _ => {}
             },
             _ => {}
         }
@@ -117,15 +133,17 @@ impl Draft {
     /// 【上下文】【策略编辑】恢复默认草稿；返回: 无，仍需保存才生效
     fn restore_defaults(&mut self) {
         self.policy = self.defaults;
+        self.selected = usize::from(self.defaults.mode == CompactionMode::Reserve);
         self.reset = true;
     }
 
     /// 【上下文】【策略编辑】返回保存操作，不进行持久化
+    /// 参数：无；返回：恢复默认或保存当前预览策略
     fn outcome(&self) -> Outcome {
         if self.reset {
             Outcome::Reset
         } else {
-            Outcome::Save(self.policy)
+            Outcome::Save(self.preview().unwrap_or(self.policy))
         }
     }
 }

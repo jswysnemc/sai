@@ -104,9 +104,7 @@ pub(crate) fn context_overview(
     .ok();
     let categories = categories(&state, breakdown.as_ref(), snapshot.context_prompt_tokens)?;
     let policy = state.resolve_compaction_policy(&config.context)?.policy;
-    let compact_trigger =
-        crate::state::CompactionBudgetPolicy::from_context(policy.ratio, policy.reserve_tokens)
-            .trigger_chars(window);
+    let compact_trigger = policy.trigger_chars(window);
     let turn_usage = state.latest_turn_usage()?;
     let usage_is_turn = turn_usage.is_some();
     Ok(ContextOverview {
