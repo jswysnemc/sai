@@ -104,6 +104,7 @@ pub(super) struct ComposerFrame {
     panel_lines: Vec<String>,
     panel_pointer: Option<(u16, u16)>,
     panel_actions: Vec<(usize, PanelAction)>,
+    panel_expanded_rows: Vec<usize>,
     /// 是否已用 Esc 收起补全面板（slash / @ / #）
     ///
     /// 面板完全由输入内容推导，没有独立开关；Esc 收起后必须记住状态，
@@ -131,14 +132,16 @@ impl ComposerFrame {
         self.selection = selection;
     }
     /// 【终端】【面板反馈】保存指针和可操作行，绘制时使用实际几何计算悬停。
-    /// 参数: `pointer` 为屏幕坐标，`actions` 为可点击面板行；返回: 无。
+    /// 参数: `pointer` 为屏幕坐标，`actions` 为可点击面板行，`expanded_rows` 为已展开标题行；返回: 无。
     pub(super) fn set_panel_pointer(
         &mut self,
         pointer: Option<(u16, u16)>,
         actions: Vec<(usize, PanelAction)>,
+        expanded_rows: Vec<usize>,
     ) {
         self.panel_pointer = pointer;
         self.panel_actions = actions;
+        self.panel_expanded_rows = expanded_rows;
     }
 
     /// 创建当前输入状态的 composer source。
@@ -172,6 +175,7 @@ impl ComposerFrame {
             panel_lines: Vec::new(),
             panel_pointer: None,
             panel_actions: Vec::new(),
+            panel_expanded_rows: Vec::new(),
             panels_dismissed: false,
             streaming: false,
             placeholder_override: None,

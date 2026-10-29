@@ -123,9 +123,27 @@ impl AnsiLine {
                 width,
                 right_margin,
                 continuation_indent,
+                false,
             ));
         }
         lines
+    }
+
+    /// 【终端】【列表换行】拆分单个列表逻辑行，断点处的单个词间空格不进入续行。
+    ///
+    /// 参数:
+    /// - `line`: 不含换行符的 ANSI 列表行
+    /// - `width`: 内容宽度
+    /// - `continuation_indent`: 列表正文起始列
+    ///
+    /// 返回:
+    /// - 续行与正文列对齐的终端行
+    pub(crate) fn wrap_list_item(
+        line: &str,
+        width: usize,
+        continuation_indent: usize,
+    ) -> Vec<Self> {
+        wrap_line(line, width, 0, continuation_indent, true)
     }
 }
 
@@ -136,6 +154,7 @@ impl AnsiLine {
 /// - `width`: 当前内容区域列数
 /// - `right_margin`: 终端右侧需要恢复默认背景的列数
 /// - `continuation_indent`: 自动续行需要恢复的前导空格列数
+/// - `drop_break_space`: 断点恰为单个空格时是否丢弃该空格
 ///
 /// 返回:
 /// - 已按显示宽度拆分的终端行
@@ -144,6 +163,7 @@ fn wrap_line(
     width: usize,
     right_margin: usize,
     continuation_indent: usize,
+    drop_break_space: bool,
 ) -> Vec<AnsiLine> {
     let width = width.max(1);
     let mut lines = Vec::new();
@@ -226,6 +246,11 @@ fn wrap_line(
                 continuation_indent,
                 outer_indent,
             );
+            // 1. 正文断点恰为单个空格时跳过，续行从下一个词开始
+            if drop_break_space && ch == ' ' && !text[index + 1..].starts_with(' ') {
+                index += 1;
+                continue;
+            }
         }
         current.push(ch);
         current_width = current_width.saturating_add(char_width);

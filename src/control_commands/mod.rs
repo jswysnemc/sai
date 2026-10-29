@@ -2,6 +2,8 @@ pub mod catalog;
 
 pub mod agent;
 mod context_info;
+pub(crate) mod context_view;
+pub(crate) use context_info::context_overview;
 mod goal;
 mod help;
 mod model;

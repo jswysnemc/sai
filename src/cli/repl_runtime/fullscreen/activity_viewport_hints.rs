@@ -46,8 +46,8 @@ pub(super) fn footer_with_focus(
         t("Resume", "恢复跟随")
     };
     let keyboard = t("Alt+PgUp/PgDn", "Alt+PgUp/PgDn");
-    let track = crate::render::transcript::deepseek_timeline::progress_bar::render_scroll_track(
-        first, last, count, 4,
+    let track = crate::render::transcript::activity_timeline::progress_bar::render_scroll_position(
+        first, last, count,
     );
     let candidates = [
         format!("{position} {track} · {action} · {keyboard}"),

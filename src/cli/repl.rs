@@ -25,10 +25,10 @@ mod session_resume;
 mod session_support;
 mod settings_commands;
 mod startup;
-mod style_commands;
 pub(super) mod subagent_commands;
 pub(super) mod subagent_input;
 mod submission_queue;
+mod view_commands;
 
 use exit_hint::print_repl_resume_hint;
 use session_support::{
@@ -86,6 +86,7 @@ pub(super) async fn run_repl(
         mode,
     )?;
     let mut external_events = ReplExternalEvents::new();
+    let mut restore_fullscreen_after_command = false;
     plugin_commands::show_diagnostics(&agent, &mut runtime)?;
     let mut presence: Option<crate::runner::SessionPresenceGuard> = None;
 
@@ -116,8 +117,8 @@ pub(super) async fn run_repl(
         };
         render::configure_display_rendering(&config.display);
         runtime.update_options(config.display.repl_transcript_row_cap, transcript_options);
-        // 【终端】【执行链视图】独占命令界面结束后恢复可点击视图，不改变经典样式的全屏偏好
-        if render::tui_style::is_deepseek() {
+        // 【终端】【布局恢复】仅恢复独占命令暂时退出的视图，不覆盖用户通过 Ctrl+O 选择的内联模式
+        if std::mem::take(&mut restore_fullscreen_after_command) {
             runtime.enter_fullscreen()?;
         }
         runtime.set_mention_skills(super::repl_mentions::load_mention_skills(&config, paths));
@@ -258,13 +259,14 @@ pub(super) async fn run_repl(
         external_events.resume();
         apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
         let input = submission.raw_input.trim();
-        if style_commands::handle(input, paths, &mut config, &mut runtime)? {
+        if view_commands::handle(input, paths, &mut config, &mut runtime)? {
             pending_undo = false;
             exit_armed = false;
             continue;
         }
         // 斜杠命令可能打开选择器、配置界面等独占终端的界面，先退出全屏视图
-        if input.starts_with('/') {
+        if input.starts_with('/') && !input.eq_ignore_ascii_case("/context") {
+            restore_fullscreen_after_command = runtime.fullscreen_active();
             runtime.leave_fullscreen()?;
         }
         if !input.eq_ignore_ascii_case("/undo") {

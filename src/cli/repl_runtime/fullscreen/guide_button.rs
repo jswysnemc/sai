@@ -1,8 +1,13 @@
-/// 【终端】【悬停按钮】悬停时用单列大于号表示可展开，不添加下划线或改变文字位置。
+/// 【终端】【悬停按钮】按展开状态显示单列展开或收起图标，不改变文字位置。
 /// 参数: `line` 为 ANSI 标题，`expanded` 为展开状态；返回: 临时替换引导符的标题。
-pub(in crate::cli::repl_runtime) fn render(line: &str, _expanded: bool) -> String {
-    let replaced = crate::render::guide_symbols::replace(line, ">");
-    if replaced != line {
+pub(in crate::cli::repl_runtime) fn render(line: &str, expanded: bool) -> String {
+    let marker = if expanded { "▾" } else { "▸" };
+    let replaced = crate::render::guide_symbols::replace(line, marker);
+    if replaced != line
+        || crate::render::ansi_clip::strip_ansi(line)
+            .trim_start()
+            .starts_with(marker)
+    {
         return replaced;
     }
     // 1. 【终端】【文字按钮】无图标的页脚使用已有缩进列，不覆盖行号或正文
@@ -20,7 +25,7 @@ pub(in crate::cli::repl_runtime) fn render(line: &str, _expanded: bool) -> Strin
         }
     }
     if let Some(&index) = spaces.get(spaces.len().saturating_sub(2)) {
-        format!("{}>{}", &line[..index], &line[index + 1..])
+        format!("{}{marker}{}", &line[..index], &line[index + 1..])
     } else {
         line.to_string()
     }
@@ -28,7 +33,16 @@ pub(in crate::cli::repl_runtime) fn render(line: &str, _expanded: bool) -> Strin
 
 #[cfg(test)]
 mod tests {
-    /// 【终端】【悬停回归】大于号只占原图标一列，不产生下划线；无参数和返回值。
+    /// 【终端】【折叠幂等】已有同向箭头且带缩进时，不再额外插入箭头。
+    /// 参数: 无；返回: 无。
+    #[test]
+    fn existing_disclosure_does_not_duplicate_on_hover() {
+        for (expanded, marker) in [(true, "▾"), (false, "▸")] {
+            let source = format!("  \x1b[2m{marker} Hide 170 earlier steps\x1b[0m");
+            assert_eq!(super::render(&source, expanded), source);
+        }
+    }
+    /// 【终端】【悬停回归】收起图标只占原图标一列，不产生下划线；无参数和返回值。
     #[test]
     fn hover_uses_disclosure_marker_without_changing_width() {
         for icon in [crate::render::guide_symbols::READ, "◇", "▸", "▾", "─"] {
@@ -37,9 +51,9 @@ mod tests {
             assert!(!result.contains("\x1b[4m"));
             assert_eq!(
                 crate::render::activity_animation::strip_ansi_for_test(&result),
-                "> title   "
+                "▾ title   "
             );
         }
-        assert_eq!(super::render("  1-5/10 Resume", false), "> 1-5/10 Resume");
+        assert_eq!(super::render("  1-5/10 Resume", false), "▸ 1-5/10 Resume");
     }
 }

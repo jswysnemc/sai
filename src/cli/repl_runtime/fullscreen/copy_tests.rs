@@ -46,14 +46,16 @@ fn releasing_selection_reuses_document_and_copies_selected_text() {
     let state = &runtime.fullscreen.as_ref().unwrap().state;
     let layout = state.layout.unwrap();
     let lines = state.document.lines.as_ptr();
-    let row = layout.body_top + 2;
+    let document_row = state.document.lines.iter().enumerate().skip(state.scroll)
+        .find(|(_, line)| line.as_str().contains("turn-4-answer-")).unwrap().0;
+    let row = layout.body_top + (document_row - state.scroll) as u16;
     let selection = Selection {
         anchor: TextPoint {
-            row: state.scroll + 2,
+            row: document_row,
             col: 3,
         },
         head: TextPoint {
-            row: state.scroll + 2,
+            row: document_row,
             col: 12,
         },
     };

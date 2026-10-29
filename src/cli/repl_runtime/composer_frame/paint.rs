@@ -109,9 +109,21 @@ impl ComposerFrame {
             .filter(|index| self.panel_actions.iter().any(|(row, _)| row == index))
         {
             let line = &mut signature.lines[index - hidden_rows];
-            *line = super::super::fullscreen::hover::tint_line(
-                &super::super::fullscreen::guide_button::render(line, false),
-            );
+            let action = self
+                .panel_actions
+                .iter()
+                .find(|(row, _)| *row == index)
+                .map(|(_, action)| action);
+            // 1. 【终端】【面板悬停】展开控件按实际状态显示箭头，导航条目只提亮原图标
+            let text = if matches!(action, Some(PanelAction::Todo | PanelAction::AgentsToggle)) {
+                super::super::fullscreen::guide_button::render(
+                    line,
+                    self.panel_expanded_rows.contains(&index),
+                )
+            } else {
+                line.clone()
+            };
+            *line = super::super::fullscreen::hover::tint_line(&text);
         }
         let same_geometry =
             previous.filter(|old| old.top == top && old.height == height && old.cols == cols);

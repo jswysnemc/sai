@@ -156,8 +156,8 @@ fn repl_only_help_lines() -> Vec<String> {
             t("open configuration UI", "打开配置界面")
         ),
         format!(
-            "  /style [classic|deepseek]  {}",
-            t("switch and save terminal style", "切换并保存终端样式")
+            "  /view [inline|fullscreen]  {}",
+            t("switch and save terminal view", "切换并保存终端视图")
         ),
         format!(
             "  /thinking [level]  {}",

@@ -184,16 +184,11 @@ impl StreamRenderer {
         }
         if self.tool_call_mode == ToolCallDisplayMode::Full {
             let mut stdout = io::stdout();
-            if let Some(label) = background_result_label.as_deref() {
-                writeln!(stdout, "{}", tool_event_text(label, status))?;
-                write_tool_payload(&mut stdout, t("output", "输出"), output)?;
-            } else {
-                writeln!(
-                    stdout,
-                    "{}",
-                    tool_view::render_result(name, ok, output, self.tool_call_mode)
-                )?;
-            }
+            writeln!(
+                stdout,
+                "{}",
+                tool_view::render_result(name, ok, output, self.tool_call_mode)
+            )?;
             stdout.flush()?;
         } else if self.tool_call_mode == ToolCallDisplayMode::Summary {
             self.summary.note_tool_result(name, ok);

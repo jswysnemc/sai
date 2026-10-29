@@ -6,13 +6,15 @@ pub(crate) const EDIT: &str = "\u{f044}";
 pub(crate) const ASK: &str = "\u{f059}";
 pub(crate) const TODO: &str = "\u{f0ae}";
 pub(crate) const TRASH: &str = "\u{f1f8}";
-pub(crate) const COMMAND: &str = "\u{f120}";
+pub(crate) const COMMAND: &str = "\u{f489}";
 pub(crate) const SEARCH: &str = "\u{f002}";
 pub(crate) const BROWSER: &str = "\u{f0ac}";
 pub(crate) const ROUTING: &str = "\u{f0b0}";
 pub(crate) const SESSION: &str = "\u{f086}";
 pub(crate) const AGENTS: &str = "\u{f0c0}";
 pub(crate) const INFO: &str = "\u{f05a}";
+pub(crate) const THOUGHT: &str = "\u{f0eb}";
+pub(crate) const WORKING: &str = "\u{f110}";
 const FOLDER: &str = "\u{f07b}";
 const CLOCK: &str = "\u{f017}";
 const IMAGE: &str = "\u{f03e}";
@@ -34,9 +36,8 @@ pub(crate) fn tool(name: &str) -> &'static str {
         "todo" => TODO,
         "trash_path" | "delete_file" | "remove_path" | "delete_meme" => TRASH,
         "run_command" | "background_command" | "background_notice" => COMMAND,
-        "grep" | "glob" | "find_files" | "search_text" | "web_search" | "man_search"
-        | "online_man_search" => SEARCH,
-        "browser" | "web_fetch" => BROWSER,
+        "grep" | "glob" | "find_files" | "search_text" => SEARCH,
+        "browser" | "web_fetch" | "web_search" | "man_search" | "online_man_search" => BROWSER,
         "subagent" | "agent_probe" => AGENTS,
         "session_probe" | "session_create" | "session_activate" => SESSION,
         "load" | "request_capability" => ROUTING,
@@ -78,7 +79,8 @@ pub(crate) fn tool(name: &str) -> &'static str {
 pub(crate) fn is_semantic(character: char) -> bool {
     [
         TOOL, READ, EDIT, ASK, TODO, TRASH, COMMAND, SEARCH, BROWSER, ROUTING, SESSION, AGENTS,
-        INFO, FOLDER, CLOCK, IMAGE, DESKTOP, MEMORY, SHIELD, PACKAGE, NETWORK, CALCULATE,
+        INFO, THOUGHT, WORKING, FOLDER, CLOCK, IMAGE, DESKTOP, MEMORY, SHIELD, PACKAGE, NETWORK,
+        CALCULATE,
     ]
     .iter()
     .any(|icon| icon.starts_with(character))
@@ -217,5 +219,8 @@ mod tests {
             format!("  \x1b[32m{READ}\x1b[0m title\n• body")
         );
         assert_eq!(replace("2-5/10 · Resume", ">"), "2-5/10 · Resume");
+        assert_ne!(tool("web_search"), tool("grep"));
+        assert_ne!(tool("mcp__web_search"), tool("mcp__search_text"));
+        assert_eq!(tool("run_command"), "\u{f489}");
     }
 }

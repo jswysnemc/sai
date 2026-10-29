@@ -15,7 +15,7 @@ fn fixture(width: u32, height: u32) -> (tempfile::TempDir, String) {
 /// 【终端图片】【左侧预览测试】宽窗口不在图片前添加右对齐空白，预览仍保留全部占位行。
 /// 参数: 无；返回: 无。
 #[test]
-fn latest_style_image_preview_starts_at_the_left_edge() {
+fn fullscreen_image_preview_starts_at_the_left_edge() {
     test_override::set(Some(true), Some(false), Some(false));
     let (_directory, path) = fixture(640, 480);
     let output = render(&path, 80);

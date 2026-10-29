@@ -1,10 +1,10 @@
 use super::*;
-use crate::config::TuiStyle;
+use crate::config::TuiMode;
 use crate::render::transcript::{
     AnsiLine, FullscreenDocument, ParagraphKey, ParagraphSpan, TranscriptRenderOptions,
 };
 use crate::render::{
-    activity_animation::strip_ansi_for_test, tui_style, ReasoningDisplayMode, ToolCallDisplayMode,
+    activity_animation::strip_ansi_for_test, tui_mode, ReasoningDisplayMode, ToolCallDisplayMode,
 };
 use crate::runner::{AutomaticInputEvent, AutomaticInputKind, RunnerEvent};
 
@@ -12,8 +12,8 @@ use crate::runner::{AutomaticInputEvent, AutomaticInputKind, RunnerEvent};
 /// 参数: 无；返回: 无。
 #[test]
 fn subsequent_messages_render_as_tools_without_navigation_points() {
-    for style in [TuiStyle::Classic, TuiStyle::Deepseek] {
-        tui_style::set_override(Some(style));
+    for style in [TuiMode::Inline, TuiMode::Fullscreen] {
+        tui_mode::set_override(Some(style));
         let options = TranscriptRenderOptions {
             reasoning_mode: ReasoningDisplayMode::Full,
             tool_call_mode: ToolCallDisplayMode::Full,
@@ -78,14 +78,14 @@ fn subsequent_messages_render_as_tools_without_navigation_points() {
             );
         }
     }
-    tui_style::set_override(None);
+    tui_mode::set_override(None);
 }
 
-/// 【终端】【固定状态测试】DeepSeek 等待响应状态进入输入框上方固定面板，不重复出现在会话中。
+/// 【终端】【固定状态测试】全屏界面等待响应状态进入输入框上方固定面板，不重复出现在会话中。
 /// 参数: 无；返回: 无。
 #[test]
-fn latest_style_waiting_status_is_fixed_above_input() {
-    tui_style::set_override(Some(TuiStyle::Deepseek));
+fn fullscreen_waiting_status_is_fixed_above_input() {
+    tui_mode::set_override(Some(TuiMode::Fullscreen));
     let options = TranscriptRenderOptions {
         reasoning_mode: ReasoningDisplayMode::Full,
         tool_call_mode: ToolCallDisplayMode::Full,
@@ -106,23 +106,26 @@ fn latest_style_waiting_status_is_fixed_above_input() {
         .lines
         .iter()
         .any(|line| strip_ansi_for_test(line.as_str()).contains("Waiting for response")));
-    tui_style::set_override(None);
+    tui_mode::set_override(None);
 }
 
-/// 【终端】【悬停按钮测试】悬停标题时保留语义图标并显示下划线，移开后恢复。
+/// 【终端】【悬停按钮测试】只在标题首行悬停时切换展开图标，移至正文或移开后恢复。
 /// 参数: 无；返回: 无。
 #[test]
-fn latest_style_hover_preserves_the_guide_without_moving_text() {
+fn fullscreen_hover_preserves_the_guide_without_moving_text() {
     let layout = FullscreenLayout::compute(80, 24, 5);
     for expanded in [false, true] {
         let mut state = FullscreenState::new();
         state.apply_document(
             FullscreenDocument {
-                lines: vec![AnsiLine::new("  \x1b[32m●\x1b[0m Ran command".into())],
+                lines: vec![
+                    AnsiLine::new("  \x1b[32m●\x1b[0m Ran command".into()),
+                    AnsiLine::new("    command output".into()),
+                ],
                 paragraphs: vec![ParagraphSpan {
                     key: ParagraphKey::whole(0),
                     start: 0,
-                    end: 1,
+                    end: 2,
                     expanded,
                     control: 0,
                 }],
@@ -134,8 +137,20 @@ fn latest_style_hover_preserves_the_guide_without_moving_text() {
         state.pointer_col = Some(2);
         let hovered = paint::compose(&state, &layout);
         let plain = strip_ansi_for_test(&hovered.rows[usize::from(layout.body_top)]);
-        assert!(plain.trim_start().starts_with("> Ran command"), "{plain:?}");
-        assert!(hovered.rows[usize::from(layout.body_top)].contains(">"));
+        let marker = if expanded { "▾" } else { "▸" };
+        assert!(
+            plain
+                .trim_start()
+                .starts_with(&format!("{marker} Ran command")),
+            "{plain:?}"
+        );
+        state.pointer_row = Some(1);
+        let body_hover = paint::compose(&state, &layout);
+        assert!(
+            strip_ansi_for_test(&body_hover.rows[usize::from(layout.body_top)])
+                .trim_start()
+                .starts_with("● Ran command")
+        );
         state.pointer_row = None;
         let restored = paint::compose(&state, &layout);
         let normal = strip_ansi_for_test(&restored.rows[usize::from(layout.body_top)]);
@@ -154,8 +169,8 @@ fn latest_style_hover_preserves_the_guide_without_moving_text() {
 /// 参数: 无；返回: 无。
 #[test]
 fn background_completion_does_not_create_a_navigation_point() {
-    for style in [TuiStyle::Classic, TuiStyle::Deepseek] {
-        tui_style::set_override(Some(style));
+    for style in [TuiMode::Inline, TuiMode::Fullscreen] {
+        tui_mode::set_override(Some(style));
         let options = TranscriptRenderOptions {
             reasoning_mode: ReasoningDisplayMode::Full,
             tool_call_mode: ToolCallDisplayMode::Full,
@@ -197,5 +212,5 @@ fn background_completion_does_not_create_a_navigation_point() {
             assert!(!plain.contains("后台工作已完成"), "{plain}");
         }
     }
-    tui_style::set_override(None);
+    tui_mode::set_override(None);
 }

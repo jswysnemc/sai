@@ -63,7 +63,7 @@ fn work_status_stays_in_fixed_panel_while_scrolled() {
     assert!(panel(&runtime).contains("Reconnecting... 2/3"));
 }
 
-/// 【全屏测试】【动效分离】没有新内容时，思考动效只刷新固定区，不改动正文。
+/// 【全屏测试】【动效分离】没有新内容时，工作状态动效只刷新固定区，思考正文留在执行链内。
 #[test]
 fn live_reasoning_animates_only_in_fixed_panel() {
     let mut runtime = runtime(2);
@@ -101,7 +101,7 @@ fn live_reasoning_animates_only_in_fixed_panel() {
         first_panel
     );
     assert!(panel(&runtime).contains("Thinking"));
-    assert!(panel(&runtime).contains("tokens"));
+    assert!(body(&runtime).contains("inspect the current window"));
 }
 
 /// 【全屏测试】【状态清理】完成后移除固定状态，返回普通视图仍使用原来的状态位置。

@@ -3,31 +3,20 @@
 //! 与内联视图共用同一套 cell 渲染和区块空行规则；额外记录每个可折叠段落
 //! 的行范围（供鼠标点击展开/收起）和每条用户消息的位置（供概览跳转与浮动标题）。
 
-use super::cell::HistoryCell;
-use super::fullscreen_parts::{is_segmented, render_segmented, ParagraphKey};
+use super::fullscreen_parts::ParagraphKey;
 use super::line::AnsiLine;
-use super::spacing;
 use super::store::{TranscriptRenderOptions, TranscriptStore, TranscriptView};
-use crate::llm::ChatStreamKind;
 use crate::render::content_indent::{align_to_guide_column_with_width, CONTENT_LEFT_INDENT};
-use crate::render::omitted_line::{
-    rewrite_fold_hint_for_fullscreen, with_fullscreen_hints, EXPANDED_MARKER, FOLD_MARKER,
-};
-use crate::render::render_expand::{with_force_collapse, with_force_expand};
+use crate::render::omitted_line::{rewrite_fold_hint_for_fullscreen, EXPANDED_MARKER, FOLD_MARKER};
 use std::collections::HashSet;
 
-/// 流式思考尾部的段落键：定稿前没有稳定的 cell 下标。
-pub(crate) const LIVE_PARAGRAPH_KEY: ParagraphKey = ParagraphKey {
-    cell: usize::MAX,
-    part: super::fullscreen_parts::ParagraphPart::Whole,
-};
 /// 概览摘要最多保留的字符数。
 const SUMMARY_CHARS: usize = 120;
 
 /// 一个可点击展开/收起的段落在文档中的位置。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ParagraphSpan {
-    /// 段落键：cell 下标与段落位置，流式思考尾部为 [`LIVE_PARAGRAPH_KEY`]
+    /// 段落键：流式尾部与定稿后使用相同的 cell 下标
     pub(crate) key: ParagraphKey,
     /// 首行（段落标题行）在文档中的行号
     pub(crate) start: usize,
@@ -35,7 +24,7 @@ pub(crate) struct ParagraphSpan {
     pub(crate) end: usize,
     /// 当前是否展开
     pub(crate) expanded: bool,
-    /// 可点击的控制行：折叠时为「N lines hidden」提示，展开时为末尾的「收起」行
+    /// 可点击的控制行：执行链节点为标题行；其余段落折叠时为「N lines hidden」提示，展开时为末尾的「收起」行
     pub(crate) control: usize,
 }
 
@@ -65,7 +54,7 @@ pub(crate) struct FullscreenDocument {
     pub(crate) anchors: Vec<UserAnchor>,
     /// 分组收起后仍保留子步骤的手动展开状态
     pub(crate) retained_keys: Vec<ParagraphKey>,
-    /// 线性执行链的子视口范围，经典样式不登记
+    /// 线性执行链的子视口范围
     pub(crate) activities: Vec<super::ActivityRegion>,
     pub(crate) reasonings: Vec<ReasoningRegion>,
 }
@@ -162,191 +151,16 @@ impl TranscriptStore {
         expanded: &HashSet<ParagraphKey>,
     ) -> FullscreenDocument {
         let width = width.max(1);
-        if crate::render::tui_style::is_deepseek() && self.view == TranscriptView::Main {
-            return crate::render::tui_presentation::with_locale(|| {
-                self.render_deepseek_document(width, options, expanded)
-            });
-        }
-        // 1. 【全屏视图】【静态正文】运行工具保留静态标题，动效统一由固定面板绘制
-        let frame = 0;
-        // 1. 子智能体视图整体替换正文，没有可折叠段落和用户锚点
         if let TranscriptView::Subagent { id, label } = self.view.clone() {
             return FullscreenDocument {
                 lines: super::subagent_view::render_fullscreen_lines(&id, &label, width),
                 ..FullscreenDocument::default()
             };
         }
-        let mut document = FullscreenDocument::default();
-        // 展开段一律按完整模式渲染：摘要模式下展开也要能看到正文
-        let full = expanded_options();
-        for index in 0..self.cells.len() {
-            // 2. 区块空行与内联视图保持一致
-            if index > 0 && spacing::needs_section_gap(&self.cells[index - 1], &self.cells[index]) {
-                document.lines.push(AnsiLine::new(String::new()));
-            }
-            let start = document.lines.len();
-            // 2. 命令卡片按命令行与输出分段，两段各自点击展开
-            if is_segmented(&self.cells[index]) {
-                let parts =
-                    render_segmented(&self.cells[index], index, width, options, frame, |key| {
-                        expanded.contains(&key)
-                    });
-                if let Some(parts) = parts {
-                    push_segmented(&mut document, parts.lines, parts.spans);
-                    continue;
-                }
-            }
-            let key = ParagraphKey::whole(index);
-            let expandable = TranscriptStore::is_expandable_cell(&self.cells[index]);
-            let open = expandable && expanded.contains(&key);
-            // 强制展开/折叠绕过缓存，可以直接在全屏提示上下文里渲染
-            let lines = if open {
-                let cell = &self.cells[index];
-                with_fullscreen_hints(|| {
-                    with_force_expand(|| cell.display_lines_framed(width, &full, frame))
-                })
-            } else if expandable {
-                let cell = &self.cells[index];
-                with_fullscreen_hints(|| {
-                    with_force_collapse(|| cell.display_lines_framed(width, options, frame))
-                })
-            } else {
-                self.cache
-                    .lines_for(index, &self.cells[index], width, options, frame)
-            };
-            document.lines.extend(lines);
-            if matches!(self.cells[index], HistoryCell::Reasoning(_)) && open {
-                document.reasonings.push(ReasoningRegion {
-                    key,
-                    start: first_content_row(&document.lines, start),
-                    end: document.lines.len(),
-                    live: false,
-                });
-            }
-            // 3. 展开段末尾保留明确的「收起」入口，正文同样支持点击收起
-            if open {
-                document.lines.push(AnsiLine::new(render_collapse_line()));
-            }
-            if let HistoryCell::UserEcho(cell) = &self.cells[index] {
-                document.anchors.push(UserAnchor {
-                    row: first_content_row(&document.lines, start),
-                    summary: summarize(&cell.text),
-                });
-            }
-            if expandable && document.lines.len() > start {
-                document.paragraphs.push(make_span(
-                    &document.lines,
-                    key,
-                    start,
-                    document.lines.len(),
-                    open,
-                ));
-            }
-        }
-        self.append_live_tail(&mut document, width, options, expanded);
-        document
+        crate::render::tui_presentation::with_locale(|| {
+            self.render_activity_document(width, options, expanded)
+        })
     }
-
-    /// 追加流式尾部；进行中的思考段同样可以点击展开。
-    ///
-    /// 参数:
-    /// - `document`: 正在组装的文档
-    /// - `width`: 正文列数
-    /// - `options`: transcript 渲染选项
-    /// - `expanded`: 需要展开的段落键
-    ///
-    /// 返回:
-    /// - 无
-    fn append_live_tail(
-        &mut self,
-        document: &mut FullscreenDocument,
-        width: usize,
-        options: &TranscriptRenderOptions,
-        expanded: &HashSet<ParagraphKey>,
-    ) {
-        let reasoning = self.live_tail.as_ref().is_some_and(|tail| {
-            tail.kind == ChatStreamKind::Reasoning && !tail.source.trim().is_empty()
-        });
-        let open = reasoning && expanded.contains(&LIVE_PARAGRAPH_KEY);
-        let mut live = with_fullscreen_hints(|| {
-            if open {
-                let full = expanded_options();
-                with_force_expand(|| {
-                    self.render_live_tail_with_activity(width, &full, usize::MAX, false)
-                })
-            } else {
-                self.render_live_tail_with_activity(width, options, usize::MAX, false)
-            }
-        });
-        // 定稿区末行已是空行时去掉 live 的前空行，与内联视图一致
-        spacing::drop_duplicate_leading_blank(&mut live, document.lines.last());
-        spacing::ensure_live_tool_gap(&mut live, self.cells.last());
-        let start = document.lines.len();
-        document.lines.extend(live);
-        if reasoning && open {
-            document.reasonings.push(ReasoningRegion {
-                key: LIVE_PARAGRAPH_KEY,
-                start: first_content_row(&document.lines, start),
-                end: document.lines.len(),
-                live: true,
-            });
-        }
-        if open {
-            document.lines.push(AnsiLine::new(render_collapse_line()));
-        }
-        if reasoning && document.lines.len() > start {
-            document.paragraphs.push(make_span(
-                &document.lines,
-                LIVE_PARAGRAPH_KEY,
-                start,
-                document.lines.len(),
-                open,
-            ));
-        }
-    }
-}
-
-/// 展开段使用的渲染选项：思考与工具都按完整模式输出。
-///
-/// 返回:
-/// - 完整模式渲染选项
-fn expanded_options() -> TranscriptRenderOptions {
-    TranscriptRenderOptions {
-        reasoning_mode: crate::render::ReasoningDisplayMode::Full,
-        tool_call_mode: crate::render::ToolCallDisplayMode::Full,
-    }
-}
-
-/// 【全屏视图】【分段写入】把命令卡片的命令段与输出段写入文档，展开段各自追加收起行。
-///
-/// 参数:
-/// - `document`: 正在组装的文档
-/// - `lines`: 分段渲染后的行
-/// - `spans`: 段落键、段内起止与展开状态
-///
-/// 返回:
-/// - 无
-fn push_segmented(
-    document: &mut FullscreenDocument,
-    lines: Vec<AnsiLine>,
-    spans: Vec<(ParagraphKey, usize, usize, bool)>,
-) {
-    let mut copied = 0usize;
-    for (key, from, to, open) in spans {
-        // 1. 先补上两段之间未登记为段落的行
-        document.lines.extend(lines[copied..from].iter().cloned());
-        let start = document.lines.len();
-        document.lines.extend(lines[from..to].iter().cloned());
-        if open {
-            document.lines.push(AnsiLine::new(render_collapse_line()));
-        }
-        let end = document.lines.len();
-        document
-            .paragraphs
-            .push(make_span(&document.lines, key, start, end, open));
-        copied = to;
-    }
-    document.lines.extend(lines[copied..].iter().cloned());
 }
 
 /// 构造段落范围并定位控制行。

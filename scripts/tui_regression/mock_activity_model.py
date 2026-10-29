@@ -94,11 +94,11 @@ class ActivityModel:
         self.server.server_close()
 
     def config(self):
-        """无参数；返回 DeepSeek 样式与隔离命令工具配置。"""
+        """无参数；返回全屏视图与隔离命令工具配置。"""
         return {"active_provider": "fixture", "providers": [{"id": "fixture",
             "display_name": "Fixture", "base_url": f"http://127.0.0.1:{self.server.server_port}/v1",
             "api_key": "local-fixture", "models": ["fixture"], "default_model": "fixture"}],
-            "display": {"tui_style": "deepseek", "reasoning": "full"},
+            "display": {"fullscreen": True, "reasoning": "full"},
             "session": {"auto_title_enabled": False}, "tools": {"enabled": True},
             "skills": {"enabled": False}, "memory": {"enabled": False},
             "permission": {"tui_mode": "yolo", "cli_mode": "yolo"}}

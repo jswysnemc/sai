@@ -21,14 +21,52 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -
         .map(|request| request.questions.len())
         .or_else(|| answers.map(Vec::len))
         .unwrap_or(0);
-    let title = match (view.outcome.is_some(), count) {
-        (false, 0) => "Asking".into(),
-        (true, 0) => "Asked".into(),
-        (done, count) => format!(
-            "{} {count} {}",
-            if done { "Asked" } else { "Asking" },
-            if count == 1 { "question" } else { "questions" }
-        ),
+    let subject = request
+        .as_ref()
+        .and_then(|request| request.questions.first())
+        .map(|question| {
+            if question.header.trim().is_empty() {
+                question.question.as_str()
+            } else {
+                question.header.as_str()
+            }
+        })
+        .or_else(|| {
+            answers
+                .and_then(|answers| answers.first())
+                .and_then(|answer| {
+                    answer["header"]
+                        .as_str()
+                        .filter(|text| !text.trim().is_empty())
+                        .or_else(|| answer["question"].as_str())
+                })
+        })
+        .filter(|text| !text.trim().is_empty());
+    let title = if let Some(subject) = subject {
+        format!(
+            "{} {}{}",
+            if view.outcome.is_some() {
+                "Asked"
+            } else {
+                "Asking"
+            },
+            super::result_card::short(subject, 64),
+            if count > 1 {
+                format!(" · {count} questions")
+            } else {
+                String::new()
+            }
+        )
+    } else {
+        match (view.outcome.is_some(), count) {
+            (false, 0) => "Asking".into(),
+            (true, 0) => "Asked".into(),
+            (done, count) => format!(
+                "{} {count} {}",
+                if done { "Asked" } else { "Asking" },
+                if count == 1 { "question" } else { "questions" }
+            ),
+        }
     };
     let health = match &view.outcome {
         None => ToolHealth::Pending,

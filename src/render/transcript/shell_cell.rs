@@ -3,7 +3,6 @@ use crate::render::fold_text::{
     command_body_column, command_wrap_width_for_title, fold_preview_lines,
     fold_preview_lines_tracked, wrap_display_lines, FoldedDisplayLine,
 };
-use crate::render::render_expand::{within_part, ExpandPart};
 use crate::render::status_style::{tool_bullet, ToolHealth};
 use crate::render::terminal_text as t;
 
@@ -51,8 +50,7 @@ pub(super) fn render(cell: &ShellCell) -> String {
             first = false;
         }
     }
-    // 2. 输出体：过长结果同样首尾折叠；全屏分段渲染时先标出命令与输出的分界
-    rendered.push_str(&crate::render::render_expand::part_boundary());
+    // 2. 输出体：过长结果同样首尾折叠
     if cell.output.is_empty() {
         rendered.push_str("\n\x1b[2m  └ (no output)\x1b[0m");
     } else {
@@ -95,9 +93,7 @@ fn fold_display_text(text: &str, expanded: bool, title: &str) -> Vec<FoldedDispl
     // 命令与输出共用同一套折行宽度，按显示配置做预览折叠
     let wrap = command_wrap_width_for_title(title);
     let wrapped = wrap_display_lines(text, wrap);
-    within_part(ExpandPart::Output, || {
-        fold_preview_lines(&wrapped, expanded)
-    })
+    fold_preview_lines(&wrapped, expanded)
 }
 
 /// 折行并折叠命令文本，保留被省略行供高亮状态推进。
@@ -112,9 +108,7 @@ fn fold_display_text(text: &str, expanded: bool, title: &str) -> Vec<FoldedDispl
 fn fold_command_entries(text: &str, expanded: bool, title: &str) -> Vec<FoldedDisplayLine> {
     let wrap = command_wrap_width_for_title(title);
     let wrapped = wrap_display_lines(text, wrap);
-    within_part(ExpandPart::Command, || {
-        fold_preview_lines_tracked(&wrapped, expanded)
-    })
+    fold_preview_lines_tracked(&wrapped, expanded)
 }
 
 /// 追加命令显示行。

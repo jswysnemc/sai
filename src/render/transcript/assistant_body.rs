@@ -23,8 +23,8 @@ pub(super) fn display_lines(rendered: &str, content_width: usize) -> Vec<AnsiLin
     if rendered.is_empty() {
         return Vec::new();
     }
-    if crate::render::tui_style::is_deepseek() {
-        return super::deepseek::assistant_lines(rendered, content_width);
+    if crate::render::tui_mode::prefers_fullscreen() {
+        return super::presentation::assistant_lines(rendered, content_width);
     }
 
     // 1. 按调用方传入的正文净宽度完成折行，并为续行恢复内收

@@ -4,11 +4,11 @@ use super::{
     test_support::{chunk, options},
     TranscriptMode, TranscriptStore,
 };
-use crate::config::TuiStyle;
+use crate::config::TuiMode;
 use crate::llm::ChatStreamKind;
 use crate::render::{
     terminal_image::{reserved_image_rows, test_override},
-    tui_style,
+    tui_mode,
 };
 use std::collections::HashSet;
 
@@ -30,8 +30,8 @@ fn image_span(document: &FullscreenDocument) -> (usize, usize) {
 #[test]
 fn svg_tail_keeps_all_image_rows() {
     test_override::set(Some(true), Some(false), Some(false));
-    for style in [TuiStyle::Classic, TuiStyle::Deepseek] {
-        tui_style::set_override(Some(style));
+    for style in [TuiMode::Inline, TuiMode::Fullscreen] {
+        tui_mode::set_override(Some(style));
         let mut store = TranscriptStore::new(500);
         store.push_chunk(&chunk(ChatStreamKind::Content, SVG));
         let document = store.render_fullscreen(100, &options(), &HashSet::new());
@@ -42,7 +42,7 @@ fn svg_tail_keeps_all_image_rows() {
             document.lines.len()
         );
     }
-    tui_style::set_override(None);
+    tui_mode::set_override(None);
     test_override::set(None, None, None);
 }
 
@@ -51,8 +51,8 @@ fn svg_tail_keeps_all_image_rows() {
 #[test]
 fn svg_does_not_overlap_following_summary_or_user_message() {
     test_override::set(Some(true), Some(false), Some(false));
-    for style in [TuiStyle::Classic, TuiStyle::Deepseek] {
-        tui_style::set_override(Some(style));
+    for style in [TuiMode::Inline, TuiMode::Fullscreen] {
+        tui_mode::set_override(Some(style));
         let mut store = TranscriptStore::new(500);
         store.push_chunk(&chunk(ChatStreamKind::Content, SVG));
         store.finalize_live_tail();
@@ -73,6 +73,6 @@ fn svg_does_not_overlap_following_summary_or_user_message() {
             );
         }
     }
-    tui_style::set_override(None);
+    tui_mode::set_override(None);
     test_override::set(None, None, None);
 }

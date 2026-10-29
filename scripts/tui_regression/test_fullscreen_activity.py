@@ -32,21 +32,21 @@ class FullscreenActivityTests(unittest.TestCase):
             terminal.wait_for(lambda: "Working" not in terminal.text(), timeout=10)
 
     def test_expanded_reasoning_collapses_from_its_body(self):
-        """点击折叠提示后，可直接点击可见正文收起；无参数，无返回值。"""
-        with TurnModel() as model, TerminalSession(model.config(), columns=100, rows=32) as terminal:
+        """Ctrl+O 进入全屏后思考默认展开，点击正文收起，点击标题恢复；无参数，无返回值。"""
+        with TurnModel() as model, TerminalSession(model.config(), columns=100, rows=32,
+                arguments=["--lang", "en-US"]) as terminal:
             terminal.send(b"ALPHA\r")
             terminal.wait_for(lambda: "ANSWER-ALPHA-7" in terminal.text(), timeout=15)
             terminal.send(b"\x0f")
-            terminal.wait_for(lambda: "1/1" in lines(terminal)[0])
+            terminal.wait_for(lambda: "Ctrl+O exit" in lines(terminal)[0])
             terminal.send(b"\x1b[1;5H")
-            terminal.wait_for(lambda: "click to expand" in terminal.text())
-            hint_row = next(index for index, line in enumerate(lines(terminal)) if "click to expand" in line)
-            click(terminal, 5, hint_row)
             terminal.wait_for(lambda: "THINK-ALPHA-4" in terminal.text())
             body_row = next(index for index, line in enumerate(lines(terminal)) if "THINK-ALPHA-4" in line)
             click(terminal, 8, body_row)
             terminal.wait_for(lambda: "THINK-ALPHA-4" not in terminal.text())
-            self.assertIn("click to expand", terminal.text())
+            title_row = next(index for index, line in enumerate(lines(terminal)) if "Thought for" in line)
+            click(terminal, 2, title_row)
+            terminal.wait_for(lambda: "THINK-ALPHA-4" in terminal.text())
 
 
 if __name__ == "__main__":

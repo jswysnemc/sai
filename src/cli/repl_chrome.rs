@@ -1,7 +1,7 @@
-mod deepseek;
 mod footer;
 #[cfg(test)]
 mod plugin_tests;
+mod presentation;
 
 use super::repl_text::visible_width;
 use super::*;

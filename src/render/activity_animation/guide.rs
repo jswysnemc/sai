@@ -1,8 +1,8 @@
 use super::{blend_color, RESET};
 use crate::render::terminal_palette::{terminal_palette, TerminalPalette};
 
-/// 活动线段固定占一列，亮度变化不移动文字
-pub(crate) const ACTIVITY_GUIDE: char = '─';
+/// 环形活动图标固定占一列，亮度变化不移动文字
+pub(crate) const ACTIVITY_GUIDE: char = '\u{f110}';
 /// 每轮 1.6 秒，两个亮度脉冲之后短暂停歇
 const GUIDE_CYCLE_FRAMES: usize = 50;
 const GUIDE_MIN_CONTRAST: f32 = 0.6;

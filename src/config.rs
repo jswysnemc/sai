@@ -38,11 +38,11 @@ mod session;
 mod ssh;
 mod subagent_models;
 mod tool_whitelist;
-mod tui_style;
+mod tui_mode;
 mod web_search;
 
 pub use computer_use::ComputerUseConfig;
-pub use tui_style::TuiStyle;
+pub use tui_mode::TuiMode;
 pub use web_search::WebSearchConfig;
 
 #[cfg(test)]

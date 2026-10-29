@@ -17,9 +17,9 @@ fn source(live: bool) -> FullscreenDocument {
         reasoning_mode: ReasoningDisplayMode::Full,
         tool_call_mode: ToolCallDisplayMode::Full,
     };
-    crate::render::tui_style::set_override(Some(crate::config::TuiStyle::Deepseek));
+    crate::render::tui_mode::set_override(Some(crate::config::TuiMode::Fullscreen));
     let document = store.render_fullscreen(80, &options, &Default::default());
-    crate::render::tui_style::set_override(None);
+    crate::render::tui_mode::set_override(None);
     document
 }
 

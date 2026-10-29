@@ -8,7 +8,11 @@ mod asset_block;
 /// 参数:
 /// - `config`: 显示配置
 pub(crate) fn configure_display_rendering(config: &crate::config::DisplayConfig) {
-    tui_style::configure(config.tui_style);
+    tui_mode::configure(if config.fullscreen {
+        crate::config::TuiMode::Fullscreen
+    } else {
+        crate::config::TuiMode::Inline
+    });
     asset_block::preferences::configure(config);
     fold_text::configure_fold_preview(config);
 }
@@ -71,8 +75,8 @@ mod tool_event_line;
 mod tool_names;
 mod tool_view;
 pub(crate) mod transcript;
+pub(crate) mod tui_mode;
 pub(crate) mod tui_presentation;
-pub(crate) mod tui_style;
 mod wait_spinner;
 pub(crate) mod work_status;
 

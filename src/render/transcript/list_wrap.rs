@@ -11,8 +11,11 @@ pub(in crate::render) fn wrap(
     rendered
         .split('\n')
         .flat_map(|line| {
-            let indent = content_column(line).unwrap_or(default_indent);
-            AnsiLine::wrap_block_with_continuation_indent(line, width, indent)
+            let Some(indent) = content_column(line) else {
+                return AnsiLine::wrap_block_with_continuation_indent(line, width, default_indent);
+            };
+            // 1. 【终端】【列表换行】断点处的单个词间空格不进入续行，续行严格对齐正文列
+            AnsiLine::wrap_list_item(line, width, indent)
         })
         .collect()
 }
@@ -35,7 +38,7 @@ pub(in crate::render) fn content_column(line: &str) -> Option<usize> {
         .is_some_and(|number| {
             !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit())
         });
-    if !matches!(marker, "-" | "·" | "–") && !ordered {
+    if !matches!(marker, "•" | "-" | "·" | "–") && !ordered {
         return None;
     }
     Some(line.len() - trimmed.len() + unicode_width::UnicodeWidthStr::width(marker) + 1)

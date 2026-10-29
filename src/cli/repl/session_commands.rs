@@ -18,16 +18,20 @@ pub(super) fn handle_context(
     input: &str,
     runtime: &mut ReplRuntime,
 ) -> Result<()> {
-    runtime.record_user(mode, input.to_string(), false)?;
     // 1. 编辑压缩策略：打开独立配置界面，返回后整屏重绘
     if update == Some(crate::control_commands::ContextPolicyUpdate::Edit) {
+        runtime.record_user(mode, input.to_string(), false)?;
         let result = crate::config_tui::compaction::run_session(paths);
         runtime.redraw()?;
         return runtime.record_meta(result.unwrap_or_else(|error| error.to_string()));
     }
-    // 2. 其余情况输出上下文占用说明
-    match crate::control_commands::context_info_for_mode_with_update(paths, mode, update) {
-        Ok(info) => runtime.record_meta(info),
+    // 2. 【上下文】【浮层入口】只读查询不写入会话记录，关闭或报错后恢复底层界面
+    match crate::control_commands::context_overview(paths, mode, update) {
+        Ok(view) => {
+            let result = crate::cli::context_panel::show(&view, || runtime.redraw());
+            runtime.redraw()?;
+            result
+        }
         Err(err) => runtime.record_meta(err.to_string()),
     }
 }

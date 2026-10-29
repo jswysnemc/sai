@@ -86,9 +86,9 @@ impl TranscriptStore {
                 dirty_from: start,
             };
         }
-        if crate::render::tui_style::is_deepseek() {
+        if crate::render::tui_mode::prefers_fullscreen() {
             let document =
-                self.render_deepseek_document(width, options, &std::collections::HashSet::new());
+                self.render_activity_document(width, options, &std::collections::HashSet::new());
             let total = document.lines.len();
             let start = total.saturating_sub(min_rows).min(max_start).min(total);
             return DisplayWindow {

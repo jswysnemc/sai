@@ -239,10 +239,10 @@ mod tests {
     #[test]
     fn replayed_external_completion_is_a_tool_without_a_navigation_anchor() {
         for style in [
-            crate::config::TuiStyle::Classic,
-            crate::config::TuiStyle::Deepseek,
+            crate::config::TuiMode::Inline,
+            crate::config::TuiMode::Fullscreen,
         ] {
-            crate::render::tui_style::set_override(Some(style));
+            crate::render::tui_mode::set_override(Some(style));
             let mut turn = turn_with_tools(None, "done", Vec::new());
             for (sequence, kind, content) in [
                 (1, "external_completion", "Background work completed; continuing the conversation automatically\n\n后台命令：echo result（task-1）\n状态：completed"),
@@ -284,7 +284,7 @@ mod tests {
             assert!(plain.contains("Continuing goal"), "{plain}");
             assert!(plain.contains("Inspect history"), "{plain}");
         }
-        crate::render::tui_style::set_override(None);
+        crate::render::tui_mode::set_override(None);
     }
 
     /// 【终端】【历史重放】分轮思考应按「思考 → 工具 → 思考 → 工具 → 正文」重放。

@@ -14,10 +14,7 @@ const COMMAND_PREVIEW_LINES: usize = 5;
 /// 返回:
 /// - 折叠时的行数上限；展开或处于展开渲染上下文时为 None
 fn preview_line_limit(expanded: bool) -> Option<usize> {
-    let expanded = crate::render::render_expand::within_part(
-        crate::render::render_expand::ExpandPart::Output,
-        || crate::render::render_expand::resolve_expanded(expanded),
-    );
+    let expanded = crate::render::render_expand::resolve_expanded(expanded);
     if expanded {
         None
     } else {
@@ -504,10 +501,7 @@ pub(crate) fn sanitize_command_output(text: &str) -> String {
 fn limited_output_text(text: &str, line_limit: Option<usize>) -> Vec<FoldedDisplayLine> {
     // 1. 先按终端显示宽度折行，再按显示行折叠（避免超长单行挤占视野）
     let display_lines = wrap_display_lines(text, terminal_wrap_width().saturating_sub(4));
-    crate::render::render_expand::within_part(
-        crate::render::render_expand::ExpandPart::Output,
-        || fold_preview_lines(&display_lines, line_limit.is_none()),
-    )
+    fold_preview_lines(&display_lines, line_limit.is_none())
 }
 
 #[cfg(test)]

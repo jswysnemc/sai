@@ -1,21 +1,15 @@
 //! 全屏视图的临时状态只进入固定面板，不进入可滚动正文。
 
-use super::store::{TranscriptRenderOptions, TranscriptStore, TranscriptView};
-use super::{reasoning_cell, AnsiLine};
-use crate::llm::ChatStreamKind;
+use super::store::{TranscriptStore, TranscriptView};
+use super::AnsiLine;
 use crate::render::content_indent::align_to_guide_column_with_width;
 use crate::render::work_status::WorkStatus;
-use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
 
 impl TranscriptStore {
-    /// 【全屏视图】【固定状态】组装工作状态和参数接收进度，限制在两行以内。
-    /// @param width 为固定面板宽度；options 为当前展示选项
+    /// 【全屏视图】【固定状态】组装固定在输入框上方的工作状态，限制在一行以内。
+    /// @param width 为固定面板宽度
     /// @returns 不随正文滚动的状态行；没有活动时为空
-    pub(crate) fn fullscreen_activity_lines(
-        &self,
-        width: usize,
-        options: &TranscriptRenderOptions,
-    ) -> Vec<String> {
+    pub(crate) fn fullscreen_activity_lines(&self, width: usize) -> Vec<String> {
         let frame = self.live_animation_frame();
         let elapsed = self
             .work_status_started
@@ -29,48 +23,10 @@ impl TranscriptStore {
                 Vec::new()
             };
         }
-        if crate::render::tui_style::is_deepseek() {
-            return self
-                .work_status
-                .map(|status| status_row(&status.render_line(frame, elapsed), width))
-                .unwrap_or_default();
-        }
-        let mut lines = Vec::new();
-        // 2. 【全屏视图】【参数进度】尚未定稿的工具参数摘要不参与历史区排版
-        if let Some(call) = &self.live_tool_call {
-            if options.tool_call_mode != ToolCallDisplayMode::Hidden {
-                let preview = crate::render::render_width::with_render_width(width, || {
-                    super::tool_cell::render_live_call(
-                        &call.name,
-                        &call.arguments_preview,
-                        ToolCallDisplayMode::Summary,
-                        call.edit_diff_counts,
-                        frame,
-                    )
-                });
-                lines.extend(status_row(&preview, width));
-            }
-        }
-        // 3. 【全屏视图】【思考进度】正文保留静态思考标题，耗时和动效在固定区更新
-        let reasoning = self
-            .live_tail
-            .as_ref()
-            .filter(|tail| tail.kind == ChatStreamKind::Reasoning && !tail.source.is_empty());
-        let status = match reasoning {
-            Some(tail) => reasoning_cell::render_live(
-                &tail.source,
-                ReasoningDisplayMode::Summary,
-                frame,
-                elapsed,
-                false,
-            ),
-            None => self
-                .work_status
-                .map(|status| status.render_line(frame, elapsed))
-                .unwrap_or_default(),
-        };
-        lines.extend(status_row(&status, width));
-        lines
+        // 2. 【全屏视图】【工作状态】思考与工具进度留在执行链内，固定区只显示工作状态
+        self.work_status
+            .map(|status| status_row(&status.render_line(frame, elapsed), width))
+            .unwrap_or_default()
     }
 }
 

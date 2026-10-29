@@ -55,6 +55,19 @@ fn render_body(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -> Stri
     if view.name == "ask_question" {
         return super::question::render(view, mode, frame);
     }
+    if let Some(rendered) = super::file_search::render(view, mode)
+        .or_else(|| super::path_search::render(view, mode))
+        .or_else(|| super::goal::render(view, mode))
+        .or_else(|| super::mcp_manager::render(view, mode))
+        .or_else(|| super::loading::render(view, mode))
+        .or_else(|| super::subagent::render(view, mode))
+        .or_else(|| super::browser::render(view, mode))
+        .or_else(|| super::system_info::render(view, mode))
+        .or_else(|| super::trash::render(view, mode))
+        .or_else(|| super::background_cleanup::render(view, mode))
+    {
+        return rendered;
+    }
     if let Some(rendered) = super::background::render(view, frame) {
         return rendered;
     }
@@ -82,7 +95,7 @@ fn render_body(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -> Stri
             return rendered;
         }
     }
-    if let Some(rendered) = super::search::render(view, mode) {
+    if let Some(rendered) = super::web_results::render(view, mode) {
         return rendered;
     }
 
@@ -225,8 +238,6 @@ fn render_command_tool(view: &ToolView, mode: ToolCallDisplayMode) -> String {
     let mut output = render_command_block_with_action(&view.arguments, action, health)
         .trim_end()
         .to_string();
-    // 全屏分段渲染时标出命令与输出的分界，命令行与输出可以分别点击展开
-    output.push_str(&crate::render::render_expand::part_boundary());
     if let Some(progress) = visible_progress(view.progress.as_deref()) {
         output.push_str(&render_progress_note(progress));
     }
@@ -287,7 +298,7 @@ fn render_command_tool(view: &ToolView, mode: ToolCallDisplayMode) -> String {
 ///
 /// 返回:
 /// - 带 ANSI 着色的 `+N -M` 状态文本；不适用时返回空
-fn edit_stat_status(view: &ToolView) -> Option<String> {
+pub(crate) fn edit_stat_status(view: &ToolView) -> Option<String> {
     if !crate::render::stream_text::is_file_edit_tool(&view.name) {
         return None;
     }

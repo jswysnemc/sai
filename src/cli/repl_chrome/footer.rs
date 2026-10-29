@@ -39,8 +39,8 @@ impl ReplChrome {
                 true,
             );
         }
-        let left_plain = if crate::render::tui_style::is_deepseek() {
-            let status = super::deepseek::footer_left(self, cols.saturating_sub(6).max(1));
+        let left_plain = if crate::render::tui_mode::prefers_fullscreen() {
+            let status = super::presentation::footer_left(self, cols.saturating_sub(6).max(1));
             match activity.filter(|text| !text.is_empty()) {
                 Some(activity) => format!("{activity}  {status}"),
                 None => status,

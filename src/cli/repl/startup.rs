@@ -23,7 +23,7 @@ pub(super) fn initialize_runtime(
     };
     let mut runtime = ReplRuntime::new(config.display.repl_transcript_row_cap, options);
     render::configure_display_rendering(&config.display);
-    if config.display.fullscreen || render::tui_style::is_deepseek() {
+    if render::tui_mode::prefers_fullscreen() {
         runtime.toggle_fullscreen()?;
     }
     runtime.set_paste_image_key(config.input.paste_image_key);

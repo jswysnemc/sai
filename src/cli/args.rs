@@ -7,9 +7,9 @@ use std::path::PathBuf;
 #[derive(Debug, Parser)]
 #[command(name = "sai", version, about = "Sai CLI AI Agent")]
 pub struct Cli {
-    /// 选择终端展示样式，覆盖本次启动的配置偏好
-    #[arg(long, global = true, value_enum, value_name = "STYLE")]
-    pub style: Option<crate::config::TuiStyle>,
+    /// 选择全屏或内联视图，覆盖本次启动的布局偏好
+    #[arg(long, alias = "style", global = true, value_enum, value_name = "VIEW")]
+    pub view: Option<crate::config::TuiMode>,
 
     #[arg(long, global = true, value_name = "LANG", value_parser = parse_language_argument)]
     pub lang: Option<String>,
@@ -74,7 +74,7 @@ fn parse_language_argument(value: &str) -> Result<String, String> {
 }
 
 #[cfg(test)]
-#[path = "args_style_tests.rs"]
+#[path = "args_view_tests.rs"]
 mod style_tests;
 
 #[derive(Debug, Subcommand)]

@@ -45,7 +45,7 @@ impl ComposerFrame {
         // 2. 【终端】【占位布局】默认提示不是输入内容，光标停在行首，不为提示末尾保留额外行
         let visual_lines = if self.input.is_empty()
             && self.placeholder_override.is_none()
-            && crate::render::tui_style::is_deepseek()
+            && crate::render::tui_mode::prefers_fullscreen()
         {
             styled_display_lines
         } else {
@@ -89,10 +89,10 @@ impl ComposerFrame {
     }
 }
 
-/// 【终端】【输入引导】简洁样式只提示当前输入动作，经典样式保留静态轮换提示。
+/// 【终端】【输入引导】全屏界面只提示当前输入动作，内联界面保留静态轮换提示。
 /// 参数: `streaming` 为是否正在工作，`width` 为输入净宽；返回: 灰色提示文本。
 fn placeholder_text(streaming: bool, width: usize) -> String {
-    let text = if crate::render::tui_style::is_deepseek() {
+    let text = if crate::render::tui_mode::prefers_fullscreen() {
         super::input_hint::placeholder(streaming, width)
     } else {
         static_placeholder_tip()

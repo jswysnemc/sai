@@ -176,9 +176,7 @@ pub(crate) fn render_todo_output(
 fn changed_item_label(label: &str, changed: &[TodoItemView]) -> String {
     // 标签动词由 todo_call_label 生成（Marking/Marked/Editing/Edited 等），
     // 定稿时用实际变更条目替换展示对象
-    let Some((verb, _)) = label.split_once(' ') else {
-        return label.to_string();
-    };
+    let verb = label.split_once(' ').map_or(label, |(verb, _)| verb);
     if !matches!(
         verb,
         "Marking" | "Marked" | "Editing" | "Edited" | "Adding" | "Added" | "Removing" | "Removed"
@@ -188,6 +186,9 @@ fn changed_item_label(label: &str, changed: &[TodoItemView]) -> String {
     let Some(item) = changed.first() else {
         return label.to_string();
     };
+    if matches!(verb, "Removing" | "Removed") {
+        return format!("{verb} {}", item.text);
+    }
     format!("{verb} {} {}", status_marker(&item.status), item.text)
 }
 

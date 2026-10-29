@@ -49,6 +49,20 @@ pub struct SessionSnapshot {
 }
 
 impl StateStore {
+    /// 【上下文】【本轮用量】读取活动分支最近一轮的汇总用量，不混入其他分支或辅助请求。
+    /// 参数: 无；返回: 已记录的本轮用量，尚未记录时为空。
+    pub(crate) fn latest_turn_usage(&self) -> Result<Option<crate::llm::Usage>> {
+        let Some(turn) = self
+            .conv_db
+            .recent_active_branch_turns(1)?
+            .into_iter()
+            .next()
+        else {
+            return Ok(None);
+        };
+        self.conv_db.turn_usage(&turn.turn_id)
+    }
+
     /// 读取当前会话状态快照。
     ///
     /// 参数:

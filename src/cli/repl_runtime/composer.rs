@@ -129,10 +129,7 @@ impl ReplRuntime {
         );
         // 1. 【终端】【执行链】新样式在正文链内展示当前步骤，不再添加底部详情面板
         if self.fullscreen.is_some() {
-            lines.extend(
-                self.transcript
-                    .fullscreen_activity_lines(cols, &self.options),
-            );
+            lines.extend(self.transcript.fullscreen_activity_lines(cols));
         }
         // SSH 征询卡片紧贴输入框，视线从说明直接落到输入行
         lines.extend(self.ssh_card_lines(cols));
@@ -240,9 +237,20 @@ impl ReplRuntime {
     fn queue_composer_in_locale(&mut self) -> Result<()> {
         let viewport = self.drawing_viewport();
         let actions = self.panel_targets();
+        let expanded_rows = actions
+            .iter()
+            .filter_map(|(row, action)| {
+                let expanded = match action {
+                    super::panel_mouse::PanelAction::Todo => !self.todo_panel_compact,
+                    super::panel_mouse::PanelAction::AgentsToggle => self.agent_panel.is_active(),
+                    super::panel_mouse::PanelAction::Agent(_) => false,
+                };
+                expanded.then_some(*row)
+            })
+            .collect();
         if let Some(composer) = self.composer.as_mut() {
             composer.set_selection(self.composer_selection.clone());
-            composer.set_panel_pointer(self.panel_pointer, actions);
+            composer.set_panel_pointer(self.panel_pointer, actions, expanded_rows);
         }
         let Some(composer) = &self.composer else {
             return Ok(());

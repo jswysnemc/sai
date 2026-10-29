@@ -127,63 +127,29 @@ fn wheel_scrolls_and_new_output_is_flagged() {
     assert!(state.unseen);
 }
 
-/// 点击折叠提示展开思考段；展开后点击正文即可收起，不必寻找末尾控制行。
+/// 【终端】【段落切换】首行点击收起当前思考，再次点击恢复正文。
+/// 参数: 无；返回: 无。
 #[test]
 fn clicking_a_paragraph_toggles_it() {
     let mut runtime = runtime(2);
     runtime.enter_fullscreen().unwrap();
-    // 滚到顶部，让第一段思考出现在正文区
-    runtime
-        .handle_fullscreen_event(&Event::Key(KeyEvent::new(
-            KeyCode::Home,
-            KeyModifiers::CONTROL,
-        )))
-        .unwrap();
+    runtime.handle_fullscreen_event(&Event::Key(KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL))).unwrap();
     let session = runtime.fullscreen.as_ref().unwrap();
     let span = session.state.document.paragraphs[0].clone();
+    assert!(span.expanded);
     let layout = session.state.layout.unwrap();
-    let scroll = session.state.scroll;
-    let screen =
-        |document_row: usize, scroll: usize| layout.body_top + (document_row - scroll) as u16;
-    // 1. 点控制行展开（摘要思考只有一行标题，标题即控制行）
-    click(&mut runtime, 4, screen(span.control, scroll));
-    let session = runtime.fullscreen.as_ref().unwrap();
-    assert!(session.state.expanded.contains(&span.key));
-    let text = session
-        .state
-        .document
-        .lines
-        .iter()
-        .map(|line| crate::render::activity_animation::strip_ansi_for_test(line.as_str()))
-        .collect::<Vec<_>>();
-    assert_eq!(
-        text.iter()
-            .filter(|line| line.contains("turn-0-think-"))
-            .count(),
-        5
-    );
-    assert!(!text.join("\n").contains("turn-0-think-10"));
-    // 2. 展开段保留末尾收起行，同时正文任意可见行也能收起
-    let reopened = session.state.document.paragraphs[0].clone();
-    assert!(
-        text[reopened.control].contains("Show less"),
-        "{:?}",
-        text[reopened.control]
-    );
-    let body_row = text
-        .iter()
-        .position(|line| line.contains("turn-0-think-3"))
-        .expect("展开后应有思考正文");
-    let scroll = session.state.scroll;
-    assert!(body_row >= scroll && body_row - scroll < usize::from(layout.body_height));
-    click(&mut runtime, 4, screen(body_row, scroll));
-    assert!(runtime
-        .fullscreen
-        .as_ref()
-        .unwrap()
-        .state
-        .expanded
-        .is_empty());
+    let row = layout.body_top + (span.control - session.state.scroll) as u16;
+    click(&mut runtime, 4, row);
+    let state = &runtime.fullscreen.as_ref().unwrap().state;
+    assert!(state.expanded.contains(&span.key));
+    assert!(!state.document.paragraphs[0].expanded);
+    assert!(!state.document.lines.iter().any(|line| line.as_str().contains("turn-0-think-")));
+    click(&mut runtime, 4, row);
+    let state = &runtime.fullscreen.as_ref().unwrap().state;
+    assert!(!state.expanded.contains(&span.key));
+    assert!(state.document.paragraphs[0].expanded);
+    assert!(state.document.lines.iter().any(|line| line.as_str().contains("turn-0-think-3")));
+    assert_eq!(state.document.paragraphs[0].control, state.document.paragraphs[0].start);
 }
 
 /// 点击概览标记跳到对应用户消息，浮动标题随之切换。
@@ -280,7 +246,7 @@ fn fullscreen_fold_hints_do_not_mention_ctrl_o() {
     let screen = plain(&runtime.fullscreen.as_ref().unwrap().state.document.lines);
     assert!(!screen.contains("Ctrl+O"), "{screen}");
     assert!(
-        screen.contains("click to expand") || screen.contains("点击展开"),
+        screen.contains("1-5/30"),
         "{screen}"
     );
     // 3. 退出后内联视图仍是 Ctrl+O，缓存没有被全屏文案污染
@@ -399,7 +365,7 @@ fn dragging_inside_expanded_paragraph_never_collapses_it() {
     let mut runtime = runtime(2);
     runtime.enter_fullscreen().unwrap();
     let session = runtime.fullscreen.as_mut().unwrap();
-    let key = session.state.document.paragraphs[0].key;
+    let key = crate::render::transcript::ParagraphKey::whole(session.state.document.paragraphs[0].key.cell);
     session.state.expanded.insert(key);
     session.state.scroll = 0;
     session.state.follow = false;

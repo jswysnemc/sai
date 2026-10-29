@@ -1,7 +1,6 @@
 use super::*;
-use crate::llm::ChatStreamChunk;
+use crate::llm::{ChatStreamChunk, ChatStreamKind};
 use crate::render::activity_animation::strip_ansi_for_test;
-use crate::render::transcript::ParagraphPart;
 use crate::render::transcript::TranscriptMode;
 use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
 
@@ -69,7 +68,14 @@ fn anchors_point_at_user_messages() {
 #[test]
 fn paragraphs_expand_independently() {
     let mut store = store();
-    let collapsed = store.render_fullscreen(80, &options(), &HashSet::new());
+    let collapsed = store.render_fullscreen(
+        80,
+        &options(),
+        &HashSet::from([
+            ParagraphKey::activity(1, false),
+            ParagraphKey::activity(4, false),
+        ]),
+    );
     let keys = collapsed
         .paragraphs
         .iter()
@@ -80,7 +86,11 @@ fn paragraphs_expand_independently() {
     let joined = plain(&collapsed).join("\n");
     assert!(!joined.contains("first question-think-10"), "{joined}");
 
-    let expanded = store.render_fullscreen(80, &options(), &HashSet::from([keys[0]]));
+    let expanded = store.render_fullscreen(
+        80,
+        &options(),
+        &HashSet::from([ParagraphKey::whole(1), ParagraphKey::activity(4, false)]),
+    );
     let joined = plain(&expanded).join("\n");
     assert!(joined.contains("first question-think-10"), "{joined}");
     assert!(!joined.contains("second question-think-10"), "{joined}");
@@ -107,9 +117,9 @@ fn live_reasoning_is_a_paragraph() {
     let document = store.render_fullscreen(80, &options(), &HashSet::new());
     assert_eq!(
         document.paragraphs.last().map(|span| span.key),
-        Some(LIVE_PARAGRAPH_KEY)
+        Some(ParagraphKey::activity(1, false))
     );
-    let open = store.render_fullscreen(80, &options(), &HashSet::from([LIVE_PARAGRAPH_KEY]));
+    let open = store.render_fullscreen(80, &options(), &HashSet::from([ParagraphKey::whole(1)]));
     assert!(plain(&open).join("\n").contains("live-10"));
 }
 
@@ -146,71 +156,54 @@ fn command_store() -> TranscriptStore {
     store
 }
 
-/// 命令卡片拆成命令行与输出两段，两段互不重叠，分界标记不进正文。
+/// 【终端】【命令折叠】命令与输出共用一个标题控件，内部边界标记不进入正文。
+/// 参数: 无；返回: 无。
 #[test]
-fn command_card_splits_into_command_and_output_paragraphs() {
-    use crate::render::render_expand::{ExpandPart, PART_BOUNDARY};
+fn command_card_has_one_header_control() {
     let mut store = command_store();
     let document = store.render_fullscreen(80, &options(), &HashSet::new());
-    let keys = document
-        .paragraphs
-        .iter()
-        .map(|span| span.key.part)
-        .collect::<Vec<_>>();
-    assert_eq!(
-        keys,
-        vec![
-            ParagraphPart::Segment(ExpandPart::Command),
-            ParagraphPart::Segment(ExpandPart::Output)
-        ]
-    );
-    let (command, output) = (&document.paragraphs[0], &document.paragraphs[1]);
-    assert!(command.end <= output.start, "两段不应重叠");
-    let text = plain(&document);
-    assert!(text[command.start].contains("$ echo step-0"), "{text:?}");
-    assert!(text.iter().all(|line| !line.contains(PART_BOUNDARY)));
+    assert_eq!(document.paragraphs.len(), 1);
+    let span = &document.paragraphs[0];
+    assert_eq!(span.control, span.start);
+    let text = plain(&document).join("\n");
+    assert!(text.contains("step-6") && text.contains("out-15"), "{text}");
 }
 
-/// 点击命令行只展开命令，输出仍折叠；反之亦然。
+/// 【终端】【命令切换】收起整条命令后只保留标题，再次展开恢复命令与输出。
+/// 参数: 无；返回: 无。
 #[test]
-fn command_and_output_expand_independently() {
-    use crate::render::render_expand::ExpandPart;
+fn command_and_output_toggle_together() {
     let mut store = command_store();
-    let collapsed = plain(&store.render_fullscreen(80, &options(), &HashSet::new())).join("\n");
-    assert!(
-        !collapsed.contains("step-6") && !collapsed.contains("out-15"),
-        "{collapsed}"
+    let collapsed = store.render_fullscreen(
+        80,
+        &options(),
+        &HashSet::from([ParagraphKey::activity(0, false)]),
     );
-    let command_key = ParagraphKey::segment(0, ExpandPart::Command);
-    let output_key = ParagraphKey::segment(0, ExpandPart::Output);
-    let command_open = store.render_fullscreen(80, &options(), &HashSet::from([command_key]));
-    let joined = plain(&command_open).join("\n");
-    assert!(joined.contains("step-6"), "命令应展开: {joined}");
-    assert!(!joined.contains("out-15"), "输出应保持折叠: {joined}");
-    assert!(command_open.paragraphs[0].expanded && !command_open.paragraphs[1].expanded);
-    let output_open = store.render_fullscreen(80, &options(), &HashSet::from([output_key]));
-    let joined = plain(&output_open).join("\n");
-    assert!(joined.contains("out-15"), "输出应展开: {joined}");
-    assert!(!joined.contains("step-6"), "命令应保持折叠: {joined}");
+    let text = plain(&collapsed).join("\n");
+    assert!(
+        !text.contains("step-6") && !text.contains("out-15"),
+        "{text}"
+    );
+    assert!(!collapsed.paragraphs[0].expanded);
+    let open = store.render_fullscreen(80, &options(), &HashSet::new());
+    let text = plain(&open).join("\n");
+    assert!(text.contains("step-6") && text.contains("out-15"), "{text}");
+    assert!(open.paragraphs[0].expanded);
 }
 
-/// 命令很短时没有可展开的命令段，只登记输出段，点击命令行不会白点。
+/// 【终端】【短命令标题】短命令也通过首行统一控制输出，不增加第二个控件。
+/// 参数: 无；返回: 无。
 #[test]
-fn short_command_registers_only_the_output_paragraph() {
-    use crate::render::render_expand::ExpandPart;
+fn short_command_has_one_header_control() {
     let mut store = TranscriptStore::new(1_000);
     store.push_shell(
-        "ls".to_string(),
+        "ls".into(),
         (0..30).map(|index| format!("file-{index}\n")).collect(),
         Some(0),
     );
     let document = store.render_fullscreen(80, &options(), &HashSet::new());
-    let parts = document
-        .paragraphs
-        .iter()
-        .map(|span| span.key.part)
-        .collect::<Vec<_>>();
-    assert_eq!(parts, vec![ParagraphPart::Segment(ExpandPart::Output)]);
+    assert_eq!(document.paragraphs.len(), 1);
+    assert_eq!(document.paragraphs[0].control, document.paragraphs[0].start);
 }
 
 /// 【全屏代码】【展开回归】文件阅读卡片展开后仍保留关键字与字符串着色；无参数或返回值。
@@ -224,7 +217,7 @@ fn expanded_read_file_keeps_syntax_colors() {
         "1\tfn main() {\n2\t    println!(\"hello\");\n3\t}".into(),
     );
     let collapsed = store.render_fullscreen(80, &options(), &HashSet::new());
-    let key = collapsed.paragraphs.last().unwrap().key;
+    let key = ParagraphKey::whole(collapsed.paragraphs.last().unwrap().key.cell);
     let expanded = store.render_fullscreen(80, &options(), &HashSet::from([key]));
     let ansi = expanded
         .lines
@@ -247,7 +240,7 @@ fn expanded_reasoning_keeps_fenced_code_colors() {
     });
     store.finalize_live_tail();
     let collapsed = store.render_fullscreen(24, &options(), &HashSet::new());
-    let key = collapsed.paragraphs[0].key;
+    let key = ParagraphKey::whole(collapsed.paragraphs[0].key.cell);
     let expanded = store.render_fullscreen(24, &options(), &HashSet::from([key]));
     let ansi = expanded
         .lines
@@ -268,7 +261,7 @@ fn expanded_question_uses_readable_answers() {
         store.push_tool_call("ask_question".into(), r#"{"questions":[{"header":"Scope","question":"Select a module","options":[{"label":"UI","description":"Option details"}]}]}"#.into());
         store.push_tool_result("ask_question".into(), true, r#"{"status":"answered","answers":[{"header":"Scope","question":"Select a module","answer":"UI"}]}"#.into());
         let collapsed = store.render_fullscreen(width, &options(), &HashSet::new());
-        let key = collapsed.paragraphs.last().unwrap().key;
+        let key = ParagraphKey::whole(collapsed.paragraphs.last().unwrap().key.cell);
         let expanded = store.render_fullscreen(width, &options(), &HashSet::from([key]));
         let text = plain(&expanded).join("\n");
         assert!(
@@ -317,31 +310,26 @@ fn wide_table_stays_inside_fullscreen_body_width() {
     }
 }
 
-/// 折叠段的控制行是「N lines hidden」提示；展开后末尾追加收起行作为控制行。
+/// 【终端】【标题控制】无论展开与否，工具控件仅位于首行而非正文或末尾。
+/// 参数: 无；返回: 无。
 #[test]
-fn control_rows_are_the_fold_hint_and_the_collapse_line() {
+fn control_rows_stay_on_headers() {
     let mut store = command_store();
-    let collapsed = store.render_fullscreen(80, &options(), &HashSet::new());
-    let text = plain(&collapsed);
-    for span in &collapsed.paragraphs {
-        assert!(
-            text[span.control].contains("hidden"),
-            "{:?}",
-            text[span.control]
+    for expanded in [
+        HashSet::new(),
+        HashSet::from([ParagraphKey::activity(0, false)]),
+    ] {
+        let document = store.render_fullscreen(80, &options(), &expanded);
+        let span = &document.paragraphs[0];
+        assert_eq!(span.control, span.start);
+        assert_eq!(
+            document
+                .paragraph_control_at(span.control)
+                .map(|span| span.key),
+            Some(span.key)
         );
-        assert!(span.control >= span.start && span.control < span.end);
+        for row in span.start + 1..span.end {
+            assert!(document.paragraph_control_at(row).is_none());
+        }
     }
-    let output_key = collapsed.paragraphs[1].key;
-    let open = store.render_fullscreen(80, &options(), &HashSet::from([output_key]));
-    let text = plain(&open);
-    let output = &open.paragraphs[1];
-    assert_eq!(output.control, output.end - 1);
-    assert!(text[output.control].contains("Show less"), "{text:?}");
-    // 收起行插在输出段末尾，命令段的控制行仍是原提示
-    assert!(text[open.paragraphs[0].control].contains("hidden"));
-    assert_eq!(
-        open.paragraph_control_at(output.control).map(|s| s.key),
-        Some(output_key)
-    );
-    assert!(open.paragraph_control_at(output.start).is_none() || output.start == output.control);
 }

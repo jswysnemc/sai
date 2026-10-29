@@ -97,7 +97,7 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
         };
         let document_row = state.scroll + row;
         let body = match hovered_span {
-            Some(span) if document_row == span.control => {
+            Some(span) if document_row == span.control && state.pointer_row == Some(row) => {
                 super::hover::tint_line(&super::guide_button::render(&body, span.expanded))
             }
             _ => body,
@@ -177,7 +177,7 @@ fn header_line(state: &FullscreenState, layout: &FullscreenLayout) -> String {
         } else {
             format!("{HEADER_COPIED}Copied {count} characters")
         }
-    } else if cols >= 100 && crate::render::tui_style::is_deepseek() {
+    } else if cols >= 100 && crate::render::tui_mode::prefers_fullscreen() {
         format!(
             "{HEADER_HINT}{}",
             t(

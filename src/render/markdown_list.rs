@@ -4,6 +4,7 @@ use super::style::{MD_LIST_MARKER_STYLE, RESET};
 #[derive(Clone)]
 struct Level {
     source_indent: usize,
+    source_content_column: usize,
     content_column: usize,
 }
 
@@ -47,27 +48,31 @@ impl ListLayout {
                 && previous_depth > 0
                 && (previous_depth > 1 || self.multiline);
             let marker = if source_marker.len() == 1 {
-                ["-", "·", "–"][depth % 3]
+                "•"
             } else {
                 source_marker
             };
             self.levels.push(Level {
                 source_indent: indent,
-                content_column: indent + marker.chars().count() + 1,
+                source_content_column: indent + trimmed.len() - body.len(),
+                content_column: depth * 4 + marker.chars().count() + 1,
             });
             self.multiline = false;
             return Some(format!(
                 "{}{}{MD_LIST_MARKER_STYLE}{marker}{RESET} {}",
                 if gap { "\n" } else { "" },
-                " ".repeat(indent),
+                " ".repeat(depth * 4),
                 super::markdown::render_inline_for_mode(body, mode)
             ));
         }
-        let level = self.levels.last()?;
-        if separated && indent < level.content_column {
+        if separated {
+            self.levels
+                .retain(|level| indent >= level.source_content_column);
+        }
+        let Some(level) = self.levels.last() else {
             self.reset();
             return None;
-        }
+        };
         self.multiline = true;
         Some(format!(
             "{}{MD_LIST_MARKER_STYLE}{RESET}{}",
@@ -103,11 +108,44 @@ pub(super) fn render_line(line: &str, mode: InlineMathMode) -> Option<String> {
     parse_item(trimmed)?;
     let indent = line.len() - trimmed.len();
     let mut layout = ListLayout::default();
-    for source_indent in (0..indent).step_by(2) {
+    for source_indent in (0..indent).step_by(4) {
         layout.levels.push(Level {
             source_indent,
+            source_content_column: source_indent + 2,
             content_column: source_indent + 2,
         });
     }
     layout.render(line, mode, false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    /// 【终端】【列表层级测试】不同源码缩进统一为每级四列，显式续行采用正文列。
+    /// 参数: 无；返回: 无。
+    #[test]
+    fn source_indent_normalizes_to_codex_columns() {
+        for indent in ["  ", "    "] {
+            let mut layout = ListLayout::default();
+            let mut render = |line: &str, separated| {
+                layout
+                    .render(line, InlineMathMode::Source, separated)
+                    .map(|text| crate::render::ansi_clip::strip_ansi(&text))
+            };
+            assert_eq!(render("- parent", false).as_deref(), Some("• parent"));
+            assert_eq!(
+                render(&format!("{indent}* child"), false).as_deref(),
+                Some("    • child")
+            );
+            assert_eq!(
+                render(&format!("{indent}  continuation"), false).as_deref(),
+                Some("      continuation")
+            );
+            assert_eq!(
+                render("  parent paragraph", true).as_deref(),
+                Some("  parent paragraph")
+            );
+            assert_eq!(render("outside", true), None);
+        }
+    }
 }

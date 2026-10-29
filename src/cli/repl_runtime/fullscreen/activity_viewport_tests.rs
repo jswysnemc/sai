@@ -17,7 +17,7 @@ const STEP: ParagraphKey = ParagraphKey {
 /// 【终端】【高度回归】八成预算使用终端总高度，输入区增高时给标题和页脚保留空间。
 /// 参数: 无；返回: 无。
 #[test]
-fn deepseek_viewport_uses_terminal_height_and_respects_composer_space() {
+fn activity_viewport_uses_terminal_height_and_respects_composer_space() {
     let mut views = ActivityViewports::default();
     for (terminal, body, expected) in [(40, 34, 32), (50, 44, 40), (24, 18, 16), (40, 12, 10)] {
         let document = views.update(source(100), body, 80, terminal);
@@ -31,7 +31,7 @@ fn deepseek_viewport_uses_terminal_height_and_respects_composer_space() {
 /// 【终端】【链内导航回归】大视口被外层底部跟随裁掉时，跳到链首必须显示完整标题与正文。
 /// 参数: 无；返回: 无。
 #[test]
-fn deepseek_navigation_reveals_clipped_activity_viewport() {
+fn activity_navigation_reveals_clipped_activity_viewport() {
     let mut state = FullscreenState::new();
     let document = state.activity.update(source(100), 34, 80, 40);
     state.apply_document(document, 34);
@@ -48,7 +48,7 @@ fn deepseek_navigation_reveals_clipped_activity_viewport() {
 /// 【终端】【页脚回归】执行链页脚位于正文末行时，外层返回按钮不能覆盖跟随操作。
 /// 参数: 无；返回: 无。
 #[test]
-fn deepseek_activity_footer_is_not_covered_by_bottom_button() {
+fn activity_activity_footer_is_not_covered_by_bottom_button() {
     let mut state = FullscreenState::new();
     let layout = super::super::layout::FullscreenLayout::compute(84, 40, 5);
     let document = state.activity.update(source(100), 34, 80, 40);
@@ -219,16 +219,16 @@ fn activity_viewport_keeps_permissions_visible_and_resizes() {
     assert_eq!(views.update(source(40), 3, 12, 3).lines.len(), 44);
 }
 
-/// 【终端】【子视口测试】经典样式不创建留白和独立视口，清屏后丢弃旧链位置。
+/// 【终端】【子视口测试】无执行链的文档不创建留白和独立视口，清屏后丢弃旧链位置。
 /// 参数: 无；返回: 无。
 #[test]
-fn activity_viewport_leaves_classic_documents_unchanged() {
+fn activity_viewport_leaves_plain_documents_unchanged() {
     let mut views = ActivityViewports::default();
     views.update(source(40), 30, 80, 30);
-    let mut classic = source(4);
-    classic.activities.clear();
-    let original = classic.lines.clone();
-    assert_eq!(views.update(classic, 30, 80, 30).lines, original);
+    let mut plain = source(4);
+    plain.activities.clear();
+    let original = plain.lines.clone();
+    assert_eq!(views.update(plain, 30, 80, 30).lines, original);
     views.update(FullscreenDocument::default(), 30, 80, 30);
     assert!(views.positions.is_empty());
 }

@@ -50,6 +50,7 @@ pub(crate) struct SubagentCell {
     subagent_id: Option<String>,
     parts: Vec<SubagentPart>,
     outcome: Option<(bool, String)>,
+    result_title: Option<String>,
 }
 
 impl SubagentCell {
@@ -70,6 +71,7 @@ impl SubagentCell {
             subagent_id,
             parts: Vec::new(),
             outcome: None,
+            result_title: None,
         }
     }
 
@@ -120,6 +122,7 @@ impl SubagentCell {
             .as_ref()
             .map(|snapshot| snapshot.description.clone())
             .filter(|description| !description.trim().is_empty())
+            .or_else(|| self.result_title.clone())
             .unwrap_or_else(|| tool_event_label_tense("subagent", Some(&self.arguments), tense));
         // 存活条目附带实时阶段（工具进度 / Token 统计 / 待命提示），供面板展示
         let detail = snapshot.as_ref().and_then(|snapshot| match status {
@@ -188,6 +191,11 @@ impl SubagentCell {
     /// 返回:
     /// - 无
     pub(crate) fn finish(&mut self, ok: bool, output: String) {
+        self.result_title = Some(crate::render::tool_view::subagent_result_title(
+            &self.arguments,
+            Some(&output),
+            true,
+        ));
         // 【TUI】【子智能体绑定】1. 后台启动结果只绑定 ID，终态由持久化时间线驱动
         if ok {
             if let Some((id, status)) = subagent_identity(&output) {
@@ -206,6 +214,32 @@ impl SubagentCell {
     /// - 尚未完成时返回 true
     pub(crate) fn is_active(&self) -> bool {
         self.outcome.is_none() && self.subagent_id.is_none()
+    }
+
+    /// 【终端】【子任务正文】从实际结果或持久化快照读取结论，复用精简工具视图。
+    /// 参数: 无；返回: 不含标题和内部快照字段的正文。
+    pub(crate) fn timeline_details(&self) -> String {
+        let snapshot = self
+            .subagent_id
+            .as_deref()
+            .and_then(|id| crate::tools::subagent_state::subagent_snapshot(id).ok());
+        let output = snapshot
+            .as_ref()
+            .map(|snapshot| serde_json::json!({"subagent": snapshot}).to_string())
+            .or_else(|| self.outcome.as_ref().map(|(_, output)| output.clone()));
+        if let Some(output) = output {
+            let mut view = crate::render::tool_view::ToolView::running(
+                "subagent".into(),
+                self.arguments.clone(),
+            );
+            view.finish(self.outcome.as_ref().is_none_or(|(ok, _)| *ok), output);
+            return crate::render::tool_view::render(&view, ToolCallDisplayMode::Full)
+                .lines()
+                .skip(1)
+                .collect::<Vec<_>>()
+                .join("\n");
+        }
+        self.overview().detail.unwrap_or_default()
     }
 
     /// 判断后台子智能体是否仍会产生新时间线。
@@ -256,12 +290,23 @@ pub(super) fn render(cell: &SubagentCell, mode: ToolCallDisplayMode) -> String {
         .subagent_id
         .as_deref()
         .and_then(|id| crate::tools::subagent_state::subagent_snapshot(id).ok());
+    if snapshot.is_none() {
+        if let Some((ok, output)) = &cell.outcome {
+            let mut view = crate::render::tool_view::ToolView::running(
+                "subagent".into(),
+                cell.arguments.clone(),
+            );
+            view.finish(*ok, output.clone());
+            return crate::render::tool_view::render(&view, mode);
+        }
+    }
     // 【TUI】【子智能体渲染】2. 使用主智能体工具标题和状态样式
     let status = status_key(cell, snapshot.as_ref());
     let tense = ToolVerbTense::from_done(status != "run");
     let label = snapshot
         .as_ref()
         .map(|snapshot| format!("{} {}", tool_verb("subagent", tense), snapshot.description))
+        .or_else(|| cell.result_title.clone())
         .unwrap_or_else(|| tool_event_label_tense("subagent", Some(&cell.arguments), tense));
     let mut output = tool_event_text(&label, status);
     // 子 agent 响应不进入 transcript，避免与主 agent 流式渲染竞态；

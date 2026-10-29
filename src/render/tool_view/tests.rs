@@ -149,10 +149,9 @@ fn capability_result_lists_exposed_names() {
     );
     let plain = crate::render::activity_animation::strip_ansi_for_test(&output);
 
-    assert!(plain.contains("Requested"), "{plain}");
-    assert!(plain.contains("1 tool · 1 skill"), "{plain}");
-    assert!(plain.contains("tool web_search"), "{plain}");
-    assert!(plain.contains("skill drawio"), "{plain}");
+    assert!(plain.contains("Capabilities ready"), "{plain}");
+    assert!(plain.contains("Tool web_search"), "{plain}");
+    assert!(plain.contains("Skill drawio"), "{plain}");
     assert!(!plain.contains("parameters"), "{plain}");
     assert!(!plain.contains("skill body marker"), "{plain}");
 }
@@ -199,7 +198,7 @@ fn web_search_summary_shows_result_count_and_provider() {
     ));
     assert_eq!(
         plain.trim(),
-        "\u{f002} Searched the web for rust 2 results · Brave"
+        "\u{f0ac} Searched the web · 2 results · rust · Brave"
     );
 }
 
@@ -222,7 +221,7 @@ fn file_search_summary_shows_match_and_file_counts() {
     ));
     assert_eq!(
         plain.trim(),
-        "\u{f002} Searched files for main 3+ matches in 2 files"
+        "\u{f002} Searched files · 3+ matches in 2 files · \"main\""
     );
     // 无命中时明确写 no matches
     let mut empty = ToolView::running("grep".into(), r#"{"pattern":"zzz"}"#.into());
@@ -231,5 +230,5 @@ fn file_search_summary_shows_match_and_file_counts() {
         &empty,
         ToolCallDisplayMode::Summary,
     ));
-    assert!(plain.ends_with("no matches"), "{plain}");
+    assert!(plain.contains("no matches"), "{plain}");
 }

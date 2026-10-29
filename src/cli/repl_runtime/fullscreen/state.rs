@@ -273,7 +273,7 @@ impl FullscreenState {
         changed
     }
 
-    /// 鼠标当前悬停的可展开段落；拖选进行中不显示悬停。
+    /// 鼠标当前悬停的展开控件；正文行和拖选过程不显示悬停。
     ///
     /// 返回:
     /// - 被悬停的段落
@@ -285,7 +285,7 @@ impl FullscreenState {
         let row = self.scroll + row;
         self.document
             .paragraph_at(row)
-            .filter(|span| span.expanded || span.control == row)
+            .filter(|span| span.control == row)
     }
 
     /// 【终端】【跟随入口悬停】只把暂停跟随的页脚视为按钮，普通状态行不高亮。

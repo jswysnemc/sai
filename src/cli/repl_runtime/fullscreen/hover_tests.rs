@@ -70,6 +70,55 @@ fn hovering_an_expandable_paragraph_highlights_it() {
     assert!(!painted_row(&runtime, hint_row).contains(HOVER_DEFAULT_FG));
 }
 
+/// 【终端】【悬停事件测试】从展开标题移动到正文时触发重绘，恢复原工具图标。
+/// 参数: 无；返回: 无。
+#[test]
+fn moving_from_expanded_header_to_body_restores_icon() {
+    use crate::render::{activity_animation::strip_ansi_for_test as plain, tui_mode};
+    tui_mode::set_override(Some(crate::config::TuiMode::Fullscreen));
+    let mut runtime = runtime(0);
+    for pattern in ["first", "second"] {
+        runtime.transcript.push_tool_call(
+            "grep".into(),
+            serde_json::json!({"pattern":pattern}).to_string(),
+        );
+        runtime.transcript.push_tool_result(
+            "grep".into(),
+            true,
+            serde_json::json!({"ok":true,"stdout":"sample.txt:1:matched content"}).to_string(),
+        );
+    }
+    runtime.enter_fullscreen().unwrap();
+    runtime
+        .handle_fullscreen_event(&Event::Key(KeyEvent::new(
+            KeyCode::Home,
+            KeyModifiers::CONTROL,
+        )))
+        .unwrap();
+    let session = runtime.fullscreen.as_ref().unwrap();
+    let span = session
+        .state
+        .document
+        .paragraphs
+        .iter()
+        .find(|span| span.expanded && span.end > span.start + 1)
+        .unwrap();
+    let layout = session.state.layout.unwrap();
+    let row = layout.body_top + (span.control - session.state.scroll) as u16;
+    let normal = plain(&painted_row(&runtime, row));
+    runtime
+        .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 4, row))
+        .unwrap();
+    assert!(plain(&painted_row(&runtime, row))
+        .trim_start()
+        .starts_with('▾'));
+    runtime
+        .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 4, row + 1))
+        .unwrap();
+    assert_eq!(plain(&painted_row(&runtime, row)), normal);
+    tui_mode::set_override(None);
+}
+
 /// 离开底部后按钮水平居中贴在输入框正上方，浮动标题不再重复显示新输出提示。
 #[test]
 fn bottom_button_floats_centered_above_the_composer() {

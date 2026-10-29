@@ -88,6 +88,12 @@ impl Drop for FullscreenSession {
 }
 
 impl ReplRuntime {
+    /// 【终端】【布局状态】查询当前是否处于全屏，而非读取启动偏好。
+    /// 参数: 无；返回: 当前全屏状态。
+    pub(in crate::cli) fn fullscreen_active(&self) -> bool {
+        self.fullscreen.is_some()
+    }
+
     /// 【全屏视图】【切换】进入或退出全屏会话视图。
     ///
     /// 返回:
@@ -111,6 +117,8 @@ impl ReplRuntime {
         // 1. 主屏未提交的绘制先送达，再切到备用屏
         self.commit_frame()?;
         self.fullscreen = Some(FullscreenSession::enter()?);
+        // 2. 【终端】【视图同步】呈现方式跟随实际屏幕，避免内联布局进入备用屏
+        crate::render::tui_mode::set_override(Some(crate::config::TuiMode::Fullscreen));
         self.resize_preview = None;
         self.last_composer_signature = None;
         self.paint_fullscreen()
@@ -127,6 +135,8 @@ impl ReplRuntime {
             return Ok(());
         };
         drop(session);
+        // 1. 【终端】【视图同步】回到主屏后按内联视图重放
+        crate::render::tui_mode::set_override(Some(crate::config::TuiMode::Inline));
         self.last_composer_signature = None;
         self.force_reanchor = true;
         self.replay(self.stream_active)

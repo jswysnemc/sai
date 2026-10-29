@@ -11,7 +11,7 @@ class ComposerSelectionTests(unittest.TestCase):
 
     def test_drag_selects_and_copies_input_without_changing_draft(self):
         """无参数；拖选产生高亮与 OSC 52，草稿保留，返回无。"""
-        with TerminalSession(columns=80, rows=24, arguments=["--style", "deepseek", "--lang", "en-US"],
+        with TerminalSession(columns=80, rows=24, arguments=["--view", "fullscreen", "--lang", "en-US"],
                              ready=lambda t: "Enter a message" in t.text()) as terminal:
             terminal.pump(.4)
             terminal.send(b"INPUT-SELECT-FIXTURE")

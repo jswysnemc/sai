@@ -57,8 +57,8 @@ fn heading_keeps_style_after_inline_reset() {
 #[test]
 fn list_markers_keep_normal_foreground() {
     // 列表符号保持正文前景，不被额外弱化
-    assert!(render_markdown_line("- item").contains(&format!("{MD_LIST_MARKER_STYLE}-{RESET}")));
-    assert!(render_markdown_line("* item").contains(&format!("{MD_LIST_MARKER_STYLE}-{RESET}")));
+    assert!(render_markdown_line("- item").contains(&format!("{MD_LIST_MARKER_STYLE}•{RESET}")));
+    assert!(render_markdown_line("* item").contains(&format!("{MD_LIST_MARKER_STYLE}•{RESET}")));
     assert!(render_markdown_line("1. item").contains(&format!("{MD_LIST_MARKER_STYLE}1.{RESET}")));
     // 嵌套列表保留原始缩进
     let nested = render_markdown_line("  - sub");

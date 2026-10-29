@@ -1,4 +1,4 @@
-"""【全屏视图】【终端回归】命令与输出分段展开、悬停高亮、居中回到底部按钮，以及有后台工作时的退出确认。"""
+"""【全屏视图】【终端回归】命令与输出共用标题控件、悬停高亮、居中回到底部按钮，以及有后台工作时的退出确认。"""
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -97,34 +97,32 @@ def row_of(terminal, needle):
 
 
 class FullscreenPartsTests(unittest.TestCase):
-    """真实终端中验证分段展开、悬停与退出确认。"""
+    """真实终端中验证标题控件、悬停与退出确认。"""
 
-    def test_command_and_output_expand_separately_with_hover(self):
-        """点命令只展开命令，点输出只展开输出；悬停整段提亮前景；返回无。"""
-        with CommandModel() as model, TerminalSession(model.config(), columns=100, rows=40) as terminal:
+    def test_command_and_output_share_title_control_with_hover(self):
+        """命令与输出共用标题控件：悬停标题显示收起图标并提亮，点击标题同时收起和展开；返回无。"""
+        with CommandModel() as model, TerminalSession(model.config(), columns=100, rows=40,
+                arguments=["--lang", "en-US"]) as terminal:
             terminal.send(b"RUN\r")
             terminal.wait_for(lambda: "FINISHED" in terminal.text(), timeout=20)
             terminal.send(b"\x0f")
             terminal.wait_for(lambda: "Ctrl+O" in lines(terminal)[0], timeout=5)
-            terminal.wait_for(lambda: row_of(terminal, "STEP-0") is not None)
-            self.assertIsNone(row_of(terminal, "STEP-6"), "命令应折叠")
-            # 1. 悬停折叠提示行：提亮该行
-            hint_row = next(row for row, line in enumerate(lines(terminal))
-                            if row > 0 and ("lines hidden" in line or "行已折叠" in line))
+            terminal.wait_for(lambda: row_of(terminal, "STEP-11") is not None)
+            title = row_of(terminal, "Ran $ echo STEP-0")
+            self.assertIsNotNone(title, terminal.text())
+            # 1. 悬停标题行：语义图标临时替换为展开状态图标并提亮
             mark = len(terminal.raw)
-            terminal.send(f"\x1b[<35;5;{hint_row + 1}M".encode())
-            terminal.wait_for(lambda: HOVER_FG.encode() in bytes(terminal.raw[mark:]), timeout=5)
-            # 2. 点折叠提示行：命令展开，输出不受影响
-            mouse(terminal, 4, hint_row)
-            terminal.wait_for(lambda: row_of(terminal, "STEP-6") is not None, timeout=5)
-            output_hint = [row for row, line in enumerate(lines(terminal))
-                           if ("click to expand" in line or "点击展开" in line) and row > row_of(terminal, "STEP-11")]
-            self.assertTrue(output_hint, "命令展开后输出仍应折叠:\n" + terminal.text())
-            # 3. 点输出折叠提示：输出展开
-            mouse(terminal, 6, output_hint[0])
-            # 标题右侧的快捷键说明含“点击展开/收起”，只检查正文区
-            terminal.wait_for(lambda: not any(("click to expand" in line or "点击展开" in line)
-                                              for line in lines(terminal)[1:]), timeout=5)
+            terminal.send(f"\x1b[<35;5;{title + 1}M".encode())
+            terminal.wait_for(lambda: lines(terminal)[title].lstrip().startswith("▾ Ran"), timeout=5)
+            self.assertIn(HOVER_FG.encode(), bytes(terminal.raw[mark:]))
+            # 2. 点击标题：命令续行和输出一起收起，标题保留
+            mouse(terminal, 4, title)
+            terminal.wait_for(lambda: row_of(terminal, "STEP-6") is None, timeout=5)
+            self.assertEqual(row_of(terminal, "Ran $ echo STEP-0"), title)
+            # 3. 再次点击标题：命令和输出一起恢复
+            mouse(terminal, 4, title)
+            terminal.wait_for(lambda: row_of(terminal, "└ STEP-0") is not None
+                              and row_of(terminal, "echo STEP-6") is not None, timeout=5)
             terminal.send(b"\x0f")
 
     def test_bottom_button_is_centered_above_the_composer(self):
