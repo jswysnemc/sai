@@ -183,10 +183,11 @@ fn wrap_line(
     while index < text.len() {
         let ch = text[index..].chars().next().unwrap_or_default();
         if ch == '\x1b' {
-            let end = crate::render::terminal_image::escape_sequence_end(text, index);
-            // 1. 【终端】【控制符过滤】孤立 ESC 不写入正文，避免终端吞掉紧随其后的可见字符
-            if end == index + 1 {
-                index = end;
+            let scanned = crate::render::terminal_image::scan_escape_sequence(text, index);
+            let end = scanned.end;
+            // 1. 【终端】【控制符过滤】分片尾部不写入终端，避免未闭合协议吞掉后续整帧内容
+            if !scanned.complete {
+                index = end.max(index + 1);
                 continue;
             }
             let sequence = &text[index..end];
@@ -348,6 +349,34 @@ fn finish_line(
 #[cfg(test)]
 mod tests {
     use super::AnsiLine;
+
+    /// 【终端】【分片折行回归】未闭合序列不进入输出行，完整图片和超链接协议不因折行拆开。
+    /// 参数：无；返回：无，输出控制前缀或协议被拆分时断言失败。
+    #[test]
+    fn wrapping_filters_incomplete_controls_and_preserves_complete_protocols() {
+        let expected = AnsiLine::wrap_block("正文", 2)
+            .iter()
+            .map(AnsiLine::as_str)
+            .collect::<String>();
+        for sequence in [
+            "\x1b[38;2;170;232;246m",
+            "\x1b]8;;https://example.invalid\x1b\\",
+            "\x1b]1337;File=inline=1:abcdef\x07",
+            "\x1b_Gf=100,a=T;abcdef\x1b\\",
+            "\x1bPpayload\x1b\\",
+        ] {
+            for end in 1..sequence.len() {
+                let source = format!("正文{}", &sequence[..end]);
+                let joined = AnsiLine::wrap_block(&source, 2)
+                    .iter()
+                    .map(AnsiLine::as_str)
+                    .collect::<String>();
+                assert_eq!(joined, expected, "{source:?}");
+            }
+            let lines = AnsiLine::wrap_block(&format!("正文{sequence}tail"), 2);
+            assert!(lines.iter().any(|line| line.as_str().contains(sequence)));
+        }
+    }
 
     /// 【终端】【UTF-8 输出回归】折行时过滤孤立 ESC，不能把后续多字节字符当成终端控制参数。
     /// 参数：无；返回：无，损坏控制符仍被输出或正文丢失时断言失败。

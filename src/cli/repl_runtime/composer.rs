@@ -257,11 +257,16 @@ impl ReplRuntime {
         };
         // 内容未变时跳过重绘：composer 每 32ms 刷新一次，而绘制是
         // 逐行清除再打印，Windows Terminal 下这一空窗表现为底部闪烁
+        let pending_before = self.frame.pending_len();
         let (cursor_row, signature) = composer.draw_lines(
             &mut self.frame,
             &viewport,
             self.last_composer_signature.as_ref(),
         )?;
+        // 1. 【终端】【光标恢复】输入区未变化但正文已写入时恢复光标，真正空帧不产生任何输出
+        if pending_before > 0 && self.frame.pending_len() == pending_before {
+            signature.restore_cursor(&mut self.frame)?;
+        }
         self.last_composer_signature = Some(signature);
         self.last_cursor_row = Some(cursor_row);
         Ok(())

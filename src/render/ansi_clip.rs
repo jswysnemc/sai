@@ -42,13 +42,14 @@ pub(crate) fn clip_ansi_to_width(text: &str, max_width: usize, ellipsis: &str) -
     let mut active_sgr = String::new();
     let mut index = 0usize;
 
-    // 1. 【终端】【ANSI 扫描】丢弃孤立 ESC，完整序列更新样式且不计入列宽，避免截断后吞掉样式重置
+    // 1. 【终端】【ANSI 扫描】丢弃未闭合控制序列，完整序列更新样式且不计入列宽
     while index < text.len() {
         let ch = text[index..].chars().next().unwrap_or_default();
         if ch == '\x1b' {
-            let end = crate::render::terminal_image::escape_sequence_end(text, index);
-            if end == index + 1 {
-                index = end;
+            let scanned = crate::render::terminal_image::scan_escape_sequence(text, index);
+            let end = scanned.end;
+            if !scanned.complete {
+                index = end.max(index + 1);
                 continue;
             }
             let sequence = &text[index..end];
@@ -109,6 +110,28 @@ pub(crate) fn ansi_visible_width(text: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 【终端】【分片过滤回归】裁剪任意控制前缀时只输出正文，补齐后保留完整协议。
+    /// 参数：无；返回：无，未闭合序列泄漏或完整协议丢失时断言失败。
+    #[test]
+    fn clipping_filters_incomplete_controls_and_preserves_complete_protocols() {
+        for sequence in [
+            "\x1b[38;2;170;232;246m",
+            "\x1b]8;;https://example.invalid\x1b\\",
+            "\x1b]1337;File=inline=1:abcdef\x07",
+            "\x1b_Gf=100,a=T;abcdef\x1b\\",
+            "\x1bPpayload\x1b\\",
+            "\x1b(B",
+        ] {
+            for end in 1..sequence.len() {
+                let source = format!("正文{}", &sequence[..end]);
+                assert_eq!(clip_ansi_to_width(&source, 80, ""), "正文", "{source:?}");
+            }
+            let source = format!("正文{sequence}tail");
+            assert_eq!(clip_ansi_to_width(&source, 80, ""), source);
+        }
+        assert_eq!(clip_ansi_to_width("前\x1b[31中", 80, ""), "前中");
+    }
 
     /// 【终端】【崩溃回归】复现字节位置 18 落在替换字符内部的输入，清除时保留可见正文。
     /// 参数：无；返回：无，UTF-8 切片越界或正文丢失时断言失败。

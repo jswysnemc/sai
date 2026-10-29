@@ -77,7 +77,7 @@ fn repaint_hides_cursor_first_and_shows_it_last() {
     assert!(!output[show + "\x1b[?25h".len()..].contains("\x1b[2K"));
 }
 
-/// 验证内容未变时跳过重绘，但仍把光标收回输入位置。
+/// 验证内容和光标均未变化时不输出，正文改变后可单独恢复光标。
 ///
 /// composer 每 32ms 刷新一次，逐行清除再打印在 Windows Terminal 下
 /// 表现为底部闪烁；内容一致时必须不重绘内容。同时 transcript/动效
@@ -116,14 +116,45 @@ fn skips_repaint_when_nothing_changed() {
 
     let output = String::from_utf8(second).unwrap();
     assert!(
-        !output.contains("\x1b[2K"),
-        "内容未变时不应重绘任何行: {output:?}"
+        output.is_empty(),
+        "内容和光标均未变化时不应输出空帧: {output:?}"
     );
-    assert!(
-        output.contains("\x1b[?25h"),
-        "内容未变时也要恢复光标显示: {output:?}"
-    );
+    let mut cursor = Vec::new();
+    signature.restore_cursor(&mut cursor).unwrap();
+    assert!(String::from_utf8(cursor).unwrap().ends_with("\x1b[?25h"));
     assert_eq!(second_row, cursor_row);
+}
+
+/// 【终端】【光标移动回归】仅移动输入光标时仍定位并显示光标，不重写已有文字。
+/// 参数：无；返回：无，漏掉定位或产生正文重绘时断言失败。
+#[test]
+fn cursor_movement_without_content_changes_still_emits_position() {
+    let chrome = ReplChrome {
+        mode: AgentMode::Yolo,
+        context_ratio: 0.0,
+        context_window_tokens: 120_000,
+        model: "gpt".to_string(),
+        thinking: "auto".to_string(),
+        directory: "/workspace".to_string(),
+        branch: None,
+        cache_hit_ratio: None,
+        status_plugin: None,
+    };
+    let first = ComposerFrame::new(chrome.clone(), "hello".to_string(), 5, false, Vec::new(), 0);
+    let mut viewport = InlineViewport::new();
+    viewport.update(TerminalSize { cols: 40, rows: 12 }, first.height(40), 8);
+    let (_, previous) = first.draw_lines(&mut Vec::new(), &viewport, None).unwrap();
+    let moved = ComposerFrame::new(chrome, "hello".to_string(), 2, false, Vec::new(), 0);
+    let mut output = Vec::new();
+    let (_, current) = moved
+        .draw_lines(&mut output, &viewport, Some(&previous))
+        .unwrap();
+    assert_eq!(previous.lines, current.lines);
+    assert_ne!(previous.cursor_col, current.cursor_col);
+    let mut expected = Vec::new();
+    current.restore_cursor(&mut expected).unwrap();
+    assert_eq!(output, expected);
+    assert!(!output.is_empty());
 }
 
 /// 验证输入变化后仍会重绘。

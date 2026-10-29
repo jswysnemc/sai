@@ -228,14 +228,16 @@ impl ReplRuntime {
                 crate::render::terminal_image::kitty_delete_placements()
             )?;
         }
-        queue!(self.frame, Hide)?;
-        paint_changed_rows(
-            &mut self.frame,
-            0,
-            usize::from(layout.cols),
-            &painted.rows,
-            session.state.previous.as_deref(),
-        )?;
+        if session.state.previous.as_deref() != Some(painted.rows.as_slice()) {
+            queue!(self.frame, Hide)?;
+            paint_changed_rows(
+                &mut self.frame,
+                0,
+                usize::from(layout.cols),
+                &painted.rows,
+                session.state.previous.as_deref(),
+            )?;
+        }
         session.state.previous = Some(painted.rows);
         session.state.layout = Some(layout);
         session.bottom_button = painted.bottom_button;

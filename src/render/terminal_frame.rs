@@ -17,6 +17,7 @@ const END_SYNC: &[u8] = b"\x1b[?2026l";
 /// 当作一次原子提交，不支持的终端会忽略这两条私有模式序列。
 pub(crate) struct TerminalFrame {
     buffer: Vec<u8>,
+    payload: Vec<u8>,
 }
 
 impl TerminalFrame {
@@ -30,7 +31,14 @@ impl TerminalFrame {
     pub(crate) fn new() -> Self {
         Self {
             buffer: Vec::with_capacity(8192),
+            payload: Vec::with_capacity(8192),
         }
+    }
+
+    /// 【终端】【帧状态】查询尚未提交的输出量，用于判断是否需要恢复输入光标。
+    /// 参数：无；返回：本帧待输出字节数，不包含上次提交的缓存。
+    pub(crate) fn pending_len(&self) -> usize {
+        self.buffer.len()
     }
 
     /// 把当前帧一次性写入终端并清空缓冲。
@@ -53,57 +61,45 @@ impl TerminalFrame {
         let missing = std::str::from_utf8(&self.buffer)
             .map(crate::render::terminal_image::kitty_missing_transmissions)
             .unwrap_or_default();
-        let payload = if missing.is_empty() {
-            framed(&self.buffer)
-        } else {
-            framed(&with_transmissions(&self.buffer, missing.as_bytes()))
-        };
+        prepare_payload(&self.buffer, missing.as_bytes(), &mut self.payload);
         let _paint = paint_lock();
         let mut stdout = io::stdout().lock();
-        stdout.write_all(&payload)?;
+        stdout.write_all(&self.payload)?;
         stdout.flush()?;
         self.buffer.clear();
         Ok(())
     }
 }
 
-/// 把图片数据插入帧内容：放在最后一次删除全部放置之后。
+/// 【终端】【帧组装】复用提交缓冲，并将图片补传放在最后一次删除全部放置之后。
 ///
 /// 删除全部放置会释放没有放置的图片数据，补传若排在删除之前会被立即回收。
 ///
 /// 参数:
 /// - `buffer`: 本帧绘制字节
 /// - `transmissions`: 需补传的图片数据
+/// - `payload`: 可复用的整帧输出缓冲
 ///
 /// 返回:
-/// - 插入后的帧内容
-fn with_transmissions(buffer: &[u8], transmissions: &[u8]) -> Vec<u8> {
+/// - 无，缓冲内包含同步更新边界和完整帧
+fn prepare_payload(buffer: &[u8], transmissions: &[u8], payload: &mut Vec<u8>) {
+    payload.clear();
+    payload.extend_from_slice(BEGIN_SYNC);
+    if transmissions.is_empty() {
+        payload.extend_from_slice(buffer);
+        payload.extend_from_slice(END_SYNC);
+        return;
+    }
     let delete = crate::render::terminal_image::KITTY_DELETE_PLACEMENTS.as_bytes();
     let at = buffer
         .windows(delete.len())
         .rposition(|window| window == delete)
         .map(|index| index + delete.len())
         .unwrap_or(0);
-    let mut body = Vec::with_capacity(buffer.len() + transmissions.len());
-    body.extend_from_slice(&buffer[..at]);
-    body.extend_from_slice(transmissions);
-    body.extend_from_slice(&buffer[at..]);
-    body
-}
-
-/// 用同步更新序列包裹一帧内容。
-///
-/// 参数:
-/// - `buffer`: 本帧累积的绘制字节
-///
-/// 返回:
-/// - 可直接写入终端的完整帧
-fn framed(buffer: &[u8]) -> Vec<u8> {
-    let mut payload = Vec::with_capacity(buffer.len() + BEGIN_SYNC.len() + END_SYNC.len());
-    payload.extend_from_slice(BEGIN_SYNC);
-    payload.extend_from_slice(buffer);
+    payload.extend_from_slice(&buffer[..at]);
+    payload.extend_from_slice(transmissions);
+    payload.extend_from_slice(&buffer[at..]);
     payload.extend_from_slice(END_SYNC);
-    payload
 }
 
 impl Default for TerminalFrame {
@@ -158,9 +154,14 @@ mod tests {
     fn transmissions_follow_the_last_full_delete() {
         let delete = crate::render::terminal_image::KITTY_DELETE_PLACEMENTS;
         let buffer = format!("a{delete}b{delete}PLACE");
-        let body = String::from_utf8(with_transmissions(buffer.as_bytes(), b"DATA")).unwrap();
+        let mut payload = Vec::new();
+        prepare_payload(buffer.as_bytes(), b"DATA", &mut payload);
+        let body = std::str::from_utf8(&payload[BEGIN_SYNC.len()..payload.len() - END_SYNC.len()])
+            .unwrap();
         assert_eq!(body, format!("a{delete}b{delete}DATAPLACE"));
-        let plain = String::from_utf8(with_transmissions(b"PLACE", b"DATA")).unwrap();
+        prepare_payload(b"PLACE", b"DATA", &mut payload);
+        let plain = std::str::from_utf8(&payload[BEGIN_SYNC.len()..payload.len() - END_SYNC.len()])
+            .unwrap();
         assert_eq!(plain, "DATAPLACE");
     }
 
@@ -170,11 +171,33 @@ mod tests {
     /// 状态行闪动与底栏跳动都源自这一中间态。
     #[test]
     fn frame_payload_is_wrapped_in_synchronized_update() {
-        let payload = framed(b"\x1b[2Kline");
+        let mut payload = Vec::new();
+        prepare_payload(b"\x1b[2Kline", b"", &mut payload);
 
         assert!(payload.starts_with(BEGIN_SYNC));
         assert!(payload.ends_with(END_SYNC));
         let inner = &payload[BEGIN_SYNC.len()..payload.len() - END_SYNC.len()];
         assert_eq!(inner, b"\x1b[2Kline");
+    }
+
+    /// 【终端】【内存复用回归】后续小帧复用同一块内存，不携带上一帧正文或补传数据。
+    /// 参数：无；返回：无，缓冲重新分配或存在旧帧残留时断言失败。
+    #[test]
+    fn subsequent_frames_reuse_payload_capacity() {
+        let mut payload = Vec::new();
+        prepare_payload(&vec![b'x'; 16_384], b"IMAGE", &mut payload);
+        let pointer = payload.as_ptr();
+        let capacity = payload.capacity();
+        prepare_payload(b"next", b"", &mut payload);
+        assert_eq!(payload.as_ptr(), pointer);
+        assert_eq!(payload.capacity(), capacity);
+        assert_eq!(
+            &payload[BEGIN_SYNC.len()..payload.len() - END_SYNC.len()],
+            b"next"
+        );
+        let mut frame = TerminalFrame::new();
+        assert_eq!(frame.pending_len(), 0);
+        frame.write_all(b"next").unwrap();
+        assert_eq!(frame.pending_len(), 4);
     }
 }

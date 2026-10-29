@@ -129,7 +129,8 @@ impl ComposerFrame {
             previous.filter(|old| old.top == top && old.height == height && old.cols == cols);
         let previous_lines = same_geometry.map(|old| old.lines.as_slice());
         // 3. 光标单独恢复；内容相同时不切换隐藏状态，也不重写静态行
-        if previous_lines != Some(signature.lines.as_slice()) {
+        let changed = previous_lines != Some(signature.lines.as_slice());
+        if changed {
             queue!(output, Hide)?;
             paint_changed_rows(output, top, cols, &signature.lines, previous_lines)?;
         }
@@ -138,7 +139,11 @@ impl ComposerFrame {
         if same_geometry.is_none() && end_row < viewport.size().rows {
             queue!(output, MoveTo(0, end_row), Clear(ClearType::FromCursorDown))?;
         }
-        queue!(output, MoveTo(cursor_col, cursor_row), Show)?;
+        let cursor_changed =
+            previous.is_none_or(|old| old.cursor_col != cursor_col || old.cursor_row != cursor_row);
+        if changed || cursor_changed || same_geometry.is_none() {
+            signature.restore_cursor(output)?;
+        }
         Ok((cursor_row, signature))
     }
 
@@ -186,5 +191,17 @@ impl ComposerFrame {
             cols,
         ));
         lines
+    }
+}
+
+impl ComposerSignature {
+    /// 【终端】【光标恢复】正文更新后恢复输入光标，不重复绘制输入区。
+    /// 参数：output 为本帧输出；返回：光标定位与显示结果。
+    pub(in crate::cli::repl_runtime) fn restore_cursor<W: Write>(
+        &self,
+        output: &mut W,
+    ) -> Result<()> {
+        queue!(output, MoveTo(self.cursor_col, self.cursor_row), Show)?;
+        Ok(())
     }
 }
