@@ -27,7 +27,7 @@ impl ReplRuntime {
                 self.viewport.composer_height(),
             );
         }
-        OverlayPlacement::bottom(size.cols, size.rows)
+        OverlayPlacement::inline(size.cols, size.rows, self.viewport.composer_top())
     }
 
     /// 【终端提问】【界面交接】暂停输出并清底部覆盖区旧底色，保留草稿供提问结束后恢复。
@@ -91,7 +91,8 @@ mod tests {
         assert!(runtime.composer.is_some());
         assert!(runtime.fullscreen.is_none());
         let placement = runtime.question_overlay_placement();
-        assert_eq!(placement.anchor_y + placement.panel_lines, 24);
+        assert!(placement.anchor_y <= runtime.viewport.composer_top());
+        assert!(placement.anchor_y + placement.panel_lines <= 24);
     }
 
     /// 【终端提问】【底部覆盖】全屏提问不退出会话，覆盖区贴在底部输入槽。

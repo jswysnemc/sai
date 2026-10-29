@@ -48,8 +48,12 @@ impl ReplRuntime {
         turns: &[SessionTimelineTurn],
         compaction: Option<&SessionTimelineCompaction>,
     ) -> Result<()> {
+        // 1. 【会话载入】【终端首屏】空历史没有新增内容，不清屏重复绘制已显示的欢迎页
+        if turns.is_empty() && compaction.is_none() {
+            return Ok(());
+        }
         history::append_timeline_with_compaction(&mut self.transcript, turns, compaction);
-        // 1. 【会话载入】【终端首屏】全部历史进入原生回滚区，后续重绘仍只处理可视窗口
+        // 2. 【会话载入】【终端首屏】全部历史进入原生回滚区，后续重绘仍只处理可视窗口
         self.restore_history()
     }
 

@@ -41,11 +41,11 @@ class InteractionTests(unittest.TestCase):
             self.assertIn("FOLLOWUP", terminal.text())
 
     def test_command_arguments_complete_before_execution(self):
-        """Tab 连续补全参数，首次回车接受候选，再次回车执行；返回无。"""
+        """Tab 连续补全命令和参数，回车执行已补全参数；返回无。"""
         with TerminalSession() as terminal:
             terminal.send(b"/cont\t")
             terminal.wait_for(lambda: "/context " in terminal.screen.display[terminal.screen.cursor.y])
-            terminal.send(b"\r")
+            terminal.send(b"\t")
             terminal.wait_for(lambda: "/context edit" in terminal.screen.display[terminal.screen.cursor.y])
             self.assertNotIn("Usage ratio", terminal.text())
             self.assertNotIn("占用比例", terminal.text())
@@ -76,7 +76,7 @@ class InteractionTests(unittest.TestCase):
         with TerminalSession() as terminal:
             terminal.send(b"/context ")
             terminal.wait_for(lambda: "/context reset" in terminal.text())
-            terminal.send(b"\x1b[6~\r")
+            terminal.send(b"\x1b[6~\t")
             terminal.wait_for(lambda: "/context reset" in terminal.screen.display[terminal.screen.cursor.y])
             self.assertNotIn("Full transcript", terminal.text())
             terminal.send(b"\x1b")

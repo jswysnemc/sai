@@ -27,11 +27,7 @@ pub(super) fn handle_context(
     }
     // 2. 【上下文】【浮层入口】只读查询不写入会话记录，关闭或报错后恢复底层界面
     match crate::control_commands::context_overview(paths, mode, update) {
-        Ok(view) => {
-            let result = crate::cli::context_panel::show(&view, || runtime.redraw());
-            runtime.redraw()?;
-            result
-        }
+        Ok(view) => runtime.show_context_panel(&view),
         Err(err) => runtime.record_meta(err.to_string()),
     }
 }

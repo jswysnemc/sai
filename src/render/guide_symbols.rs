@@ -1,6 +1,8 @@
 //! 终端语义标记：工具类别与交互指示分开，所有字形固定占一列。
 
 pub(crate) const TOOL: &str = "\u{f0ad}";
+/// 执行步骤的分组汇总标记，区别于具体文件和工具条目
+pub(crate) const ACTIVITY_GROUP: &str = "\u{f03a}";
 pub(crate) const READ: &str = "\u{f15c}";
 pub(crate) const EDIT: &str = "\u{f044}";
 pub(crate) const ASK: &str = "\u{f059}";
@@ -78,9 +80,31 @@ pub(crate) fn tool(name: &str) -> &'static str {
 /// 参数: `character` 为可见字符；返回: 是否属于本模块图标集合。
 pub(crate) fn is_semantic(character: char) -> bool {
     [
-        TOOL, READ, EDIT, ASK, TODO, TRASH, COMMAND, SEARCH, BROWSER, ROUTING, SESSION, AGENTS,
-        INFO, THOUGHT, WORKING, FOLDER, CLOCK, IMAGE, DESKTOP, MEMORY, SHIELD, PACKAGE, NETWORK,
+        TOOL,
+        READ,
+        EDIT,
+        ASK,
+        TODO,
+        TRASH,
+        COMMAND,
+        SEARCH,
+        BROWSER,
+        ROUTING,
+        SESSION,
+        AGENTS,
+        INFO,
+        THOUGHT,
+        WORKING,
+        FOLDER,
+        CLOCK,
+        IMAGE,
+        DESKTOP,
+        MEMORY,
+        SHIELD,
+        PACKAGE,
+        NETWORK,
         CALCULATE,
+        ACTIVITY_GROUP,
     ]
     .iter()
     .any(|icon| icon.starts_with(character))
@@ -205,7 +229,17 @@ mod tests {
     #[test]
     fn semantic_icons_are_distinct_single_column_and_preserve_body() {
         let icons = [
-            READ, EDIT, ASK, TODO, TRASH, COMMAND, SEARCH, BROWSER, ROUTING, SESSION,
+            READ,
+            EDIT,
+            ASK,
+            TODO,
+            TRASH,
+            COMMAND,
+            SEARCH,
+            BROWSER,
+            ROUTING,
+            SESSION,
+            ACTIVITY_GROUP,
         ];
         assert_eq!(
             icons.iter().collect::<std::collections::HashSet<_>>().len(),
@@ -213,6 +247,7 @@ mod tests {
         );
         for icon in icons {
             assert_eq!(unicode_width::UnicodeWidthStr::width(icon), 1);
+            assert!(is_semantic(icon.chars().next().unwrap()));
         }
         assert_eq!(
             replace("  \x1b[32m•\x1b[0m title\n• body", READ),

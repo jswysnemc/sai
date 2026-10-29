@@ -34,7 +34,7 @@ fn activity_timeline_uses_english_labels_under_chinese_locale() {
         );
         let visible = text(&document);
         assert!(
-            visible.contains("\u{f15c} 1 read · \u{f0eb} 1 thought"),
+            visible.contains("\u{f03a} 1 read · \u{f0eb} 1 thought"),
             "{visible}"
         );
         assert!(visible.contains("Thought"), "{visible}");
@@ -70,7 +70,7 @@ fn activity_timeline_matches_linear_collapsed_structure() {
             ]),
         );
         let visible = text(&document);
-        assert!(visible.contains("\u{f15c} 1 read · \u{f0eb} 1 thought"));
+        assert!(visible.contains("\u{f03a} 1 read · \u{f0eb} 1 thought"));
         assert!(!visible.contains('│'));
         assert_eq!(document.lines.len(), 3);
         assert!(visible.contains("Thought"));
@@ -283,7 +283,7 @@ fn activity_timeline_group_counts_three_categories() {
     let document = store.render_fullscreen(100, &options(), &HashSet::new());
     let plain = text(&document);
     assert!(
-        plain.contains("\u{f0ad} 1 tool · \u{f15c} 2 reads · \u{f0eb} 1 thought"),
+        plain.contains("\u{f03a} 1 tool · \u{f15c} 2 reads · \u{f0eb} 1 thought"),
         "{plain}"
     );
     tui_mode::set_override(None);

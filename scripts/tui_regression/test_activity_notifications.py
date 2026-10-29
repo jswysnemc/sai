@@ -92,6 +92,8 @@ class ActivityNotificationTests(unittest.TestCase):
                 group = self.row_of(terminal, "1 read · \uf0eb 1 thought")
                 thought = self.row_of(terminal, "Thought")
                 tool = self.row_of(terminal, "Read file")
+                self.assertTrue(lines(terminal)[group].lstrip().startswith("\uf03a "), terminal.text())
+                self.assertTrue(lines(terminal)[tool].lstrip().startswith("\uf15c Read file"), terminal.text())
                 group_column = len(lines(terminal)[group]) - len(lines(terminal)[group].lstrip())
                 thought_column = len(lines(terminal)[thought]) - len(lines(terminal)[thought].lstrip())
                 tool_column = len(lines(terminal)[tool]) - len(lines(terminal)[tool].lstrip())

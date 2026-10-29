@@ -47,6 +47,28 @@ fn animated_guides_stay_aligned_at_every_supported_width() {
     }
 }
 
+/// 【终端】【视觉引导测试】底部状态行的表情从引导列起笔，各宽度下都不被当成正文缩进。
+/// 参数：无；返回：无。
+#[test]
+fn status_companion_lines_start_at_the_guide_column() {
+    use crate::render::activity_animation::{render_status_line, strip_ansi_for_test};
+
+    for frame in [0, 12, 31, 62] {
+        let line = render_status_line("Working", "3s", frame);
+        let plain = strip_ansi_for_test(&line);
+        for width in [2, 1, 0] {
+            assert_eq!(
+                strip_ansi_for_test(&align_to_guide_column_with_width(&line, width)),
+                plain
+            );
+        }
+        assert_eq!(align_to_guide_column(&format!("  {line}")), line);
+        assert_eq!(align_cli_stream_block(&line), line);
+    }
+    // 只有完整表情才按状态行处理，普通括号正文仍移到正文列
+    assert_eq!(align_to_guide_column("(note) text"), "  (note) text");
+}
+
 /// 引导符号保留在左侧，普通正文与续行位于右侧。
 #[test]
 fn aligns_symbols_and_content_on_opposite_sides() {

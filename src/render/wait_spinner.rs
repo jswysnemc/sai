@@ -1,5 +1,5 @@
 use crate::render::activity_animation::{
-    activity_frame_at, activity_started_at, render_activity_detail, render_activity_line,
+    activity_frame_at, activity_started_at, render_activity_detail, render_status_line,
     ACTIVITY_FRAME_INTERVAL,
 };
 use crate::render::terminal_paint::paint_lock;
@@ -236,8 +236,7 @@ fn render_initial_spinner_frame(state: &Arc<Mutex<WaitSpinnerState>>) {
 /// 返回:
 /// - ANSI 文本与占用行数
 fn render_frame(frame: usize, state: &WaitSpinnerState) -> (String, u16) {
-    let main_line =
-        render_activity_line(&state.phase, &format_elapsed(state.start.elapsed()), frame);
+    let main_line = render_status_line(&state.phase, &format_elapsed(state.start.elapsed()), frame);
     match &state.sub_phase {
         Some(sub_phase) if !sub_phase.trim().is_empty() => {
             if state.reserved_lines >= 2 {
@@ -398,7 +397,7 @@ mod tests {
         assert!(frame.contains("model gpt"));
     }
 
-    /// 【终端】【等待状态测试】验证等待状态与工作状态共用主题流光和脉冲线段。
+    /// 【终端】【等待状态测试】验证等待状态与工作状态共用主题流光和状态表情引导。
     ///
     /// 参数:
     /// - 无
@@ -406,7 +405,7 @@ mod tests {
     /// 返回:
     /// - 无
     #[test]
-    fn render_frame_uses_theme_shimmer_with_fixed_guide() {
+    fn render_frame_uses_theme_shimmer_with_status_companion() {
         let state = make_state("Thinking", None);
 
         let (first, lines) = render_frame(0, &state);
@@ -416,7 +415,9 @@ mod tests {
 
         assert!(plain.contains("Thinking"));
         assert!(plain.contains("0s"));
-        assert!(plain.starts_with("\u{f110} "));
+        assert!(crate::render::activity_animation::is_status_companion_line(
+            &first
+        ));
         assert!(!plain.contains('·'));
         assert_ne!(first, second);
         assert_eq!(lines, 1);

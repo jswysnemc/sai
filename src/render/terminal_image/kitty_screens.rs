@@ -121,7 +121,11 @@ pub(crate) fn kitty_delete_placements() -> &'static str {
     if let Ok(mut state) = kitty_screens().lock() {
         state.sent_mut().clear();
     }
-    KITTY_DELETE_PLACEMENTS
+    if supports_kitty_graphics() {
+        KITTY_DELETE_PLACEMENTS
+    } else {
+        ""
+    }
 }
 
 /// 【终端图片】【按需补传】返回即将写出文本所引用、当前屏幕缺失的图片数据。

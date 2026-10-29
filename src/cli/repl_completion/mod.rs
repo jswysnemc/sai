@@ -90,6 +90,14 @@ pub(super) fn accept(
     if cursor != input.chars().count() {
         return None;
     }
+    // 1. 【终端】【命令提交】完整命令优先执行，Tab 添加的尾部空格不能让回车误选子命令
+    if enter
+        && super::repl_commands::repl_commands()
+            .iter()
+            .any(|command| input.trim().eq_ignore_ascii_case(command))
+    {
+        return None;
+    }
     let suggestions = visible_repl_command_suggestions(input, streaming);
     let item = suggestions.get(selected.min(suggestions.len().saturating_sub(1)))?;
     if item.disabled || (enter && input.trim().eq_ignore_ascii_case(item.command)) {

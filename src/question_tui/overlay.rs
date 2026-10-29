@@ -12,9 +12,20 @@ pub struct OverlayPlacement {
     pub anchor_y: u16,
     /// 覆盖层占用行数
     pub panel_lines: u16,
+    /// 内联模式的正文尾部位置，窗口变高时恢复此锚点
+    pub(crate) inline_anchor: Option<u16>,
 }
 
 impl OverlayPlacement {
+    /// 【终端面板】【内联承接】在正文后接替输入区，空间不足时仅向上让出所需高度。
+    /// 参数：终端宽高和输入区首行；返回：不超出屏幕的面板区域。
+    pub fn inline(cols: u16, rows: u16, composer_top: u16) -> Self {
+        let mut placement = Self::bottom(cols, rows);
+        placement.anchor_y = composer_top.min(placement.anchor_y);
+        placement.inline_anchor = Some(composer_top);
+        placement
+    }
+
     /// 【终端提问】【底部覆盖】参数为终端列行，返回贴底的覆盖区域。
     ///
     /// 返回:
@@ -28,6 +39,7 @@ impl OverlayPlacement {
             rows,
             anchor_y: rows.saturating_sub(panel_lines),
             panel_lines,
+            inline_anchor: None,
         }
     }
 
@@ -45,6 +57,7 @@ impl OverlayPlacement {
             rows,
             anchor_y: composer_top.min(rows.saturating_sub(panel_lines)),
             panel_lines,
+            inline_anchor: None,
         }
     }
 }
@@ -52,6 +65,14 @@ impl OverlayPlacement {
 #[cfg(test)]
 mod tests {
     use super::{OverlayPlacement, MAX_PANEL_LINES};
+
+    /// 【终端面板】【内联锚点】短屏临时贴底仍保留正文位置，避免放大后出现空白；无参数或返回值。
+    #[test]
+    fn inline_placement_remembers_anchor_when_clamped() {
+        let placement = OverlayPlacement::inline(80, 24, 12);
+        assert_eq!(placement.anchor_y, 8);
+        assert_eq!(placement.inline_anchor, Some(12));
+    }
 
     /// 【终端提问】【底部覆盖】24 行终端贴底占用上限行，历史区留在上方。
     #[test]

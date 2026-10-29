@@ -88,7 +88,7 @@ pub(super) fn needs_section_gap(previous: &HistoryCell, next: &HistoryCell) -> b
 /// - `lines`: live 预换行
 ///
 /// 返回:
-/// - 首个非空行以工具引导符或活动圆点开头时为 true
+/// - 首个非空行以工具引导符、活动圆点或状态表情开头时为 true
 pub(super) fn live_opens_with_tool(lines: &[AnsiLine]) -> bool {
     lines
         .iter()
@@ -102,6 +102,7 @@ pub(super) fn live_opens_with_tool(lines: &[AnsiLine]) -> bool {
                     crate::render::guide_symbols::is_semantic(ch)
                         || matches!(ch, '•' | ACTIVITY_GUIDE | '╶' | '╴')
                 })
+                || crate::render::activity_animation::is_status_companion_line(line.as_str())
         })
 }
 
@@ -177,5 +178,19 @@ mod tests {
         assert!(needs_section_gap(&body, &tool));
         assert!(!needs_section_gap(&think, &tool));
         assert!(!needs_section_gap(&tool, &tool));
+    }
+
+    /// 【终端】【块间距】底部状态行换成表情引导后，正文与状态行之间仍补一块空行。
+    #[test]
+    fn status_companion_line_keeps_gap_after_body() {
+        let status = crate::render::work_status::WorkStatus::Working
+            .render_line(0, std::time::Duration::ZERO);
+        let mut live = vec![AnsiLine::new(status)];
+        assert!(live_opens_with_tool(&live));
+        ensure_live_tool_gap(&mut live, Some(&HistoryCell::markdown("answer".into())));
+        assert!(is_visual_blank(&live[0]));
+        assert!(!live_opens_with_tool(&[AnsiLine::new(
+            "(plain) text".into()
+        )]));
     }
 }

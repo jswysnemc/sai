@@ -3,6 +3,27 @@ use super::node;
 use crate::render::tool_view::ToolView;
 use unicode_width::UnicodeWidthStr;
 
+/// 【终端】【分组图标测试】分组标题使用汇总图标，子项和后续分类图标保持原样。
+/// 参数：无；返回：无。
+#[test]
+fn group_guide_is_distinct_from_individual_tool_icons() {
+    use crate::render::guide_symbols as icons;
+    for first in [icons::READ, icons::TOOL, icons::THOUGHT] {
+        let suffix = format!(" 16 steps · {} 2 thoughts", icons::THOUGHT);
+        let title = format!("{first}{suffix}");
+        let rendered = super::appearance::group_title(&title, 80);
+        let plain = crate::render::ansi_clip::strip_ansi(rendered.as_str());
+        assert_eq!(plain, format!("\u{f03a}{suffix}"));
+        for width in [1, 8, 24] {
+            let rendered = super::appearance::group_title(&title, width);
+            let plain = crate::render::ansi_clip::strip_ansi(rendered.as_str());
+            assert!(plain.starts_with('\u{f03a}'));
+            assert!(UnicodeWidthStr::width(plain.as_str()) <= width);
+        }
+    }
+    assert!(title(&read_cell("fixture.rs", "1\tcontent"), 80).starts_with(icons::READ));
+}
+
 /// 【终端】【工具图标测试】读取、执行、搜索与变更使用各自语义图标且均占一列。
 /// 参数: 无；返回: 无。
 #[test]

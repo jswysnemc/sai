@@ -20,6 +20,8 @@ pub(super) struct QuestionSession {
     pub(super) owns_terminal: bool,
     /// 是否为底部覆盖层；结束时只清覆盖区，不写摘要卡片
     pub(super) overlay: bool,
+    /// 内联面板保留正文后的锚点；全屏面板随窗口底部移动
+    pub(super) inline_anchor: Option<u16>,
 }
 
 impl QuestionSession {
@@ -48,6 +50,7 @@ impl QuestionSession {
             previous: Vec::new(),
             owns_terminal: true,
             overlay: false,
+            inline_anchor: None,
         })
     }
 
@@ -62,6 +65,7 @@ impl QuestionSession {
             previous: Vec::new(),
             owns_terminal: false,
             overlay: true,
+            inline_anchor: placement.inline_anchor,
         })
     }
 
@@ -170,7 +174,10 @@ impl QuestionSession {
             if !cfg!(test) {
                 let _ = self.clear();
             }
-            let placement = OverlayPlacement::bottom(cols, rows);
+            let placement = match self.inline_anchor {
+                Some(anchor) => OverlayPlacement::inline(cols, rows, anchor),
+                None => OverlayPlacement::bottom(cols, rows),
+            };
             self.anchor_y = placement.anchor_y;
             self.panel_lines = placement.panel_lines;
             return;

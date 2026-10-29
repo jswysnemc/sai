@@ -108,6 +108,7 @@ pub(super) fn handle_agent_event(
         AgentEvent::JevPreselect { phase, detail } => {
             if let Some(line) = crate::render::format_jev_preselect(phase.as_str(), detail.as_str())
             {
+                renderer.prepare_for_external_output()?;
                 println!("\x1b[2m{line}\x1b[0m");
             }
             Ok(())

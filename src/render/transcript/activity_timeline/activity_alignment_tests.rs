@@ -141,7 +141,7 @@ fn activity_group_and_single_step_align_with_user_marker() {
         .unwrap();
     assert_eq!(
         strip_ansi_for_test(grouped.lines[group.start].as_str())
-            .find(crate::render::guide_symbols::READ),
+            .find(crate::render::guide_symbols::ACTIVITY_GROUP),
         Some(0)
     );
     tui_mode::set_override(None);

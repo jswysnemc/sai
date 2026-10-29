@@ -40,7 +40,11 @@ impl Agent {
         let history = match self.chat_base_context_projection(Some(turn_id)) {
             Ok(projection) => projection.messages,
             Err(error) => {
-                eprintln!("【Jev路由】【请求前预选】读取历史失败: {error:#}");
+                // 1. 【Jev路由】【请求前预选】诊断交由界面事件绘制，不能直接打断终端帧
+                on_event(AgentEvent::JevPreselect {
+                    phase: "failed".to_string(),
+                    detail: format!("{error:#}"),
+                })?;
                 Vec::new()
             }
         };
@@ -59,10 +63,9 @@ impl Agent {
                 return Ok(Preselection::default());
             }
             Err(error) => {
-                eprintln!("【Jev路由】【请求前预选】判断失败，本轮不新增能力或上下文: {error:#}");
                 on_event(AgentEvent::JevPreselect {
                     phase: "failed".to_string(),
-                    detail: error.to_string(),
+                    detail: format!("{error:#}"),
                 })?;
                 return Ok(Preselection::default());
             }
@@ -101,10 +104,9 @@ impl Agent {
                 Ok(result)
             }
             Err(error) => {
-                eprintln!("【Jev路由】【请求前预选】暴露资源失败: {error:#}");
                 on_event(AgentEvent::JevPreselect {
                     phase: "failed".to_string(),
-                    detail: error.to_string(),
+                    detail: format!("{error:#}"),
                 })?;
                 Ok(result)
             }

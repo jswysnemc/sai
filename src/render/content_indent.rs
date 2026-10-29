@@ -121,6 +121,10 @@ fn is_turn_rule_line(text: &str) -> bool {
 /// 返回:
 /// - 引导符号位于左侧，普通正文位于右侧的终端行
 pub(crate) fn align_to_guide_column(text: &str) -> String {
+    // 状态行的表情从引导列起笔，与其他引导符号一样顶格，不按正文缩进
+    if crate::render::activity_animation::is_status_companion_line(text) {
+        return remove_leading_visible_spaces(text, visible_line_start(text).0);
+    }
     if crate::render::transcript::list_wrap::content_column(text).is_some() {
         let indent = CONTENT_LEFT_INDENT.saturating_sub(text.len() - text.trim_start().len());
         return format!("{}{text}", " ".repeat(indent));

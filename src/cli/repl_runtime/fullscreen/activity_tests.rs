@@ -64,6 +64,7 @@ fn work_status_stays_in_fixed_panel_while_scrolled() {
 }
 
 /// 【全屏测试】【动效分离】没有新内容时，工作状态动效只刷新固定区，思考正文留在执行链内。
+/// 参数：无；返回：无。
 #[test]
 fn live_reasoning_animates_only_in_fixed_panel() {
     let mut runtime = runtime(2);
@@ -88,9 +89,10 @@ fn live_reasoning_animates_only_in_fixed_panel() {
         .lines
         .clone();
     let first_panel = runtime.composer.as_ref().unwrap().panel_lines().to_vec();
+    // 1. 【全屏测试】【动效分离】第 8 帧仍在流光缓冲区，第 24 帧流光经过文字且笑脸与秒数不变
     runtime
         .transcript
-        .set_live_animation_elapsed_for_test(ACTIVITY_FRAME_INTERVAL * 8);
+        .set_live_animation_elapsed_for_test(ACTIVITY_FRAME_INTERVAL * 24);
     runtime.paint_fullscreen().unwrap();
     assert_eq!(
         runtime.fullscreen.as_ref().unwrap().state.document.lines,
@@ -99,6 +101,11 @@ fn live_reasoning_animates_only_in_fixed_panel() {
     assert_ne!(
         runtime.composer.as_ref().unwrap().panel_lines(),
         first_panel
+    );
+    // 2. 【全屏测试】【动效分离】可见内容不变，确保面板差异来自文字样式而非表情或计时
+    assert_eq!(
+        panel(&runtime),
+        strip_ansi_for_test(&first_panel.join("\n"))
     );
     assert!(panel(&runtime).contains("Thinking"));
     assert!(body(&runtime).contains("inspect the current window"));

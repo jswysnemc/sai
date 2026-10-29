@@ -1,9 +1,11 @@
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
+mod companion;
 mod guide;
 mod shimmer;
 
+pub(crate) use companion::is_status_companion_line;
 pub(crate) use guide::{render_activity_guide, render_activity_guide_with_color, ACTIVITY_GUIDE};
 pub(crate) use shimmer::render_activity_text;
 
@@ -29,11 +31,24 @@ pub(crate) fn render_activity_detail(text: &str) -> String {
 /// 【终端】【状态动效】组合脉冲线段、流光标题和弱化详情。
 /// 参数：`label` 为状态文字，`detail` 为可选详情，`frame` 为动画帧号；返回：完整 ANSI 状态行。
 pub(crate) fn render_activity_line(label: &str, detail: &str, frame: usize) -> String {
-    let mut output = format!(
-        "{} {}",
-        render_activity_guide(frame),
-        render_activity_text(label, frame)
-    );
+    compose_activity_line(render_activity_guide(frame), label, detail, frame)
+}
+
+/// 【终端】【状态动效】组合底部状态行：左侧为眨眼表情，其后为流光标题和弱化详情。
+/// 参数：`label` 为状态文字，`detail` 为可选详情，`frame` 为动画帧号；返回：完整 ANSI 状态行。
+pub(crate) fn render_status_line(label: &str, detail: &str, frame: usize) -> String {
+    compose_activity_line(
+        companion::render_status_companion(frame),
+        label,
+        detail,
+        frame,
+    )
+}
+
+/// 【终端】【状态动效】在左侧引导后拼接流光标题与弱化详情。
+/// 参数：`guide` 为已渲染的左侧引导，`label`/`detail`/`frame` 同上；返回：完整 ANSI 行。
+fn compose_activity_line(guide: String, label: &str, detail: &str, frame: usize) -> String {
+    let mut output = format!("{guide} {}", render_activity_text(label, frame));
     if !detail.is_empty() {
         output.push(' ');
         output.push_str(&render_activity_detail(detail));

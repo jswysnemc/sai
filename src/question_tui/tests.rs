@@ -186,6 +186,7 @@ fn resize_recovers_panel_height_after_terminal_grows() {
         previous: Vec::new(),
         owns_terminal: false,
         overlay: false,
+        inline_anchor: None,
     });
     session.resize_to_terminal(80, 3);
     assert_eq!(session.panel_lines, 2);
@@ -203,10 +204,29 @@ fn overlay_resize_pins_panel_to_bottom() {
         previous: Vec::new(),
         owns_terminal: false,
         overlay: true,
+        inline_anchor: None,
     });
     session.resize_to_terminal(80, 10);
     assert_eq!(session.panel_lines, 9);
     assert_eq!(session.anchor_y, 1);
+}
+
+/// 【终端提问】【内联缩放】面板缩小时保持可见，放大后回到正文后而非贴底；无参数或返回值。
+#[test]
+fn inline_overlay_resize_keeps_content_anchor() {
+    let mut session = std::mem::ManuallyDrop::new(QuestionSession {
+        stdout: io::stdout(),
+        anchor_y: 7,
+        panel_lines: 16,
+        previous: Vec::new(),
+        owns_terminal: false,
+        overlay: true,
+        inline_anchor: Some(7),
+    });
+    session.resize_to_terminal(80, 10);
+    assert_eq!(session.anchor_y, 1);
+    session.resize_to_terminal(100, 40);
+    assert_eq!(session.anchor_y, 7);
 }
 
 #[test]

@@ -5,6 +5,7 @@ mod bottom_panel;
 mod composer;
 mod composer_frame;
 mod composer_selection;
+mod context_handoff;
 mod event_loop;
 mod fullscreen;
 mod history;

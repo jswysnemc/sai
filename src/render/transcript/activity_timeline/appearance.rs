@@ -82,11 +82,13 @@ fn color_diff_counts(metadata: &str) -> String {
     }
 }
 
-/// 【终端】【分组着色】突出分类图标与计数，避免给整块正文添加背景。
+/// 【终端】【分组着色】使用独立汇总图标，保留后续分类与计数，不添加正文背景。
 /// 参数: `text` 为分组标题，`width` 为净宽；返回: 带颜色的定宽标题。
 pub(super) fn group_title(text: &str, width: usize) -> AnsiLine {
+    let text =
+        crate::render::guide_symbols::replace(text, crate::render::guide_symbols::ACTIVITY_GROUP);
     AnsiLine::new(format!(
         "\x1b[36m{}\x1b[0m",
-        crate::render::clip_to_width(text, width, "")
+        crate::render::clip_to_width(&text, width, "")
     ))
 }
