@@ -85,3 +85,7 @@ pub(crate) fn has_compact_result_view(name: &str) -> bool {
 
 #[cfg(test)]
 mod question_tests;
+#[cfg(test)]
+mod demo_tests;
+#[cfg(test)]
+mod comparison_demo_tests;
