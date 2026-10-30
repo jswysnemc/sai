@@ -84,4 +84,6 @@ pub(crate) struct TranscriptStore {
     pub(super) latest_todo: Vec<TodoSnapshotItem>,
     /// 当前展示的会话视图（主 agent 或某个子智能体）
     pub(super) view: TranscriptView,
+    /// 子会话复用共享渲染器，缓存与主会话相互隔离
+    pub(super) subagent_document: Option<(String, Box<TranscriptStore>)>,
 }

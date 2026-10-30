@@ -29,6 +29,7 @@ impl TranscriptStore {
             dirty_from_cell: None,
             latest_todo: Vec::new(),
             view: super::TranscriptView::Main,
+            subagent_document: None,
         }
     }
 

@@ -151,13 +151,10 @@ impl TranscriptStore {
         expanded: &HashSet<ParagraphKey>,
     ) -> FullscreenDocument {
         let width = width.max(1);
-        if let TranscriptView::Subagent { id, label } = self.view.clone() {
-            return FullscreenDocument {
-                lines: super::subagent_view::render_fullscreen_lines(&id, &label, width),
-                ..FullscreenDocument::default()
-            };
-        }
         crate::render::tui_presentation::with_locale(|| {
+            if let TranscriptView::Subagent { id, label } = self.view.clone() {
+                return self.render_subagent_document(&id, &label, width, options, expanded);
+            }
             self.render_activity_document(width, options, expanded)
         })
     }

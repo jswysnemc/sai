@@ -70,12 +70,26 @@ impl TranscriptStore {
     ) -> DisplayWindow {
         // 子智能体视图：整个 transcript 切换为该子智能体的会话时间线
         if let super::store::TranscriptView::Subagent { id, label } = self.view.clone() {
-            let lines = super::subagent_view::render_view_lines(
-                &id,
-                &label,
-                width,
-                self.live_animation_frame(),
-            );
+            let lines = if crate::render::tui_mode::prefers_fullscreen() {
+                crate::render::tui_presentation::with_locale(|| {
+                    self.render_subagent_document(
+                        &id,
+                        &label,
+                        width,
+                        options,
+                        &std::collections::HashSet::new(),
+                    )
+                    .lines
+                })
+            } else {
+                super::subagent_view::render_view_lines(
+                    &id,
+                    &label,
+                    width,
+                    self.live_animation_frame(),
+                    options,
+                )
+            };
             let total = lines.len();
             let start = total.saturating_sub(min_rows).min(max_start).min(total);
             return DisplayWindow {

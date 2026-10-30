@@ -1,5 +1,5 @@
 use super::line::AnsiLine;
-use super::{markdown_cell, reasoning_cell};
+use super::{markdown_cell, reasoning_cell, TranscriptRenderOptions};
 use crate::i18n::text as t;
 use crate::render::activity_animation::render_activity_text;
 use crate::render::tool_event_line::tool_event_text;
@@ -13,6 +13,7 @@ use crate::tools::subagent_timeline::SubagentTimelineEntry;
 /// - `label`: 展示名称
 /// - `width`: 当前终端列数
 /// - `frame`: live 动画帧序号
+/// - `options`: 主会话当前展示选项
 ///
 /// 返回:
 /// - 预换行 ANSI 行
@@ -21,20 +22,11 @@ pub(super) fn render_view_lines(
     label: &str,
     width: usize,
     frame: usize,
+    options: &TranscriptRenderOptions,
 ) -> Vec<AnsiLine> {
     // 渲染宽度上下文与折行共用同一宽度，避免表格/思考块超宽被二次折断
     let rendered = crate::render::render_width::with_render_width(width, || {
-        render_view_text(id, label, frame, true)
-    });
-    AnsiLine::wrap_block(&rendered, width.max(1))
-}
-
-/// 【全屏视图】【子会话正文】仅输出子会话内容，运行状态由固定面板承载。
-/// @param id 为子会话标识；label 为展示名称；width 为正文净宽
-/// @returns 不含工作动效的正文行
-pub(super) fn render_fullscreen_lines(id: &str, label: &str, width: usize) -> Vec<AnsiLine> {
-    let rendered = crate::render::render_width::with_render_width(width, || {
-        render_view_text(id, label, 0, false)
+        render_view_text(id, label, frame, true, options)
     });
     AnsiLine::wrap_block(&rendered, width.max(1))
 }
@@ -46,40 +38,25 @@ pub(super) fn render_fullscreen_lines(id: &str, label: &str, width: usize) -> Ve
 /// - `label`: 展示名称
 /// - `frame`: live 动画帧序号
 /// - `activity`: 是否在正文附带运行状态
+/// - `options`: 主会话当前展示选项
 ///
 /// 返回:
 /// - ANSI 文本块
-fn render_view_text(id: &str, label: &str, frame: usize, activity: bool) -> String {
+fn render_view_text(
+    id: &str,
+    label: &str,
+    frame: usize,
+    activity: bool,
+    options: &TranscriptRenderOptions,
+) -> String {
     let snapshot = crate::tools::subagent_state::subagent_snapshot(id).ok();
     let status = snapshot
         .as_ref()
         .map(|snapshot| crate::render::status_style::subagent_status_key(&snapshot.status))
         .unwrap_or("run");
-    // 1. 标题：与主视图工具行同语汇（Delegating/Delegated）+ 返回提示
-    let tense = crate::render::tool_event_line::ToolVerbTense::from_done(status != "run");
-    let verb = crate::render::tool_event_line::tool_verb("subagent", tense);
-    let mut output = tool_event_text(&format!("{verb} {label}"), status);
-    output.push_str(&format!(
-        "\n\x1b[2m  └ {} · ↓ {}\x1b[0m\n",
-        t("subagent session view", "子智能体会话视图"),
-        t("switch back", "切换返回")
-    ));
-    // 2. 时间线全量渲染：思考 / 正文 / 工具行
+    let mut output = view_heading(label, status, snapshot.as_ref());
+    // 1. 【终端】【子会话偏好】思考与工具读取主会话选项，不另设展示模式
     let entries = crate::tools::subagent_state::subagent_timeline(id).unwrap_or_default();
-    if let Some(error) = snapshot
-        .as_ref()
-        .and_then(|snapshot| snapshot.error.as_deref())
-    {
-        let (style, heading) = match status {
-            "err" => ("\x1b[31m", t("Failure details", "失败详情")),
-            "interrupted" => ("\x1b[2m", t("Interruption details", "中断详情")),
-            _ => ("\x1b[2m", t("Task details", "任务详情")),
-        };
-        output.push_str(&format!(
-            "\n{style}{heading}\x1b[0m\n{}\n",
-            markdown_cell::render_completed(error)
-        ));
-    }
     if entries.is_empty() {
         output.push_str(&format!(
             "\n\x1b[2m  {}\x1b[0m",
@@ -89,10 +66,14 @@ fn render_view_text(id: &str, label: &str, frame: usize, activity: bool) -> Stri
     for entry in &entries {
         match entry {
             SubagentTimelineEntry::Reasoning { text } => {
-                output.push('\n');
-                output.push_str(&reasoning_cell::render_thinking_body(
-                    text, false, false, None,
-                ));
+                let rendered = reasoning_cell::render(
+                    &reasoning_cell::ReasoningCell::new(text.clone()),
+                    options.reasoning_mode,
+                );
+                if !rendered.is_empty() {
+                    output.push('\n');
+                    output.push_str(&rendered);
+                }
             }
             SubagentTimelineEntry::Text { text } => {
                 output.push('\n');
@@ -112,6 +93,8 @@ fn render_view_text(id: &str, label: &str, frame: usize, activity: bool) -> Stri
                     output.push_str(&format!("\n\x1b[2m  {gutter}{line}\x1b[0m"));
                 }
             }
+            SubagentTimelineEntry::Tool { .. }
+                if options.tool_call_mode == crate::render::ToolCallDisplayMode::Hidden => {}
             SubagentTimelineEntry::Tool {
                 name,
                 args_preview,
@@ -125,7 +108,6 @@ fn render_view_text(id: &str, label: &str, frame: usize, activity: bool) -> Stri
                     None if matches!(status, "interrupted" | "cancelled" | "err") => status,
                     None => "run",
                 };
-                // 与主视图工具行同语汇：动词 + 对象，而不是原始工具名
                 let tense =
                     crate::render::tool_event_line::ToolVerbTense::from_done(status != "run");
                 let label = crate::render::tool_event_line::tool_event_label_tense(
@@ -135,7 +117,6 @@ fn render_view_text(id: &str, label: &str, frame: usize, activity: bool) -> Stri
                 );
                 output.push('\n');
                 let heading = if name == "run_command" {
-                    // 1. 【终端】【命令样式】与主会话共享命令符、续行缩进和语法着色
                     crate::render::command_output::render_command_block_with_action(
                         args_preview,
                         crate::render::tool_event_line::tool_verb(name, tense),
@@ -153,12 +134,15 @@ fn render_view_text(id: &str, label: &str, frame: usize, activity: bool) -> Stri
                 } else {
                     output.push_str(&heading);
                 }
-                if let Some(result) = output_preview
-                    .as_deref()
-                    .filter(|text| ok == &Some(false) && !text.trim().is_empty())
-                {
+                if let Some(result) = output_preview.as_deref().filter(|text| {
+                    !text.trim().is_empty()
+                        && (ok == &Some(false)
+                            || options.tool_call_mode == crate::render::ToolCallDisplayMode::Full)
+                }) {
                     let body = crate::render::command_result_block::render_live_command_output(
-                        "", result, false,
+                        if ok == &Some(false) { "" } else { result },
+                        if ok == &Some(false) { result } else { "" },
+                        ok != &Some(false),
                     );
                     output.push('\n');
                     output.push_str(&body);
@@ -178,26 +162,70 @@ fn render_view_text(id: &str, label: &str, frame: usize, activity: bool) -> Stri
             output.push_str(&markdown_cell::render_completed(result));
         }
     }
-    // 3. 【终端】【子智能体状态】运行中显示 Working 主题流光；待命给出留言提示
+    // 2. 【终端】【子智能体状态】运行状态与待命提示只属于当前子会话
     if status == "run" && activity {
         output.push('\n');
-        let label = WorkStatus::Working.localized_label();
-        output.push_str(&render_activity_text(&label, frame));
+        output.push_str(&render_activity_text(
+            &WorkStatus::Working.localized_label(),
+            frame,
+        ));
     } else if status == "idle" {
         output.push('\n');
+        output.push_str(&idle_hint());
+    }
+    output
+}
+
+/// 【终端】【子会话标题】为两种渲染模式生成一致的身份、状态与错误信息。
+/// 参数: label 为展示名称，status 为状态键，snapshot 为任务快照；返回: 标题文本。
+pub(super) fn view_heading(
+    label: &str,
+    status: &str,
+    snapshot: Option<&crate::tools::subagent_state::SubagentSnapshot>,
+) -> String {
+    let tense = crate::render::tool_event_line::ToolVerbTense::from_done(status != "run");
+    let verb = crate::render::tool_event_line::tool_verb("subagent", tense);
+    let mut output = tool_event_text(&format!("{verb} {label}"), status);
+    output.push_str(&format!(
+        "\n\x1b[2m  └ {} · ↓ {}\x1b[0m\n",
+        t("subagent session view", "子智能体会话视图"),
+        t("switch back", "切换返回")
+    ));
+    if let Some(error) = snapshot.and_then(|snapshot| snapshot.error.as_deref()) {
+        let (style, heading) = match status {
+            "err" => ("\x1b[31m", t("Failure details", "失败详情")),
+            "interrupted" => ("\x1b[2m", t("Interruption details", "中断详情")),
+            _ => ("\x1b[2m", t("Task details", "任务详情")),
+        };
         output.push_str(&format!(
-            "\x1b[38;5;110m● {}\x1b[0m \x1b[2m{}\x1b[0m",
-            t("idle, waiting for follow-ups", "待命中"),
-            t("type a message to follow up", "直接输入消息追加指令")
+            "\n{style}{heading}\x1b[0m\n{}\n",
+            markdown_cell::render_completed(error)
         ));
     }
     output
+}
+
+/// 【终端】【子会话待命】生成追加指令提示；参数: 无；返回: 待命文本。
+pub(super) fn idle_hint() -> String {
+    format!(
+        "\x1b[38;5;110m● {}\x1b[0m \x1b[2m{}\x1b[0m",
+        t("idle, waiting for follow-ups", "待命中"),
+        t("type a message to follow up", "直接输入消息追加指令")
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::render::activity_animation::strip_ansi_for_test;
+
+    /// 构造主会话展示选项；参数: 无；返回: 完整思考与工具模式。
+    fn options() -> TranscriptRenderOptions {
+        TranscriptRenderOptions {
+            reasoning_mode: crate::render::ReasoningDisplayMode::Full,
+            tool_call_mode: crate::render::ToolCallDisplayMode::Full,
+        }
+    }
 
     /// 【终端】【子代理命令】命令从运行到完成都使用主会话的命令块；无参数，无返回值
     #[test]
@@ -212,14 +240,26 @@ mod tests {
         );
         let args = r#"{"command":"printf hello"}"#;
         crate::tools::subagent_state::timeline_tool_started(&snapshot.id, "run_command", args);
-        let running = strip_ansi_for_test(&render_view_text(&snapshot.id, "command test", 0, true));
+        let running = strip_ansi_for_test(&render_view_text(
+            &snapshot.id,
+            "command test",
+            0,
+            true,
+            &options(),
+        ));
         crate::tools::subagent_state::timeline_tool_finished(
             &snapshot.id,
             "run_command",
             true,
             "hello",
         );
-        let done = strip_ansi_for_test(&render_view_text(&snapshot.id, "command test", 0, true));
+        let done = strip_ansi_for_test(&render_view_text(
+            &snapshot.id,
+            "command test",
+            0,
+            true,
+            &options(),
+        ));
         crate::tools::subagent_state::clear_subagents_for_owner(&owner);
         assert!(running.contains("Running $ printf hello"), "{running}");
         assert!(done.contains("Ran $ printf hello"), "{done}");
@@ -237,7 +277,7 @@ mod tests {
         state::timeline_tool_started(&snapshot.id, "run_command", &args);
         state::timeline_tool_finished(&snapshot.id, "run_command", false, "command failed");
         state::timeline_tool_started(&snapshot.id, "read_file", r#"{"path":"src/main.rs"}"#);
-        let rendered = render_view_lines(&snapshot.id, "render", 32, 0);
+        let rendered = render_view_lines(&snapshot.id, "render", 32, 0, &options());
         let plain = rendered
             .iter()
             .map(|line| strip_ansi_for_test(line.as_str()))
@@ -259,7 +299,7 @@ mod tests {
 
     #[test]
     fn view_renders_title_and_placeholder_without_snapshot() {
-        let lines = render_view_lines("missing-id", "检查项目", 80, 0);
+        let lines = render_view_lines("missing-id", "检查项目", 80, 0, &options());
         let joined = strip_ansi_for_test(
             &lines
                 .iter()
@@ -273,7 +313,7 @@ mod tests {
 
     #[test]
     fn view_lines_fit_width() {
-        let lines = render_view_lines("missing-id", &"标".repeat(60), 40, 0);
+        let lines = render_view_lines("missing-id", &"标".repeat(60), 40, 0, &options());
         for line in &lines {
             let width: usize = line
                 .as_str()
@@ -295,9 +335,9 @@ mod tests {
     /// - 无
     #[test]
     fn running_view_uses_working_shimmer() {
-        let first = render_view_text("missing-id", "检查项目", 0, true);
+        let first = render_view_text("missing-id", "检查项目", 0, true, &options());
         // 【终端】【流光测试】对比扫描带在文字外与文字中的阶段，覆盖 ANSI 降级样式
-        let second = render_view_text("missing-id", "检查项目", 31, true);
+        let second = render_view_text("missing-id", "检查项目", 31, true, &options());
         let first_status = first.lines().last().unwrap_or_default();
         let second_status = second.lines().last().unwrap_or_default();
 
@@ -343,8 +383,8 @@ mod tests {
         assert!(!overview.running);
         assert!(!cell.has_live_updates());
         assert_eq!(overview.detail, snapshots[0].error);
-        let first = render_view_text(&id, "检查项目", 4, true);
-        let later = render_view_text(&id, "检查项目", 12, true);
+        let first = render_view_text(&id, "检查项目", 4, true, &options());
+        let later = render_view_text(&id, "检查项目", 12, true, &options());
         assert_eq!(first, later);
         let plain = strip_ansi_for_test(&first);
         assert!(plain.contains(t("Interruption details", "中断详情")));
@@ -376,7 +416,13 @@ mod tests {
             None,
             None,
         );
-        let text = strip_ansi_for_test(&render_view_text(&snapshot.id, "检查项目", 4, true));
+        let text = strip_ansi_for_test(&render_view_text(
+            &snapshot.id,
+            "检查项目",
+            4,
+            true,
+            &options(),
+        ));
         assert!(text.contains("Result without trailing newline"), "{text}");
         assert!(!text.contains("Working"));
         crate::tools::subagent_state::clear_subagents_for_owner(&owner);

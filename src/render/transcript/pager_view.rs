@@ -78,6 +78,7 @@ impl TranscriptStore {
                 &label,
                 width,
                 self.live_animation_frame(),
+                options,
             );
             return PagerView::from_lines(guide_lines(lines, width));
         }

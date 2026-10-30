@@ -22,6 +22,8 @@ mod presentation_tests;
 mod reasoning_viewport;
 pub(super) mod selection;
 mod state;
+#[cfg(test)]
+mod subagent_view_tests;
 
 pub(in crate::cli) use input::FullscreenEvent;
 
@@ -40,6 +42,8 @@ use std::io::{self, Write};
 /// 全屏会话：持有备用屏与鼠标捕获，销毁时恢复主屏。
 pub(super) struct FullscreenSession {
     state: FullscreenState,
+    /// 当前正文所属子任务，空值表示主会话
+    viewing_subagent: Option<String>,
     /// 输入框正上方“回到底部”按钮的点击范围
     bottom_button: Option<(u16, u16)>,
     /// 待应用的段落切换锚点：段落键与切换前的屏幕偏移
@@ -65,6 +69,7 @@ impl FullscreenSession {
         }
         Ok(Self {
             state: FullscreenState::new(),
+            viewing_subagent: None,
             bottom_button: None,
             pending_toggle: None,
             images: Vec::new(),
@@ -183,13 +188,22 @@ impl ReplRuntime {
         let Some(session) = self.fullscreen.as_mut() else {
             return Ok(());
         };
+        // 2. 【全屏视图】【会话切换】段落键只在各自会话内有效，切换时清除旧命中与滚动状态
+        let viewing_subagent = self.transcript.viewing_subagent_id().map(str::to_string);
+        let view_changed = session.viewing_subagent != viewing_subagent;
+        if view_changed {
+            session.state = FullscreenState::new();
+            session.viewing_subagent = viewing_subagent;
+            session.pending_toggle = None;
+            session.pending_copy = None;
+        }
         // 2. 【全屏视图】【正文复用】拖选和滚动不遍历历史；内容、布局或展开状态变化才更新正文
         let layout_changed = session.state.layout != Some(layout);
         if layout_changed {
             session.state.previous = None;
         }
         let body_height = usize::from(layout.body_height);
-        if refresh_document || layout_changed || session.pending_toggle.is_some() {
+        if refresh_document || view_changed || layout_changed || session.pending_toggle.is_some() {
             let document = self.transcript.render_fullscreen(
                 usize::from(layout.content_width),
                 &self.options,

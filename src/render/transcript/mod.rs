@@ -22,6 +22,7 @@ mod shell_cell;
 mod spacing;
 mod store;
 mod subagent_cell;
+mod subagent_document;
 mod subagent_view;
 mod tool_cell;
 pub(crate) mod unified_diff;
