@@ -52,7 +52,9 @@ class ResumeTests(unittest.TestCase):
             metadata = fixture.scope(fixture.b) / "workspace.json"
             metadata.unlink()
             open_picker(terminal)
-            terminal.send(b"\tBETA\r")
+            terminal.send(b"\tBETA")
+            terminal.wait_for(lambda: "BETA-SESSION" in terminal.text())
+            terminal.send(b"\r")
             terminal.wait_for(lambda: "LOCATE WORKSPACE" in terminal.text() or "定位原工作区" in terminal.text())
             terminal.send(b"\r" + str(fixture.b).encode() + b"\rs")
             terminal.wait_for(lambda: "Resumed session" in terminal.text() or "已恢复会话" in terminal.text())
@@ -64,7 +66,8 @@ class ResumeTests(unittest.TestCase):
         """CLI --all 直接打开全量分组视图，选择后恢复目标目录；返回无。"""
         fixture = Workspaces()
         with TerminalSession(prepare=fixture.setup, workspace="workspace-a", arguments=["resume", "--all"],
-                             ready=lambda term: "All workspaces" in term.text() or "全部工作区" in term.text()) as terminal:
+                             ready=lambda term: "BETA-SESSION" in term.text()) as terminal:
+            self.assertTrue("All workspaces" in terminal.text() or "全部工作区" in terminal.text())
             self.assertIn("ALPHA-SESSION", terminal.text())
             self.assertIn("BETA-SESSION", terminal.text())
             terminal.send(b"BETA\r")

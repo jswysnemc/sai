@@ -1,3 +1,4 @@
+mod catalog;
 mod model;
 mod rows;
 #[cfg(test)]
@@ -21,15 +22,15 @@ pub(super) fn select(
     directory: &Path,
     all: bool,
 ) -> Result<Option<ResumeTarget>> {
-    let targets = crate::state::resume_catalog(paths, directory, true)?;
-    let id = crate::state::workspace_id_for_path(&crate::platform::windows_path::canonicalize(
-        directory,
-    )?);
-    let mut picker = model::Picker::new(targets, id, all);
+    let (mut catalog, mut picker) = catalog::Catalog::new(paths, directory, all)?;
+    if all {
+        catalog.load_all(&mut picker)?;
+    }
     let _terminal = TerminalGuard::start()?;
     let mut stdout = io::stdout();
     let mut dirty = true;
     loop {
+        dirty |= catalog.poll(&mut picker);
         if dirty {
             view::draw(&mut stdout, &picker, terminal::size()?)?;
         }
@@ -53,7 +54,12 @@ pub(super) fn select(
                             }
                         }
                     }
-                    KeyCode::Tab | KeyCode::BackTab => picker.toggle(),
+                    KeyCode::Tab | KeyCode::BackTab => {
+                        picker.toggle();
+                        if picker.all {
+                            catalog.load_all(&mut picker)?;
+                        }
+                    }
                     KeyCode::Up => picker.selected = picker.selected.saturating_sub(1),
                     KeyCode::Down => {
                         picker.selected =

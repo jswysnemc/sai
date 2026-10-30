@@ -9,6 +9,8 @@ pub(super) struct Picker {
     pub query: String,
     pub selected: usize,
     pub visible: Vec<usize>,
+    pub loading: bool,
+    pub load_error: Option<String>,
 }
 
 impl Picker {
@@ -22,9 +24,34 @@ impl Picker {
             query: String::new(),
             selected: 0,
             visible: Vec::new(),
+            loading: false,
+            load_error: None,
         };
         state.filter();
         state
+    }
+
+    /// 【会话选择】【目录更新】应用后台快照，保留查询、范围与工作区内的精确选中身份。
+    /// 参数: targets 为最新会话目录；返回: 无
+    pub(super) fn replace_targets(&mut self, targets: Vec<ResumeTarget>) {
+        // 1. 【会话选择】【精确身份】记录完整身份，避免新增工作区重排后选中其他同名会话
+        let selected = self.target().map(|target| {
+            (
+                target.session.workspace_id.clone(),
+                target.session.info.id.clone(),
+            )
+        });
+        // 2. 【会话选择】【快照筛选】沿用当前查询和范围，再恢复仍然可见的目标
+        self.targets = targets;
+        self.filter();
+        self.selected = selected
+            .and_then(|(workspace, session)| {
+                self.visible.iter().position(|index| {
+                    let target = &self.targets[*index];
+                    target.session.workspace_id == workspace && target.session.info.id == session
+                })
+            })
+            .unwrap_or(0);
     }
 
     /// 【会话选择】【过滤】按标题、标识和路径匹配，保留工作区分组顺序。
@@ -67,7 +94,7 @@ impl Picker {
             .unwrap_or(0);
     }
 
-    /// 【会话选择】【面板高度】计算全部会话展开后的行数（会话行 + 工作区标题行）。
+    /// 【会话选择】【面板高度】计算已加载会话展开后的行数（会话行 + 工作区标题行）。
     ///
     /// 面板高度据此固定，切换范围或输入搜索时外框不会跳动。
     ///

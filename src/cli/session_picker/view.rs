@@ -32,7 +32,7 @@ const CHROME_ROWS: usize = 5;
 /// - 输出结果
 pub(super) fn draw(stdout: &mut io::Stdout, picker: &Picker, size: (u16, u16)) -> Result<()> {
     let (cols, rows) = size;
-    // 1. 面板高度按全量会话计算，切换范围或搜索时外框不跳动
+    // 1. 面板高度按已加载会话计算，同一快照内切换范围或搜索时外框不跳动
     let list_rows = picker.max_rows().max(MIN_LIST_ROWS);
     let content_rows = (list_rows + CHROME_ROWS).min(usize::from(u16::MAX)) as u16;
     let frame = content_frame(cols, rows, content_rows, PICKER_MAX_WIDTH);
@@ -85,7 +85,12 @@ pub(super) fn draw(stdout: &mut io::Stdout, picker: &Picker, size: (u16, u16)) -
 /// - 顶边框行
 fn top_border(picker: &Picker, width: u16) -> String {
     let title = t("Resume session", "恢复会话");
-    let count = format!("{}/{}", picker.visible.len(), picker.targets.len());
+    let mut count = format!("{}/{}", picker.visible.len(), picker.targets.len());
+    if picker.all && picker.loading {
+        count.push_str(t(" Loading", " 正在加载"));
+    } else if picker.all && picker.load_error.is_some() {
+        count.push_str(t(" Load failed", " 加载失败"));
+    }
     // 固定字符：左角、短横、菱形、右角与四处空格
     let label_width = display_width(title) + display_width(&count) + 8;
     let fill = usize::from(width).saturating_sub(label_width);

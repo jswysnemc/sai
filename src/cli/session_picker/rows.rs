@@ -36,7 +36,21 @@ pub(super) fn body(picker: &Picker, width: usize) -> (Vec<String>, usize) {
         // 2. 会话行：标题左对齐、相对时间右对齐
         lines.push(session_line(target, position == picker.selected, width));
     }
-    if lines.is_empty() {
+    if picker.all && picker.loading {
+        lines.push(format!(
+            "{MUTED}{}{RESET}",
+            t(
+                "Loading workspaces... Esc cancels.",
+                "正在加载工作区，按 Esc 取消。"
+            )
+        ));
+    } else if picker.all && picker.load_error.is_some() {
+        lines.push(format!(
+            "{MUTED}{}: {}{RESET}",
+            t("Failed to load workspaces", "工作区加载失败"),
+            picker.load_error.as_deref().unwrap_or_default()
+        ));
+    } else if lines.is_empty() {
         lines.push(format!(
             "{MUTED}{}{RESET}",
             t(
