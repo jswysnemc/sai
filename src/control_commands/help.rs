@@ -160,6 +160,10 @@ fn repl_only_help_lines() -> Vec<String> {
             t("switch and save terminal view", "切换并保存终端视图")
         ),
         format!(
+            "  /tui sidebar [on|off|auto]  {}",
+            t("control sidebar visibility", "控制侧栏可见性")
+        ),
+        format!(
             "  /thinking [level]  {}",
             t(
                 "choose active provider thinking level",

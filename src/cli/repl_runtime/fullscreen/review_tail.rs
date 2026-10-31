@@ -39,7 +39,7 @@ impl ReplRuntime {
             &session.sidebar.git.summary,
             &layout,
         );
-        let rows = panel
+        let mut rows = panel
             .into_iter()
             .skip(usize::from(layout.composer_top))
             .map(|line| {
@@ -51,7 +51,8 @@ impl ReplRuntime {
                     " ".repeat(padding)
                 )
             })
-            .collect();
+            .collect::<Vec<_>>();
+        super::sidebar_resize::decorate_divider(&self.sidebar_control, &mut rows);
         let next = ReviewTail {
             left: layout.main_width,
             top: layout.composer_top,

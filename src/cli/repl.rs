@@ -116,6 +116,7 @@ pub(super) async fn run_repl(
             tool_call_mode: render::ToolCallDisplayMode::from_config(&config.display.tool_calls),
         };
         render::configure_display_rendering(&config.display);
+        runtime.configure_sidebar(config.display.sidebar);
         runtime.update_options(config.display.repl_transcript_row_cap, transcript_options);
         // 【终端】【布局恢复】仅恢复独占命令暂时退出的视图，不覆盖用户通过 Ctrl+O 选择的内联模式
         if std::mem::take(&mut restore_fullscreen_after_command) {
@@ -259,7 +260,9 @@ pub(super) async fn run_repl(
         external_events.resume();
         apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
         let input = submission.raw_input.trim();
-        if view_commands::handle(input, paths, &mut config, &mut runtime)? {
+        if runtime.handle_tui_command(input)?
+            || view_commands::handle(input, paths, &mut config, &mut runtime)?
+        {
             pending_undo = false;
             exit_armed = false;
             continue;

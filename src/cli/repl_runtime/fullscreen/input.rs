@@ -55,8 +55,11 @@ impl ReplRuntime {
             .fullscreen
             .as_ref()
             .is_some_and(|session| session.sidebar.preview.hovered.is_some());
+        let control_was_hovered =
+            self.sidebar_control.divider_hovered || self.sidebar_control.close_hovered;
         let effect = match self
-            .git_preview_event(event)
+            .sidebar_control_event(event)
+            .or_else(|| self.git_preview_event(event))
             .or_else(|| self.message_picker_event(event))
             .or_else(|| self.sidebar_key(event))
         {
@@ -74,7 +77,12 @@ impl ReplRuntime {
                 .fullscreen
                 .as_ref()
                 .is_some_and(|session| session.sidebar.preview.hovered.is_none());
-        let effect = if (cleared || review_hover_cleared) && matches!(effect, Effect::Nothing) {
+        let control_hover_cleared = control_was_hovered
+            && !self.sidebar_control.divider_hovered
+            && !self.sidebar_control.close_hovered;
+        let effect = if (cleared || review_hover_cleared || control_hover_cleared)
+            && matches!(effect, Effect::Nothing)
+        {
             Effect::Repaint
         } else {
             effect
@@ -101,6 +109,7 @@ impl ReplRuntime {
             Effect::Nothing => Ok(FullscreenEvent::Consumed),
             Effect::Pass => {
                 if review_hover_cleared
+                    || control_hover_cleared
                     || (picker_was_active
                         && self
                             .fullscreen

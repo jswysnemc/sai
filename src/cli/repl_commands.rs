@@ -58,11 +58,12 @@ const EXTRA_REPL_COMMANDS: &[&str] = &[
     "/jev",
     "/sandbox",
     "/view",
+    "/tui",
 ];
 
 /// 其中只切换权限模式的命令：等价于 Shift+Tab 热切换，可立即生效。
 const STREAM_IMMEDIATE_EXTRA_COMMANDS: &[&str] =
-    &["/plan", "/audit", "/yolo", "/auto", "/auto-audit"];
+    &["/plan", "/audit", "/yolo", "/auto", "/auto-audit", "/tui"];
 
 /// 判断输入在模型运行期间的执行策略。
 ///
@@ -308,6 +309,10 @@ fn command_description(command: &str) -> &'static str {
         "/view" => t(
             "switch terminal view (inline / fullscreen)",
             "切换终端视图（inline / fullscreen）",
+        ),
+        "/tui" => t(
+            "show or hide sidebar (on / off / auto)",
+            "开启或关闭侧栏（on / off / auto）",
         ),
         "/plan" => t("switch to read-only planning mode", "切换到只读计划模式"),
         "/audit" => t(

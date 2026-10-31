@@ -22,6 +22,7 @@ pub(super) fn initialize_runtime(
         tool_call_mode: render::ToolCallDisplayMode::from_config(&config.display.tool_calls),
     };
     let mut runtime = ReplRuntime::new(config.display.repl_transcript_row_cap, options);
+    runtime.configure_sidebar(config.display.sidebar);
     render::configure_display_rendering(&config.display);
     if render::tui_mode::prefers_fullscreen() {
         runtime.toggle_fullscreen()?;

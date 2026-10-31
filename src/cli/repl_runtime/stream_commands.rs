@@ -77,6 +77,9 @@ pub(in crate::cli) fn run_immediate_stream_command(
     text: &str,
 ) -> Result<()> {
     let input = text.trim();
+    if runtime.handle_tui_command(input)? {
+        return Ok(());
+    }
     match crate::control_commands::parse_control_command(input, ControlSurface::Repl) {
         Ok(Some(ControlCommand::Help)) => {
             // 帮助不走浮层：浮层内的阻塞读键会让 chat future 停止被 poll，

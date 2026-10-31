@@ -187,7 +187,8 @@ fn separator_details_and_footer_are_not_clickable() {
             let sidebar = &session.sidebar;
             let left = layout.sidebar.unwrap().left;
             assert_eq!(sidebar.target_at(&layout, left + 1, 0), Some(0));
-            assert_eq!(sidebar.target_at(&layout, 156, 0), Some(0));
+            assert_eq!(sidebar.target_at(&layout, 154, 0), Some(0));
+            assert_eq!(sidebar.target_at(&layout, 156, 0), None);
             assert_eq!(sidebar.target_at(&layout, left, 0), None);
             assert_eq!(sidebar.target_at(&layout, 159, 0), None);
             assert_eq!(
@@ -221,7 +222,7 @@ fn subagents_can_fold_without_hiding_main_navigation() {
             );
             runtime.enter_fullscreen().unwrap();
             runtime
-                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 156, 0))
+                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 154, 0))
                 .unwrap();
             let sidebar = &runtime.fullscreen.as_ref().unwrap().sidebar;
             assert!(sidebar.sections.agents_collapsed);
@@ -232,7 +233,7 @@ fn subagents_can_fold_without_hiding_main_navigation() {
                 .any(|row| row.text.contains("CHILD-TASK")));
             assert!(sidebar.document.rows[1].text.contains("Main conversation"));
             runtime
-                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 156, 0))
+                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 154, 0))
                 .unwrap();
             assert!(runtime
                 .fullscreen

@@ -41,12 +41,16 @@ pub(super) mod selection;
 mod sidebar;
 mod sidebar_action;
 mod sidebar_agents_view;
+pub(super) mod sidebar_control;
+#[cfg(test)]
+mod sidebar_control_tests;
 mod sidebar_git;
 mod sidebar_git_view;
 #[cfg(test)]
 mod sidebar_interaction_tests;
 mod sidebar_palette;
 mod sidebar_regions;
+mod sidebar_resize;
 mod sidebar_style;
 #[cfg(test)]
 mod sidebar_tests;
@@ -69,6 +73,7 @@ use crossterm::cursor::Hide;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::terminal::{Clear, ClearType};
 use crossterm::{execute, queue};
+#[cfg(test)]
 use layout::FullscreenLayout;
 use state::FullscreenState;
 use std::io::{self, Write};
@@ -187,6 +192,9 @@ impl ReplRuntime {
             return Ok(());
         };
         drop(session);
+        self.sidebar_control.dragging = false;
+        self.sidebar_control.divider_hovered = false;
+        self.sidebar_control.close_hovered = false;
         // 1. 【终端】【视图同步】回到主屏后按内联视图重放
         crate::render::tui_mode::set_override(Some(crate::config::TuiMode::Inline));
         self.last_composer_signature = None;
@@ -242,12 +250,17 @@ impl ReplRuntime {
             .fullscreen
             .as_ref()
             .is_some_and(|session| session.sidebar.preview.path.is_some());
-        let columns = FullscreenLayout::compute_for(size.cols, size.rows, 0, review).main_width;
+        let columns = self
+            .sidebar_control
+            .layout(size.cols, size.rows, 0, review)
+            .main_width;
         let wanted = self.composer_height_for(TerminalSize {
             cols: columns,
             rows: size.rows,
         });
-        let layout = FullscreenLayout::compute_for(size.cols, size.rows, wanted, review);
+        let layout = self
+            .sidebar_control
+            .layout(size.cols, size.rows, wanted, review);
         self.clear_review_tail(&layout)?;
         let Some(session) = self.fullscreen.as_mut() else {
             return Ok(());
@@ -339,13 +352,19 @@ impl ReplRuntime {
                 .update(document, usize::from(layout.composer_top));
         }
         let mut painted = paint::compose(&session.state, &layout);
-        sidebar_view::overlay(&session.sidebar, &layout, &mut painted.rows);
+        sidebar_view::overlay(
+            &session.sidebar,
+            &layout,
+            &self.sidebar_control,
+            &mut painted.rows,
+        );
         git_preview_view::overlay(
             &session.sidebar.preview,
             &session.sidebar.git.summary,
             &layout,
             &mut painted.rows,
         );
+        sidebar_resize::decorate_divider(&self.sidebar_control, &mut painted.rows);
         // 图片位置变化时先删除旧放置并整屏重画，未变化的行也要重新落下图片
         let images = image_window::placement_signature(&painted.rows);
         if session.images != images {
@@ -411,12 +430,17 @@ impl ReplRuntime {
             .fullscreen
             .as_ref()
             .is_some_and(|session| session.sidebar.preview.path.is_some());
-        let columns = FullscreenLayout::compute_for(size.cols, size.rows, 0, review).main_width;
+        let columns = self
+            .sidebar_control
+            .layout(size.cols, size.rows, 0, review)
+            .main_width;
         let wanted = self.composer_height_for(TerminalSize {
             cols: columns,
             rows: size.rows,
         });
-        let layout = FullscreenLayout::compute_for(size.cols, size.rows, wanted, review);
+        let layout = self
+            .sidebar_control
+            .layout(size.cols, size.rows, wanted, review);
         let stale = self
             .fullscreen
             .as_ref()

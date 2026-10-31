@@ -48,6 +48,8 @@ impl FoldPreviewMode {
 pub struct DisplayConfig {
     /// TUI 启动时使用全局渲染，Ctrl+O 可临时切换
     pub fullscreen: bool,
+    /// 侧栏默认可见性：auto 按空间显示，off 启动时隐藏
+    pub sidebar: super::SidebarDefault,
     /// 将终端公式渲染成图片
     pub math_images: bool,
     /// 将终端 Mermaid 代码块渲染成图片
@@ -82,6 +84,8 @@ struct RawDisplayConfig {
     legacy_style: Option<super::TuiMode>,
     #[serde(default)]
     fullscreen: Option<bool>,
+    #[serde(default)]
+    sidebar: super::SidebarDefault,
     #[serde(default)]
     math_images: Option<bool>,
     #[serde(default)]
@@ -161,6 +165,7 @@ impl<'de> Deserialize<'de> for DisplayConfig {
         });
         Ok(Self {
             fullscreen,
+            sidebar: raw.sidebar,
             math_images: raw.math_images.unwrap_or(true),
             mermaid_images: raw.mermaid_images.unwrap_or(true),
             reasoning,

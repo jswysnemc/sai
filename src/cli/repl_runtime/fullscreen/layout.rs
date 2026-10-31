@@ -56,7 +56,25 @@ impl FullscreenLayout {
 
     /// 【终端布局】【固定审查分栏】审查时左右平分列宽，不使用浮动窗口或遮住聊天。
     /// 参数: cols/rows 为终端尺寸，composer_wanted 为输入高度，review 为是否打开审查；返回: 屏幕分区。
+    #[cfg(test)]
     pub(super) fn compute_for(cols: u16, rows: u16, composer_wanted: u16, review: bool) -> Self {
+        super::sidebar_control::SidebarControl::default().layout(
+            cols,
+            rows,
+            composer_wanted,
+            review,
+        )
+    }
+
+    /// 【终端布局】【可调分栏】接受统一策略算出的右栏，正文和输入区使用相同左栏宽度。
+    /// 参数: cols/rows 为终端尺寸，composer_wanted 为输入高度，review 为审查状态，sidebar 为右栏；返回: 屏幕分区。
+    pub(super) fn with_sidebar(
+        cols: u16,
+        rows: u16,
+        composer_wanted: u16,
+        review: bool,
+        sidebar: Option<SidebarLayout>,
+    ) -> Self {
         let cols = cols.max(8);
         let rows = rows.max(2);
         // 1. 标题固定一行，输入框贴底，正文保底 MIN_BODY_ROWS 行
@@ -65,16 +83,6 @@ impl FullscreenLayout {
         let composer_height = composer_wanted.min(composer_cap);
         let composer_top = rows - composer_height;
         let body_height = composer_top.saturating_sub(header).max(1);
-        // 2. 【终端】【响应式侧栏】正文至少保留一百列，右侧限制为三十六至四十四列
-        let sidebar = if review {
-            let left = cols / 2;
-            Some(SidebarLayout {
-                left,
-                width: cols - left,
-            })
-        } else {
-            Self::sidebar_for(cols, rows)
-        };
         let main_width = sidebar.map_or(cols, |sidebar| sidebar.left);
         let (content_width, rail_col) = if main_width >= RAIL_MIN_COLS {
             (main_width - 4, Some(main_width - 3))
@@ -115,6 +123,16 @@ impl FullscreenLayout {
         self.sidebar.is_some_and(|sidebar| {
             column >= sidebar.left && column < self.cols && row < self.composer_top
         })
+    }
+
+    /// 【终端侧栏】【关闭命中】关闭按钮只占首行右端三列，不属于标题折叠区域。
+    /// 参数: column/row 为屏幕坐标；返回: 是否位于普通侧栏关闭按钮。
+    pub(super) fn sidebar_close_at(&self, column: u16, row: u16) -> bool {
+        self.sidebar.is_some()
+            && !self.review
+            && row == 0
+            && column >= self.cols.saturating_sub(4)
+            && column < self.cols.saturating_sub(1)
     }
 
     /// 判断屏幕行是否位于正文区。

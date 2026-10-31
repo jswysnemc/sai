@@ -36,6 +36,7 @@ mod provider_keys;
 mod sandbox;
 mod secrets;
 mod session;
+mod sidebar;
 mod ssh;
 mod subagent_models;
 mod tool_whitelist;
@@ -44,6 +45,7 @@ mod web_search;
 
 pub use compaction_mode::CompactionMode;
 pub use computer_use::ComputerUseConfig;
+pub use sidebar::SidebarDefault;
 pub use tui_mode::TuiMode;
 pub use web_search::WebSearchConfig;
 

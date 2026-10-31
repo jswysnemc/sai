@@ -78,6 +78,7 @@ impl Default for DisplayConfig {
     fn default() -> Self {
         Self {
             fullscreen: true,
+            sidebar: super::SidebarDefault::Auto,
             math_images: true,
             mermaid_images: true,
             reasoning: default_reasoning_display(),

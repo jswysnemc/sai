@@ -67,6 +67,7 @@ impl Sidebar {
     ) -> Option<usize> {
         let sidebar = layout.sidebar?;
         if !layout.in_sidebar(column, row)
+            || layout.sidebar_close_at(column, row)
             || row.saturating_add(1) >= layout.composer_top
             || column <= sidebar.left
             || column >= layout.cols.saturating_sub(1)
@@ -94,16 +95,15 @@ impl ReplRuntime {
     /// 【终端侧栏】【布局判断】使用真实终端尺寸决定底部概览是否迁移到侧栏。
     /// 参数: cols 为终端宽度；返回: 是否启用侧栏。
     pub(in crate::cli::repl_runtime) fn sidebar_visible(&self, cols: usize) -> bool {
-        self.fullscreen.is_some()
-            && (self
-                .fullscreen
-                .as_ref()
-                .is_some_and(|session| session.sidebar.preview.path.is_some())
-                || FullscreenLayout::sidebar_for(
+        self.fullscreen.as_ref().is_some_and(|session| {
+            self.sidebar_control
+                .geometry(
                     cols.min(u16::MAX as usize) as u16,
                     super::super::viewport::TerminalSize::current().rows,
+                    session.sidebar.preview.path.is_some(),
                 )
-                .is_some())
+                .is_some()
+        })
     }
 
     /// 【终端侧栏】【Git 工作目录】查看隔离子任务时使用其 worktree，否则使用当前工作目录。

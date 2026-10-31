@@ -13,6 +13,14 @@ pub(super) fn arguments(input: &str, streaming: bool) -> Vec<ReplCommandSuggesti
         return Vec::new();
     };
     let values: &[(&str, &str)] = match command.to_ascii_lowercase().as_str() {
+        "/tui" => &[
+            ("/tui sidebar on", t("show sidebar", "开启侧栏")),
+            ("/tui sidebar off", t("hide sidebar", "关闭侧栏")),
+            (
+                "/tui sidebar auto",
+                t("show when space permits", "空间足够时显示侧栏"),
+            ),
+        ],
         "/context" => &[
             ("/context edit", t("edit compaction policy", "编辑压缩策略")),
             (
@@ -104,7 +112,10 @@ pub(super) fn accept(
         return None;
     }
     let mut replacement = item.command.to_string();
-    if matches!(item.command, "/context" | "/goal" | "/clear" | "/jev") {
+    if matches!(
+        item.command,
+        "/context" | "/goal" | "/clear" | "/jev" | "/tui"
+    ) {
         replacement.push(' ');
     }
     Some(replacement)

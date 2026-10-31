@@ -3,6 +3,7 @@
 use super::layout::FullscreenLayout;
 use super::sidebar::Sidebar;
 use super::sidebar_action::{SidebarAction, SidebarSections};
+use super::sidebar_control::SidebarControl;
 use super::sidebar_git::GitSummary;
 use super::sidebar_palette::{fg, SidebarPalette};
 use super::sidebar_regions::{regions, SidebarPanel};
@@ -77,8 +78,13 @@ pub(super) fn document(
 }
 
 /// 【终端侧栏】【组件绘制】显示独立面板、鼠标状态与键盘焦点，不覆盖正文和输入框。
-/// 参数: sidebar 为状态，layout 为分区，rows 为当前绘制行；返回: 无。
-pub(super) fn overlay(sidebar: &Sidebar, layout: &FullscreenLayout, rows: &mut [String]) {
+/// 参数: sidebar 为状态，layout 为分区，control 为控件状态，rows 为绘制行；返回: 无。
+pub(super) fn overlay(
+    sidebar: &Sidebar,
+    layout: &FullscreenLayout,
+    control: &SidebarControl,
+    rows: &mut [String],
+) {
     let Some(geometry) = layout.sidebar else {
         return;
     };
@@ -98,7 +104,19 @@ pub(super) fn overlay(sidebar: &Sidebar, layout: &FullscreenLayout, rows: &mut [
             .iter()
             .find_map(|panel| panel.index_at(screen_row, &sidebar.scrolls));
         let entry = index.and_then(|index| sidebar.document.rows.get(index));
-        let text = if screen_row == height {
+        let text = if screen_row == height
+            && (control.close_hovered || control.divider_hovered || control.dragging)
+        {
+            format!(
+                "{}{}\x1b[0m",
+                fg(palette.muted),
+                if control.close_hovered {
+                    "Close sidebar · /tui sidebar on"
+                } else {
+                    "Drag divider to resize"
+                }
+            )
+        } else if screen_row == height {
             sidebar_style::footer(sidebar, height)
         } else if let Some(entry) = entry {
             let previewed = match entry.action {
@@ -123,7 +141,16 @@ pub(super) fn overlay(sidebar: &Sidebar, layout: &FullscreenLayout, rows: &mut [
         } else {
             String::new()
         };
-        let text = sidebar_style::clip(&text, width);
+        let text = if screen_row == 0 {
+            let button = if control.close_hovered {
+                sidebar_widgets::highlight("[x]", false)
+            } else {
+                "[x]".into()
+            };
+            sidebar_widgets::columns(&text, &button, width)
+        } else {
+            sidebar_style::clip(&text, width)
+        };
         let padding = width.saturating_sub(crate::cli::repl_text::visible_width(&text));
         output.push_str(&format!(
             "\x1b[0m{}│\x1b[0m {text}{} ",

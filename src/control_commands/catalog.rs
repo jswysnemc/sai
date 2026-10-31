@@ -18,6 +18,7 @@ pub const REPL_COMMANDS: &[&str] = &[
     "/msg",
     "/thinking",
     "/view",
+    "/tui",
     "/audit",
     "/plan",
     "/yolo",

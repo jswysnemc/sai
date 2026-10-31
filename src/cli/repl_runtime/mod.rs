@@ -152,6 +152,7 @@ pub(super) struct ReplRuntime {
     ssh_prompt: Option<crate::cli::ssh_prompt::SshPromptView>,
     /// Ctrl+O 全屏会话视图；存在时所有绘制改走整屏布局
     fullscreen: Option<fullscreen::FullscreenSession>,
+    sidebar_control: fullscreen::sidebar_control::SidebarControl,
     /// 提问覆盖层临时占用的底部槽高度；存在时全屏正文让出该行数
     question_overlay_height: Option<u16>,
     /// 二次按键确认提示及其截止时间
@@ -281,6 +282,7 @@ impl ReplRuntime {
             force_reanchor: false,
             ssh_prompt: None,
             fullscreen: None,
+            sidebar_control: fullscreen::sidebar_control::SidebarControl::default(),
             question_overlay_height: None,
             key_notice: None,
             shortcuts_open: false,
