@@ -71,12 +71,14 @@ fn keys_for(context: KeyHintContext, input_empty: bool) -> Vec<Hint> {
     match (context.streaming, input_empty) {
         (true, true) => vec![
             hint("Ctrl+C", t("stop", "停止")),
+            hint("Ctrl+↑", t("queue manager", "队列管理")),
             hint("Ctrl+Z", t("undo queued", "撤回排队")),
             hint("Shift+Tab", t("mode", "切换模式")),
             hint("?", t("shortcuts", "快捷键")),
         ],
         (true, false) => vec![
-            hint("Enter", t("queue message", "排队发送")),
+            hint("Enter", t("next turn", "下轮接力")),
+            hint("Ctrl+Enter", t("steer", "次回插话")),
             hint("Shift+Enter", t("new line", "换行")),
             hint("Ctrl+C", t("stop", "停止")),
         ],

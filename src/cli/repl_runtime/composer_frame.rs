@@ -49,6 +49,7 @@ pub(super) struct ComposerSignature {
     /// 原始面板行宽与裁掉的顶部行数，供鼠标命中映射
     panel_widths: Vec<usize>,
     panel_actions: Vec<(usize, PanelAction)>,
+    queue_hits: Vec<super::queue_panel_view::QueueHit>,
     hidden_rows: usize,
 }
 
@@ -56,11 +57,28 @@ impl ComposerSignature {
     /// 【终端】【操作快照】按最后一帧的可见行查询操作，不在鼠标移动时重新扫描会话。
     /// 参数: `column` 与 `row` 为屏幕坐标；返回: 与显示内容对应的操作。
     pub(super) fn panel_action_at(&self, column: u16, row: u16) -> Option<PanelAction> {
+        if let Some(action) = self.queue_action_at(column, row) {
+            return Some(action);
+        }
         let index = self.panel_row_at(column, row)?;
         self.panel_actions
             .iter()
             .find(|(candidate, _)| *candidate == index)
             .map(|(_, action)| *action)
+    }
+
+    /// 【用户队列】【可见命中】只查询实际绘制的队列按钮，顶部裁切与左右分栏后仍按列命中。
+    /// 参数: column/row 为屏幕坐标；返回: 队列动作或空值。
+    pub(super) fn queue_action_at(&self, column: u16, row: u16) -> Option<PanelAction> {
+        let relative = usize::from(row.checked_sub(self.top)?);
+        if relative >= usize::from(self.height) || usize::from(column) >= self.cols {
+            return None;
+        }
+        let source = relative + self.hidden_rows;
+        self.queue_hits
+            .iter()
+            .find(|hit| hit.row == source && hit.columns.contains(&usize::from(column)))
+            .map(|hit| hit.action)
     }
     /// 【终端】【面板测试】参数为源面板行号；返回实际绘制行，仅供断言。
     #[cfg(test)]
@@ -106,6 +124,7 @@ pub(super) struct ComposerFrame {
     panel_pointer: Option<(u16, u16)>,
     panel_actions: Vec<(usize, PanelAction)>,
     panel_expanded_rows: Vec<usize>,
+    queue_hits: Vec<super::queue_panel_view::QueueHit>,
     /// 是否已用 Esc 收起补全面板（slash / @ / #）
     ///
     /// 面板完全由输入内容推导，没有独立开关；Esc 收起后必须记住状态，
@@ -124,6 +143,11 @@ pub(super) struct ComposerFrame {
 }
 
 impl ComposerFrame {
+    /// 【用户队列】【交互快照】保存与当前绘制宽度匹配的操作范围。
+    /// 参数: hits 为队列点击区域；返回: 无。
+    pub(super) fn set_queue_hits(&mut self, hits: Vec<super::queue_panel_view::QueueHit>) {
+        self.queue_hits = hits;
+    }
     /// 【终端】【输入选区】同步源码选区，绘制时再映射实际屏幕坐标。
     /// 参数: `selection` 为当前选区；返回: 无。
     pub(super) fn set_selection(
@@ -177,6 +201,7 @@ impl ComposerFrame {
             panel_pointer: None,
             panel_actions: Vec::new(),
             panel_expanded_rows: Vec::new(),
+            queue_hits: Vec::new(),
             panels_dismissed: false,
             streaming: false,
             placeholder_override: None,

@@ -76,6 +76,10 @@ fn groups(paste_key: PasteImageKey) -> Vec<Group> {
             items: vec![
                 ("Enter / Tab", t("Queue message", "排队发送")),
                 ("Ctrl+↑", t("Manage queue", "管理队列")),
+                (
+                    "Ctrl+Enter",
+                    t("Steer next call", "次回插话"),
+                ),
                 ("Ctrl+Z", t("Undo last queued", "撤回队尾")),
                 ("Ctrl+Y ×2", t("Clear queue", "清空队列")),
             ],
@@ -198,7 +202,9 @@ pub(in crate::cli::repl_runtime) fn render_shortcut_sheet(
         .map(render_group)
         .collect::<Vec<_>>();
     // 1. 两列：左列输入 + 运行中，右列会话 + 会话记录；放不下时单列
-    let left = stack(&[&blocks[0], &blocks[2]]);
+    let mut left = stack(&[&blocks[0], &blocks[2]]);
+    // 1. 【终端】【紧凑速查】运行中新增插话快捷键后，移除组间空行以保留全部操作
+    left.lines.retain(|line| !line.is_empty());
     let right = stack(&[&blocks[1], &blocks[3]]);
     let body = if left.width + GROUP_GAP + right.width <= budget {
         side_by_side(&left, &right)

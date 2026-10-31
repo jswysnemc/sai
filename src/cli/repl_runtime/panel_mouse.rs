@@ -6,14 +6,61 @@ pub(super) enum PanelAction {
     Todo,
     AgentsToggle,
     Agent(Option<usize>),
+    QueueToggle,
+    QueueItem(usize),
+    QueueAction(super::queue_panel::QueuePanelAction),
 }
 
 impl ReplRuntime {
+    /// 【用户队列】【命中映射】队列绘制和操作共享行与列，不把按钮间空白识别成操作。
+    /// 参数: cols 为当前输入区域宽度；返回: 队列在沉底面板中的操作区域。
+    pub(super) fn queue_panel_hits(&self, cols: usize) -> Vec<super::queue_panel_view::QueueHit> {
+        let todos =
+            if self.sidebar_visible(usize::from(super::viewport::TerminalSize::current().cols)) {
+                &[][..]
+            } else {
+                self.transcript.latest_todo_items()
+            };
+        let offset = super::bottom_panel::render_panel_lines(
+            todos,
+            &[],
+            &self.queued_control_commands(),
+            &[],
+            cols,
+            self.todo_panel_compact,
+            0,
+        )
+        .len();
+        super::queue_panel_view::render_at(
+            &self.queue_panel,
+            &self.queued_items(),
+            self.stream_active,
+            cols,
+        )
+        .into_iter()
+        .enumerate()
+        .flat_map(|(row, entry)| {
+            entry
+                .hits
+                .into_iter()
+                .map(move |(columns, action)| super::queue_panel_view::QueueHit {
+                    row: row + offset,
+                    columns,
+                    action,
+                })
+        })
+        .collect()
+    }
     /// 【终端】【面板命中】与面板渲染使用同一来源，计算标题和子代理行的操作映射。
     /// 参数: 无；返回: 原面板行号与操作。
     pub(super) fn panel_targets(&self) -> Vec<(usize, PanelAction)> {
         let mut targets = Vec::new();
-        let todos = self.transcript.latest_todo_items();
+        let sidebar = self.sidebar_visible(usize::from(self.viewport.size().cols));
+        let todos = if sidebar {
+            &[][..]
+        } else {
+            self.transcript.latest_todo_items()
+        };
         if todos
             .iter()
             .any(|item| matches!(item.status.as_str(), "pending" | "in_progress"))
@@ -33,9 +80,12 @@ impl ReplRuntime {
             0,
         )
         .len();
-        let (_, agents) = self
-            .agent_panel
-            .panel_layout(&self.transcript.subagent_overview(), 0);
+        let (_, agents) = if sidebar && !self.agent_panel.is_active() {
+            (Vec::new(), Vec::new())
+        } else {
+            self.agent_panel
+                .panel_layout(&self.transcript.subagent_overview(), 0)
+        };
         targets.extend(
             agents
                 .into_iter()
@@ -92,6 +142,52 @@ impl ReplRuntime {
                         self.transcript.enter_subagent_view(index);
                     }
                 }
+            }
+            PanelAction::QueueToggle => {
+                if self.queue_panel.is_active() {
+                    self.queue_panel.deactivate();
+                } else {
+                    self.queue_panel.activate(self.queue_len());
+                    self.clamp_queue_panel();
+                    self.agent_panel.deactivate();
+                }
+            }
+            PanelAction::QueueItem(index) => {
+                self.queue_panel.active = true;
+                self.queue_panel.select(index);
+                self.clamp_queue_panel();
+                self.agent_panel.deactivate();
+            }
+            PanelAction::QueueAction(action) => {
+                // 1. 【用户队列】【鼠标派发】进入既有编辑事件循环，空闲与流式共用相同保护逻辑
+                let code = match action {
+                    super::queue_panel::QueuePanelAction::MoveUp => {
+                        crossterm::event::KeyCode::Char('k')
+                    }
+                    super::queue_panel::QueuePanelAction::MoveDown => {
+                        crossterm::event::KeyCode::Char('j')
+                    }
+                    super::queue_panel::QueuePanelAction::Top => {
+                        crossterm::event::KeyCode::Char('t')
+                    }
+                    super::queue_panel::QueuePanelAction::ToggleInsert => {
+                        crossterm::event::KeyCode::Tab
+                    }
+                    super::queue_panel::QueuePanelAction::Delete => {
+                        crossterm::event::KeyCode::Char('d')
+                    }
+                    super::queue_panel::QueuePanelAction::UndoDelete => {
+                        crossterm::event::KeyCode::Char('u')
+                    }
+                    super::queue_panel::QueuePanelAction::Edit => crossterm::event::KeyCode::Enter,
+                    super::queue_panel::QueuePanelAction::SendNow => {
+                        crossterm::event::KeyCode::Char('s')
+                    }
+                    _ => crossterm::event::KeyCode::Esc,
+                };
+                self.return_input_event(crossterm::event::Event::Key(
+                    crossterm::event::KeyEvent::new(code, crossterm::event::KeyModifiers::NONE),
+                ));
             }
         }
     }

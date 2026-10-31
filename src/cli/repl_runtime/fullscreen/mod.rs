@@ -9,23 +9,57 @@ mod activity_viewport_hints;
 mod activity_visibility;
 mod activity_window;
 mod bottom_button;
+mod git_preview;
+mod git_preview_code;
+#[cfg(test)]
+mod git_preview_code_tests;
+mod git_preview_input;
+mod git_preview_patch;
+#[cfg(test)]
+mod git_preview_tests;
+mod git_preview_view;
 pub(super) mod guide_button;
 pub(super) mod hover;
 mod hover_color;
 mod image_window;
 mod input;
 mod layout;
+mod message_picker;
+mod message_picker_input;
+#[cfg(test)]
+mod message_picker_tests;
+mod message_picker_view;
 mod overview;
 mod paint;
 #[cfg(test)]
 mod presentation_tests;
 mod reasoning_viewport;
+#[cfg(test)]
+mod review_layout_tests;
+mod review_tail;
 pub(super) mod selection;
+mod sidebar;
+mod sidebar_action;
+mod sidebar_agents_view;
+mod sidebar_git;
+mod sidebar_git_view;
+#[cfg(test)]
+mod sidebar_interaction_tests;
+mod sidebar_palette;
+mod sidebar_regions;
+mod sidebar_style;
+#[cfg(test)]
+mod sidebar_tests;
+mod sidebar_todo_view;
+mod sidebar_view;
+mod sidebar_widgets;
 mod state;
 #[cfg(test)]
 mod subagent_view_tests;
 
 pub(in crate::cli) use input::FullscreenEvent;
+#[cfg(test)]
+pub(super) use sidebar_widgets::without_background;
 
 use super::viewport::{InlineViewport, TerminalSize};
 use super::ReplRuntime;
@@ -42,6 +76,8 @@ use std::io::{self, Write};
 /// 全屏会话：持有备用屏与鼠标捕获，销毁时恢复主屏。
 pub(super) struct FullscreenSession {
     state: FullscreenState,
+    sidebar: sidebar::Sidebar,
+    review_tail: Option<review_tail::ReviewTail>,
     /// 当前正文所属子任务，空值表示主会话
     viewing_subagent: Option<String>,
     /// 输入框正上方“回到底部”按钮的点击范围
@@ -69,6 +105,8 @@ impl FullscreenSession {
         }
         Ok(Self {
             state: FullscreenState::new(),
+            sidebar: sidebar::Sidebar::default(),
+            review_tail: None,
             viewing_subagent: None,
             bottom_button: None,
             pending_toggle: None,
@@ -93,6 +131,15 @@ impl Drop for FullscreenSession {
 }
 
 impl ReplRuntime {
+    /// 【终端审查】【聊天宽度】输入框使用当前聊天区域的实际宽度，不影响终端尺寸缓存。
+    /// 参数: 无；返回: 当前聊天列数，非全屏时为空。
+    pub(super) fn fullscreen_main_columns(&self) -> Option<u16> {
+        self.fullscreen
+            .as_ref()
+            .and_then(|session| session.state.layout)
+            .map(|layout| layout.main_width)
+    }
+
     /// 【终端】【布局状态】查询当前是否处于全屏，而非读取启动偏好。
     /// 参数: 无；返回: 当前全屏状态。
     pub(in crate::cli) fn fullscreen_active(&self) -> bool {
@@ -174,6 +221,14 @@ impl ReplRuntime {
         if self.fullscreen.is_none() {
             return Ok(());
         }
+        self.tick_sidebar_git();
+        // 1. 【终端审查】【会话隔离】先退出旧会话审查，再计算新的聊天布局
+        let viewing = self.transcript.viewing_subagent_id().map(str::to_string);
+        if let Some(session) = self.fullscreen.as_mut() {
+            if session.viewing_subagent != viewing {
+                session.sidebar.preview.close();
+            }
+        }
         let size = TerminalSize::current();
         // 1. 沉底面板可能随实时状态变化，先刷新再计算输入框高度；
         //    面板里的折叠提示同样不能引导用户按 Ctrl+O
@@ -183,8 +238,17 @@ impl ReplRuntime {
         if let Some(composer) = self.composer.as_mut() {
             composer.set_panel_lines(panel);
         }
-        let wanted = self.composer_height_for(size);
-        let layout = FullscreenLayout::compute(size.cols, size.rows, wanted);
+        let review = self
+            .fullscreen
+            .as_ref()
+            .is_some_and(|session| session.sidebar.preview.path.is_some());
+        let columns = FullscreenLayout::compute_for(size.cols, size.rows, 0, review).main_width;
+        let wanted = self.composer_height_for(TerminalSize {
+            cols: columns,
+            rows: size.rows,
+        });
+        let layout = FullscreenLayout::compute_for(size.cols, size.rows, wanted, review);
+        self.clear_review_tail(&layout)?;
         let Some(session) = self.fullscreen.as_mut() else {
             return Ok(());
         };
@@ -196,6 +260,8 @@ impl ReplRuntime {
             session.viewing_subagent = viewing_subagent;
             session.pending_toggle = None;
             session.pending_copy = None;
+            session.sidebar.scrolls = Default::default();
+            session.sidebar.preview.close();
         }
         // 2. 【全屏视图】【正文复用】拖选和滚动不遍历历史；内容、布局或展开状态变化才更新正文
         let layout_changed = session.state.layout != Some(layout);
@@ -227,8 +293,59 @@ impl ReplRuntime {
                 .state
                 .restore_toggle_anchor(key, offset, body_height);
         }
+        // 3. 【消息导航】【窗口同步】缩放和后台新增消息后保留焦点，不覆盖输入框
+        let count = session.state.document.anchors.len();
+        let preview_visible = git_preview_view::PreviewLayout::compute(
+            &layout,
+            session.sidebar.git.summary.files.len(),
+        )
+        .visible;
+        session.sidebar.preview.scroll_by(0, preview_visible);
+        let files_visible = git_preview_view::PreviewLayout::compute(
+            &layout,
+            session.sidebar.git.summary.files.len(),
+        )
+        .files_visible;
+        session.sidebar.preview.scroll_files(
+            0,
+            files_visible,
+            session.sidebar.git.summary.files.len(),
+        );
+        let visible = message_picker_view::PickerLayout::compute(&layout, count).visible;
+        session.state.message_picker.sync(count, visible);
         // 3. 组装标题与正文，只重写变化的行
-        let painted = paint::compose(&session.state, &layout);
+        if let Some(side) = layout.sidebar.filter(|_| !layout.review) {
+            let agents = self.transcript.subagent_overview();
+            let mut document = sidebar_view::document(
+                &agents,
+                self.transcript.latest_todo_items(),
+                &session.sidebar.git.summary,
+                sidebar_view::SidebarView {
+                    viewing: self.transcript.viewing_subagent_id(),
+                    compact: self.todo_panel_compact,
+                    sections: &session.sidebar.sections,
+                    width: usize::from(side.width.saturating_sub(3)),
+                    frame: self.transcript.live_animation_frame(),
+                },
+            );
+            for row in &mut document.rows {
+                if matches!(row.action, Some(sidebar_action::SidebarAction::Panel(super::panel_mouse::PanelAction::Agent(Some(index)))) if !self.transcript.can_view_subagent(index))
+                {
+                    row.action = None;
+                }
+            }
+            session
+                .sidebar
+                .update(document, usize::from(layout.composer_top));
+        }
+        let mut painted = paint::compose(&session.state, &layout);
+        sidebar_view::overlay(&session.sidebar, &layout, &mut painted.rows);
+        git_preview_view::overlay(
+            &session.sidebar.preview,
+            &session.sidebar.git.summary,
+            &layout,
+            &mut painted.rows,
+        );
         // 图片位置变化时先删除旧放置并整屏重画，未变化的行也要重新落下图片
         let images = image_window::placement_signature(&painted.rows);
         if session.images != images {
@@ -290,8 +407,16 @@ impl ReplRuntime {
         if let Some(composer) = self.composer.as_mut() {
             composer.set_panel_lines(panel);
         }
-        let wanted = self.composer_height_for(size);
-        let layout = FullscreenLayout::compute(size.cols, size.rows, wanted);
+        let review = self
+            .fullscreen
+            .as_ref()
+            .is_some_and(|session| session.sidebar.preview.path.is_some());
+        let columns = FullscreenLayout::compute_for(size.cols, size.rows, 0, review).main_width;
+        let wanted = self.composer_height_for(TerminalSize {
+            cols: columns,
+            rows: size.rows,
+        });
+        let layout = FullscreenLayout::compute_for(size.cols, size.rows, wanted, review);
         let stale = self
             .fullscreen
             .as_ref()

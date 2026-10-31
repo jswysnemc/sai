@@ -82,6 +82,9 @@ pub(crate) fn process_stream_tick(runtime: &mut ReplRuntime) -> Result<()> {
     runtime.observe_terminal_size(true)?;
     runtime.maybe_reflow_due(true)?;
     runtime.tick_live()?;
+    if runtime.tick_sidebar_git() {
+        runtime.paint_fullscreen()?;
+    }
     runtime.clamp_queue_panel();
     if runtime.tick_subagents()? {
         // 子 agent 状态变化会改变底部 agent 面板的计数与状态行
@@ -112,6 +115,9 @@ pub(crate) fn process_stream_input(
         };
         // 全屏视图先处理鼠标与浏览键，其余按键仍交给输入框
         if runtime.handle_fullscreen_event(&input)? == super::FullscreenEvent::Consumed {
+            if runtime.apply_stream_mouse_cursor() {
+                runtime.redraw_stream_composer()?;
+            }
             continue;
         }
         match input {

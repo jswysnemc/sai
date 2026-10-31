@@ -85,6 +85,9 @@ pub(super) fn handle_stream_key(
                 runtime.redraw_stream_composer()?;
                 return Ok(StreamInputAction::Continue);
             }
+            if modifiers.contains(KeyModifiers::CONTROL) {
+                runtime.set_queue_draft_timing(crate::cli::repl_runtime::QueueInsertAt::Request);
+            }
             if complete_stream_mention(runtime)? {
                 return Ok(StreamInputAction::Continue);
             }

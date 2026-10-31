@@ -20,6 +20,7 @@ pub(in crate::cli::repl_runtime) struct InputGeometry {
     first: usize,
     top: u16,
     left: usize,
+    width: usize,
     visible: usize,
 }
 
@@ -115,8 +116,23 @@ impl InputGeometry {
             first,
             top,
             left,
+            width,
             visible,
         }
+    }
+
+    /// 【终端】【光标命中】输入行内空白定位到行尾，空行定位到对应换行，区域外不命中。
+    /// 参数: column/row 为屏幕坐标；返回: 输入文本的 UTF-8 字节边界。
+    pub(in crate::cli::repl_runtime) fn cursor_hit(&self, column: u16, row: u16) -> Option<usize> {
+        let offset = usize::from(row.checked_sub(self.top)?);
+        let relative = usize::from(column).checked_sub(self.left)?;
+        if offset >= self.visible || relative >= self.width {
+            return None;
+        }
+        if self.text.is_empty() {
+            return Some(0);
+        }
+        self.hit(column, row, true)
     }
 
     /// 【终端】【输入命中】拖动时夹到可见文字边界，首次按下必须落在真实文字区域。
@@ -222,5 +238,22 @@ mod tests {
         assert_eq!(geometry.columns(10, &(start..end)), Some(3..4));
         let end = geometry.hit(40, 100, true).unwrap();
         assert_eq!(&geometry.text[start..end], "e\u{301}测试");
+    }
+
+    /// 【终端】【插入位置】空草稿、硬换行和软折行使用真实输入范围，外部坐标不夹进输入。
+    /// 参数: 无；返回: 无。
+    #[test]
+    fn cursor_hits_blank_lines_soft_wraps_and_visible_window_only() {
+        let empty = InputGeometry::new("", 20, 0, 10, 3, 1);
+        assert_eq!(empty.cursor_hit(12, 10), Some(0));
+        assert_eq!(empty.cursor_hit(2, 10), None);
+        assert_eq!(empty.cursor_hit(23, 10), None);
+        assert_eq!(empty.cursor_hit(12, 9), None);
+        assert_eq!(empty.cursor_hit(12, 11), None);
+        let wrapped = InputGeometry::new("abcdef\ngh", 3, 1, 10, 3, 3);
+        assert_eq!(wrapped.cursor_hit(4, 10), Some(4));
+        assert_eq!(wrapped.cursor_hit(3, 11), Some(6));
+        assert_eq!(wrapped.cursor_hit(5, 12), Some(9));
+        assert_eq!(wrapped.cursor_hit(10, 12), None);
     }
 }

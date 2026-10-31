@@ -74,7 +74,7 @@ impl ComposerFrame {
                 cols,
                 top.saturating_add(footer_start as u16),
             )),
-            input_geometry: (!self.input.is_empty()).then(|| {
+            input_geometry: Some({
                 let hidden_input = hidden_rows
                     .saturating_sub(cursor_offset - usize::from(layout.cursor_row_offset));
                 InputGeometry::new(
@@ -98,6 +98,7 @@ impl ComposerFrame {
             cursor_row,
             hidden_rows,
             panel_actions: self.panel_actions.clone(),
+            queue_hits: self.queue_hits.clone(),
             panel_widths: self
                 .panel_lines
                 .iter()
@@ -128,6 +129,24 @@ impl ComposerFrame {
                         );
                     }
                 }
+            }
+        }
+        if let Some((column, row)) = self
+            .panel_pointer
+            .filter(|(column, row)| signature.queue_action_at(*column, *row).is_some())
+        {
+            let offset = usize::from(row - top);
+            let source = offset + hidden_rows;
+            if let Some(hit) = self
+                .queue_hits
+                .iter()
+                .find(|hit| hit.row == source && hit.columns.contains(&usize::from(column)))
+            {
+                signature.lines[offset] = super::super::fullscreen::selection::highlight_cols(
+                    &signature.lines[offset],
+                    hit.columns.start,
+                    hit.columns.end,
+                );
             }
         }
         if let Some(index) = self

@@ -18,6 +18,7 @@ pub(super) enum ActivityNavigation {
 /// 全屏视图状态；只描述“看哪里”，不持有终端资源。
 #[derive(Default)]
 pub(super) struct FullscreenState {
+    pub(super) message_picker: super::message_picker::MessagePicker,
     pub(super) reasoning: super::reasoning_viewport::ReasoningViewports,
     pub(super) activity: super::activity_viewport::ActivityViewports,
     /// 正文首行在文档中的行号

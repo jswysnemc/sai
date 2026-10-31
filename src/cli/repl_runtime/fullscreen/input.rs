@@ -20,7 +20,7 @@ pub(in crate::cli) enum FullscreenEvent {
 }
 
 /// 一次交互造成的变化。
-enum Effect {
+pub(super) enum Effect {
     Refresh,
     /// 视图位置或展开状态变化，需要重绘
     Repaint,
@@ -47,12 +47,34 @@ impl ReplRuntime {
         }
         let cleared = matches!(event, Event::Key(key) if key.kind != KeyEventKind::Release)
             && self.composer_selection.clear();
-        let effect = match event {
-            Event::Mouse(mouse) => self.fullscreen_mouse(*mouse),
-            Event::Key(key) if key.kind != KeyEventKind::Release => self.fullscreen_key(*key),
-            _ => Effect::Pass,
+        let picker_was_active = self
+            .fullscreen
+            .as_ref()
+            .is_some_and(|session| session.state.message_picker.active);
+        let review_was_hovered = self
+            .fullscreen
+            .as_ref()
+            .is_some_and(|session| session.sidebar.preview.hovered.is_some());
+        let effect = match self
+            .git_preview_event(event)
+            .or_else(|| self.message_picker_event(event))
+            .or_else(|| self.sidebar_key(event))
+        {
+            Some(effect) => effect,
+            None => match event {
+                Event::Mouse(mouse) => self
+                    .sidebar_mouse(*mouse)
+                    .unwrap_or_else(|| self.fullscreen_mouse(*mouse)),
+                Event::Key(key) if key.kind != KeyEventKind::Release => self.fullscreen_key(*key),
+                _ => Effect::Pass,
+            },
         };
-        let effect = if cleared && matches!(effect, Effect::Nothing) {
+        let review_hover_cleared = review_was_hovered
+            && self
+                .fullscreen
+                .as_ref()
+                .is_some_and(|session| session.sidebar.preview.hovered.is_none());
+        let effect = if (cleared || review_hover_cleared) && matches!(effect, Effect::Nothing) {
             Effect::Repaint
         } else {
             effect
@@ -77,7 +99,18 @@ impl ReplRuntime {
                 Ok(FullscreenEvent::Consumed)
             }
             Effect::Nothing => Ok(FullscreenEvent::Consumed),
-            Effect::Pass => Ok(FullscreenEvent::Pass),
+            Effect::Pass => {
+                if review_hover_cleared
+                    || (picker_was_active
+                        && self
+                            .fullscreen
+                            .as_ref()
+                            .is_some_and(|session| !session.state.message_picker.active))
+                {
+                    self.paint_fullscreen_interaction()?;
+                }
+                Ok(FullscreenEvent::Pass)
+            }
         }
     }
 
@@ -89,6 +122,11 @@ impl ReplRuntime {
     /// 返回:
     /// - 处理效果
     fn fullscreen_key(&mut self, key: KeyEvent) -> Effect {
+        if self.queue_panel.is_active()
+            || super::super::queue_panel::is_enter_queue_key(key.code, key.modifiers)
+        {
+            return Effect::Pass;
+        }
         let Some(session) = self.fullscreen.as_mut() else {
             return Effect::Pass;
         };
@@ -138,6 +176,30 @@ impl ReplRuntime {
     /// 返回:
     /// - 处理效果
     fn fullscreen_mouse(&mut self, mouse: MouseEvent) -> Effect {
+        if matches!(
+            mouse.kind,
+            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
+        ) {
+            if matches!(
+                self.panel_target_at(mouse.column, mouse.row),
+                Some(super::super::panel_mouse::PanelAction::QueueItem(_))
+            ) {
+                let len = self.queue_len();
+                let delta = if mouse.kind == MouseEventKind::ScrollUp {
+                    -1
+                } else {
+                    1
+                };
+                self.queue_panel.select(
+                    self.queue_panel
+                        .selected()
+                        .saturating_add_signed(delta)
+                        .min(len.saturating_sub(1)),
+                );
+                self.clamp_queue_panel();
+                return Effect::Repaint;
+            }
+        }
         let input = self.composer_selection.handle(
             mouse,
             self.last_composer_signature
@@ -148,6 +210,9 @@ impl ReplRuntime {
                 .and_then(|signature| signature.footer_geometry.as_ref()),
         );
         if input.handled {
+            if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
+                self.queue_panel.deactivate();
+            }
             if let Some(session) = self.fullscreen.as_mut() {
                 session.state.press = None;
                 session.state.selection = None;
@@ -205,7 +270,8 @@ impl ReplRuntime {
             }
             // 1. 悬停：只在指向的概览标记或可展开段落变化时重绘
             MouseEventKind::Moved => {
-                let header_hover = mouse.row < layout.body_top && state.current_anchor().is_some();
+                let header_hover =
+                    super::paint::header_target_at(state, &layout, mouse.column, mouse.row);
                 let before_footer = state.hovered_activity_footer();
                 let hover = if layout.in_body(mouse.row) && layout.in_rail(mouse.column) {
                     let marks = rail_marks(state.document.anchors.len(), height);
@@ -323,12 +389,19 @@ impl ReplRuntime {
                 // 新的按下清掉上一次选区与复制提示
                 let cleared = state.selection.take().is_some() | state.copied.take().is_some();
                 let handled = {
-                    // 2. 标题：回到当前消息开头
-                    if mouse.row < layout.body_top {
-                        match state.current_anchor() {
-                            Some(index) => state.jump_to_anchor(index, height),
-                            None => false,
-                        }
+                    // 2. 【消息导航】【标题入口】展开所有用户消息，不直接改变会话位置
+                    if super::paint::header_target_at(state, &layout, mouse.column, mouse.row) {
+                        let count = state.document.anchors.len();
+                        let visible =
+                            super::message_picker_view::PickerLayout::compute(&layout, count)
+                                .visible;
+                        let current = state.current_anchor();
+                        state.press = None;
+                        state.pointer_row = None;
+                        state.pointer_col = None;
+                        state.hover = None;
+                        state.dragging = false;
+                        state.message_picker.open(current, count, visible)
                     } else if layout.in_body(mouse.row)
                         && usize::from(mouse.row - layout.body_top) + 1 == height
                         && session

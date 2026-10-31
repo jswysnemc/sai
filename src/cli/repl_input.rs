@@ -122,6 +122,12 @@ pub(super) fn read_repl_input(
         let event = queued_event.map(Ok).unwrap_or_else(event::read)?;
         // 全屏视图先处理鼠标与浏览键，其余按键仍交给输入框
         if runtime.handle_fullscreen_event(&event)? == FullscreenEvent::Consumed {
+            if let Some(position) = runtime.take_composer_mouse_cursor(&input, &clipboard_state) {
+                cursor = position;
+                slash_selection = 0;
+                last_escape = None;
+                redraw_input!()?;
+            }
             continue;
         }
         match event {
@@ -192,7 +198,7 @@ pub(super) fn read_repl_input(
                     matches!(code, KeyCode::Char('c')) && modifiers.contains(KeyModifiers::CONTROL);
                 if !skip_queue_for_ctrl_c
                     && (runtime.queue_panel_active()
-                        || (code == KeyCode::Up && modifiers.contains(KeyModifiers::CONTROL)))
+                        || super::repl_runtime::queue_panel::is_enter_queue_key(code, modifiers))
                 {
                     match runtime.handle_queue_panel_idle_key(
                         code,

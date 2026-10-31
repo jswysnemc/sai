@@ -4,6 +4,7 @@ mod background_logs;
 mod bottom_panel;
 mod composer;
 mod composer_frame;
+mod composer_mouse;
 mod composer_selection;
 mod context_handoff;
 mod event_loop;
@@ -20,7 +21,14 @@ mod mention_panel;
 mod panel_mouse;
 mod placeholder_tips;
 mod question_handoff;
-mod queue_panel;
+mod queue_operations;
+pub(in crate::cli) mod queue_panel;
+mod queue_panel_dispatch;
+#[cfg(test)]
+mod queue_panel_tests;
+#[cfg(test)]
+mod queue_manager_tests;
+mod queue_panel_view;
 mod queue_source;
 mod records;
 mod reflow;
@@ -36,7 +44,7 @@ mod stream_commands;
 mod viewport;
 
 pub(in crate::cli) use fullscreen::FullscreenEvent;
-pub(in crate::cli) use queue_panel::QueuePanelIdleResult;
+pub(in crate::cli) use queue_panel_dispatch::QueuePanelIdleResult;
 
 #[cfg(test)]
 mod full_pager_tests;
@@ -110,6 +118,8 @@ pub(super) struct ReplRuntime {
     subagent_input_error: Option<(String, String)>,
     /// 用户消息队列管理面板状态
     queue_panel: queue_panel::QueuePanelState,
+    /// 取回编辑时保持原消息消费时机，普通新消息默认下一轮
+    queue_draft_timing: QueueInsertAt,
     /// 最近一次 composer 绘制后的光标屏幕行（高度变化重锚探测用）
     last_cursor_row: Option<u16>,
     /// 上次 composer 绘制的内容签名，用于跳过无变化的重绘
@@ -255,6 +265,7 @@ impl ReplRuntime {
             panel_pointer: None,
             subagent_input_error: None,
             queue_panel: queue_panel::QueuePanelState::default(),
+            queue_draft_timing: QueueInsertAt::Turn,
             last_cursor_row: None,
             last_composer_signature: None,
             mention_skills: Vec::new(),
@@ -421,6 +432,7 @@ impl ReplRuntime {
             animation_wait,
             completion_wait,
             exit_hint_wait,
+            self.sidebar_wait(),
         ]
         .into_iter()
         .flatten()
@@ -475,6 +487,7 @@ impl ReplRuntime {
         self.pending_input_events.clear();
         self.stream_draft = StreamComposerDraft::default();
         self.lock_queue().clear();
+        self.queue_panel = Default::default();
         self.agent_panel.deactivate();
         self.subagent_input_error = None;
         self.queue_panel.deactivate();

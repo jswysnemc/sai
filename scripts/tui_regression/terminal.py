@@ -117,6 +117,8 @@ class TerminalSession:
             self.stream.feed(self.filter_graphics(decoded) if self.kitty_graphics else decoded)
             if b"\x1b[6n" in data:
                 self.send(f"\x1b[{self.screen.cursor.y + 1};{self.screen.cursor.x + 1}R".encode())
+            if b"\x1b]10;?" in data:
+                self.send(b"\x1b]10;rgb:dddd/dddd/dddd\x1b\\")
             if b"\x1b]11;?" in data:
                 self.send(b"\x1b]11;rgb:0000/0000/0000\x1b\\")
             if self.kitty_keyboard and b"\x1b[?u" in data:

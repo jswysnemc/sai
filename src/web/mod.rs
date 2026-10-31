@@ -18,6 +18,7 @@ mod system_monitor;
 mod terminal;
 mod workspace;
 mod workspaces;
+pub(crate) use workspace::{git_diff, git_file_stats, git_status, GitFileStats};
 
 use crate::cli::WebArgs;
 use crate::paths::SaiPaths;

@@ -78,8 +78,12 @@ impl ReplRuntime {
 
     /// 按当前队列长度夹紧管理面板高亮。
     pub(super) fn clamp_queue_panel(&mut self) {
-        let len = self.queue_len();
-        self.queue_panel.clamp(len);
+        let ids = self
+            .lock_queue()
+            .iter()
+            .map(|item| item.id.clone())
+            .collect::<Vec<_>>();
+        self.queue_panel.sync_ids(&ids);
     }
 
     /// 返回当前排队项的快照。

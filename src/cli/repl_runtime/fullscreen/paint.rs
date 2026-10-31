@@ -138,6 +138,7 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
         output.push_str(&scrollbar_glyph(row, thumb));
         rows.push(output);
     }
+    super::message_picker_view::overlay(state, layout, &mut rows);
     PaintedRows {
         rows,
         bottom_button,
@@ -155,7 +156,27 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
 /// 返回:
 /// - 标题行
 fn header_line(state: &FullscreenState, layout: &FullscreenLayout) -> String {
-    let cols = usize::from(layout.cols);
+    header_row(state, layout).0
+}
+
+/// 【消息导航】【标题命中】使用实际绘制的左侧标题宽度，右侧快捷键与空白不响应点击。
+/// 参数: state 为全屏状态，layout 为分区，column/row 为坐标；返回: 是否命中消息入口。
+pub(super) fn header_target_at(
+    state: &FullscreenState,
+    layout: &FullscreenLayout,
+    column: u16,
+    row: u16,
+) -> bool {
+    !state.document.anchors.is_empty()
+        && row < layout.body_top
+        && usize::from(column)
+            < crate::render::tui_presentation::with_locale(|| header_row(state, layout).1)
+}
+
+/// 【消息导航】【标题布局】同步生成标题文字和入口宽度。
+/// 参数: state 为全屏状态，layout 为分区；返回: ANSI 标题行与可点击列数。
+fn header_row(state: &FullscreenState, layout: &FullscreenLayout) -> (String, usize) {
+    let cols = usize::from(layout.main_width);
     let total = state.document.anchors.len();
     // 1. 左侧：当前所在用户消息
     let left = match state.current_anchor() {
@@ -196,7 +217,9 @@ fn header_line(state: &FullscreenState, layout: &FullscreenLayout) -> String {
     } else {
         format!("{HEADER_HINT}{}", t("Ctrl+O exit", "Ctrl+O 退出"))
     };
-    let left = if state.header_hover {
+    let left = if state.message_picker.active {
+        super::hover::tint_line(&super::guide_button::render(&left, true))
+    } else if state.header_hover {
         super::hover::tint_line(&super::guide_button::render(&left, false))
     } else {
         left
@@ -204,12 +227,13 @@ fn header_line(state: &FullscreenState, layout: &FullscreenLayout) -> String {
     let right_width = visible_width(&right);
     let left_budget = cols.saturating_sub(right_width + 3).max(1);
     let left = clip_to_width(&format!("{HEADER_BG} {left}"), left_budget + 1);
+    let target_width = visible_width(&left).min(cols);
     let gap = cols.saturating_sub(visible_width(&left) + right_width + 1);
     let line = format!(
         "{left}{HEADER_BG}{}{right}{HEADER_BG} {RESET}",
         " ".repeat(gap)
     );
-    clip_to_width(&line, cols)
+    (clip_to_width(&line, cols), target_width)
 }
 
 /// 生成悬停预览文本：消息序号与摘要。

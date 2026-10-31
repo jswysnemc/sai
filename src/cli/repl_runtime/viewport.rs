@@ -1,5 +1,10 @@
 use crossterm::{cursor, terminal};
 
+#[cfg(test)]
+thread_local! {
+    static TEST_SIZE: std::cell::Cell<TerminalSize> = const { std::cell::Cell::new(TerminalSize { cols: 80, rows: 24 }) };
+}
+
 /// REPL 终端可用尺寸。
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct TerminalSize {
@@ -19,13 +24,29 @@ impl TerminalSize {
         // 测试环境固定尺寸：CI console（尤其 Windows）可能报出真实尺寸，
         // 与 InlineViewport::new 的固定值不一致会误触发 resize 冻结分支
         if cfg!(test) {
-            return Self { cols: 80, rows: 24 };
+            #[cfg(test)]
+            return TEST_SIZE.with(std::cell::Cell::get);
         }
         let (cols, rows) = terminal::size().unwrap_or((80, 24));
         Self {
             cols: cols.max(1),
             rows: rows.max(1),
         }
+    }
+
+    /// 【终端测试】【尺寸作用域】在单个测试线程内模拟缩放，结束时恢复原尺寸。
+    /// 参数: size 为模拟尺寸，work 为测试操作；返回: 操作结果。
+    #[cfg(test)]
+    pub(super) fn with_size<T>(size: Self, work: impl FnOnce() -> T) -> T {
+        struct Restore(TerminalSize);
+        impl Drop for Restore {
+            /// 恢复测试尺寸；参数: 无；返回: 无。
+            fn drop(&mut self) {
+                TEST_SIZE.with(|state| state.set(self.0));
+            }
+        }
+        let _restore = Restore(TEST_SIZE.with(|state| state.replace(size)));
+        work()
     }
 }
 

@@ -99,11 +99,24 @@ impl ReplRuntime {
     /// 参数: `cols` 为可用列数；返回: 保留原始消息内容的面板行。
     fn render_bottom_panel_lines(&self, cols: usize) -> Vec<String> {
         let queued = self.queued_items();
-        let queue_lines = self.queue_panel.panel_lines(&queued, self.stream_active);
-        let mut agent_lines = self.agent_panel.panel_lines(
-            &self.transcript.subagent_overview(),
-            self.transcript.live_animation_frame(),
-        );
+        let queue_lines = super::queue_panel_view::render_at(
+            &self.queue_panel,
+            &queued,
+            self.stream_active,
+            cols,
+        )
+        .into_iter()
+        .map(|row| row.text)
+        .collect::<Vec<_>>();
+        let sidebar = self.sidebar_visible(cols);
+        let mut agent_lines = if sidebar && !self.agent_panel.is_active() {
+            Vec::new()
+        } else {
+            self.agent_panel.panel_lines(
+                &self.transcript.subagent_overview(),
+                self.transcript.live_animation_frame(),
+            )
+        };
         if let Some((_, error)) = self
             .subagent_input_error
             .as_ref()
@@ -119,7 +132,11 @@ impl ReplRuntime {
             );
         }
         let mut lines = super::bottom_panel::render_panel_lines(
-            self.transcript.latest_todo_items(),
+            if sidebar {
+                &[]
+            } else {
+                self.transcript.latest_todo_items()
+            },
             &queue_lines,
             &self.queued_control_commands(),
             &agent_lines,
@@ -236,7 +253,21 @@ impl ReplRuntime {
     /// 参数: 无；返回: 当前帧组装结果。
     fn queue_composer_in_locale(&mut self) -> Result<()> {
         let viewport = self.drawing_viewport();
+        // 1. 【终端审查】【输入区域】输入框仅在左侧聊天列内绘制，不横跨右侧审查区
+        let viewport = if let Some(columns) = self.fullscreen_main_columns() {
+            super::viewport::InlineViewport::fixed(
+                TerminalSize {
+                    cols: columns,
+                    rows: viewport.size().rows,
+                },
+                viewport.composer_top(),
+                viewport.composer_height(),
+            )
+        } else {
+            viewport
+        };
         let actions = self.panel_targets();
+        let queue_hits = self.queue_panel_hits(usize::from(viewport.size().cols));
         let expanded_rows = actions
             .iter()
             .filter_map(|(row, action)| {
@@ -244,6 +275,9 @@ impl ReplRuntime {
                     super::panel_mouse::PanelAction::Todo => !self.todo_panel_compact,
                     super::panel_mouse::PanelAction::AgentsToggle => self.agent_panel.is_active(),
                     super::panel_mouse::PanelAction::Agent(_) => false,
+                    super::panel_mouse::PanelAction::QueueToggle => self.queue_panel.is_active(),
+                    super::panel_mouse::PanelAction::QueueItem(_)
+                    | super::panel_mouse::PanelAction::QueueAction(_) => false,
                 };
                 expanded.then_some(*row)
             })
@@ -251,6 +285,7 @@ impl ReplRuntime {
         if let Some(composer) = self.composer.as_mut() {
             composer.set_selection(self.composer_selection.clone());
             composer.set_panel_pointer(self.panel_pointer, actions, expanded_rows);
+            composer.set_queue_hits(queue_hits);
         }
         let Some(composer) = &self.composer else {
             return Ok(());
@@ -263,8 +298,11 @@ impl ReplRuntime {
             &viewport,
             self.last_composer_signature.as_ref(),
         )?;
-        // 1. 【终端】【光标恢复】输入区未变化但正文已写入时恢复光标，真正空帧不产生任何输出
-        if pending_before > 0 && self.frame.pending_len() == pending_before {
+        // 1. 【终端审查】【右侧固定区域】输入重绘可能清除同一行右侧，随后仅重画审查区
+        let input_changed = self.frame.pending_len() != pending_before;
+        let review_written = self.paint_review_tail(input_changed)?;
+        // 2. 【终端】【光标恢复】右侧绘制完成后恢复左侧输入光标
+        if review_written || (pending_before > 0 && self.frame.pending_len() == pending_before) {
             signature.restore_cursor(&mut self.frame)?;
         }
         self.last_composer_signature = Some(signature);
@@ -362,8 +400,10 @@ impl ReplRuntime {
         }
         // 剪贴板附件随草稿一起入队，执行时还原为真实图片或长文本
         let clipboard = std::mem::take(&mut self.stream_draft.clipboard);
-        self.lock_queue()
-            .push_back(QueuedSubmission::new(mode, text, clipboard));
+        let mut item = QueuedSubmission::new(mode, text, clipboard);
+        item.insert_at = self.queue_draft_timing;
+        self.lock_queue().push_back(item);
+        self.queue_draft_timing = super::QueueInsertAt::Turn;
         self.clamp_queue_panel();
         self.stream_draft = StreamComposerDraft {
             mode: Some(mode),
@@ -411,6 +451,7 @@ impl ReplRuntime {
                 // 附件随文本一起回到草稿，否则占位符会退化成字面文本
                 self.stream_draft.clipboard = item.clipboard;
                 self.stream_draft.mode = Some(item.mode);
+                self.queue_draft_timing = item.insert_at;
                 item.text
             }
             None => self.control_queue.pop_back().unwrap_or_default(),
@@ -443,7 +484,8 @@ impl ReplRuntime {
         self.lock_queue().clear();
         self.control_queue.clear();
         self.resume_submission_queue();
-        self.queue_panel.deactivate();
+        self.queue_panel = Default::default();
+        self.queue_draft_timing = super::QueueInsertAt::Turn;
         self.redraw_stream_composer()?;
         self.sync_transcript(false)?;
         Ok(count)

@@ -11,6 +11,7 @@ pub(super) struct ComposerSelection {
     head: usize,
     pressed: bool,
     dragged: bool,
+    pending_cursor: Option<usize>,
 }
 
 /// 【终端】【选区目标】输入源码和底栏快照分开匹配，避免相同文字导致高亮串区。
@@ -157,6 +158,81 @@ mod tests {
                 .is_none());
         }
     }
+
+    /// 【终端】【单击定位】中文命中转换为字符索引，行尾空白定位到行尾，拖动不产生光标请求。
+    /// 参数: 无；返回: 无。
+    #[test]
+    fn clicks_request_character_positions_but_drag_keeps_cursor_unchanged() {
+        let input = "中文 alpha\n\nend";
+        let geometry = InputGeometry::new(input, 30, 0, 10, 3, 3);
+        for (column, row, expected) in
+            [(5, 10, 1), (6, 10, 1), (20, 10, 8), (3, 11, 9), (8, 12, 13)]
+        {
+            let mut selection = ComposerSelection::default();
+            selection.handle(
+                mouse(MouseEventKind::Down(MouseButton::Left), column, row),
+                Some(&geometry),
+                None,
+            );
+            let result = selection.handle(
+                mouse(MouseEventKind::Up(MouseButton::Left), column, row),
+                Some(&geometry),
+                None,
+            );
+            assert!(result.copy.is_none());
+            assert_eq!(selection.take_cursor(input), Some(expected));
+            assert_eq!(selection.take_cursor(input), None);
+        }
+        let mut selection = ComposerSelection::default();
+        selection.handle(
+            mouse(MouseEventKind::Down(MouseButton::Left), 3, 10),
+            Some(&geometry),
+            None,
+        );
+        selection.handle(
+            mouse(MouseEventKind::Drag(MouseButton::Left), 8, 10),
+            Some(&geometry),
+            None,
+        );
+        let result = selection.handle(
+            mouse(MouseEventKind::Up(MouseButton::Left), 8, 10),
+            Some(&geometry),
+            None,
+        );
+        assert!(result.copy.is_some());
+        assert_eq!(selection.take_cursor(input), None);
+    }
+
+    /// 【终端】【旧点击隔离】草稿变化或点击底栏后不移动输入光标。
+    /// 参数: 无；返回: 无。
+    #[test]
+    fn old_text_and_footer_clicks_do_not_request_input_cursor() {
+        let geometry = InputGeometry::new("draft", 30, 0, 10, 3, 1);
+        let mut selection = ComposerSelection::default();
+        selection.handle(
+            mouse(MouseEventKind::Down(MouseButton::Left), 4, 10),
+            Some(&geometry),
+            None,
+        );
+        selection.handle(
+            mouse(MouseEventKind::Up(MouseButton::Left), 4, 10),
+            Some(&geometry),
+            None,
+        );
+        assert_eq!(selection.take_cursor("new draft"), None);
+        let footer = InputGeometry::from_rendered_lines(&["footer".into()], 30, 13);
+        selection.handle(
+            mouse(MouseEventKind::Down(MouseButton::Left), 2, 13),
+            Some(&geometry),
+            Some(&footer),
+        );
+        selection.handle(
+            mouse(MouseEventKind::Up(MouseButton::Left), 2, 13),
+            Some(&geometry),
+            Some(&footer),
+        );
+        assert_eq!(selection.take_cursor("draft"), None);
+    }
 }
 
 #[derive(Default)]
@@ -193,7 +269,7 @@ impl ComposerSelection {
             .then_some(self.anchor.min(self.head)..self.anchor.max(self.head))
     }
 
-    /// 【终端】【输入拖选】按下记录锚点，拖动高亮，释放复制；不改写输入和光标。
+    /// 【终端】【输入拖选】按下记录锚点，拖动高亮并复制，单击记录待应用光标。
     /// 参数: `mouse` 为鼠标事件，`geometry/footer` 为最近绘制的输入与底栏映射；返回: 消费状态、重绘需求及待复制文本。
     pub(super) fn handle(
         &mut self,
@@ -206,7 +282,7 @@ impl ComposerSelection {
             let hit = geometry
                 .and_then(|geometry| {
                     geometry
-                        .hit(mouse.column, mouse.row, false)
+                        .cursor_hit(mouse.column, mouse.row)
                         .map(|position| (SelectionTarget::Input, geometry, position))
                 })
                 .or_else(|| {
@@ -272,6 +348,9 @@ impl ComposerSelection {
                 let copy = (self.anchor != self.head).then(|| {
                     self.source[self.anchor.min(self.head)..self.anchor.max(self.head)].to_string()
                 });
+                if !self.dragged && self.target == SelectionTarget::Input {
+                    self.pending_cursor = Some(self.source[..self.anchor].chars().count());
+                }
                 MouseEffect {
                     handled: true,
                     changed: true,
@@ -280,5 +359,12 @@ impl ComposerSelection {
             }
             _ => MouseEffect::default(),
         }
+    }
+
+    /// 【终端】【光标请求】仅当前草稿仍匹配鼠标按下快照时返回位置，旧请求读取后丢弃。
+    /// 参数: input 为当前草稿；返回: 字符偏移，拖选或文本已变化时为空。
+    pub(super) fn take_cursor(&mut self, input: &str) -> Option<usize> {
+        let cursor = self.pending_cursor.take()?;
+        (self.source == input).then_some(cursor)
     }
 }

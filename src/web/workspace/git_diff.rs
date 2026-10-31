@@ -26,6 +26,10 @@ mod diff_stats;
 
 pub(crate) use diff_stats::{git_diff_stats, GitDiffStats};
 
+#[path = "git_file_stats.rs"]
+mod file_stats;
+pub(crate) use file_stats::{git_file_stats, GitFileStats};
+
 #[path = "git_file_compare.rs"]
 mod file_compare;
 

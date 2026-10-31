@@ -4,6 +4,13 @@
 const MIN_BODY_ROWS: u16 = 3;
 /// 显示概览轨道所需的最小终端列数。
 const RAIL_MIN_COLS: u16 = 60;
+const SIDEBAR_MIN_COLS: u16 = 140;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct SidebarLayout {
+    pub(super) left: u16,
+    pub(super) width: u16,
+}
 
 /// 一帧的屏幕分区，所有坐标从 0 开始。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -12,6 +19,10 @@ pub(super) struct FullscreenLayout {
     pub(super) cols: u16,
     /// 终端行数
     pub(super) rows: u16,
+    /// 会话区域总宽度，不包含右侧面板
+    pub(super) main_width: u16,
+    pub(super) sidebar: Option<SidebarLayout>,
+    pub(super) review: bool,
     /// 正文首行（浮动标题占第 0 行）
     pub(super) body_top: u16,
     /// 正文行数
@@ -38,7 +49,14 @@ impl FullscreenLayout {
     ///
     /// 返回:
     /// - 屏幕分区
+    #[cfg(test)]
     pub(super) fn compute(cols: u16, rows: u16, composer_wanted: u16) -> Self {
+        Self::compute_for(cols, rows, composer_wanted, false)
+    }
+
+    /// 【终端布局】【固定审查分栏】审查时左右平分列宽，不使用浮动窗口或遮住聊天。
+    /// 参数: cols/rows 为终端尺寸，composer_wanted 为输入高度，review 为是否打开审查；返回: 屏幕分区。
+    pub(super) fn compute_for(cols: u16, rows: u16, composer_wanted: u16, review: bool) -> Self {
         let cols = cols.max(8);
         let rows = rows.max(2);
         // 1. 标题固定一行，输入框贴底，正文保底 MIN_BODY_ROWS 行
@@ -47,23 +65,56 @@ impl FullscreenLayout {
         let composer_height = composer_wanted.min(composer_cap);
         let composer_top = rows - composer_height;
         let body_height = composer_top.saturating_sub(header).max(1);
-        // 2. 右侧依次为间隔列、概览轨道、滚动条；窄终端只保留滚动条
-        let (content_width, rail_col) = if cols >= RAIL_MIN_COLS {
-            (cols - 4, Some(cols - 3))
+        // 2. 【终端】【响应式侧栏】正文至少保留一百列，右侧限制为三十六至四十四列
+        let sidebar = if review {
+            let left = cols / 2;
+            Some(SidebarLayout {
+                left,
+                width: cols - left,
+            })
         } else {
-            (cols - 1, None)
+            Self::sidebar_for(cols, rows)
+        };
+        let main_width = sidebar.map_or(cols, |sidebar| sidebar.left);
+        let (content_width, rail_col) = if main_width >= RAIL_MIN_COLS {
+            (main_width - 4, Some(main_width - 3))
+        } else {
+            (main_width - 1, None)
         };
         Self {
             cols,
             rows,
+            main_width,
+            sidebar,
+            review,
             body_top: header,
             body_height,
             composer_top,
             composer_height,
             content_width,
             rail_col,
-            scrollbar_col: cols - 1,
+            scrollbar_col: main_width - 1,
         }
+    }
+
+    /// 【终端】【侧栏断点】根据真实终端尺寸决定是否显示右侧概览。
+    /// 参数: cols/rows 为终端尺寸；返回: 侧栏起点和宽度，窄屏或矮屏为空。
+    pub(super) fn sidebar_for(cols: u16, rows: u16) -> Option<SidebarLayout> {
+        (cols >= SIDEBAR_MIN_COLS && rows >= 16).then(|| {
+            let width = (cols / 4).clamp(36, 44);
+            SidebarLayout {
+                left: cols - width,
+                width,
+            }
+        })
+    }
+
+    /// 【终端】【侧栏命中】侧栏与正文、输入框分开处理鼠标事件。
+    /// 参数: column/row 为屏幕坐标；返回: 是否位于侧栏可见区域。
+    pub(super) fn in_sidebar(&self, column: u16, row: u16) -> bool {
+        self.sidebar.is_some_and(|sidebar| {
+            column >= sidebar.left && column < self.cols && row < self.composer_top
+        })
     }
 
     /// 判断屏幕行是否位于正文区。

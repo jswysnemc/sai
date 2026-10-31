@@ -172,8 +172,9 @@ fn paint_ops_ansi(line: &str, ops: Vec<(usize, ScopeStackOp)>, session: &mut Car
     if !open_style.is_empty() {
         output.push_str(CODE_TOKEN_RESET);
     }
-    // 3. 行注释在逻辑行结束时会被解析器弹出；折行后续片段要自己续上
-    session.carry_comment = ended_as_comment && !stack_has_comment(&session.stack);
+    // 3. 【代码着色】【注释边界】完整源码行以换行结束，只有显示折行才延续行注释颜色
+    session.carry_comment =
+        ended_as_comment && !stack_has_comment(&session.stack) && !line.ends_with('\n');
     output
 }
 
