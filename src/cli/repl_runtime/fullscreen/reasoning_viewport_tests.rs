@@ -62,3 +62,34 @@ fn live_reasoning_follows_until_user_scrolls_up() {
     assert!(next.lines[1].as_str().contains("thought-12"));
     assert_eq!(next.lines.len(), 6);
 }
+
+/// 【终端】【思考结算回归】实时自动跟随转为历史时从开头阅读，不依赖首帧到达时序。
+/// 参数: 无；返回: 无，覆盖同一正文键跨实时和历史阶段的投影
+#[test]
+fn automatically_followed_live_reasoning_starts_history_at_the_top() {
+    let live = source(true);
+    let history = source(false);
+    assert!(live.reasonings[0].live);
+    assert!(!history.reasonings[0].live);
+    assert_eq!(live.reasonings[0].key, history.reasonings[0].key);
+    let mut viewport = ReasoningViewports::default();
+    assert!(viewport.update(live, 80).lines[5]
+        .as_str()
+        .contains("thought-19"));
+    let completed = viewport.update(history, 80);
+    assert!(completed.lines[1].as_str().contains("thought-00"));
+    assert_eq!(completed.lines.len(), 6);
+}
+
+/// 【终端】【阅读位置回归】用户已经滚动的实时正文转为历史后仍保留阅读位置。
+/// 参数: 无；返回: 无，防止结算把主动阅读位置跳回开头
+#[test]
+fn manually_scrolled_live_reasoning_keeps_its_history_position() {
+    let live = source(true);
+    let key = live.reasonings[0].key;
+    let mut viewport = ReasoningViewports::default();
+    viewport.update(live, 80);
+    assert!(viewport.scroll(key, -3));
+    let history = viewport.update(source(false), 80);
+    assert!(history.lines[1].as_str().contains("thought-12"));
+}

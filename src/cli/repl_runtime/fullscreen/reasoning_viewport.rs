@@ -7,6 +7,8 @@ const BODY_ROWS: usize = 5;
 struct Position {
     offset: usize,
     follow: bool,
+    live: bool,
+    manually_scrolled: bool,
 }
 
 /// 【终端】【思考窗口】保存完整正文与独立阅读位置，不把截断结果写回会话。
@@ -56,7 +58,8 @@ impl ReasoningViewports {
         let next = position.offset.saturating_add_signed(delta).min(max);
         let changed = next != position.offset;
         position.offset = next;
-        position.follow = next == max;
+        position.follow = region.live && next == max;
+        position.manually_scrolled |= changed;
         changed
     }
 
@@ -73,7 +76,17 @@ impl ReasoningViewports {
             let position = self.positions.entry(region.key.cell).or_insert(Position {
                 offset: 0,
                 follow: region.live,
+                live: region.live,
+                manually_scrolled: false,
             });
+            // 1. 【终端】【思考结算】只重置自动阅读位置，保留用户滚动结果并停止历史跟随
+            if position.live && !region.live {
+                if !position.manually_scrolled {
+                    position.offset = 0;
+                }
+                position.follow = false;
+            }
+            position.live = region.live;
             let max = total.saturating_sub(BODY_ROWS);
             position.offset = if position.follow {
                 max

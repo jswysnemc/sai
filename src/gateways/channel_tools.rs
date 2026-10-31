@@ -1,30 +1,28 @@
-use super::channel_context::{load_latest_channel_context, ChannelContext};
-use super::message::{MediaKind, OutboundMedia, OutboundMessage};
-use super::qq_bot::auth::QqBotAuthenticator;
-use super::qq_bot::config::{resolve_qq_credentials, QqBotCredentialOverrides};
-use super::qq_official::{QqOfficialClient, QqTargetKind};
-use super::weixin_bot::client::WeixinBotClient;
-use super::weixin_bot::login::{default_base_url as default_weixin_base_url, load_weixin_account};
-use super::weixin_bot::media::{send_local_media, WeixinOutboundMediaKind};
+use super::channel_delivery::{send_qq_message, send_weixin_message};
+use super::channel_target::resolve_latest_target;
+pub(crate) use super::channel_target::{resolve_channel_target, ActiveChannelTarget};
 use crate::config::AppConfig;
 use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use crate::tools::{ToolRegistry, ToolSpec};
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
-use std::path::PathBuf;
 
-#[derive(Clone)]
-pub(crate) enum ActiveChannelTarget {
-    Qq {
-        client: QqOfficialClient,
-        msg_id: Option<String>,
-    },
-    Weixin {
-        client: WeixinBotClient,
-        to_user_id: String,
-        context_token: Option<String>,
-    },
+/// 【渠道消息】【通用注册】参数为 registry、paths、config，返回无。
+/// 只在未注册时挂载普通会话入口，保留网关已绑定的入站目标
+pub(crate) fn register_unbound_channel_message_tool(
+    registry: &mut ToolRegistry,
+    paths: &SaiPaths,
+    config: &AppConfig,
+) {
+    if !registry.contains("send_channel_message") {
+        register_channel_message_tool(
+            registry,
+            paths.clone(),
+            config.clone(),
+            ActiveChannelTarget::Unbound,
+        );
+    }
 }
 
 /// 注册统一渠道发送工具。
@@ -46,14 +44,14 @@ pub(crate) fn register_channel_message_tool(
     registry.register(
         ToolSpec::new(
             "send_channel_message",
-            "Send text or a local media file to a channel. Use channel=current or the current channel name for this chat. Another channel name sends to that channel's most recent chat.",
+            "Send text or a local media file to a channel. In a gateway chat, channel=current preserves that chat's recipient. In a terminal, CLI or subagent, current/default sends to the most recent Weixin chat. Specify qq or weixin to use that channel's most recent chat. A recent chat must exist; this tool never guesses a recipient.",
             json!({
                 "type": "object",
                 "properties": {
                     "channel": {
                         "type": "string",
-                        "description": "Target channel: current, qq, or weixin.",
-                        "enum": ["current", "qq", "weixin"]
+                        "description": "Target channel: current/default, qq, or weixin. Unbound sessions default to the latest Weixin chat.",
+                        "enum": ["current", "default", "qq", "weixin"]
                     },
                     "kind": {
                         "type": "string",
@@ -87,42 +85,6 @@ pub(crate) fn register_channel_message_tool(
     );
 }
 
-/// 根据持久化渠道上下文重建当前发送目标。
-///
-/// 参数:
-/// - `paths`: Sai 路径
-/// - `config`: 应用配置
-/// - `context`: 会话绑定的渠道上下文
-///
-/// 返回:
-/// - 可供渠道发送工具使用的目标
-pub(crate) async fn resolve_channel_target(
-    paths: &SaiPaths,
-    config: &AppConfig,
-    context: &ChannelContext,
-) -> Result<ActiveChannelTarget> {
-    match context {
-        ChannelContext::Qq {
-            target_kind,
-            target_id,
-            msg_id,
-            ..
-        } => resolve_qq_context_target(config, target_kind, target_id, msg_id.clone()).await,
-        ChannelContext::Weixin {
-            to_user_id,
-            context_token,
-            ..
-        } => {
-            resolve_weixin_context_target(paths, config, to_user_id.clone(), context_token.clone())
-        }
-        // 飞书暂未接主动推送工具：回复走网关自身的发送路径
-        ChannelContext::Feishu { .. } => bail!(t(
-            "the Feishu channel does not support proactive messages yet",
-            "飞书渠道暂不支持主动推送消息",
-        )),
-    }
-}
-
 /// 执行统一渠道发送工具。
 ///
 /// 参数:
@@ -142,9 +104,10 @@ async fn send_channel_message(
     let channel = optional_string(&args, "channel").unwrap_or_else(|| "current".to_string());
     let kind = required_string(&args, "kind")?;
     let text = optional_string(&args, "text").or_else(|| optional_string(&args, "caption"));
-    let path = optional_string(&args, "path").map(PathBuf::from);
+    let path = optional_string(&args, "path").map(|path| crate::tools::fs_path::expand_path(&path));
     let target = resolve_target(&paths, &config, current, &channel).await?;
     match target {
+        ActiveChannelTarget::Unbound => bail!("channel target resolution returned no recipient"),
         ActiveChannelTarget::Qq { client, msg_id } => {
             send_qq_message(client, msg_id, &kind, text, path).await
         }
@@ -172,255 +135,22 @@ async fn resolve_target(
     current: ActiveChannelTarget,
     channel: &str,
 ) -> Result<ActiveChannelTarget> {
-    match channel.trim().to_ascii_lowercase().as_str() {
-        "" | "current" => Ok(current),
+    let channel = channel.trim().to_ascii_lowercase();
+    if matches!(current, ActiveChannelTarget::Unbound) {
+        let requested = match channel.as_str() {
+            "" | "current" | "default" => "weixin",
+            "qq" | "weixin" | "wechat" => channel.as_str(),
+            value => bail!("{}: {value}", t("unsupported channel", "不支持的渠道")),
+        };
+        return resolve_latest_target(paths, config, requested).await;
+    }
+    match channel.as_str() {
+        "" | "current" | "default" => Ok(current),
         // 1. 【渠道消息】【目标隔离】同渠道名称绑定本次入站目标，不读取其他并发会话的最近目标
         "qq" if matches!(current, ActiveChannelTarget::Qq { .. }) => Ok(current),
         "weixin" | "wechat" if matches!(current, ActiveChannelTarget::Weixin { .. }) => Ok(current),
-        "qq" => resolve_qq_target(paths, config).await,
-        "weixin" | "wechat" => resolve_weixin_target(paths, config),
+        "qq" | "weixin" | "wechat" => resolve_latest_target(paths, config, &channel).await,
         value => bail!("{}: {value}", t("unsupported channel", "不支持的渠道")),
-    }
-}
-
-/// 解析最近 QQ 发送目标。
-///
-/// 参数:
-/// - `paths`: Sai 路径
-/// - `config`: 应用配置
-///
-/// 返回:
-/// - QQ 发送目标
-async fn resolve_qq_target(paths: &SaiPaths, config: &AppConfig) -> Result<ActiveChannelTarget> {
-    let Some(ChannelContext::Qq {
-        target_kind,
-        target_id,
-        msg_id,
-        ..
-    }) = load_latest_channel_context(paths, "qq")?
-    else {
-        bail!(t(
-            "no recent QQ channel target",
-            "没有最近使用的 QQ 渠道目标"
-        ));
-    };
-    resolve_qq_context_target(config, &target_kind, &target_id, msg_id).await
-}
-
-/// 根据明确 QQ 上下文重建发送目标。
-///
-/// 参数:
-/// - `config`: 应用配置
-/// - `target_kind`: QQ 目标类型
-/// - `target_id`: QQ 目标标识
-/// - `msg_id`: 可选被动回复消息标识
-///
-/// 返回:
-/// - QQ 发送目标
-async fn resolve_qq_context_target(
-    config: &AppConfig,
-    target_kind: &str,
-    target_id: &str,
-    msg_id: Option<String>,
-) -> Result<ActiveChannelTarget> {
-    let credentials = resolve_qq_credentials(
-        QqBotCredentialOverrides {
-            token: None,
-            app_id: None,
-            client_secret: None,
-        },
-        &config.gateways.qq,
-    )?;
-    let mut authenticator = QqBotAuthenticator::new(credentials.app_id, credentials.client_secret);
-    let authorization = authenticator.authorization().await?;
-    let target_kind = QqTargetKind::parse(target_kind)?;
-    let client = QqOfficialClient::new(
-        non_empty_config(&config.gateways.qq.base_url)
-            .unwrap_or_else(|| "https://api.sgroup.qq.com".to_string()),
-        authorization,
-        target_kind,
-        target_id.to_string(),
-    );
-    Ok(ActiveChannelTarget::Qq { client, msg_id })
-}
-
-/// 解析最近微信发送目标。
-///
-/// 参数:
-/// - `paths`: Sai 路径
-/// - `config`: 应用配置
-///
-/// 返回:
-/// - 微信发送目标
-fn resolve_weixin_target(paths: &SaiPaths, config: &AppConfig) -> Result<ActiveChannelTarget> {
-    let Some(ChannelContext::Weixin {
-        to_user_id,
-        context_token,
-        ..
-    }) = load_latest_channel_context(paths, "weixin")?
-    else {
-        bail!(t(
-            "no recent Weixin channel target",
-            "没有最近使用的微信渠道目标"
-        ));
-    };
-    resolve_weixin_context_target(paths, config, to_user_id, context_token)
-}
-
-/// 根据明确微信上下文重建发送目标。
-///
-/// 参数:
-/// - `paths`: Sai 路径
-/// - `config`: 应用配置
-/// - `to_user_id`: 微信用户标识
-/// - `context_token`: 可选上下文 token
-///
-/// 返回:
-/// - 微信发送目标
-fn resolve_weixin_context_target(
-    paths: &SaiPaths,
-    config: &AppConfig,
-    to_user_id: String,
-    context_token: Option<String>,
-) -> Result<ActiveChannelTarget> {
-    let weixin = &config.gateways.weixin;
-    let base_url_config =
-        non_empty_config(&weixin.base_url).unwrap_or_else(|| default_weixin_base_url().to_string());
-    let cdn_base_url_config = non_empty_config(&weixin.cdn_base_url)
-        .unwrap_or_else(|| super::weixin_bot::client::default_cdn_base_url().to_string());
-    let (base_url, cdn_base_url, token) = if let Some(token) = non_empty_config(&weixin.token) {
-        (base_url_config, cdn_base_url_config, token)
-    } else {
-        let account = load_weixin_account(paths, non_empty_config(&weixin.account).as_deref())?;
-        (account.base_url, account.cdn_base_url, account.token)
-    };
-    let client = WeixinBotClient::new(
-        base_url,
-        cdn_base_url,
-        token,
-        non_empty_config(&weixin.bot_agent),
-        false,
-    );
-    Ok(ActiveChannelTarget::Weixin {
-        client,
-        to_user_id,
-        context_token,
-    })
-}
-
-/// 发送 QQ 渠道消息。
-///
-/// 参数:
-/// - `client`: QQ 官方客户端
-/// - `msg_id`: 可选消息 ID
-/// - `kind`: 消息类型
-/// - `text`: 可选文本
-/// - `path`: 可选本机文件路径
-///
-/// 返回:
-/// - JSON 格式发送结果
-async fn send_qq_message(
-    client: QqOfficialClient,
-    msg_id: Option<String>,
-    kind: &str,
-    text: Option<String>,
-    path: Option<PathBuf>,
-) -> Result<String> {
-    let message = match kind {
-        "text" => OutboundMessage {
-            text: Some(required_text(text)?),
-            media: Vec::new(),
-        },
-        "image" => OutboundMessage {
-            text,
-            media: vec![OutboundMedia {
-                kind: MediaKind::Image,
-                path: required_path(path)?,
-            }],
-        },
-        "file" => OutboundMessage {
-            text,
-            media: vec![OutboundMedia {
-                kind: MediaKind::File,
-                path: required_path(path)?,
-            }],
-        },
-        "video" => bail!(t(
-            "QQ channel does not support video via send_channel_message",
-            "QQ 渠道不支持通过 send_channel_message 发送视频"
-        )),
-        value => bail!(
-            "{}: {value}",
-            t("unsupported message kind", "不支持的消息类型")
-        ),
-    };
-    let responses = client.send(&message, msg_id.as_deref()).await?;
-    Ok(serde_json::to_string_pretty(&json!({
-        "ok": true,
-        "channel": "qq",
-        "kind": kind,
-        "responses": responses,
-    }))?)
-}
-
-/// 发送微信渠道消息。
-///
-/// 参数:
-/// - `client`: 微信客户端
-/// - `to_user_id`: 接收方用户 ID
-/// - `context_token`: 可选上下文 token
-/// - `kind`: 消息类型
-/// - `text`: 可选文本
-/// - `path`: 可选本机文件路径
-///
-/// 返回:
-/// - JSON 格式发送结果
-async fn send_weixin_message(
-    client: WeixinBotClient,
-    to_user_id: String,
-    context_token: Option<String>,
-    kind: &str,
-    text: Option<String>,
-    path: Option<PathBuf>,
-) -> Result<String> {
-    match kind {
-        "text" => {
-            client
-                .send_text(&to_user_id, &required_text(text)?, context_token.as_deref())
-                .await?;
-            Ok(serde_json::to_string_pretty(&json!({
-                "ok": true,
-                "channel": "weixin",
-                "kind": "text",
-            }))?)
-        }
-        "image" | "file" | "video" => {
-            let kind = match kind {
-                "image" => WeixinOutboundMediaKind::Image,
-                "file" => WeixinOutboundMediaKind::File,
-                "video" => WeixinOutboundMediaKind::Video,
-                _ => unreachable!(),
-            };
-            let message_id = send_local_media(
-                &client,
-                &to_user_id,
-                context_token.as_deref(),
-                &required_path(path)?,
-                text.as_deref(),
-                kind,
-            )
-            .await?;
-            Ok(serde_json::to_string_pretty(&json!({
-                "ok": true,
-                "channel": "weixin",
-                "kind": media_kind_name(kind),
-                "message_id": message_id,
-            }))?)
-        }
-        value => bail!(
-            "{}: {value}",
-            t("unsupported message kind", "不支持的消息类型")
-        ),
     }
 }
 
@@ -452,67 +182,15 @@ fn optional_string(args: &Value, key: &str) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
-/// 读取必填文本。
-///
-/// 参数:
-/// - `text`: 可选文本
-///
-/// 返回:
-/// - 文本
-fn required_text(text: Option<String>) -> Result<String> {
-    text.filter(|value| !value.trim().is_empty()).context(t(
-        "text is required for text messages",
-        "文本消息必须提供 text",
-    ))
-}
-
-/// 读取必填路径。
-///
-/// 参数:
-/// - `path`: 可选路径
-///
-/// 返回:
-/// - 路径
-fn required_path(path: Option<PathBuf>) -> Result<PathBuf> {
-    path.context(t(
-        "path is required for media messages",
-        "媒体消息必须提供 path",
-    ))
-}
-
-/// 读取非空配置字符串。
-///
-/// 参数:
-/// - `value`: 配置值
-///
-/// 返回:
-/// - 非空字符串
-fn non_empty_config(value: &str) -> Option<String> {
-    let value = value.trim();
-    if value.is_empty() {
-        None
-    } else {
-        Some(value.to_string())
-    }
-}
-
-/// 返回微信媒体类型名称。
-///
-/// 参数:
-/// - `kind`: 微信媒体类型
-///
-/// 返回:
-/// - 媒体类型文本
-fn media_kind_name(kind: WeixinOutboundMediaKind) -> &'static str {
-    match kind {
-        WeixinOutboundMediaKind::Image => "image",
-        WeixinOutboundMediaKind::Video => "video",
-        WeixinOutboundMediaKind::File => "file",
-    }
-}
+#[cfg(test)]
+#[path = "channel_tools_integration_tests.rs"]
+mod integration_tests;
 
 #[cfg(test)]
 mod tests {
+    use super::super::channel_delivery::{required_path, required_text};
+    use super::super::channel_target::non_empty_config;
+    use super::super::qq_official::{QqOfficialClient, QqTargetKind};
     use super::*;
 
     /// 【渠道消息】【目标回归】显式指定当前渠道也沿用本次入站目标，不解析全局最近会话。

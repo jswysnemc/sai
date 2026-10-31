@@ -278,12 +278,15 @@ async fn run_agent(
     image_url: Option<String>,
 ) -> Result<String> {
     AppConfig::init_files(paths)?;
-    let config = crate::config::apply_agent_override(
+    let mut config = crate::config::apply_agent_override(
         AppConfig::load_or_default(paths)?,
         None,
         crate::config::AgentSurface::Gateway,
     )?;
+    super::mesh_tools::configure(&mut config);
+    let session_id = ensure_gateway_session(paths, context)?;
     let mut registry = build_tool_registry(&config, paths, AgentMode::Yolo)?;
+    super::mesh_tools::register(&mut registry, paths, &session_id)?;
     register_channel_message_tool(
         &mut registry,
         paths.clone(),
@@ -299,10 +302,12 @@ async fn run_agent(
     if let Some(image_url) = image_url {
         user_input = user_input.with_image_url(image_url);
     }
-    let channel = crate::runner::ChannelSubmission::new(context.channel())
+    let mut channel = crate::runner::ChannelSubmission::new(context.channel())
         .with_inbound_marker(context.inbound_marker())
         .with_extra_loaded_tool("send_channel_message");
-    let session_id = ensure_gateway_session(paths, context)?;
+    for name in super::mesh_tools::TOOL_NAMES {
+        channel = channel.with_extra_loaded_tool(name);
+    }
     let submission = crate::runner::RunnerSubmission::user_input(
         crate::runner::SubmissionSource::Gateway,
         user_input,

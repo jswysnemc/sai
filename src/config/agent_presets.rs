@@ -29,6 +29,7 @@ const GATEWAY_AGENT_TOOLS: &[&str] = &[
 
 /// TUI / Web 长程编程默认工具白名单（排除表情包、趣味占卜等助手娱乐工具）。
 const CODE_AGENT_TOOLS: &[&str] = &[
+    "send_channel_message",
     "run_command",
     "background_command",
     "subagent",

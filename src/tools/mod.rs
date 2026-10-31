@@ -225,6 +225,11 @@ pub(crate) fn builtin_registry_with_cached_mcp(
 pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     let mut registry = ToolRegistry::new();
     codemode::register(&mut registry, &config.codemode);
+    crate::gateways::channel_tools::register_unbound_channel_message_tool(
+        &mut registry,
+        paths,
+        config,
+    );
     command::register(&mut registry, config, paths, true);
     default_tools::register(&mut registry);
     web_search::register(&mut registry, &config.plugins.web);
@@ -278,6 +283,7 @@ pub(crate) fn register_interactive_tools(
     owner_key: String,
     session_id: String,
 ) {
+    crate::gateways::channel_tools::register_unbound_channel_message_tool(registry, paths, config);
     command::register_session_background(registry, config, paths, &session_id);
     // SSH 工具组：可 load 的远程服务器管理，秘密经独立安全通道，不进模型
     crate::ssh::register(registry, paths, &session_id);
