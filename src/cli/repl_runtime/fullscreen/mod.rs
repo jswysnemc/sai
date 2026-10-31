@@ -27,6 +27,11 @@ mod header_controls;
 mod header_controls_tests;
 pub(super) mod hover;
 mod hover_color;
+mod image_viewer;
+mod image_viewer_input;
+#[cfg(test)]
+mod image_viewer_tests;
+mod image_viewer_view;
 mod image_window;
 mod input;
 mod layout;
@@ -103,6 +108,7 @@ pub(super) struct FullscreenSession {
     images: Vec<(usize, String)>,
     /// 松开鼠标后待写入剪贴板的文本
     pending_copy: Option<String>,
+    image_viewer: image_viewer::ImageViewer,
 }
 
 impl FullscreenSession {
@@ -127,6 +133,7 @@ impl FullscreenSession {
             pending_toggle: None,
             images: Vec::new(),
             pending_copy: None,
+            image_viewer: image_viewer::ImageViewer::default(),
         })
     }
 }
@@ -284,6 +291,7 @@ impl ReplRuntime {
             session.pending_copy = None;
             session.sidebar.scrolls = Default::default();
             session.sidebar.preview.close();
+            session.image_viewer.close();
         }
         // 2. 【全屏视图】【正文复用】拖选和滚动不遍历历史；内容、布局或展开状态变化才更新正文
         let layout_changed = session.state.layout != Some(layout);
@@ -373,6 +381,7 @@ impl ReplRuntime {
         );
         sidebar_resize::decorate_divider(&self.sidebar_control, &mut painted.rows);
         header_controls::overlay(&self.sidebar_control, &layout, &mut painted.rows);
+        image_viewer_view::overlay(&session.image_viewer, &layout, &mut painted.rows);
         // 图片位置变化时先删除旧放置并整屏重画，未变化的行也要重新落下图片
         let images = image_window::placement_signature(&painted.rows);
         if session.images != images {

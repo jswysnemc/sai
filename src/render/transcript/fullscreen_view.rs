@@ -126,11 +126,25 @@ impl TranscriptStore {
                 activities.next();
             }
             let in_activity = activities.peek().is_some_and(|region| row >= region.start);
-            *line = AnsiLine::new(if in_activity {
+            let text = if in_activity {
                 source.to_string()
             } else {
                 align_to_guide_column_with_width(source, padding)
-            });
+            };
+            let indent = if line.image.is_some() && !in_activity {
+                let before = crate::render::ansi_clip::strip_ansi(source)
+                    .chars()
+                    .take_while(|ch| *ch == ' ')
+                    .count();
+                let after = crate::render::ansi_clip::strip_ansi(&text)
+                    .chars()
+                    .take_while(|ch| *ch == ' ')
+                    .count();
+                after.saturating_sub(before)
+            } else {
+                0
+            };
+            *line = line.with_text(text, indent);
         }
         document
     }

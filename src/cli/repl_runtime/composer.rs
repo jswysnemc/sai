@@ -307,6 +307,9 @@ impl ReplRuntime {
         }
         self.last_composer_signature = Some(signature);
         self.last_cursor_row = Some(cursor_row);
+        if self.image_viewer_active() && self.frame.pending_len() > 0 {
+            crossterm::queue!(self.frame, crossterm::cursor::Hide)?;
+        }
         Ok(())
     }
 

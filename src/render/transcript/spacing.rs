@@ -10,7 +10,8 @@ use crate::render::activity_animation::{strip_ansi_for_test, ACTIVITY_GUIDE};
 /// 返回:
 /// - 去掉 ANSI 后没有非空白字符时为 true
 pub(super) fn is_visual_blank(line: &AnsiLine) -> bool {
-    !line.as_str().contains("\x1b_Ga=p")
+    line.image.is_none()
+        && !line.as_str().contains("\x1b_Ga=p")
         && !line.as_str().contains("\x1b]1337;File=")
         && strip_ansi_for_test(line.as_str()).trim().is_empty()
 }

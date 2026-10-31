@@ -1,7 +1,6 @@
 use super::super::cell::HistoryCell;
 use super::super::fullscreen_parts::ParagraphKey;
 use super::super::fullscreen_view::{FullscreenDocument, ParagraphSpan};
-use super::super::line::AnsiLine;
 use super::super::store::{TranscriptRenderOptions, TranscriptStore};
 use super::super::tool_cell::ToolCell;
 use super::appearance;
@@ -194,9 +193,9 @@ pub(super) fn render(
         let reasoning = matches!(store.cells.get(key.cell), Some(HistoryCell::Reasoning(_)))
             || (live_thought && key.cell == thought_index);
         document.lines.extend(
-            node.lines
-                .into_iter()
-                .map(|line| AnsiLine::new(format!("{}{}", " ".repeat(inset), line.as_str()))),
+            node.lines.into_iter().map(|line| {
+                line.with_text(format!("{}{}", " ".repeat(inset), line.as_str()), inset)
+            }),
         );
         if reasoning && node.open {
             document

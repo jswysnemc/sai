@@ -15,21 +15,30 @@ type PreviewCache = VecDeque<(u64, String)>;
 /// 【终端图片】【附件预览】生成固定上限的左对齐预览，缓存协议以稳定放置标识。
 /// 参数: `source` 为文件路径或图片数据 URL，`width` 为可用列数；返回: 预览或语义化错误提示。
 pub(crate) fn render(source: &str, width: usize) -> String {
-    render_cached(source, width).unwrap_or_else(|_| {
-        format!(
-            "\x1b[2m{}\x1b[0m",
-            crate::render::terminal_text("Image preview unavailable.", "图片预览不可用。")
-        )
-    })
+    render_cached(source, width.clamp(1, MAX_COLUMNS), MAX_ROWS)
+        .map(|rendered| {
+            if crate::render::tui_mode::prefers_fullscreen() {
+                super::image_reference::annotate(source, &rendered)
+            } else {
+                rendered
+            }
+        })
+        .unwrap_or_else(|_| {
+            format!(
+                "\x1b[2m{}\x1b[0m",
+                crate::render::terminal_text("Image preview unavailable.", "图片预览不可用。")
+            )
+        })
 }
 
 /// 【终端图片】【预览缓存】文件内容变化、窗口尺寸或协议能力变化时重新渲染。
-/// 参数: `source` 为图片来源，`width` 为可用列数；返回: 完整有界协议或读取错误。
-fn render_cached(source: &str, width: usize) -> Result<String> {
-    let columns = width.clamp(1, MAX_COLUMNS);
+/// 参数: `source` 为图片来源，`width`、`rows` 为可用列行数；返回: 完整有界协议或读取错误。
+fn render_cached(source: &str, width: usize, rows: usize) -> Result<String> {
+    let columns = width.clamp(1, 300);
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     source.hash(&mut hasher);
     width.hash(&mut hasher);
+    rows.hash(&mut hasher);
     crate::render::terminal_image::preview_environment().hash(&mut hasher);
     if !source.starts_with("data:") {
         let metadata = std::fs::metadata(source)?;
@@ -41,7 +50,7 @@ fn render_cached(source: &str, width: usize) -> Result<String> {
         return Ok(rendered.clone());
     }
     // 1. 【终端图片】【来源解析】数据 URL 临时落盘，复用现有 Kitty 和降级实现
-    let size = format!("{columns}x{MAX_ROWS}");
+    let size = format!("{columns}x{rows}");
     let rendered = if source.starts_with("data:") {
         let (header, payload) = source.split_once(',').context("missing image payload")?;
         anyhow::ensure!(
@@ -67,6 +76,12 @@ fn render_cached(source: &str, width: usize) -> Result<String> {
         cache.push_back((key, rendered.clone()));
     }
     Ok(rendered)
+}
+
+/// 【终端图片】【浮窗渲染】按浮窗净尺寸生成图片，复用有界缓存与协议降级。
+/// 参数: source 为图片来源，columns/rows 为可用单元格；返回: 图片文本或读取错误。
+pub(crate) fn render_large(source: &str, columns: usize, rows: usize) -> Result<String> {
+    render_cached(source, columns.clamp(1, 300), rows.clamp(1, 200))
 }
 
 /// 【终端图片】【左侧布局】不添加横向占位，只保留协议声明的完整图像高度。

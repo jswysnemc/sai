@@ -171,11 +171,10 @@ fn finish(mut lines: Vec<AnsiLine>, width: usize, open: bool) -> RenderedNode {
     // 3. 【终端】【安全截断】逐行检查列宽并使用 ANSI 安全函数截断
     for line in &mut lines {
         if crate::render::ansi_clip::ansi_visible_width(line.as_str()) > width {
-            *line = AnsiLine::new(crate::render::ansi_clip::clip_ansi_to_width(
-                line.as_str(),
-                width,
-                "",
-            ));
+            *line = line.with_text(
+                crate::render::ansi_clip::clip_ansi_to_width(line.as_str(), width, ""),
+                0,
+            );
         }
     }
     RenderedNode { lines, open }

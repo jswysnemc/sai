@@ -222,7 +222,7 @@ fn render(
         } else {
             line.as_str().to_string()
         };
-        lines.push(AnsiLine::new(format!("{}{text}", " ".repeat(indent))));
+        lines.push(line.with_text(format!("{}{text}", " ".repeat(indent)), indent));
     }
     RenderedNode { lines, open }
 }

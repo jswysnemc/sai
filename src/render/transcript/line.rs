@@ -7,6 +7,7 @@ const TAB_STOP_COLUMNS: usize = 4;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct AnsiLine {
     text: String,
+    pub(crate) image: Option<crate::render::image_reference::ImageLine>,
 }
 
 impl AnsiLine {
@@ -18,7 +19,25 @@ impl AnsiLine {
     /// 返回:
     /// - ANSI 终端行
     pub(crate) fn new(text: String) -> Self {
-        Self { text }
+        if !crate::render::image_reference::has_marker(&text) {
+            return Self { text, image: None };
+        }
+        let (text, metadata) = crate::render::image_reference::extract(&text);
+        Self {
+            text,
+            image: metadata.map(|(image, _)| image),
+        }
+    }
+
+    /// 【终端图片】【行变换】替换显示文本并保留图片来源，调用方按新增缩进调整列。
+    /// 参数: text 为排版或裁切后的行，indent 为新增缩进；返回: 保留点击区域的行。
+    pub(crate) fn with_text(&self, text: String, indent: usize) -> Self {
+        let mut line = Self::new(text);
+        line.image = self.image.clone().map(|mut image| {
+            image.column += indent;
+            image
+        });
+        line
     }
 
     /// 返回可直接写入终端的 ANSI 文本。
@@ -102,7 +121,13 @@ impl AnsiLine {
         continuation_indent: usize,
     ) -> Vec<Self> {
         let mut lines = Vec::new();
+        let mut image_rows = None;
         for raw_line in text.split('\n') {
+            let (raw_line, metadata) = crate::render::image_reference::extract(raw_line);
+            if let Some(metadata) = metadata {
+                image_rows = Some(metadata);
+            }
+            let raw_line = raw_line.as_str();
             let plain = crate::render::activity_animation::strip_ansi_for_test(raw_line);
             let trimmed = plain.trim();
             // turn 横线：不短于目标宽度时重画到 width，避免烘焙通栏线被拆行。
@@ -118,13 +143,19 @@ impl AnsiLine {
                 )));
                 continue;
             }
-            lines.extend(wrap_line(
-                raw_line,
-                width,
-                right_margin,
-                continuation_indent,
-                false,
-            ));
+            let mut wrapped = wrap_line(raw_line, width, right_margin, continuation_indent, false);
+            if let Some((image, remaining)) = image_rows.as_mut() {
+                for line in &mut wrapped {
+                    let mut image = image.clone();
+                    image.width = image.width.min(width.saturating_sub(image.column));
+                    line.image = Some(image);
+                }
+                *remaining = remaining.saturating_sub(1);
+                if *remaining == 0 {
+                    image_rows = None;
+                }
+            }
+            lines.extend(wrapped);
         }
         lines
     }

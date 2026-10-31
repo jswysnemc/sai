@@ -64,7 +64,8 @@ impl ReplRuntime {
         let control_was_hovered =
             self.sidebar_control.divider_hovered || self.sidebar_control.header_hovered;
         let effect = match self
-            .header_control_event(event)
+            .image_viewer_event(event)
+            .or_else(|| self.header_control_event(event))
             .or_else(|| self.sidebar_control_event(event))
             .or_else(|| self.git_preview_selection_event(event))
             .or_else(|| self.git_preview_event(event))

@@ -124,7 +124,8 @@ impl<'a> DocumentProjection<'a> {
                     crate::render::terminal_image::kitty_cell_pixel_height(),
                 )
                 .into_iter()
-                .map(AnsiLine::new),
+                .enumerate()
+                .map(|(row, text)| self.source.lines[range.start + row].with_text(text, 0)),
             );
         }
     }

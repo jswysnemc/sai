@@ -29,7 +29,25 @@ pub(crate) fn reserved_image_rows(text: &str) -> Option<usize> {
                 .ok()
         })
         .max();
-    kitty.into_iter().chain(iterm).max()
+    kitty
+        .into_iter()
+        .chain(iterm)
+        .chain(sixel_image_cells(text).map(|(_, rows)| rows))
+        .max()
+}
+
+/// 【终端图片】【Sixel 占位】解析栅格属性，按协议使用的单元格尺寸换算占位。
+/// 参数: text 为图片文本；返回: 列行数，没有完整栅格声明时为空。
+pub(crate) fn sixel_image_cells(text: &str) -> Option<(usize, usize)> {
+    let payload = text.split("\x1bPq\"1;1;").nth(1)?;
+    let (width, rest) = payload.split_once(';')?;
+    let height = rest.bytes().take_while(u8::is_ascii_digit).count();
+    let width = width.parse::<usize>().ok()?;
+    let height = rest[..height].parse::<usize>().ok()?;
+    Some((
+        width.div_ceil(SIXEL_CELL_WIDTH_PX),
+        height.div_ceil(SIXEL_CELL_HEIGHT_PX),
+    ))
 }
 
 /// 【终端图片】【末尾占位】只删除非图像尾部换行，保留图片声明高度所需的全部视觉行。

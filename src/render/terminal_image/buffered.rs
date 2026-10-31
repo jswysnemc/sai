@@ -23,7 +23,32 @@ pub(crate) fn render_buffered_image(path: &Path, size: Option<&str>) -> Result<S
         let (columns, rows) = kitty_cell_dimensions_with(limits, width as usize, height as usize);
         return render_iterm_image_with_cells(path, columns, rows);
     }
+    if super::supports_windows_terminal_sixel() {
+        return encode_sixel_buffered(path, limits);
+    }
     render_terminal_image_with_size(path, size)
+}
+
+/// 【终端图片】【Sixel 缓冲】显式限制像素尺寸并保留占位行，防止小浮窗被旧协议下限撑开。
+/// 参数: path 为图片路径，limits 为最大单元格与像素尺寸；返回: 有界协议及全部占位行。
+fn encode_sixel_buffered(path: &Path, limits: (usize, usize, usize, usize)) -> Result<String> {
+    let image = super::load_image_rgba(path)?;
+    let (width, height) = super::fit_dimensions(
+        image.width,
+        image.height,
+        limits.0.max(1) * super::SIXEL_CELL_WIDTH_PX,
+        limits.1.max(1) * super::SIXEL_CELL_HEIGHT_PX,
+    );
+    let pixels = super::quantize_for_sixel(&image, width, height);
+    let mut rendered = super::encode_sixel(&pixels, width, height);
+    rendered.push_str(
+        &"\n".repeat(
+            height
+                .div_ceil(super::SIXEL_CELL_HEIGHT_PX)
+                .saturating_sub(1),
+        ),
+    );
+    Ok(rendered)
 }
 
 /// 【终端图片】【尺寸约束】取当前终端、调用方尺寸与硬上限的交集。

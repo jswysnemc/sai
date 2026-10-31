@@ -93,3 +93,17 @@ fn invalid_image_source_has_semantic_fallback() {
         assert!(render("data:image/png;base64,invalid", 80).contains("Image preview unavailable."));
     });
 }
+
+/// 【终端图片】【Sixel 边界测试】小窗口不采用旧的像素下限，占位尺寸与渲染行数一致。
+/// 参数: 无；返回: 无。
+#[test]
+fn sixel_viewer_respects_small_cell_bounds() {
+    test_override::set(Some(false), Some(false), Some(true));
+    let (_directory, path) = fixture(640, 480);
+    let output = render_large(&path, 8, 3).unwrap();
+    let (columns, rows) = crate::render::image_reference::dimensions(&output);
+    assert!(columns <= 8 && rows <= 3);
+    assert_eq!(output.split('\n').count(), rows);
+    assert!(output.starts_with("\x1bPq"));
+    test_override::set(None, None, None);
+}
