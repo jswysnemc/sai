@@ -1,4 +1,5 @@
 mod checkpoints;
+pub(crate) mod codemode_store;
 mod compaction;
 pub(crate) mod context_blocks;
 pub(crate) use compaction::MessageTokenCache;

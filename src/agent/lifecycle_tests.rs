@@ -322,6 +322,7 @@ fn deepseek_anchor_restores_promotion_from_session_history() {
             "str_replace_editor",
             crate::tools::LOAD_NAME,
             crate::tools::INVOKE_NAME,
+            crate::tools::codemode::NAME,
         ]
     );
 }

@@ -416,122 +416,16 @@ impl Agent {
                         messages.push(ChatMessage::tool(call.id, output));
                         continue;
                     }
-                    if self
-                        .tools
-                        .requires_permission(&call.function.name, &call.function.arguments)?
-                    {
-                        self.tools.record_permission_requested(
-                            &call.function.name,
-                            &call.function.arguments,
-                        )?;
-                        // 自动审核：与人工审核并行；必须在 on_event（可能阻塞）之前启动
-                        let (auto_task, auto_audit_active) = if self.mode() == AgentMode::AutoAudit
-                        {
-                            let context = crate::permission::build_audit_context(messages, 2_500);
-                            match crate::permission::AutoAuditBackend::resolve(
-                                &self.config,
-                                &self.paths,
-                            ) {
-                                Ok(audit_client) => {
-                                    // 先占位 request_id，创建请求后再克隆给任务
-                                    (Some((audit_client, context)), true)
-                                }
-                                Err(_) => {
-                                    // 客户端不可用：静默回退人工审核
-                                    (None, false)
-                                }
-                            }
-                        } else {
-                            (None, false)
-                        };
-                        let (request, decision_rx) =
-                            crate::permission::request_permission_with_auto_audit(
-                                self.session_id(),
-                                &call.function.name,
-                                &call.function.arguments,
-                                auto_audit_active,
-                            );
-                        let request_id = request.id.clone();
-                        let auto_task = auto_task.map(|(audit_client, context)| {
-                            let audit_request = request.clone();
-                            let workdir = crate::runtime_cwd::current_dir()
-                                .unwrap_or_else(|_| std::path::PathBuf::from("."));
-                            tokio::spawn(async move {
-                                // 超时或失败时静默回退人工审核
-                                match audit_client.run(&audit_request, &context, &workdir).await {
-                                    Ok(_) => {}
-                                    Err(error) => {
-                                        let message = format!("{error:#}");
-                                        // 超时 / 竞态：完全静默；其它失败仅提示一次后回退人工
-                                        if message.contains("timed out")
-                                            || message.contains("timeout")
-                                            || message.contains("no longer pending")
-                                            || message.contains("no longer running")
-                                        {
-                                            return;
-                                        }
-                                        eprintln!(
-                                            "【权限审核】【人工接管】自动审核失败: {message}"
-                                        );
-                                    }
-                                }
-                            })
-                        });
-                        on_event(AgentEvent::PermissionRequested(request.clone()))?;
-                        let decision = match decision_rx.await {
-                            Ok(decision) => {
-                                if let Some(task) = auto_task {
-                                    task.abort();
-                                }
-                                decision
-                            }
-                            Err(_) => {
-                                if let Some(task) = auto_task {
-                                    let _ = task.await;
-                                }
-                                crate::permission::PermissionDecision::Deny {
-                                    reply: Some("权限审核通道已关闭".to_string()),
-                                }
-                            }
-                        };
-                        on_event(AgentEvent::PermissionResolved {
-                            request_id,
-                            decision: decision.clone(),
+                    if let Err(error) = self.authorize_tool_call(&call, messages, on_event).await {
+                        let output = error.to_string();
+                        self.record_simple_tool_result(turn_id, recorded_call, false, &output)?;
+                        on_event(AgentEvent::ToolResult {
+                            name: call.function.name.clone(),
+                            ok: false,
+                            output: output.clone(),
                         })?;
-                        // 自动审核的放行理由写入审计日志，人工批准没有说明
-                        let approval_detail = decision.detail().map(str::to_string);
-                        match decision {
-                            crate::permission::PermissionDecision::Allow { .. } => {
-                                self.tools.record_permission_approved(
-                                    &call.function.name,
-                                    &call.function.arguments,
-                                    approval_detail.as_deref(),
-                                )?;
-                            }
-                            crate::permission::PermissionDecision::Deny { reply } => {
-                                self.tools.record_permission_denied(
-                                    &call.function.name,
-                                    &call.function.arguments,
-                                    reply.as_deref(),
-                                )?;
-                                let output = reply
-                                    .filter(|value| !value.trim().is_empty())
-                                    .unwrap_or_else(|| "用户拒绝了此工具调用".to_string());
-                                self.record_simple_tool_result(
-                                    turn_id,
-                                    recorded_call,
-                                    false,
-                                    &output,
-                                )?;
-                                on_event(AgentEvent::ToolResult {
-                                    name: call.function.name.clone(),
-                                    ok: false,
-                                    output: output.clone(),
-                                })?;
-                                messages.push(ChatMessage::tool(call.id, output));
-                                continue;
-                            }
-                        }
+                        messages.push(ChatMessage::tool(call.id, output));
+                        continue;
                     }
                     if self.tool_visibility.is_loader_call(&call.function.name) {
                         let output = match self.tool_visibility.load_from_arguments(
@@ -597,18 +491,20 @@ impl Agent {
                         &tool_hook_ctx,
                     )
                     .await;
-                    let execution =
-                        match self.execute_real_tool(turn_id, &call, on_event, perf).await {
-                            Ok(execution) => execution,
-                            Err(error) => {
-                                // 同上：中途失败不丢已读取的图片附件
-                                tool_attachments::append_model_attachments(
-                                    messages,
-                                    std::mem::take(&mut round_model_attachments),
-                                );
-                                return Err(error);
-                            }
-                        };
+                    let execution = match self
+                        .execute_real_tool(turn_id, &call, messages, on_event, perf)
+                        .await
+                    {
+                        Ok(execution) => execution,
+                        Err(error) => {
+                            // 同上：中途失败不丢已读取的图片附件
+                            tool_attachments::append_model_attachments(
+                                messages,
+                                std::mem::take(&mut round_model_attachments),
+                            );
+                            return Err(error);
+                        }
+                    };
                     round_model_attachments.extend(execution.model_attachments);
                     let output = execution.output;
                     if execution.failed || is_tool_error_output(&output) {

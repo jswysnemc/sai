@@ -123,7 +123,7 @@ fn is_concurrent_read_only_call(
 ) -> bool {
     if matches!(
         call.function.name.as_str(),
-        "ask_question" | "enter_plan_mode" | "exit_plan_mode"
+        "ask_question" | "enter_plan_mode" | "exit_plan_mode" | "codemode"
     ) || call.function.name == tools::REQUEST_CAPABILITY_NAME
         || visibility.is_loader_call(&call.function.name)
     {
@@ -282,6 +282,9 @@ pub(crate) fn resolve_execution_call(
     visibility: &ToolVisibility,
     provider_call: &ToolCall,
 ) -> Result<ToolCall> {
+    if visibility.is_codemode_only() && provider_call.function.name != tools::codemode::NAME {
+        bail!("direct tool calls are disabled; use codemode");
+    }
     if visibility.is_anchor_enabled()
         && deepseek_anchor::is_provider_tool(&provider_call.function.name)
     {

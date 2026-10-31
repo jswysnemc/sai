@@ -34,6 +34,9 @@ pub struct AppConfig {
     pub retry: RetryConfig,
     #[serde(default)]
     pub tools: ToolsConfig,
+    /// JavaScript 工具编排模式，默认保留直接工具并增加脚本入口
+    #[serde(default)]
+    pub codemode: super::CodeModeConfig,
     /// 原生桌面操作需要用户显式开启，独立于内置浏览器
     #[serde(default, skip_serializing_if = "super::computer_use::is_default")]
     pub computer_use: super::ComputerUseConfig,

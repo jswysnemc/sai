@@ -154,6 +154,7 @@ pub fn readable_tool_name(name: &str) -> &str {
         "draw_fortune_lot" => "吉凶占",
         "roll_dice" => "掷骰子",
         "load" => "加载",
+        "codemode" => "代码行动",
         "review_aur_package" => "审查 AUR 包",
         "install_aur_package" => "安装 AUR 包",
         "review_pkgbuild_directory" => "审查 PKGBUILD 目录",
@@ -223,6 +224,7 @@ pub(crate) fn builtin_registry_with_cached_mcp(
 /// - 内置工具与 MCP 管理工具组成的注册表
 pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     let mut registry = ToolRegistry::new();
+    codemode::register(&mut registry, &config.codemode);
     command::register(&mut registry, config, paths, true);
     default_tools::register(&mut registry);
     web_search::register(&mut registry, &config.plugins.web);
@@ -356,3 +358,4 @@ pub fn readonly_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     }
     registry
 }
+pub(crate) mod codemode;

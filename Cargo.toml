@@ -7,8 +7,8 @@ repository = "https://github.com/jswysnemc/sai"
 description = "Command-line AI assistant"
 
 [workspace]
-members = [".", "crates/sai-plugin-runtime", "crates/sai-sqlite-buffer"]
-default-members = [".", "crates/sai-plugin-runtime", "crates/sai-sqlite-buffer"]
+members = [".", "crates/sai-plugin-runtime", "crates/sai-sqlite-buffer", "crates/sai-codemode"]
+default-members = [".", "crates/sai-plugin-runtime", "crates/sai-sqlite-buffer", "crates/sai-codemode"]
 resolver = "2"
 
 [dependencies]
@@ -67,6 +67,7 @@ rust-embed = "8.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sai-plugin-runtime = { path = "crates/sai-plugin-runtime" }
+sai-codemode = { path = "crates/sai-codemode" }
 sha2 = "0.10"
 tempfile = "3.15"
 tar = "0.4"

@@ -29,6 +29,12 @@ pub(crate) fn evaluate_tool_gate(
     call: &ToolCall,
 ) -> ToolGate {
     let name = call.function.name.as_str();
+    if visibility.is_codemode_only() && name != crate::tools::codemode::NAME {
+        return ToolGate::Reject(
+            "tool error: direct tool calls are disabled; use codemode and tools.<name>(args)"
+                .into(),
+        );
+    }
     // 1. load 走可见性专用分支，不做注册表存在性判定，但参数仍需可解析
     if visibility.is_loader_call(name) {
         return match registry.check_arguments(&call.function.arguments) {

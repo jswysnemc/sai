@@ -37,15 +37,22 @@ impl Agent {
     /// 返回:
     /// - 工具文本、模型附件与失败状态
     pub(super) async fn execute_real_tool<F>(
-        &self,
+        &mut self,
         turn_id: &str,
         call: &ToolCall,
+        messages: &[crate::llm::ChatMessage],
         on_event: &mut F,
         perf: &mut PerfTrace,
     ) -> Result<RealToolExecution>
     where
         F: FnMut(AgentEvent) -> Result<()>,
     {
+        if call.function.name == crate::tools::codemode::NAME {
+            let execution = self
+                .execute_codemode(turn_id, call, messages, on_event)
+                .await?;
+            return self.finish_real_tool_execution(turn_id, call, execution, on_event, perf);
+        }
         let (progress_tx, mut progress_rx) = mpsc::unbounded_channel();
         let requested_name = if call.kind == deepseek_anchor::BASH_EXECUTION_KIND {
             crate::tools::DSH_BASH_EXECUTION_ALIAS

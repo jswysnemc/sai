@@ -1,4 +1,10 @@
 mod agent_state;
+mod codemode;
+mod codemode_dispatch;
+mod codemode_readonly;
+mod codemode_scheduler;
+#[cfg(test)]
+mod codemode_tests;
 mod compaction;
 mod compaction_model;
 mod compaction_replay;
@@ -55,6 +61,7 @@ mod tool_execution;
 mod tool_gate;
 mod tool_history;
 mod tool_invocation;
+mod tool_permission;
 mod tool_policy;
 mod tool_visibility;
 mod turn_execution;

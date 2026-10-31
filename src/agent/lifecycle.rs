@@ -50,6 +50,7 @@ impl Agent {
         tools.start_plugin_session(state.session_id())?;
         tools.inherit_plugin_storage_session(&state.state_dir().to_string_lossy());
         tools.set_plugin_model_client(&client);
+        tools::codemode::register_for_agent(&mut tools, &config);
         let tools_enabled = config.tools.enabled && config.active_model_tools_enabled()?;
         let base_system_prompt =
             build_base_system_prompt(&config, paths, tools_enabled, extra_system_prompt)?;
@@ -249,6 +250,7 @@ impl Agent {
         );
         tools.continue_plugin_session(&self.tools);
         tools.set_plugin_model_client(&self.client);
+        tools::codemode::register_for_agent(&mut tools, &self.config);
         let loaded = if !self.tool_visibility.is_progressive() {
             Vec::new()
         } else {
@@ -300,6 +302,7 @@ impl Agent {
         );
         tools.continue_plugin_session(&self.tools);
         tools.set_plugin_model_client(&self.client);
+        tools::codemode::register_for_agent(&mut tools, &self.config);
         let loaded = self.tool_visibility.loaded_tool_names();
         crate::goal::register_tools_for_config(&mut tools, self.state.goal_file(), &self.config)
             .expect("failed to register goal tools");
@@ -373,6 +376,7 @@ impl Agent {
         );
         tools.continue_plugin_session(&self.tools);
         tools.set_plugin_model_client(&client);
+        tools::codemode::register_for_agent(&mut tools, &config);
         let compaction_runtime =
             compaction_model::resolve_compaction_runtime(&config, &self.paths)?;
         self.config = config;

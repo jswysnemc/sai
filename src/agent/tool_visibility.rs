@@ -30,6 +30,7 @@ pub(crate) struct ToolVisibility {
     /// 是否由 Jev 决定额外工具与 skill 的暴露
     jev_routing: bool,
     context_tools: BTreeSet<String>,
+    codemode: Option<crate::config::CodeModeConfig>,
 }
 
 impl ToolVisibility {
@@ -53,6 +54,7 @@ impl ToolVisibility {
             anchor_promoted: false,
             jev_routing: false,
             context_tools: BTreeSet::new(),
+            codemode: None,
         }
     }
 
@@ -69,6 +71,7 @@ impl ToolVisibility {
         } else {
             Self::new(config.agent_deferred_tools().to_vec())
         };
+        visibility.codemode = Some(config.codemode.clone());
         if config.context.experimental_context_blocks {
             visibility.context_tools = tools::context_blocks::NAMES
                 .into_iter()
@@ -145,6 +148,26 @@ impl ToolVisibility {
     /// 返回:
     /// - 当前可见的工具定义列表
     pub(crate) fn definitions(&self, registry: &ToolRegistry) -> Vec<ToolDefinition> {
+        let mut definitions = self.direct_definitions(registry);
+        if let Some(config) = &self.codemode {
+            if config.mode == crate::config::CodeMode::Off {
+                definitions.retain(|item| item.function.name != tools::codemode::NAME);
+            } else {
+                if config.mode == crate::config::CodeMode::Only {
+                    definitions.clear();
+                } else {
+                    definitions.retain(|item| item.function.name != tools::codemode::NAME);
+                }
+                if let Some(definition) = tools::codemode::definition(registry, config) {
+                    definitions.push(definition);
+                }
+            }
+        }
+        definitions
+    }
+
+    /// 【CodeMode】【原生目录】根据 registry 计算既有直接工具目录，返回未应用脚本模式的声明。
+    fn direct_definitions(&self, registry: &ToolRegistry) -> Vec<ToolDefinition> {
         if self.anchor_enabled {
             let mut definitions = deepseek_anchor::definitions();
             if !self.context_tools.is_empty() {
@@ -178,6 +201,14 @@ impl ToolVisibility {
     /// 返回:
     /// - 当前是否可见并允许调用
     pub(crate) fn is_visible(&self, name: &str) -> bool {
+        if let Some(config) = &self.codemode {
+            if name == tools::codemode::NAME {
+                return config.mode != crate::config::CodeMode::Off;
+            }
+            if config.mode == crate::config::CodeMode::Only {
+                return false;
+            }
+        }
         if self.context_tools.contains(name) {
             return true;
         }
@@ -204,6 +235,9 @@ impl ToolVisibility {
     /// 返回:
     /// - 当前配置下是否属于延迟工具
     pub(crate) fn requires_load(&self, name: &str) -> bool {
+        if name == tools::codemode::NAME && self.is_visible(name) {
+            return false;
+        }
         if self.context_tools.contains(name) {
             return false;
         }
@@ -219,6 +253,13 @@ impl ToolVisibility {
     /// - 是否为 `load`
     pub(crate) fn is_loader_call(&self, name: &str) -> bool {
         name == tools::LOAD_NAME
+    }
+
+    /// 【CodeMode】【直接调用边界】无参数，返回当前模式是否禁止直接工具调用。
+    pub(crate) fn is_codemode_only(&self) -> bool {
+        self.codemode
+            .as_ref()
+            .is_some_and(|config| config.mode == crate::config::CodeMode::Only)
     }
 
     /// 判断当前工具调用是否为统一调用外壳。

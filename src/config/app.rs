@@ -164,6 +164,7 @@ impl AppConfig {
     }
 
     pub fn validate(&self) -> Result<()> {
+        self.codemode.validate()?;
         self.computer_use.validate()?;
         self.plugins.web.validate()?;
         super::model_endpoints::validate(&self.model_endpoints)?;
