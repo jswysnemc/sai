@@ -23,7 +23,7 @@ pub(crate) fn channel_prompt() -> &'static str {
 2. 先调用 session_probe（scope=all）查询存活会话；需要查看子智能体状态时使用 agent_probe。目标不明确或候选多于一个时先向用户确认，不猜测会话 ID，不默认广播。
 3. 将用户指令通过 mesh_send 投递到 session:<session_id>；对子智能体使用探测结果提供的 agent 地址。正文保留用户意图和必要上下文。
 4. mesh_send 立即返回投递回执，不代表任务已经完成。向微信用户准确说明已转发，不虚构目标会话的回复或进度。
-5. 关联后续消息时沿用 correlation_id，并使用回执中的 from/reply_to 地址。需要直接向微信推送结果时使用 send_channel_message。
+5. 向目标追加消息时沿用 correlation_id 和目标地址，不把自己发出的回执中的 from/reply_to 当成目标。收到其他会话的消息后，向入站消息中的 from/reply_to 地址回复并沿用 correlation_id。需要直接向微信推送结果时使用 send_channel_message。
 6. session_activate 仅改变目标工作区的当前会话指针，不启动任务、不投递消息，也不会切换当前微信 Agent；只有用户明确要求激活会话时才调用。
 7. 若工具采用渐进加载，按已有工具调用网关规则执行；不要假设存在名为 send 的工具，实际发送工具名称为 mesh_send。
 </channel-context>"#

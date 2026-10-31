@@ -54,6 +54,35 @@ fn unrestricted_profile_stays_unrestricted() {
     assert!(config.agent_runtime.unwrap().enabled_tools.is_empty());
 }
 
+/// 【微信网关】【加载回归】无参数，返回无；渠道预加载工具通过渐进执行门禁。
+#[test]
+fn preloaded_mesh_tools_pass_progressive_visibility_checks() {
+    let root = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(root.path());
+    let mut config = AppConfig::default();
+    config.agent_runtime = Some(AgentRuntimeOverride {
+        deferred_tools: TOOL_NAMES.into_iter().map(str::to_string).collect(),
+        ..Default::default()
+    });
+    configure(&mut config);
+    let mut registry = ToolRegistry::new();
+    let gateway =
+        ensure_gateway_session(&paths, &ChannelContext::weixin("user".into(), None)).unwrap();
+    register(&mut registry, &paths, &gateway).unwrap();
+    let mut visibility = crate::agent::ToolVisibility::from_config(&config);
+    assert!(visibility.is_progressive());
+    assert!(visibility.requires_load("mesh_send"));
+    let mut channel = crate::runner::ChannelSubmission::new("weixin");
+    for name in TOOL_NAMES {
+        channel = channel.with_extra_loaded_tool(name);
+    }
+    visibility.restore_loaded_tools(&registry, &channel.extra_loaded_tools);
+    for name in TOOL_NAMES {
+        assert!(visibility.is_loaded(name));
+        assert!(visibility.is_visible(name));
+    }
+}
+
 /// 【微信网关】【投递回归】无参数，返回无；真实会话注册经过过滤与身份重绑后可跨工作区投递。
 #[tokio::test]
 async fn gateway_probes_and_sends_with_its_actual_session_identity() {
