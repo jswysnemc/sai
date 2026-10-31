@@ -56,33 +56,57 @@ fn legacy_state_is_bound_to_record_identity_but_not_old_status() {
 #[test]
 fn legacy_concurrent_cancellation_has_one_successful_transition() {
     for _ in 0..32 {
-        assert_single_cancellation_transition();
+        assert_single_cancellation_transition(std::time::Duration::ZERO);
     }
 }
 
+/// 【旧闹钟测试】【慢锁回归】无参数，返回无；锁持有超过一秒后释放仍只允许一次取消成功。
+#[test]
+fn legacy_concurrent_cancellation_waits_for_delayed_lock_release() {
+    assert_single_cancellation_transition(std::time::Duration::from_millis(1500));
+}
+
 /// 【旧闹钟测试】【取消竞争】从未创建的状态目录开始，同时取消同一任务。
-/// @returns 无，所有线程结束后检查唯一终态
-fn assert_single_cancellation_transition() {
+/// 参数: lock_hold 为模拟外部锁持有时间，零值不预建状态目录；返回: 无，所有线程结束后检查唯一终态。
+fn assert_single_cancellation_transition(lock_hold: std::time::Duration) {
     let (_root, paths, record) = fixture();
+    let release = if lock_hold.is_zero() {
+        None
+    } else {
+        let store = super::super::store::Store::open(&paths).unwrap();
+        let lock = store.cancellation_lock().unwrap();
+        Some(std::thread::spawn(move || {
+            std::thread::sleep(lock_hold);
+            drop(lock);
+        }))
+    };
     let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
     let mut handles = Vec::new();
     for _ in 0..8 {
         let (paths, id, barrier) = (paths.clone(), record.task_id(), barrier.clone());
         handles.push(std::thread::spawn(move || {
             barrier.wait();
-            for _ in 0..200 {
+            // 1. 【旧闹钟测试】【有界等待】使用真实截止时间，不能把慢文件同步误判为取消锁失效
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            loop {
                 match legacy_alarm_jobs::cancel(&paths, &id) {
                     Ok(changed) => return changed,
                     Err(error) if super::super::store::is_busy(&error) => {
-                        std::thread::sleep(std::time::Duration::from_millis(5))
+                        assert!(
+                            std::time::Instant::now() < deadline,
+                            "legacy cancellation lock did not become available: {error:#}"
+                        );
+                        std::thread::sleep(std::time::Duration::from_millis(10))
                     }
                     Err(error) => panic!("{error:#}"),
                 }
             }
-            panic!("legacy cancellation lock did not become available");
         }));
     }
     let results: Vec<_> = handles.into_iter().map(|handle| handle.join()).collect();
+    if let Some(release) = release {
+        release.join().unwrap();
+    }
     assert_eq!(
         results
             .into_iter()
