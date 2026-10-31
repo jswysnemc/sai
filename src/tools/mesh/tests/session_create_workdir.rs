@@ -4,11 +4,32 @@ use super::*;
 #[tokio::test]
 async fn create_in_specified_workdir_preserves_both_workspace_pointers() {
     let root = tempfile::tempdir().unwrap();
-    let paths = SaiPaths::for_tests(root.path());
-    let current = root.path().join("source");
-    let target = root.path().join("target");
+    assert_creation_preserves_pointers(root.path()).await;
+}
+
+/// 【会话创建】【路径别名回归】无参数，返回无；符号链接与真实路径共享作用域且不改变启动指针。
+#[cfg(unix)]
+#[tokio::test]
+async fn aliased_workdir_preserves_both_workspace_pointers() {
+    let root = tempfile::tempdir().unwrap();
+    let real = root.path().join("real");
+    let alias = root.path().join("alias");
+    std::fs::create_dir_all(&real).unwrap();
+    std::os::unix::fs::symlink(&real, &alias).unwrap();
+    assert_creation_preserves_pointers(&alias).await;
+}
+
+/// 【会话创建】【目录身份校验】在真实路径或别名下验证作用域、返回目录和两侧启动指针。
+/// 参数: root 为已存在的测试根目录；返回: 无，身份不一致或指针变化时断言失败。
+async fn assert_creation_preserves_pointers(root: &std::path::Path) {
+    let paths = SaiPaths::for_tests(root);
+    let current = root.join("source");
+    let target = root.join("target");
     std::fs::create_dir_all(&current).unwrap();
     std::fs::create_dir_all(&target).unwrap();
+    // 1. 【会话创建】【规范目录】存储作用域使用真实目录，不能用短路径或符号链接文本计算预期 ID
+    let expected_current = crate::platform::windows_path::canonicalize(&current).unwrap();
+    let expected_target = crate::platform::windows_path::canonicalize(&target).unwrap();
     crate::runtime_cwd::scope(current.clone(), async {
         let (source, _) = session_in(&paths, &current, "source");
         let (prior, _) = session_in(&paths, &target, "prior");
@@ -32,13 +53,7 @@ async fn create_in_specified_workdir_preserves_both_workspace_pointers() {
         .unwrap();
         assert_eq!(output["pointer_changed"], false);
         assert_eq!(output["started"], false);
-        assert_eq!(
-            output["workdir"],
-            crate::platform::windows_path::canonicalize(&target)
-                .unwrap()
-                .display()
-                .to_string()
-        );
+        assert_eq!(output["workdir"], expected_target.display().to_string());
         assert_eq!(std::fs::read(source_pointer).unwrap(), before_source);
         assert_eq!(std::fs::read(target_pointer).unwrap(), before_target);
         assert_eq!(
@@ -52,11 +67,11 @@ async fn create_in_specified_workdir_preserves_both_workspace_pointers() {
             .unwrap();
         assert_eq!(
             located.workspace_id,
-            crate::state::workspace_id_for_path(&target)
+            crate::state::workspace_id_for_path(&expected_target)
         );
         assert_ne!(
             located.workspace_id,
-            crate::state::workspace_id_for_path(&current)
+            crate::state::workspace_id_for_path(&expected_current)
         );
     })
     .await;
@@ -109,7 +124,10 @@ async fn relative_workdir_is_resolved_without_switching_the_caller() {
         .unwrap();
         assert_eq!(
             created["workdir"],
-            cwd.join("project").display().to_string()
+            crate::platform::windows_path::canonicalize(&cwd.join("project"))
+                .unwrap()
+                .display()
+                .to_string()
         );
         assert_eq!(crate::runtime_cwd::current_dir().unwrap(), cwd);
         let base = locate_session_dirs(&paths, created["session_id"].as_str().unwrap())
