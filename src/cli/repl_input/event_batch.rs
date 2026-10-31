@@ -2,7 +2,6 @@ use crate::cli::repl_runtime::ReplRuntime;
 use crate::cli::repl_windows_paste::WindowsPasteKey;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use std::io;
-use std::time::Duration;
 
 const MAX_TEXT_BATCH_CHARS: usize = 512;
 const MAX_TEXT_BATCH_EVENTS: usize = MAX_TEXT_BATCH_CHARS * 2;
@@ -14,7 +13,7 @@ pub(in crate::cli) fn next_ready_event(runtime: &mut ReplRuntime) -> io::Result<
     if let Some(event) = runtime.pop_input_event() {
         return Ok(Some(event));
     }
-    if event::poll(Duration::ZERO)? {
+    if crate::cli::terminal_events::ready()? {
         event::read().map(Some)
     } else {
         Ok(None)

@@ -74,7 +74,8 @@ impl SidebarScrolls {
 /// 【终端侧栏】【区域分配】三个标题固定，子任务和待办限制高度，Changes 使用剩余内容区。
 /// 参数: document 为分组文档，height 为侧栏高度；返回: 分组布局。
 pub(super) fn regions(document: &SidebarDocument, height: usize) -> Vec<SidebarRegion> {
-    let available = height.saturating_sub(1 + document.panels.len());
+    let header = super::pane_header::height(height);
+    let available = height.saturating_sub(header + 1 + document.panels.len());
     let len = |section| {
         document
             .panels
@@ -89,7 +90,7 @@ pub(super) fn regions(document: &SidebarDocument, height: usize) -> Vec<SidebarR
         .min(4)
         .min(available.saturating_sub(agents) / 2);
     let git = len(SidebarSection::Git).min(available.saturating_sub(agents + todo));
-    let mut top = 0;
+    let mut top = header;
     document
         .panels
         .iter()

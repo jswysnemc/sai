@@ -31,12 +31,13 @@ mod message_picker_tests;
 mod message_picker_view;
 mod overview;
 mod paint;
+mod pane_header;
+mod pane_tail;
 #[cfg(test)]
 mod presentation_tests;
 mod reasoning_viewport;
 #[cfg(test)]
 mod review_layout_tests;
-mod review_tail;
 pub(super) mod selection;
 mod sidebar;
 mod sidebar_action;
@@ -44,6 +45,7 @@ mod sidebar_agents_view;
 pub(super) mod sidebar_control;
 #[cfg(test)]
 mod sidebar_control_tests;
+mod sidebar_drag_batch;
 mod sidebar_git;
 mod sidebar_git_view;
 #[cfg(test)]
@@ -82,7 +84,7 @@ use std::io::{self, Write};
 pub(super) struct FullscreenSession {
     state: FullscreenState,
     sidebar: sidebar::Sidebar,
-    review_tail: Option<review_tail::ReviewTail>,
+    pane_tail: Option<pane_tail::PaneTail>,
     /// 当前正文所属子任务，空值表示主会话
     viewing_subagent: Option<String>,
     /// 输入框正上方“回到底部”按钮的点击范围
@@ -111,7 +113,7 @@ impl FullscreenSession {
         Ok(Self {
             state: FullscreenState::new(),
             sidebar: sidebar::Sidebar::default(),
-            review_tail: None,
+            pane_tail: None,
             viewing_subagent: None,
             bottom_button: None,
             pending_toggle: None,
@@ -261,7 +263,7 @@ impl ReplRuntime {
         let layout = self
             .sidebar_control
             .layout(size.cols, size.rows, wanted, review);
-        self.clear_review_tail(&layout)?;
+        self.invalidate_pane_tail(&layout);
         let Some(session) = self.fullscreen.as_mut() else {
             return Ok(());
         };
@@ -347,9 +349,7 @@ impl ReplRuntime {
                     row.action = None;
                 }
             }
-            session
-                .sidebar
-                .update(document, usize::from(layout.composer_top));
+            session.sidebar.update(document, usize::from(layout.rows));
         }
         let mut painted = paint::compose(&session.state, &layout);
         sidebar_view::overlay(

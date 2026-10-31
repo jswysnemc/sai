@@ -36,7 +36,7 @@ impl SidebarPalette {
                 accent: (23, 109, 123),
                 added: (45, 122, 74),
                 removed: (169, 62, 73),
-                added_bg: (225, 237, 252),
+                added_bg: (226, 243, 231),
                 removed_bg: (253, 229, 230),
             }
         } else {
@@ -47,7 +47,7 @@ impl SidebarPalette {
                 accent: (103, 193, 207),
                 added: (118, 185, 133),
                 removed: (216, 125, 125),
-                added_bg: (20, 42, 66),
+                added_bg: (20, 46, 30),
                 removed_bg: (63, 25, 30),
             }
         }

@@ -28,12 +28,6 @@ pub(super) fn heading(title: &str, count: &str, collapsed: bool, width: usize) -
     format!("{}\x1b[0m", columns(&left, count, width))
 }
 
-/// 【终端审查】【审查标题】固定标题与关闭控件，不创建浮动窗口。
-/// 参数: title 为标题，width 为宽度；返回: 标题行。
-pub(super) fn window_title(title: &str, width: usize) -> String {
-    columns(&format!("\x1b[1m{title}\x1b[22m"), "[x]", width)
-}
-
 /// 【终端侧栏】【内容条目】按列宽裁剪内容，次要文本使用前景弱化。
 /// 参数: text 为内容，width 为宽度，muted 为次要状态；返回: 定宽条目。
 pub(super) fn item(text: &str, width: usize, muted: bool) -> String {

@@ -35,12 +35,7 @@ impl ReplRuntime {
             return None;
         };
         let side = layout.sidebar?;
-        let in_height = mouse.row
-            < if layout.review {
-                layout.rows
-            } else {
-                layout.composer_top
-            };
+        let in_height = mouse.row < layout.rows;
         let divider = in_height && mouse.column == side.left;
         let close = layout.sidebar_close_at(mouse.column, mouse.row);
         let control = &mut self.sidebar_control;
@@ -68,7 +63,7 @@ impl ReplRuntime {
                 control.dragging = false;
                 control.divider_hovered = mouse.column == geometry.left && in_height;
             }
-            return Some(Effect::Refresh);
+            return Some(Effect::Repaint);
         }
         if mouse.kind == MouseEventKind::Down(MouseButton::Left) && (divider || close) {
             session.state.press = None;

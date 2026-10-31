@@ -25,6 +25,17 @@ fn heading(runtime: &ReplRuntime, label: &str) -> u16 {
         .unwrap()
 }
 
+/// 【侧栏测试】【全高内容】读取包括输入区右侧页脚的完整侧栏，不把正文绘制基线当成全屏快照。
+/// 参数: runtime 为界面；返回: 全高侧栏行。
+fn panel(runtime: &ReplRuntime) -> Vec<String> {
+    let session = runtime.fullscreen.as_ref().unwrap();
+    super::sidebar_view::panel_rows(
+        &session.sidebar,
+        &session.state.layout.unwrap(),
+        &runtime.sidebar_control,
+    )
+}
+
 /// 【侧栏测试】【整行点击】待办标题右侧留白也能切换，不改变草稿或正文状态。
 /// 参数: 无；返回: 无。
 #[test]
@@ -131,11 +142,16 @@ fn heading_hover_explains_action_and_clears_on_exit() {
                 .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 156, row))
                 .unwrap();
             let session = runtime.fullscreen.as_ref().unwrap();
-            assert_eq!(session.sidebar.hovered, Some(usize::from(row)));
+            assert_eq!(
+                session
+                    .sidebar
+                    .target_at(&session.state.layout.unwrap(), 156, row),
+                session.sidebar.hovered
+            );
             let painted = session.state.previous.as_ref().unwrap();
             assert!(painted[usize::from(row)].contains("\x1b[7m"));
             assert!(!painted[usize::from(row)].contains("\x1b[4m"));
-            assert!(painted
+            assert!(panel(&runtime)
                 .iter()
                 .any(|line| line.contains("Click to collapse")));
             // 1. 【侧栏测试】【滚动边界】即使已在顶部，滚轮也必须清除原有悬停反馈
@@ -144,11 +160,7 @@ fn heading_hover_explains_action_and_clears_on_exit() {
                 .unwrap();
             let session = runtime.fullscreen.as_ref().unwrap();
             assert!(session.sidebar.hovered.is_none());
-            assert!(!session
-                .state
-                .previous
-                .as_ref()
-                .unwrap()
+            assert!(!panel(&runtime)
                 .iter()
                 .any(|line| line.contains("Click to collapse")));
             runtime
@@ -159,11 +171,7 @@ fn heading_hover_explains_action_and_clears_on_exit() {
                 .unwrap();
             let session = runtime.fullscreen.as_ref().unwrap();
             assert!(session.sidebar.hovered.is_none());
-            assert!(!session
-                .state
-                .previous
-                .as_ref()
-                .unwrap()
+            assert!(!panel(&runtime)
                 .iter()
                 .any(|line| line.contains("Click to collapse")));
         },
@@ -186,15 +194,12 @@ fn separator_details_and_footer_are_not_clickable() {
             let layout = session.state.layout.unwrap();
             let sidebar = &session.sidebar;
             let left = layout.sidebar.unwrap().left;
-            assert_eq!(sidebar.target_at(&layout, left + 1, 0), Some(0));
-            assert_eq!(sidebar.target_at(&layout, 154, 0), Some(0));
+            assert_eq!(sidebar.target_at(&layout, left + 1, 3), Some(0));
+            assert_eq!(sidebar.target_at(&layout, 154, 3), Some(0));
             assert_eq!(sidebar.target_at(&layout, 156, 0), None);
             assert_eq!(sidebar.target_at(&layout, left, 0), None);
             assert_eq!(sidebar.target_at(&layout, 159, 0), None);
-            assert_eq!(
-                sidebar.target_at(&layout, 156, layout.composer_top - 1),
-                None
-            );
+            assert_eq!(sidebar.target_at(&layout, 156, layout.rows - 1), None);
             let detail = heading(&runtime, "Checking working tree");
             assert_eq!(sidebar.target_at(&layout, 156, detail), None);
         },
@@ -222,7 +227,7 @@ fn subagents_can_fold_without_hiding_main_navigation() {
             );
             runtime.enter_fullscreen().unwrap();
             runtime
-                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 154, 0))
+                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 154, 3))
                 .unwrap();
             let sidebar = &runtime.fullscreen.as_ref().unwrap().sidebar;
             assert!(sidebar.sections.agents_collapsed);
@@ -233,7 +238,7 @@ fn subagents_can_fold_without_hiding_main_navigation() {
                 .any(|row| row.text.contains("CHILD-TASK")));
             assert!(sidebar.document.rows[1].text.contains("Main conversation"));
             runtime
-                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 154, 0))
+                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 154, 3))
                 .unwrap();
             assert!(runtime
                 .fullscreen
@@ -272,7 +277,7 @@ fn scrolled_heading_uses_document_offset_and_retains_fold_on_resize() {
                 .handle_fullscreen_event(&mouse(MouseEventKind::ScrollDown, 156, 4))
                 .unwrap();
             let row = heading(&runtime, "Changes");
-            assert_eq!(row, 2);
+            assert_eq!(row, 5);
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 156, row))
                 .unwrap();

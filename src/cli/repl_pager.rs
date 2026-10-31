@@ -358,7 +358,7 @@ impl PagerScreen {
                 }
                 _ => {}
             }
-            if wait.is_some() && event::poll(Duration::ZERO)? {
+            if wait.is_some() && super::terminal_events::ready()? {
                 continue;
             }
             return Ok(false);

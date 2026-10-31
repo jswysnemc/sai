@@ -220,12 +220,13 @@ fn file_widgets_open_preview_and_keep_conversation_state() {
                 .position(|row| row.action == Some(SidebarAction::GitFile(0)))
                 .unwrap();
             let before = runtime.fullscreen.as_ref().unwrap().state.scroll;
+            let session = runtime.fullscreen.as_ref().unwrap();
+            let row = session
+                .sidebar
+                .screen_row(&session.state.layout.unwrap(), row)
+                .unwrap();
             runtime
-                .handle_fullscreen_event(&mouse(
-                    MouseEventKind::Down(MouseButton::Left),
-                    156,
-                    row as u16,
-                ))
+                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 156, row))
                 .unwrap();
             assert_eq!(
                 runtime
@@ -275,13 +276,14 @@ fn file_widgets_open_preview_and_keep_conversation_state() {
     );
 }
 
-/// 【Git预览测试】【固定分栏】审查区只写入右侧，红蓝背景仅覆盖增删代码行。
+/// 【Git预览测试】【固定分栏】审查区只写入右侧，红绿背景仅覆盖增删代码行。
 /// 参数: 无；返回: 无。
 #[test]
 fn preview_layout_and_components_stay_within_body() {
     let light = SidebarPalette::for_background((255, 255, 255));
     let dark = SidebarPalette::for_background((0, 0, 0));
     assert_ne!(light.text, dark.text);
+    assert!(dark.added_bg.1 > dark.added_bg.0 && dark.added_bg.1 > dark.added_bg.2);
     for (cols, rows, wanted) in [(160, 30, 4), (100, 20, 4), (40, 16, 12)] {
         let layout = FullscreenLayout::compute_for(cols, rows, wanted, true);
         let geometry = PreviewLayout::compute(&layout, 1);
@@ -311,7 +313,10 @@ fn preview_layout_and_components_stay_within_body() {
         assert!(panel[geometry.diff_top + 2].contains("\x1b[48;2;"));
         assert!(!panel.last().unwrap().contains("\x1b[48;"));
         assert_eq!(geometry.left, usize::from(layout.main_width));
-        assert!(geometry.close_at((geometry.left + geometry.width - 3) as u16, 0));
+        assert!(geometry.close_at(
+            (geometry.left + geometry.width - 3) as u16,
+            super::pane_header::close_row(geometry.height)
+        ));
     }
 }
 
@@ -340,8 +345,16 @@ fn review_controls_reverse_on_hover_and_clear_without_intercepting_chat() {
             let geometry = PreviewLayout::compute(&layout, 1);
             for (column, row, target) in [
                 (90, geometry.files_top as u16, ReviewHover::File(0)),
-                (85, 1, ReviewHover::Mode(DiffMode::Working)),
-                (157, 0, ReviewHover::Close),
+                (
+                    85,
+                    geometry.header_height as u16,
+                    ReviewHover::Mode(DiffMode::Working),
+                ),
+                (
+                    157,
+                    super::pane_header::close_row(geometry.height),
+                    ReviewHover::Close,
+                ),
             ] {
                 runtime
                     .handle_fullscreen_event(&mouse(MouseEventKind::Moved, column, row))
@@ -464,7 +477,10 @@ fn mode_controls_fit_narrow_review_and_match_click_columns() {
         for mode in [DiffMode::Working, DiffMode::Staged, DiffMode::Unstaged] {
             let width = geometry.mode_label(mode).len() + 4;
             assert_eq!(
-                geometry.mode_at((geometry.left + 2 + start) as u16, 1),
+                geometry.mode_at(
+                    (geometry.left + 2 + start) as u16,
+                    geometry.header_height as u16
+                ),
                 Some(mode)
             );
             start += width + 1;

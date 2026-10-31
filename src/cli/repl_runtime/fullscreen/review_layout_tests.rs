@@ -134,8 +134,7 @@ fn chat_files_and_diff_scroll_independently_without_hiding_chat() {
             assert_eq!(session.sidebar.preview.file_scroll, 3);
             assert_eq!(session.sidebar.preview.scroll, 3);
             assert!(
-                strip_ansi_for_test(&session.state.previous.as_ref().unwrap()[0])
-                    .contains("Review")
+                strip_ansi_for_test(&session.state.previous.as_ref().unwrap()[0]).contains("╭──╴")
             );
         },
     );
@@ -163,7 +162,7 @@ fn sidebar_sections_have_independent_scroll_offsets_and_fixed_headers() {
             runtime.paint_fullscreen().unwrap();
             let session = runtime.fullscreen.as_ref().unwrap();
             let layout = session.state.layout.unwrap();
-            let panels = regions(&session.sidebar.document, usize::from(layout.composer_top));
+            let panels = regions(&session.sidebar.document, usize::from(layout.rows));
             let git = panels
                 .iter()
                 .find(|region| region.section == SidebarSection::Git)
@@ -184,7 +183,7 @@ fn sidebar_sections_have_independent_scroll_offsets_and_fixed_headers() {
             assert_eq!(session.sidebar.scrolls.agents, 0);
             assert_eq!(session.sidebar.scrolls.todo, 0);
             assert_eq!(
-                regions(&session.sidebar.document, usize::from(layout.composer_top))
+                regions(&session.sidebar.document, usize::from(layout.rows))
                     .iter()
                     .map(|region| (region.section, region.top))
                     .collect::<Vec<_>>(),

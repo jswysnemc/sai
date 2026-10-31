@@ -101,7 +101,7 @@ pub(super) fn render(
 /// 参数: text 为安全 ANSI 行，foreground/background 为基础样式，width 为净宽；返回: 定宽行。
 fn fill_row(text: &str, foreground: &str, background: &str, width: usize) -> String {
     let base = format!("{background}{foreground}");
-    // 1. 【终端审查】【语法复位】词元重置不能清除所属差异行的红蓝背景
+    // 1. 【终端审查】【语法复位】词元重置不能清除所属差异行的红绿背景
     let text = text.replace("\x1b[0m", &format!("\x1b[0m{base}"));
     let clipped = clip_ansi_to_width(&format!("{base}{text}"), width, "");
     // 2. 【终端审查】【边界填充】裁剪可能插入重置，重新设置背景后填满剩余列

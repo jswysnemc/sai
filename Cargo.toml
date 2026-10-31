@@ -88,6 +88,8 @@ cap-std = "3"
 cap-fs-ext = "3"
 
 [target.'cfg(unix)'.dependencies]
+# 【终端输入】【连续事件】使用电平触发轮询，避免长鼠标事件流在一次读取后停滞
+crossterm = { version = "0.28", features = ["use-dev-tty"] }
 signal-hook = "=0.3.18"
 
 [target.'cfg(windows)'.dependencies]

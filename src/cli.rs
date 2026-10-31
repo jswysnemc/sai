@@ -86,6 +86,7 @@ mod session_resume;
 mod sessions;
 mod skills_commands;
 mod ssh_prompt;
+mod terminal_events;
 mod terminal_restore;
 mod terminal_signals;
 mod tree_select;

@@ -298,11 +298,11 @@ impl ReplRuntime {
             &viewport,
             self.last_composer_signature.as_ref(),
         )?;
-        // 1. 【终端审查】【右侧固定区域】输入重绘可能清除同一行右侧，随后仅重画审查区
+        // 1. 【终端侧栏】【右侧固定区域】输入重绘可能清除同一行右侧，随后仅重画固定面板
         let input_changed = self.frame.pending_len() != pending_before;
-        let review_written = self.paint_review_tail(input_changed)?;
+        let pane_written = self.paint_pane_tail(input_changed)?;
         // 2. 【终端】【光标恢复】右侧绘制完成后恢复左侧输入光标
-        if review_written || (pending_before > 0 && self.frame.pending_len() == pending_before) {
+        if pane_written || (pending_before > 0 && self.frame.pending_len() == pending_before) {
             signature.restore_cursor(&mut self.frame)?;
         }
         self.last_composer_signature = Some(signature);

@@ -132,11 +132,13 @@ fn close_button_hides_sidebar_without_losing_draft() {
                 .unwrap();
             runtime.enter_fullscreen().unwrap();
             let session = runtime.fullscreen.as_ref().unwrap();
-            let row = &session.state.previous.as_ref().unwrap()[0];
+            let row = &session.state.previous.as_ref().unwrap()[1];
             assert!(strip_ansi(row).ends_with("[x] "));
-            assert!(row.contains("\x1b[48;5;235m"));
+            assert!(strip_ansi(row).contains("sai"));
+            assert!(strip_ansi(&session.state.previous.as_ref().unwrap()[3]).ends_with("0 "));
+            assert!(session.state.previous.as_ref().unwrap()[0].contains("\x1b[48;5;235m"));
             runtime
-                .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 157, 0))
+                .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 157, 1))
                 .unwrap();
             let row = &runtime
                 .fullscreen
@@ -145,11 +147,11 @@ fn close_button_hides_sidebar_without_losing_draft() {
                 .state
                 .previous
                 .as_ref()
-                .unwrap()[0];
+                .unwrap()[1];
             assert!(row.contains("\x1b[7m[x]"));
             assert!(!row.contains("\x1b[4m"));
             runtime
-                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 157, 0))
+                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 157, 1))
                 .unwrap();
             assert!(runtime
                 .fullscreen

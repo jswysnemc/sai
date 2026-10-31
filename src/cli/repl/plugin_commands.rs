@@ -189,7 +189,7 @@ async fn execute_live(
 /// 【插件终端】【取消按键】仅消费命令执行期间的按键，Esc 和 Ctrl+C 停止命令。
 /// @returns 用户是否请求取消
 fn cancelled() -> Result<bool> {
-    while event::poll(Duration::ZERO)? {
+    while crate::cli::terminal_events::ready()? {
         if let Event::Key(key) = event::read()? {
             if key.kind != KeyEventKind::Release
                 && (key.code == KeyCode::Esc

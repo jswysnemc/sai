@@ -55,7 +55,12 @@ pub(super) fn read_repl_input(
     // 否则屏幕底部会触发受管模型感知不到的滚动，吞掉上方内容
     let mut terminal_guard =
         super::terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
-    let (_, mut input_row) = cursor::position()?;
+    // 1. 【终端布局】【固定输入区】全屏使用已知布局坐标，避免光标查询占用终端事件读取器
+    let mut input_row = if runtime.fullscreen_active() {
+        0
+    } else {
+        cursor::position()?.1
+    };
     let mut rendered_rows = 0u16;
     let mut is_pasted = false;
     let mut windows_paste = WindowsPasteState::default();
@@ -83,7 +88,7 @@ pub(super) fn read_repl_input(
         // 排在读键之前，用户连第一个字符都打不进去（input 始终为空，靠它判断无效）。
         // 先做一次零超时探测，终端里已有待读事件就走正常按键流程。
         let queued_event = runtime.pop_input_event();
-        let user_pending = queued_event.is_some() || event::poll(Duration::ZERO)?;
+        let user_pending = queued_event.is_some() || super::terminal_events::ready()?;
         if !user_pending {
             if let Some(wake) = external_events.take_ready() {
                 terminal_guard.finish(&mut stdout)?;

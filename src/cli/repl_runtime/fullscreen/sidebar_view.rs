@@ -91,71 +91,72 @@ pub(super) fn overlay(
     if layout.review {
         return;
     }
-    let width = usize::from(geometry.width.saturating_sub(3));
-    let height = usize::from(layout.composer_top.saturating_sub(1));
     let palette = SidebarPalette::current();
-    let panels = regions(&sidebar.document, usize::from(layout.composer_top));
-    let focused_action = sidebar
-        .focused_row
-        .and_then(|index| sidebar.document.rows.get(index))
-        .and_then(|row| row.action);
-    for (screen_row, output) in rows.iter_mut().enumerate() {
-        let index = panels
-            .iter()
-            .find_map(|panel| panel.index_at(screen_row, &sidebar.scrolls));
-        let entry = index.and_then(|index| sidebar.document.rows.get(index));
-        let text = if screen_row == height
-            && (control.close_hovered || control.divider_hovered || control.dragging)
-        {
-            format!(
-                "{}{}\x1b[0m",
-                fg(palette.muted),
-                if control.close_hovered {
-                    "Close sidebar · /tui sidebar on"
-                } else {
-                    "Drag divider to resize"
-                }
-            )
-        } else if screen_row == height {
-            sidebar_style::footer(sidebar, height)
-        } else if let Some(entry) = entry {
-            let previewed = match entry.action {
-                Some(SidebarAction::GitFile(file)) => sidebar
-                    .git
-                    .summary
-                    .files
-                    .get(file)
-                    .is_some_and(|(_, path)| sidebar.preview.path.as_deref() == Some(path)),
-                _ => false,
-            };
-            if entry.selected
-                || previewed
-                || (sidebar.focused && entry.action.is_some() && entry.action == focused_action)
-            {
-                sidebar_widgets::highlight(&entry.text, true)
-            } else if sidebar.hovered == index {
-                sidebar_widgets::highlight(&entry.text, false)
-            } else {
-                entry.text.clone()
-            }
-        } else {
-            String::new()
-        };
-        let text = if screen_row == 0 {
-            let button = if control.close_hovered {
-                sidebar_widgets::highlight("[x]", false)
-            } else {
-                "[x]".into()
-            };
-            sidebar_widgets::columns(&text, &button, width)
-        } else {
-            sidebar_style::clip(&text, width)
-        };
-        let padding = width.saturating_sub(crate::cli::repl_text::visible_width(&text));
+    let panel = panel_rows(sidebar, layout, control);
+    let width = usize::from(geometry.width.saturating_sub(3));
+    for (row, output) in rows.iter_mut().enumerate() {
+        let text = panel.get(row).map(String::as_str).unwrap_or_default();
+        let padding = width.saturating_sub(crate::cli::repl_text::visible_width(text));
         output.push_str(&format!(
             "\x1b[0m{}│\x1b[0m {text}{} ",
             fg(palette.border),
             " ".repeat(padding)
         ));
     }
+}
+
+/// 【终端侧栏】【完整面板】品牌区、独立列表和页脚覆盖右栏全高度，供正文与输入右侧共用。
+/// 参数: sidebar 为文档与焦点，layout 为布局，control 为控件状态；返回: 不含分界线的面板行。
+pub(super) fn panel_rows(
+    sidebar: &Sidebar,
+    layout: &FullscreenLayout,
+    control: &SidebarControl,
+) -> Vec<String> {
+    let Some(geometry) = layout.sidebar else {
+        return Vec::new();
+    };
+    let width = usize::from(geometry.width.saturating_sub(3));
+    let height = usize::from(layout.rows);
+    let header = super::pane_header::render("", width, height, control.close_hovered);
+    let panels = regions(&sidebar.document, height);
+    let focused_action = sidebar
+        .focused_row
+        .and_then(|index| sidebar.document.rows.get(index))
+        .and_then(|row| row.action);
+    (0..height)
+        .map(|screen_row| {
+            let index = panels
+                .iter()
+                .find_map(|panel| panel.index_at(screen_row, &sidebar.scrolls));
+            let entry = index.and_then(|index| sidebar.document.rows.get(index));
+            let text = if let Some(line) = header.get(screen_row) {
+                line.clone()
+            } else if screen_row + 1 == height {
+                sidebar_style::footer(sidebar, height)
+            } else if let Some(entry) = entry {
+                let previewed = match entry.action {
+                    Some(SidebarAction::GitFile(file)) => sidebar
+                        .git
+                        .summary
+                        .files
+                        .get(file)
+                        .is_some_and(|(_, path)| sidebar.preview.path.as_deref() == Some(path)),
+                    _ => false,
+                };
+                if entry.selected
+                    || previewed
+                    || (sidebar.focused && entry.action.is_some() && entry.action == focused_action)
+                {
+                    sidebar_widgets::highlight(&entry.text, true)
+                } else if sidebar.hovered == index {
+                    sidebar_widgets::highlight(&entry.text, false)
+                } else {
+                    entry.text.clone()
+                }
+            } else {
+                String::new()
+            };
+            sidebar_style::clip(&text, width)
+        })
+        .collect()
 }

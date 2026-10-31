@@ -136,6 +136,9 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
             output.push_str(&rail_glyph(mark, active, hovered));
         }
         output.push_str(&scrollbar_glyph(row, thumb));
+        if layout.sidebar.is_some() {
+            output.push(' ');
+        }
         rows.push(output);
     }
     super::message_picker_view::overlay(state, layout, &mut rows);

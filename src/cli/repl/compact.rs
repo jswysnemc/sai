@@ -63,7 +63,7 @@ pub(super) async fn run_compaction(
 /// 返回:
 /// - 收到 Ctrl+C 或 Esc 时返回 true
 fn poll_compact_cancel() -> Result<bool> {
-    while event::poll(Duration::ZERO)? {
+    while crate::cli::terminal_events::ready()? {
         if let Event::Key(key) = event::read()? {
             if key.kind == KeyEventKind::Release {
                 continue;

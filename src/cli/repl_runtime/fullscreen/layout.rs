@@ -84,10 +84,11 @@ impl FullscreenLayout {
         let composer_top = rows - composer_height;
         let body_height = composer_top.saturating_sub(header).max(1);
         let main_width = sidebar.map_or(cols, |sidebar| sidebar.left);
+        let gutter = u16::from(sidebar.is_some());
         let (content_width, rail_col) = if main_width >= RAIL_MIN_COLS {
-            (main_width - 4, Some(main_width - 3))
+            (main_width - 4 - gutter, Some(main_width - 3 - gutter))
         } else {
-            (main_width - 1, None)
+            (main_width - 1 - gutter, None)
         };
         Self {
             cols,
@@ -101,7 +102,7 @@ impl FullscreenLayout {
             composer_height,
             content_width,
             rail_col,
-            scrollbar_col: main_width - 1,
+            scrollbar_col: main_width - 1 - gutter,
         }
     }
 
@@ -120,19 +121,16 @@ impl FullscreenLayout {
     /// 【终端】【侧栏命中】侧栏与正文、输入框分开处理鼠标事件。
     /// 参数: column/row 为屏幕坐标；返回: 是否位于侧栏可见区域。
     pub(super) fn in_sidebar(&self, column: u16, row: u16) -> bool {
-        self.sidebar.is_some_and(|sidebar| {
-            column >= sidebar.left && column < self.cols && row < self.composer_top
-        })
+        self.sidebar
+            .is_some_and(|sidebar| column >= sidebar.left && column < self.cols && row < self.rows)
     }
 
-    /// 【终端侧栏】【关闭命中】关闭按钮只占首行右端三列，不属于标题折叠区域。
+    /// 【终端侧栏】【关闭命中】关闭按钮只占品牌区右端三列，不属于标题折叠区域。
     /// 参数: column/row 为屏幕坐标；返回: 是否位于普通侧栏关闭按钮。
     pub(super) fn sidebar_close_at(&self, column: u16, row: u16) -> bool {
         self.sidebar.is_some()
             && !self.review
-            && row == 0
-            && column >= self.cols.saturating_sub(4)
-            && column < self.cols.saturating_sub(1)
+            && super::pane_header::close_at(self.cols, usize::from(self.rows), column, row)
     }
 
     /// 判断屏幕行是否位于正文区。

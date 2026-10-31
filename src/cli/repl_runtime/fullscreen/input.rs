@@ -45,6 +45,8 @@ impl ReplRuntime {
         if self.fullscreen.is_none() {
             return Ok(FullscreenEvent::Pass);
         }
+        let latest = self.coalesce_sidebar_drag(event)?;
+        let event = latest.as_ref().unwrap_or(event);
         let cleared = matches!(event, Event::Key(key) if key.kind != KeyEventKind::Release)
             && self.composer_selection.clear();
         let picker_was_active = self

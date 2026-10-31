@@ -5,7 +5,7 @@ use super::layout::FullscreenLayout;
 use super::sidebar_git::GitSummary;
 use super::sidebar_palette::{fg, SidebarPalette};
 use super::sidebar_style::clip;
-use super::sidebar_widgets::{changes, columns, highlight, item, safe_text, window_title};
+use super::sidebar_widgets::{changes, columns, highlight, item, safe_text};
 
 pub(super) struct PreviewLayout {
     pub(super) left: usize,
@@ -16,6 +16,7 @@ pub(super) struct PreviewLayout {
     pub(super) diff_top: usize,
     pub(super) visible: usize,
     pub(super) chrome: bool,
+    pub(super) header_height: usize,
 }
 
 impl PreviewLayout {
@@ -27,13 +28,18 @@ impl PreviewLayout {
             width: layout.cols - layout.cols / 2,
         });
         let height = usize::from(layout.rows);
-        let chrome = height >= 9;
-        let files_top = if chrome { 3 } else { 1 };
+        let header_height = super::pane_header::height(height);
+        let chrome = height >= header_height + 8;
+        let files_top = if chrome {
+            header_height + 2
+        } else {
+            header_height
+        };
         let files_visible = if chrome {
             (height / 4)
                 .clamp(1, 6)
                 .min(count)
-                .min(height.saturating_sub(9))
+                .min(height.saturating_sub(header_height + 8))
         } else {
             0
         };
@@ -53,6 +59,7 @@ impl PreviewLayout {
             diff_top,
             visible: height.saturating_sub(diff_top + 1),
             chrome,
+            header_height,
         }
     }
 
@@ -67,15 +74,14 @@ impl PreviewLayout {
     /// 【终端审查】【关闭控件】右上角关闭只退出审查，不改变聊天位置。
     /// 参数: column/row 为坐标；返回: 是否命中关闭。
     pub(super) fn close_at(&self, column: u16, row: u16) -> bool {
-        row == 0
-            && usize::from(column) >= self.left + self.width.saturating_sub(5)
+        super::pane_header::close_at((self.left + self.width) as u16, self.height, column, row)
             && self.contains(column, row)
     }
 
     /// 【终端审查】【比较控件】模式切换控件固定在标题下方，不随内容移动。
     /// 参数: column/row 为坐标；返回: 命中模式。
     pub(super) fn mode_at(&self, column: u16, row: u16) -> Option<DiffMode> {
-        if !self.chrome || row != 1 || !self.contains(column, row) {
+        if !self.chrome || usize::from(row) != self.header_height || !self.contains(column, row) {
             return None;
         }
         if usize::from(column) < self.left + 2 {
@@ -196,15 +202,19 @@ pub(super) fn panel_rows(
     let width = geometry.width.saturating_sub(3);
     let palette = SidebarPalette::current();
     let mut panel = vec![String::new(); geometry.height];
-    if let Some(title) = panel.first_mut() {
-        *title = if preview.hovered == Some(ReviewHover::Close) {
-            columns("\x1b[1mReview\x1b[22m", &highlight("[x]", false), width)
-        } else {
-            window_title("Review", width)
-        };
+    for (index, title) in super::pane_header::render(
+        "Review",
+        width,
+        geometry.height,
+        preview.hovered == Some(ReviewHover::Close),
+    )
+    .into_iter()
+    .enumerate()
+    {
+        panel[index] = title;
     }
     if geometry.chrome {
-        panel[1] = [DiffMode::Working, DiffMode::Staged, DiffMode::Unstaged]
+        panel[geometry.header_height] = [DiffMode::Working, DiffMode::Staged, DiffMode::Unstaged]
             .into_iter()
             .map(|mode| {
                 let text = format!("[ {} ]", geometry.mode_label(mode));
@@ -221,7 +231,7 @@ pub(super) fn panel_rows(
             })
             .collect::<Vec<_>>()
             .join(" ");
-        panel[2] = columns(
+        panel[geometry.header_height + 1] = columns(
             &format!("\x1b[1m{} files changed\x1b[22m", git.files.len()),
             &super::sidebar_git_view::totals(git),
             width,

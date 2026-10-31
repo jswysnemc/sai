@@ -90,7 +90,7 @@ class InputMouseTests(unittest.TestCase):
             terminal.pump(.2)
             terminal.send(b"EDIT-")
             terminal.wait_for(lambda: "REVIEW-EDIT-DRAFT" in terminal.text())
-            self.assertIn("Review", lines(terminal)[0][80:])
+            self.assertIn("Review", lines(terminal)[1][80:])
             self.assertIn("working-line", terminal.text())
 
 

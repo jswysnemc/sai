@@ -68,13 +68,13 @@ impl Sidebar {
         let sidebar = layout.sidebar?;
         if !layout.in_sidebar(column, row)
             || layout.sidebar_close_at(column, row)
-            || row.saturating_add(1) >= layout.composer_top
+            || row.saturating_add(1) >= layout.rows
             || column <= sidebar.left
             || column >= layout.cols.saturating_sub(1)
         {
             return None;
         }
-        let index = regions(&self.document, usize::from(layout.composer_top))
+        let index = regions(&self.document, usize::from(layout.rows))
             .iter()
             .find_map(|region| region.index_at(usize::from(row), &self.scrolls))?;
         let entry = self.document.rows.get(index)?;
@@ -84,7 +84,7 @@ impl Sidebar {
     /// 参数: layout 为布局，index 为文档行；返回: 屏幕行。
     #[cfg(test)]
     pub(super) fn screen_row(&self, layout: &FullscreenLayout, index: usize) -> Option<u16> {
-        regions(&self.document, usize::from(layout.composer_top))
+        regions(&self.document, usize::from(layout.rows))
             .iter()
             .find_map(|region| region.row_for(index, &self.scrolls))
             .map(|row| row as u16)
@@ -176,7 +176,7 @@ impl ReplRuntime {
         let mut action = None;
         let changed = match mouse.kind {
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
-                let region = regions(&sidebar.document, usize::from(layout.composer_top))
+                let region = regions(&sidebar.document, usize::from(layout.rows))
                     .into_iter()
                     .find(|region| {
                         usize::from(mouse.row) >= region.top
@@ -330,12 +330,9 @@ impl ReplRuntime {
                 };
                 sidebar.focused_row = targets.get(next).copied();
                 if let Some(index) = sidebar.focused_row {
-                    if let Some(region) =
-                        regions(&sidebar.document, usize::from(layout.composer_top))
-                            .iter()
-                            .find(|region| {
-                                region.header == index || region.content.contains(&index)
-                            })
+                    if let Some(region) = regions(&sidebar.document, usize::from(layout.rows))
+                        .iter()
+                        .find(|region| region.header == index || region.content.contains(&index))
                     {
                         sidebar.scrolls.reveal(region, index);
                     }
