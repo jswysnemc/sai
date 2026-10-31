@@ -8,6 +8,40 @@ use crate::render::{
 };
 use crate::runner::{AutomaticInputEvent, AutomaticInputKind, RunnerEvent};
 
+/// 【终端】【标题简化】宽窄屏及两种语言只保留会话标题，不再添加右侧快捷键。
+/// 参数: 无；返回: 无，快捷键文字重新出现时断言失败。
+#[test]
+fn header_omits_shortcuts_at_every_width_and_locale() {
+    for locale in [crate::i18n::Locale::En, crate::i18n::Locale::Zh] {
+        crate::i18n::with_locale(locale, || {
+            let mut runtime = runtime_tests::runtime(2);
+            for cols in [40, 80, 100, 160] {
+                let layout = FullscreenLayout::compute(cols, 30, 4);
+                let mut state = FullscreenState::new();
+                state.apply_document(
+                    runtime.transcript.render_fullscreen(
+                        usize::from(layout.content_width),
+                        &runtime.options,
+                        &Default::default(),
+                    ),
+                    usize::from(layout.body_height),
+                );
+                let header = strip_ansi_for_test(&paint::compose(&state, &layout).rows[0]);
+                for hint in [
+                    "Alt+",
+                    "Ctrl+",
+                    "Drag to copy",
+                    "Click to",
+                    "拖动复制",
+                    "点击展开",
+                ] {
+                    assert!(!header.contains(hint), "{header}");
+                }
+            }
+        });
+    }
+}
+
 /// 【终端】【后续消息测试】目标续轮和排队交付均作为工具通知，不增加导航点。
 /// 参数: 无；返回: 无。
 #[test]

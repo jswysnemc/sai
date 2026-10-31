@@ -1,11 +1,10 @@
 //! 待办面板的完成进度与任务条目。
 
 use super::sidebar::row;
-use super::sidebar_action::SidebarAction;
+use super::sidebar_action::{SidebarAction, SidebarSection};
 use super::sidebar_palette::{fg, SidebarPalette};
 use super::sidebar_view::SidebarRow;
 use super::sidebar_widgets::{heading, item, safe_text};
-use crate::cli::repl_runtime::panel_mouse::PanelAction;
 use crate::render::transcript::TodoSnapshotItem;
 
 /// 【终端侧栏】【待办面板】以完成计数和状态条目呈现任务，紧凑模式只保留当前项。
@@ -23,7 +22,7 @@ pub(super) fn rows(
         .count();
     let mut rows = vec![row(
         heading("Todo", &format!("{done}/{}", todos.len()), compact, width),
-        Some(SidebarAction::Panel(PanelAction::Todo)),
+        Some(SidebarAction::Toggle(SidebarSection::Todo)),
     )];
     if todos.is_empty() {
         rows.push(row(item("No active tasks", width, true), None));

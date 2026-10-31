@@ -1,5 +1,7 @@
 """【Git预览】【真实终端】文件组件、比较控件与键盘焦点的端到端回归。"""
 
+import base64
+import re
 import subprocess
 import unittest
 
@@ -25,6 +27,42 @@ def prepare_repository(root, environment, binary):
 
 class GitPreviewTests(unittest.TestCase):
     """使用真实鼠标与键盘事件验证文件浏览和差异窗口。"""
+
+    def test_diff_drag_copies_source_without_gutters(self):
+        """无参数；真实拖选包含中文和跨行代码，不复制行号，保留草稿和固定文件名，返回无。"""
+        def prepare(root, environment, binary):
+            """参数为隔离目录、环境和程序；追加中文代码行作为复制夹具，返回无。"""
+            prepare_repository(root, environment, binary)
+            (root / "tracked.txt").write_text("working-line\n中文gamma\n    indented-code\n")
+
+        with TurnModel() as model:
+            config = model.config()
+            config["display"]["fullscreen"] = True
+            with TerminalSession(config, columns=160, rows=32, prepare=prepare,
+                                 arguments=["--lang", "en-US"]) as terminal:
+                terminal.wait_for(lambda: "tracked.txt" in terminal.text())
+                terminal.send(b"KEPT-DRAFT")
+                terminal.wait_for(lambda: "KEPT-DRAFT" in terminal.text())
+                row = next(index for index, line in enumerate(lines(terminal)) if "tracked.txt" in line[120:])
+                click(terminal, 156, row)
+                terminal.wait_for(lambda: "中文gamma" in terminal.text())
+                row = next(index for index, line in enumerate(lines(terminal)) if "中文gamma" in line[80:])
+                column = lines(terminal)[row].index("中文gamma")
+                last = row + 1
+                end = lines(terminal)[last].index("indented-code") + len("indented-code")
+                chat = [line[:80] for line in lines(terminal)[1:]]
+                mark = len(terminal.raw)
+                terminal.send(f"\x1b[<0;{column + 1};{row + 1}M".encode())
+                terminal.send(f"\x1b[<32;{end + 1};{last + 1}M".encode())
+                terminal.wait_for(lambda: terminal.screen.buffer[row][column].reverse)
+                terminal.send(f"\x1b[<0;{end + 1};{last + 1}m".encode())
+                pattern = rb"\x1b\]52;c;([A-Za-z0-9+/=]*)\x07"
+                terminal.wait_for(lambda: re.search(pattern, bytes(terminal.raw[mark:])) is not None)
+                payload = re.search(pattern, bytes(terminal.raw[mark:])).group(1)
+                self.assertEqual(base64.b64decode(payload).decode(), "中文gamma\n    indented-code")
+                self.assertEqual([line[:80] for line in lines(terminal)[1:]], chat)
+                self.assertIn("KEPT-DRAFT", terminal.text())
+                self.assertFalse(terminal.screen.buffer[last][80].reverse)
 
     def test_file_click_modes_scroll_resize_and_draft_isolation(self):
         """无参数；固定左右分栏中，文件、差异、聊天分别滚动，标题不动且草稿保留，返回无。"""

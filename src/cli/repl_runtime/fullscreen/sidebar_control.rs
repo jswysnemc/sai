@@ -33,9 +33,16 @@ pub(in crate::cli::repl_runtime) struct SidebarControl {
     pub(super) dragging: bool,
     pub(super) divider_hovered: bool,
     pub(super) close_hovered: bool,
+    pub(super) header_hovered: bool,
 }
 
 impl SidebarControl {
+    /// 【终端侧栏】【开启条件】统一手动开启的尺寸下限，供命令策略和顶部开关共用。
+    /// 参数: cols/rows 为终端尺寸；返回: 是否足以保留聊天和侧栏。
+    pub(super) fn can_open(cols: u16, rows: u16) -> bool {
+        cols >= 88 && rows >= 8
+    }
+
     /// 【终端侧栏】【有效状态】显式选择优先于配置，配置刷新不覆盖手动开关。
     /// 参数: 当前状态；返回: 生效的显示策略。
     pub(super) fn visibility(&self) -> Visibility {
@@ -65,7 +72,7 @@ impl SidebarControl {
         match self.visibility() {
             Visibility::Off => return None,
             Visibility::Auto if automatic.is_none() => return None,
-            Visibility::On if cols < 88 || rows < 8 => return None,
+            Visibility::On if !Self::can_open(cols, rows) => return None,
             _ => {}
         }
         let width = self

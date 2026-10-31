@@ -53,13 +53,28 @@ fn todo_heading_padding_is_clickable() {
                 .update_composer(&chrome(), "KEPT-DRAFT", 10, false, Vec::new(), 0)
                 .unwrap();
             runtime.enter_fullscreen().unwrap();
-            let before = runtime.todo_panel_compact;
+            let before = runtime
+                .fullscreen
+                .as_ref()
+                .unwrap()
+                .sidebar
+                .sections
+                .todo_collapsed;
             let scroll = runtime.fullscreen.as_ref().unwrap().state.scroll;
             let row = heading(&runtime, "Todo");
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 156, row))
                 .unwrap();
-            assert_ne!(runtime.todo_panel_compact, before);
+            assert_ne!(
+                runtime
+                    .fullscreen
+                    .as_ref()
+                    .unwrap()
+                    .sidebar
+                    .sections
+                    .todo_collapsed,
+                before
+            );
             let session = runtime.fullscreen.as_ref().unwrap();
             assert_eq!(session.state.scroll, scroll);
             assert!(session.state.selection.is_none() && session.state.press.is_none());

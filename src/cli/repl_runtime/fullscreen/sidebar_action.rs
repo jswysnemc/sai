@@ -20,6 +20,7 @@ pub(super) enum SidebarAction {
 pub(super) struct SidebarSections {
     pub(super) agents_collapsed: bool,
     pub(super) git_collapsed: bool,
+    pub(super) todo_collapsed: bool,
 }
 
 impl SidebarSections {
@@ -29,7 +30,7 @@ impl SidebarSections {
         let collapsed = match section {
             SidebarSection::Agents => &mut self.agents_collapsed,
             SidebarSection::Git => &mut self.git_collapsed,
-            SidebarSection::Todo => return,
+            SidebarSection::Todo => &mut self.todo_collapsed,
         };
         *collapsed = !*collapsed;
     }

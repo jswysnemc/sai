@@ -11,6 +11,25 @@ from test_fullscreen import TurnModel, lines
 class FullscreenCopyTests(unittest.TestCase):
     """验证拖选复制不破坏全屏会话和后续输入。"""
 
+    def test_multiline_selection_excludes_layout_margin(self):
+        """无参数；跨行选择去除布局用两列空格，保留正文字符，返回无。"""
+        with TurnModel() as model, TerminalSession(model.config(), columns=100, rows=30) as terminal:
+            terminal.send(b"ALPHA\r")
+            terminal.wait_for(lambda: "ANSWER-ALPHA-7" in terminal.text())
+            terminal.send(b"\x0f")
+            terminal.wait_for(lambda: "1/1" in lines(terminal)[0])
+            first = next(index for index, line in enumerate(lines(terminal)) if "ANSWER-ALPHA-6" in line)
+            last = next(index for index, line in enumerate(lines(terminal)) if "ANSWER-ALPHA-7" in line)
+            end = lines(terminal)[last].index("ANSWER-ALPHA-7") + len("ANSWER-ALPHA-7")
+            mark = len(terminal.raw)
+            terminal.send(f"\x1b[<0;1;{first + 1}M".encode())
+            terminal.send(f"\x1b[<32;{end + 1};{last + 1}M".encode())
+            terminal.send(f"\x1b[<0;{end + 1};{last + 1}m".encode())
+            pattern = rb"\x1b\]52;c;([A-Za-z0-9+/=]*)\x07"
+            terminal.wait_for(lambda: re.search(pattern, bytes(terminal.raw[mark:])) is not None)
+            payload = re.search(pattern, bytes(terminal.raw[mark:])).group(1)
+            self.assertEqual(base64.b64decode(payload).decode(), "ANSWER-ALPHA-6\n\nANSWER-ALPHA-7")
+
     def test_selection_copies_only_selected_visible_text(self):
         """发送鼠标按下、拖动和松开事件；验证复制载荷后继续对话，返回无。"""
         with TurnModel() as model, TerminalSession(model.config(), columns=100, rows=30) as terminal:

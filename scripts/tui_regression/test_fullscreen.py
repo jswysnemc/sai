@@ -76,6 +76,12 @@ def lines(terminal):
     return terminal.text().splitlines()
 
 
+def fullscreen_ready(terminal):
+    """参数 terminal 为终端；返回备用屏已启用且输入框已绘制，不依赖快捷键文案。"""
+    raw = bytes(terminal.raw)
+    return raw.rfind(b"\x1b[?1049h") > raw.rfind(b"\x1b[?1049l") and "→" in terminal.text()
+
+
 def content_lines(terminal):
     """参数 terminal 为宽屏全屏会话；返回不含右侧三列导航轨道的正文行。"""
     return [line[:terminal.screen.columns - 3].rstrip() for line in lines(terminal)]

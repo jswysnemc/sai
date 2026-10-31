@@ -4,7 +4,7 @@ import json
 import unittest
 
 from terminal import TerminalSession
-from test_fullscreen import TurnModel
+from test_fullscreen import TurnModel, fullscreen_ready
 
 ENTER_ALT = b"\x1b[?1049h"
 LEAVE_ALT = b"\x1b[?1049l"
@@ -31,7 +31,7 @@ class TuiViewTests(unittest.TestCase):
             self.assertNotIn(ENTER_ALT, terminal.raw)
         for arguments in [["--view", "fullscreen"], ["--style", "deepseek"]]:
             with TerminalSession(arguments=["--lang", "en-US"] + arguments, columns=100, rows=30,
-                                 ready=lambda terminal: "Ctrl+O exit" in terminal.text()) as terminal:
+                                 ready=fullscreen_ready) as terminal:
                 self.assertIn(ENTER_ALT, terminal.raw)
                 self.assertNotIn("DeepSeek", terminal.text())
                 self.assertFalse(self.stored_config(terminal)["display"]["fullscreen"])
@@ -40,7 +40,7 @@ class TuiViewTests(unittest.TestCase):
         """无参数；旧 deepseek 样式迁移为全屏，旧 classic 样式保留内联。"""
         legacy = default_config({"tui_style": "deepseek", "fullscreen": False})
         with TerminalSession(legacy, arguments=["--lang", "en-US"], columns=100, rows=30,
-                             ready=lambda terminal: "Ctrl+O exit" in terminal.text()) as terminal:
+                             ready=fullscreen_ready) as terminal:
             self.assertIn(ENTER_ALT, terminal.raw)
         classic = default_config({"tui_style": "classic", "fullscreen": False})
         with TerminalSession(classic, arguments=["--lang", "en-US"], columns=100, rows=30) as terminal:
@@ -95,7 +95,7 @@ class TuiViewTests(unittest.TestCase):
     def test_invalid_view_does_not_change_preference(self):
         """无参数；非法视图展示用法，不修改偏好或发起模型请求。"""
         with TerminalSession(arguments=["--lang", "en-US", "--view", "fullscreen"], columns=100, rows=30,
-                             ready=lambda terminal: "Ctrl+O exit" in terminal.text()) as terminal:
+                             ready=fullscreen_ready) as terminal:
             terminal.send(b"/view invalid\r")
             terminal.wait_for(lambda: "usage: /view [inline|fullscreen]" in terminal.text())
             self.assertIn("→", terminal.text())

@@ -15,10 +15,16 @@ mod git_preview_code;
 mod git_preview_code_tests;
 mod git_preview_input;
 mod git_preview_patch;
+mod git_preview_selection;
+#[cfg(test)]
+mod git_preview_selection_tests;
 #[cfg(test)]
 mod git_preview_tests;
 mod git_preview_view;
 pub(super) mod guide_button;
+mod header_controls;
+#[cfg(test)]
+mod header_controls_tests;
 pub(super) mod hover;
 mod hover_color;
 mod image_window;
@@ -52,6 +58,8 @@ mod sidebar_git_view;
 mod sidebar_interaction_tests;
 mod sidebar_palette;
 mod sidebar_regions;
+#[cfg(test)]
+mod sidebar_regions_tests;
 mod sidebar_resize;
 mod sidebar_style;
 #[cfg(test)]
@@ -337,7 +345,7 @@ impl ReplRuntime {
                 &session.sidebar.git.summary,
                 sidebar_view::SidebarView {
                     viewing: self.transcript.viewing_subagent_id(),
-                    compact: self.todo_panel_compact,
+                    compact: session.sidebar.sections.todo_collapsed,
                     sections: &session.sidebar.sections,
                     width: usize::from(side.width.saturating_sub(3)),
                     frame: self.transcript.live_animation_frame(),
@@ -365,6 +373,7 @@ impl ReplRuntime {
             &mut painted.rows,
         );
         sidebar_resize::decorate_divider(&self.sidebar_control, &mut painted.rows);
+        header_controls::overlay(&self.sidebar_control, &layout, &mut painted.rows);
         // 图片位置变化时先删除旧放置并整屏重画，未变化的行也要重新落下图片
         let images = image_window::placement_signature(&painted.rows);
         if session.images != images {

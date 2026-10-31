@@ -69,6 +69,7 @@ pub(super) struct GitPreview {
     pub(super) file_scroll: usize,
     pub(super) focus: Option<ReviewFocus>,
     pub(super) hovered: Option<ReviewHover>,
+    pub(super) selection: super::git_preview_selection::DiffSelection,
     directory: PathBuf,
     receiver: Option<Receiver<Result<PreviewContent, String>>>,
     task: Option<tokio::task::JoinHandle<()>>,
@@ -103,6 +104,7 @@ impl GitPreview {
         self.file_scroll = 0;
         self.focus = None;
         self.hovered = None;
+        self.selection = Default::default();
     }
 
     /// 【Git预览】【切换比较】仅在模式发生变化时重新读取，保持所选文件不变。
@@ -125,6 +127,7 @@ impl GitPreview {
         self.error = None;
         self.scroll = 0;
         self.horizontal = 0;
+        self.selection = Default::default();
         let Some(path) = self.path.clone() else {
             return;
         };

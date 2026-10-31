@@ -22,13 +22,15 @@ class SidebarTests(unittest.TestCase):
                 terminal.wait_for(lambda: "ANSWER-END" in terminal.text(), timeout=15)
                 terminal.wait_for(lambda: any("CURRENT-TASK" in line[120:] for line in lines(terminal)))
                 row = next(index for index, line in enumerate(lines(terminal)) if "Todo" in line[120:])
-                # 1. 【终端侧栏】【整行点击】标题右侧留白与文字具有相同操作
+                self.assertTrue(all(any(text in line[120:] for line in lines(terminal)) for text in texts))
+                # 1. 【终端侧栏】【整行点击】默认完整展示，手动收起后仍可再次展开
                 terminal.send(f"\x1b[<35;157;{row + 1}M".encode())
-                terminal.wait_for(lambda: "Click to show all tasks" in terminal.text())
+                terminal.wait_for(lambda: "Click to collapse" in terminal.text())
+                click(terminal, 156, row)
+                terminal.wait_for(lambda: not any("NEXT-TASK-2" in line[120:] for line in lines(terminal)))
                 click(terminal, 156, row)
                 terminal.wait_for(lambda: any("NEXT-TASK-2" in line[120:] for line in lines(terminal)))
                 row = next(index for index, line in enumerate(lines(terminal)) if "NEXT-TASK-2" in line[120:])
-                click(terminal, 156, row, kind=65)
                 terminal.wait_for(lambda: any("NEXT-TASK-3" in line[120:] for line in lines(terminal)))
                 terminal.send(b"KEPT-DRAFT")
                 terminal.resize(100, 32)

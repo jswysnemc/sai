@@ -73,6 +73,7 @@ impl ReplRuntime {
             session.state.pointer_col = None;
             session.sidebar.hovered = None;
             session.sidebar.preview.hovered = None;
+            session.sidebar.preview.selection = Default::default();
             if close {
                 control.close();
                 session.sidebar.focused = false;

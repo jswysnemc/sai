@@ -328,6 +328,8 @@ pub(super) fn panel_rows(
         } else {
             String::new()
         };
+        let text =
+            super::git_preview_selection::highlight(preview, preview.scroll + offset, text, width);
         panel[geometry.diff_top + offset] = item(&text, width, false);
     }
     if let Some(footer) = panel.last_mut() {

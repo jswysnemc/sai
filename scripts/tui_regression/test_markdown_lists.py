@@ -4,7 +4,7 @@ import unittest
 
 from mock_activity_model import ActivityModel
 from terminal import TerminalSession
-from test_fullscreen import lines
+from test_fullscreen import fullscreen_ready, lines
 
 
 class MarkdownListTests(unittest.TestCase):
@@ -22,7 +22,7 @@ class MarkdownListTests(unittest.TestCase):
                     config["display"]["fullscreen"] = fullscreen
                     with TerminalSession(config, columns=columns, rows=40,
                                          arguments=["--lang", "en-US"],
-                                         ready=lambda t: "Ctrl+O" in t.text() if fullscreen else "auto" in t.text()) as terminal:
+                                         ready=lambda t: fullscreen_ready(t) if fullscreen else "auto" in t.text()) as terminal:
                         (terminal.root / "fixture.txt").write_text("fixture")
                         terminal.pump(.4)
                         terminal.send(b"List layout\r")

@@ -331,6 +331,9 @@ impl ReplRuntime {
         if self.transcript.latest_todo_items().is_empty() {
             return false;
         }
+        if self.toggle_sidebar_todo() {
+            return true;
+        }
         self.todo_panel_compact = !self.todo_panel_compact;
         true
     }

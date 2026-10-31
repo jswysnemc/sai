@@ -57,10 +57,17 @@ impl ReplRuntime {
             .fullscreen
             .as_ref()
             .is_some_and(|session| session.sidebar.preview.hovered.is_some());
-        let control_was_hovered =
-            self.sidebar_control.divider_hovered || self.sidebar_control.close_hovered;
+        let diff_was_selected = self
+            .fullscreen
+            .as_ref()
+            .is_some_and(|session| session.sidebar.preview.selection.span.is_some());
+        let control_was_hovered = self.sidebar_control.divider_hovered
+            || self.sidebar_control.close_hovered
+            || self.sidebar_control.header_hovered;
         let effect = match self
-            .sidebar_control_event(event)
+            .header_control_event(event)
+            .or_else(|| self.sidebar_control_event(event))
+            .or_else(|| self.git_preview_selection_event(event))
             .or_else(|| self.git_preview_event(event))
             .or_else(|| self.message_picker_event(event))
             .or_else(|| self.sidebar_key(event))
@@ -79,16 +86,23 @@ impl ReplRuntime {
                 .fullscreen
                 .as_ref()
                 .is_some_and(|session| session.sidebar.preview.hovered.is_none());
+        let diff_selection_cleared = diff_was_selected
+            && self
+                .fullscreen
+                .as_ref()
+                .is_some_and(|session| session.sidebar.preview.selection.span.is_none());
         let control_hover_cleared = control_was_hovered
             && !self.sidebar_control.divider_hovered
-            && !self.sidebar_control.close_hovered;
-        let effect = if (cleared || review_hover_cleared || control_hover_cleared)
-            && matches!(effect, Effect::Nothing)
-        {
-            Effect::Repaint
-        } else {
-            effect
-        };
+            && !self.sidebar_control.close_hovered
+            && !self.sidebar_control.header_hovered;
+        let effect =
+            if (cleared || review_hover_cleared || control_hover_cleared || diff_selection_cleared)
+                && matches!(effect, Effect::Nothing)
+            {
+                Effect::Repaint
+            } else {
+                effect
+            };
         // 1. 选区复制经 OSC 52 写入终端剪贴板，随下一帧一起送出
         if let Some(text) = self
             .fullscreen
@@ -112,6 +126,7 @@ impl ReplRuntime {
             Effect::Pass => {
                 if review_hover_cleared
                     || control_hover_cleared
+                    || diff_selection_cleared
                     || (picker_was_active
                         && self
                             .fullscreen

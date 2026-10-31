@@ -9,6 +9,7 @@ import time
 import unittest
 
 from terminal import TerminalSession
+from test_fullscreen import fullscreen_ready
 
 HOVER_FG = "\x1b[22;38;2;255;255;255m"
 LONG_COMMAND = " && \\\n".join(f"echo STEP-{index}" for index in range(12))
@@ -106,7 +107,7 @@ class FullscreenPartsTests(unittest.TestCase):
             terminal.send(b"RUN\r")
             terminal.wait_for(lambda: "FINISHED" in terminal.text(), timeout=20)
             terminal.send(b"\x0f")
-            terminal.wait_for(lambda: "Ctrl+O" in lines(terminal)[0], timeout=5)
+            terminal.wait_for(lambda: fullscreen_ready(terminal), timeout=5)
             terminal.wait_for(lambda: row_of(terminal, "STEP-11") is not None)
             title = row_of(terminal, "Ran $ echo STEP-0")
             self.assertIsNotNone(title, terminal.text())
@@ -134,7 +135,7 @@ class FullscreenPartsTests(unittest.TestCase):
                 terminal.send(b"RUN\r")
                 terminal.wait_for(lambda: terminal.text(history=True).count("FINISHED") > turn, timeout=20)
             terminal.send(b"\x0f")
-            terminal.wait_for(lambda: "Ctrl+O" in lines(terminal)[0], timeout=5)
+            terminal.wait_for(lambda: fullscreen_ready(terminal), timeout=5)
             for _ in range(4):
                 mouse(terminal, 10, 5, kind=64, release=False)
             label = re.compile(r"↓ (Back to bottom|回到底部|New output|有新输出)")

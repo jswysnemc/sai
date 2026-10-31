@@ -92,6 +92,24 @@ impl Sidebar {
 }
 
 impl ReplRuntime {
+    /// 【终端侧栏】【待办切换】只在概览可见时切换待办，保留窄屏沉底面板的独立状态。
+    /// 参数: 无；返回: 是否已处理侧栏切换。
+    pub(in crate::cli::repl_runtime) fn toggle_sidebar_todo(&mut self) -> bool {
+        let Some(session) = self.fullscreen.as_mut().filter(|session| {
+            session
+                .state
+                .layout
+                .is_some_and(|layout| layout.sidebar.is_some() && !layout.review)
+        }) else {
+            return false;
+        };
+        session
+            .sidebar
+            .sections
+            .toggle(super::sidebar_action::SidebarSection::Todo);
+        true
+    }
+
     /// 【终端侧栏】【布局判断】使用真实终端尺寸决定底部概览是否迁移到侧栏。
     /// 参数: cols 为终端宽度；返回: 是否启用侧栏。
     pub(in crate::cli::repl_runtime) fn sidebar_visible(&self, cols: usize) -> bool {

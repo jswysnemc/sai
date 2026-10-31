@@ -7,6 +7,18 @@ use crate::render::syntect_highlight::{paint, Carry};
 use std::path::Path;
 
 const MAX_SYNTAX_BYTES: usize = 200_000;
+/// 行号四列、增删标记一列和两列间距。
+pub(super) const GUTTER_WIDTH: usize = 7;
+
+/// 【终端审查】【行号列宽】超过四位的行号扩展排版栏，鼠标坐标与实际绘制保持一致。
+/// 参数: line 为差异行；返回: 行号、标记和间距合计列数。
+pub(super) fn gutter_width(line: &PatchLine) -> usize {
+    GUTTER_WIDTH
+        + line
+            .new
+            .or(line.old)
+            .map_or(0, |number| number.to_string().len().saturating_sub(4))
+}
 
 /// 【终端审查】【语法缓存】按扩展名复用现有着色器，原文件和新文件分别保存解析状态。
 /// 参数: content 为差异模型，path 为文件路径；返回: 无，缓存写入 content.code。
@@ -51,7 +63,7 @@ pub(super) fn cache(content: &mut PreviewContent, path: &str) {
         .collect();
 }
 
-/// 【终端审查】【代码行】删除使用红底、新增使用蓝底，行号、增删标记与语法前景保留。
+/// 【终端审查】【代码行】删除使用红底、新增使用绿底，行号、增删标记与语法前景保留。
 /// 参数: line 为差异行，code 为语法缓存，horizontal 为代码偏移，width 为净宽；返回: 定宽 ANSI 行。
 pub(super) fn render(
     line: &PatchLine,

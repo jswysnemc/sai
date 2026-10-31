@@ -18,6 +18,16 @@ impl ReplRuntime {
         preview.path.as_ref()?;
         match event {
             Event::Mouse(mouse) => {
+                // 1. 【终端审查】【聊天捕获】从聊天开始的拖选跨入右栏仍归聊天，不切换选区来源
+                if session.state.press.is_some()
+                    && matches!(
+                        mouse.kind,
+                        MouseEventKind::Drag(MouseButton::Left)
+                            | MouseEventKind::Up(MouseButton::Left)
+                    )
+                {
+                    return None;
+                }
                 if !geometry.contains(mouse.column, mouse.row) {
                     preview.hovered = None;
                     if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {

@@ -84,6 +84,13 @@ pub(super) fn selected_text(lines: &[AnsiLine], selection: &Selection, width: us
             continue;
         };
         let plain = crate::render::activity_animation::strip_ansi_for_test(line.as_str());
+        // 2. 【全屏视图】【复制排版】去除正文基线空格，不裁掉代码或列表自身的相对缩进
+        let margin = crate::render::content_indent::CONTENT_LEFT_INDENT;
+        let from = if plain.starts_with(&" ".repeat(margin)) {
+            from.max(margin)
+        } else {
+            from
+        };
         rows.push(slice_cols(&plain, from, to).trim_end().to_string());
     }
     rows.join("\n")
@@ -98,7 +105,7 @@ pub(super) fn selected_text(lines: &[AnsiLine], selection: &Selection, width: us
 ///
 /// 返回:
 /// - 截取结果
-fn slice_cols(text: &str, from: usize, to: usize) -> String {
+pub(super) fn slice_cols(text: &str, from: usize, to: usize) -> String {
     let mut col = 0usize;
     let mut output = String::new();
     for ch in text.chars() {
@@ -146,7 +153,7 @@ pub(in crate::cli::repl_runtime) fn highlight_cols(line: &str, from: usize, to: 
             break;
         };
         let width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
-        let inside = col >= from && col < to;
+        let inside = (col >= from || (width > 1 && col + width > from)) && col < to;
         if inside && !active {
             output.push_str(SELECT_ON);
             active = true;
@@ -285,6 +292,37 @@ mod tests {
         assert_eq!(
             selected_text(&lines, &selection((0, 5), (usize::MAX, 2)), 20),
             "line"
+        );
+    }
+
+    /// 【全屏视图】【布局复制】跨行和反向拖选移除两列布局边距，保留嵌套和代码缩进。
+    /// 参数: 无；返回: 无，布局空格泄漏或内容缩进丢失时断言失败。
+    #[test]
+    fn copy_removes_layout_margin_but_preserves_content_indentation() {
+        let lines = [
+            AnsiLine::new("  1. heading".into()),
+            AnsiLine::new("    child".into()),
+            AnsiLine::new("      code".into()),
+            AnsiLine::new("  last".into()),
+        ];
+        for span in [selection((0, 0), (3, 6)), selection((3, 6), (0, 0))] {
+            assert_eq!(
+                selected_text(&lines, &span, 30),
+                "1. heading\n  child\n    code\nlast"
+            );
+        }
+        assert_eq!(selected_text(&lines, &selection((2, 8), (2, 10)), 30), "de");
+    }
+
+    /// 【全屏视图】【宽字高亮】选区起点落在宽字符第二列时，整字高亮与复制结果一致。
+    /// 参数: 无；返回: 无，中文字形缺失高亮时断言失败。
+    #[test]
+    fn highlight_includes_wide_character_overlapping_selection_start() {
+        let text = highlight_cols("中文ab", 1, 4);
+        assert!(text.starts_with("\x1b[7m中文\x1b[27ma"));
+        assert_eq!(
+            crate::render::activity_animation::strip_ansi_for_test(&text),
+            "中文ab"
         );
     }
 }

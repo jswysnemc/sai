@@ -33,7 +33,7 @@ pub(super) fn footer(sidebar: &Sidebar, _height: usize) -> String {
             let collapsed = match section {
                 SidebarSection::Agents => sidebar.sections.agents_collapsed,
                 SidebarSection::Git => sidebar.sections.git_collapsed,
-                SidebarSection::Todo => sidebar.document.todo_compact,
+                SidebarSection::Todo => sidebar.sections.todo_collapsed,
             };
             if collapsed {
                 "Click to expand"

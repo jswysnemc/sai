@@ -15,8 +15,6 @@ const HEADER_BG: &str = "\x1b[48;5;235m";
 const HEADER_INDEX: &str = "\x1b[38;2;94;196;168m";
 /// 标题正文。
 const HEADER_TEXT: &str = "\x1b[38;5;252m";
-/// 标题右侧提示。
-const HEADER_HINT: &str = "\x1b[38;5;244m";
 /// 复制结果提示。
 const HEADER_COPIED: &str = "\x1b[1m\x1b[38;2;94;196;168m";
 /// 轨道普通标记。
@@ -148,7 +146,7 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
     }
 }
 
-/// 生成浮动标题：当前用户消息序号与摘要，右侧为复制结果或快捷键。
+/// 生成浮动标题：当前用户消息序号与摘要，右侧显示紧凑位置或复制结果。
 ///
 /// 新输出提示只由输入框上方的悬浮按钮承担，标题不再重复显示。
 ///
@@ -179,7 +177,7 @@ pub(super) fn header_target_at(
 /// 【消息导航】【标题布局】同步生成标题文字和入口宽度。
 /// 参数: state 为全屏状态，layout 为分区；返回: ANSI 标题行与可点击列数。
 fn header_row(state: &FullscreenState, layout: &FullscreenLayout) -> (String, usize) {
-    let cols = usize::from(layout.main_width);
+    let cols = super::header_controls::title_width(layout);
     let total = state.document.anchors.len();
     // 1. 左侧：当前所在用户消息
     let left = match state.current_anchor() {
@@ -194,31 +192,15 @@ fn header_row(state: &FullscreenState, layout: &FullscreenLayout) -> (String, us
         ),
         None => format!("{HEADER_TEXT}{}", t("Conversation", "会话")),
     };
-    // 2. 右侧：刚复制时显示字数，否则给出快捷键
+    // 2. 右侧显示紧凑位置，复制后显示字数，不重复底部快捷键入口
     let right = if let Some(count) = state.copied {
         if crate::i18n::is_zh() {
             format!("{HEADER_COPIED}已复制 {count} 个字符")
         } else {
             format!("{HEADER_COPIED}Copied {count} characters")
         }
-    } else if cols >= 100 && crate::render::tui_mode::prefers_fullscreen() {
-        format!(
-            "{HEADER_HINT}{}",
-            t(
-                "Alt+PgUp/PgDn steps · Click to toggle · Drag to copy · Ctrl+O exit",
-                "Alt+PgUp/PgDn 浏览步骤 · 点击展开或收起 · 拖动复制 · Ctrl+O 退出"
-            )
-        )
-    } else if cols >= 100 {
-        format!(
-            "{HEADER_HINT}{}",
-            t(
-                "Click to fold · Drag to copy · Alt+↑↓ messages · Ctrl+O exit",
-                "点击展开/收起 · 拖动复制 · Alt+↑↓ 切换消息 · Ctrl+O 退出"
-            )
-        )
     } else {
-        format!("{HEADER_HINT}{}", t("Ctrl+O exit", "Ctrl+O 退出"))
+        super::header_controls::position(state, layout)
     };
     let left = if state.message_picker.active {
         super::hover::tint_line(&super::guide_button::render(&left, true))

@@ -6,7 +6,7 @@ import unittest
 from mock_activity_model import ActivityModel
 from mock_tool_model import MockToolModel
 from terminal import TerminalSession
-from test_fullscreen import TurnModel, click, content_lines, lines
+from test_fullscreen import TurnModel, click, content_lines, fullscreen_ready, lines
 
 
 class ActivityChainTests(unittest.TestCase):
@@ -172,7 +172,7 @@ class ActivityChainTests(unittest.TestCase):
             terminal.send(b"/help\r")
             terminal.wait_for(lambda: "/view" in terminal.text() and "Esc close" in terminal.text())
             terminal.send(b"\x1b")
-            terminal.wait_for(lambda: "Esc close" not in terminal.text() and "Ctrl+O" in lines(terminal)[0])
+            terminal.wait_for(lambda: "Esc close" not in terminal.text() and fullscreen_ready(terminal))
             self.assertNotIn("Execution details", terminal.text())
             self.assertIn("→", terminal.text())
 
