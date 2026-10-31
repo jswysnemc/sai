@@ -6,6 +6,8 @@ from terminal import TerminalSession
 from test_fullscreen import click, lines
 from test_tui_view import default_config
 
+SIDEBAR_ICON = "\uf0db"
+
 
 class HeaderControlTests(unittest.TestCase):
     """真实终端验证开关命中、悬停、草稿光标与尺寸限制。"""
@@ -15,26 +17,27 @@ class HeaderControlTests(unittest.TestCase):
         config = default_config({"fullscreen": True, "sidebar": "off"})
         with TerminalSession(config, columns=160, rows=32,
                              arguments=["--lang", "en-US"]) as terminal:
-            terminal.wait_for(lambda: "[ │>]" in lines(terminal)[0])
+            terminal.wait_for(lambda: SIDEBAR_ICON in lines(terminal)[0])
             self.assertNotIn("Ctrl+O", lines(terminal)[0])
             terminal.send(b"KEPT-DRAFT\x1b[D\x1b[D\x1b[D")
             terminal.wait_for(lambda: "KEPT-DRAFT" in terminal.text())
-            column = 156
+            column = 157
             terminal.send(f"\x1b[<35;{column + 1};1M".encode())
             terminal.wait_for(lambda: terminal.screen.buffer[0][column].reverse)
             self.assertFalse(terminal.screen.buffer[0][column].underscore)
             click(terminal, column, 0)
-            terminal.wait_for(lambda: "Changes" in terminal.text() and "[<│ ]" in lines(terminal)[0])
+            terminal.wait_for(lambda: "Changes" in terminal.text() and SIDEBAR_ICON in lines(terminal)[0])
+            self.assertNotIn("[x]", "\n".join(line[120:] for line in lines(terminal)[:3]))
             self.assertEqual(terminal.screen.buffer[0][column].bg, "default")
             click(terminal, column, 0)
-            terminal.wait_for(lambda: "Changes" not in terminal.text() and "[ │>]" in lines(terminal)[0])
+            terminal.wait_for(lambda: "Changes" not in terminal.text() and SIDEBAR_ICON in lines(terminal)[0])
             terminal.send(b"X")
             terminal.wait_for(lambda: "KEPT-DRXAFT" in terminal.text())
             terminal.resize(80, 32)
-            terminal.wait_for(lambda: "[ │>]" not in lines(terminal)[0])
+            terminal.wait_for(lambda: SIDEBAR_ICON not in lines(terminal)[0])
             self.assertIn("KEPT-DRXAFT", terminal.text())
             terminal.resize(100, 32)
-            terminal.wait_for(lambda: "[ │>]" in lines(terminal)[0])
-            click(terminal, 96, 0)
+            terminal.wait_for(lambda: SIDEBAR_ICON in lines(terminal)[0])
+            click(terminal, 97, 0)
             terminal.wait_for(lambda: "Changes" in terminal.text())
             self.assertIn("KEPT-DRXAFT", terminal.text())

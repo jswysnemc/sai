@@ -121,6 +121,10 @@ fn is_turn_rule_line(text: &str) -> bool {
 /// 返回:
 /// - 引导符号位于左侧，普通正文位于右侧的终端行
 pub(crate) fn align_to_guide_column(text: &str) -> String {
+    // 1. 【终端欢迎】【品牌对齐】标志三行保持相同正文基线，底部笔画不是活动引导符
+    if crate::render::brand_logo::is_logo_line(text) {
+        return format!("{}{text}", " ".repeat(CONTENT_LEFT_INDENT));
+    }
     // 状态行的表情从引导列起笔，与其他引导符号一样顶格，不按正文缩进
     if crate::render::activity_animation::is_status_companion_line(text) {
         return remove_leading_visible_spaces(text, visible_line_start(text).0);

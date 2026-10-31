@@ -1,6 +1,6 @@
 //! 顶部侧栏开关和紧凑位置指示的回归测试。
 
-use super::header_controls::{overlay, position, target};
+use super::header_controls::{overlay, position, target, SIDEBAR_ICON};
 use super::layout::FullscreenLayout;
 use super::runtime_tests::{chrome, mouse, runtime};
 use super::sidebar_control::{SidebarControl, Visibility};
@@ -31,10 +31,10 @@ fn sidebar_toggle_only_exists_when_manual_open_is_possible() {
             crate::cli::repl_text::visible_width(&text),
             usize::from(cols)
         );
-        assert_eq!(text.contains("│"), visible);
+        assert_eq!(text.contains(SIDEBAR_ICON), visible);
         if let Some(range) = target(&layout) {
             assert_eq!(range.end, usize::from(cols) - 1);
-            assert_eq!(range.len(), 5);
+            assert_eq!(range.len(), 3);
         }
     }
 }
@@ -116,7 +116,8 @@ fn hover_reverses_only_toggle_and_clears_on_departure() {
                 .previous
                 .as_ref()
                 .unwrap()[0];
-            assert!(header.contains("\x1b[7m[<│ ]\x1b[27m"));
+            assert!(header.contains(&format!("\x1b[7m {SIDEBAR_ICON} \x1b[27m")));
+            assert!(!session_has_duplicate_button(&runtime));
             assert!(!header.contains("\x1b[4m"));
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 4, 2))
@@ -130,9 +131,24 @@ fn hover_reverses_only_toggle_and_clears_on_departure() {
                 .previous
                 .as_ref()
                 .unwrap()[0];
-            assert!(!header.contains("\x1b[7m[<│ ]"));
+            assert!(!header.contains(&format!("\x1b[7m {SIDEBAR_ICON}")));
         },
     );
+}
+
+/// 【标题测试】【按钮去重】检测当前侧栏是否仍含旧关闭文字。
+/// 参数: runtime 为全屏运行期；返回: 是否存在重复按钮。
+fn session_has_duplicate_button(runtime: &crate::cli::repl_runtime::ReplRuntime) -> bool {
+    runtime
+        .fullscreen
+        .as_ref()
+        .unwrap()
+        .state
+        .previous
+        .as_ref()
+        .unwrap()
+        .iter()
+        .any(|line| line.contains("[x]"))
 }
 
 /// 【标题测试】【位置指示】短轨道只反映主会话浏览位置，不添加快捷键或覆盖标题。

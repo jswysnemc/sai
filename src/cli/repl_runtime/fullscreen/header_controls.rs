@@ -8,7 +8,9 @@ use crate::cli::repl_runtime::ReplRuntime;
 use crossterm::event::{Event, MouseButton, MouseEventKind};
 use std::ops::Range;
 
-const CONTROL_WIDTH: usize = 5;
+/// Nerd Fonts 的 Font Awesome columns 字形，沿用项目现有单列图标体系。
+pub(super) const SIDEBAR_ICON: &str = "\u{f0db}";
+const CONTROL_WIDTH: usize = 3;
 
 /// 【终端标题】【开关范围】侧栏开关固定在终端最右端，仅在可手动开启时显示。
 /// 参数: layout 为当前布局；返回: 开关列范围，不含右端留白。
@@ -67,11 +69,11 @@ pub(super) fn overlay(control: &SidebarControl, layout: &FullscreenLayout, rows:
     } else {
         "\x1b[38;5;244m"
     };
-    let text = if active { "[<│ ]" } else { "[ │>]" };
+    let text = format!(" {SIDEBAR_ICON} ");
     let text = if control.header_hovered {
         format!("\x1b[7m{text}\x1b[27m")
     } else {
-        text.to_string()
+        text
     };
     let left = crate::render::ansi_clip::clip_ansi_to_width(row, range.start, "");
     let pad = range
@@ -98,7 +100,6 @@ impl ReplRuntime {
             let changed = self.sidebar_control.header_hovered != hit;
             self.sidebar_control.header_hovered = hit;
             if hit {
-                self.sidebar_control.close_hovered = false;
                 self.sidebar_control.divider_hovered = false;
                 session.state.header_hover = false;
                 session.state.pointer_row = None;

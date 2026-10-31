@@ -34,7 +34,7 @@ fn fullscreen_welcome_is_compact_and_responsive() {
             assert!(!text.contains("Fullscreen"));
             assert!(!text.contains("DeepSeek harness"));
             assert!(text.contains("~/workspace/sai"));
-            assert!(!text.contains('╭'));
+            assert!(text.contains('╭'));
         }
     }
 }

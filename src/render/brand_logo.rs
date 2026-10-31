@@ -15,6 +15,17 @@ pub(crate) const LOGO_WIDTH: usize = 6;
 /// 标志渲染所需的字符行数。
 pub(crate) const LOGO_HEIGHT: usize = MARK_LINES.len();
 
+/// 【终端】【标志识别】识别本模块输出的品牌笔画，避免底部短线误当作工具引导符。
+/// 参数: text 为待对齐 ANSI 行；返回: 是否以标准品牌标志开头。
+pub(crate) fn is_logo_line(text: &str) -> bool {
+    text.strip_prefix(MARK_STYLE).is_some_and(|text| {
+        MARK_LINES.iter().any(|line| {
+            text.strip_prefix(line.trim_end())
+                .is_some_and(|tail| tail.starts_with("\x1b[0m"))
+        })
+    })
+}
+
 /// 【终端】【品牌标志】按行渲染 Sai 标志。
 ///
 /// 参数:

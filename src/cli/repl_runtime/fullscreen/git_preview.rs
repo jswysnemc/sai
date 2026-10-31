@@ -21,7 +21,6 @@ pub(super) enum ReviewFocus {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ReviewHover {
-    Close,
     Mode(DiffMode),
     File(usize),
 }

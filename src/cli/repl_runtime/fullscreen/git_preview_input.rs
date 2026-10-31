@@ -50,10 +50,6 @@ impl ReplRuntime {
                 let cleared = preview.hovered.take().is_some();
                 match mouse.kind {
                     MouseEventKind::Down(MouseButton::Left) => {
-                        if geometry.close_at(mouse.column, mouse.row) {
-                            preview.close();
-                            return Some(Effect::Refresh);
-                        }
                         if let Some(mode) = geometry.mode_at(mouse.column, mouse.row) {
                             preview.focus = Some(ReviewFocus::Diff);
                             preview.set_mode(mode);

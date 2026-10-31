@@ -125,14 +125,6 @@ impl FullscreenLayout {
             .is_some_and(|sidebar| column >= sidebar.left && column < self.cols && row < self.rows)
     }
 
-    /// 【终端侧栏】【关闭命中】关闭按钮只占品牌区右端三列，不属于标题折叠区域。
-    /// 参数: column/row 为屏幕坐标；返回: 是否位于普通侧栏关闭按钮。
-    pub(super) fn sidebar_close_at(&self, column: u16, row: u16) -> bool {
-        self.sidebar.is_some()
-            && !self.review
-            && super::pane_header::close_at(self.cols, usize::from(self.rows), column, row)
-    }
-
     /// 判断屏幕行是否位于正文区。
     ///
     /// 参数:

@@ -1,4 +1,4 @@
-//! 分界线拖动与侧栏关闭控件；优先于聊天选择和审查面板处理鼠标。
+//! 分界线拖动；优先于聊天选择和审查面板处理鼠标。
 
 use super::input::Effect;
 use super::sidebar_control::SidebarControl;
@@ -30,14 +30,12 @@ impl ReplRuntime {
             if matches!(event, Event::Resize(..) | Event::FocusLost) {
                 self.sidebar_control.dragging = false;
                 self.sidebar_control.divider_hovered = false;
-                self.sidebar_control.close_hovered = false;
             }
             return None;
         };
         let side = layout.sidebar?;
         let in_height = mouse.row < layout.rows;
         let divider = in_height && mouse.column == side.left;
-        let close = layout.sidebar_close_at(mouse.column, mouse.row);
         let control = &mut self.sidebar_control;
         // 1. 【终端侧栏】【拖动捕获】按下之后允许指针离开分界线，以当前位置计算宽度
         if control.dragging
@@ -65,7 +63,7 @@ impl ReplRuntime {
             }
             return Some(Effect::Repaint);
         }
-        if mouse.kind == MouseEventKind::Down(MouseButton::Left) && (divider || close) {
+        if mouse.kind == MouseEventKind::Down(MouseButton::Left) && divider {
             session.state.press = None;
             session.state.selection = None;
             session.state.dragging = false;
@@ -74,22 +72,14 @@ impl ReplRuntime {
             session.sidebar.hovered = None;
             session.sidebar.preview.hovered = None;
             session.sidebar.preview.selection = Default::default();
-            if close {
-                control.close();
-                session.sidebar.focused = false;
-                session.sidebar.preview.close();
-                return Some(Effect::Refresh);
-            }
             control.dragging = true;
             control.divider_hovered = true;
-            control.close_hovered = false;
             return Some(Effect::Repaint);
         }
         if mouse.kind == MouseEventKind::Moved {
-            let changed = control.divider_hovered != divider || control.close_hovered != close;
+            let changed = control.divider_hovered != divider;
             control.divider_hovered = divider;
-            control.close_hovered = close;
-            if divider || close {
+            if divider {
                 session.sidebar.hovered = None;
                 session.sidebar.preview.hovered = None;
                 session.state.pointer_row = None;

@@ -156,7 +156,9 @@ class GitPreviewTests(unittest.TestCase):
                 terminal.wait_for(lambda: "Review" in lines(terminal)[1][50:])
                 self.assertFalse(any("CODE-ROW" in line[:50] for line in lines(terminal)))
                 self.assertIn("KEPT-DRAFTNEXT", terminal.text())
-                click(terminal, 97, 1)
+                terminal.send(b"\x1b[17~")
+                terminal.wait_for(lambda: "F6 files" in terminal.text())
+                terminal.send(b"\x1b")
                 terminal.wait_for(lambda: "Review" not in lines(terminal)[1])
                 self.assertEqual(subprocess.check_output(["git", "status", "--porcelain"], cwd=terminal.root), before)
 
@@ -232,7 +234,7 @@ class GitPreviewTests(unittest.TestCase):
                 self.assertIn("[ Working ] [ Staged ] [ Unstaged ]", lines(terminal)[3][40:])
                 self.assertTrue(any("syntax.rs" in line[40:] for line in lines(terminal)))
                 self.assertFalse(any("row_" in line[:40] for line in lines(terminal)))
-                click(terminal, 77, 1)
+                terminal.send(b"\x1b")
                 terminal.wait_for(lambda: "Review" not in lines(terminal)[1])
 
 

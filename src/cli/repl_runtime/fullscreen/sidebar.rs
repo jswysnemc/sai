@@ -67,7 +67,6 @@ impl Sidebar {
     ) -> Option<usize> {
         let sidebar = layout.sidebar?;
         if !layout.in_sidebar(column, row)
-            || layout.sidebar_close_at(column, row)
             || row.saturating_add(1) >= layout.rows
             || column <= sidebar.left
             || column >= layout.cols.saturating_sub(1)

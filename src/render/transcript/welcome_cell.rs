@@ -241,7 +241,7 @@ fn permission_row(permissions: &str, width: usize) -> String {
 ///
 /// 返回:
 /// - ANSI 样式前缀
-fn permission_style(permissions: &str) -> &'static str {
+pub(super) fn permission_style(permissions: &str) -> &'static str {
     let lowered = permissions.to_ascii_lowercase();
     if lowered.contains("yolo") {
         // 完全放行：橙色警示

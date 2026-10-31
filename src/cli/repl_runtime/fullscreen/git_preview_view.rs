@@ -71,13 +71,6 @@ impl PreviewLayout {
             && usize::from(row) < self.height
     }
 
-    /// 【终端审查】【关闭控件】右上角关闭只退出审查，不改变聊天位置。
-    /// 参数: column/row 为坐标；返回: 是否命中关闭。
-    pub(super) fn close_at(&self, column: u16, row: u16) -> bool {
-        super::pane_header::close_at((self.left + self.width) as u16, self.height, column, row)
-            && self.contains(column, row)
-    }
-
     /// 【终端审查】【比较控件】模式切换控件固定在标题下方，不随内容移动。
     /// 参数: column/row 为坐标；返回: 命中模式。
     pub(super) fn mode_at(&self, column: u16, row: u16) -> Option<DiffMode> {
@@ -129,9 +122,6 @@ impl PreviewLayout {
     ) -> Option<ReviewHover> {
         if !self.contains(column, row) || usize::from(column) < self.left + 2 {
             return None;
-        }
-        if self.close_at(column, row) {
-            return Some(ReviewHover::Close);
         }
         if let Some(mode) = self.mode_at(column, row) {
             return Some(ReviewHover::Mode(mode));
@@ -202,14 +192,9 @@ pub(super) fn panel_rows(
     let width = geometry.width.saturating_sub(3);
     let palette = SidebarPalette::current();
     let mut panel = vec![String::new(); geometry.height];
-    for (index, title) in super::pane_header::render(
-        "Review",
-        width,
-        geometry.height,
-        preview.hovered == Some(ReviewHover::Close),
-    )
-    .into_iter()
-    .enumerate()
+    for (index, title) in super::pane_header::render("Review", width, geometry.height)
+        .into_iter()
+        .enumerate()
     {
         panel[index] = title;
     }

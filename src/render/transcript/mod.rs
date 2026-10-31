@@ -28,6 +28,9 @@ mod tool_cell;
 pub(crate) mod unified_diff;
 mod user_echo_cell;
 mod user_image_preview;
+mod welcome_brand;
+#[cfg(test)]
+mod welcome_brand_tests;
 mod welcome_cell;
 mod window;
 

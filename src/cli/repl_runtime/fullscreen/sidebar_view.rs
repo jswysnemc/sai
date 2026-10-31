@@ -110,14 +110,14 @@ pub(super) fn overlay(
 pub(super) fn panel_rows(
     sidebar: &Sidebar,
     layout: &FullscreenLayout,
-    control: &SidebarControl,
+    _control: &SidebarControl,
 ) -> Vec<String> {
     let Some(geometry) = layout.sidebar else {
         return Vec::new();
     };
     let width = usize::from(geometry.width.saturating_sub(3));
     let height = usize::from(layout.rows);
-    let header = super::pane_header::render("", width, height, control.close_hovered);
+    let header = super::pane_header::render("", width, height);
     let panels = regions(&sidebar.document, height);
     let focused_action = sidebar
         .focused_row

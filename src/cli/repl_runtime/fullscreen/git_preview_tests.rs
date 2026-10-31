@@ -313,14 +313,11 @@ fn preview_layout_and_components_stay_within_body() {
         assert!(panel[geometry.diff_top + 2].contains("\x1b[48;2;"));
         assert!(!panel.last().unwrap().contains("\x1b[48;"));
         assert_eq!(geometry.left, usize::from(layout.main_width));
-        assert!(geometry.close_at(
-            (geometry.left + geometry.width - 3) as u16,
-            super::pane_header::close_row(geometry.height)
-        ));
+        assert!(panel.iter().all(|row| !row.contains("[x]")));
     }
 }
 
-/// 【审查测试】【悬停反色】文件、模式和关闭按钮响应悬停，移到左侧后清除且不阻止聊天。
+/// 【审查测试】【悬停反色】文件和模式响应悬停，移到左侧后清除且不阻止聊天。
 /// 参数: 无；返回: 无。
 #[test]
 fn review_controls_reverse_on_hover_and_clear_without_intercepting_chat() {
@@ -349,11 +346,6 @@ fn review_controls_reverse_on_hover_and_clear_without_intercepting_chat() {
                     85,
                     geometry.header_height as u16,
                     ReviewHover::Mode(DiffMode::Working),
-                ),
-                (
-                    157,
-                    super::pane_header::close_row(geometry.height),
-                    ReviewHover::Close,
                 ),
             ] {
                 runtime

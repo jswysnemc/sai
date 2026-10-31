@@ -204,7 +204,6 @@ impl ReplRuntime {
         drop(session);
         self.sidebar_control.dragging = false;
         self.sidebar_control.divider_hovered = false;
-        self.sidebar_control.close_hovered = false;
         // 1. 【终端】【视图同步】回到主屏后按内联视图重放
         crate::render::tui_mode::set_override(Some(crate::config::TuiMode::Inline));
         self.last_composer_signature = None;

@@ -32,7 +32,6 @@ pub(in crate::cli::repl_runtime) struct SidebarControl {
     pub(super) review_width: Option<u16>,
     pub(super) dragging: bool,
     pub(super) divider_hovered: bool,
-    pub(super) close_hovered: bool,
     pub(super) header_hovered: bool,
 }
 
@@ -109,7 +108,6 @@ impl SidebarControl {
         self.visibility = Some(Visibility::Off);
         self.dragging = false;
         self.divider_hovered = false;
-        self.close_hovered = false;
     }
 }
 
@@ -155,7 +153,6 @@ impl ReplRuntime {
         if let Some(visibility) = visibility {
             self.sidebar_control.visibility = Some(visibility);
             self.sidebar_control.dragging = false;
-            self.sidebar_control.close_hovered = false;
             self.sidebar_control.divider_hovered = false;
             if let Some(session) = self.fullscreen.as_mut() {
                 session.sidebar.focused = false;
