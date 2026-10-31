@@ -2,7 +2,7 @@
 
 use super::queue_panel::{is_enter_queue_key, QueuePanelState};
 use super::queue_panel_view::{page_size, render_at};
-use super::viewport::{TerminalSize};
+use super::viewport::TerminalSize;
 use super::{QueueInsertAt, QueuedSubmission, ReplRuntime};
 use crate::agent::AgentMode;
 use crate::cli::repl_clipboard::ReplClipboardState;
@@ -13,12 +13,19 @@ use crossterm::event::{KeyCode, KeyModifiers};
 /// 【队列测试】【运行期】创建纯内存队列，避免调用模型或依赖当前仓库。
 /// 参数: count 为消息数量；返回: 带稳定标识的运行期。
 fn runtime(count: usize) -> ReplRuntime {
-    let runtime = ReplRuntime::new(1000, TranscriptRenderOptions {
-        reasoning_mode: crate::render::ReasoningDisplayMode::Summary,
-        tool_call_mode: crate::render::ToolCallDisplayMode::Summary,
-    });
+    let runtime = ReplRuntime::new(
+        1000,
+        TranscriptRenderOptions {
+            reasoning_mode: crate::render::ReasoningDisplayMode::Summary,
+            tool_call_mode: crate::render::ToolCallDisplayMode::Summary,
+        },
+    );
     for index in 0..count {
-        runtime.lock_queue().push_back(QueuedSubmission::new(AgentMode::Yolo, format!("message-{index:02}"), ReplClipboardState::default()));
+        runtime.lock_queue().push_back(QueuedSubmission::new(
+            AgentMode::Yolo,
+            format!("message-{index:02}"),
+            ReplClipboardState::default(),
+        ));
     }
     runtime
 }
@@ -91,7 +98,10 @@ fn deleted_history_is_bounded_and_preserves_attachments() {
     key(&mut runtime, KeyCode::Char('d'), KeyModifiers::NONE);
     key(&mut runtime, KeyCode::Char('u'), KeyModifiers::NONE);
     let item = runtime.lock_queue()[24].clone();
-    assert_eq!(item.clipboard.to_chat_input(&item.text).message, body.trim());
+    assert_eq!(
+        item.clipboard.to_chat_input(&item.text).message,
+        body.trim()
+    );
     for _ in 0..25 {
         key(&mut runtime, KeyCode::Char('d'), KeyModifiers::NONE);
         key(&mut runtime, KeyCode::Char('d'), KeyModifiers::NONE);
@@ -131,8 +141,14 @@ fn manager_rows_stay_bounded_and_click_regions_match_visible_buttons() {
             let rows = render_at(&panel, &items, true, width);
             assert!(rows.len() <= page_size() + 3);
             assert!(rows.iter().any(|row| row.text.contains("message-99")));
-            assert!(rows.iter().all(|row| crate::cli::repl_text::visible_width(&row.text) <= width));
-            let plain = rows.iter().map(|row| strip_ansi(&row.text)).collect::<Vec<_>>().join("\n");
+            assert!(rows
+                .iter()
+                .all(|row| crate::cli::repl_text::visible_width(&row.text) <= width));
+            let plain = rows
+                .iter()
+                .map(|row| strip_ansi(&row.text))
+                .collect::<Vec<_>>()
+                .join("\n");
             assert!(plain.contains("[ u") && plain.contains("[ Enter"));
             for row in &rows {
                 assert!(!row.text.contains("\x1b[48;"));

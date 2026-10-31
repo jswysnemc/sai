@@ -196,25 +196,61 @@ pub(super) fn render_at(
         &[
             ("↑", QueuePanelAction::MoveUp),
             ("↓", QueuePanelAction::MoveDown),
-            (if short { "T" } else { t("T Top", "T 置顶") }, QueuePanelAction::Top),
-            (if short { "Tab" } else { t("Tab Timing", "Tab 时机") }, QueuePanelAction::ToggleInsert),
-            (if short { "d" } else { t("d Delete", "d 删除") }, QueuePanelAction::Delete),
-            (if short { "u" } else { t("u Undo", "u 恢复") }, QueuePanelAction::UndoDelete),
+            (
+                if short { "T" } else { t("T Top", "T 置顶") },
+                QueuePanelAction::Top,
+            ),
+            (
+                if short {
+                    "Tab"
+                } else {
+                    t("Tab Timing", "Tab 时机")
+                },
+                QueuePanelAction::ToggleInsert,
+            ),
+            (
+                if short {
+                    "d"
+                } else {
+                    t("d Delete", "d 删除")
+                },
+                QueuePanelAction::Delete,
+            ),
+            (
+                if short { "u" } else { t("u Undo", "u 恢复") },
+                QueuePanelAction::UndoDelete,
+            ),
         ],
         width,
     ));
     rows.push(controls(
         &[
-            (if short { "Enter" } else { t("Enter Edit", "Enter 编辑") }, QueuePanelAction::Edit),
             (
-                if short { "s" } else if streaming {
+                if short {
+                    "Enter"
+                } else {
+                    t("Enter Edit", "Enter 编辑")
+                },
+                QueuePanelAction::Edit,
+            ),
+            (
+                if short {
+                    "s"
+                } else if streaming {
                     t("s Steer now", "s 立即插话")
                 } else {
                     t("s Send now", "s 立即发送")
                 },
                 QueuePanelAction::SendNow,
             ),
-            (if short { "Esc" } else { t("Esc Return", "Esc 返回") }, QueuePanelAction::Exit),
+            (
+                if short {
+                    "Esc"
+                } else {
+                    t("Esc Return", "Esc 返回")
+                },
+                QueuePanelAction::Exit,
+            ),
         ],
         width,
     ));
@@ -244,7 +280,9 @@ fn controls(actions: &[(&str, QueuePanelAction)], width: usize) -> QueueRow {
         if end > width {
             break;
         }
-        if start > 0 { output.text.push(' '); }
+        if start > 0 {
+            output.text.push(' ');
+        }
         let start = start + usize::from(start > 0);
         output.text.push_str(&format!("{MUTED}{label}{RESET}"));
         output

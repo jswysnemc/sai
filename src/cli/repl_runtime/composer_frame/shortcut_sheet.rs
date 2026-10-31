@@ -76,10 +76,7 @@ fn groups(paste_key: PasteImageKey) -> Vec<Group> {
             items: vec![
                 ("Enter / Tab", t("Queue message", "排队发送")),
                 ("Ctrl+↑", t("Manage queue", "管理队列")),
-                (
-                    "Ctrl+Enter",
-                    t("Steer next call", "次回插话"),
-                ),
+                ("Ctrl+Enter", t("Steer next call", "次回插话")),
                 ("Ctrl+Z", t("Undo last queued", "撤回队尾")),
                 ("Ctrl+Y ×2", t("Clear queue", "清空队列")),
             ],

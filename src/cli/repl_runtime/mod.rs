@@ -21,13 +21,13 @@ mod mention_panel;
 mod panel_mouse;
 mod placeholder_tips;
 mod question_handoff;
+#[cfg(test)]
+mod queue_manager_tests;
 mod queue_operations;
 pub(in crate::cli) mod queue_panel;
 mod queue_panel_dispatch;
 #[cfg(test)]
 mod queue_panel_tests;
-#[cfg(test)]
-mod queue_manager_tests;
 mod queue_panel_view;
 mod queue_source;
 mod records;
