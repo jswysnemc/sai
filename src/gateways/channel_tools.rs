@@ -105,6 +105,10 @@ async fn send_channel_message(
     let kind = required_string(&args, "kind")?;
     let text = optional_string(&args, "text").or_else(|| optional_string(&args, "caption"));
     let path = optional_string(&args, "path").map(|path| crate::tools::fs_path::expand_path(&path));
+    if kind == "text" && text.is_none() {
+        bail!("text is required for text messages");
+    }
+    let origin = super::weixin_bot::message_origin::MessageOrigin::from_args(&paths, &args)?;
     // 1. 【渠道消息】【按需启动】在读取最近目标前启动接收端，允许积压消息更新上下文
     ensure_weixin_gateway(&paths, &config, &current, &channel).await?;
     let target = resolve_target(&paths, &config, current, &channel).await?;
@@ -118,15 +122,35 @@ async fn send_channel_message(
             to_user_id,
             context_token,
         } => {
-            send_weixin_message(
-                client.with_delivery_paths(paths),
-                to_user_id,
+            let decorated = origin
+                .as_ref()
+                .map(|source| source.decorate(text.clone()))
+                .or_else(|| text.clone());
+            let output = send_weixin_message(
+                client.with_delivery_paths(paths.clone()),
+                to_user_id.clone(),
                 context_token,
                 &kind,
-                text,
+                decorated,
                 path,
             )
-            .await
+            .await?;
+            let mut output: Value = serde_json::from_str(&output)?;
+            if let Some(origin) = &origin {
+                if let Err(error) = super::weixin_bot::origin_history::record(
+                    &paths,
+                    &to_user_id,
+                    origin,
+                    text.as_deref(),
+                ) {
+                    // 2. 【微信消息】【记录失败】消息已经送达，不能报告发送失败而诱导重复投递
+                    output["origin_warning"] = Value::String(format!(
+                        "Message sent, but reply-source history could not be saved: {error}"
+                    ));
+                }
+            }
+            output["origin"] = serde_json::to_value(&origin)?;
+            Ok(serde_json::to_string_pretty(&output)?)
         }
     }
 }

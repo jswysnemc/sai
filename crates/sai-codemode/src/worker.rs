@@ -27,6 +27,7 @@ pub fn execute(
     mut send: impl FnMut(WorkerEvent) -> Result<()> + Send + 'static,
     receive: &mut impl FnMut() -> Result<ToolReply>,
 ) -> Result<()> {
+    let deadline = Instant::now() + Duration::from_millis(request.timeout_ms.min(600_000));
     let (sender, events) = sync_channel(16);
     // 1. 【CodeMode】【输出隔离】专用写线程持续刷新有界通道，同步死循环不阻断先前输出
     let writer = std::thread::spawn(move || -> Result<()> {
@@ -35,7 +36,7 @@ pub fn execute(
         }
         Ok(())
     });
-    let result = execute_vm(request, &sender, receive);
+    let result = execute_vm(request, &sender, receive, deadline);
     drop(sender);
     writer
         .join()
@@ -44,10 +45,12 @@ pub fn execute(
 }
 
 /// 【CodeMode】【解释器执行】运行 request，sender 交付事件，receive 提供工具回复，返回执行结果。
-fn execute_vm(
+/// 参数 deadline 包含初始化预算，便于确定性验证启动阶段中断
+pub(crate) fn execute_vm(
     request: ExecutionRequest,
     sender: &SyncSender<WorkerEvent>,
     receive: &mut impl FnMut() -> Result<ToolReply>,
+    deadline: Instant,
 ) -> Result<()> {
     if request.code.len() > protocol::MAX_CODE_BYTES || request.timeout_ms == 0 {
         bail!("invalid codemode execution limits");
@@ -56,7 +59,6 @@ fn execute_vm(
     let runtime = Runtime::new()?;
     runtime.set_memory_limit(256 * 1024 * 1024);
     runtime.set_max_stack_size(1024 * 1024);
-    let deadline = Instant::now() + Duration::from_millis(request.timeout_ms.min(600_000));
     runtime.set_interrupt_handler(Some(Box::new(move || Instant::now() >= deadline)));
     let context = Context::full(&runtime)?;
     let result = context.with(|ctx| -> Result<()> {
@@ -120,8 +122,14 @@ fn execute_vm(
         }
     });
     if let Err(error) = result {
+        // 3. 【CodeMode】【超时归类】初始化冻结与微任务中断统一按硬截止报告，不要求脚本已经开始
+        let error = if Instant::now() >= deadline {
+            "codemode script timed out".to_string()
+        } else {
+            error.to_string()
+        };
         sender.send(WorkerEvent::Done {
-            error: Some(error.to_string()),
+            error: Some(error),
             writes: Default::default(),
         })?;
     }

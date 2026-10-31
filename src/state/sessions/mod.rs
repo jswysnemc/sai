@@ -22,10 +22,10 @@ pub use model::{LocatedSession, SessionInfo};
 #[allow(unused_imports)]
 pub use repository::{
     active_session_if_present, create_session, create_session_detached,
-    create_session_for_workspace, delete_session, delete_sessions, ensure_active_session,
-    list_all_sessions, locate_session_dirs, rename_session, session_scope_dir,
-    state_dir_for_session, switch_session, switch_session_located, title_from_message_public,
-    touch_session_with_message,
+    create_session_detached_for_workspace, create_session_for_workspace, delete_session,
+    delete_sessions, ensure_active_session, list_all_sessions, locate_session_dirs, rename_session,
+    session_scope_dir, state_dir_for_session, switch_session, switch_session_located,
+    title_from_message_public, touch_session_with_message,
 };
 pub use sidebar_index::{
     load_sidebar_index, patch_sidebar_index, sidebar_session_key, SidebarGroup, SidebarIndex,

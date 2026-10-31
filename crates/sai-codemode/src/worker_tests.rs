@@ -123,7 +123,8 @@ fn sandbox_has_no_os_apis_and_prototypes_are_frozen() {
 
 #[test]
 fn loops_are_interrupted_and_stalled_promises_fail() {
-    let events = run("text('before'); while(true) {}", &[], 30);
+    // 1. 【CodeMode】【执行预算】给原型冻结留出启动时间，部分输出断言只覆盖已开始的用户脚本
+    let events = run("text('before'); while(true) {}", &[], 1000);
     assert!(
         completion(&events)
             .0
@@ -135,6 +136,37 @@ fn loops_are_interrupted_and_stalled_promises_fail() {
     assert!(matches!(&events[0], WorkerEvent::Output { value, .. } if value == "before"));
     let events = run("await new Promise(() => {})", &[], 1000);
     assert!(completion(&events).0.as_ref().unwrap().contains("stalled"));
+}
+
+/// 【CodeMode】【初始化超时回归】无参数，返回无；已耗尽预算进入真实初始化路径时输出超时错误。
+#[test]
+fn initialization_timeout_is_reported_without_requiring_script_output() {
+    let request = ExecutionRequest {
+        code: "text('must-not-run'); return 1".into(),
+        timeout_ms: 1000,
+        catalog: Vec::new(),
+        store: Default::default(),
+    };
+    let (sender, receiver) = std::sync::mpsc::sync_channel(16);
+    crate::worker::execute_vm(
+        request,
+        &sender,
+        &mut || panic!("no tools during initialization"),
+        std::time::Instant::now() - std::time::Duration::from_millis(1),
+    )
+    .unwrap();
+    drop(sender);
+    let events = receiver.into_iter().collect::<Vec<_>>();
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert!(
+        completion(&events)
+            .0
+            .as_ref()
+            .unwrap()
+            .contains("timed out"),
+        "{events:?}"
+    );
+    assert!(completion(&events).1.is_empty());
 }
 
 #[test]

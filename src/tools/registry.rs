@@ -4,6 +4,8 @@ pub use super::tool_spec::{
 
 #[path = "registry_execution.rs"]
 mod execution;
+#[path = "registry_origin.rs"]
+mod origin;
 #[path = "registry_plugin_services.rs"]
 mod plugin_services;
 #[path = "registry_plugins.rs"]

@@ -37,3 +37,32 @@ async fn credentials_are_persisted_before_agent_queue_processing() {
     assert_eq!(receiver.recv().await.unwrap().prompt, "two");
     assert_eq!(receiver.recv().await.unwrap().prompt, "three");
 }
+
+/// 【微信网关】【空凭证回归】无参数，返回无；没有附带新凭证的入站消息不能清空已有有效缓存。
+#[tokio::test]
+async fn inbound_without_token_preserves_the_recipient_cache() {
+    let root = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(root.path());
+    ensure_gateway_session(
+        &paths,
+        &ChannelContext::weixin("user".into(), Some("fresh".into())),
+    )
+    .unwrap();
+    let client = WeixinBotClient::new(
+        "http://127.0.0.1:1".into(),
+        "".into(),
+        "fixture".into(),
+        None,
+        false,
+    );
+    let (sender, _receiver) = tokio::sync::mpsc::channel(8);
+    handle_updates(&paths, &client, &sender, &json!({"ret":0,"msgs":[
+        {"message_type":1,"from_user_id":"user","item_list":[{"type":1,"text_item":{"text":"hello"}}]}
+    ]})).await.unwrap();
+    assert_eq!(
+        super::super::delivery::recipient_token(&paths, "user")
+            .unwrap()
+            .as_deref(),
+        Some("fresh")
+    );
+}

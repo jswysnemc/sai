@@ -12,8 +12,13 @@ async fn session_create_registers_a_session_without_switching_current() {
         let (session, _) = session_in(&paths, &cwd, "current");
         let registry = registry_for(&paths, &session);
 
-        let created: Value =
-            serde_json::from_str(&registry.call("session_create", "{}").await.unwrap()).unwrap();
+        let created: Value = serde_json::from_str(
+            &registry
+                .call("session_create", r#"{"workdir":"."}"#)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(created["ok"], true, "{created}");
         assert_eq!(created["activated"], false, "{created}");
@@ -47,7 +52,7 @@ async fn session_create_with_explicit_title_names_the_session() {
 
         let created: Value = serde_json::from_str(
             &registry
-                .call("session_create", r#"{"title":"researcher"}"#)
+                .call("session_create", r#"{"workdir":".","title":"researcher"}"#)
                 .await
                 .unwrap(),
         )
@@ -78,8 +83,13 @@ async fn created_session_receives_mesh_send_by_id() {
         // 新会话不是当前会话，投递属于跨会话，需要显式开启
         let registry = registry_with_cross_session(&paths, &session, true);
 
-        let created: Value =
-            serde_json::from_str(&registry.call("session_create", "{}").await.unwrap()).unwrap();
+        let created: Value = serde_json::from_str(
+            &registry
+                .call("session_create", r#"{"workdir":"."}"#)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         let new_id = created["session_id"].as_str().unwrap().to_string();
 
         let sent: Value = serde_json::from_str(
@@ -114,8 +124,13 @@ async fn session_activate_by_id_switches_the_current_session() {
     crate::runtime_cwd::scope(cwd.clone(), async {
         let (session, _) = session_in(&paths, &cwd, "current");
         let registry = registry_for(&paths, &session);
-        let created: Value =
-            serde_json::from_str(&registry.call("session_create", "{}").await.unwrap()).unwrap();
+        let created: Value = serde_json::from_str(
+            &registry
+                .call("session_create", r#"{"workdir":"."}"#)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         let new_id = created["session_id"].as_str().unwrap().to_string();
 
         let activated: Value = serde_json::from_str(
@@ -351,15 +366,15 @@ fn session_control_descriptions_document_the_contract() {
         super::super::session_create::DESCRIPTION_ZH,
     ] {
         assert!(
-            description.contains("session_id"),
+            description.contains("id"),
             "创建工具说明必须点名 session_id: {description}"
         );
         assert!(
-            description.contains("NOT activated") || description.contains("不会被激活"),
+            description.contains("next-launch pointer") || description.contains("下次启动指针"),
             "创建工具说明必须声明不自动激活: {description}"
         );
         assert!(
-            description.contains("keyed by id") || description.contains("以 id 为键"),
+            description.contains("workdir"),
             "创建工具说明必须声明会话以 id 为键: {description}"
         );
     }

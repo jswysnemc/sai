@@ -7,6 +7,8 @@ pub(crate) mod lifecycle;
 pub(crate) mod login;
 pub(crate) mod media;
 mod mesh_tools;
+pub(crate) mod message_origin;
+pub(crate) mod origin_history;
 pub(crate) mod prompt;
 pub(crate) mod runtime;
 pub(crate) mod server;

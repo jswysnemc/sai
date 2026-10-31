@@ -61,14 +61,14 @@ pub(crate) use sessions::session_index_io_counts;
 #[allow(unused_imports)]
 pub use sessions::{
     active_session_id_for_workspace, active_session_if_present, create_session,
-    create_session_detached, create_session_for_workspace, current_workspace_id, delete_session,
-    delete_sessions, delete_sessions_for_workspace, ensure_active_session as active_session,
-    ensure_workspace_session, list_all_sessions, list_located_sessions,
-    list_located_sessions_for_workspace, list_sessions, list_sessions_for_workspace,
-    load_sidebar_index, locate_session_dirs, patch_sidebar_index, rename_session,
-    sidebar_session_key, state_dir_for_workspace_session, switch_session, switch_session_located,
-    title_from_message_public, workspace_id_for_path, LocatedSession, SessionInfo, SidebarGroup,
-    SidebarIndex, SidebarIndexPatch,
+    create_session_detached, create_session_detached_for_workspace, create_session_for_workspace,
+    current_workspace_id, delete_session, delete_sessions, delete_sessions_for_workspace,
+    ensure_active_session as active_session, ensure_workspace_session, list_all_sessions,
+    list_located_sessions, list_located_sessions_for_workspace, list_sessions,
+    list_sessions_for_workspace, load_sidebar_index, locate_session_dirs, patch_sidebar_index,
+    rename_session, sidebar_session_key, state_dir_for_workspace_session, switch_session,
+    switch_session_located, title_from_message_public, workspace_id_for_path, LocatedSession,
+    SessionInfo, SidebarGroup, SidebarIndex, SidebarIndexPatch,
 };
 #[allow(unused_imports)]
 pub use tool_history::{

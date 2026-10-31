@@ -11,6 +11,7 @@ mod agent_probe;
 mod messaging;
 mod registry;
 mod session_control;
+mod session_create_workdir;
 mod session_probe;
 
 /// 构造绑定当前会话的探测工具注册表。

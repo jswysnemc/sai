@@ -102,6 +102,8 @@ impl ToolRegistry {
                 );
         }
         // 【插件】【嵌套边界】1. 递归检查先于事件，旧注册表的活动观察者使用独立 VM
+        // 2. 【渠道消息】【可信来源】外部同名字段已删除，授权后注入实际会话身份
+        self.inject_channel_origin(name, args);
         if let Some(id) = tool.plugin_id() {
             PluginServices::check_invocation(id)?;
         }

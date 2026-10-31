@@ -88,7 +88,7 @@ fn api_error(response: &Value) -> anyhow::Error {
 }
 
 /// 【微信网关】【接收人凭证】参数 paths/recipient 为缓存路径和接收人，返回匹配会话的非空凭证。
-fn recipient_token(paths: &SaiPaths, recipient: &str) -> Result<Option<String>> {
+pub(super) fn recipient_token(paths: &SaiPaths, recipient: &str) -> Result<Option<String>> {
     if let Some(token) = token_from(
         channel_context::load_latest_channel_context(paths, "weixin")?,
         recipient,

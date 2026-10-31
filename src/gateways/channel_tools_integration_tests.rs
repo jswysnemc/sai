@@ -245,3 +245,43 @@ async fn interactive_sender_obeys_plan_permissions() {
         .unwrap_err();
     assert!(error.to_string().contains("Plan mode blocked"), "{error}");
 }
+
+/// 【微信消息】【真实发送来源回归】无参数，返回无；注册表传递真实来源，微信正文与回执可定位会话。
+#[tokio::test]
+async fn outgoing_message_identifies_the_actual_sender_session() {
+    let root = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(root.path());
+    let workdir = root.path().join("project");
+    std::fs::create_dir_all(&workdir).unwrap();
+    let session =
+        crate::state::create_session_for_workspace(&paths, &workdir, Some("Project Alpha"))
+            .unwrap();
+    let state_dir = crate::state::locate_session_dirs(&paths, &session.id)
+        .unwrap()
+        .1;
+    let mut mock = MockWeixin::start().await;
+    mock.mark_running(&paths);
+    save_latest_channel_context(
+        &paths,
+        &ChannelContext::weixin("user".into(), Some("ctx".into())),
+    )
+    .unwrap();
+    let config = mock.config();
+    let mut registry = crate::tools::builtin_registry_without_mcp(&config, &paths);
+    registry.set_session_ownership(state_dir.display().to_string(), session.id.clone(), false);
+    let output: Value = serde_json::from_str(&registry.call("send_channel_message", &json!({"kind":"text","text":"progress", "_sai_channel_origin":{"session_id":"fake-session"}}).to_string()).await.unwrap()).unwrap();
+    let (_, body) = mock.request().await;
+    let text = body["msg"]["item_list"][0]["text_item"]["text"]
+        .as_str()
+        .unwrap();
+    assert!(text.starts_with("[Sai · Project Alpha]"));
+    assert!(text.contains(&session.id));
+    assert!(text.contains(&format!("回复 {}：内容", session.id)));
+    assert!(!text.contains("fake-session"));
+    assert!(!text.contains(&state_dir.display().to_string()));
+    assert_eq!(output["origin"]["session_id"], session.id);
+    let prompt =
+        crate::gateways::weixin_bot::origin_history::gateway_prompt(&paths, "user").unwrap();
+    assert!(prompt.contains(&session.id));
+    assert!(prompt.contains("progress"));
+}

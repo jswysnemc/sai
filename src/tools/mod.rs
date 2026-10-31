@@ -287,6 +287,11 @@ pub(crate) fn register_interactive_tools(
     command::register_session_background(registry, config, paths, &session_id);
     // SSH 工具组：可 load 的远程服务器管理，秘密经独立安全通道，不进模型
     crate::ssh::register(registry, paths, &session_id);
+    registry.set_session_ownership(
+        owner_key.clone(),
+        session_id.clone(),
+        config.mesh.cross_session,
+    );
     let subagent_tools = registry.clone();
     subagent::register(
         registry,

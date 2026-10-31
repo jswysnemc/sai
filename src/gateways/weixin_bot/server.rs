@@ -1,7 +1,6 @@
 use super::client::WeixinBotClient;
 use super::event::{parse_weixin_message, WeixinInboundMediaKind, WeixinMessageEvent};
 use super::inbound_media::{image_mime, save_inbound_media, SavedInboundMedia};
-use super::prompt::channel_prompt;
 use crate::agent::AgentMode;
 use crate::cli::build_tool_registry;
 use crate::config::AppConfig;
@@ -139,8 +138,11 @@ async fn handle_updates(
         .collect::<Vec<_>>();
     // 1. 【微信网关】【先保存凭证】批量入站先更新每个接收人的上下文，不等待模型执行结束
     for event in &events {
-        let context =
-            ChannelContext::weixin(event.from_user_id.clone(), event.context_token.clone());
+        let token = match &event.context_token {
+            Some(token) => Some(token.clone()),
+            None => super::delivery::recipient_token(paths, &event.from_user_id)?,
+        };
+        let context = ChannelContext::weixin(event.from_user_id.clone(), token);
         save_latest_channel_context(paths, &context)?;
         ensure_gateway_session(paths, &context)?;
     }
@@ -314,8 +316,10 @@ async fn run_agent(
             context_token: event.context_token.clone(),
         },
     );
-    let mut user_input = crate::runner::UserInputSubmission::new(prompt, AgentMode::Yolo)
-        .with_extra_system_prompt(channel_prompt());
+    let mut user_input =
+        crate::runner::UserInputSubmission::new(prompt, AgentMode::Yolo).with_extra_system_prompt(
+            super::origin_history::gateway_prompt(paths, &event.from_user_id)?,
+        );
     if let Some(image_url) = image_url {
         user_input = user_input.with_image_url(image_url);
     }

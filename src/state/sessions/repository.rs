@@ -56,6 +56,17 @@ pub fn create_session_detached(paths: &SaiPaths, title: Option<&str>) -> Result<
     create_session_record(&scope, title, false)
 }
 
+/// 【会话创建】【指定目录】参数 paths/workspace_path/title 为存储路径、工作目录与可选标题。
+/// 返回登记的新会话；不改当前会话或下次启动指针
+pub fn create_session_detached_for_workspace(
+    paths: &SaiPaths,
+    workspace_path: &Path,
+    title: Option<&str>,
+) -> Result<SessionInfo> {
+    let scope = super::workspace::workspace_scope_for_path(paths, workspace_path);
+    create_session_record(&scope, title, false)
+}
+
 /// 在指定工作区创建新会话并设为该工作区当前会话。
 ///
 /// 参数:

@@ -16,13 +16,17 @@ import unittest
 class WeixinAutostartTests(unittest.TestCase):
     """覆盖实际主程序、网关独立进程与模拟 iLink 接口。"""
 
-    def execute(self, refresh):
+    def execute(self, refresh, route_reply=False):
         """【微信网关】【运行场景】参数 refresh 决定是否拒绝旧凭证，返回记录并始终回收后台进程。"""
         requests = []
         messages = []
         polling = threading.Event()
         expired = threading.Event()
         delivered_context = threading.Event()
+        stopping = threading.Event()
+        reply_ready = threading.Event()
+        reply_completed = threading.Event()
+        gateway_requests = []
 
         class Handler(BaseHTTPRequestHandler):
             """按请求路径提供模型响应和微信收发接口。"""
@@ -41,6 +45,13 @@ class WeixinAutostartTests(unittest.TestCase):
                         delivered_context.set()
                         events = [{"message_type": 1, "from_user_id": "user", "context_token": "fresh",
                                    "item_list": [{"type": 1, "text_item": {"text": "/help"}}]}]
+                    if route_reply and reply_ready.is_set() and not delivered_context.is_set():
+                        records = list((root / "state/sai/gateways/weixin-origins").glob("*.json"))
+                        if records:
+                            source = json.loads(records[0].read_text())[0]["origin"]["session_id"]
+                            delivered_context.set()
+                            events = [{"message_type": 1, "from_user_id": "user", "context_token": "fresh",
+                                       "item_list": [{"type": 1, "text_item": {"text": f"回复 {source}：继续处理"}}]}]
                     self.respond({"ret": 0, "msgs": events, "get_updates_buf": "fixture"})
                     if delivered_context.is_set():
                         time.sleep(0.1)
@@ -49,11 +60,36 @@ class WeixinAutostartTests(unittest.TestCase):
                     message = body["msg"]
                     messages.append(message)
                     text = message["item_list"][0].get("text_item", {}).get("text", "")
-                    if refresh and text.startswith("progress") and message["context_token"] == "old":
+                    if refresh and "\n\nprogress-" in text and message["context_token"] == "old":
                         expired.set()
                         self.respond({"ret": -2, "errmsg": "prepare failed"})
                     else:
                         self.respond({"ret": 0})
+                        if "\n\nprogress-" in text:
+                            reply_ready.set()
+                    return
+                is_gateway = "<channel-context>" in json.dumps(body, ensure_ascii=False)
+                if is_gateway and route_reply:
+                    gateway_requests.append(body)
+                    round_index = len(gateway_requests) - 1
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream")
+                    self.send_header("Connection", "close")
+                    self.end_headers()
+                    if round_index == 0:
+                        function = {"name": "session_probe", "arguments": json.dumps({"scope": "all"})}
+                    elif round_index == 1:
+                        records = list((root / "state/sai/gateways/weixin-origins").glob("*.json"))
+                        source = json.loads(records[0].read_text())[0]["origin"]["session_id"]
+                        function = {"name": "mesh_send", "arguments": json.dumps({"to": f"session:{source}", "text": "继续处理", "correlation_id": "weixin-reply"})}
+                    else:
+                        function = None
+                        reply_completed.set()
+                    delta = {"tool_calls": [{"index": 0, "id": f"gateway-{round_index}", "type": "function", "function": function}]} if function else {"content": "已转发"}
+                    event = {"choices": [{"index": 0, "delta": delta, "finish_reason": None}]}
+                    self.wfile.write(("data: " + json.dumps(event) + "\n\n").encode())
+                    event = {"choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls" if function else "stop"}]}
+                    self.wfile.write(("data: " + json.dumps(event) + "\n\ndata: [DONE]\n\n").encode())
                     return
                 index = len(requests)
                 requests.append(body)
@@ -67,6 +103,8 @@ class WeixinAutostartTests(unittest.TestCase):
                                  "kind": "text", "channel": "weixin", "text": f"progress-{index}"})}}]}
                     reason = "tool_calls"
                 else:
+                    if route_reply:
+                        reply_completed.wait(10)
                     delta = {"content": "sending-complete"}
                     reason = "stop"
                 for change, finish in [(delta, None), ({}, reason)]:
@@ -81,7 +119,11 @@ class WeixinAutostartTests(unittest.TestCase):
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
-                self.wfile.write(data)
+                try:
+                    self.wfile.write(data)
+                except (BrokenPipeError, ConnectionResetError):
+                    if not stopping.is_set():
+                        raise
 
         with tempfile.TemporaryDirectory(prefix="sai-weixin-test-") as directory:
             root = Path(directory)
@@ -129,9 +171,24 @@ class WeixinAutostartTests(unittest.TestCase):
                 outputs = [message["content"] for request in requests for message in request["messages"]
                            if message["role"] == "tool"]
                 self.assertTrue(any('"ok": true' in text for text in outputs), outputs)
-                sent = [message for message in messages if message["item_list"][0].get("text_item", {}).get("text", "").startswith("progress")]
+                sent = [message for message in messages if "\n\nprogress-" in message["item_list"][0].get("text_item", {}).get("text", "")]
+                self.assertTrue(sent, messages)
+                for message in sent:
+                    text = message["item_list"][0]["text_item"]["text"]
+                    self.assertTrue(text.startswith("[Sai · "), text)
+                    self.assertIn("会话：", text)
+                    self.assertIn("回复此会话：回复 ", text)
+                self.assertTrue(list((root / "state/sai/gateways/weixin-origins").glob("*.json")))
+                if route_reply:
+                    self.assertTrue(reply_completed.is_set(), gateway_requests)
+                    self.assertTrue(gateway_requests)
+                    self.assertIn("recent-outbound-origins", json.dumps(gateway_requests[0]))
+                    envelopes = [json.loads(line) for file in (root / "state/sai").rglob("mesh.jsonl") for line in file.read_text().splitlines()]
+                    self.assertTrue(any(item["text"] == "继续处理" and item.get("correlation_id") == "weixin-reply" for item in envelopes), envelopes)
+                    self.assertFalse(any(call["function"]["name"] == "session_create" for request in gateway_requests for message in request["messages"] for call in (message.get("tool_calls") or [])))
                 return sent
             finally:
+                stopping.set()
                 if processes.exists():
                     for record in json.loads(processes.read_text()):
                         try:
@@ -157,6 +214,10 @@ class WeixinAutostartTests(unittest.TestCase):
         self.assertEqual(len(sent), 3)
         self.assertEqual([message["context_token"] for message in sent], ["old", "fresh", "fresh"])
         self.assertEqual(sent[0]["client_id"], sent[1]["client_id"])
+
+    def test_weixin_reply_is_forwarded_back_to_the_source_session(self):
+        """【微信网关】【来源回复】无参数，返回无；来源记录进入网关背景，探测后投递到原会话。"""
+        self.execute(False, route_reply=True)
 
 
 if __name__ == "__main__":
