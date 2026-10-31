@@ -44,9 +44,12 @@ class ActivityNotificationTests(unittest.TestCase):
                 terminal.send(b"FOLLOW-UP-CONTENT\r")
                 terminal.wait_for(lambda: "FOLLOW-UP-CONTENT" in terminal.text())
                 terminal.send(b"\x1b[1;5A")
-                terminal.pump(.2)
+                terminal.wait_for(lambda: "Queue manager (1)" in terminal.text())
+                self.assertTrue(any("FOLLOW-UP-CONTENT" in line and "Next turn" in line
+                                    for line in lines(terminal)))
                 terminal.send(b"\t")
-                terminal.wait_for(lambda: "request" in terminal.text())
+                terminal.wait_for(lambda: any("FOLLOW-UP-CONTENT" in line and "Steer" in line
+                                            for line in lines(terminal)))
                 terminal.send(b"\x1b")
                 terminal.pump(.2)
                 model.advance.set()
