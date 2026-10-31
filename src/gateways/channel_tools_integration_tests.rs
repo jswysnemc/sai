@@ -19,6 +19,7 @@ struct MockWeixin {
     url: String,
     received: mpsc::UnboundedReceiver<(HeaderMap, Value)>,
     task: tokio::task::JoinHandle<()>,
+    runtime: Option<crate::gateways::weixin_bot::runtime::RuntimeGuard>,
 }
 
 impl MockWeixin {
@@ -35,6 +36,7 @@ impl MockWeixin {
             url,
             received,
             task,
+            runtime: None,
         }
     }
 
@@ -44,6 +46,20 @@ impl MockWeixin {
         config.gateways.weixin.base_url = self.url.clone();
         config.gateways.weixin.token = "test-token".into();
         config
+    }
+
+    /// 【渠道消息】【运行模拟】参数 paths 为隔离路径，返回无；模拟已有网关以避免启动测试二进制。
+    fn mark_running(&mut self, paths: &SaiPaths) {
+        let client = WeixinBotClient::new(
+            self.url.clone(),
+            self.url.clone(),
+            "test-token".into(),
+            None,
+            false,
+        );
+        self.runtime = Some(
+            crate::gateways::weixin_bot::runtime::RuntimeGuard::acquire(paths, &client).unwrap(),
+        );
     }
 
     /// 【渠道消息】【测试接收】无参数；返回请求头及正文，超时直接报告测试失败。
@@ -67,7 +83,9 @@ impl Drop for MockWeixin {
 async fn unbound_session_reports_missing_weixin_context() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
-    let registry = crate::tools::builtin_registry_without_mcp(&AppConfig::default(), &paths);
+    let mut mock = MockWeixin::start().await;
+    mock.mark_running(&paths);
+    let registry = crate::tools::builtin_registry_without_mcp(&mock.config(), &paths);
     assert!(registry.contains("send_channel_message"));
     let error = registry
         .call("send_channel_message", r#"{"kind":"text","text":"hello"}"#)
@@ -88,6 +106,7 @@ async fn ordinary_and_cloned_registries_send_to_latest_weixin_context() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
     let mut mock = MockWeixin::start().await;
+    mock.mark_running(&paths);
     let config = mock.config();
     let registry = crate::tools::builtin_registry_without_mcp(&config, &paths);
     assert_eq!(
@@ -127,6 +146,7 @@ async fn generic_registration_keeps_the_bound_inbound_recipient() {
     let root = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(root.path());
     let mut mock = MockWeixin::start().await;
+    mock.mark_running(&paths);
     let config = mock.config();
     save_latest_channel_context(
         &paths,

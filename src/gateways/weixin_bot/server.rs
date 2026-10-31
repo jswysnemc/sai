@@ -45,9 +45,10 @@ pub(crate) async fn run_weixin_bot_server(
         config.token,
         config.bot_agent,
         config.verbose,
-    );
-    let http_client = reqwest::Client::new();
-    let agent_lock = Mutex::new(());
+    )
+    .with_delivery_paths(paths.clone());
+    let _runtime = super::runtime::RuntimeGuard::acquire(paths, &client)?;
+    let (inbound, mut workers) = super::inbound_dispatch::start(paths, &client);
     let mut updates_buf = None::<String>;
     println!(
         "{}",
@@ -64,6 +65,12 @@ pub(crate) async fn run_weixin_bot_server(
     ));
     loop {
         tokio::select! {
+            completed = workers.join_next() => {
+                match completed {
+                    Some(result) => return result?,
+                    None => bail!("Weixin inbound dispatcher stopped unexpectedly"),
+                }
+            }
             _ = tokio::signal::ctrl_c() => {
                 println!("{}", t(
                     "Weixin bot long-poll server stopped",
@@ -79,7 +86,7 @@ pub(crate) async fn run_weixin_bot_server(
                             .and_then(Value::as_str)
                             .map(ToOwned::to_owned)
                             .or(updates_buf);
-                        handle_updates(paths, &client, &http_client, &agent_lock, &response).await?;
+                        handle_updates(paths, &client, &inbound, &response).await?;
                     }
                     Err(err) => {
                         eprintln!("{}: {err:#}", t("Weixin getupdates failed", "微信 getupdates 失败"));
@@ -96,8 +103,7 @@ pub(crate) async fn run_weixin_bot_server(
 /// 参数:
 /// - `paths`: Sai 路径
 /// - `client`: 微信 iLink 客户端
-/// - `http_client`: HTTP 客户端
-/// - `agent_lock`: Agent 串行锁
+/// - `inbound`: 有界入站处理队列
 /// - `response`: getUpdates 响应 JSON
 ///
 /// 返回:
@@ -105,8 +111,7 @@ pub(crate) async fn run_weixin_bot_server(
 async fn handle_updates(
     paths: &SaiPaths,
     client: &WeixinBotClient,
-    http_client: &reqwest::Client,
-    agent_lock: &Mutex<()>,
+    inbound: &tokio::sync::mpsc::Sender<WeixinMessageEvent>,
     response: &Value,
 ) -> Result<()> {
     let ret = response.get("ret").and_then(Value::as_i64).unwrap_or(0);
@@ -128,17 +133,29 @@ async fn handle_updates(
         t("getupdates message count", "getupdates 收到消息数"),
         messages.len()
     ));
-    for message in messages {
-        if let Some(event) = parse_weixin_message(message) {
-            client.debug_log(format!(
-                "{} from={} media_count={} prompt_chars={}",
-                t("processing Weixin message", "处理微信消息"),
-                event.from_user_id,
-                event.media.len(),
-                event.prompt.chars().count()
-            ));
-            process_message_event(paths, client, http_client, agent_lock, event).await?;
-        }
+    let events = messages
+        .iter()
+        .filter_map(parse_weixin_message)
+        .collect::<Vec<_>>();
+    // 1. 【微信网关】【先保存凭证】批量入站先更新每个接收人的上下文，不等待模型执行结束
+    for event in &events {
+        let context =
+            ChannelContext::weixin(event.from_user_id.clone(), event.context_token.clone());
+        save_latest_channel_context(paths, &context)?;
+        ensure_gateway_session(paths, &context)?;
+    }
+    for event in events {
+        client.debug_log(format!(
+            "{} from={} media_count={} prompt_chars={}",
+            t("processing Weixin message", "处理微信消息"),
+            event.from_user_id,
+            event.media.len(),
+            event.prompt.chars().count()
+        ));
+        inbound
+            .send(event)
+            .await
+            .context("Weixin inbound dispatcher closed")?;
     }
     Ok(())
 }
@@ -154,7 +171,7 @@ async fn handle_updates(
 ///
 /// 返回:
 /// - 处理是否成功
-async fn process_message_event(
+pub(super) async fn process_message_event(
     paths: &SaiPaths,
     client: &WeixinBotClient,
     http_client: &reqwest::Client,
@@ -163,7 +180,6 @@ async fn process_message_event(
 ) -> Result<()> {
     let _guard = agent_lock.lock().await;
     let context = ChannelContext::weixin(event.from_user_id.clone(), event.context_token.clone());
-    save_latest_channel_context(paths, &context)?;
     if let Some(reply) = handle_gateway_command(paths, &event.prompt).await? {
         client
             .send_text(&event.from_user_id, &reply, event.context_token.as_deref())
@@ -284,7 +300,8 @@ async fn run_agent(
         crate::config::AgentSurface::Gateway,
     )?;
     super::mesh_tools::configure(&mut config);
-    let session_id = ensure_gateway_session(paths, context)?;
+    // 1. 【微信网关】【会话复用】入站接收已经持久化最新凭证，模型执行不能用旧消息覆盖它
+    let session_id = crate::gateways::session::gateway_session_id(context);
     let mut registry = build_tool_registry(&config, paths, AgentMode::Yolo)?;
     super::mesh_tools::register(&mut registry, paths, &session_id)?;
     register_channel_message_tool(
@@ -380,3 +397,7 @@ fn saved_image_to_data_url(saved: &SavedInboundMedia) -> Result<String> {
     let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
     Ok(format!("data:{content_type};base64,{encoded}"))
 }
+
+#[cfg(test)]
+#[path = "server_tests.rs"]
+mod tests;

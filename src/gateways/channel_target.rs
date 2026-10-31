@@ -141,6 +141,19 @@ fn resolve_weixin_context_target(
     to_user_id: String,
     context_token: Option<String>,
 ) -> Result<ActiveChannelTarget> {
+    let client = configured_weixin_client(paths, config)?;
+    Ok(ActiveChannelTarget::Weixin {
+        client,
+        to_user_id,
+        context_token,
+    })
+}
+
+/// 【渠道消息】【微信客户端】参数 paths/config 为运行路径与配置，返回无需接收人即可启动的客户端。
+pub(crate) fn configured_weixin_client(
+    paths: &SaiPaths,
+    config: &AppConfig,
+) -> Result<WeixinBotClient> {
     let weixin = &config.gateways.weixin;
     let base_url_config =
         non_empty_config(&weixin.base_url).unwrap_or_else(|| default_weixin_base_url().to_string());
@@ -152,18 +165,13 @@ fn resolve_weixin_context_target(
         let account = load_weixin_account(paths, non_empty_config(&weixin.account).as_deref())?;
         (account.base_url, account.cdn_base_url, account.token)
     };
-    let client = WeixinBotClient::new(
+    Ok(WeixinBotClient::new(
         base_url,
         cdn_base_url,
         token,
         non_empty_config(&weixin.bot_agent),
         false,
-    );
-    Ok(ActiveChannelTarget::Weixin {
-        client,
-        to_user_id,
-        context_token,
-    })
+    ))
 }
 
 /// 读取非空配置字符串。

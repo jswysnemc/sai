@@ -44,7 +44,7 @@ pub(crate) fn register_channel_message_tool(
     registry.register(
         ToolSpec::new(
             "send_channel_message",
-            "Send text or a local media file to a channel. In a gateway chat, channel=current preserves that chat's recipient. In a terminal, CLI or subagent, current/default sends to the most recent Weixin chat. Specify qq or weixin to use that channel's most recent chat. A recent chat must exist; this tool never guesses a recipient.",
+            "Send text or a local media file to Weixin (WeChat) or QQ. Weixin calls start the gateway if stopped and refresh cached recipient context before sending. A prepare-failed rejection is retried once only after new context arrives; no automatic login. In a gateway chat, current preserves the inbound recipient. In a terminal, CLI or subagent, current/default sends to the most recent Weixin chat. A recent chat must exist; never guess a recipient.",
             json!({
                 "type": "object",
                 "properties": {
@@ -105,6 +105,8 @@ async fn send_channel_message(
     let kind = required_string(&args, "kind")?;
     let text = optional_string(&args, "text").or_else(|| optional_string(&args, "caption"));
     let path = optional_string(&args, "path").map(|path| crate::tools::fs_path::expand_path(&path));
+    // 1. 【渠道消息】【按需启动】在读取最近目标前启动接收端，允许积压消息更新上下文
+    ensure_weixin_gateway(&paths, &config, &current, &channel).await?;
     let target = resolve_target(&paths, &config, current, &channel).await?;
     match target {
         ActiveChannelTarget::Unbound => bail!("channel target resolution returned no recipient"),
@@ -115,8 +117,39 @@ async fn send_channel_message(
             client,
             to_user_id,
             context_token,
-        } => send_weixin_message(client, to_user_id, context_token, &kind, text, path).await,
+        } => {
+            send_weixin_message(
+                client.with_delivery_paths(paths),
+                to_user_id,
+                context_token,
+                &kind,
+                text,
+                path,
+            )
+            .await
+        }
     }
+}
+
+/// 【渠道消息】【启动路由】参数为路径、配置、绑定目标及渠道，返回微信接收端启动结果。
+async fn ensure_weixin_gateway(
+    paths: &SaiPaths,
+    config: &AppConfig,
+    current: &ActiveChannelTarget,
+    channel: &str,
+) -> Result<()> {
+    let channel = channel.trim().to_ascii_lowercase();
+    let uses_current = matches!(channel.as_str(), "" | "current" | "default");
+    let is_weixin = matches!(channel.as_str(), "weixin" | "wechat")
+        || (uses_current && !matches!(current, ActiveChannelTarget::Qq { .. }));
+    if !is_weixin {
+        return Ok(());
+    }
+    let client = match current {
+        ActiveChannelTarget::Weixin { client, .. } => client.clone(),
+        _ => super::channel_target::configured_weixin_client(paths, config)?,
+    };
+    super::weixin_bot::lifecycle::ensure_running(paths, config, &client).await
 }
 
 /// 解析发送目标。

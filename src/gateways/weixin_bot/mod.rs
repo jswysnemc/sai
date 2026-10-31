@@ -1,8 +1,12 @@
 pub(crate) mod client;
+mod delivery;
 pub(crate) mod event;
+mod inbound_dispatch;
 pub(crate) mod inbound_media;
+pub(crate) mod lifecycle;
 pub(crate) mod login;
 pub(crate) mod media;
 mod mesh_tools;
 pub(crate) mod prompt;
+pub(crate) mod runtime;
 pub(crate) mod server;

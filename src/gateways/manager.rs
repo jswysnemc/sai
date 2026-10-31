@@ -142,6 +142,21 @@ pub(crate) async fn start_gateway(
     config: &AppConfig,
     gateway: ManagedGateway,
 ) -> Result<String> {
+    let _startup = if gateway == ManagedGateway::Weixin {
+        Some(super::weixin_bot::runtime::startup_lock(paths).await?)
+    } else {
+        None
+    };
+    start_gateway_unlocked(paths, config, gateway).await
+}
+
+/// 【网关管理】【锁内启动】参数 paths/config/gateway 为运行路径、配置和网关，返回启动回执。
+/// 微信调用方必须持有启动锁，避免检查状态和写入进程记录之间重复启动
+pub(crate) async fn start_gateway_unlocked(
+    paths: &SaiPaths,
+    config: &AppConfig,
+    gateway: ManagedGateway,
+) -> Result<String> {
     let records = refresh_gateway_processes(paths)?;
     if records
         .iter()

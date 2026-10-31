@@ -20,6 +20,7 @@ pub(crate) struct WeixinBotClient {
     token: String,
     bot_agent: String,
     verbose: bool,
+    delivery_paths: Option<crate::paths::SaiPaths>,
 }
 
 impl WeixinBotClient {
@@ -50,7 +51,21 @@ impl WeixinBotClient {
                 .filter(|value| !value.trim().is_empty())
                 .unwrap_or_else(|| DEFAULT_BOT_AGENT.to_string()),
             verbose,
+            delivery_paths: None,
         }
+    }
+
+    /// 【微信网关】【账号标识】无参数，返回账号与地址摘要，不保存或暴露原始登录凭证。
+    pub(super) fn fingerprint(&self) -> String {
+        blake3::hash(format!("{}\0{}", self.base_url, self.token).as_bytes())
+            .to_hex()
+            .to_string()
+    }
+
+    /// 【微信网关】【发送上下文】参数 paths 为会话状态路径，返回启用上下文刷新的客户端。
+    pub(crate) fn with_delivery_paths(mut self, paths: crate::paths::SaiPaths) -> Self {
+        self.delivery_paths = Some(paths);
+        self
     }
 
     /// 长轮询获取微信消息。
@@ -159,33 +174,25 @@ impl WeixinBotClient {
         context_token: Option<&str>,
     ) -> Result<()> {
         let client_id = new_client_id();
-        let response = self
-            .post_json(
-                "ilink/bot/sendmessage",
-                json!({
-                    "msg": {
-                        "from_user_id": "",
-                        "to_user_id": to_user_id,
-                        "client_id": client_id,
-                        "message_type": 2,
-                        "message_state": 2,
-                        "item_list": [
-                            { "type": 1, "text_item": { "text": text } }
-                        ],
-                        "context_token": context_token,
-                    },
-                    "base_info": self.base_info(),
-                }),
-                API_TIMEOUT,
-            )
-            .await?;
-        let ret = response.get("ret").and_then(Value::as_i64).unwrap_or(0);
-        if ret != 0 {
-            bail!(
-                "{} ret={ret}: {response}",
-                t("Weixin sendmessage failed", "微信 sendmessage 失败")
-            );
-        }
+        super::delivery::send(
+            self,
+            json!({
+                "msg": {
+                    "from_user_id": "",
+                    "to_user_id": to_user_id,
+                    "client_id": client_id,
+                    "message_type": 2,
+                    "message_state": 2,
+                    "item_list": [
+                        { "type": 1, "text_item": { "text": text } }
+                    ],
+                    "context_token": context_token,
+                },
+                "base_info": self.base_info(),
+            }),
+            self.delivery_paths.as_ref(),
+        )
+        .await?;
         self.debug_log(format!(
             "{} client_id={client_id}",
             t("sendmessage text sent", "sendmessage 文本发送成功")
@@ -209,31 +216,23 @@ impl WeixinBotClient {
         context_token: Option<&str>,
     ) -> Result<String> {
         let client_id = new_client_id();
-        let response = self
-            .post_json(
-                "ilink/bot/sendmessage",
-                json!({
-                    "msg": {
-                        "from_user_id": "",
-                        "to_user_id": to_user_id,
-                        "client_id": client_id,
-                        "message_type": 2,
-                        "message_state": 2,
-                        "item_list": [item],
-                        "context_token": context_token,
-                    },
-                    "base_info": self.base_info(),
-                }),
-                API_TIMEOUT,
-            )
-            .await?;
-        let ret = response.get("ret").and_then(Value::as_i64).unwrap_or(0);
-        if ret != 0 {
-            bail!(
-                "{} ret={ret}: {response}",
-                t("Weixin sendmessage failed", "微信 sendmessage 失败")
-            );
-        }
+        super::delivery::send(
+            self,
+            json!({
+                "msg": {
+                    "from_user_id": "",
+                    "to_user_id": to_user_id,
+                    "client_id": client_id,
+                    "message_type": 2,
+                    "message_state": 2,
+                    "item_list": [item],
+                    "context_token": context_token,
+                },
+                "base_info": self.base_info(),
+            }),
+            self.delivery_paths.as_ref(),
+        )
+        .await?;
         self.debug_log(format!(
             "{} client_id={client_id}",
             t("sendmessage media sent", "sendmessage 媒体发送成功")
@@ -271,7 +270,12 @@ impl WeixinBotClient {
     ///
     /// 返回:
     /// - 响应 JSON
-    async fn post_json(&self, endpoint: &str, payload: Value, timeout: Duration) -> Result<Value> {
+    pub(super) async fn post_json(
+        &self,
+        endpoint: &str,
+        payload: Value,
+        timeout: Duration,
+    ) -> Result<Value> {
         let url = format!("{}/{}", self.base_url, endpoint);
         self.debug_log(format!(
             "POST {endpoint} timeout={}s payload_bytes={}",

@@ -34,7 +34,7 @@ pub(crate) fn ensure_gateway_session(paths: &SaiPaths, context: &ChannelContext)
 ///
 /// 返回:
 /// - 稳定会话标识
-fn gateway_session_id(context: &ChannelContext) -> String {
+pub(crate) fn gateway_session_id(context: &ChannelContext) -> String {
     let (channel, target) = match context {
         ChannelContext::Qq {
             target_kind,
