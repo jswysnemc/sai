@@ -33,7 +33,11 @@ fn render_chafa_image(
     {
         command.arg("--size").arg(size);
     }
-    command.arg("--fg-only").arg("--threshold").arg("0.75");
+    command
+        .arg("--format=symbols")
+        .arg("--fg-only")
+        .arg("--threshold")
+        .arg("0.75");
     run_chafa(
         command,
         path,
