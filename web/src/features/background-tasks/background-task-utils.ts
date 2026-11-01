@@ -1,6 +1,18 @@
 import type { BackgroundTask } from "../../api/contracts";
 import { text, type Locale } from "../i18n/locale";
 
+export type BackgroundTaskFilter = "all" | "running" | "finished";
+
+/**
+ * 按状态筛选后台任务，不改变排序。
+ * @param tasks 已排序任务
+ * @param filter 当前筛选条件
+ * @returns 匹配条件的任务
+ */
+export function filterBackgroundTasks(tasks: readonly BackgroundTask[], filter: BackgroundTaskFilter): BackgroundTask[] {
+  return tasks.filter((task) => filter === "all" || (filter === "running" ? isBackgroundTaskRunning(task) : !isBackgroundTaskRunning(task)));
+}
+
 /**
  * 判断后台任务是否仍在运行。
  *
@@ -9,6 +21,19 @@ import { text, type Locale } from "../i18n/locale";
  */
 export function isBackgroundTaskRunning(task: BackgroundTask): boolean {
   return task.status === "running";
+}
+
+/**
+ * 按运行状态和启动时间排列任务，不修改原始列表。
+ * @param tasks 后台任务列表
+ * @returns 运行中优先、同组按启动时间倒序排列的新列表
+ */
+export function sortBackgroundTasks(tasks: readonly BackgroundTask[]): BackgroundTask[] {
+  return [...tasks].sort((left, right) =>
+    Number(isBackgroundTaskRunning(right)) - Number(isBackgroundTaskRunning(left))
+    || right.started_at - left.started_at
+    || left.id.localeCompare(right.id)
+  );
 }
 
 /**
@@ -21,10 +46,20 @@ export function isBackgroundTaskRunning(task: BackgroundTask): boolean {
 export function backgroundTaskStatusLabel(status: string, locale: Locale = "zh-CN"): string {
   return ({
     running: text(locale, "Running", "运行中"),
+    failed: text(locale, "Failed", "已失败"),
     exited: text(locale, "Exited", "已结束"),
     stopped: text(locale, "Stopped", "已停止"),
     timed_out: text(locale, "Timed out", "已超时")
   } as Record<string, string>)[status] ?? status;
+}
+
+/**
+ * 返回任务状态的紧凑标记，未知状态不伪装为正常结束。
+ * @param status 服务端真实状态
+ * @returns 紧凑状态标记
+ */
+export function backgroundTaskStatusBadge(status: string): string {
+  return ({ running: "RUN", exited: "EXIT", stopped: "STOP", timed_out: "TIME", failed: "FAIL" } as Record<string, string>)[status] ?? status;
 }
 
 /**

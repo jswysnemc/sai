@@ -2,6 +2,7 @@ import { loadTurnTree } from "./turn-tree-client";
 import { apiRequest } from "./api-request";
 import { usageApi } from "./usage-client";
 import { imageModelsApi, jevApi } from "./model-endpoint-client";
+import { backgroundTasksApi } from "./background-tasks-api";
 export { apiRequest } from "./api-request";
 export { bootstrapSession, fetchAuthMode, hasActiveSession, loginWithPassword } from "./auth-client";
 import type { BranchSwitchResult } from "./turn-tree-contracts";
@@ -66,8 +67,6 @@ import type {
   SshImportCandidate,
   UpdateCronJobRequest,
   UpdateAgentRuntimeRequest,
-  BackgroundTask,
-  BackgroundTaskOutput,
   TodoItem,
   TodoSnapshot,
   TodoStatus,
@@ -91,8 +90,6 @@ import type { GoalResponse, GoalUpdateRequest } from "./goal-contracts";
 import type { GitOperationAction, GitOperationOptions } from "./git-contracts";
 import type { McpToolInfo } from "./mcp-tool-contracts";
 import type { ManagedSkill, ManagedSkillDocument } from "./skill-contracts";
-
-
 export type SessionSidebarGroup = { id: string; name: string; color: string; session_ids: string[] };
 export type SessionSidebarIndex = {
   pinned: string[];
@@ -639,14 +636,7 @@ export const api = {
         body: JSON.stringify(key)
       })
   },
-  backgroundTasks: {
-    list: () => apiRequest<{ tasks: BackgroundTask[] }>("/api/background-tasks"),
-    output: (id: string, tailLines = 200) =>
-      apiRequest<BackgroundTaskOutput>(`/api/background-tasks/${encodeURIComponent(id)}/output?tail_lines=${tailLines}`),
-    stop: (id: string) => apiRequest<{ task: BackgroundTask; was_running: boolean }>(`/api/background-tasks/${encodeURIComponent(id)}/stop`, { method: "POST" }),
-    cleanup: (removeLogs = false) =>
-      apiRequest<{ removed: string[]; remaining: number }>(`/api/background-tasks?remove_logs=${removeLogs}`, { method: "DELETE" })
-  },
+  backgroundTasks: backgroundTasksApi,
   todos: {
     list: () => apiRequest<TodoSnapshot>("/api/todos"),
     create: (text: string) => apiRequest<TodoItem>("/api/todos", { method:"POST", body:JSON.stringify({ text }) }),

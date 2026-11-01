@@ -2,8 +2,8 @@ use super::super::app_state::WebAppState;
 use super::super::error::{WebError, WebResult};
 use crate::config::AppConfig;
 use crate::tools::command::{
-    cleanup_background_tasks_for_user, list_background_tasks_for_user,
-    read_background_task_output_for_user, stop_background_task_for_user,
+    cleanup_managed_background_tasks, list_managed_background_tasks,
+    read_managed_background_output, stop_background_task_for_user,
 };
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
@@ -23,6 +23,12 @@ struct CleanupQuery {
     remove_logs: bool,
 }
 
+#[derive(Debug, Default, Deserialize)]
+struct StopQuery {
+    #[serde(default)]
+    force: bool,
+}
+
 /// 返回后台任务管理路由。
 pub(super) fn routes() -> Router<WebAppState> {
     Router::new()
@@ -37,7 +43,7 @@ async fn list(State(state): State<WebAppState>) -> WebResult<Json<Value>> {
     // 1. 先迁移历史遗留的网关记录，网关进程只在网关管理页展示
     crate::gateways::process_control::migrate_legacy_gateway_tasks(&state.paths)
         .map_err(WebError::from)?;
-    let output = list_background_tasks_for_user(&state.paths, &config, true)
+    let output = list_managed_background_tasks(&state.paths, &config)
         .await
         .map_err(WebError::from)?;
     Ok(Json(parse_tool_output(output)?))
@@ -50,22 +56,22 @@ async fn output(
     Query(query): Query<OutputQuery>,
 ) -> WebResult<Json<Value>> {
     let config = load_config(&state)?;
-    let output = read_background_task_output_for_user(
-        &state.paths,
-        &config,
-        &id,
-        "all",
-        query.tail_lines.clamp(1, 2000),
-    )
-    .await
-    .map_err(WebError::from)?;
+    let output =
+        read_managed_background_output(&state.paths, &config, &id, query.tail_lines.clamp(1, 2000))
+            .await
+            .map_err(WebError::from)?;
     Ok(Json(parse_tool_output(output)?))
 }
 
-/// 停止指定后台任务，宽限期后仍未退出时由底层实现强制终止。
-async fn stop(State(state): State<WebAppState>, Path(id): Path<String>) -> WebResult<Json<Value>> {
+/// 【后台任务】【停止接口】停止指定任务，force 为真时跳过宽限期。
+/// 参数: state 为应用状态，id 为任务标识，query 为停止模式；返回: 真实任务状态。
+async fn stop(
+    State(state): State<WebAppState>,
+    Path(id): Path<String>,
+    Query(query): Query<StopQuery>,
+) -> WebResult<Json<Value>> {
     let config = load_config(&state)?;
-    let output = stop_background_task_for_user(&state.paths, &config, &id, false)
+    let output = stop_background_task_for_user(&state.paths, &config, &id, query.force)
         .await
         .map_err(WebError::from)?;
     Ok(Json(parse_tool_output(output)?))
@@ -77,7 +83,7 @@ async fn cleanup(
     Query(query): Query<CleanupQuery>,
 ) -> WebResult<Json<Value>> {
     let config = load_config(&state)?;
-    let output = cleanup_background_tasks_for_user(&state.paths, &config, query.remove_logs)
+    let output = cleanup_managed_background_tasks(&state.paths, &config, query.remove_logs)
         .await
         .map_err(WebError::from)?;
     Ok(Json(parse_tool_output(output)?))
@@ -103,6 +109,18 @@ fn default_tail_lines() -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 【后台任务测试】【停止模式】旧请求默认温和停止，显式参数才强制终止。
+    /// 参数: 无；返回: 无。
+    #[test]
+    fn stop_defaults_to_graceful() {
+        assert!(!serde_json::from_str::<StopQuery>("{}").unwrap().force);
+        assert!(
+            serde_json::from_str::<StopQuery>(r#"{"force":true}"#)
+                .unwrap()
+                .force
+        );
+    }
 
     #[test]
     fn parses_background_task_tool_output() {

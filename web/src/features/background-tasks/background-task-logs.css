@@ -1,0 +1,18 @@
+/* 【后台任务】【日志视口】行号属于当前缓冲区，保留换行并限制横向溢出 */
+.background-task-log-view { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
+.background-task-log-heading { display: flex; flex: none; align-items: center; gap: var(--space-xs); padding: var(--space-xs); border-bottom: 1px solid var(--line); }
+.background-task-log-heading strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); }
+.background-task-log-heading .ui-button { flex: none; font-size: var(--text-xs); }
+.background-task-log-toolbar { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-xs); padding: var(--space-xs) var(--space-sm); }
+.background-task-log-toolbar > div:last-child { display: flex; }
+.background-task-log-toolbar .segmented-control .ui-button { font-size: var(--text-2xs); min-height: 1.75rem; padding-inline: var(--space-sm); }
+.background-task-log-hint { flex: none; margin: 0; padding: 0 var(--space-sm) var(--space-xs); font-size: var(--text-2xs); color: var(--ink-soft); }
+.background-task-log-viewport { flex: 1; min-height: 0; overflow: auto; overflow-anchor: none; padding: var(--space-sm) 0; border-block: 1px solid var(--line); }
+.background-task-log-viewport:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--signal); }
+.background-task-log-viewport > p { padding-inline: var(--space-sm); color: var(--ink-soft); font-size: var(--text-xs); }
+.background-task-log-line { display: grid; grid-template-columns: 3rem minmax(0, 1fr); padding-right: var(--space-sm); font: 400 var(--text-xs)/1.65 var(--font-code); }
+.background-task-line-number { position: sticky; left: 0; padding-right: var(--space-sm); text-align: right; color: var(--ink-soft); user-select: none; }
+.background-task-log-line code { padding-left: var(--space-sm); border-left: 1px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.background-task-log-line.stderr code { color: var(--danger); }
+.background-task-stream-tag { color: var(--ink-soft); }
+.background-task-log-footer { flex: none; margin: 0; padding: var(--space-xs) var(--space-sm); font-size: var(--text-2xs); color: var(--ink-soft); }

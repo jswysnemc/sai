@@ -150,6 +150,15 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
     void actions.openSession(workspaceId, sessionId, workspace.active, session.active);
   };
 
+  /**
+   * 【后台任务】【侧栏导航】打开后台任务面板，并关闭移动端导航抽屉。
+   * @returns 无返回值
+   */
+  const openBackgroundTasks = () => {
+    window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_PANEL_EVENT, { detail: { tab: "tasks" } }));
+    onNavigate?.();
+  };
+
   const dialogs = (
     <>
       <ServerDirectoryDialog open={browserOpen} onClose={() => setBrowserOpen(false)} onSelect={actions.openDirectory} />
@@ -173,6 +182,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
           newSessionPending={actions.create.isPending}
           onOpenDirectory={() => setBrowserOpen(true)}
           onSearch={() => setSearchOpen(true)}
+          onBackgroundTasks={openBackgroundTasks}
           onAfterNavigate={onNavigate}
         />
         {dialogs}
@@ -197,6 +207,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
       <SessionSidebarActions
         onNewSession={() => actions.create.mutate(undefined)}
         onSearch={() => setSearchOpen(true)}
+        onBackgroundTasks={openBackgroundTasks}
         onScheduledTasks={() => { navigate("/cron-jobs"); onNavigate?.(); }}
         onSkills={() => { navigate("/settings/skills"); onNavigate?.(); }}
         createPending={actions.create.isPending}

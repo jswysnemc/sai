@@ -252,7 +252,7 @@ pub(super) async fn list_background_tasks(
 ///
 /// 返回:
 /// - 属于网关时返回 true
-fn is_gateway_owned_task(task: &BackgroundCommandTask) -> bool {
+pub(super) fn is_gateway_owned_task(task: &BackgroundCommandTask) -> bool {
     task.runtime_owner_kind.as_deref() == Some(OwnerKind::Gateway.as_str())
         || task.label.starts_with("gateway:")
 }

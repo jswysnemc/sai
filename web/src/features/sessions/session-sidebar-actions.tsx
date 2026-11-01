@@ -1,4 +1,4 @@
-import { Blocks, CalendarClock, MessageCirclePlus, Search } from "../../shared/ui/icons";
+import { Activity, Blocks, CalendarClock, MessageCirclePlus, Search } from "../../shared/ui/icons";
 import { Button } from "../../shared/ui/button/button";
 import { modKeyLabel } from "../../shared/mod-key";
 import { useI18n } from "../i18n/use-i18n";
@@ -7,22 +7,24 @@ type SessionSidebarActionsProps = {
   onNewSession: () => void;
   onSearch: () => void;
   onScheduledTasks: () => void;
+  onBackgroundTasks: () => void;
   onSkills: () => void;
   createPending?: boolean;
 };
 
 /**
- * 提供新任务、搜索、定时任务与技能的常用导航入口。
+ * 提供新任务、搜索、后台任务、定时任务与技能的常用导航入口。
  * @param props 导航回调和创建状态
  * @returns 侧栏常用操作列表
  */
-export function SessionSidebarActions({ onNewSession, onSearch, onScheduledTasks, onSkills, createPending = false }: SessionSidebarActionsProps) {
+export function SessionSidebarActions({ onNewSession, onSearch, onScheduledTasks, onBackgroundTasks, onSkills, createPending = false }: SessionSidebarActionsProps) {
   const { t } = useI18n();
   const modifier = modKeyLabel();
   return (
     <div className="sidebar-session-actions" role="toolbar" aria-label={t("Session actions", "会话操作")}>
       <Button variant="ghost" size="icon" onClick={onNewSession} disabled={createPending} title={createPending ? t("Creating", "正在创建") : `${t("New task", "新建任务")} ${modifier}+Shift+O`} aria-label={t("New task", "新建任务")}><MessageCirclePlus size={16} /></Button>
       <Button variant="ghost" size="icon" onClick={onSearch} title={`${t("Search", "搜索")} ${modifier}+K`} aria-label={t("Search", "搜索")}><Search size={16} /></Button>
+      <Button variant="ghost" size="icon" onClick={onBackgroundTasks} title={t("Background tasks", "后台任务")} aria-label={t("Background tasks", "后台任务")}><Activity size={16} /></Button>
       <Button variant="ghost" size="icon" onClick={onScheduledTasks} title={t("Scheduled tasks", "定时任务")} aria-label={t("Scheduled tasks", "定时任务")}><CalendarClock size={16} /></Button>
       <Button variant="ghost" size="icon" onClick={onSkills} title={t("Skills", "技能")} aria-label={t("Skills", "技能")}><Blocks size={16} /></Button>
     </div>
