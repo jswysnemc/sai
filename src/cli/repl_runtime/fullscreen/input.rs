@@ -45,6 +45,9 @@ impl ReplRuntime {
         if self.fullscreen.is_none() {
             return Ok(FullscreenEvent::Pass);
         }
+        if self.background_panel_event(event)? {
+            return Ok(FullscreenEvent::Consumed);
+        }
         let latest = self.coalesce_sidebar_drag(event)?;
         let event = latest.as_ref().unwrap_or(event);
         let cleared = matches!(event, Event::Key(key) if key.kind != KeyEventKind::Release)

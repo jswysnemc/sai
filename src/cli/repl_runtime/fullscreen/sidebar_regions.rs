@@ -23,6 +23,7 @@ pub(super) struct SidebarScrolls {
     pub(super) agents: usize,
     pub(super) git: usize,
     pub(super) todo: usize,
+    pub(super) background: usize,
 }
 
 impl SidebarScrolls {
@@ -33,6 +34,7 @@ impl SidebarScrolls {
             SidebarSection::Agents => self.agents,
             SidebarSection::Git => self.git,
             SidebarSection::Todo => self.todo,
+            SidebarSection::Background => self.background,
         }
     }
     /// 【终端侧栏】【局部滚动】仅修改目标区域的滚动位置，不移动标题或其他分组。
@@ -42,6 +44,7 @@ impl SidebarScrolls {
             SidebarSection::Agents => &mut self.agents,
             SidebarSection::Git => &mut self.git,
             SidebarSection::Todo => &mut self.todo,
+            SidebarSection::Background => &mut self.background,
         };
         let before = *offset;
         *offset = offset
@@ -59,6 +62,7 @@ impl SidebarScrolls {
             SidebarSection::Agents => &mut self.agents,
             SidebarSection::Git => &mut self.git,
             SidebarSection::Todo => &mut self.todo,
+            SidebarSection::Background => &mut self.background,
         };
         let target = index - region.content.start;
         if target < *offset {
@@ -83,6 +87,12 @@ pub(super) fn regions(document: &SidebarDocument, height: usize) -> Vec<SidebarR
             .find(|panel| panel.section == section)
             .map_or(0, |panel| panel.content.len())
     };
+    // 1. 【终端侧栏】【入口保留】后台任务最多占四行，矮屏仍为管理入口保留一行
+    let background = len(SidebarSection::Background)
+        .min(4)
+        .min((available / 3).max(1))
+        .min(available);
+    let available = available.saturating_sub(background);
     let agents = len(SidebarSection::Agents)
         .min(5)
         .min(available / 3 + usize::from(available > 0));
@@ -99,6 +109,7 @@ pub(super) fn regions(document: &SidebarDocument, height: usize) -> Vec<SidebarR
                 SidebarSection::Agents => agents,
                 SidebarSection::Git => git,
                 SidebarSection::Todo => todo,
+                SidebarSection::Background => background,
             };
             let region = SidebarRegion {
                 section: panel.section,

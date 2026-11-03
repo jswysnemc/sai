@@ -53,6 +53,10 @@ pub(super) mod selection;
 mod sidebar;
 mod sidebar_action;
 mod sidebar_agents_view;
+mod sidebar_background;
+#[cfg(test)]
+mod sidebar_background_tests;
+mod sidebar_background_view;
 pub(super) mod sidebar_control;
 #[cfg(test)]
 mod sidebar_control_tests;
@@ -80,8 +84,8 @@ pub(in crate::cli) use input::FullscreenEvent;
 #[cfg(test)]
 pub(super) use sidebar_widgets::without_background;
 
-use super::viewport::{InlineViewport, TerminalSize};
 use super::ReplRuntime;
+use super::viewport::{InlineViewport, TerminalSize};
 use crate::render::terminal_rows::paint_changed_rows;
 use anyhow::Result;
 use crossterm::cursor::Hide;
@@ -245,7 +249,11 @@ impl ReplRuntime {
         if self.fullscreen.is_none() {
             return Ok(());
         }
-        self.tick_sidebar_git();
+        self.tick_sidebar();
+        if self.background_panel_active() {
+            self.queue_background_panel()?;
+            return self.commit_frame();
+        }
         // 1. 【终端审查】【会话隔离】先退出旧会话审查，再计算新的聊天布局
         let viewing = self.transcript.viewing_subagent_id().map(str::to_string);
         if let Some(session) = self.fullscreen.as_mut() {
@@ -350,6 +358,7 @@ impl ReplRuntime {
                 &agents,
                 self.transcript.latest_todo_items(),
                 &session.sidebar.git.summary,
+                &self.background_panel,
                 sidebar_view::SidebarView {
                     viewing: self.transcript.viewing_subagent_id(),
                     compact: session.sidebar.sections.todo_collapsed,

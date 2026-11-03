@@ -153,6 +153,8 @@ impl ReplRuntime {
     /// 返回:
     /// - transcript 同步结果
     pub(in crate::cli) fn pause_for_permission_prompt(&mut self) -> Result<()> {
+        // 1. 【后台任务】【权限交接】审批和提问优先显示，任务写操作仍在后台完成
+        self.background_panel.dismiss();
         // 全屏视图回到底部，保证审批控件在可见区域
         self.follow_fullscreen_bottom();
         self.next_live_refresh = None;

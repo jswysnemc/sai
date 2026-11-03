@@ -62,7 +62,7 @@ impl ReplRuntime {
     pub(in crate::cli) fn process_idle_tick(&mut self) -> Result<bool> {
         let reflowed = self.maybe_reflow_due(false)?;
         let subagents = self.tick_subagents()?;
-        let sidebar = self.tick_sidebar_git();
+        let sidebar = self.tick_sidebar();
         if sidebar {
             self.paint_fullscreen()?;
         }

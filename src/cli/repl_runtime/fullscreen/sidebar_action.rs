@@ -7,6 +7,7 @@ pub(super) enum SidebarSection {
     Agents,
     Git,
     Todo,
+    Background,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,6 +15,7 @@ pub(super) enum SidebarAction {
     Toggle(SidebarSection),
     Panel(PanelAction),
     GitFile(usize),
+    Background(Option<usize>),
 }
 
 #[derive(Default)]
@@ -21,6 +23,7 @@ pub(super) struct SidebarSections {
     pub(super) agents_collapsed: bool,
     pub(super) git_collapsed: bool,
     pub(super) todo_collapsed: bool,
+    pub(super) background_collapsed: bool,
 }
 
 impl SidebarSections {
@@ -31,6 +34,7 @@ impl SidebarSections {
             SidebarSection::Agents => &mut self.agents_collapsed,
             SidebarSection::Git => &mut self.git_collapsed,
             SidebarSection::Todo => &mut self.todo_collapsed,
+            SidebarSection::Background => &mut self.background_collapsed,
         };
         *collapsed = !*collapsed;
     }

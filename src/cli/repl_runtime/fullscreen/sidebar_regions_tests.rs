@@ -1,7 +1,7 @@
 //! 待办列表可用高度与独立滚动的回归测试。
 
 use super::sidebar_action::SidebarSection;
-use super::sidebar_regions::{regions, SidebarPanel, SidebarScrolls};
+use super::sidebar_regions::{SidebarPanel, SidebarScrolls, regions};
 use super::sidebar_view::SidebarDocument;
 
 /// 【侧栏测试】【高度夹具】生成只包含区域范围的布局文档。
@@ -64,4 +64,31 @@ fn overflow_scrolls_locally_and_growth_reveals_all() {
     assert_eq!(tall[2].visible, 20);
     scrolls.scroll(&tall[2], 0);
     assert_eq!(scrolls.todo, 0);
+}
+
+/// 【侧栏测试】【后台滚动】后台命令使用有界区域，滚动时不改变其他分组偏移。
+/// 参数: 无；返回: 无。
+#[test]
+fn background_commands_scroll_independently_with_a_bounded_preview() {
+    let mut document = document([20, 50, 30]);
+    let header = document.panels.last().unwrap().content.end;
+    document.panels.push(SidebarPanel {
+        section: SidebarSection::Background,
+        header,
+        content: header + 1..header + 31,
+    });
+    for height in [8, 12, 16, 30, 60] {
+        let regions = regions(&document, height);
+        let background = regions.last().unwrap();
+        assert!((1..=4).contains(&background.visible));
+        assert!(background.top + background.visible < height - 1);
+        let mut scrolls = SidebarScrolls::default();
+        assert!(scrolls.scroll(background, 3));
+        assert_eq!((scrolls.agents, scrolls.git, scrolls.todo), (0, 0, 0));
+        assert_eq!(background.index_at(background.top, &scrolls), Some(header));
+        assert_eq!(
+            background.index_at(background.top + 1, &scrolls),
+            Some(header + 4)
+        );
+    }
 }

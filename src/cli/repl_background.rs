@@ -5,6 +5,7 @@ mod model;
 #[cfg(test)]
 mod model_tests;
 mod pager_view;
+mod panel;
 mod screen;
 mod service;
 mod view;
@@ -19,6 +20,9 @@ use crossterm::event::{self, Event, KeyEventKind};
 use model::TaskManager;
 use service::{Request, TaskService};
 use std::time::{Duration, Instant};
+
+pub(in crate::cli) use model::Task;
+pub(in crate::cli) use panel::EmbeddedTaskPanel;
 
 /// 【后台任务】【管理入口】运行紧凑任务面板，接口请求不阻塞键盘与终端尺寸更新。
 /// 参数: paths 为应用路径，config 为当前配置；返回: 终端交互结果。

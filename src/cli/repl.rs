@@ -95,6 +95,7 @@ pub(super) async fn run_repl(
     loop {
         // 【终端】【会话在线】切换后仅更新探测记录，输入始终在本终端执行
         runtime.bind_background_session(paths, state.session_id());
+        runtime.configure_background_tasks(paths, &config);
         if presence
             .as_ref()
             .is_none_or(|record| !record.matches(state.state_dir()))

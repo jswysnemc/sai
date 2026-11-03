@@ -5,8 +5,8 @@ use super::sidebar::Sidebar;
 use super::sidebar_action::{SidebarAction, SidebarSections};
 use super::sidebar_control::SidebarControl;
 use super::sidebar_git::GitSummary;
-use super::sidebar_palette::{fg, SidebarPalette};
-use super::sidebar_regions::{regions, SidebarPanel};
+use super::sidebar_palette::{SidebarPalette, fg};
+use super::sidebar_regions::{SidebarPanel, regions};
 use super::sidebar_style;
 use super::sidebar_widgets;
 use crate::render::transcript::{SubagentOverviewEntry, TodoSnapshotItem};
@@ -33,11 +33,12 @@ pub(super) struct SidebarView<'a> {
 }
 
 /// 【终端侧栏】【面板组合】组合独立领域面板，布局与动作使用同一份条目模型。
-/// 参数: agents 为子任务，todos 为待办，git 为快照，view 为排版配置；返回: 侧栏文档。
+/// 参数: agents 为子任务，todos 为待办，git 为快照，background 为后台任务，view 为排版配置；返回: 侧栏文档。
 pub(super) fn document(
     agents: &[SubagentOverviewEntry],
     todos: &[TodoSnapshotItem],
     git: &GitSummary,
+    background: &crate::cli::repl_background::EmbeddedTaskPanel,
     view: SidebarView<'_>,
 ) -> SidebarDocument {
     let mut rows = Vec::new();
@@ -60,6 +61,14 @@ pub(super) fn document(
         (
             super::sidebar_action::SidebarSection::Todo,
             super::sidebar_todo_view::rows(todos, view.compact, view.width, view.frame),
+        ),
+        (
+            super::sidebar_action::SidebarSection::Background,
+            super::sidebar_background_view::rows(
+                background,
+                view.sections.background_collapsed,
+                view.width,
+            ),
         ),
     ] {
         let header = rows.len();

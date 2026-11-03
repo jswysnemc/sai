@@ -4,8 +4,8 @@ use super::service::{Request, Update};
 use serde::Deserialize;
 use std::time::{Duration, Instant};
 
-#[derive(Clone, Debug, Deserialize)]
-pub(super) struct Task {
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub(in crate::cli) struct Task {
     pub id: String,
     pub label: String,
     pub command: String,

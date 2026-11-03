@@ -94,6 +94,7 @@ pub(super) struct ReplRuntime {
     desynced: bool,
     subagent_signature: Vec<(String, String, u64, u64)>,
     background_logs: background_logs::BackgroundLogWatcher,
+    background_panel: crate::cli::repl_background::EmbeddedTaskPanel,
     pending_input_events: VecDeque<Event>,
     /// 读取系统剪贴板并插入的键位；两个输入框共用
     paste_image_key: PasteImageKey,
@@ -253,6 +254,7 @@ impl ReplRuntime {
             desynced: false,
             subagent_signature: Vec::new(),
             background_logs: background_logs::BackgroundLogWatcher::default(),
+            background_panel: Default::default(),
             pending_input_events: VecDeque::new(),
             paste_image_key: PasteImageKey::default(),
             stream_draft: StreamComposerDraft::default(),

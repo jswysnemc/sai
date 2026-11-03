@@ -7,6 +7,7 @@ use crate::tools::command::{
 };
 use crate::{config::AppConfig, i18n::text as t, paths::SaiPaths};
 use anyhow::Result;
+use futures_util::FutureExt;
 use serde::Deserialize;
 use tokio::task::JoinHandle;
 
@@ -52,6 +53,11 @@ impl TaskService {
     /// 【后台任务】【请求启动】写操作前取消旧读取，不并发执行多个写操作。
     /// 参数: request 为操作，selected 为当前选择；返回: 无。
     pub fn start(&mut self, request: Request, selected: Option<String>) {
+        self.start_with_output(request, selected, true);
+    }
+    /// 【后台任务】【概览读取】侧栏只读取任务列表，打开管理器后才读取日志。
+    /// 参数: request 为操作，selected 为选择，output 决定是否读取日志；返回: 无。
+    pub fn start_with_output(&mut self, request: Request, selected: Option<String>, output: bool) {
         if self.mutating() {
             return;
         }
@@ -62,19 +68,24 @@ impl TaskService {
         let paths = self.paths.clone();
         let config = self.config.clone();
         self.pending = Some(tokio::spawn(async move {
-            execute(&paths, &config, request, selected).await
+            execute(&paths, &config, request, selected, output).await
         }));
     }
     /// 【后台任务】【请求完成】只等待已经完成的请求，保持键盘循环响应。
     /// 参数: 无；返回: 已完成的服务结果。
     pub async fn completed(&mut self) -> Option<Result<Update>> {
+        self.try_completed()
+    }
+    /// 【后台任务】【同步采样】仅提取已结束请求，供终端事件循环非阻塞刷新。
+    /// 参数: 无；返回: 已完成结果，尚未完成时为空。
+    pub fn try_completed(&mut self) -> Option<Result<Update>> {
         if !self.pending.as_ref().is_some_and(JoinHandle::is_finished) {
             return None;
         }
         let pending = self.pending.take().unwrap();
         Some(
             pending
-                .await
+                .now_or_never()?
                 .map_err(anyhow::Error::from)
                 .and_then(|result| result),
         )
@@ -94,12 +105,13 @@ impl Drop for TaskService {
 }
 
 /// 【后台任务】【接口适配】执行真实任务操作，再读取任务及输出尾部。
-/// 参数: paths/config 为运行环境，request 为操作，selected 为日志目标；返回: 最新状态。
+/// 参数: paths/config 为运行环境，request 为操作，selected 为日志目标，output 决定是否读取日志；返回: 最新状态。
 async fn execute(
     paths: &SaiPaths,
     config: &AppConfig,
     request: Request,
     selected: Option<String>,
+    output: bool,
 ) -> Result<Update> {
     let notice = match request {
         Request::Refresh => None,
@@ -134,7 +146,7 @@ async fn execute(
     let target = selected
         .filter(|id| tasks.iter().any(|task| &task.id == id))
         .or_else(|| tasks.first().map(|task| task.id.clone()));
-    let output = if let Some(id) = target {
+    let output = if let Some(id) = target.filter(|_| output) {
         let result = async {
             let raw = read_managed_background_output(paths, config, &id, 2000).await?;
             Ok::<Output, anyhow::Error>(serde_json::from_str(&raw)?)

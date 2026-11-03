@@ -89,7 +89,7 @@ pub(super) fn read_repl_input(
         // 先做一次零超时探测，终端里已有待读事件就走正常按键流程。
         let queued_event = runtime.pop_input_event();
         let user_pending = queued_event.is_some() || super::terminal_events::ready()?;
-        if !user_pending {
+        if !user_pending && !runtime.background_panel_active() {
             if let Some(wake) = external_events.take_ready() {
                 terminal_guard.finish(&mut stdout)?;
                 return Ok(Some(ReplInputEvent::Automatic {

@@ -252,6 +252,9 @@ impl ReplRuntime {
     /// 【终端】【输入重绘语言】在统一语言作用域内计算输入与底栏，并保留原有差异绘制。
     /// 参数: 无；返回: 当前帧组装结果。
     fn queue_composer_in_locale(&mut self) -> Result<()> {
+        if self.background_panel_active() {
+            return self.queue_background_panel();
+        }
         let viewport = self.drawing_viewport();
         // 1. 【终端审查】【输入区域】输入框仅在左侧聊天列内绘制，不横跨右侧审查区
         let viewport = if let Some(columns) = self.fullscreen_main_columns() {

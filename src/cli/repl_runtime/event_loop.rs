@@ -82,7 +82,7 @@ pub(crate) fn process_stream_tick(runtime: &mut ReplRuntime) -> Result<()> {
     runtime.observe_terminal_size(true)?;
     runtime.maybe_reflow_due(true)?;
     runtime.tick_live()?;
-    if runtime.tick_sidebar_git() {
+    if runtime.tick_sidebar() {
         runtime.paint_fullscreen()?;
     }
     runtime.clamp_queue_panel();

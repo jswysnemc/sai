@@ -2,7 +2,7 @@
 
 use super::sidebar::Sidebar;
 use super::sidebar_action::{SidebarAction, SidebarSection};
-use super::sidebar_palette::{fg, SidebarPalette};
+use super::sidebar_palette::{SidebarPalette, fg};
 use crate::cli::repl_runtime::panel_mouse::PanelAction;
 use crate::cli::repl_text::visible_width;
 use crate::render::ansi_clip::clip_ansi_to_width;
@@ -34,6 +34,7 @@ pub(super) fn footer(sidebar: &Sidebar, _height: usize) -> String {
                 SidebarSection::Agents => sidebar.sections.agents_collapsed,
                 SidebarSection::Git => sidebar.sections.git_collapsed,
                 SidebarSection::Todo => sidebar.sections.todo_collapsed,
+                SidebarSection::Background => sidebar.sections.background_collapsed,
             };
             if collapsed {
                 "Click to expand"
@@ -49,6 +50,7 @@ pub(super) fn footer(sidebar: &Sidebar, _height: usize) -> String {
         }
         .to_string(),
         Some(SidebarAction::GitFile(_)) => "Enter / click to inspect changes".into(),
+        Some(SidebarAction::Background(_)) => "Enter / click to manage tasks and logs".into(),
         Some(SidebarAction::Panel(PanelAction::Agent(None))) => {
             "Click to view main conversation".into()
         }

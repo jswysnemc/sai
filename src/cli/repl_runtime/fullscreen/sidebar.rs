@@ -5,7 +5,7 @@ use super::input::Effect;
 use super::layout::FullscreenLayout;
 use super::sidebar_action::{SidebarAction, SidebarSections};
 use super::sidebar_git::GitWatcher;
-use super::sidebar_regions::{regions, SidebarScrolls};
+use super::sidebar_regions::{SidebarScrolls, regions};
 use super::sidebar_view::{SidebarDocument, SidebarRow};
 use crate::cli::repl_runtime::ReplRuntime;
 use crossterm::event::{
@@ -152,7 +152,7 @@ impl ReplRuntime {
             || preview_changed
     }
 
-    /// 【终端侧栏】【定时唤醒】让空闲输入和流式输入均能刷新 Git 概览。
+    /// 【终端侧栏】【定时唤醒】让空闲输入和流式输入均能刷新 Git 与后台任务概览。
     /// 参数: 无；返回: 侧栏下一次刷新等待，隐藏时为空。
     pub(in crate::cli::repl_runtime) fn sidebar_wait(&self) -> Option<std::time::Duration> {
         let preview = self
@@ -164,10 +164,10 @@ impl ReplRuntime {
                 super::super::viewport::TerminalSize::current().cols,
             ))
             .then(|| self.fullscreen.as_ref().unwrap().sidebar.git.wait());
-        match (preview, git) {
-            (Some(preview), Some(git)) => Some(preview.min(git)),
-            (preview, git) => preview.or(git),
-        }
+        let background = self.background_panel.wait(self.sidebar_visible(usize::from(
+            super::super::viewport::TerminalSize::current().cols,
+        )));
+        [preview, git, background].into_iter().flatten().min()
     }
 
     /// 【终端侧栏】【鼠标隔离】侧栏滚轮和点击不传给会话滚动、选择或输入框。
@@ -239,6 +239,7 @@ impl ReplRuntime {
     /// 参数: action 为命中的动作；返回: 无。
     pub(super) fn apply_sidebar_action(&mut self, action: SidebarAction) {
         match action {
+            SidebarAction::Background(index) => self.background_panel.open(index),
             SidebarAction::Toggle(section) => self
                 .fullscreen
                 .as_mut()
