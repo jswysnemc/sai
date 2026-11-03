@@ -10,6 +10,44 @@ fn temporary_workspace_uses_canonical_system_directory() {
     assert_eq!(root.path(), root.path().canonicalize().unwrap());
 }
 
+/// 【文件补丁测试】【Windows 父级跳转】规范化工作目录不能在路径拼接时吞掉协议中的父级跳转。
+/// 参数: 无；返回: 无。
+#[cfg(windows)]
+#[tokio::test]
+async fn verbatim_workspace_rejects_parent_traversal_before_path_joining() {
+    use super::{ToolRegistry, json, register};
+
+    let root = test_support::tempdir();
+    let workspace = root.path().join("workspace");
+    std::fs::create_dir(&workspace).unwrap();
+    let mut registry = ToolRegistry::new();
+    register(&mut registry);
+    crate::runtime_cwd::scope(workspace.clone(), async {
+        for path in [
+            "../escape".to_string(),
+            "..\\escape".to_string(),
+            "nested/../escape".to_string(),
+            "nested\\..\\escape".to_string(),
+            format!("{}\\..\\escape", workspace.display()),
+            format!("{}\\nested\\..\\escape", workspace.display()),
+        ] {
+            let patch = format!("*** Begin Patch\n*** Add File: {path}\n+new\n*** End Patch");
+            let error = registry
+                .call("apply_patch", &json!({"patch": patch}).to_string())
+                .await
+                .unwrap_err();
+            assert!(
+                format!("{error:#}").contains("parent-directory traversal"),
+                "{error:#}"
+            );
+        }
+        assert!(!root.path().join("escape").exists());
+        assert!(!workspace.join("escape").exists());
+        assert!(!workspace.join("nested").exists());
+    })
+    .await;
+}
+
 /// 【文件补丁测试】【链接临时目录】通过含链接的系统目录创建工作区，同时拒绝补丁目标链接。
 /// 参数: 无；返回: 无。
 #[cfg(unix)]

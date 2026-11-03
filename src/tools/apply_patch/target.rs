@@ -44,9 +44,17 @@ impl CreatedDirectory {
 /// 【文件补丁】【路径边界】展开当前工作区路径，拒绝父目录跳转及非文件目标。
 /// 参数: path 为协议路径；返回: 无父目录跳转的绝对路径。
 pub(super) fn resolve(path: &str) -> Result<PathBuf> {
+    // 1. 【文件补丁】【原始路径】Windows 逐字路径拼接会消除父级跳转，必须先校验协议输入
+    let original = Path::new(path.trim());
+    ensure!(
+        !original.components().any(|part| part.as_os_str() == ".."),
+        "patch paths must not contain parent-directory traversal: {}",
+        original.display()
+    );
+    // 2. 【文件补丁】【展开路径】继续检查展开结果，拒绝工作目录或家目录引入父级跳转
     let path = crate::tools::fs_path::expand_path(path);
     ensure!(
-        path.is_absolute() && !path.components().any(|part| part == Component::ParentDir),
+        path.is_absolute() && !path.components().any(|part| part.as_os_str() == ".."),
         "patch paths must not contain parent-directory traversal: {}",
         path.display()
     );

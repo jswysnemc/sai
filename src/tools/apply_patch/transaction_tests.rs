@@ -50,7 +50,7 @@ async fn validation_failure_does_not_write_any_files_or_directories() {
         "*** Begin Patch\n*** Add File: a\n+overwrite\n*** End Patch",
         "*** Begin Patch\n*** Add File: ../escape\n+x\n*** End Patch",
     ] {
-        assert!(call(root.path(), patch).await.is_err());
+        assert!(call(root.path(), patch).await.is_err(), "{patch}");
         assert_eq!(
             std::fs::read_to_string(root.path().join("a")).unwrap(),
             "one\n"
