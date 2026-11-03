@@ -103,7 +103,10 @@ impl HistoryCell {
                 .iter_mut()
                 .find(|line| !spacing::is_visual_blank(line))
             {
-                *line = AnsiLine::new(crate::render::guide_symbols::replace(line.as_str(), icon));
+                *line = line.with_text(
+                    crate::render::guide_symbols::replace(line.as_str(), icon),
+                    0,
+                );
             }
         }
         // 【终端】【状态动效】运行中的命令、编辑和工具共用引导符动画
@@ -112,10 +115,10 @@ impl HistoryCell {
                 .iter_mut()
                 .find(|line| !spacing::is_visual_blank(line))
             {
-                *line = AnsiLine::new(crate::render::content_indent::animate_guide_marker(
-                    line.as_str(),
-                    frame,
-                ));
+                *line = line.with_text(
+                    crate::render::content_indent::animate_guide_marker(line.as_str(), frame),
+                    0,
+                );
             }
         }
         // 区块间距（交界处只保留一行空行）：

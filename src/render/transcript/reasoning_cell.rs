@@ -1,6 +1,6 @@
 use crate::render::activity_animation::render_activity_line;
 use crate::render::fold_text::{
-    fold_preview_lines, terminal_wrap_width, wrap_display_lines, FoldedDisplayLine,
+    fold_preview_lines, terminal_wrap_width, wrap_display_lines_for_copy, FoldedDisplayLine,
 };
 use crate::render::work_status::format_elapsed;
 use crate::render::ReasoningDisplayMode;
@@ -234,25 +234,27 @@ fn render_thinking_body_with_title(
     terminal_cols: usize,
     title: String,
 ) -> String {
+    // 1. 【终端】【思考标题】标题保持单行，避免窄终端将标题续行计入正文窗口
+    let title = crate::render::ansi_clip::clip_ansi_to_width(&title, terminal_cols.max(1), "…");
     let body = source.trim_end();
     if body.is_empty() {
         return title;
     }
-    // 1. 按「终端列数 - gutter」折行，再拼 `  └ `/`    `，保证最终行宽不超过终端
+    // 2. 【终端】【思考折行】按「终端列数 - gutter」折行，再拼 `  └ `/`    `，保证最终行宽不超过终端
     let wrapped = if body.contains("```") {
-        // 1. 【全屏代码】【思考展开】代码围栏先解析高亮，再按 ANSI 显示宽度折行
+        // 2. 【全屏代码】【思考展开】代码围栏先解析高亮，再按 ANSI 显示宽度折行
         let rendered = crate::render::expandable::render_expandable_body(
             crate::render::expandable::ExpandableBlockKind::Markdown,
             body,
         );
         super::AnsiLine::wrap_block(&rendered, thinking_body_wrap_width(terminal_cols))
             .into_iter()
-            .map(|line| line.as_str().to_string())
+            .map(|line| super::copy_line::tag(line.as_str(), line.copy.join_previous))
             .collect()
     } else {
-        wrap_display_lines(body, thinking_body_wrap_width(terminal_cols))
+        wrap_display_lines_for_copy(body, thinking_body_wrap_width(terminal_cols))
     };
-    // 2. 丢掉空段落：模型常在思考里插 `\n\n`，渲染成 gutter 空行会像「块内硬隔开」；
+    // 3. 【终端】【思考段落】丢掉空段落：模型常在思考里插 `\n\n`，渲染成 gutter 空行会像「块内硬隔开」；
     //    思考与后续正文的间距由 cell / live 的前空行负责，工具块不加前空行
     let lines: Vec<String> = wrapped
         .into_iter()
@@ -482,6 +484,24 @@ mod tests {
             continuation.starts_with("  │ "),
             "continuation should keep gutter indent: {continuation}"
         );
+    }
+
+    /// 【终端】【标题宽度回归】窄终端中的思考标题保持单行，正文紧接标题显示。
+    /// 参数: 无；返回: 无。
+    #[test]
+    fn narrow_thinking_title_does_not_wrap_into_the_body() {
+        let rendered = render_thinking_body_with_cols(
+            "thought-00\nthought-01",
+            true,
+            false,
+            Some(Duration::from_secs(12)),
+            18,
+        );
+        let lines = super::super::AnsiLine::wrap_block(&rendered, 18);
+        assert_eq!(lines.len(), 3);
+        assert!(lines[1].as_str().contains("thought-00"));
+        assert!(lines[2].as_str().contains("thought-01"));
+        assert!(strip_ansi_for_test(lines[0].as_str()).ends_with('…'));
     }
 
     #[test]

@@ -3,11 +3,17 @@
 //! 所有绘制仍经过 `ReplRuntime` 的既有入口（`sync_transcript`、`replay`、
 //! `queue_composer`），全屏时这些入口改走本模块的整屏绘制；输入编辑逻辑不变。
 
+#[cfg(test)]
+mod activity_interaction_tests;
+mod activity_scroll;
 mod activity_scroll_anchor;
 mod activity_viewport;
 mod activity_viewport_hints;
 mod activity_visibility;
 mod activity_window;
+#[cfg(test)]
+mod block_interaction_tests;
+mod block_scrollbar;
 mod bottom_button;
 mod git_preview;
 mod git_preview_code;
@@ -44,6 +50,7 @@ mod overview;
 mod paint;
 mod pane_header;
 mod pane_tail;
+mod paragraph_interaction;
 #[cfg(test)]
 mod presentation_tests;
 mod reasoning_viewport;
@@ -79,13 +86,14 @@ mod sidebar_widgets;
 mod state;
 #[cfg(test)]
 mod subagent_view_tests;
+mod wheel_boundary;
 
 pub(in crate::cli) use input::FullscreenEvent;
 #[cfg(test)]
 pub(super) use sidebar_widgets::without_background;
 
-use super::ReplRuntime;
 use super::viewport::{InlineViewport, TerminalSize};
+use super::ReplRuntime;
 use crate::render::terminal_rows::paint_changed_rows;
 use anyhow::Result;
 use crossterm::cursor::Hide;
@@ -500,6 +508,8 @@ mod runtime_tests;
 
 #[cfg(test)]
 mod copy_tests;
+#[cfg(test)]
+mod copy_wrap_tests;
 #[cfg(test)]
 mod todo_tests;
 

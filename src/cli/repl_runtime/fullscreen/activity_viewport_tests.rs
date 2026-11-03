@@ -146,13 +146,14 @@ fn activity_viewport_has_fixed_height_and_follows_latest() {
     assert_eq!(next.lines[27].as_str(), "ANSWER");
 }
 
-/// 【终端】【子视口测试】链内滚轮暂停独立跟随，到达边界后允许外层接管滚动。
+/// 【终端】【子视口测试】悬停后直接滚动内部并暂停跟随，位移结果与外层滚动独立。
 /// 参数: 无；返回: 无。
 #[test]
 fn activity_viewport_wheel_does_not_move_outer_scroll() {
     let mut state = FullscreenState::new();
     let document = state.activity.update(source(40), 30, 80, 30);
     state.apply_document(document, 8);
+    assert_eq!(state.activity.selected, None);
     let outer = state.scroll;
     assert_eq!(state.scroll_activity_at(3, -3), Some(true));
     assert_eq!(state.scroll, outer);
@@ -161,7 +162,7 @@ fn activity_viewport_wheel_does_not_move_outer_scroll() {
     state.apply_document(document, 8);
     assert_eq!(state.document.lines[3].as_str(), "STEP-14");
     assert_eq!(state.scroll_activity_at(3, -100), Some(true));
-    assert_eq!(state.scroll_activity_at(3, -3), None);
+    assert_eq!(state.scroll_activity_at(3, -3), Some(false));
     assert_eq!(state.scroll, outer);
     assert_eq!(state.scroll_activity_at(0, -3), None);
     assert_eq!(state.scroll_activity_at(3, 100), Some(true));
@@ -169,15 +170,15 @@ fn activity_viewport_wheel_does_not_move_outer_scroll() {
     assert_eq!(document.lines[3].as_str(), "STEP-27");
 }
 
-/// 【终端】【滚轮边界回归】首次滚轮命中链尾时，焦点变化不能吞掉交给外层的滚动。
+/// 【终端】【滚轮命中回归】普通悬停直接命中内部边界，选中执行链而不产生位移。
 /// 参数: 无；返回: 无。
 #[test]
-fn activity_viewport_first_wheel_at_boundary_bubbles() {
+fn activity_viewport_hover_at_boundary_selects_scrollable_chain() {
     let mut state = FullscreenState::new();
     let document = state.activity.update(source(40), 30, 80, 30);
     state.apply_document(document, 30);
     assert_eq!(state.activity.selected, None);
-    assert_eq!(state.scroll_activity_at(3, 3), None);
+    assert_eq!(state.scroll_activity_at(3, 3), Some(false));
     assert_eq!(state.activity.selected, Some(GROUP));
 }
 
@@ -329,10 +330,10 @@ fn activity_viewport_keyboard_ignores_offscreen_groups() {
     assert_eq!(state.navigate_activity(ActivityNavigation::Top, 10), None);
 }
 
-/// 【终端】【子视口测试】收起保留在顶部的标题后，分组标题与外层位置不发生跳动。
+/// 【终端】【子视口测试】收起步骤后保持所操作标题的屏幕位置。
 /// 参数: 无；返回: 无。
 #[test]
-fn activity_viewport_fold_keeps_group_anchor_instead_of_moving_conversation() {
+fn activity_viewport_fold_keeps_the_operated_step_anchor() {
     let mut state = FullscreenState::new();
     let document = state.activity.update(source(40), 30, 80, 30);
     state.apply_document(document, 10);
@@ -340,6 +341,10 @@ fn activity_viewport_fold_keeps_group_anchor_instead_of_moving_conversation() {
     state.expanded.insert(STEP);
     let (key, offset) = state.toggle_at(2).unwrap();
     let mut folded = source(2);
+    // 1. 【终端】【锚定范围】保留后续会话，使折叠后仍有足够滚动空间保持步骤位置
+    folded
+        .lines
+        .extend((0..20).map(|row| AnsiLine::new(format!("ANSWER-{row}"))));
     folded.paragraphs[1].start = 3;
     folded.paragraphs[1].control = 3;
     folded.paragraphs[1].expanded = false;
@@ -347,5 +352,5 @@ fn activity_viewport_fold_keeps_group_anchor_instead_of_moving_conversation() {
     state.apply_document(document, 10);
     state.restore_toggle_anchor(key, offset, 10);
     assert_eq!(state.document.activities[0].start, 1);
-    assert_eq!(state.scroll, 0);
+    assert_eq!(state.document.paragraphs[1].control - state.scroll, 2);
 }

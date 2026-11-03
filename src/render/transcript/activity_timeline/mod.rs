@@ -7,6 +7,7 @@ pub(in crate::render::transcript) mod cache;
 mod compact_tests;
 mod details;
 mod file_summary;
+mod fold_controls;
 mod group;
 mod node;
 mod older_steps;
@@ -14,7 +15,6 @@ mod older_steps;
 mod older_steps_tests;
 #[cfg(test)]
 mod presentation_request_tests;
-pub(crate) mod progress_bar;
 mod pulse;
 pub(in crate::render::transcript) mod recent_details;
 #[cfg(test)]

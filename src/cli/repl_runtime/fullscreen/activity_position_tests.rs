@@ -14,10 +14,10 @@ fn short_activity_has_the_same_geometry_before_and_after_completion() {
     assert_eq!(running.activities[0].footer, None);
 }
 
-/// 【终端】【点击位置测试】展开详情只占用标题下方空间，不把已可见标题搬到页面顶部。
+/// 【终端】【点击位置测试】展开详情保持标题位置，使用稳定高度预算。
 /// 参数: 无；返回: 无。
 #[test]
-fn expanding_history_preserves_outer_anchor_and_fits_remaining_space() {
+fn expanding_history_preserves_step_anchor_and_uses_stable_budget() {
     let mut state = FullscreenState::new();
     state.layout = Some(super::super::super::layout::FullscreenLayout::compute(
         84, 40, 5,
@@ -37,7 +37,7 @@ fn expanding_history_preserves_outer_anchor_and_fits_remaining_space() {
     state.restore_toggle_anchor(key, offset, 34);
     let region = &state.document.activities[0];
     assert_eq!(region.start - state.scroll, group_row);
-    assert!(region.end <= state.scroll + 34);
+    assert_eq!(region.end - region.start, 34);
 }
 
 /// 【终端】【子标题位置测试】展开第二个节点时保留前一个摘要，不把点击的标题移动到链首。
@@ -52,11 +52,11 @@ fn focused_child_keeps_its_offset_below_the_group() {
     document.paragraphs[1].start = 3;
     document.paragraphs[1].control = 3;
     views.update(document.clone(), 34, 80, 40);
-    views.focus_at(STEP, 1, Some(12));
+    views.focus_at(STEP, 1);
     let focused = views.update(document, 34, 80, 40);
     assert_eq!(focused.lines[2].as_str(), "OLDER");
     assert_eq!(focused.lines[3].as_str(), "TARGET");
-    assert_eq!(focused.activities[0].end - focused.activities[0].start, 14);
+    assert_eq!(focused.activities[0].end - focused.activities[0].start, 34);
 }
 
 /// 【终端】【位置夹具】在执行链前放置普通会话内容，以复现页面中部的展开操作。

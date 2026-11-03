@@ -33,6 +33,7 @@ impl ParagraphKey {
 
     /// 【终端】【当前步骤】区分默认展开的实时步骤与手动展开的历史节点。
     /// 参数: 无；返回: 是否为当前活动步骤键。
+    #[cfg(test)]
     pub(crate) fn is_active(self) -> bool {
         matches!(self.part, ParagraphPart::Active)
     }

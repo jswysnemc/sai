@@ -133,7 +133,12 @@ fn wheel_scrolls_and_new_output_is_flagged() {
 fn clicking_a_paragraph_toggles_it() {
     let mut runtime = runtime(2);
     runtime.enter_fullscreen().unwrap();
-    runtime.handle_fullscreen_event(&Event::Key(KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL))).unwrap();
+    runtime
+        .handle_fullscreen_event(&Event::Key(KeyEvent::new(
+            KeyCode::Home,
+            KeyModifiers::CONTROL,
+        )))
+        .unwrap();
     let session = runtime.fullscreen.as_ref().unwrap();
     let span = session.state.document.paragraphs[0].clone();
     assert!(span.expanded);
@@ -143,13 +148,24 @@ fn clicking_a_paragraph_toggles_it() {
     let state = &runtime.fullscreen.as_ref().unwrap().state;
     assert!(state.expanded.contains(&span.key));
     assert!(!state.document.paragraphs[0].expanded);
-    assert!(!state.document.lines.iter().any(|line| line.as_str().contains("turn-0-think-")));
+    assert!(!state
+        .document
+        .lines
+        .iter()
+        .any(|line| line.as_str().contains("turn-0-think-")));
     click(&mut runtime, 4, row);
     let state = &runtime.fullscreen.as_ref().unwrap().state;
     assert!(!state.expanded.contains(&span.key));
     assert!(state.document.paragraphs[0].expanded);
-    assert!(state.document.lines.iter().any(|line| line.as_str().contains("turn-0-think-3")));
-    assert_eq!(state.document.paragraphs[0].control, state.document.paragraphs[0].start);
+    assert!(state
+        .document
+        .lines
+        .iter()
+        .any(|line| line.as_str().contains("turn-0-think-3")));
+    assert_eq!(
+        state.document.paragraphs[0].control,
+        state.document.paragraphs[0].start
+    );
 }
 
 /// 点击概览标记跳到对应用户消息，浮动标题随之切换。
@@ -241,12 +257,13 @@ fn fullscreen_fold_hints_do_not_mention_ctrl_o() {
     // 1. 内联视图先渲染并写入缓存，提示为 Ctrl+O
     let inline = plain(&runtime.transcript.display_tail(80, &runtime.options));
     assert!(inline.contains("Ctrl+O"), "{inline}");
-    // 2. 全屏正文不出现 Ctrl+O，改为点击展开
+    // 2. 【终端】【思考位置】全屏正文使用双色引导线，不再附加重复行数提示
     runtime.enter_fullscreen().unwrap();
     let screen = plain(&runtime.fullscreen.as_ref().unwrap().state.document.lines);
     assert!(!screen.contains("Ctrl+O"), "{screen}");
+    assert!(screen.contains('│'), "{screen}");
     assert!(
-        screen.contains("1-5/30"),
+        !screen.contains("1-5/30") && !screen.contains('↕'),
         "{screen}"
     );
     // 3. 退出后内联视图仍是 Ctrl+O，缓存没有被全屏文案污染
@@ -365,7 +382,9 @@ fn dragging_inside_expanded_paragraph_never_collapses_it() {
     let mut runtime = runtime(2);
     runtime.enter_fullscreen().unwrap();
     let session = runtime.fullscreen.as_mut().unwrap();
-    let key = crate::render::transcript::ParagraphKey::whole(session.state.document.paragraphs[0].key.cell);
+    let key = crate::render::transcript::ParagraphKey::whole(
+        session.state.document.paragraphs[0].key.cell,
+    );
     session.state.expanded.insert(key);
     session.state.scroll = 0;
     session.state.follow = false;

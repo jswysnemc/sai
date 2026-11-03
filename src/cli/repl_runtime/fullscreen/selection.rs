@@ -61,7 +61,7 @@ impl Selection {
     }
 }
 
-/// 【全屏视图】【选区文本】按选区提取正文纯文本，行尾空白去除，行间用换行连接。
+/// 【全屏视图】【选区文本】提取正文纯文本，只在原始换行处插入换行符。
 ///
 /// 参数:
 /// - `lines`: 正文每行的 ANSI 文本，只读取选区覆盖的行
@@ -72,7 +72,8 @@ impl Selection {
 /// - 选中的文本
 pub(super) fn selected_text(lines: &[AnsiLine], selection: &Selection, width: usize) -> String {
     let (start, end) = selection.ordered();
-    let mut rows = Vec::new();
+    let mut output = String::new();
+    let mut previous_row = None;
     let end_row = end.row.saturating_add(1).min(lines.len());
     let Some(selected_lines) = lines.get(start.row..end_row) else {
         return String::new();
@@ -86,14 +87,32 @@ pub(super) fn selected_text(lines: &[AnsiLine], selection: &Selection, width: us
         let plain = crate::render::activity_animation::strip_ansi_for_test(line.as_str());
         // 2. 【全屏视图】【复制排版】去除正文基线空格，不裁掉代码或列表自身的相对缩进
         let margin = crate::render::content_indent::CONTENT_LEFT_INDENT;
-        let from = if plain.starts_with(&" ".repeat(margin)) {
-            from.max(margin)
+        let fallback = if line.copy.content_end.is_none() && plain.starts_with(&" ".repeat(margin))
+        {
+            margin
         } else {
-            from
+            0
         };
-        rows.push(slice_cols(&plain, from, to).trim_end().to_string());
+        let from = from.max(line.copy.content_start).max(fallback);
+        let to = to.min(line.copy.content_end.unwrap_or(to));
+        let text = slice_cols(&plain, from, to);
+        let continued = selected_lines.get(offset + 1).is_some_and(|next| {
+            next.copy.join_previous && selection.cols_on_row(row + 1, width).is_some()
+        });
+        // 3. 【全屏视图】【换行来源】连续排版续行直接拼接，真实换行和隐藏区间保留边界
+        if let Some(previous) = previous_row {
+            if line.copy.join_previous && row == previous + 1 {
+                if line.copy.space_before {
+                    output.push(' ');
+                }
+            } else {
+                output.push('\n');
+            }
+        }
+        output.push_str(if continued { &text } else { text.trim_end() });
+        previous_row = Some(row);
     }
-    rows.join("\n")
+    output
 }
 
 /// 按显示列截取纯文本；宽字符只要起点落在区间内就整字保留。

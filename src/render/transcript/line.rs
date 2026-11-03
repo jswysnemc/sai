@@ -8,6 +8,7 @@ const TAB_STOP_COLUMNS: usize = 4;
 pub(crate) struct AnsiLine {
     text: String,
     pub(crate) image: Option<crate::render::image_reference::ImageLine>,
+    pub(crate) copy: super::copy_line::CopyLine,
 }
 
 impl AnsiLine {
@@ -19,13 +20,23 @@ impl AnsiLine {
     /// 返回:
     /// - ANSI 终端行
     pub(crate) fn new(text: String) -> Self {
+        let (cleaned, copy) = super::copy_line::extract(&text);
+        let text = match cleaned {
+            std::borrow::Cow::Owned(cleaned) => cleaned,
+            std::borrow::Cow::Borrowed(_) => text,
+        };
         if !crate::render::image_reference::has_marker(&text) {
-            return Self { text, image: None };
+            return Self {
+                text,
+                image: None,
+                copy,
+            };
         }
         let (text, metadata) = crate::render::image_reference::extract(&text);
         Self {
             text,
             image: metadata.map(|(image, _)| image),
+            copy,
         }
     }
 
@@ -33,6 +44,7 @@ impl AnsiLine {
     /// 参数: text 为排版或裁切后的行，indent 为新增缩进；返回: 保留点击区域的行。
     pub(crate) fn with_text(&self, text: String, indent: usize) -> Self {
         let mut line = Self::new(text);
+        line.copy = self.copy.shifted(indent);
         line.image = self.image.clone().map(|mut image| {
             image.column += indent;
             image
@@ -122,8 +134,11 @@ impl AnsiLine {
     ) -> Vec<Self> {
         let mut lines = Vec::new();
         let mut image_rows = None;
+        let mut previous_tagged = false;
         for raw_line in text.split('\n') {
-            let (raw_line, metadata) = crate::render::image_reference::extract(raw_line);
+            let (raw_line, copy) = super::copy_line::extract(raw_line);
+            let tagged = matches!(raw_line, std::borrow::Cow::Owned(_));
+            let (raw_line, metadata) = crate::render::image_reference::extract(&raw_line);
             if let Some(metadata) = metadata {
                 image_rows = Some(metadata);
             }
@@ -144,6 +159,11 @@ impl AnsiLine {
                 continue;
             }
             let mut wrapped = wrap_line(raw_line, width, right_margin, continuation_indent, false);
+            if let Some(first) = wrapped.first_mut() {
+                first.copy.join_previous = copy.join_previous && previous_tagged;
+                first.copy.content_start = copy.content_start;
+            }
+            previous_tagged = tagged;
             if let Some((image, remaining)) = image_rows.as_mut() {
                 for line in &mut wrapped {
                     let mut image = image.clone();
@@ -210,6 +230,7 @@ fn wrap_line(
         0
     };
     let mut index = 0usize;
+    let mut spaces_before = vec![false];
 
     while index < text.len() {
         let ch = text[index..].chars().next().unwrap_or_default();
@@ -252,6 +273,7 @@ fn wrap_line(
                         &base_fill_sgr,
                         right_margin,
                     ));
+                    spaces_before.push(false);
                     (current, current_width) = continuation_line(
                         &active_sgr,
                         &base_fill_sgr,
@@ -277,6 +299,7 @@ fn wrap_line(
                 &base_fill_sgr,
                 right_margin,
             ));
+            spaces_before.push(false);
             (current, current_width) = continuation_line(
                 &active_sgr,
                 &base_fill_sgr,
@@ -286,6 +309,9 @@ fn wrap_line(
             );
             // 1. 正文断点恰为单个空格时跳过，续行从下一个词开始
             if drop_break_space && ch == ' ' && !text[index + 1..].starts_with(' ') {
+                if let Some(space_before) = spaces_before.last_mut() {
+                    *space_before = true;
+                }
                 index += 1;
                 continue;
             }
@@ -303,6 +329,16 @@ fn wrap_line(
             &base_fill_sgr,
             right_margin,
         ));
+    }
+    // 3. 【终端】【复制来源】仅同一原始行内的续行允许拼接，并记录补入的续行缩进
+    for (row, line) in lines.iter_mut().enumerate() {
+        line.copy.join_previous = row > 0;
+        line.copy.content_start = if row > 0 {
+            continuation_indent.min(width - 1)
+        } else {
+            0
+        };
+        line.copy.space_before = spaces_before.get(row).copied().unwrap_or(false);
     }
     lines
 }
@@ -375,7 +411,9 @@ fn finish_line(
             right_margin,
         ));
     }
-    AnsiLine::new(output)
+    let mut line = AnsiLine::new(output);
+    line.copy.content_end = Some(crate::render::ansi_clip::ansi_visible_width(text));
+    line
 }
 
 #[cfg(test)]

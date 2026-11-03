@@ -45,6 +45,31 @@ impl ReplRuntime {
         if self.fullscreen.is_none() {
             return Ok(FullscreenEvent::Pass);
         }
+        // 1. 【终端】【边界交互】离开正文或切换滚动目标时清除交接，其他输入开始新交互
+        if let Some(session) = self.fullscreen.as_mut() {
+            match event {
+                Event::Mouse(mouse)
+                    if matches!(
+                        mouse.kind,
+                        MouseEventKind::Moved
+                            | MouseEventKind::ScrollUp
+                            | MouseEventKind::ScrollDown
+                    ) =>
+                {
+                    let row = session
+                        .state
+                        .layout
+                        .filter(|layout| {
+                            layout.in_body(mouse.row) && mouse.column < layout.content_width
+                        })
+                        .map(|layout| {
+                            session.state.scroll + usize::from(mouse.row - layout.body_top)
+                        });
+                    session.state.retain_wheel_target_at(row);
+                }
+                _ => session.state.wheel_boundary.clear(),
+            }
+        }
         if self.background_panel_event(event)? {
             return Ok(FullscreenEvent::Consumed);
         }
@@ -288,13 +313,9 @@ impl ReplRuntime {
                 } else {
                     WHEEL_STEP as isize
                 };
-                if layout.in_body(mouse.row) && mouse.column < layout.content_width {
-                    state
-                        .scroll_activity_at(state.scroll + body_row, delta)
-                        .unwrap_or_else(|| state.scroll_by(delta, height))
-                } else {
-                    state.scroll_by(delta, height)
-                }
+                let row = (layout.in_body(mouse.row) && mouse.column < layout.content_width)
+                    .then_some(state.scroll + body_row);
+                state.wheel_at(row, delta, height)
             }
             // 1. 悬停：只在指向的概览标记或可展开段落变化时重绘
             MouseEventKind::Moved => {
@@ -308,6 +329,7 @@ impl ReplRuntime {
                     None
                 };
                 let before = state.hovered_paragraph().map(|span| span.key);
+                let before_row = state.pointer_row;
                 let before_button = session.bottom_button.is_some_and(|(start, end)| {
                     state.pointer_row == Some(height.saturating_sub(1))
                         && state
@@ -327,6 +349,7 @@ impl ReplRuntime {
                 });
                 let changed = hover != state.hover
                     || before != after
+                    || (before.is_some() && before_row != state.pointer_row)
                     || before_button != after_button
                     || header_hover != state.header_hover
                     || before_footer != after_footer;
@@ -408,7 +431,7 @@ impl ReplRuntime {
                                 session.pending_toggle = Some(anchor);
                                 true
                             }
-                            None => false,
+                            None => state.focus_activity_at(press.row),
                         }
                     }
                 }

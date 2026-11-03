@@ -166,11 +166,11 @@ fn fold_shell_command_lines(
     title: &str,
 ) -> Vec<crate::render::fold_text::FoldedDisplayLine> {
     use crate::render::fold_text::{
-        command_wrap_width_for_title, fold_preview_lines_tracked, wrap_display_lines,
+        command_wrap_width_for_title, fold_preview_lines_tracked, wrap_display_lines_for_copy,
     };
     // 命令行预览：按显示配置折叠，过长时收缩
     let wrap = command_wrap_width_for_title(title);
-    let wrapped = wrap_display_lines(command, wrap);
+    let wrapped = wrap_display_lines_for_copy(command, wrap);
     fold_preview_lines_tracked(&wrapped, expanded)
 }
 
@@ -190,7 +190,8 @@ fn append_command_display_line(
         FoldedDisplayLine::Omitted { omitted, skipped } => {
             // 被省略的行仍要推进高亮状态，尾部行的引号/注释上下文才正确
             for line in skipped {
-                let _ = highlight_code_line_continued("sh", line, highlight);
+                let (text, _) = super::transcript::copy_line::extract(line);
+                let _ = highlight_code_line_continued("sh", &text, highlight);
             }
             output.push_str(&crate::render::omitted_line::render_omitted_line(
                 *omitted, true,
@@ -198,7 +199,12 @@ fn append_command_display_line(
             output.push('\n');
         }
         FoldedDisplayLine::Line(line) => {
-            output.push_str(&highlight_code_line_continued("sh", line, highlight));
+            let (text, copy) = super::transcript::copy_line::extract(line);
+            let highlighted = highlight_code_line_continued("sh", &text, highlight);
+            output.push_str(&super::transcript::copy_line::tag(
+                &highlighted,
+                copy.join_previous,
+            ));
             output.push('\n');
         }
     }

@@ -1,5 +1,5 @@
 use super::activity_window::DocumentProjection;
-use crate::render::transcript::{AnsiLine, FullscreenDocument, ParagraphKey};
+use crate::render::transcript::{FullscreenDocument, ParagraphKey};
 use std::collections::HashMap;
 
 const BODY_ROWS: usize = 5;
@@ -16,16 +16,23 @@ struct Position {
 pub(super) struct ReasoningViewports {
     source: FullscreenDocument,
     positions: HashMap<usize, Position>,
-    width: usize,
 }
 
 impl ReasoningViewports {
+    /// 【终端】【思考边界】判断段落是否需要独立滚动，全文可见时交由主会话滚动。
+    /// 参数: `key` 为思考段落键；返回: 正文是否超过五行窗口。
+    pub(super) fn is_scrollable(&self, key: ParagraphKey) -> bool {
+        self.source.reasonings.iter().any(|region| {
+            region.key.cell == key.cell && region.end.saturating_sub(region.start + 1) > BODY_ROWS
+        })
+    }
+
     /// 【终端】【思考窗口】更新完整源文档；流式默认跟随，历史默认从开头阅读。
-    /// 参数: `source` 为源文档，`width` 为显示列数；返回: 每段正文至多五行的文档。
+    /// 参数: `source` 为源文档，`_width` 为调用方已完成排版的显示列数；返回: 每段正文至多五行的文档。
     pub(super) fn update(
         &mut self,
         source: FullscreenDocument,
-        width: usize,
+        _width: usize,
     ) -> FullscreenDocument {
         self.positions.retain(|cell, _| {
             source
@@ -36,7 +43,6 @@ impl ReasoningViewports {
                 || source.paragraphs.iter().any(|span| span.key.cell == *cell)
         });
         self.source = source;
-        self.width = width;
         self.project()
     }
 
@@ -64,15 +70,14 @@ impl ReasoningViewports {
     }
 
     /// 【终端】【思考裁切】标题固定，正文按五行窗口投影，点击与执行链范围同步映射。
-    /// 参数: 无；返回: 带位置提示的可见文档。
+    /// 参数: 无；返回: 带双色引导线的可见文档。
     pub(super) fn project(&mut self) -> FullscreenDocument {
         let mut projection = DocumentProjection::new(&self.source);
         let mut cursor = 0;
-        let mut hints = Vec::new();
+        let mut scrollbars = Vec::new();
         for region in &self.source.reasonings {
             let total = region.end.saturating_sub(region.start + 1);
             projection.copy(cursor..region.start + 1);
-            let title_row = projection.len().saturating_sub(1);
             let position = self.positions.entry(region.key.cell).or_insert(Position {
                 offset: 0,
                 follow: region.live,
@@ -94,32 +99,17 @@ impl ReasoningViewports {
                 position.offset.min(max)
             };
             let first = region.start + 1 + position.offset;
+            let body_start = projection.len();
             projection.copy(first..(first + BODY_ROWS).min(region.end));
-            if max > 0 {
-                hints.push((
-                    title_row,
-                    format!(
-                        " · {}-{}/{total} ↕",
-                        position.offset + 1,
-                        (position.offset + BODY_ROWS).min(total)
-                    ),
-                ));
-            }
+            scrollbars.push((body_start..projection.len(), position.offset, total));
             cursor = region.end;
         }
         projection.copy(cursor..self.source.lines.len());
         projection.remap_activities();
         let mut document = projection.finish();
-        for (row, hint) in hints {
-            let hint_width = unicode_width::UnicodeWidthStr::width(hint.as_str());
-            if self.width > hint_width + 12 {
-                let title = crate::render::ansi_clip::clip_ansi_to_width(
-                    document.lines[row].as_str(),
-                    self.width - hint_width,
-                    "…",
-                );
-                document.lines[row] = AnsiLine::new(format!("{title}\x1b[2m{hint}\x1b[0m"));
-            }
+        // 2. 【终端】【思考滚动条】只为投影正文着色，完整源文档保持原有样式
+        for (rows, offset, total) in scrollbars {
+            super::block_scrollbar::decorate(&mut document.lines[rows], offset, total);
         }
         document
     }

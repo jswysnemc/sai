@@ -21,6 +21,8 @@ pub(super) struct FullscreenState {
     pub(super) message_picker: super::message_picker::MessagePicker,
     pub(super) reasoning: super::reasoning_viewport::ReasoningViewports,
     pub(super) activity: super::activity_viewport::ActivityViewports,
+    /// 【终端】【边界状态】内部首次阻挡后，允许后续同向事件控制主会话
+    pub(super) wheel_boundary: super::wheel_boundary::WheelBoundary,
     /// 正文首行在文档中的行号
     pub(super) scroll: usize,
     /// 是否跟随最新输出（停在底部）
@@ -128,132 +130,6 @@ impl FullscreenState {
         self.scroll_to(target, body_height)
     }
 
-    /// 【终端】【链内输入】命中子视口时优先滚动链内列表；达到边界无法滚动时返回空值，允许外层主会话平滑接管滚动。
-    ///
-    /// 参数:
-    /// - `row`: 鼠标命中的文档物理行
-    /// - `delta`: 滚轮位移
-    ///
-    /// 返回:
-    /// - 若链内产生位移返回 Some(true)；未命中或已达边界返回 None 以触发冒泡回退
-    pub(super) fn scroll_activity_at(&mut self, row: usize, delta: isize) -> Option<bool> {
-        if self.scroll_reasoning_at(row, delta) {
-            return Some(true);
-        }
-        let key = self
-            .document
-            .activities
-            .iter()
-            .find(|region| region.scrollable && row >= region.start && row < region.end)?
-            .key;
-        let changed = self.scroll_activity(key, delta);
-        if changed {
-            Some(true)
-        } else {
-            // 链内已触顶或触底，返回 None 允许外部主会话继续滚动
-            None
-        }
-    }
-
-    /// 【终端】【思考滚轮】思考正文先消费滚轮，标题、其他步骤和输入框保持原位。
-    /// 参数: `row` 为文档行，`delta` 为偏移；返回: 是否滚动思考正文。
-    fn scroll_reasoning_at(&mut self, row: usize, delta: isize) -> bool {
-        let Some(key) = self
-            .document
-            .reasonings
-            .iter()
-            .find(|region| row >= region.start && row < region.end)
-            .map(|region| region.key)
-        else {
-            return false;
-        };
-        let Some(layout) = self.layout else {
-            return false;
-        };
-        if !self.reasoning.scroll(key, delta) {
-            return false;
-        }
-        self.document = self.activity.update(
-            self.reasoning.project(),
-            usize::from(layout.body_height),
-            usize::from(layout.content_width),
-            usize::from(layout.rows),
-        );
-        self.press = None;
-        self.selection = None;
-        self.copied = None;
-        true
-    }
-
-    /// 【终端】【链内键盘】优先浏览已操作的可见链，否则使用最近的可见链。
-    /// 参数: `navigation` 为翻页或首尾操作，`body_height` 为正文高度；返回: 是否命中并改变位置。
-    pub(super) fn navigate_activity(
-        &mut self,
-        navigation: ActivityNavigation,
-        body_height: usize,
-    ) -> Option<bool> {
-        let visible = |region: &&crate::render::transcript::ActivityRegion| {
-            region.scrollable
-                && region.end > self.scroll
-                && region.start < self.scroll + body_height
-        };
-        let key = self
-            .document
-            .activities
-            .iter()
-            .filter(visible)
-            .find(|region| Some(region.key) == self.activity.selected)
-            .or_else(|| self.document.activities.iter().filter(visible).next_back())?
-            .key;
-        let delta = match navigation {
-            ActivityNavigation::Top => isize::MIN,
-            ActivityNavigation::Latest => isize::MAX,
-            ActivityNavigation::Page(forward) => {
-                let page = self.activity.page(key) as isize;
-                if forward {
-                    page
-                } else {
-                    -page
-                }
-            }
-        };
-        let selected = self.activity.selected;
-        let changed = self.scroll_activity(key, delta);
-        Some(
-            self.reveal_activity(key, body_height) || changed || selected != self.activity.selected,
-        )
-    }
-
-    /// 【终端】【链内跟随】提示行单击恢复跟随，必要时显示被外层裁切的执行链。
-    /// 参数: `row` 为文档行，`body_height` 为正文可用高度；返回: 是否命中并改变位置。
-    pub(super) fn resume_activity_at(&mut self, row: usize, body_height: usize) -> Option<bool> {
-        let key = self
-            .document
-            .activities
-            .iter()
-            .find(|region| region.footer == Some(row))?
-            .key;
-        let selected = self.activity.selected;
-        let changed = self.scroll_activity(key, isize::MAX);
-        Some(
-            self.reveal_activity(key, body_height) || changed || selected != self.activity.selected,
-        )
-    }
-
-    /// 【终端】【链内状态】应用独立滚动并清理已失效选区。
-    /// 参数: `key` 为链键，`delta` 为偏移；返回: 位置是否改变。
-    fn scroll_activity(&mut self, key: ParagraphKey, delta: isize) -> bool {
-        let selected = self.activity.selected;
-        let changed = self.activity.scroll(key, delta);
-        if changed || selected != self.activity.selected {
-            self.document = self.activity.project();
-            self.press = None;
-            self.selection = None;
-            self.copied = None;
-        }
-        changed
-    }
-
     /// 滚动到指定首行，滚到底部时恢复跟随。
     ///
     /// 参数:
@@ -274,7 +150,7 @@ impl FullscreenState {
         changed
     }
 
-    /// 鼠标当前悬停的展开控件；正文行和拖选过程不显示悬停。
+    /// 鼠标当前悬停的折叠提示或展开区域，拖选过程中不显示悬停。
     ///
     /// 返回:
     /// - 被悬停的段落
@@ -286,7 +162,7 @@ impl FullscreenState {
         let row = self.scroll + row;
         self.document
             .paragraph_at(row)
-            .filter(|span| span.control == row)
+            .filter(|span| span.expanded || span.control == row)
     }
 
     /// 【终端】【跟随入口悬停】只把暂停跟随的页脚视为按钮，普通状态行不高亮。
@@ -353,80 +229,6 @@ impl FullscreenState {
             None if forward => self.scroll_to(usize::MAX, body_height),
             None => self.scroll_to(0, body_height),
         }
-    }
-
-    /// 切换段落展开状态，执行链使用分组标题锚定，其他内容使用段落标题。
-    ///
-    /// 折叠时只响应提示行；展开后整段均可收起，拖选由输入层优先处理。
-    ///
-    /// 参数:
-    /// - `row`: 被点击的文档行
-    ///
-    /// 返回:
-    /// - 被切换的段落键与点击时标题行在屏幕上的偏移；未命中为 None
-    pub(super) fn toggle_at(&mut self, row: usize) -> Option<(ParagraphKey, isize)> {
-        let span = self
-            .document
-            .paragraph_at(row)
-            .filter(|span| span.expanded || span.control == row)?
-            .clone();
-        if !self.expanded.remove(&span.key) {
-            self.expanded.insert(span.key);
-        }
-        let anchor = self.toggle_anchor_row(span.start);
-        let screen_offset = anchor as isize - self.scroll as isize;
-        let height_limit = self.layout.map(|layout| {
-            usize::from(layout.body_height)
-                .saturating_sub(screen_offset.max(0) as usize + 2)
-                .max(1)
-        });
-        self.activity.focus_at(
-            span.key,
-            span.control.saturating_sub(anchor + 1),
-            height_limit,
-        );
-        // 切换后停止跟随，否则展开的内容会被新输出推走
-        self.follow = false;
-        Some((span.key, screen_offset))
-    }
-
-    /// 【终端】【折叠锚定】节点展开收起只影响链内窗口，不推动外层会话。
-    /// 参数: `row` 为段落标题行；返回: 应保持屏幕位置的分组或段落标题行。
-    fn toggle_anchor_row(&self, row: usize) -> usize {
-        self.document
-            .activities
-            .iter()
-            .find(|region| row >= region.start && row < region.end)
-            .map(|region| region.start)
-            .unwrap_or(row)
-    }
-
-    /// 重排后让被切换段落的标题行停在原来的屏幕位置。
-    ///
-    /// 在长段正文中间点击收起时，标题行可能已滚出正文顶部；此时把收起后的段落
-    /// 放到正文顶部，而不是让它停在视野之外。
-    ///
-    /// 参数:
-    /// - `key`: 被切换的段落键
-    /// - `screen_offset`: 切换前标题行相对正文顶部的偏移
-    /// - `body_height`: 正文区行数
-    ///
-    /// 返回:
-    /// - 无
-    pub(super) fn restore_toggle_anchor(
-        &mut self,
-        key: ParagraphKey,
-        screen_offset: isize,
-        body_height: usize,
-    ) {
-        let Some(span) = self.document.paragraphs.iter().find(|span| span.key == key) else {
-            return;
-        };
-        let target =
-            (self.toggle_anchor_row(span.start) as isize - screen_offset.max(0)).max(0) as usize;
-        let max = self.max_scroll(body_height);
-        self.scroll = target.min(max);
-        self.follow = self.scroll == max && !span.expanded;
     }
 }
 

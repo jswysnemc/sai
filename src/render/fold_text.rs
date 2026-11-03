@@ -175,6 +175,24 @@ pub(crate) fn wrap_display_lines(text: &str, wrap_width: usize) -> Vec<String> {
     lines
 }
 
+/// 【终端】【预先折行】保存每个显示行的换行来源，折叠与着色后仍可正确复制。
+/// 参数: `text` 为原始文本，`wrap_width` 为正文显示宽度；返回: 带内部来源标记的显示行。
+pub(crate) fn wrap_display_lines_for_copy(text: &str, wrap_width: usize) -> Vec<String> {
+    text.lines()
+        .flat_map(|raw| {
+            let lines = if raw.is_empty() {
+                vec![String::new()]
+            } else {
+                wrap_display_lines(raw, wrap_width)
+            };
+            lines
+                .into_iter()
+                .enumerate()
+                .map(|(row, line)| crate::render::transcript::copy_line::tag(&line, row > 0))
+        })
+        .collect()
+}
+
 /// 对显示行做首尾折叠，中间插入省略标记。
 ///
 /// 参数:

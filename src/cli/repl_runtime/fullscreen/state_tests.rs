@@ -69,7 +69,7 @@ fn relative_jumps_walk_user_messages() {
     assert!(state.follow);
 }
 
-/// 只有折叠提示行能展开；重排后标题保持位置；展开后点击正文即可收起。
+/// 折叠提示支持展开，展开正文支持收起，重排后标题保持位置。
 #[test]
 fn toggling_keeps_the_paragraph_header_in_place() {
     let mut state = FullscreenState::new();

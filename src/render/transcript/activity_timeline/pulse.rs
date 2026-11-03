@@ -38,7 +38,7 @@ pub(super) fn apply_marker(lines: &mut [AnsiLine], marker: &str) {
             index += character.len_utf8();
         } else {
             text.replace_range(index..index + character.len_utf8(), marker);
-            *title = AnsiLine::new(text);
+            *title = title.with_text(text, 0);
             return;
         }
     }

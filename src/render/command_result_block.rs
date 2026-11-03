@@ -1,5 +1,5 @@
 use crate::render::fold_text::{
-    fold_preview_lines, terminal_wrap_width, wrap_display_lines, FoldedDisplayLine,
+    fold_preview_lines, terminal_wrap_width, wrap_display_lines_for_copy, FoldedDisplayLine,
 };
 use crate::render::terminal_text as t;
 use serde_json::Value;
@@ -534,7 +534,7 @@ pub(crate) fn sanitize_command_output(text: &str) -> String {
 /// - 最新输出文本与折叠行数
 fn limited_output_text(text: &str, line_limit: Option<usize>) -> Vec<FoldedDisplayLine> {
     // 1. 先按终端显示宽度折行，再按显示行折叠（避免超长单行挤占视野）
-    let display_lines = wrap_display_lines(text, terminal_wrap_width().saturating_sub(4));
+    let display_lines = wrap_display_lines_for_copy(text, terminal_wrap_width().saturating_sub(4));
     fold_preview_lines(&display_lines, line_limit.is_none())
 }
 

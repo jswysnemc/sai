@@ -11,7 +11,7 @@ pub(super) fn footer(
     follow: bool,
     width: usize,
 ) -> AnsiLine {
-    footer_with_focus(first, last, count, follow, width, false)
+    footer_with_focus(first, last, count, follow, width, false, true)
 }
 
 /// 【终端】【带焦点链内提示】当视口被键盘选中时突出焦点标记。
@@ -23,6 +23,7 @@ pub(super) fn footer(
 /// - `follow`: 是否跟随最新
 /// - `width`: 净宽
 /// - `focused`: 是否当前键盘选中
+/// - `active`: 是否仍在执行
 ///
 /// 返回:
 /// - 提示行 ANSI Line
@@ -33,26 +34,30 @@ pub(super) fn footer_with_focus(
     follow: bool,
     width: usize,
     focused: bool,
+    active: bool,
 ) -> AnsiLine {
     let position = format!("{first}–{last}/{count}");
     let action = if follow {
-        t("Following latest", "跟随最新步骤")
+        if active {
+            t("Following latest", "跟随最新步骤")
+        } else {
+            t("Completed · Latest", "已完成 · 最新")
+        }
     } else {
         t("Click to follow latest", "点击恢复跟随")
     };
     let compact = if follow {
-        t("Latest", "最新")
+        if active {
+            t("Latest", "最新")
+        } else {
+            t("Completed", "已完成")
+        }
     } else {
         t("Resume", "恢复跟随")
     };
-    let keyboard = t("Alt+PgUp/PgDn", "Alt+PgUp/PgDn");
-    let track = crate::render::transcript::activity_timeline::progress_bar::render_scroll_position(
-        first, last, count,
-    );
+    let keyboard = t("Wheel · Alt+PgUp/PgDn", "滚轮 · Alt+PgUp/PgDn");
     let candidates = [
-        format!("{position} {track} · {action} · {keyboard}"),
         format!("{position} · {action} · {keyboard}"),
-        format!("{position} {track} · {action}"),
         format!("{position} · {action}"),
         format!("{position} · {compact}"),
         position,
@@ -61,7 +66,7 @@ pub(super) fn footer_with_focus(
     let text = candidates
         .iter()
         .find(|text| unicode_width::UnicodeWidthStr::width(text.as_str()) <= budget)
-        .unwrap_or(&candidates[3]);
+        .unwrap_or(&candidates[1]);
     let prefix = if focused { "  ● " } else { "  " };
     AnsiLine::new(format!(
         "\x1b[2m{}\x1b[0m",
@@ -86,6 +91,8 @@ mod tests {
             let paused = footer(32, 40, 40, false, 100);
             assert!(paused.as_str().contains("Click to follow latest"));
             assert!(paused.as_str().contains("Alt+PgUp/PgDn"));
+            assert!(paused.as_str().contains("Wheel"));
+            assert!(!paused.as_str().contains("Alt+wheel"));
             assert!(footer(32, 40, 40, true, 100)
                 .as_str()
                 .contains("Following latest"));

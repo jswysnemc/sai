@@ -33,6 +33,6 @@ pub(super) fn display_lines(rendered: &str, content_width: usize) -> Vec<AnsiLin
     let prefix = " ".repeat(CONTENT_LEFT_INDENT);
     lines
         .into_iter()
-        .map(|line| AnsiLine::new(format!("{prefix}{}", line.as_str())))
+        .map(|line| line.with_text(format!("{prefix}{}", line.as_str()), CONTENT_LEFT_INDENT))
         .collect()
 }

@@ -4,6 +4,7 @@ pub(crate) mod activity_timeline;
 mod assistant_body;
 mod cell;
 pub(crate) mod command_output;
+pub(crate) mod copy_line;
 mod diff_cell;
 mod fullscreen_activity;
 mod fullscreen_parts;

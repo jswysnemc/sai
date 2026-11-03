@@ -1,6 +1,6 @@
 use super::activity_scroll_anchor::ActivityScrollAnchor;
 use super::activity_viewport_hints;
-use super::activity_window::{ActivityWindow, DocumentProjection};
+use super::activity_window::{body_height_budget, ActivityWindow, DocumentProjection};
 use crate::render::transcript::{ActivityRegion, AnsiLine, FullscreenDocument, ParagraphKey};
 use std::collections::{HashMap, HashSet};
 
@@ -8,14 +8,13 @@ use std::collections::{HashMap, HashSet};
 struct ScrollPosition {
     offset: usize,
     follow: bool,
-    height_limit: Option<usize>,
+    show_footer: bool,
 }
 
-/// 【终端】【点击锚点】保存节点在链内的位置，以及标题下方可以展开的空间。
+/// 【终端】【点击锚点】保存节点在链内的相对位置，详情使用稳定高度预算。
 struct ActivityFocus {
     key: ParagraphKey,
     body_offset: usize,
-    height_limit: Option<usize>,
 }
 
 impl Default for ScrollPosition {
@@ -25,7 +24,7 @@ impl Default for ScrollPosition {
         Self {
             offset: 0,
             follow: true,
-            height_limit: None,
+            show_footer: false,
         }
     }
 }
@@ -37,7 +36,6 @@ pub(super) struct ActivityViewports {
     positions: HashMap<ParagraphKey, ScrollPosition>,
     body_rows: usize,
     width: usize,
-    terminal_height: usize,
     focus: Option<ActivityFocus>,
     pub(super) selected: Option<ParagraphKey>,
 }
@@ -68,12 +66,7 @@ impl ActivityViewports {
             self.focus = None;
             return source;
         }
-        // 1. 【终端】【尺寸变化】只有真实终端缩放才释放点击时的高度限制，状态栏变化不重置阅读位置
-        if self.width != width || self.terminal_height != terminal_height {
-            for position in self.positions.values_mut() {
-                position.height_limit = None;
-            }
-        }
+        // 1. 【终端】【尺寸变化】仅按真实列宽重定位正文，点击坐标不参与高度预算
         if self.width != width {
             for region in &source.activities {
                 let Some(position) = self
@@ -99,14 +92,8 @@ impl ActivityViewports {
                 }
             }
         }
-        self.body_rows = if height < 4 {
-            0
-        } else {
-            // 【终端】【高度预算】以终端总高度计算八成，给分组标题和页脚留出空间
-            (terminal_height.saturating_mul(8) / 10).min(height.saturating_sub(2))
-        };
+        self.body_rows = body_height_budget(height, terminal_height);
         self.width = width;
-        self.terminal_height = terminal_height;
         self.source = source;
         if let Some(focus) = self.focus.take() {
             if let Some(span) = self
@@ -124,7 +111,6 @@ impl ActivityViewports {
                     self.selected = Some(region.key);
                     let height = self
                         .body_rows
-                        .min(focus.height_limit.unwrap_or(self.body_rows))
                         .min(region.end.saturating_sub(region.start + 1));
                     let pinned = usize::from(
                         ActivityWindow::at(&self.source, region, 0, height)
@@ -132,16 +118,13 @@ impl ActivityViewports {
                             .is_some(),
                     );
                     let position = self.positions.entry(region.key).or_default();
-                    position.height_limit = focus.height_limit;
                     if region.key != focus.key {
                         position.offset = span
                             .control
                             .saturating_sub(region.start + 1)
                             .saturating_sub(focus.body_offset.saturating_sub(pinned));
-                        position.follow = focus.key.is_active()
-                            && region.active
-                            && span.expanded
-                            && span.end == region.end;
+                        // 2. 【终端】【操作锚定】展开后暂停自动跟随，流式增长不移动所点击步骤
+                        position.follow = false;
                     }
                 }
             }
@@ -153,22 +136,13 @@ impl ActivityViewports {
     /// 参数: `key` 为节点键；返回: 无。
     #[cfg(test)]
     pub(super) fn focus(&mut self, key: ParagraphKey) {
-        self.focus_at(key, 0, None);
+        self.focus_at(key, 0);
     }
 
-    /// 【终端】【点击定位】记录原节点行位置，只在标题下方剩余空间中展开详情。
-    /// 参数: `key` 为节点键，`body_offset` 为节点相对链正文的行数，`height_limit` 为可用详情高度；返回: 无。
-    pub(super) fn focus_at(
-        &mut self,
-        key: ParagraphKey,
-        body_offset: usize,
-        height_limit: Option<usize>,
-    ) {
-        self.focus = Some(ActivityFocus {
-            key,
-            body_offset,
-            height_limit,
-        });
+    /// 【终端】【点击定位】记录原节点相对位置，展开内容向下延伸。
+    /// 参数: `key` 为节点键，`body_offset` 为节点相对链正文的行数；返回: 无。
+    pub(super) fn focus_at(&mut self, key: ParagraphKey, body_offset: usize) {
+        self.focus = Some(ActivityFocus { key, body_offset });
     }
 
     /// 【终端】【链内翻页】计算留有上下文重叠的页高。
@@ -217,16 +191,10 @@ impl ActivityViewports {
         changed
     }
 
-    /// 【终端】【链内高度】短内容不填充空白，展开时受原标题下方可用空间限制。
+    /// 【终端】【链内高度】短内容使用自然高度，长内容受稳定正文预算限制。
     /// 参数: `region` 为链范围；返回: 正文行数。
     fn height(&self, region: &ActivityRegion) -> usize {
         self.body_rows
-            .min(
-                self.positions
-                    .get(&region.key)
-                    .and_then(|position| position.height_limit)
-                    .unwrap_or(self.body_rows),
-            )
             .min(region.end.saturating_sub(region.start + 1))
     }
 
@@ -242,12 +210,16 @@ impl ActivityViewports {
         }
         let mut projection = DocumentProjection::new(&self.source);
         let mut cursor = 0;
+        let mut scrollbars = Vec::new();
         // 1. 【终端】【链内裁切】审批始终完整显示，普通链只在内容溢出时启用独立滚动
         for region in &self.source.activities {
             projection.copy(cursor..region.start);
             let mut visible = region.clone();
             visible.start = projection.len();
             if !region.scrollable {
+                if let Some(position) = self.positions.get_mut(&region.key) {
+                    position.show_footer = false;
+                }
                 projection.copy(region.start..region.end);
             } else {
                 projection.copy(region.start..region.start + 1);
@@ -271,14 +243,24 @@ impl ActivityViewports {
                 if let Some(context) = window.context {
                     projection.copy(context..context + 1);
                 }
+                let output_start = projection.len();
                 projection.copy(window.rows.clone());
+                if window.max > window.min {
+                    scrollbars.push((
+                        output_start..projection.len(),
+                        window.offset - window.min,
+                        window.max - window.min,
+                    ));
+                }
                 let pinned = usize::from(window.pinned_control.is_some());
                 let rendered = window.rows.len() + usize::from(window.context.is_some()) + pinned;
                 for _ in rendered..height {
                     projection.push(AnsiLine::new(String::new()));
                 }
                 visible.scrollable = window.max > window.min;
-                if visible.scrollable {
+                // 2. 【终端】【状态占位】页脚一旦出现就在展开期间保留一行，完成态只替换文案
+                position.show_footer |= visible.scrollable;
+                if position.show_footer {
                     let focused = self.selected == Some(region.key);
                     visible.footer = Some(projection.len());
                     projection.push(activity_viewport_hints::footer_with_focus(
@@ -288,6 +270,7 @@ impl ActivityViewports {
                         position.follow,
                         self.width,
                         focused,
+                        region.active,
                     ));
                 }
             }
@@ -296,7 +279,39 @@ impl ActivityViewports {
             cursor = region.end;
         }
         projection.copy(cursor..self.source.lines.len());
-        projection.finish()
+        let mut document = projection.finish();
+        // 3. 【终端】【输出引导线】控件和独立思考窗口保留各自样式，执行链只装饰实际输出
+        let controls = document
+            .paragraphs
+            .iter()
+            .map(|span| span.control)
+            .collect::<HashSet<_>>();
+        for (range, offset, max) in scrollbars {
+            let rows = range
+                .filter(|row| {
+                    !controls.contains(row)
+                        && !document
+                            .reasonings
+                            .iter()
+                            .any(|region| *row >= region.start && *row < region.end)
+                })
+                .map(|row| {
+                    let column = document
+                        .paragraph_at(row)
+                        .and_then(|span| document.lines.get(span.control))
+                        .map(|line| {
+                            crate::render::ansi_clip::strip_ansi(line.as_str())
+                                .chars()
+                                .take_while(|ch| *ch == ' ')
+                                .count()
+                        })
+                        .unwrap_or(0);
+                    (row, column)
+                })
+                .collect::<Vec<_>>();
+            super::block_scrollbar::decorate_output(&mut document.lines, &rows, offset, max);
+        }
+        document
     }
 }
 

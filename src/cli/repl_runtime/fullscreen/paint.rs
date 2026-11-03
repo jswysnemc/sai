@@ -81,7 +81,7 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
         crate::render::terminal_image::kitty_cell_pixel_height(),
     );
     let mut bottom_button = None;
-    // 4. 悬停在折叠提示或收起行上时只提亮该行；回到底部按钮被悬停时让位给按钮
+    // 4. 【终端】【区域悬停】提亮指针所在提示或展开正文行，回到底部按钮优先响应
     let hovered_span = state
         .hovered_paragraph()
         .filter(|_| !super::bottom_button::is_hovered(state, content_width, body_height));
@@ -95,8 +95,12 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
         };
         let document_row = state.scroll + row;
         let body = match hovered_span {
-            Some(span) if document_row == span.control && state.pointer_row == Some(row) => {
-                super::hover::tint_line(&super::guide_button::render(&body, span.expanded))
+            Some(span) if state.pointer_row == Some(row) => {
+                if document_row == span.control {
+                    super::hover::tint_line(&super::guide_button::render(&body, span.expanded))
+                } else {
+                    super::hover::tint_line(&body)
+                }
             }
             _ => body,
         };

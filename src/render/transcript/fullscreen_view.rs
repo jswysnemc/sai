@@ -70,7 +70,12 @@ impl FullscreenDocument {
     pub(crate) fn paragraph_at(&self, row: usize) -> Option<&ParagraphSpan> {
         self.paragraphs
             .iter()
-            .find(|span| row >= span.start && row < span.end)
+            .find(|span| span.control == row)
+            .or_else(|| {
+                self.paragraphs
+                    .iter()
+                    .find(|span| row >= span.start && row < span.end)
+            })
     }
 
     /// 查找控制行（折叠提示或收起行）恰好位于指定行的段落。
@@ -131,7 +136,7 @@ impl TranscriptStore {
             } else {
                 align_to_guide_column_with_width(source, padding)
             };
-            let indent = if line.image.is_some() && !in_activity {
+            let indent = if !in_activity {
                 let before = crate::render::ansi_clip::strip_ansi(source)
                     .chars()
                     .take_while(|ch| *ch == ' ')

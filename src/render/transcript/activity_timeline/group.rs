@@ -216,6 +216,8 @@ pub(super) fn render(
                 expanded: node.open && (!preview || expanded.contains(&key)),
                 control: start,
             });
+            let end = document.lines.len();
+            super::fold_controls::append(&mut document, key, start, end);
         }
     }
     document

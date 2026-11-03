@@ -3,6 +3,17 @@ use crate::render::transcript::{
 };
 use std::ops::Range;
 
+/// 【终端】【窗口预算】标题和状态各保留一行，正文预算与点击位置和运行状态无关。
+/// 参数: `available` 为正文区高度，`terminal` 为终端总高度；返回: 链内正文最大行数。
+pub(super) fn body_height_budget(available: usize, terminal: usize) -> usize {
+    const TITLE_ROWS: usize = 1;
+    const STATUS_ROWS: usize = 1;
+    if available < 4 {
+        return 0;
+    }
+    (terminal.saturating_mul(8) / 10).min(available.saturating_sub(TITLE_ROWS + STATUS_ROWS))
+}
+
 pub(super) struct ActivityWindow {
     pub(super) rows: Range<usize>,
     pub(super) context: Option<usize>,
@@ -115,6 +126,10 @@ impl<'a> DocumentProjection<'a> {
     /// 参数: `range` 为源行范围；返回: 无。
     pub(super) fn copy(&mut self, range: Range<usize>) {
         if !range.is_empty() {
+            let contiguous = self
+                .chunks
+                .last()
+                .is_some_and(|(previous, _)| previous.end == range.start);
             self.chunks.push((range.clone(), self.document.lines.len()));
             self.document.lines.extend(
                 super::image_window::window_lines(
@@ -125,7 +140,13 @@ impl<'a> DocumentProjection<'a> {
                 )
                 .into_iter()
                 .enumerate()
-                .map(|(row, text)| self.source.lines[range.start + row].with_text(text, 0)),
+                .map(|(row, text)| {
+                    let mut line = self.source.lines[range.start + row].with_text(text, 0);
+                    if row == 0 && !contiguous {
+                        line.copy.join_previous = false;
+                    }
+                    line
+                }),
             );
         }
     }
