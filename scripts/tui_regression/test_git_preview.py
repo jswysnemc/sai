@@ -144,6 +144,11 @@ class GitPreviewTests(unittest.TestCase):
                 right_before = [line[80:] for line in lines(terminal)]
                 # 4. 【终端审查】【聊天独立】聊天滚动不改变审查区，也不会关闭审查
                 click(terminal, 10, 6, kind=64)
+                terminal.pump(.2)
+                self.assertEqual([line[:80] for line in lines(terminal)], chat_before)
+                self.assertEqual([line[80:] for line in lines(terminal)], right_before)
+                # 5. 【终端审查】【边界交接】思考窗口位于顶部时先阻挡一次，继续滚轮再滚动聊天
+                click(terminal, 10, 6, kind=64)
                 terminal.wait_for(lambda: [line[:80] for line in lines(terminal)] != chat_before)
                 self.assertEqual([line[80:] for line in lines(terminal)], right_before)
                 terminal.send(b"\x1b[17~")
@@ -151,7 +156,7 @@ class GitPreviewTests(unittest.TestCase):
                 terminal.send(b"NEXT")
                 terminal.wait_for(lambda: "KEPT-DRAFTNEXT" in terminal.text())
                 self.assertIn("Review", lines(terminal)[1][80:])
-                # 5. 【终端审查】【缩放保持分栏】窄屏仍然左右分栏，不回退成浮动窗口
+                # 6. 【终端审查】【缩放保持分栏】窄屏仍然左右分栏，不回退成浮动窗口
                 terminal.resize(100, 26)
                 terminal.wait_for(lambda: "Review" in lines(terminal)[1][50:])
                 self.assertFalse(any("CODE-ROW" in line[:50] for line in lines(terminal)))

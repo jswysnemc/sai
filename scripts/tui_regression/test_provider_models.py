@@ -11,8 +11,11 @@ class ProviderModelTests(unittest.TestCase):
     """通过真实配置表单和 /model 验证新增、修改与导入路径。"""
 
     def open_providers(self, terminal):
-        """terminal 为终端会话；进入供应商列表，返回无。"""
-        terminal.send(b"/config\r")
+        """【供应商配置】【进入列表】terminal 为终端会话；等待配置命令草稿后进入供应商列表，返回无。"""
+        # 1. 【供应商配置】【输入同步】确认命令已经显示，避免首次输入与终端初始化交错
+        terminal.send(b"/config")
+        terminal.wait_for(lambda: "→ /config" in terminal.text())
+        terminal.send(b"\r")
         terminal.wait_for(lambda: "SAI CONFIG" in terminal.text())
         terminal.send(b"2\r")
         terminal.wait_for(lambda: "PROVIDERS & MODELS" in terminal.text())

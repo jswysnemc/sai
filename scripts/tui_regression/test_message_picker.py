@@ -4,6 +4,7 @@ import unittest
 
 from terminal import TerminalSession
 from test_fullscreen import TurnModel, click, lines
+from test_fullscreen_parts import idle
 
 
 class MessagePickerTests(unittest.TestCase):
@@ -15,13 +16,17 @@ class MessagePickerTests(unittest.TestCase):
             model.config(), columns=100, rows=30, arguments=["--lang", "en-US"]
         ) as terminal:
             for name in ["ALPHA", "BRAVO", "CHARLIE"]:
-                terminal.send(name.encode() + b"\r")
+                # 1. 【消息导航】【输入同步】上一轮回复显示后等待输入循环收尾，再确认草稿并提交
+                terminal.wait_for(lambda: idle(terminal))
+                terminal.send(name.encode())
+                terminal.wait_for(lambda: f"→ {name}" in terminal.text())
+                terminal.send(b"\r")
                 terminal.wait_for(lambda: f"ANSWER-{name}-7" in terminal.text(), timeout=15)
             terminal.send(b"\x0f")
             terminal.wait_for(lambda: "3/3" in lines(terminal)[0])
             terminal.send(b"KEPT-DRAFT")
             terminal.wait_for(lambda: "KEPT-DRAFT" in terminal.text())
-            # 1. 【消息导航】【鼠标跳转】展开列表后选择首条，面板关闭并跳到原消息
+            # 2. 【消息导航】【鼠标跳转】展开列表后选择首条，面板关闭并跳到原消息
             click(terminal, 3, 0)
             terminal.wait_for(lambda: "User messages (3)" in terminal.text())
             for index, name in enumerate(["ALPHA", "BRAVO", "CHARLIE"], 1):
@@ -30,12 +35,12 @@ class MessagePickerTests(unittest.TestCase):
             click(terminal, 5, row)
             terminal.wait_for(lambda: "1/3" in lines(terminal)[0] and "User messages" not in terminal.text())
             self.assertIn("KEPT-DRAFT", terminal.text())
-            # 2. 【消息导航】【键盘跳转】焦点移动和确认不提交输入框中的草稿
+            # 3. 【消息导航】【键盘跳转】焦点移动和确认不提交输入框中的草稿
             click(terminal, 3, 0)
             terminal.wait_for(lambda: "User messages (3)" in terminal.text())
             terminal.send(b"\x1b[B\r")
             terminal.wait_for(lambda: "2/3" in lines(terminal)[0] and "User messages" not in terminal.text())
-            # 3. 【消息导航】【缩放取消】窄屏保持列表可见，Esc 恢复当前会话及草稿
+            # 4. 【消息导航】【缩放取消】窄屏保持列表可见，Esc 恢复当前会话及草稿
             click(terminal, 3, 0)
             terminal.wait_for(lambda: "User messages (3)" in terminal.text())
             terminal.resize(42, 18)

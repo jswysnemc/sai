@@ -61,7 +61,14 @@ class ActivityScrollTests(unittest.TestCase):
                 click(terminal, 6, self.row_of(terminal, "Preparing"))
                 terminal.wait_for(lambda: "DETAIL-39" not in terminal.text())
                 self.assertIn("Preparing", terminal.text())
+                title = self.row_of(terminal, "Preparing")
                 click(terminal, 6, self.row_of(terminal, "Preparing"))
+                # 1. 【终端】【展开锚定】重新展开显示起始正文，保持步骤位置并暂停自动跟随
+                terminal.wait_for(lambda: "DETAIL-01" in terminal.text())
+                self.assertEqual(self.row_of(terminal, "Preparing"), title)
+                self.assertNotIn("DETAIL-39", terminal.text())
+                self.assertNotIn("Following latest", terminal.text())
+                terminal.send(b"\x1b[1;3F")
                 terminal.wait_for(lambda: "DETAIL-39" in terminal.text())
                 self.assertIn("Following latest", terminal.text())
 

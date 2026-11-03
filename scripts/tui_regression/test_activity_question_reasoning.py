@@ -22,7 +22,10 @@ class ActivityCompactContentTests(unittest.TestCase):
                 with TerminalSession(model.config(), columns=columns, rows=rows,
                                      arguments=["--lang", "en-US"],
                                      ready=lambda t: "Enter a message" in t.text()) as terminal:
-                    terminal.send(b"Inspect reasoning window\r")
+                    # 1. 【终端】【输入同步】先确认草稿已进入输入循环，再发送提交按键
+                    terminal.send(b"Inspect reasoning window")
+                    terminal.wait_for(lambda: "Inspect reasoning window" in terminal.text())
+                    terminal.send(b"\r")
                     terminal.wait_for(lambda: "REASON-19" in terminal.text())
                     title = self.row_of(terminal, "Thinking")
                     composer = self.row_of(terminal, "→")

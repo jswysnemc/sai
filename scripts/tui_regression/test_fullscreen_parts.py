@@ -136,7 +136,13 @@ class FullscreenPartsTests(unittest.TestCase):
                 terminal.wait_for(lambda: terminal.text(history=True).count("FINISHED") > turn, timeout=20)
             terminal.send(b"\x0f")
             terminal.wait_for(lambda: fullscreen_ready(terminal), timeout=5)
-            for _ in range(4):
+            composer = row_of(terminal, "→")
+            # 1. 【终端】【内部优先】先滚动工具正文，输入框不移动且主会话按钮不出现
+            mouse(terminal, 10, 5, kind=64, release=False)
+            terminal.wait_for(lambda: "Click to follow latest" in terminal.text())
+            self.assertEqual(row_of(terminal, "→"), composer)
+            # 2. 【终端】【边界交接】内部到达边界后继续滚轮，越过首次阻挡再滚动主会话
+            for _ in range(5):
                 mouse(terminal, 10, 5, kind=64, release=False)
             label = re.compile(r"↓ (Back to bottom|回到底部|New output|有新输出)")
             terminal.wait_for(lambda: any(label.search(line) for line in lines(terminal)), timeout=5)
