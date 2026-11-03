@@ -7,7 +7,7 @@ use serde_json::json;
 /// 参数: 无；返回: 无。
 #[tokio::test]
 async fn apply_patch_previews_and_results_use_the_edit_renderer() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::tools::apply_patch::test_support::tempdir();
     std::fs::write(root.path().join("old"), "removed-line\n").unwrap();
     crate::runtime_cwd::scope(root.path().into(), async {
         let patch =

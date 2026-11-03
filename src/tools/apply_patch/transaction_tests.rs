@@ -19,7 +19,7 @@ async fn call(root: &std::path::Path, patch: &str) -> Result<String> {
 /// 参数: 无；返回: 无。
 #[tokio::test]
 async fn applies_all_operations_and_emits_actual_diff() {
-    let root = tempfile::tempdir().unwrap();
+    let root = test_support::tempdir();
     std::fs::write(root.path().join("a"), "one\ntwo\n").unwrap();
     std::fs::write(root.path().join("remove"), "old\n").unwrap();
     let output = call(root.path(), "*** Begin Patch\n*** Add File: nested/new\n+new\n*** Update File: a\n*** Move to: moved\n@@\n-two\n+TWO\n*** Delete File: remove\n*** End Patch").await.unwrap();
@@ -42,7 +42,7 @@ async fn applies_all_operations_and_emits_actual_diff() {
 /// 参数: 无；返回: 无。
 #[tokio::test]
 async fn validation_failure_does_not_write_any_files_or_directories() {
-    let root = tempfile::tempdir().unwrap();
+    let root = test_support::tempdir();
     std::fs::write(root.path().join("a"), "one\n").unwrap();
     for patch in [
         "*** Begin Patch\n*** Add File: nested/new\n+new\n*** Update File: a\n@@\n-missing\n+new\n*** End Patch",
@@ -63,7 +63,7 @@ async fn validation_failure_does_not_write_any_files_or_directories() {
 /// 参数: 无；返回: 无。
 #[test]
 fn rolls_back_commit_failure_and_rejects_stale_snapshots() {
-    let root = tempfile::tempdir().unwrap();
+    let root = test_support::tempdir();
     std::fs::write(root.path().join("a"), "a\n").unwrap();
     std::fs::write(root.path().join("b"), "b\n").unwrap();
     crate::runtime_cwd::with_directory(root.path().into(), || {
@@ -99,7 +99,7 @@ fn rolls_back_commit_failure_and_rejects_stale_snapshots() {
 /// 参数: 无；返回: 无。
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn concurrent_patches_preserve_non_overlapping_updates() {
-    let root = tempfile::tempdir().unwrap();
+    let root = test_support::tempdir();
     std::fs::write(root.path().join("a"), "first\nsecond\n").unwrap();
     let (first, second) = tokio::join!(
         call(
@@ -124,8 +124,8 @@ async fn concurrent_patches_preserve_non_overlapping_updates() {
 #[cfg(unix)]
 #[tokio::test]
 async fn rejects_symlink_and_hardlink_aliases() {
-    let root = tempfile::tempdir().unwrap();
-    let outside = tempfile::tempdir().unwrap();
+    let root = test_support::tempdir();
+    let outside = test_support::tempdir();
     std::fs::write(outside.path().join("a"), "old\n").unwrap();
     std::os::unix::fs::symlink(outside.path(), root.path().join("link")).unwrap();
     assert!(
@@ -155,13 +155,14 @@ async fn rejects_symlink_and_hardlink_aliases() {
 /// 参数: 无；返回: 无。
 #[test]
 fn rollback_preserves_external_edits_and_reports_incomplete_recovery() {
-    let root = tempfile::tempdir().unwrap();
+    let root = test_support::tempdir();
     for name in ["a", "b"] {
         std::fs::write(root.path().join(name), "old\n").unwrap();
     }
     crate::runtime_cwd::with_directory(root.path().into(), || {
         let patch = "*** Begin Patch\n*** Update File: a\n@@\n-old\n+new\n*** Update File: b\n@@\n-old\n+new\n*** End Patch";
         let mut plan = prepare::prepare(&parser::parse(patch).unwrap()).unwrap();
+        let recovery_path = plan.files[0].target.path.display().to_string();
         let result = transaction::commit_with(&mut plan, &AtomicBool::new(false), |index| {
             if index == 1 {
                 std::fs::write(root.path().join("a"), "external\n")?;
@@ -171,7 +172,8 @@ fn rollback_preserves_external_edits_and_reports_incomplete_recovery() {
         });
         let error = result.unwrap_err().to_string();
         assert!(
-            error.contains("ROLLBACK INCOMPLETE") && error.contains("/a"),
+            error.contains("ROLLBACK INCOMPLETE")
+                && error.contains(&format!("{recovery_path}: file edit conflict:")),
             "{error}"
         );
         assert_eq!(
@@ -189,7 +191,7 @@ fn rollback_preserves_external_edits_and_reports_incomplete_recovery() {
 /// 参数: 无；返回: 无。
 #[test]
 fn cancellation_prevents_writes_and_updates_preserve_permissions() {
-    let root = tempfile::tempdir().unwrap();
+    let root = test_support::tempdir();
     crate::runtime_cwd::with_directory(root.path().into(), || {
         let operations =
             parser::parse("*** Begin Patch\n*** Add File: nested/new\n+new\n*** End Patch")
@@ -225,7 +227,7 @@ fn cancellation_prevents_writes_and_updates_preserve_permissions() {
 /// 参数: 无；返回: 无。
 #[test]
 fn lock_wait_is_bounded_and_target_order_is_normalized() {
-    let root = tempfile::tempdir().unwrap();
+    let root = test_support::tempdir();
     let a = root.path().join("a");
     let b = root.path().join("b");
     let held = FileEditLocks::acquire(&[a.clone(), b.clone()]).unwrap();
@@ -245,8 +247,8 @@ fn lock_wait_is_bounded_and_target_order_is_normalized() {
 #[cfg(unix)]
 #[test]
 fn directory_cleanup_does_not_follow_a_replaced_ancestor() {
-    let root = tempfile::tempdir().unwrap();
-    let outside = tempfile::tempdir().unwrap();
+    let root = test_support::tempdir();
+    let outside = test_support::tempdir();
     std::fs::create_dir(outside.path().join("deeper")).unwrap();
     crate::runtime_cwd::with_directory(root.path().into(), || {
         let operations = parser::parse(

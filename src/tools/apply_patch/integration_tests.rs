@@ -7,7 +7,7 @@ use crate::tools::ToolPermission;
 /// 参数: 无；返回: 无。
 #[tokio::test]
 async fn base_tool_is_registered_and_uses_existing_permission_policy() {
-    let root = tempfile::tempdir().unwrap();
+    let root = test_support::tempdir();
     let mut registry = ToolRegistry::new();
     crate::tools::default_tools::register(&mut registry);
     assert!(registry.contains("apply_patch"));
@@ -48,7 +48,7 @@ async fn base_tool_is_registered_and_uses_existing_permission_policy() {
 /// 参数: 无；返回: 无。
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn legacy_editor_waits_for_the_shared_patch_lock() {
-    let root = tempfile::tempdir().unwrap();
+    let root = test_support::tempdir();
     let path = root.path().join("a");
     std::fs::write(&path, "first\n").unwrap();
     let guard = FileEditLocks::acquire(std::slice::from_ref(&path)).unwrap();
@@ -68,7 +68,7 @@ async fn legacy_editor_waits_for_the_shared_patch_lock() {
 /// 参数: 无；返回: 无。
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn cancelled_legacy_writer_does_not_write_after_the_lock_is_released() {
-    let root = tempfile::tempdir().unwrap();
+    let root = test_support::tempdir();
     let path = root.path().join("a");
     std::fs::write(&path, "kept\n").unwrap();
     let guard = FileEditLocks::acquire(std::slice::from_ref(&path)).unwrap();

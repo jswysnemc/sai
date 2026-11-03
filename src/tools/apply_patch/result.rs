@@ -51,7 +51,7 @@ mod tests {
     /// 参数: 无；返回: 无。
     #[test]
     fn apply_patch_headers_preserve_operations_independently_of_content() {
-        let root = tempfile::tempdir().unwrap();
+        let root = super::super::test_support::tempdir();
         for name in ["old", "clear", "empty"] {
             std::fs::write(
                 root.path().join(name),

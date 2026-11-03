@@ -6,9 +6,13 @@ mod model;
 mod parser;
 #[cfg(test)]
 mod parser_tests;
+#[cfg(test)]
+mod path_compatibility_tests;
 mod prepare;
 mod result;
 mod target;
+#[cfg(test)]
+pub(crate) mod test_support;
 mod text;
 mod transaction;
 #[cfg(test)]
