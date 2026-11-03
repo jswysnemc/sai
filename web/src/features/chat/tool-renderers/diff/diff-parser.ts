@@ -46,7 +46,13 @@ export function parseDiff(source: string): DiffFile[] {
 
   for (const line of lines) {
     // Codex patch 的边界标记可能紧跟在上一段 hunk 正文之后，不能落入上下文行
-    if (line.startsWith("*** Begin Patch") || line.startsWith("*** End Patch")) continue;
+    if (line.startsWith("*** Begin Patch") || line.startsWith("*** End Patch") || line === "*** End of File") continue;
+    if (line.startsWith("*** Move to: ") && current) {
+      current.oldPath = current.path;
+      current.path = line.slice("*** Move to: ".length).trim();
+      current.status = "renamed";
+      continue;
+    }
 
     // 1. 文件起始标记在任何状态下都要识别：多文件补丁里它紧跟上一个文件的正文
     const codexHead = CODEX_FILE.exec(line);
@@ -64,6 +70,15 @@ export function parseDiff(source: string): DiffFile[] {
     // 2. 其余文件头只在 header 状态识别，避免吃掉正文
     if (state === "header") {
       if (current && consumeFileMetadata(current, line)) continue;
+      // 1. 【文件补丁】【空文件语义】无正文时也根据空侧文件头保留新增和删除状态
+      if (current && line === "--- /dev/null") {
+        current.status = "added";
+        continue;
+      }
+      if (current && line === "+++ /dev/null") {
+        current.status = "deleted";
+        continue;
+      }
       if (line.startsWith("+++ ")) {
         const path = stripPathPrefix(line.slice(4));
         const active = current;

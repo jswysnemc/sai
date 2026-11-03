@@ -303,7 +303,10 @@ impl Agent {
                         messages.push(ChatMessage::tool(call.id, output));
                         continue;
                     }
-                    if matches!(call.function.name.as_str(), "str_replace" | "write_file") {
+                    if matches!(
+                        call.function.name.as_str(),
+                        "str_replace" | "write_file" | "apply_patch"
+                    ) {
                         if let Err(error) = edit_guard::ensure_edit_target_was_read(self, &call) {
                             let output = format!("tool error: {error}");
                             repeat_guard

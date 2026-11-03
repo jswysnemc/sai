@@ -5,9 +5,9 @@ use super::colors::{
 use super::intraline::intraline_pair;
 use super::model::preview_from_arguments;
 use crate::render::content_indent::{
-    clear_right_margin, indent_diff_for_cli, indent_diff_for_transcript, DIFF_BLOCK_INSET,
+    DIFF_BLOCK_INSET, clear_right_margin, indent_diff_for_cli, indent_diff_for_transcript,
 };
-use crate::render::status_style::{tool_bullet, ToolHealth};
+use crate::render::status_style::{ToolHealth, tool_bullet};
 use crate::render::style::TOOL_BULLET;
 use crate::tools::file_change_model::{AppliedPatch, FileChange, LineChange, LineChangeKind};
 use anyhow::Result;
@@ -323,6 +323,9 @@ pub(crate) fn render_unified_patch_for_transcript(
 fn render_file_change(change: &FileChange) -> String {
     match change {
         FileChange::Add { path, content } => render_added_file(path, content),
+        FileChange::Delete { path, content } => {
+            render_update_lines(path, &crate::tools::file_diff::line_changes(content, ""))
+        }
         FileChange::Update { path, lines, .. } => render_update_lines(path, lines),
     }
 }

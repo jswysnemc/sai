@@ -33,7 +33,7 @@ export function ToolIcon({ name, backgroundTask = false }: { name: string; backg
   if (["context_status", "compress_context", "search_context", "restore_context"].includes(name)) return <Layers size={size} />;
   if (backgroundTask) return <Layers size={size} />;
   if (name === "run_command" || name.includes("command")) return <TerminalSquare size={size} />;
-  if (name === "edit_file" || name === "write_file" || name === "str_replace") return <FilePenLine size={size} />;
+  if (name === "edit_file" || name === "apply_patch" || name === "write_file" || name === "str_replace") return <FilePenLine size={size} />;
   if (name === "read_file") return <FileSearch size={size} />;
   if (name === "grep") return <Search size={size} />;
   if (name === "glob" || name === "list_dir") return <FolderTree size={size} />;

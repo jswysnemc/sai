@@ -3,6 +3,7 @@
 !/docs/releases/
 !/docs/releases/*
 !/docs/computer-use.md
+!/docs/apply-patch.md
 /web/dist/
 /.idea/
 /.vscode/

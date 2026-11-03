@@ -9,6 +9,8 @@
  * write_file 的 content 全算新增，供 +N -M 徽章实时跳动。
  */
 
+import { lenientStringField } from "./tool-data";
+
 /** 流式增删近似统计 */
 export type StreamedDiffCounts = {
   added: number;
@@ -43,6 +45,10 @@ export function streamedLineCount(argumentsText: string): number {
  */
 export function streamedDiffCounts(argumentsText: string): StreamedDiffCounts | null {
   if (!argumentsText) return null;
+  if (argumentsText.includes('"patch"')) {
+    const lines = lenientStringField(argumentsText, "patch").split("\n");
+    return { added: lines.filter((line) => line.startsWith("+")).length, removed: lines.filter((line) => line.startsWith("-")).length };
+  }
   const removed = lenientFieldLineCount(argumentsText, "old_string");
   const added = lenientFieldLineCount(argumentsText, "new_string");
   if (removed !== null || added !== null) {

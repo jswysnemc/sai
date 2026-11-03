@@ -18,6 +18,7 @@ mod presentation;
 pub(crate) mod reasoning_cell;
 mod render_cache;
 mod result_diff;
+pub(crate) use result_diff::parse_edit_result;
 mod shell_cell;
 mod spacing;
 mod store;

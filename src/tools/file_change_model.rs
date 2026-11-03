@@ -3,6 +3,10 @@ use std::path::PathBuf;
 /// patch 文件变更类型。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum FileChange {
+    Delete {
+        path: PathBuf,
+        content: String,
+    },
     Add {
         path: PathBuf,
         content: String,
@@ -25,7 +29,7 @@ impl FileChange {
     /// - 当前变更主路径
     pub(crate) fn path(&self) -> &PathBuf {
         match self {
-            Self::Add { path, .. } | Self::Update { path, .. } => path,
+            Self::Add { path, .. } | Self::Delete { path, .. } | Self::Update { path, .. } => path,
         }
     }
 
@@ -39,6 +43,7 @@ impl FileChange {
     pub(crate) fn action_label(&self) -> &'static str {
         match self {
             Self::Add { .. } => "Added",
+            Self::Delete { .. } => "Deleted",
             Self::Update {
                 move_path: Some(_), ..
             } => "Renamed",
@@ -56,6 +61,7 @@ impl FileChange {
     pub(crate) fn line_counts(&self) -> (usize, usize) {
         match self {
             Self::Add { content, .. } => (line_count(content), 0),
+            Self::Delete { content, .. } => (0, line_count(content)),
             Self::Update { lines, .. } => {
                 let added = lines
                     .iter()

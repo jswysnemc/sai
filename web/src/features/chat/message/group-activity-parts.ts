@@ -97,6 +97,7 @@ const WRITE_TOOLS = new Set([
   "write_file",
   "str_replace",
   "edit_file",
+  "apply_patch",
   "trash_path",
   "ssh_upload_file"
 ]);

@@ -28,6 +28,7 @@ fn readable_tool_name_for_locale(name: &str, locale: Locale) -> &str {
         "cron" => localized(locale, "Scheduled task", "定时任务"),
         "read_file" => localized(locale, "Read file", "读取文件"),
         "edit_file" => localized(locale, "Edit file", "编辑文件"),
+        "apply_patch" => localized(locale, "Apply patch", "应用补丁"),
         "list_directory" => localized(locale, "List directory", "列目录"),
         "create_directory" => localized(locale, "Create directory", "创建目录"),
         "trash_path" => localized(locale, "Move to trash", "移入回收站"),

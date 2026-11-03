@@ -1,6 +1,8 @@
 pub(crate) mod activity_animation;
 pub(crate) mod ansi_clip;
 pub(crate) mod ansi_style;
+#[cfg(test)]
+mod apply_patch_tests;
 mod asset_block;
 
 /// 【终端显示】【渲染偏好】同步公式、Mermaid 与折叠预览开关。
@@ -87,8 +89,8 @@ pub(crate) use error::write_chat_error;
 pub(crate) use expandable::render_expandable_body;
 pub(crate) use jev_preselect::format_jev_preselect;
 pub(crate) use permission::{
-    render_auto_audit_status, render_permission_controls, render_permission_decision,
-    render_permission_decision_for, render_permission_title, PermissionChoice, PermissionView,
+    PermissionChoice, PermissionView, render_auto_audit_status, render_permission_controls,
+    render_permission_decision, render_permission_decision_for, render_permission_title,
 };
 pub(crate) use sandbox_notice::{render_sandbox_denial, render_sandbox_scope};
 pub use session_summary::print_session_summary;
@@ -96,7 +98,7 @@ pub use stream::StreamRenderer;
 pub use stream_config::{ReasoningDisplayMode, StreamRenderOptions, ToolCallDisplayMode};
 pub use stream_output::print_assistant_response;
 pub(crate) use streaming_replace::{rendered_visual_rows, terminal_width};
-pub(crate) use tool_view::{is_external_notice, ConversationNoticeKind};
+pub(crate) use tool_view::{ConversationNoticeKind, is_external_notice};
 
 /// 终端聊天与执行流渲染统一使用英文文案。
 ///

@@ -8,6 +8,7 @@ pub(crate) const BASE_TOOL_NAMES: &[&str] = &[
     "mesh_send",
     "cron",
     "edit_file",
+    "apply_patch",
     "write_file",
     "str_replace",
     "create_goal",

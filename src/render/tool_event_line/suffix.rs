@@ -51,7 +51,7 @@ pub(super) fn tool_suffix_from_text(name: &str, arguments: &str) -> Option<Strin
 pub(super) fn tool_suffix(name: &str, arguments: &Value) -> Option<String> {
     match name {
         "run_command" => string_field(arguments, &["command"]).map(command_summary),
-        "edit_file" => patch_file_basename(arguments),
+        "edit_file" | "apply_patch" => patch_file_basename(arguments),
         "write_file" | "str_replace" | "trash_path" => {
             string_field(arguments, &["path"]).map(file_basename)
         }
@@ -84,7 +84,7 @@ pub(super) fn tool_suffix(name: &str, arguments: &Value) -> Option<String> {
 pub(super) fn tool_suffix_from_partial_text(name: &str, arguments: &str) -> Option<String> {
     match name {
         "run_command" => lenient_string_field(arguments, "command").map(command_summary),
-        "edit_file" => lenient_string_field(arguments, "patch").and_then(|patch| {
+        "edit_file" | "apply_patch" => lenient_string_field(arguments, "patch").and_then(|patch| {
             patch
                 .lines()
                 .find_map(patch_path_from_line)
@@ -612,7 +612,9 @@ pub(super) fn builtin_fallback_object(name: &str) -> Option<&'static str> {
         "glob" | "find_files" => Some("files"),
         "grep" | "search_text" => Some("text"),
         "web_fetch" => Some("page"),
-        "read_file" | "write_file" | "str_replace" | "trash_path" | "edit_file" => Some("file"),
+        "read_file" | "write_file" | "str_replace" | "trash_path" | "edit_file" | "apply_patch" => {
+            Some("file")
+        }
         "run_command" => Some("command"),
         "generate_image" => Some("image"),
         _ => None,

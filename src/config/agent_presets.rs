@@ -36,6 +36,7 @@ const CODE_AGENT_TOOLS: &[&str] = &[
     "todo",
     "write_file",
     "str_replace",
+    "apply_patch",
     "create_goal",
     "get_goal",
     "update_goal",
@@ -221,10 +222,11 @@ fn expand_enabled_tool_conveniences(mut tools: Vec<String>, add_conveniences: bo
             tools.push(name.to_string());
         }
     };
-    // 具备 write_file 的工程 Agent 默认补上 str_replace；
-    // 独占白名单要的是精确控制，这条便利补充会让"两个工具"变成三个
+    // 具备 write_file 的工程 Agent 默认补上局部替换和批量补丁；
+    // 独占白名单保持精确控制，不自动补充编辑工具
     if add_conveniences && has(&tools, "write_file") {
         push_if_missing(&mut tools, "str_replace");
+        push_if_missing(&mut tools, "apply_patch");
     }
     // 能跑本地命令的 Agent 默认也能用 SSH 工具组；旧档案白名单里没有
     // 这四个名字，不补上的话设置页即使列出分组，运行时仍会被滤掉。

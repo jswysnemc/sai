@@ -1,5 +1,5 @@
 use crate::render::background_command_event::background_command_call_label_tense;
-use crate::render::status_style::{color_status, tool_bullet, ToolHealth};
+use crate::render::status_style::{ToolHealth, color_status, tool_bullet};
 use crate::render::style::TOOL_BULLET;
 use serde_json::Value;
 
@@ -489,6 +489,8 @@ pub(crate) fn tool_verb(name: &str, tense: ToolVerbTense) -> &'static str {
         ("run_command", ToolVerbTense::Perfect) => "Ran",
         ("edit_file", ToolVerbTense::Progressive) => "Editing",
         ("edit_file", ToolVerbTense::Perfect) => "Edited",
+        ("apply_patch", ToolVerbTense::Progressive) => "Patching",
+        ("apply_patch", ToolVerbTense::Perfect) => "Patched",
         ("write_file", ToolVerbTense::Progressive) => "Writing",
         ("write_file", ToolVerbTense::Perfect) => "Wrote",
         ("str_replace", ToolVerbTense::Progressive) => "Replacing",
@@ -576,6 +578,7 @@ fn is_builtin_tool_verb(name: &str) -> bool {
                 | "enter_plan_mode"
                 | "exit_plan_mode"
                 | "edit_file"
+                | "apply_patch"
                 | "write_file"
                 | "str_replace"
                 | "read_file"

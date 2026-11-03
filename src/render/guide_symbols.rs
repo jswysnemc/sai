@@ -33,7 +33,7 @@ pub(crate) fn tool(name: &str) -> &'static str {
     let name = name.rsplit("__").next().unwrap_or(name);
     match name {
         "read_file" | "read" | "man_read" | "online_man_get_page" => READ,
-        "str_replace" | "write_file" | "edit_file" | "replace" => EDIT,
+        "str_replace" | "write_file" | "edit_file" | "apply_patch" | "replace" => EDIT,
         "ask_question" | "ask" => ASK,
         "todo" => TODO,
         "trash_path" | "delete_file" | "remove_path" | "delete_meme" => TRASH,
@@ -177,8 +177,8 @@ mod tests {
     #[test]
     fn builtin_render_paths_keep_semantic_icons() {
         use crate::render::{
-            tool_view::{render, ToolView},
             ToolCallDisplayMode,
+            tool_view::{ToolView, render},
         };
         for name in [
             "read_file",

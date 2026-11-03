@@ -14,6 +14,7 @@ use std::path::Path;
 /// 返回:
 /// - 写入是否成功
 pub(crate) fn write_text_file(path: &Path, content: &str) -> Result<()> {
+    super::ensure_active()?;
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     // 1. 补齐缺失的上级目录
     std::fs::create_dir_all(parent)
@@ -23,7 +24,13 @@ pub(crate) fn write_text_file(path: &Path, content: &str) -> Result<()> {
         .map_err(|error| fs_error("create temporary file in", parent, &error))?;
     std::fs::write(temp.path(), content.as_bytes())
         .map_err(|error| fs_error("write file", path, &error))?;
+    if let Ok(metadata) = std::fs::metadata(path) {
+        temp.as_file()
+            .set_permissions(metadata.permissions())
+            .map_err(|error| fs_error("preserve permissions", path, &error))?;
+    }
     // 3. 原子替换目标文件
+    super::ensure_active()?;
     temp.persist(path)
         .map_err(|error| fs_error("write file", path, &error.error))?;
     Ok(())

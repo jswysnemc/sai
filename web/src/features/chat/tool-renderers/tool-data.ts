@@ -54,7 +54,7 @@ export function prettyJson(value: string): string {
 export function toolSummary(name: string, argumentsText: string, locale: Locale = "zh-CN"): string {
   const args = parseJsonRecord(argumentsText);
   if (name === "run_command") return stringField(args, "command");
-  if (name === "edit_file") {
+  if (name === "edit_file" || name === "apply_patch") {
     const patch = stringField(args, "patch");
     return patch.split("\n").find((line) => line.startsWith("*** ") && line.includes(" File: "))?.split(" File: ")[1]
       ?? text(locale, "File edit", "文件修改");
@@ -80,14 +80,14 @@ export function toolFilePath(name: string, argumentsText: string): string {
   if (name === "read_file" || name === "write_file" || name === "str_replace") {
     return stringField(args, "path") || lenientStringField(argumentsText, "path");
   }
-  if (name !== "edit_file") return "";
+  if (name !== "edit_file" && name !== "apply_patch") return "";
   const patch = stringField(args, "patch") || lenientStringField(argumentsText, "patch");
-  const paths = patch
-    .split("\n")
-    .flatMap((line) => {
-      const match = /^\*\*\* (?:Add|Delete|Update) File: (.+)$/.exec(line);
-      return match ? [match[1].trim()] : [];
-    });
+  const paths: string[] = [];
+  for (const line of patch.split("\n")) {
+    const match = /^\*\*\* (?:Add|Delete|Update) File: (.+)$/.exec(line);
+    if (match) paths.push(match[1].trim());
+    else if (line.startsWith("*** Move to: ") && paths.length > 0) paths[paths.length - 1] = line.slice("*** Move to: ".length).trim();
+  }
   return new Set(paths).size === 1 ? paths[0] : "";
 }
 

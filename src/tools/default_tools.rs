@@ -15,6 +15,7 @@ pub fn register(registry: &mut ToolRegistry) {
     register_readonly(registry);
     super::write_file::register(registry);
     super::str_replace::register(registry);
+    super::apply_patch::register(registry);
 }
 
 pub fn register_readonly(registry: &mut ToolRegistry) {

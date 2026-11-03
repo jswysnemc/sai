@@ -86,7 +86,7 @@ export function toolDisplaySummary(
     return text(locale, "File edit", "文件修改");
   }
 
-  if (name === "edit_file") {
+  if (name === "edit_file" || name === "apply_patch") {
     const path = firstPatchPath(stringField(args, "patch"));
     if (path) return displayPath(path, workspacePath);
     return text(locale, "File edit", "文件修改");
@@ -226,7 +226,7 @@ export function isCommandToolName(name: string): boolean {
  * @returns 编辑类返回 true
  */
 export function isEditToolName(name: string): boolean {
-  return name === "edit_file" || name === "write_file" || name === "str_replace";
+  return name === "edit_file" || name === "apply_patch" || name === "write_file" || name === "str_replace";
 }
 
 /**

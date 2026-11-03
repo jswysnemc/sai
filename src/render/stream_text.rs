@@ -30,7 +30,7 @@ pub(crate) fn tool_call_has_visible_block(name: &str) -> bool {
 /// 返回:
 /// - 是否应走 diff 渲染路径
 pub(crate) fn is_file_edit_tool(name: &str) -> bool {
-    matches!(name, "write_file" | "str_replace")
+    matches!(name, "write_file" | "str_replace" | "apply_patch")
 }
 
 /// 生成等待动效详情行。

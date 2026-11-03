@@ -34,7 +34,7 @@ impl Agent {
         {
             bail!("Plan mode blocked non-read-only tool: {name}");
         }
-        if matches!(name.as_str(), "str_replace" | "write_file") {
+        if matches!(name.as_str(), "str_replace" | "write_file" | "apply_patch") {
             super::edit_guard::ensure_edit_target_was_read(self, &call)?;
         }
         if name == "ask_question" || name == "exit_plan_mode" {

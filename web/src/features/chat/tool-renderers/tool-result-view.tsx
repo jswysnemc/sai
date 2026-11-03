@@ -51,7 +51,7 @@ export function ToolResultView({ name, argumentsText, output, headerPath, worksp
   if (name === "read_file") {
     return <ReadToolView argumentsText={argumentsText} output={output} headerPath={headerPath} workspacePath={workspacePath} />;
   }
-  if (name === "edit_file" || name === "write_file" || name === "str_replace") {
+  if (name === "edit_file" || name === "apply_patch" || name === "write_file" || name === "str_replace") {
     return <EditToolView argumentsText={argumentsText} output={output} headerPath={headerPath} workspacePath={workspacePath} />;
   }
   return <GenericToolView argumentsText={argumentsText} output={output} />;

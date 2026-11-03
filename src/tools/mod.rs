@@ -1,4 +1,5 @@
 mod ask_question;
+pub(crate) mod apply_patch;
 pub(crate) mod browser;
 mod calculator;
 mod catalog;
@@ -86,6 +87,7 @@ pub fn readable_tool_name(name: &str) -> &str {
         "request_capability" => "能力申请",
         "write_file" => "写入文件",
         "str_replace" => "字符串替换",
+        "apply_patch" => "应用补丁",
         "create_goal" => "创建目标",
         "get_goal" => "查看目标",
         "update_goal" => "更新目标",

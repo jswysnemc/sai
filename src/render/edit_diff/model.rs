@@ -1,6 +1,6 @@
 use crate::render::terminal_text as t;
 use crate::tools::file_change_model::{AppliedPatch, FileChange, LineChange, LineChangeKind};
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
@@ -32,6 +32,9 @@ pub(crate) fn preview_from_arguments(arguments: &str) -> Result<AppliedPatch> {
 /// 返回:
 /// - 可渲染的变更预览
 fn preview_from_value(value: &Value) -> Result<AppliedPatch> {
+    if let Some(patch) = value.get("patch").and_then(Value::as_str) {
+        return crate::tools::apply_patch::preview(patch);
+    }
     if let (Some(path), Some(content)) = (
         value.get("path").and_then(Value::as_str),
         value.get("content").and_then(Value::as_str),
@@ -67,6 +70,9 @@ fn preview_from_value(value: &Value) -> Result<AppliedPatch> {
 /// 返回:
 /// - 字段已闭合时返回预览；否则返回空
 fn preview_from_partial_arguments(raw: &str) -> Result<Option<AppliedPatch>> {
+    if let Some(patch) = string_field_from_partial(raw, "patch") {
+        return crate::tools::apply_patch::preview(&patch).map(Some);
+    }
     if let (Some(path), Some(content)) = (
         string_field_from_partial(raw, "path"),
         string_field_from_partial(raw, "content"),
@@ -505,9 +511,11 @@ mod tests {
         .unwrap();
         match &edit.changes[0] {
             FileChange::Update { lines, .. } => {
-                assert!(lines
-                    .iter()
-                    .any(|line| line.kind == LineChangeKind::Add && line.text == "world"));
+                assert!(
+                    lines
+                        .iter()
+                        .any(|line| line.kind == LineChangeKind::Add && line.text == "world")
+                );
             }
             other => panic!("expected update, got {other:?}"),
         }

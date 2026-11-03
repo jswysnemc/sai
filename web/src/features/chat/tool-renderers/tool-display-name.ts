@@ -5,6 +5,7 @@ const TOOL_KIND_LABELS: Record<string, readonly [string, string]> = {
   run_command: ["Shell", "命令"],
   background_command: ["Shell", "命令"],
   edit_file: ["Edit", "编辑"],
+  apply_patch: ["Patch", "补丁"],
   write_file: ["Write", "写入"],
   str_replace: ["Replace", "替换"],
   read_file: ["Read", "读取"],
@@ -121,6 +122,7 @@ const TOOL_TITLES_ZH: Record<string, string> = {
   send_channel_file: "发送渠道文件",
   send_channel_video: "发送渠道视频",
   edit_file: "编辑文件",
+  apply_patch: "应用补丁",
   fcitx5_input_method_wiki_qurey: "查询 Fcitx5 Wiki"
 };
 

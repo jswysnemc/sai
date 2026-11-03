@@ -49,6 +49,7 @@ pub(crate) fn parse_unified_diff(text: &str) -> Option<UnifiedFilePatch> {
     let path = text
         .lines()
         .find_map(|line| line.strip_prefix("+++ b/"))
+        .or_else(|| text.lines().find_map(|line| line.strip_prefix("--- a/")))
         .map(str::to_string)?;
     let mut patch = UnifiedFilePatch {
         path,
@@ -60,6 +61,9 @@ pub(crate) fn parse_unified_diff(text: &str) -> Option<UnifiedFilePatch> {
     let mut new_cursor = 0usize;
     let mut in_hunk = false;
     for line in text.lines() {
+        if in_hunk && line.starts_with("diff --git ") {
+            break;
+        }
         if let Some(header) = line.strip_prefix("@@ ") {
             let (old_start, new_start) = parse_hunk_starts(header)?;
             old_cursor = old_start;
@@ -96,6 +100,27 @@ pub(crate) fn parse_unified_diff(text: &str) -> Option<UnifiedFilePatch> {
         });
     }
     (!patch.lines.is_empty()).then_some(patch)
+}
+
+/// 【文件差异】【多文件拆分】按文件边界独立解析，防止后续文件头落入前一个文件的正文。
+/// 参数: text 为完整 unified diff；返回: 各文件差异，纯元数据变更由结果摘要展示。
+pub(crate) fn parse_unified_diffs(text: &str) -> Vec<UnifiedFilePatch> {
+    let mut chunks = Vec::new();
+    let mut current = String::new();
+    for line in text.lines() {
+        if line.starts_with("diff --git ") && !current.is_empty() {
+            if let Some(patch) = parse_unified_diff(&current) {
+                chunks.push(patch);
+            }
+            current.clear();
+        }
+        current.push_str(line);
+        current.push('\n');
+    }
+    if let Some(patch) = parse_unified_diff(&current) {
+        chunks.push(patch);
+    }
+    chunks
 }
 
 /// 解析 hunk 头里的旧行起点与行起点。

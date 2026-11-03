@@ -7,10 +7,11 @@ export type DiffSourceTool = {
   argumentsPreview?: string;
   output?: string;
   status?: string;
+  ok?: boolean | null;
 };
 
 /** 会产生文件差异的工具 */
-const EDIT_TOOLS = ["edit_file", "write_file", "str_replace"];
+const EDIT_TOOLS = ["apply_patch", "edit_file", "write_file", "str_replace"];
 
 /**
  * 从本轮编辑工具的参数与输出组装差异源文本。
@@ -31,13 +32,16 @@ export function buildTurnDiffSource(
   for (const tool of tools) {
     if (!EDIT_TOOLS.includes(tool.name)) continue;
     if (tool.status && tool.status !== "completed") continue;
+    if (tool.ok === false || /^tool error:/i.test((tool.output ?? "").trimStart())) continue;
     // 1. 真实差异可直接使用，它已经反映了工具实际改动的范围
     const output = parseJsonRecord(tool.output ?? "");
     const actualDiff = output ? stringField(output, "diff") : "";
     if (actualDiff && (!path || diffIncludesPath(actualDiff, path))) {
-      chunks.push(actualDiff);
+      chunks.push(path ? actualDiff.split(/(?=^diff --git )/m).filter((block) => diffIncludesPath(block, path)).join("") : actualDiff);
       continue;
     }
+    // 1. 【文件补丁】【结果边界】新工具只使用执行报告，失败或缺少结果时不把计划当作已修改
+    if (tool.name === "apply_patch") continue;
     // 2. 无真实差异时按工具类型从参数合成
     const synthesized = synthesizeFromArguments(tool, path);
     if (synthesized) chunks.push(synthesized);
@@ -55,7 +59,7 @@ export function buildTurnDiffSource(
 function synthesizeFromArguments(tool: DiffSourceTool, path: string | null): string {
   const args = parseJsonRecord(tool.arguments || tool.argumentsPreview || "");
   if (!args) return "";
-  if (tool.name === "edit_file") {
+  if ((tool.name === "edit_file" || tool.name === "apply_patch")) {
     const patch = stringField(args, "patch");
     if (!patch) return "";
     if (path && !patchIncludesPath(patch, path)) return "";
@@ -84,6 +88,7 @@ function synthesizeFromArguments(tool: DiffSourceTool, path: string | null): str
  */
 function diffIncludesPath(diff: string, path: string): boolean {
   return diff.split("\n").some((line) => {
+    if (line.startsWith("rename to ")) return pathsMatch(line.slice("rename to ".length).trim(), path);
     if (!line.startsWith("+++ ") && !line.startsWith("--- ")) return false;
     const candidate = line.slice(4).trim();
     if (candidate === "/dev/null") return false;

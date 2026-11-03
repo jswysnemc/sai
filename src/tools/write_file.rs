@@ -18,11 +18,11 @@ pub(crate) fn register(registry: &mut ToolRegistry) {
         ToolSpec::new(
             "write_file",
             t(
-                "Create a new text file or fully overwrite an existing text file. Use for new files or complete rewrites. Prefer str_replace for small local edits and edit_file for multi-file Codex patches. Do not use shell redirection, tee, or python heredocs to write source files.",
-                "创建新文本文件，或整文件覆盖已有文本文件。用于新建或完整重写。局部小改优先 str_replace；多文件 Codex 补丁用 edit_file。不要用 shell 重定向、tee 或 python heredoc 写源码。",
+                "Create a new text file or fully overwrite an existing text file. Use for new files or complete rewrites. Prefer str_replace for small local edits and apply_patch for multiple related edits or multi-file patches. Do not use shell redirection, tee, or python heredocs to write source files.",
+                "创建新文本文件，或整文件覆盖已有文本文件。用于新建或完整重写。局部小改优先 str_replace；多处关联修改或多文件补丁用 apply_patch。不要用 shell 重定向、tee 或 python heredoc 写源码。",
             ),
             write_file_parameters(),
-            |args| async move { write_file(args) },
+            |args| super::file_edit::blocking_edit(args, write_file),
         )
         .writes(),
     );
@@ -79,6 +79,7 @@ fn write_file(args: Value) -> Result<String> {
         .ok_or_else(|| anyhow::anyhow!("content is required"))?;
     // 1. 解析路径并读取旧内容（若存在）
     let path = expand_path(path_text);
+    let _locks = super::file_edit::locks::FileEditLocks::acquire(std::slice::from_ref(&path))?;
     let existed = path.exists();
     if existed && !path.is_file() {
         bail!("not a regular file: {}", path.display());

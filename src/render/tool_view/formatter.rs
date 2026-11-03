@@ -1,16 +1,16 @@
 use super::model::{PermissionAuditView, ToolView};
 use crate::permission::PermissionDecision;
+use crate::render::ToolCallDisplayMode;
 use crate::render::activity_animation::render_activity_line;
 use crate::render::command_output::render_command_block_with_action;
 use crate::render::command_result_block::{
     render_command_result_view_with_limit, render_completed_command_output,
     render_live_command_output,
 };
-use crate::render::status_style::{color_status, ToolHealth};
+use crate::render::status_style::{ToolHealth, color_status};
 use crate::render::tool_event_line::{
-    tool_event_label_tense, tool_event_text, tool_status_line, tool_verb, ToolVerbTense,
+    ToolVerbTense, tool_event_label_tense, tool_event_text, tool_status_line, tool_verb,
 };
-use crate::render::ToolCallDisplayMode;
 use serde_json::Value;
 
 /// 渲染完整工具生命周期视图。
@@ -171,9 +171,15 @@ fn render_body(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -> Stri
     let mut output = tool_status_line(&label, &badge, health);
     // 编辑类 Full：挂 diff 正文（无 Added 标题）；其它工具仍展示参数/结果载荷
     if is_edit {
-        if let Some(diff_body) =
+        let actual = view
+            .outcome
+            .as_ref()
+            .filter(|outcome| outcome.ok)
+            .and_then(|outcome| crate::render::transcript::parse_edit_result(&outcome.output))
+            .map(|report| report.rendered);
+        if let Some(diff_body) = actual.or_else(|| {
             crate::render::edit_diff::render_edit_file_diff_body_for_transcript(&view.arguments)
-        {
+        }) {
             if !diff_body.trim().is_empty() {
                 output.push('\n');
                 output.push_str(diff_body.trim_end());
@@ -187,7 +193,7 @@ fn render_body(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -> Stri
         output.push_str(&render_progress_note(progress));
     }
     if let Some(outcome) = &view.outcome {
-        if !denied && !outcome.output.trim().is_empty() && !is_edit {
+        if !denied && !outcome.output.trim().is_empty() && (!is_edit || !outcome.ok) {
             output.push('\n');
             output.push_str(&render_payload("output", &outcome.output));
         }
@@ -465,7 +471,7 @@ fn arguments_ready_for_display(arguments: &str) -> bool {
 /// - Codex 风格的层级载荷块
 fn render_payload(label: &str, payload: &str) -> String {
     use crate::render::fold_text::{
-        fold_preview_lines, terminal_wrap_width, wrap_display_lines, FoldedDisplayLine,
+        FoldedDisplayLine, fold_preview_lines, terminal_wrap_width, wrap_display_lines,
     };
     let formatted = super::structured_payload::format(payload.trim());
     // 【终端】【工具载荷】1. 保留原文，仅按显示行折叠，全文模式可还原全部内容

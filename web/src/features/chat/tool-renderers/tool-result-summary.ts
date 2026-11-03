@@ -59,7 +59,7 @@ export function toolResultSummary(
  * @returns 增删统计；非编辑类工具或无统计时返回 null
  */
 export function toolDiffStat(name: string, output: string): ToolDiffStat | null {
-  if (name !== "edit_file" && name !== "write_file" && name !== "str_replace") return null;
+  if (name !== "edit_file" && name !== "apply_patch" && name !== "write_file" && name !== "str_replace") return null;
   const result = parseJsonRecord(output);
   if (!result || !Array.isArray(result.changed_files)) return null;
   let added = 0;

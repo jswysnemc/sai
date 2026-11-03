@@ -10,12 +10,45 @@
 /// 返回:
 /// - `(新增行数, 删除行数)`；尚无可统计字段时返回空
 pub(crate) fn streamed_diff_counts(arguments: &str) -> Option<(usize, usize)> {
+    if let Some(counts) = streamed_patch_counts(arguments) {
+        return Some(counts);
+    }
     let removed = lenient_field_line_count(arguments, "old_string");
     let added = lenient_field_line_count(arguments, "new_string");
     if removed.is_some() || added.is_some() {
         return Some((added.unwrap_or(0), removed.unwrap_or(0)));
     }
     lenient_field_line_count(arguments, "content").map(|added| (added, 0))
+}
+
+/// 【文件补丁】【流式统计】按补丁正文行前缀估算增删数量，不把协议标题计入差异。
+/// 参数: raw 为可能未闭合的 JSON 参数；返回: 已到达的增删行数。
+fn streamed_patch_counts(raw: &str) -> Option<(usize, usize)> {
+    let field = raw.find("\"patch\"")?;
+    let after_key = &raw[field + 7..];
+    let value = after_key[after_key.find(':')? + 1..]
+        .trim_start()
+        .strip_prefix('"')?;
+    let (mut added, mut removed) = (0, 0);
+    let mut start = true;
+    let mut escaped = false;
+    for ch in value.chars() {
+        if !escaped && ch == '"' {
+            break;
+        }
+        if !escaped && ch == '\\' {
+            escaped = true;
+            continue;
+        }
+        let ch = if escaped && ch == 'n' { '\n' } else { ch };
+        escaped = false;
+        if start {
+            added += usize::from(ch == '+');
+            removed += usize::from(ch == '-');
+        }
+        start = ch == '\n';
+    }
+    Some((added, removed))
 }
 
 /// 统计字段字符串值中已接收的行数。

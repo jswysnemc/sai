@@ -19,11 +19,11 @@ pub(crate) fn register(registry: &mut ToolRegistry) {
         ToolSpec::new(
             "str_replace",
             t(
-                "Perform an exact string replacement in an existing text file. Prefer reading the file first. old_string must match exactly; if it matches multiple places, either expand old_string until unique or set replace_all=true. Prefer write_file for new files or full rewrites, and edit_file for multi-file Codex patches. Do not use shell redirection to edit source.",
-                "对已有文本文件做精确字符串替换。修改前优先读取文件。old_string 必须精确匹配；若匹配多处，扩展上下文使其唯一，或设置 replace_all=true。新建或整文件重写用 write_file；多文件 Codex 补丁用 edit_file。不要用 shell 重定向改源码。",
+                "Perform an exact string replacement in an existing text file. Prefer reading the file first. old_string must match exactly; if it matches multiple places, either expand old_string until unique or set replace_all=true. Prefer write_file for new files or full rewrites, and apply_patch for multiple related edits or multi-file patches. Do not use shell redirection to edit source.",
+                "对已有文本文件做精确字符串替换。修改前优先读取文件。old_string 必须精确匹配；若匹配多处，扩展上下文使其唯一，或设置 replace_all=true。新建或整文件重写用 write_file；多处关联修改或多文件补丁用 apply_patch。不要用 shell 重定向改源码。",
             ),
             str_replace_parameters(),
-            |args| async move { str_replace(args) },
+            |args| super::file_edit::blocking_edit(args, str_replace),
         )
         .writes(),
     );
@@ -101,6 +101,7 @@ fn str_replace(args: Value) -> Result<String> {
 
     // 1. 读取目标文件
     let path = expand_path(path_text);
+    let _locks = super::file_edit::locks::FileEditLocks::acquire(std::slice::from_ref(&path))?;
     if !path.exists() {
         bail!("file not found: {}", path.display());
     }

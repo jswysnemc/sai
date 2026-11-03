@@ -19,7 +19,7 @@ export function PermissionArgumentDetails({ tool, argumentsText }: PermissionArg
   if (tool === "run_command" || tool.includes("background_command")) {
     return <ShellToolView argumentsText={argumentsText} output="" />;
   }
-  if (tool === "edit_file") {
+  if (tool === "edit_file" || tool === "apply_patch") {
     return <EditToolView argumentsText={argumentsText} output="" />;
   }
   const fields = semanticFields(argumentsText, t);

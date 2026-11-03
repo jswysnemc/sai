@@ -17,7 +17,7 @@ type ToolLike = {
   ok?: boolean | null;
 };
 
-const EDIT_TOOLS = new Set(["edit_file", "write_file", "str_replace"]);
+const EDIT_TOOLS = new Set(["apply_patch", "edit_file", "write_file", "str_replace"]);
 
 /**
  * 从本轮工具结果汇总文件改动。
@@ -33,7 +33,7 @@ export function collectTurnFileChanges(tools: readonly ToolLike[]): TurnFileChan
     if (tool.ok === false) continue;
     const argsText = tool.arguments || tool.argumentsPreview || "";
     const fromOutput = changesFromOutput(tool.output || "", tool.name);
-    const entries = fromOutput.length > 0 ? fromOutput : changesFromArguments(argsText, tool.name);
+    const entries = fromOutput.length > 0 ? fromOutput : tool.name === "apply_patch" ? [] : changesFromArguments(argsText, tool.name);
     for (const entry of entries) {
       const current = merged.get(entry.path);
       if (!current) {
@@ -87,7 +87,7 @@ function changesFromArguments(argumentsText: string, tool: string): TurnFileChan
     const path = stringField(args, "path");
     return path ? [{ path, action: tool === "write_file" ? "Edited" : "Edited", added: 0, removed: 0, tool }] : [];
   }
-  if (tool === "edit_file") {
+  if ((tool === "edit_file" || tool === "apply_patch")) {
     return stringField(args, "patch")
       .split("\n")
       .flatMap((line) => {
