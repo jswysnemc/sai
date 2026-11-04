@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 mod burst;
 #[cfg(test)]
 mod burst_tests;
+mod control;
 #[cfg(windows)]
 mod native;
 #[cfg(all(windows, test))]
@@ -18,10 +19,12 @@ const WINDOWS_PASTE_BURST_WINDOW: Duration = Duration::from_millis(250);
 #[derive(Clone, Debug, Default)]
 pub(super) struct WindowsPasteState {
     burst: burst::PasteBurst,
+    control: control::PasteControl,
     recent_chars: String,
     last_char_at: Option<Instant>,
     replay: String,
     replay_offset: usize,
+    replay_confirmed: bool,
 }
 
 /// Windows 粘贴检测成功后需要替换的输入片段。
@@ -32,14 +35,21 @@ pub(super) struct WindowsPasteMatch {
 }
 
 /// Windows 终端输入事件中可参与粘贴回放匹配的按键。
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum WindowsPasteKey {
     Char(char),
     Enter,
+    LineFeed,
     Tab,
 }
 
 impl WindowsPasteState {
+    /// 【终端】【粘贴保护】判断是否保护尚未确认的连续输入控制键
+    /// 参数: now 为按键时间；返回控制键属于当前连续输入时为真
+    pub(super) fn should_protect_control(&self, now: Instant) -> bool {
+        self.burst.should_protect_control(now)
+    }
+
     /// 【终端】【粘贴保护】将连续粘贴中的控制键写入输入框，避免换行触发提交
     /// 参数: input 为正文，cursor 为字符光标，key 为控制键，now 为事件时间
     /// 返回: 控制键属于粘贴且已插入时为真
@@ -51,13 +61,17 @@ impl WindowsPasteState {
         now: Instant,
     ) -> bool {
         let ch = match key {
-            WindowsPasteKey::Enter => '\n',
+            WindowsPasteKey::Enter | WindowsPasteKey::LineFeed => '\n',
             WindowsPasteKey::Tab => '\t',
             WindowsPasteKey::Char(_) => return false,
         };
+        if self.control.consume_paired_lf(key, now) {
+            return true;
+        }
         if !self.burst.consume_control(now) {
             return false;
         }
+        self.control.record_newline(key, true, now);
         // 1. 【终端】【粘贴保护】字符光标转换为字节位置，保留光标之后已有正文
         let byte = input
             .char_indices()
@@ -120,10 +134,29 @@ impl WindowsPasteState {
     ///
     /// 返回:
     /// - 识别成功时的替换信息
+    #[cfg(test)]
     pub(super) fn begin_multiline(
         &mut self,
         input_before_cursor: &str,
         clipboard_text: &str,
+        now: Instant,
+    ) -> Option<WindowsPasteMatch> {
+        self.begin_multiline_after(
+            input_before_cursor,
+            clipboard_text,
+            WindowsPasteKey::Enter,
+            now,
+        )
+    }
+
+    /// 【终端】【粘贴识别】保留原始 CRLF 回放，插入正文统一使用 LF
+    /// 参数: input_before_cursor 为光标前正文，clipboard_text 为原文，key 为首个换行键，
+    /// now 为接收时间；返回匹配成功后的替换信息
+    fn begin_multiline_after(
+        &mut self,
+        input_before_cursor: &str,
+        clipboard_text: &str,
+        key: WindowsPasteKey,
         now: Instant,
     ) -> Option<WindowsPasteMatch> {
         // 1. 换行必须紧跟连续字符，普通提交不读取为粘贴
@@ -151,26 +184,28 @@ impl WindowsPasteState {
         // 3. 保存首个换行之后的事件序列，后续按键只做匹配消费
         self.recent_chars.clear();
         self.last_char_at = None;
-        self.replay = normalized[separator + 1..].to_string();
+        let raw_separator = clipboard_text.find(['\r', '\n'])?;
+        let newline_bytes = control::newline_bytes(&clipboard_text[raw_separator..])?;
+        self.replay = clipboard_text[raw_separator + newline_bytes..].to_string();
         self.replay_offset = 0;
+        self.replay_confirmed = true;
+        self.control.record_newline(key, newline_bytes == 2, now);
+        self.finish_replay_if_done(now);
         Some(WindowsPasteMatch {
             prefix_chars: first_line.chars().count(),
             text: normalized.trim().to_string(),
         })
     }
 
-    /// 读取系统剪贴板并尝试识别 Windows 拆分的多行粘贴。
-    ///
-    /// 参数:
-    /// - `input_before_cursor`: 光标前的当前输入
-    /// - `now`: 当前事件时间
-    ///
-    /// 返回:
-    /// - 识别成功时的替换信息
-    pub(super) fn begin_from_system_clipboard(
+    /// 【终端】【粘贴识别】通过指定读取器识别剪贴板，供真实输入循环与隔离回归共用
+    /// 参数: input_before_cursor 为光标前正文，key 为首个换行键，now 为事件时间，read 为剪贴板读取器
+    /// 返回: 识别成功时的替换信息
+    pub(super) fn begin_from_clipboard(
         &mut self,
         input_before_cursor: &str,
+        key: WindowsPasteKey,
         now: Instant,
+        read: impl FnOnce() -> Option<String>,
     ) -> Option<WindowsPasteMatch> {
         if self.last_char_at.is_none()
             || self
@@ -180,11 +215,11 @@ impl WindowsPasteState {
             self.reset_clipboard_candidate();
             return None;
         }
-        let Some(text) = read_system_clipboard_text() else {
+        let Some(text) = read() else {
             self.reset_clipboard_candidate();
             return None;
         };
-        self.begin_multiline(input_before_cursor, &text, now)
+        self.begin_multiline_after(input_before_cursor, &text, key, now)
     }
 
     /// 消费已识别粘贴的后续按键，避免剩余换行再次触发提交。
@@ -194,27 +229,45 @@ impl WindowsPasteState {
     ///
     /// 返回:
     /// - 当前按键属于粘贴回放时返回 true
+    #[cfg(test)]
     pub(super) fn consume_key(&mut self, key: WindowsPasteKey) -> bool {
-        let Some(expected) = self.replay[self.replay_offset..].chars().next() else {
-            return false;
-        };
-        let actual = match key {
-            WindowsPasteKey::Char(ch) => ch,
-            WindowsPasteKey::Enter => '\n',
-            WindowsPasteKey::Tab => '\t',
-        };
-        if actual != expected {
+        self.consume_key_at(key, Instant::now())
+    }
+
+    /// 【终端】【粘贴回放】使用接收时间消费普通字符、带修饰 LF 和可选 CRLF 配对
+    /// 参数: key 为已分类的键，now 为接收时间；返回事件已消费时为真
+    pub(super) fn consume_key_at(&mut self, key: WindowsPasteKey, now: Instant) -> bool {
+        let finished = self.replay_confirmed && self.replay_offset == self.replay.len();
+        let Some(bytes) = self
+            .control
+            .matching_bytes(&self.replay[self.replay_offset..], key, now)
+        else {
+            if finished {
+                self.burst = burst::PasteBurst::default();
+            }
             self.replay.clear();
             self.replay_offset = 0;
+            self.replay_confirmed = false;
+            self.control = control::PasteControl::default();
             return false;
-        }
+        };
         // 1. 【终端】【Windows 粘贴】仅移动字节游标，避免逐字删除首部造成平方级搬移
-        self.replay_offset += expected.len_utf8();
+        self.replay_offset += bytes;
         if self.replay_offset == self.replay.len() {
             self.replay.clear();
             self.replay_offset = 0;
         }
+        self.finish_replay_if_done(now);
         true
+    }
+
+    /// 【终端】【粘贴结束】原文与可选 LF 全部消费后立即归还发送快捷键
+    /// 参数: now 为消费时间；返回无
+    fn finish_replay_if_done(&mut self, now: Instant) {
+        if self.replay_confirmed && self.replay.is_empty() && !self.control.has_pending_lf(now) {
+            self.replay_confirmed = false;
+            self.burst = burst::PasteBurst::default();
+        }
     }
 
     /// 清除当前粘贴识别状态。
@@ -231,8 +284,10 @@ impl WindowsPasteState {
     fn reset_clipboard_candidate(&mut self) {
         self.recent_chars.clear();
         self.last_char_at = None;
+        self.control = control::PasteControl::default();
         self.replay.clear();
         self.replay_offset = 0;
+        self.replay_confirmed = false;
     }
 }
 
@@ -251,7 +306,7 @@ fn normalize_clipboard_text(text: &str) -> String {
 ///
 /// 返回:
 /// - Windows 文本剪贴板正文，其他平台返回空值
-fn read_system_clipboard_text() -> Option<String> {
+pub(super) fn read_system_clipboard_text() -> Option<String> {
     #[cfg(windows)]
     {
         let payload = clipboard::read_clipboard_payload().ok()?;

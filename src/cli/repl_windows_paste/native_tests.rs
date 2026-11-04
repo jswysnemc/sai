@@ -1,4 +1,4 @@
-use super::{WindowsPasteKey, WindowsPasteState};
+use super::WindowsPasteState;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use std::fs::OpenOptions;
 use std::os::windows::{io::AsRawHandle, process::CommandExt};
@@ -65,6 +65,9 @@ fn console_child() {
 
     // 2. 【终端】【粘贴回归】让高代理落在批次末尾，核验 UTF-16 边界及制表换行
     replay_text(&console, &format!("{}𠮷\t中\n文", "a".repeat(2048)), false);
+    for virtual_key in [0x0d, 0x4a] {
+        replay_conpty_crlf(&console, virtual_key);
+    }
     preserves_shortcut(&console);
     preserves_resize(&console);
     empty_queue_returns_immediately(&console);
@@ -90,12 +93,9 @@ fn replay_text(console: &std::fs::File, body: &str, releases: bool) -> (Duration
         if key.kind == KeyEventKind::Release {
             continue;
         }
-        let candidate = match key.code {
-            KeyCode::Char(ch) => WindowsPasteKey::Char(ch),
-            KeyCode::Enter => WindowsPasteKey::Enter,
-            KeyCode::Tab => WindowsPasteKey::Tab,
-            _ => panic!("非预期按键: {key:?}"),
-        };
+        let candidate =
+            crate::cli::repl_input::event_batch::windows_paste_key(key.code, key.modifiers)
+                .unwrap_or_else(|| panic!("非预期按键: {key:?}"));
         if state.consume_key(candidate) {
             state.drain_console_replay();
             continue;
@@ -114,6 +114,70 @@ fn replay_text(console: &std::fs::File, body: &str, releases: bool) -> (Duration
         Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL))
     );
     (elapsed, reads)
+}
+
+/// 【终端】【ConPTY 回归】真实 Windows 事件解析后合并 CRLF，保留粘贴之后的 Ctrl+Enter
+/// 参数: console 为隔离控制台，virtual_lf 为 LF 的虚拟键；返回无，回放或边界错误时失败
+fn replay_conpty_crlf(console: &std::fs::File, virtual_lf: u16) {
+    clear_console(console);
+    let now = Instant::now();
+    let body = "中\t文\r\n\r\n𠮷\r\n";
+    let mut state = WindowsPasteState::default();
+    state.record_text("first", now);
+    state
+        .begin_multiline("first", &format!("first\r\n{body}"), now)
+        .unwrap();
+    // 1. 【终端】【ConPTY 回归】首个 CR 已触发识别，队列从它的配对 LF 开始
+    let mut records = vec![
+        key_record(0, 0x11, LEFT_CTRL_PRESSED, true),
+        key_record(10, virtual_lf, LEFT_CTRL_PRESSED, true),
+        key_record(0, 0x11, 0, false),
+    ];
+    for unit in body.encode_utf16() {
+        let (virtual_key, modifiers) = match unit {
+            13 => (0x0d, 0),
+            10 => (virtual_lf, LEFT_CTRL_PRESSED),
+            9 => (0x09, 0),
+            _ => (0, 0),
+        };
+        if unit == 10 {
+            records.push(key_record(0, 0x11, LEFT_CTRL_PRESSED, true));
+        }
+        records.push(key_record(unit, virtual_key, modifiers, true));
+        records.push(key_record(unit, virtual_key, modifiers, false));
+        if unit == 10 {
+            records.push(key_record(0, 0x11, 0, false));
+        }
+    }
+    records.push(key_record(b'!' as u16, 0, 0, true));
+    records.push(key_record(13, 0x0d, LEFT_CTRL_PRESSED, true));
+    write_records(console, &records);
+    let mut reads = 0;
+    loop {
+        reads += 1;
+        let Event::Key(key) = next_event() else {
+            continue;
+        };
+        if key.kind == KeyEventKind::Release {
+            continue;
+        }
+        let candidate =
+            crate::cli::repl_input::event_batch::windows_paste_key(key.code, key.modifiers)
+                .unwrap_or_else(|| panic!("非预期按键: {key:?}"));
+        if state.consume_key(candidate) {
+            state.drain_console_replay();
+        } else {
+            assert_eq!(key, KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE));
+            break;
+        }
+    }
+    // 2. 【终端】【ConPTY 回归】全部原文被消费，后续快捷键保持原有修饰键与次序
+    assert!(state.replay.is_empty());
+    assert!(reads <= 4, "ConPTY 换行使批量回放退回逐事件读取: {reads}");
+    assert_eq!(
+        next_event(),
+        Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL))
+    );
 }
 
 /// 【终端】【粘贴回归】回放中间的快捷键必须保留，其后的队列保持不动

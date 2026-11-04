@@ -166,14 +166,6 @@ pub(super) fn read_repl_input(
                 if kind == KeyEventKind::Release {
                     continue;
                 }
-                let replay_key = event_batch::windows_paste_key(code, modifiers);
-                if replay_key.is_none() {
-                    windows_paste.reset();
-                }
-                if replay_key.is_some_and(|key| windows_paste.consume_key(key)) {
-                    windows_paste.drain_console_replay();
-                    continue;
-                }
                 if paste::handle_unbracketed_paste(
                     &mut windows_paste,
                     &mut clipboard_state,

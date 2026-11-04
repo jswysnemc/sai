@@ -37,14 +37,20 @@ impl PasteBurst {
     /// 【终端】【粘贴保护】判定回车或制表符是否属于粘贴，并保护随后的空行
     /// 参数: now 为控制键时间；返回控制键应作为正文插入时为真
     pub(super) fn consume_control(&mut self, now: Instant) -> bool {
-        let recent_char = self
-            .last_char_at
-            .is_some_and(|previous| now.duration_since(previous) <= CHAR_INTERVAL);
-        let in_window = self.suppress_until.is_some_and(|until| now <= until);
-        if !recent_char && !in_window {
+        if !self.should_protect_control(now) {
             return false;
         }
         self.suppress_until = Some(now + CONTROL_SUPPRESS_WINDOW);
         true
+    }
+
+    /// 【终端】【粘贴保护】只查询当前连续输入窗口，避免普通带修饰快捷键读取剪贴板
+    /// 参数: now 为按键时间；返回当前控制键属于连续输入时为真
+    pub(super) fn should_protect_control(&self, now: Instant) -> bool {
+        let recent_char = self
+            .last_char_at
+            .is_some_and(|previous| now.duration_since(previous) <= CHAR_INTERVAL);
+        let in_window = self.suppress_until.is_some_and(|until| now <= until);
+        recent_char || in_window
     }
 }

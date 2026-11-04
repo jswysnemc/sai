@@ -10,7 +10,7 @@ use crate::cli::repl_clipboard::{is_paste_key, paste_image_first};
 use crate::cli::repl_commands::{
     stream_command_disabled_hint, stream_command_policy, StreamCommandPolicy,
 };
-use crate::cli::repl_input::event_batch::{next_ready_event, take_text_batch, windows_paste_key};
+use crate::cli::repl_input::event_batch::{next_ready_event, take_text_batch};
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
 use std::time::Duration;
@@ -145,22 +145,6 @@ pub(crate) fn process_stream_input(
                 runtime.redraw_stream_composer()?;
             }
             Event::Key(key) if key.kind != KeyEventKind::Release => {
-                let replay_key = windows_paste_key(key.code, key.modifiers);
-                if replay_key.is_none() {
-                    runtime.stream_draft_mut().windows_paste.reset();
-                }
-                if replay_key.is_some_and(|candidate| {
-                    runtime
-                        .stream_draft_mut()
-                        .windows_paste
-                        .consume_key(candidate)
-                }) {
-                    runtime
-                        .stream_draft_mut()
-                        .windows_paste
-                        .drain_console_replay();
-                    continue;
-                }
                 let handled_paste = {
                     let draft = runtime.stream_draft_mut();
                     crate::cli::repl_input::paste::handle_unbracketed_paste(

@@ -78,6 +78,21 @@ pub(in crate::cli) fn windows_paste_key(
     modifiers: KeyModifiers,
 ) -> Option<WindowsPasteKey> {
     match code {
+        KeyCode::Enter | KeyCode::Char('j' | 'J')
+            if modifiers.contains(KeyModifiers::CONTROL)
+                && !modifiers.intersects(
+                    KeyModifiers::ALT
+                        | KeyModifiers::SUPER
+                        | KeyModifiers::HYPER
+                        | KeyModifiers::META,
+                ) =>
+        {
+            Some(WindowsPasteKey::LineFeed)
+        }
+        KeyCode::Char('\n') if modifiers.is_empty() || modifiers == KeyModifiers::CONTROL => {
+            Some(WindowsPasteKey::LineFeed)
+        }
+        KeyCode::Char('\r') if modifiers.is_empty() => Some(WindowsPasteKey::Enter),
         KeyCode::Char(ch) if !modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
             Some(WindowsPasteKey::Char(ch))
         }
