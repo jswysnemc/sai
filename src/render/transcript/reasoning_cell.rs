@@ -143,8 +143,8 @@ pub(crate) fn duration_label_value(elapsed: Duration) -> Option<Duration> {
     (!elapsed.is_zero()).then_some(elapsed)
 }
 
-/// 思考 gutter 前缀显示宽度：`  └ ` / `    `
-const THINKING_GUTTER_WIDTH: usize = 4;
+/// 思考引导线与标题同列，正文保留一列间隔：`│ `
+const THINKING_GUTTER_WIDTH: usize = 2;
 
 /// 计算思考正文折行宽度（预留 gutter，避免拼前缀后超出终端列数）。
 ///
@@ -155,7 +155,7 @@ const THINKING_GUTTER_WIDTH: usize = 4;
 /// - 正文可用显示宽度
 fn thinking_body_wrap_width(terminal_cols: usize) -> usize {
     // 下限保证极窄终端下正文还有可读宽度，但必须再夹回终端列数：
-    // 只写 .max(8) 时 4 列终端会按 8 列折行，再拼上 4 列 gutter 就超出屏幕
+    // 只写 .max(8) 时 4 列终端会按 8 列折行，再拼上引导线就超出屏幕
     let cols = terminal_cols.max(1);
     terminal_cols
         .saturating_sub(THINKING_GUTTER_WIDTH)
@@ -240,7 +240,7 @@ fn render_thinking_body_with_title(
     if body.is_empty() {
         return title;
     }
-    // 2. 【终端】【思考折行】按「终端列数 - gutter」折行，再拼 `  └ `/`    `，保证最终行宽不超过终端
+    // 2. 【终端】【思考折行】预留两列引导区，正文与标题文字保持相同起始列
     let wrapped = if body.contains("```") {
         // 2. 【全屏代码】【思考展开】代码围栏先解析高亮，再按 ANSI 显示宽度折行
         let rendered = crate::render::expandable::render_expandable_body(
@@ -276,7 +276,7 @@ fn render_thinking_body_with_title(
             }
             FoldedDisplayLine::Line(line) => line,
         };
-        let prefix = "  │ ";
+        let prefix = "│ ";
         output.push_str(&format!("\n\x1b[2m\x1b[36m{prefix}{line}\x1b[0m"));
     }
     output
@@ -471,7 +471,7 @@ mod tests {
         let mut body_lines = plain.lines().skip(1);
         let first = body_lines.next().expect("first gutter line");
         assert!(
-            first.starts_with("  │ "),
+            first.starts_with("│ "),
             "first body line should use vertical gutter: {first}"
         );
         for line in std::iter::once(first).chain(body_lines) {
@@ -481,7 +481,7 @@ mod tests {
         // 2. 续行保留 gutter 缩进，而不是被二次折行挤成无缩进碎片
         let continuation = plain.lines().nth(2).expect("continuation line");
         assert!(
-            continuation.starts_with("  │ "),
+            continuation.starts_with("│ "),
             "continuation should keep gutter indent: {continuation}"
         );
     }
@@ -506,7 +506,7 @@ mod tests {
 
     #[test]
     fn thinking_body_wrap_width_reserves_gutter() {
-        assert_eq!(thinking_body_wrap_width(80), 76);
+        assert_eq!(thinking_body_wrap_width(80), 78);
         assert_eq!(thinking_body_wrap_width(10), 8);
         // 极窄终端：下限不能把宽度顶到超过终端列数，否则拼上 gutter 会溢出
         assert_eq!(thinking_body_wrap_width(4), 4);

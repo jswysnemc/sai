@@ -12,6 +12,7 @@ mod editing;
 pub(super) mod event_batch;
 mod external_editor;
 pub(super) mod history;
+pub(super) mod paste;
 mod submission;
 
 use cleanup::finish_repl_input;
@@ -166,8 +167,25 @@ pub(super) fn read_repl_input(
                     continue;
                 }
                 let replay_key = event_batch::windows_paste_key(code, modifiers);
+                if replay_key.is_none() {
+                    windows_paste.reset();
+                }
                 if replay_key.is_some_and(|key| windows_paste.consume_key(key)) {
                     windows_paste.drain_console_replay();
+                    continue;
+                }
+                if paste::handle_unbracketed_paste(
+                    &mut windows_paste,
+                    &mut clipboard_state,
+                    &mut input,
+                    &mut cursor,
+                    code,
+                    modifiers,
+                ) {
+                    slash_selection = 0;
+                    history_clean_index = None;
+                    is_pasted = true;
+                    redraw_input!()?;
                     continue;
                 }
                 if code != KeyCode::Esc && last_escape.take().is_some() {
@@ -473,22 +491,6 @@ pub(super) fn read_repl_input(
                         redraw_input!()?;
                     }
                     KeyCode::Enter => {
-                        let input_before_cursor: String = input.chars().take(cursor).collect();
-                        if let Some(paste) = windows_paste
-                            .begin_from_system_clipboard(&input_before_cursor, Instant::now())
-                        {
-                            clipboard_state.replace_recent_text_with_paste(
-                                &mut input,
-                                &mut cursor,
-                                paste.prefix_chars,
-                                paste.text,
-                            );
-                            slash_selection = 0;
-                            history_clean_index = None;
-                            is_pasted = true;
-                            redraw_input!()?;
-                            continue;
-                        }
                         if let Some((next, next_cursor)) = complete_active_mention(
                             &input,
                             cursor,

@@ -146,6 +146,9 @@ pub(crate) fn process_stream_input(
             }
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 let replay_key = windows_paste_key(key.code, key.modifiers);
+                if replay_key.is_none() {
+                    runtime.stream_draft_mut().windows_paste.reset();
+                }
                 if replay_key.is_some_and(|candidate| {
                     runtime
                         .stream_draft_mut()
@@ -156,6 +159,24 @@ pub(crate) fn process_stream_input(
                         .stream_draft_mut()
                         .windows_paste
                         .drain_console_replay();
+                    continue;
+                }
+                let handled_paste = {
+                    let draft = runtime.stream_draft_mut();
+                    crate::cli::repl_input::paste::handle_unbracketed_paste(
+                        &mut draft.windows_paste,
+                        &mut draft.clipboard,
+                        &mut draft.text,
+                        &mut draft.cursor,
+                        key.code,
+                        key.modifiers,
+                    )
+                };
+                if handled_paste {
+                    let draft = runtime.stream_draft_mut();
+                    draft.is_pasted = true;
+                    draft.slash_selection = 0;
+                    runtime.redraw_stream_composer()?;
                     continue;
                 }
                 // 1. 【终端】【面板焦点】中断保持全局可用，其余按键先交给焦点面板
@@ -268,30 +289,6 @@ pub(crate) fn process_stream_input(
                         .to_string(),
                     )?;
                     continue;
-                }
-                if matches!(key.code, KeyCode::Enter) && key.modifiers.is_empty() {
-                    let paste = {
-                        let draft = runtime.stream_draft_mut();
-                        let input_before_cursor: String =
-                            draft.text.chars().take(draft.cursor).collect();
-                        draft.windows_paste.begin_from_system_clipboard(
-                            &input_before_cursor,
-                            std::time::Instant::now(),
-                        )
-                    };
-                    if let Some(paste) = paste {
-                        let draft = runtime.stream_draft_mut();
-                        draft.clipboard.replace_recent_text_with_paste(
-                            &mut draft.text,
-                            &mut draft.cursor,
-                            paste.prefix_chars,
-                            paste.text,
-                        );
-                        draft.is_pasted = true;
-                        draft.slash_selection = 0;
-                        runtime.redraw_stream_composer()?;
-                        continue;
-                    }
                 }
                 // 5. 其他键写入运行中输入框
                 let action = handle_stream_key(runtime, ctx, key.code, key.modifiers)?;

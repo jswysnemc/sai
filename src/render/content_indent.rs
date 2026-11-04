@@ -46,6 +46,10 @@ fn is_guide_marker(ch: char) -> bool {
 /// 【终端】【引导区分】活动线段后必须有内容，不能把 Markdown 分隔线当作运行标题。
 /// 参数: `text` 为整行，`first` 为首个可见字符；返回: 是否为带语义的引导行。
 fn is_guide_line(text: &str, first: Option<char>) -> bool {
+    // 1. 【终端】【思考对齐】顶格竖线沿用标题引导列，缩进引用保留原有层级
+    if first == Some('│') && visible_line_start(text).0 == 0 {
+        return true;
+    }
     first.is_some_and(is_guide_marker)
         && (first != Some(ACTIVITY_GUIDE)
             || !crate::render::activity_animation::strip_ansi_for_test(text)

@@ -2,6 +2,9 @@
 use crate::clipboard::{self, ClipboardPayload};
 use std::time::{Duration, Instant};
 
+mod burst;
+#[cfg(test)]
+mod burst_tests;
 #[cfg(windows)]
 mod native;
 #[cfg(all(windows, test))]
@@ -14,6 +17,7 @@ const WINDOWS_PASTE_BURST_WINDOW: Duration = Duration::from_millis(250);
 /// Windows 终端将多行剪贴板拆成普通按键时的粘贴状态。
 #[derive(Clone, Debug, Default)]
 pub(super) struct WindowsPasteState {
+    burst: burst::PasteBurst,
     recent_chars: String,
     last_char_at: Option<Instant>,
     replay: String,
@@ -36,6 +40,34 @@ pub(super) enum WindowsPasteKey {
 }
 
 impl WindowsPasteState {
+    /// 【终端】【粘贴保护】将连续粘贴中的控制键写入输入框，避免换行触发提交
+    /// 参数: input 为正文，cursor 为字符光标，key 为控制键，now 为事件时间
+    /// 返回: 控制键属于粘贴且已插入时为真
+    pub(super) fn insert_burst_control(
+        &mut self,
+        input: &mut String,
+        cursor: &mut usize,
+        key: WindowsPasteKey,
+        now: Instant,
+    ) -> bool {
+        let ch = match key {
+            WindowsPasteKey::Enter => '\n',
+            WindowsPasteKey::Tab => '\t',
+            WindowsPasteKey::Char(_) => return false,
+        };
+        if !self.burst.consume_control(now) {
+            return false;
+        }
+        // 1. 【终端】【粘贴保护】字符光标转换为字节位置，保留光标之后已有正文
+        let byte = input
+            .char_indices()
+            .nth(*cursor)
+            .map_or(input.len(), |(byte, _)| byte);
+        input.insert(byte, ch);
+        *cursor += 1;
+        true
+    }
+
     /// 【终端】【Windows 粘贴】批量消费已确认属于剪贴板的控制台事件
     /// 参数: 无；返回本次消费的原生事件数，其他平台或接口不可用时返回零
     pub(super) fn drain_console_replay(&mut self) -> usize {
@@ -66,6 +98,7 @@ impl WindowsPasteState {
     /// 参数: `text` 为连续输入文字，`now` 为接收时间
     /// 返回: 无
     pub(super) fn record_text(&mut self, text: &str, now: Instant) {
+        self.burst.record_text(text, now);
         // 1. 相邻字符间隔过长时开始新的候选片段
         if self
             .last_char_at
@@ -96,14 +129,14 @@ impl WindowsPasteState {
         // 1. 换行必须紧跟连续字符，普通提交不读取为粘贴
         let previous = self.last_char_at?;
         if now.duration_since(previous) > WINDOWS_PASTE_BURST_WINDOW {
-            self.reset();
+            self.reset_clipboard_candidate();
             return None;
         }
 
         // 2. 当前输入、连续字符和剪贴板首行必须完全对应
         let normalized = normalize_clipboard_text(clipboard_text);
         let Some(separator) = normalized.find('\n') else {
-            self.reset();
+            self.reset_clipboard_candidate();
             return None;
         };
         let first_line = &normalized[..separator];
@@ -111,7 +144,7 @@ impl WindowsPasteState {
             || !input_before_cursor.ends_with(first_line)
             || !self.recent_chars.ends_with(first_line)
         {
-            self.reset();
+            self.reset_clipboard_candidate();
             return None;
         }
 
@@ -144,11 +177,11 @@ impl WindowsPasteState {
                 .last_char_at
                 .is_some_and(|previous| now.duration_since(previous) > WINDOWS_PASTE_BURST_WINDOW)
         {
-            self.reset();
+            self.reset_clipboard_candidate();
             return None;
         }
         let Some(text) = read_system_clipboard_text() else {
-            self.reset();
+            self.reset_clipboard_candidate();
             return None;
         };
         self.begin_multiline(input_before_cursor, &text, now)
@@ -189,6 +222,13 @@ impl WindowsPasteState {
     /// 返回:
     /// - 无
     pub(super) fn reset(&mut self) {
+        self.burst = burst::PasteBurst::default();
+        self.reset_clipboard_candidate();
+    }
+
+    /// 【终端】【粘贴保护】清除剪贴板匹配候选，保留独立的连续输入保护
+    /// 参数: 无；返回无
+    fn reset_clipboard_candidate(&mut self) {
         self.recent_chars.clear();
         self.last_char_at = None;
         self.replay.clear();

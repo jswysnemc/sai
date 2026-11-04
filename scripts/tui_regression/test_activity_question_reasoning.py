@@ -32,6 +32,9 @@ class ActivityCompactContentTests(unittest.TestCase):
                     body = [line for line in lines(terminal) if "REASON-" in line]
                     self.assertEqual(len(body), 5, terminal.text())
                     self.assertTrue(all("│" in line for line in body), body)
+                    title_line = lines(terminal)[title]
+                    guide_column = len(title_line) - len(title_line.lstrip())
+                    self.assertTrue(all(line.index("│") == guide_column for line in body), body)
                     terminal.send(f"\x1b[<64;8;{title + 3}M".encode())
                     terminal.wait_for(lambda: "REASON-12" in terminal.text())
                     self.assertNotIn("REASON-19", terminal.text())
