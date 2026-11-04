@@ -23,6 +23,7 @@ pub(crate) mod background_promotion;
 pub(crate) mod brand_logo;
 mod cli_command_preview;
 mod code_block;
+mod command_highlight;
 mod command_output;
 mod command_result_block;
 pub(crate) mod content_indent;

@@ -1,4 +1,3 @@
-use crate::render::code_block::{highlight_code_line_continued, CodeLineHighlightState};
 use crate::render::command_result_block::truncate_chars;
 pub(crate) use crate::render::command_result_block::{
     render_command_error_view_for_cli, render_command_result_view_for_cli,
@@ -7,6 +6,10 @@ use crate::render::status_style::{tool_bullet, ToolHealth};
 use anyhow::Result;
 use serde_json::Value;
 use std::io::{self, Write};
+
+#[cfg(test)]
+#[path = "command_output_path_tests.rs"]
+mod path_tests;
 
 /// 写入普通工具参数或输出块（统一 gutter：`  └ ` 首行 + 四空格续行）。
 ///
@@ -128,11 +131,9 @@ pub(crate) fn render_command_block_with_action(
         other => other,
     };
     // 1. 按终端宽度折行后首尾折叠，过长命令在主列表收缩
-    let lines = fold_shell_command_lines(command, false, title);
+    let lines = fold_shell_command_lines(command, false, title, arguments);
     let mut output = format!("{} \x1b[1m{title}\x1b[0m ", tool_bullet(health));
-    // 2. 折行续行共享高亮状态：跨行字符串/注释的颜色才能延续，
-    //    否则 URL 中段的数字会被重新 token 化成数字色
-    let mut highlight = CodeLineHighlightState::default();
+    // 2. 【命令预览】【显示输出】源码已完成着色，显示续行只补齐布局前缀
     if lines.is_empty() {
         output.push_str("\x1b[35m$ \x1b[0m\n");
         return output;
@@ -145,7 +146,7 @@ pub(crate) fn render_command_block_with_action(
         } else if matches!(entry, crate::render::fold_text::FoldedDisplayLine::Line(_)) {
             output.push_str(&continuation);
         }
-        append_command_display_line(&mut output, entry, &mut highlight);
+        append_command_display_line(&mut output, entry);
         first = false;
     }
     output
@@ -157,54 +158,45 @@ pub(crate) fn render_command_block_with_action(
 /// - `command`: 原始命令
 /// - `expanded`: 是否展开全文
 /// - `title`: 命令块标题，决定正文起始列
+/// - `arguments`: 工具参数，用于选择命令解释器语法
 ///
 /// 返回:
-/// - 折叠后的显示条目（占位处保留被省略行供状态推进）
+/// - 已着色的折叠显示条目
 fn fold_shell_command_lines(
     command: &str,
     expanded: bool,
     title: &str,
+    arguments: &str,
 ) -> Vec<crate::render::fold_text::FoldedDisplayLine> {
-    use crate::render::fold_text::{
-        command_wrap_width_for_title, fold_preview_lines_tracked, wrap_display_lines_for_copy,
-    };
+    use crate::render::fold_text::{command_wrap_width_for_title, fold_preview_lines_tracked};
     // 命令行预览：按显示配置折叠，过长时收缩
     let wrap = command_wrap_width_for_title(title);
-    let wrapped = wrap_display_lines_for_copy(command, wrap);
+    let language = super::command_highlight::language(arguments);
+    let wrapped = super::command_highlight::display_lines(command, language, wrap);
     fold_preview_lines_tracked(&wrapped, expanded)
 }
 
-/// 追加一行命令显示（省略行 dim，普通行 shell 着色）。
+/// 追加一行已着色命令，省略行沿用统一的弱化提示样式。
 ///
 /// 参数:
 /// - `output`: 输出缓冲
 /// - `entry`: 折叠后的显示条目
-/// - `highlight`: 跨显示行的高亮状态
+///
+/// 返回: 无，直接追加带样式的显示条目
 fn append_command_display_line(
     output: &mut String,
     entry: &crate::render::fold_text::FoldedDisplayLine,
-    highlight: &mut CodeLineHighlightState,
 ) {
     use crate::render::fold_text::FoldedDisplayLine;
     match entry {
-        FoldedDisplayLine::Omitted { omitted, skipped } => {
-            // 被省略的行仍要推进高亮状态，尾部行的引号/注释上下文才正确
-            for line in skipped {
-                let (text, _) = super::transcript::copy_line::extract(line);
-                let _ = highlight_code_line_continued("sh", &text, highlight);
-            }
+        FoldedDisplayLine::Omitted { omitted, .. } => {
             output.push_str(&crate::render::omitted_line::render_omitted_line(
                 *omitted, true,
             ));
             output.push('\n');
         }
         FoldedDisplayLine::Line(line) => {
-            let (text, copy) = super::transcript::copy_line::extract(line);
-            let highlighted = highlight_code_line_continued("sh", &text, highlight);
-            output.push_str(&super::transcript::copy_line::tag(
-                &highlighted,
-                copy.join_previous,
-            ));
+            output.push_str(line);
             output.push('\n');
         }
     }

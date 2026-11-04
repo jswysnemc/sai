@@ -1,5 +1,6 @@
 use serde_json::Value;
 use std::path::Path;
+mod json_string;
 #[path = "command_summary.rs"]
 mod command_summary;
 use command_summary::command_summary;
@@ -168,26 +169,7 @@ pub(crate) fn lenient_string_field(raw: &str, key: &str) -> Option<String> {
     let after_key = &raw[key_index + pattern.len()..];
     let colon_index = after_key.find(':')?;
     let after_colon = after_key[colon_index + 1..].trim_start();
-    let value = after_colon.strip_prefix('"')?;
-    let mut output = String::new();
-    let mut escaped = false;
-    for ch in value.chars() {
-        if escaped {
-            output.push(match ch {
-                'n' => '\n',
-                'r' => '\r',
-                't' => '\t',
-                other => other,
-            });
-            escaped = false;
-            continue;
-        }
-        match ch {
-            '\\' => escaped = true,
-            '"' => break,
-            other => output.push(other),
-        }
-    }
+    let output = json_string::decode_prefix(after_colon)?;
     (!output.trim().is_empty()).then_some(output)
 }
 

@@ -1,5 +1,8 @@
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsStr;
+#[cfg(any(windows, test))]
+use std::ffi::OsString;
 
+#[cfg(any(windows, test))]
 use base64::Engine;
 
 /// Shell 的参数风格。
@@ -18,6 +21,7 @@ pub(crate) enum ShellFlavor {
     Unknown,
 }
 
+#[cfg(any(windows, test))]
 impl ShellFlavor {
     /// 判断执行脚本时是否套用 PowerShell 语法。
     ///
@@ -64,6 +68,7 @@ pub(crate) fn shell_flavor(program: &OsStr) -> ShellFlavor {
 ///
 /// 返回:
 /// - 参数列表；PowerShell 的脚本位于 UTF-16LE Base64 参数中
+#[cfg(any(windows, test))]
 pub(crate) fn script_args(flavor: ShellFlavor, script: &str) -> Vec<OsString> {
     match flavor {
         // /S 保留引号原样，否则首尾引号会被 cmd 吃掉；先切换到 UTF-8，
@@ -98,6 +103,7 @@ pub(crate) fn script_args(flavor: ShellFlavor, script: &str) -> Vec<OsString> {
 ///
 /// 返回:
 /// - 可直接作为 `-EncodedCommand` 值传入的 Base64 字符串
+#[cfg(any(windows, test))]
 fn powershell_encoded_command(script: &str) -> OsString {
     // 1. 在脚本最前面统一设置 PowerShell 与原生命令的 UTF-8 编码
     let script = format!(
@@ -152,6 +158,7 @@ fn program_name(program: &OsStr) -> String {
 ///
 /// 返回:
 /// - 交互式 Shell 程序
+#[cfg(any(windows, test))]
 pub(super) fn select_windows_interactive_shell(
     configured: Option<&OsStr>,
     shell: Option<&OsStr>,
@@ -192,6 +199,7 @@ pub(super) fn select_windows_interactive_shell(
 ///
 /// 返回:
 /// - PowerShell 隐藏启动横幅，其他 Shell 不附加参数
+#[cfg(any(windows, test))]
 pub(super) fn windows_interactive_shell_args(program: &OsStr) -> Vec<OsString> {
     if shell_flavor(program) == ShellFlavor::PowerShell {
         vec![OsString::from("-NoLogo")]

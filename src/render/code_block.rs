@@ -3,6 +3,10 @@ use super::style::{
     CODE_STRING_STYLE, CODE_TOKEN_RESET, MD_CODE_LANG_STYLE, PRIMARY_STYLE, RESET,
 };
 
+#[cfg(test)]
+#[path = "code_highlight_path_tests.rs"]
+mod path_tests;
+
 /// 渲染不带横线的代码块标签行。
 ///
 /// 标签弱化显示，与命令输出块的 dim gutter 属于同一视觉层。
@@ -40,7 +44,7 @@ pub(crate) fn render_code_footer(_lines: &[String]) -> String {
 pub(crate) struct CodeLineHighlightState {
     /// 未闭合的引号字符（`"`、`'` 或反引号）
     open_quote: Option<char>,
-    /// 未闭合字符串在行尾是否停在反斜杠转义中
+    /// 未闭合字符串在行尾是否停在当前语言的转义字符之后
     escaped: bool,
     /// 是否仍处于延续到逻辑行尾的行注释中
     in_comment: bool,
@@ -112,9 +116,13 @@ pub(crate) fn highlight_code_line_continued(
 /// 返回:
 /// - 带 ANSI 样式的代码行
 fn paint_code_line(lang: &str, line: &str, state: &mut CodeLineHighlightState) -> String {
-    // 1. 原扫描器继续推进折行状态，供调用方判断引号和注释是否闭合
+    // 1. 【代码着色】【状态推进】原扫描器继续推进折行状态，供调用方判断引号和注释是否闭合
     let legacy = highlight_code_line_legacy(lang, line, state);
-    // 2. syntect 负责实际颜色；解析失败时保留原扫描结果
+    // 2. 【代码着色】【逻辑换行】行注释只延续视觉折行，真实换行必须结束注释状态
+    if line.ends_with('\n') {
+        state.in_comment = false;
+    }
+    // 3. 【代码着色】【颜色输出】syntect 负责实际颜色，解析失败时保留原扫描结果
     super::syntect_highlight::paint(lang, line, &mut state.syntect).unwrap_or(legacy)
 }
 
@@ -137,7 +145,8 @@ fn highlight_code_line_legacy(
         return line.to_string();
     }
     let comment_marker = match lang.as_str() {
-        "py" | "python" | "sh" | "bash" | "zsh" | "fish" | "toml" | "yaml" | "yml" => Some('#'),
+        "py" | "python" | "sh" | "bash" | "zsh" | "fish" | "toml" | "yaml" | "yml"
+        | "powershell" | "pwsh" | "ps1" | "psm1" | "psd1" => Some('#'),
         "rs" | "rust" | "js" | "ts" | "tsx" | "jsx" | "c" | "cpp" | "java" | "go" => None,
         _ => None,
     };
@@ -153,7 +162,7 @@ fn highlight_code_line_legacy(
     }
     // 1. 上一显示行有未闭合字符串：从行首继续染到闭合引号为止
     if let Some(quote) = state.open_quote {
-        let close = scan_string_end(&chars, 0, quote, state);
+        let close = scan_string_end(&chars, 0, quote, &lang, state);
         output.push_str(CODE_STRING_STYLE);
         output.extend(chars[..close].iter());
         output.push_str(CODE_TOKEN_RESET);
@@ -202,7 +211,7 @@ fn highlight_code_line_legacy(
         {
             let quote = chars[index];
             let start = index;
-            let close = scan_string_end(&chars, index + 1, quote, state);
+            let close = scan_string_end(&chars, index + 1, quote, &lang, state);
             output.push_str(CODE_STRING_STYLE);
             output.extend(chars[start..close].iter());
             output.push_str(CODE_TOKEN_RESET);
@@ -267,6 +276,7 @@ fn highlight_code_line_legacy(
 /// - `chars`: 当前行字符
 /// - `start`: 引号内容起始下标
 /// - `quote`: 引号字符
+/// - `lang`: 语言标识，决定转义字符及重复引号规则
 /// - `state`: 跨行高亮状态
 ///
 /// 返回:
@@ -275,17 +285,31 @@ fn scan_string_end(
     chars: &[char],
     start: usize,
     quote: char,
+    lang: &str,
     state: &mut CodeLineHighlightState,
 ) -> usize {
     let mut index = start;
     let mut escaped = state.escaped;
     state.escaped = false;
+    let powershell = matches!(lang, "powershell" | "pwsh" | "ps1" | "psm1" | "psd1");
+    let escape = if powershell {
+        (quote == '"').then_some('`')
+    } else if matches!(lang, "bat" | "cmd") {
+        None
+    } else {
+        Some('\\')
+    };
     while index < chars.len() {
         if escaped {
             escaped = false;
-        } else if chars[index] == '\\' {
+        } else if Some(chars[index]) == escape {
             escaped = true;
         } else if chars[index] == quote {
+            // 1. 【代码着色】【PowerShell 字符串】重复引号表示字面引号，路径反斜杠不参与转义
+            if powershell && chars.get(index + 1) == Some(&quote) {
+                index += 2;
+                continue;
+            }
             state.open_quote = None;
             return index + 1;
         }
@@ -324,6 +348,39 @@ fn code_keywords(lang: &str) -> &'static [&'static str] {
         "sh" | "bash" | "zsh" | "fish" => &[
             "case", "do", "done", "elif", "else", "esac", "fi", "for", "function", "if", "in",
             "then", "while",
+        ],
+        "powershell" | "pwsh" | "ps1" | "psm1" | "psd1" => &[
+            "begin",
+            "break",
+            "catch",
+            "class",
+            "continue",
+            "data",
+            "do",
+            "dynamicparam",
+            "else",
+            "elseif",
+            "end",
+            "enum",
+            "exit",
+            "filter",
+            "finally",
+            "for",
+            "foreach",
+            "from",
+            "function",
+            "if",
+            "in",
+            "param",
+            "process",
+            "return",
+            "switch",
+            "throw",
+            "trap",
+            "try",
+            "until",
+            "using",
+            "while",
         ],
         "json" | "toml" | "yaml" | "yml" => &["true", "false", "null"],
         // edit_diff::colors 已把这些扩展名映射到对应语言（因此 `//` 与
