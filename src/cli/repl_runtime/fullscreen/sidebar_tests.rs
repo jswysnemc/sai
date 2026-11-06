@@ -105,27 +105,23 @@ fn wide_sidebar_moves_overviews_and_restores_bottom_at_narrow_width() {
             for line in screen(&runtime) {
                 assert!(unicode_width::UnicodeWidthStr::width(line.as_str()) <= 160);
             }
-            assert!(
-                screen(&runtime)[3]
-                    .chars()
-                    .skip(usize::from(side.left))
-                    .collect::<String>()
-                    .contains("Subagents")
-            );
+            assert!(screen(&runtime)[3]
+                .chars()
+                .skip(usize::from(side.left))
+                .collect::<String>()
+                .contains("Subagents"));
         },
     );
     runtime.paint_fullscreen().unwrap();
-    assert!(
-        runtime
-            .fullscreen
-            .as_ref()
-            .unwrap()
-            .state
-            .layout
-            .unwrap()
-            .sidebar
-            .is_none()
-    );
+    assert!(runtime
+        .fullscreen
+        .as_ref()
+        .unwrap()
+        .state
+        .layout
+        .unwrap()
+        .sidebar
+        .is_none());
     let bottom = strip_ansi_for_test(&runtime.composer.as_ref().unwrap().panel_lines().join("\n"));
     assert!(
         bottom.contains("Todo") && bottom.contains("subagents"),
@@ -220,7 +216,10 @@ fn sidebar_sanitizes_user_text_and_keeps_full_todo_list() {
         .collect::<Vec<_>>();
     let git = GitSummary {
         state: "ready".into(),
-        files: vec![("??".into(), "a\n\x1b[2Jb".into())],
+        files: vec![
+            ("??".into(), "a\n\x1b[2Jb".into()),
+            ("??".into(), "src/tools/skills/".into()),
+        ],
         ..Default::default()
     };
     let document = sidebar_view::document(
@@ -244,6 +243,7 @@ fn sidebar_sanitizes_user_text_and_keeps_full_todo_list() {
         .join("\n");
     assert!(!text.contains("\x1b[2J"));
     assert!(text.contains("todo-19"));
+    assert!(text.contains("skills"));
     for row in document.rows {
         assert!(crate::cli::repl_text::visible_width(&row.text) <= 32);
     }

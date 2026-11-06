@@ -164,7 +164,12 @@ fn heading_hover_explains_action_and_clears_on_exit() {
                 session.sidebar.hovered
             );
             let painted = session.state.previous.as_ref().unwrap();
-            assert!(painted[usize::from(row)].contains("\x1b[7m"));
+            assert!(
+                painted[usize::from(row)].contains(&super::sidebar_palette::bg(
+                    super::sidebar_palette::SidebarPalette::current().hover_bg
+                ))
+            );
+            assert!(!painted[usize::from(row)].contains("\x1b[7m"));
             assert!(!painted[usize::from(row)].contains("\x1b[4m"));
             assert!(panel(&runtime)
                 .iter()

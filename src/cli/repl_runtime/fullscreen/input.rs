@@ -89,10 +89,12 @@ impl ReplRuntime {
             .fullscreen
             .as_ref()
             .is_some_and(|session| session.sidebar.preview.selection.span.is_some());
-        let control_was_hovered =
-            self.sidebar_control.divider_hovered || self.sidebar_control.header_hovered;
+        let control_was_hovered = self.sidebar_control.divider_hovered
+            || self.sidebar_control.header_hovered
+            || self.sidebar_control.scrollbar.hovered.is_some();
         let effect = match self
             .image_viewer_event(event)
+            .or_else(|| self.sidebar_scrollbar_event(event))
             .or_else(|| self.header_control_event(event))
             .or_else(|| self.sidebar_control_event(event))
             .or_else(|| self.git_preview_selection_event(event))
@@ -122,6 +124,8 @@ impl ReplRuntime {
         let control_hover_cleared = control_was_hovered
             && !self.sidebar_control.divider_hovered
             && !self.sidebar_control.header_hovered;
+        let control_hover_cleared =
+            control_hover_cleared && self.sidebar_control.scrollbar.hovered.is_none();
         let effect =
             if (cleared || review_hover_cleared || control_hover_cleared || diff_selection_cleared)
                 && matches!(effect, Effect::Nothing)

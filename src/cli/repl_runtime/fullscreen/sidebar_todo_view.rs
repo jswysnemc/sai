@@ -37,17 +37,25 @@ pub(super) fn rows(
         .take(if compact { 1 } else { todos.len() })
     {
         let todo = &todos[index];
-        let marker = match todo.status.as_str() {
-            "completed" => format!("{}[x]", fg(palette.added)),
-            "cancelled" => format!("{}[-]", fg(palette.muted)),
-            "in_progress" => format!("{}[>]", fg(palette.accent)),
-            _ => format!("{}[ ]", fg(palette.muted)),
+        let status = todo.status.as_str();
+        // 1. 【终端侧栏】【状态字形】与工具卡共用状态符，字形与正文分别着色
+        let (marker, text) = match status {
+            "completed" => (palette.added, String::new()),
+            "cancelled" => (palette.muted, "\x1b[9m".into()),
+            "in_progress" => (palette.accent, fg(palette.accent)),
+            _ => (palette.muted, String::new()),
         };
+        let glyph = crate::render::todo_style::status_glyph(status);
+        // 2. 【终端侧栏】【层级弱化】已完成与已取消正文减淡，进行中使用强调色，待办保持正文色
         rows.push(row(
             item(
-                &format!("{marker} {}", safe_text(&todo.text)),
+                &format!(
+                    "{}{glyph}\x1b[39m {text}{}",
+                    fg(marker),
+                    safe_text(&todo.text)
+                ),
                 width,
-                todo.status == "completed",
+                matches!(status, "completed" | "cancelled"),
             ),
             None,
         ));

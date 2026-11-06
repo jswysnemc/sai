@@ -18,6 +18,22 @@ pub(crate) fn status_marker(status: &str) -> &'static str {
     }
 }
 
+/// 【终端】【待办字形】返回不含颜色的状态符，供需要自定义主题色的面板复用。
+///
+/// 参数:
+/// - `status`: 待办状态
+///
+/// 返回:
+/// - 单列状态字形，与 `status_marker` 保持一致
+pub(crate) fn status_glyph(status: &str) -> &'static str {
+    match status {
+        "completed" => "✓",
+        "in_progress" => "→",
+        "cancelled" => "–",
+        _ => "○",
+    }
+}
+
 /// 【终端】【待办动效】保持进行中箭头的字形，仅复用原有状态色和亮度变化。
 /// 参数: `status` 为条目状态，`frame` 为动画帧号；返回: 单列 ANSI 状态标记。
 pub(crate) fn status_marker_framed(status: &str, frame: usize) -> String {
@@ -164,5 +180,17 @@ mod tests {
         }
         assert!(!marker.contains('●'));
         assert!(!marker.contains('•'));
+    }
+
+    /// 【待办测试】【字形一致】无色字形与带色标记使用同一状态符，避免侧栏和工具卡漂移
+    /// 参数: 无；返回: 无
+    #[test]
+    fn plain_glyph_matches_colored_marker() {
+        for status in ["completed", "in_progress", "cancelled", "pending"] {
+            assert_eq!(
+                crate::render::activity_animation::strip_ansi_for_test(status_marker(status)),
+                status_glyph(status)
+            );
+        }
     }
 }

@@ -10,8 +10,9 @@ from test_tui_view import default_config
 
 
 def divider_column(terminal):
-    """参数 terminal 为终端；返回顶部固定分界线列号。"""
-    return lines(terminal)[0].index("│")
+    """参数 terminal 为终端；返回顶部固定分界线列号，拖动期间分界线加粗为 ┃。"""
+    line = lines(terminal)[0]
+    return min(index for index in (line.find("│"), line.find("┃")) if index >= 0)
 
 
 def drag_divider(terminal, target, row=5):

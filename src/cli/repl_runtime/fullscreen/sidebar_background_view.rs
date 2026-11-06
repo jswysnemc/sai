@@ -10,6 +10,7 @@ use crate::cli::repl_background::EmbeddedTaskPanel;
 /// 【终端侧栏】【后台概览】显示运行数量、紧凑命令和管理入口，任务按快照顺序独立滚动。
 /// 参数: panel 为任务快照，collapsed 为折叠状态，width 为净宽；返回: 带操作的侧栏行。
 pub(super) fn rows(panel: &EmbeddedTaskPanel, collapsed: bool, width: usize) -> Vec<SidebarRow> {
+    let palette = SidebarPalette::current();
     let tasks = panel.tasks();
     let running = tasks.iter().filter(|task| task.status == "running").count();
     let mut rows = vec![
@@ -23,7 +24,11 @@ pub(super) fn rows(panel: &EmbeddedTaskPanel, collapsed: bool, width: usize) -> 
             Some(SidebarAction::Toggle(SidebarSection::Background)),
         ),
         row(
-            item(&columns("Manage tasks", "/ps", width), width, false),
+            item(
+                &columns("Manage tasks", &badge("/ps", palette.muted), width),
+                width,
+                false,
+            ),
             Some(SidebarAction::Background(None)),
         ),
     ];
@@ -35,7 +40,6 @@ pub(super) fn rows(panel: &EmbeddedTaskPanel, collapsed: bool, width: usize) -> 
     } else if tasks.is_empty() {
         rows.push(row(item("No background commands", width, true), None));
     }
-    let palette = SidebarPalette::current();
     for (index, task) in tasks.iter().enumerate() {
         let (status, color) = match task.status.as_str() {
             "running" => ("running", palette.accent),

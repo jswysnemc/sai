@@ -317,10 +317,10 @@ fn preview_layout_and_components_stay_within_body() {
     }
 }
 
-/// 【审查测试】【悬停反色】文件和模式响应悬停，移到左侧后清除且不阻止聊天。
+/// 【审查测试】【悬停浅底】文件和模式响应悬停，移到左侧后清除且不阻止聊天
 /// 参数: 无；返回: 无。
 #[test]
-fn review_controls_reverse_on_hover_and_clear_without_intercepting_chat() {
+fn review_controls_tint_on_hover_and_clear_without_intercepting_chat() {
     TerminalSize::with_size(
         TerminalSize {
             cols: 160,
@@ -358,7 +358,11 @@ fn review_controls_reverse_on_hover_and_clear_without_intercepting_chat() {
                     &session.sidebar.git.summary,
                     &layout,
                 );
-                assert!(panel[usize::from(row)].contains("\x1b[7m"));
+                assert!(
+                    panel[usize::from(row)].contains(&super::sidebar_palette::bg(
+                        SidebarPalette::current().hover_bg
+                    ))
+                );
                 assert!(!panel[usize::from(row)].contains("\x1b[4m"));
                 runtime
                     .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 5, 5))
@@ -370,7 +374,11 @@ fn review_controls_reverse_on_hover_and_clear_without_intercepting_chat() {
                     &session.sidebar.git.summary,
                     &layout,
                 );
-                assert!(panel.iter().all(|line| !line.contains("\x1b[7m")));
+                assert!(panel
+                    .iter()
+                    .all(|line| !line.contains(&super::sidebar_palette::bg(
+                        SidebarPalette::current().hover_bg
+                    ))));
             }
             assert_eq!(geometry.hover_at(80, 1, 0, 1), None);
             assert_eq!(

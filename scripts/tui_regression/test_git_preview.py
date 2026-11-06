@@ -110,13 +110,14 @@ class GitPreviewTests(unittest.TestCase):
                 header = lines(terminal)[4]
                 self.assertNotEqual(terminal.screen.buffer[4][header.index("+", 80)].fg,
                                     terminal.screen.buffer[4][header.index("-", 80)].fg)
-                # 2. 【终端审查】【比较控件】模式只在悬停时反色，切换读取不同内容
+                # 2. 【终端审查】【比较控件】模式只在悬停时显示主题浅底，切换读取不同内容
                 column = lines(terminal)[3].index("[ Staged ]") + 2
                 terminal.send(f"\x1b[<35;{column + 1};4M".encode())
-                terminal.wait_for(lambda: terminal.screen.buffer[3][column].reverse)
+                terminal.wait_for(lambda: terminal.screen.buffer[3][column].bg != "default")
+                self.assertFalse(terminal.screen.buffer[3][column].reverse)
                 self.assertFalse(terminal.screen.buffer[3][column].underscore)
                 terminal.send(b"\x1b[<35;6;6M")
-                terminal.wait_for(lambda: not terminal.screen.buffer[3][column].reverse)
+                terminal.wait_for(lambda: terminal.screen.buffer[3][column].bg == "default")
                 click(terminal, column, 3)
                 terminal.wait_for(lambda: "staged-line" in terminal.text() and "working-line" not in terminal.text())
                 column = lines(terminal)[3].index("[ Unstaged ]") + 2

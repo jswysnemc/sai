@@ -3,10 +3,10 @@
 use super::sidebar_widgets::columns;
 use crate::render::brand_logo::{logo_lines, MARK_STYLE};
 
-/// 【终端侧栏】【标识高度】正常尺寸显示完整标志，矮屏退回单行品牌名称。
+/// 【终端侧栏】【标识高度】正常尺寸显示完整标志，矮屏退回单行品牌名称，把行数留给分组列表。
 /// 参数: rows 为面板高度；返回: 标识区行数。
 pub(super) fn height(rows: usize) -> usize {
-    if rows >= 12 {
+    if rows >= 24 {
         3
     } else {
         1
@@ -23,8 +23,10 @@ pub(super) fn render(title: &str, width: usize, rows: usize) -> Vec<String> {
         .map(|index| {
             let logo = if count == 3 { mark[index].as_str() } else { "" };
             let name = if index == center {
+                // 1. 【终端侧栏】【单行品牌】无标志时名称从首列开始，不保留标志后的间隔
+                let gap = if logo.is_empty() { "" } else { " " };
                 format!(
-                    "{logo} \x1b[1msai\x1b[22m{}",
+                    "{logo}{gap}\x1b[1msai\x1b[22m{}",
                     if title.is_empty() {
                         String::new()
                     } else {
@@ -56,5 +58,7 @@ mod tests {
         assert!(rows.iter().all(|row| !row.contains("[x]")));
         assert!(rows.iter().all(|row| !row.contains("\x1b[48;")));
         assert_eq!(render("Review", 20, 8).len(), 1);
+        assert_eq!(render("", 37, 23).len(), 1);
+        assert!(strip_ansi(&render("", 37, 16)[0]).starts_with("sai"));
     }
 }

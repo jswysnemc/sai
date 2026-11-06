@@ -41,19 +41,24 @@ pub(super) fn rows(git: &GitSummary, collapsed: bool, width: usize) -> Vec<Sideb
 /// 参数: git 为快照，status 为文件状态，path 为路径，width 为宽度；返回: 文件行。
 pub(super) fn file(git: &GitSummary, status: &str, path: &str, width: usize) -> String {
     let palette = SidebarPalette::current();
-    let name = path.rsplit('/').next().unwrap_or(path);
-    let marker = if status == "UU" {
-        "!"
+    let trimmed = path.trim_end_matches('/');
+    let name = trimmed.rsplit('/').next().unwrap_or(trimmed);
+    // 1. 【终端审查】【目录标识】未跟踪目录保留结尾斜杠，与同名文件区分
+    let suffix = if trimmed.len() < path.len() { "/" } else { "" };
+    // 2. 【终端审查】【状态着色】只有新增、删除、重命名和冲突使用状态色，常规修改保持弱化
+    let (marker, color) = if status == "UU" {
+        ("!", palette.removed)
     } else if status.contains('D') {
-        "D"
+        ("D", palette.removed)
     } else if status == "??" || status.contains('A') {
-        "A"
+        ("A", palette.added)
     } else if status.contains('R') {
-        "R"
+        ("R", palette.accent)
     } else {
-        "M"
+        ("M", palette.muted)
     };
-    let label = format!("{}{marker} {}", fg(palette.muted), safe_text(name));
+    // 3. 【终端审查】【颜色复位】状态字母单独着色，文件名回到条目正文色
+    let label = format!("{}{marker}\x1b[39m {}{suffix}", fg(color), safe_text(name));
     item(
         &columns(&label, &changes(git.changes.get(path)), width),
         width,

@@ -5,8 +5,8 @@ use super::sidebar::Sidebar;
 use super::sidebar_action::{SidebarAction, SidebarSections};
 use super::sidebar_control::SidebarControl;
 use super::sidebar_git::GitSummary;
-use super::sidebar_palette::{SidebarPalette, fg};
-use super::sidebar_regions::{SidebarPanel, regions};
+use super::sidebar_palette::{fg, SidebarPalette};
+use super::sidebar_regions::{regions, SidebarPanel};
 use super::sidebar_style;
 use super::sidebar_widgets;
 use crate::render::transcript::{SubagentOverviewEntry, TodoSnapshotItem};
@@ -126,6 +126,7 @@ pub(super) fn panel_rows(
     };
     let width = usize::from(geometry.width.saturating_sub(3));
     let height = usize::from(layout.rows);
+    let palette = SidebarPalette::current();
     let header = super::pane_header::render("", width, height);
     let panels = regions(&sidebar.document, height);
     let focused_action = sidebar
@@ -141,7 +142,7 @@ pub(super) fn panel_rows(
             let text = if let Some(line) = header.get(screen_row) {
                 line.clone()
             } else if screen_row + 1 == height {
-                sidebar_style::footer(sidebar, height)
+                sidebar_style::footer(sidebar, width)
             } else if let Some(entry) = entry {
                 let previewed = match entry.action {
                     Some(SidebarAction::GitFile(file)) => sidebar
@@ -152,15 +153,20 @@ pub(super) fn panel_rows(
                         .is_some_and(|(_, path)| sidebar.preview.path.as_deref() == Some(path)),
                     _ => false,
                 };
-                if entry.selected
-                    || previewed
-                    || (sidebar.focused && entry.action.is_some() && entry.action == focused_action)
-                {
+                let focused =
+                    sidebar.focused && entry.action.is_some() && entry.action == focused_action;
+                // 1. 【终端侧栏】【状态叠加】当前项加粗，键盘焦点使用较深底色，鼠标悬停使用浅底
+                let text = if entry.selected || previewed || focused {
                     sidebar_widgets::highlight(&entry.text, true)
-                } else if sidebar.hovered == index {
-                    sidebar_widgets::highlight(&entry.text, false)
                 } else {
                     entry.text.clone()
+                };
+                if focused {
+                    sidebar_widgets::tint(&text, palette.focus_bg)
+                } else if sidebar.hovered == index {
+                    sidebar_widgets::highlight(&text, false)
+                } else {
+                    text
                 }
             } else {
                 String::new()

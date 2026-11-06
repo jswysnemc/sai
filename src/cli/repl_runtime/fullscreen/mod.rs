@@ -77,6 +77,10 @@ mod sidebar_regions;
 #[cfg(test)]
 mod sidebar_regions_tests;
 mod sidebar_resize;
+mod sidebar_scrollbar;
+mod sidebar_scrollbar_input;
+#[cfg(test)]
+mod sidebar_scrollbar_tests;
 mod sidebar_style;
 #[cfg(test)]
 mod sidebar_tests;
@@ -223,6 +227,7 @@ impl ReplRuntime {
         drop(session);
         self.sidebar_control.dragging = false;
         self.sidebar_control.divider_hovered = false;
+        self.sidebar_control.scrollbar = Default::default();
         // 1. 【终端】【视图同步】回到主屏后按内联视图重放
         crate::render::tui_mode::set_override(Some(crate::config::TuiMode::Inline));
         self.last_composer_signature = None;
@@ -396,7 +401,24 @@ impl ReplRuntime {
             &layout,
             &mut painted.rows,
         );
-        sidebar_resize::decorate_divider(&self.sidebar_control, &mut painted.rows);
+        if let Some(side) = layout.sidebar {
+            sidebar_resize::decorate_divider(
+                &self.sidebar_control,
+                &mut painted.rows,
+                usize::from(side.left),
+                0,
+                usize::from(layout.rows),
+            );
+        }
+        let scrollbars = sidebar_scrollbar::scrollbars(&session.sidebar, &layout);
+        self.sidebar_control.scrollbar.sync(&scrollbars);
+        sidebar_scrollbar::decorate(
+            &scrollbars,
+            &self.sidebar_control.scrollbar,
+            &mut painted.rows,
+            usize::from(layout.cols.saturating_sub(1)),
+            0,
+        );
         header_controls::overlay(&self.sidebar_control, &layout, &mut painted.rows);
         image_viewer_view::overlay(&session.image_viewer, &layout, &mut painted.rows);
         // 图片位置变化时先删除旧放置并整屏重画，未变化的行也要重新落下图片

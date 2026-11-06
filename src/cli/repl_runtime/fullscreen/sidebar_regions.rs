@@ -27,6 +27,17 @@ pub(super) struct SidebarScrolls {
 }
 
 impl SidebarScrolls {
+    /// 【终端侧栏】【偏移更新】设置指定分组偏移，由调用方按区域可见范围夹紧
+    /// 参数：section 为分组，offset 为有效偏移；返回：无
+    pub(super) fn set(&mut self, section: SidebarSection, offset: usize) {
+        match section {
+            SidebarSection::Agents => self.agents = offset,
+            SidebarSection::Git => self.git = offset,
+            SidebarSection::Todo => self.todo = offset,
+            SidebarSection::Background => self.background = offset,
+        }
+    }
+
     /// 【终端侧栏】【独立偏移】读取指定分组的滚动位置。
     /// 参数: section 为分组；返回: 该分组偏移。
     pub(super) fn get(&self, section: SidebarSection) -> usize {

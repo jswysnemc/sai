@@ -1,6 +1,6 @@
-//! 无背景色的定宽标题、条目与变更统计。
+//! 定宽分组标题、条目与变更统计，只有悬停控件显示浅底反馈
 
-use super::sidebar_palette::{fg, Rgb, SidebarPalette};
+use super::sidebar_palette::{bg, fg, Rgb, SidebarPalette};
 use super::sidebar_style::clip;
 use crate::cli::repl_text::visible_width;
 
@@ -25,7 +25,17 @@ pub(super) fn heading(title: &str, count: &str, collapsed: bool, width: usize) -
     let marker = if collapsed { "▸" } else { "▾" };
     let palette = SidebarPalette::current();
     let left = format!("{}\x1b[1m{marker} {title}\x1b[22m", fg(palette.text));
-    format!("{}\x1b[0m", columns(&left, count, width))
+    let count = format!("{}{count}\x1b[39m", fg(palette.muted));
+    let gap = width.saturating_sub(visible_width(&left) + visible_width(&count));
+    if gap < 4 {
+        return format!("{}\x1b[0m", columns(&left, &count, width));
+    }
+    format!(
+        "{left} {}{} {}{count}\x1b[0m",
+        fg(palette.border),
+        "─".repeat(gap - 2),
+        fg(palette.muted)
+    )
 }
 
 /// 【终端侧栏】【内容条目】按列宽裁剪内容，次要文本使用前景弱化。
@@ -40,10 +50,25 @@ pub(super) fn item(text: &str, width: usize, muted: bool) -> String {
     )
 }
 
-/// 【终端侧栏】【交互反馈】选中加粗，悬停反色，保留增删行各自的颜色。
+/// 【终端侧栏】【交互反馈】选中加粗，悬停使用主题浅底，保留增删行各自前景色
 /// 参数: text 为 ANSI 行，selected 为选中状态；返回: 状态样式行。
 pub(super) fn highlight(text: &str, selected: bool) -> String {
-    let style = if selected { "\x1b[1m" } else { "\x1b[7m" };
+    if selected {
+        restyle(text, "\x1b[1m")
+    } else {
+        tint(text, SidebarPalette::current().hover_bg)
+    }
+}
+
+/// 【终端侧栏】【整行底色】在每次复位后补回底色，悬停与键盘焦点共用，前景色保持不变
+/// 参数: text 为 ANSI 行，color 为底色；返回: 铺满底色的行
+pub(super) fn tint(text: &str, color: Rgb) -> String {
+    restyle(text, &bg(color))
+}
+
+/// 【终端侧栏】【样式延续】行首写入样式，并在行内每个复位序列后重新应用
+/// 参数: text 为 ANSI 行，style 为控制序列；返回: 全行带样式的文本
+fn restyle(text: &str, style: &str) -> String {
     format!(
         "{style}{}\x1b[0m",
         text.replace("\x1b[0m", &format!("\x1b[0m{style}"))
@@ -64,19 +89,20 @@ pub(super) fn columns(left: &str, right: &str, width: usize) -> String {
     )
 }
 
-/// 【终端审查】【增删统计】新增使用绿色加号，删除使用红色减号，未知统计不伪装成零。
+/// 【终端审查】【增删统计】新增使用绿色加号，删除使用红色减号，未知统计弱化显示且不伪装成零。
 /// 参数: stats 为可选文件统计；返回: 着色的增删数量。
 pub(super) fn changes(stats: Option<&crate::web::GitFileStats>) -> String {
     let palette = SidebarPalette::current();
-    let (added, removed) = match stats {
-        Some(stats) if !stats.binary => (stats.added.to_string(), stats.removed.to_string()),
-        _ => ("?".into(), "?".into()),
-    };
-    format!(
-        "{}+{added} {}-{removed}\x1b[39m",
-        fg(palette.added),
-        fg(palette.removed)
-    )
+    match stats {
+        Some(stats) if !stats.binary => format!(
+            "{}+{} {}-{}\x1b[39m",
+            fg(palette.added),
+            stats.added,
+            fg(palette.removed),
+            stats.removed
+        ),
+        _ => format!("{}+? -?\x1b[39m", fg(palette.muted)),
+    }
 }
 
 /// 【终端显示】【移除背景】保留前景与文字效果，只移除设置背景色的 SGR 参数。

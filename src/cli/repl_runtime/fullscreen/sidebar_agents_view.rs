@@ -21,16 +21,14 @@ pub(super) fn rows(
         heading("Subagents", &agents.len().to_string(), collapsed, width),
         Some(SidebarAction::Toggle(SidebarSection::Agents)),
     )];
+    // 1. 【终端侧栏】【当前会话】正在查看主会话时使用强调色标签，与子任务状态标签一致
+    let current = if viewing.is_none() {
+        badge("active", palette.accent)
+    } else {
+        String::new()
+    };
     let mut main = row(
-        item(
-            &columns(
-                "Main conversation",
-                if viewing.is_none() { "active" } else { "" },
-                width,
-            ),
-            width,
-            false,
-        ),
+        item(&columns("Main conversation", &current, width), width, false),
         Some(SidebarAction::Panel(PanelAction::Agent(None))),
     );
     main.selected = viewing.is_none();

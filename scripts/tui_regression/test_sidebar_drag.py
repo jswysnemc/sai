@@ -35,8 +35,8 @@ class SidebarDragTests(unittest.TestCase):
                 self.assertTrue(all(terminal.screen.buffer[row][column].bg == "default"
                                     for column in range(target + 1, 160)),
                                 f"拖动到 {target} 列时，输入框旧背景必须立即清除")
-                self.assertEqual(lines(terminal)[row][target], "│")
-                self.assertEqual(lines(terminal)[31][target], "│")
+                self.assertIn(lines(terminal)[row][target], "│┃")
+                self.assertIn(lines(terminal)[31][target], "│┃")
             terminal.send(b"\x1b[<0;91;6m")
             terminal.wait_for(lambda: divider_column(terminal) == 90)
 

@@ -29,10 +29,10 @@ fn collect_drag(
 }
 
 impl ReplRuntime {
-    /// 【终端侧栏】【拖动调度】已捕获分界线时才预读鼠标，普通文本选择和输入不参与合并。
+    /// 【终端侧栏】【拖动调度】已捕获分界线或滚动条时预读鼠标，普通文本选择和输入不参与合并
     /// 参数: event 为当前事件；返回: 合并后的事件，未参与合并时为空，读取错误向调用者返回。
     pub(super) fn coalesce_sidebar_drag(&mut self, event: &Event) -> io::Result<Option<Event>> {
-        if !self.sidebar_control.dragging
+        if (!self.sidebar_control.dragging && self.sidebar_control.scrollbar.dragging.is_none())
             || !matches!(event, Event::Mouse(mouse) if mouse.kind == MouseEventKind::Drag(MouseButton::Left))
         {
             return Ok(None);

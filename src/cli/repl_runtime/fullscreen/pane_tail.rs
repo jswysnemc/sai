@@ -57,7 +57,20 @@ impl ReplRuntime {
                 )
             })
             .collect::<Vec<_>>();
-        super::sidebar_resize::decorate_divider(&self.sidebar_control, &mut rows);
+        super::sidebar_resize::decorate_divider(
+            &self.sidebar_control,
+            &mut rows,
+            0,
+            usize::from(layout.composer_top),
+            usize::from(layout.rows),
+        );
+        super::sidebar_scrollbar::decorate(
+            &super::sidebar_scrollbar::scrollbars(&session.sidebar, &layout),
+            &self.sidebar_control.scrollbar,
+            &mut rows,
+            geometry.width.saturating_sub(1),
+            usize::from(layout.composer_top),
+        );
         let next = PaneTail {
             left: layout.main_width,
             top: layout.composer_top,

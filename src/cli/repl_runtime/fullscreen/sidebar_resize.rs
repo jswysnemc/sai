@@ -6,18 +6,61 @@ use super::sidebar_palette::{fg, SidebarPalette};
 use crate::cli::repl_runtime::ReplRuntime;
 use crossterm::event::{Event, MouseButton, MouseEventKind};
 
-/// 【终端侧栏】【分界反馈】悬停和拖动时仅提亮分界线，不改变左右视图背景。
-/// 参数: control 为交互状态，rows 为绘制行；返回: 无。
-pub(super) fn decorate_divider(control: &SidebarControl, rows: &mut [String]) {
-    if !control.divider_hovered && !control.dragging {
-        return;
-    }
+/// 【终端侧栏】【分界反馈】按实际列坐标绘制细线和居中手柄，悬停提亮，拖动增加线宽
+/// 参数：control 为交互，rows 为绘制行，column 为分界列，row_offset 为首行坐标，height 为总高度
+/// 返回：无，只修改分界字符，不改变聊天或面板背景
+pub(super) fn decorate_divider(
+    control: &SidebarControl,
+    rows: &mut [String],
+    column: usize,
+    row_offset: usize,
+    height: usize,
+) {
     let palette = SidebarPalette::current();
-    let before = format!("{}│", fg(palette.border));
-    let after = format!("\x1b[7m{}│\x1b[27m", fg(palette.accent));
-    for row in rows {
-        *row = row.replacen(&before, &after, 1);
+    let active = control.divider_hovered || control.dragging;
+    for (index, row) in rows.iter_mut().enumerate() {
+        let grip = (row_offset + index).abs_diff(height / 2) <= 1;
+        let color = if active {
+            palette.accent
+        } else if grip {
+            palette.muted
+        } else {
+            palette.border
+        };
+        let glyph = if grip || control.dragging {
+            "┃"
+        } else {
+            "│"
+        };
+        *row = replace_divider(row, column, &format!("\x1b[0m{}{glyph}\x1b[0m", fg(color)));
     }
+}
+
+/// 【终端侧栏】【分界定位】跳过 ANSI 控制序列，按显示列定位分界字符，保留其他文字与样式
+/// 参数：text 为整行，column 为目标显示列，replacement 为新字符与样式；返回：更新后的行
+fn replace_divider(text: &str, column: usize, replacement: &str) -> String {
+    let mut index = 0;
+    let mut visible = 0;
+    while index < text.len() {
+        if text.as_bytes()[index] == 0x1b {
+            index = crate::render::terminal_image::escape_sequence_end(text, index).max(index + 1);
+            continue;
+        }
+        let ch = text[index..].chars().next().unwrap();
+        if visible == column && ch == '│' {
+            return format!(
+                "{}{replacement}{}",
+                &text[..index],
+                &text[index + ch.len_utf8()..]
+            );
+        }
+        visible += unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+        index += ch.len_utf8();
+        if visible > column {
+            break;
+        }
+    }
+    text.to_string()
 }
 
 impl ReplRuntime {
@@ -74,6 +117,7 @@ impl ReplRuntime {
             session.sidebar.preview.selection = Default::default();
             control.dragging = true;
             control.divider_hovered = true;
+            control.scrollbar = Default::default();
             return Some(Effect::Repaint);
         }
         if mouse.kind == MouseEventKind::Moved {
