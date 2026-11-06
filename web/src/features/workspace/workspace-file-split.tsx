@@ -34,9 +34,14 @@ type WorkspaceFileSplitProps = {
 export function WorkspaceFileSplit(props: WorkspaceFileSplitProps) {
   const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
+  const cleanupDragRef = useRef<(() => void) | null>(null);
   const [overlay, setOverlay] = useState(false);
   const [containerWidth, setContainerWidth] = useState(0);
   const { treeWidth, resize, constrain } = useWorkspaceFileSplitState();
+
+  useEffect(() => {
+    return () => cleanupDragRef.current?.();
+  }, [props.open, overlay]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -63,28 +68,33 @@ export function WorkspaceFileSplit(props: WorkspaceFileSplitProps) {
    * @returns 无
    */
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
-    if (overlay) return;
+    if (overlay || event.button !== 0) return;
     event.preventDefault();
     const bounds = rootRef.current?.getBoundingClientRect();
     if (!bounds) return;
+    cleanupDragRef.current?.();
     document.body.classList.add("workspace-file-split-resizing");
 
-    // 1. 容器右缘减去指针横坐标，得到右侧文件树目标宽度
+    // 1. 【Web 工作台】【文件树拖动】按指针到右缘的距离计算文件树宽度
+    /** 更新文件树宽度；moveEvent 为指针移动事件，无返回值 */
     const handlePointerMove = (moveEvent: PointerEvent) => {
       resize(bounds.right - moveEvent.clientX, bounds.width);
     };
 
-    // 2. 指针释放或取消时移除全局监听和拖动态
+    // 2. 【Web 工作台】【文件树拖动】释放、取消或卸载时清理监听和拖动态
+    /** 清理本次拖动的全局监听，无参数和返回值 */
     const handlePointerUp = () => {
       document.body.classList.remove("workspace-file-split-resizing");
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
+      cleanupDragRef.current = null;
     };
 
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp, { once: true });
     window.addEventListener("pointercancel", handlePointerUp, { once: true });
+    cleanupDragRef.current = handlePointerUp;
   };
 
   /**

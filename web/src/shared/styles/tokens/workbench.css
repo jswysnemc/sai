@@ -6,6 +6,8 @@
   --panel-surface: var(--paper);
   --composer-surface: var(--paper-raised);
   --toolbar-height: 2rem;
+  /* 右侧面板内的标题行（后台任务、子智能体等）统一高度 */
+  --panel-header-height: 2.5rem;
   --statusbar-height: 1.625rem;
   --control-height: 1.625rem;
   --shadow-composer: 0 2px 10px rgb(var(--shadow-hue) / 4%);

@@ -1,12 +1,27 @@
-.editor-breadcrumbs { position: relative; min-width: 0; flex: 1; align-self: stretch; }
+.editor-breadcrumbs { position: relative; min-width: 0; flex: 1; align-self: stretch; container: editor-breadcrumbs / inline-size; }
 .editor-external-path { display: flex; align-items: center; gap: 0.5rem; overflow: hidden; }
 .editor-external-path > img, .editor-external-path > svg { flex: none; }
 .editor-external-path strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); font-weight: 500; }
 .editor-external-path > span { min-width: 0; overflow: hidden; color: var(--ink-soft); font-size: var(--text-2xs); text-overflow: ellipsis; white-space: nowrap; }
 .editor-breadcrumb-list { display: flex; align-items: center; height: 100%; min-width: 0; overflow: hidden; }
-.editor-breadcrumb-part { display: inline-flex; align-items: center; min-width: 0; flex: 0 1 auto; }
-.editor-breadcrumb-part:last-child { flex-shrink: 1; }
+/*
+ * 空间不足时上级目录先收缩，文件名最后收缩。
+ * 每段只保留分隔箭头：原先段内还有一个下拉箭头，收窄后两个箭头挤在一起难以分辨。
+ */
+.editor-breadcrumb-part { display: inline-flex; align-items: center; min-width: 1.75rem; flex: 0 8 auto; overflow: hidden; }
+.editor-breadcrumb-part:first-child { min-width: 1.25rem; }
+.editor-breadcrumb-part:last-child { min-width: 0; flex-shrink: 1; }
 .editor-breadcrumb-separator { flex: 0 0 auto; color: var(--ink-soft); }
+/* 折叠提示挂在根段内部，不参与段落计数；默认隐藏，窄栏折叠中间目录时出现 */
+.editor-breadcrumb-ellipsis { display: none; flex: none; align-items: center; color: var(--ink-soft); font-size: var(--text-xs); }
+.editor-breadcrumb-ellipsis > span { padding: 0 var(--space-3xs); }
+@container editor-breadcrumbs (width < 22rem) {
+  /* 保留根目录、父目录与文件名，中间目录折叠为省略号；完整路径见悬停提示 */
+  .editor-breadcrumb-part:not(:first-child):nth-last-child(n + 3) { display: none; }
+  .editor-breadcrumb-part:first-child:nth-last-child(n + 4) .editor-breadcrumb-ellipsis { display: inline-flex; }
+  /* 折叠后只剩三段，根目录不再收缩，空间先让给文件名 */
+  .editor-breadcrumb-part:first-child { flex-shrink: 0; }
+}
 .editor-breadcrumb-part button { display: inline-flex; align-items: center; gap:var(--space-3xs); min-width: 0; height: 27px; padding:0 var(--space-3xs); overflow: hidden; border: 0; border-radius:var(--radius-1); background: transparent; color: var(--ink-soft); font:400 var(--text-xs) var(--font-ui); }
 .editor-breadcrumb-part button:hover,
 .editor-breadcrumb-part button.active { background: var(--paper-deep); color: var(--ink); }

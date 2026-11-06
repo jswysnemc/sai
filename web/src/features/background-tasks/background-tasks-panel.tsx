@@ -54,7 +54,7 @@ export function BackgroundTasksPanel() {
   return <section className="background-tasks-panel @container" aria-label={t("Background tasks", "后台任务")}>
     <div className={`background-task-manager${logs && selected ? " log-mode" : ""}`} onKeyDown={logs ? undefined : keyboard}>
       <header className="background-task-heading">
-        <Activity size={14} /><strong>{t("Background tasks", "后台任务管理")}</strong>
+        <Activity size={14} /><strong>{t("Background tasks", "后台任务")}</strong>
         <span>{runningCount}/{tasks.length} {t("running", "运行中")}</span>
         <Button variant="ghost" size="icon" onClick={() => void actions.refresh()} disabled={busy || manager.refreshing} aria-label={t("Refresh tasks", "刷新任务")} title={t("Refresh tasks", "刷新任务")}><RefreshCw size={14} /></Button>
       </header>
@@ -64,6 +64,7 @@ export function BackgroundTasksPanel() {
         <BackgroundTaskFilters tasks={tasks} filter={filter} onChange={setFilter} />
         {manager.loading ? <div className="background-task-empty-state" role="status">{t("Loading tasks…", "正在获取任务…")}</div>
           : visibleTasks.length === 0 ? <div className="background-task-empty-state">
+            <Activity size={20} aria-hidden />
             <p>{manager.error ? t("Tasks unavailable", "暂时无法获取任务") : tasks.length ? t("No tasks match this filter", "当前筛选下没有任务") : t("No background tasks", "没有后台任务")}</p>
             <small>{manager.error ? t("Use Refresh to try again.", "请点击刷新重试。") : t("Commands started in the background appear here.", "后台启动的命令会出现在这里。")}</small>
           </div> : <div className="background-task-list" role="group" aria-label={t("Task list", "任务列表")} ref={listRef}>

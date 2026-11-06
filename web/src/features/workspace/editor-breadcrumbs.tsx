@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Folder, FolderOpen } from "../../shared/ui/icons";
+import { ChevronRight, Folder, FolderOpen } from "../../shared/ui/icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { localizeApiMessage } from "../../api/api-error";
@@ -50,7 +50,7 @@ export function EditorBreadcrumbs({ path, onSelectFile }: EditorBreadcrumbsProps
   </nav>;
 
   return (
-    <nav className="editor-breadcrumbs" aria-label={t("Current file path", "当前文件路径")} ref={rootRef}>
+    <nav className="editor-breadcrumbs" aria-label={t("Current file path", "当前文件路径")} title={relativePath} ref={rootRef}>
       <div className="editor-breadcrumb-list">
         {parts.map((part, index) => (
           <span className="editor-breadcrumb-part" key={`${part.kind}:${part.path}`}>
@@ -63,8 +63,13 @@ export function EditorBreadcrumbs({ path, onSelectFile }: EditorBreadcrumbsProps
               aria-expanded={openPath === part.path}
             >
               <span>{part.label}</span>
-              <ChevronDown size={12} aria-hidden="true" />
             </button>
+            {index === 0 && (
+              <span className="editor-breadcrumb-ellipsis" aria-hidden="true">
+                <ChevronRight size={12} className="editor-breadcrumb-separator" />
+                <span>…</span>
+              </span>
+            )}
           </span>
         ))}
       </div>

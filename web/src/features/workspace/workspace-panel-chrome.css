@@ -1,0 +1,138 @@
+/* 【Web 工作台】【面板层级】分隔、标题和操作统一沿用主题中性色 */
+.workbench-content {
+  --panel-divider: color-mix(in srgb, var(--ink) 12%, transparent);
+  --panel-header-surface: color-mix(in srgb, var(--ink) 2%, var(--paper));
+}
+
+.workspace-pane {
+  min-width: 0;
+  overflow: hidden;
+  background: var(--panel-surface);
+}
+
+.workspace-pane :is(.workspace-tab-bar, .editor-head, .file-tree-head) {
+  border-bottom-color: var(--panel-divider);
+  background: var(--panel-header-surface);
+}
+
+.workspace-pane :is(.workspace-tab-bar, .editor-head, .file-tree-head):hover {
+  border-bottom-color: var(--line-strong);
+}
+
+.workspace-pane :is(.background-task-heading, .subagent-overview-head, .git-toolbar, .workspace-targeted-diff-head) {
+  border-bottom-color: var(--panel-divider);
+  background: var(--panel-header-surface);
+}
+
+.workspace-pane .files-layout.file-tree-open:not(.file-tree-overlay) .file-tree {
+  border-left: 0;
+}
+
+.workspace-pane .file-tree {
+  background: color-mix(in srgb, var(--ink) 1%, var(--paper));
+}
+
+.workspace-pane .workspace-tab,
+.workspace-pane .tree-row::before {
+  transition: background-color var(--transition-fast);
+}
+
+.workspace-pane :is(.workspace-tab-bar, .editor-head, .file-tree-head) .ui-button.ghost:hover:not(:disabled, .workspace-tab-main) {
+  background: var(--surface-selected);
+  color: var(--ink);
+}
+
+/* 【Web 工作台】【分隔交互】两级分栏共用完整细线和圆角手柄，命中范围保持不变 */
+.workspace-resize-handle,
+.workspace-file-split-handle {
+  position: relative;
+  display: grid;
+  width: 0.4375rem;
+  min-height: 0;
+  place-items: center;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 8;
+}
+
+.workspace-file-split-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: calc(var(--workspace-file-tree-width) - 0.25rem);
+  z-index: 12;
+  width: 0.5rem;
+}
+
+.workspace-resize-handle::before,
+.workspace-resize-handle::after,
+.workspace-file-split-handle::before,
+.workspace-file-split-handle::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 50%;
+  width: 1px;
+  background: var(--panel-divider, var(--line));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.workspace-resize-handle::after,
+.workspace-file-split-handle::after {
+  background: var(--signal);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.workspace-resize-handle span,
+.workspace-file-split-handle span {
+  position: relative;
+  width: 0.1875rem;
+  height: 2rem;
+  border-radius: var(--radius-pill);
+  background: var(--line-strong);
+  opacity: 0.45;
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+  pointer-events: none;
+}
+
+.workspace-resize-handle:hover::after,
+.workspace-file-split-handle:hover::after {
+  opacity: 0.45;
+}
+
+.workspace-resize-handle:is(:hover, :focus-visible) span,
+.workspace-file-split-handle:is(:hover, :focus-visible) span,
+.workspace-resizing .workspace-resize-handle span,
+.workspace-file-split-resizing .workspace-file-split-handle span {
+  background: var(--signal);
+  opacity: 1;
+  transform: scaleY(1.1);
+}
+
+.workspace-resize-handle:focus-visible::after,
+.workspace-file-split-handle:focus-visible::after,
+.workspace-resizing .workspace-resize-handle::after,
+.workspace-file-split-resizing .workspace-file-split-handle::after {
+  opacity: 0.8;
+}
+
+.workspace-resizing,
+.workspace-file-split-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-resize-handle::after,
+  .workspace-resize-handle span,
+  .workspace-file-split-handle::after,
+  .workspace-file-split-handle span,
+  .workspace-pane .workspace-tab,
+  .workspace-pane .tree-row::before {
+    transition: none;
+  }
+}

@@ -330,7 +330,7 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
               onMaximize={layout.toggleWorkspaceMaximized}
             />
           )} /></section>}
-          {layout.workspaceOpen && layout.chatOpen && !layout.workspaceMaximized && <WorkspaceResizeHandle swapped={layout.swapped} onResize={layout.resizeWorkspace} />}
+          {layout.workspaceOpen && layout.chatOpen && !layout.workspaceMaximized && <WorkspaceResizeHandle width={layout.workspaceWidth} swapped={layout.swapped} onResize={layout.resizeWorkspace} />}
           {(layout.workspaceOpen || workspaceMounted) && (
             <aside className="coding-workspace" hidden={!layout.workspaceOpen} inert={!layout.workspaceOpen || (isMobile && mobilePane === "chat")}>
               <Suspense fallback={<LoadingPanel />}>

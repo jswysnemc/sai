@@ -207,6 +207,11 @@ export function MonacoCodeEditor({ path, value, onChange, loadingLabel, gitLines
             scrollBeyondLastLine: false,
             mouseWheelZoom: false,
             wordWrap: wordWrap ? "on" : "off",
+            scrollbar: {
+              verticalScrollbarSize: 10,
+              horizontalScrollbarSize: 10,
+              useShadows: false,
+            },
           }}
         />
       ) : (

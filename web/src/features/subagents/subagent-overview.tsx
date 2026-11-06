@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Bot, RefreshCw } from "../../shared/ui/icons";
 import { api } from "../../api/client";
+import { Button } from "../../shared/ui/button/button";
 import type { Subagent } from "../../api/contracts";
 import { SubagentCard } from "./subagent-card";
 import { useI18n } from "../i18n/use-i18n";
@@ -26,11 +27,11 @@ export function SubagentOverview({ selectedId, onSelect, onCancel }: SubagentOve
     <div className="subagent-overview">
       <header className="subagent-overview-head">
         <div className="subagent-overview-title">
-          <Bot size={16} />
+          <Bot size={14} />
           <strong>{t("Subagents", "子智能体")}</strong>
           <span className="subagent-overview-count">{running > 0 ? t(`${running} running · ${subagents.length} total`, `${running} 运行中 · 共 ${subagents.length}`) : t(`${subagents.length} total`, `${subagents.length} 个`)}</span>
         </div>
-        <button type="button" onClick={() => void query.refetch()} aria-label={t("Refresh subagents", "刷新子智能体")}><RefreshCw size={14} /></button>
+        <Button variant="ghost" size="icon" onClick={() => void query.refetch()} aria-label={t("Refresh subagents", "刷新子智能体")} title={t("Refresh subagents", "刷新子智能体")}><RefreshCw size={14} /></Button>
       </header>
       <div className="subagent-overview-list">
         {subagents.map((subagent: Subagent) => (

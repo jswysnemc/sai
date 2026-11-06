@@ -1,10 +1,9 @@
-/* 【后台任务】【紧凑面板】列表、详情与操作共用单一圆角面板，长日志单独进入查看模式 */
+/* 【后台任务】【面板布局】列表、详情与操作铺满右侧面板，与 Git、子智能体同为无外框结构 */
 .background-tasks-panel {
   position: relative;
   height: 100%;
   min-width: 0;
-  overflow: auto;
-  padding: var(--space-sm);
+  overflow: hidden;
   color: var(--ink);
   background: var(--paper);
 }
@@ -12,28 +11,23 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 56rem;
-  max-height: 100%;
-  margin-inline: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-3);
+  height: 100%;
+  min-height: 0;
   overflow: auto;
-  background: var(--paper-raised);
 }
-.background-task-manager.log-mode { height: 100%; }
 .background-task-heading {
   display: flex;
   flex: none;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--space-sm);
-  min-height: 2.5rem;
-  padding: var(--space-xs) var(--space-sm);
+  gap: var(--space-xs);
+  min-height: var(--panel-header-height);
+  padding: var(--space-2xs) var(--space-sm) var(--space-2xs) var(--space-xl);
   border-bottom: 1px solid var(--line);
 }
-.background-task-heading > svg { color: var(--signal); }
-.background-task-heading strong { font-size: var(--text-sm); }
-.background-task-heading > span { color: var(--ink-soft); font-size: var(--text-2xs); }
+.background-task-heading > svg { flex: none; color: var(--signal); }
+.background-task-heading strong { font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.background-task-heading > span { color: var(--ink-soft); font-size: var(--text-xs); }
 .background-task-heading > button { margin-left: auto; }
 .background-task-manager .segmented-control {
   display: flex;
@@ -51,8 +45,8 @@
 .background-task-filters.segmented-control {
   flex: none;
   align-self: start;
-  max-width: calc(100% - 1rem);
-  margin: var(--space-sm);
+  max-width: calc(100% - 2 * var(--space-xl));
+  margin: var(--space-sm) var(--space-xl);
 }
 .background-task-filters.segmented-control .ui-button {
   padding-inline: 0.5rem;
@@ -109,7 +103,7 @@
   flex: none;
   min-width: 0;
   border-top: 1px solid var(--line);
-  padding: var(--space-sm);
+  padding: var(--space-sm) var(--space-xl);
 }
 .background-task-detail > header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
 .background-task-detail > header > span { color: var(--ink-soft); font-size: var(--text-xs); }
@@ -127,9 +121,11 @@
 .background-task-actions { display: flex; flex: none; align-items: center; flex-wrap: wrap; gap: var(--space-2xs); padding: var(--space-xs); border-top: 1px solid var(--line); }
 .background-task-actions .ui-button { font-size: var(--text-xs); }
 .background-task-actions .ui-button:last-child { margin-left: auto; }
-.background-task-key-hint { flex: none; margin: 0; padding: var(--space-xs) var(--space-sm); color: var(--ink-soft); font-size: var(--text-2xs); border-top: 1px solid var(--line); }
-.background-task-empty-state { padding: var(--space-lg); text-align: center; color: var(--ink-soft); font-size: var(--text-sm); }
-.background-task-empty-state p { margin: 0 0 var(--space-xs); }
+.background-task-key-hint { flex: none; margin: 0; padding: var(--space-xs) var(--space-xl); color: var(--ink-soft); font-size: var(--text-2xs); border-top: 1px solid var(--line); }
+/* 空状态与子智能体面板同一结构：弱化图标、正文标题、次级说明 */
+.background-task-empty-state { display: grid; gap: var(--space-xs); justify-items: center; padding: 3rem var(--space-3xl); text-align: center; color: var(--ink-soft); font-size: var(--text-xs); }
+.background-task-empty-state > svg { color: var(--line-strong); }
+.background-task-empty-state p { margin: 0; color: var(--ink); font-size: var(--text-base); }
 .background-task-empty-state small { font-size: var(--text-xs); }
-.background-task-inline-error { flex: none; margin: 0; padding: var(--space-sm); color: var(--danger); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.background-task-inline-error { flex: none; margin: 0; padding: var(--space-sm) var(--space-xl); color: var(--danger); font-size: var(--text-xs); overflow-wrap: anywhere; }
 .background-tasks-panel > .ui-toast { top: auto; right: var(--space-sm); bottom: var(--space-sm); max-width: calc(100% - 2 * var(--space-sm)); }

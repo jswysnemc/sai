@@ -146,52 +146,13 @@
 
 .workspace-maximized .workspace-activity-rail { grid-column: 2; }
 
-.workspace-resize-handle {
-  position: relative;
-  display: grid;
-  width: 7px;
-  min-height: 0;
-  place-items: center;
-  border: 0;
-  background: transparent;
-  cursor: col-resize;
-  touch-action: none;
-  z-index: 8;
-}
-
-.workspace-resize-handle::before {
-  content: "";
-  grid-area: 1 / 1;
-  width: 1px;
-  height: 100%;
-  background: var(--line);
-}
-
-.workspace-resize-handle span {
-  grid-area: 1 / 1;
-  width: 2px;
-  height: 34px;
-  border-radius: var(--radius-pill);
-  background: var(--line-strong);
-  opacity: 0;
-}
-
-.workspace-resize-handle:hover span,
-.workspace-resizing .workspace-resize-handle span {
-  opacity: 1;
-}
-
-.workspace-resizing {
-  cursor: col-resize;
-  user-select: none;
-}
-
 .mobile-sidebar-scrim {
   display: none;
 }
 
 @media (max-width: 60rem) {
-  .workspace-open.chat-open:not(.workspace-maximized) .workbench-content {
+  .workspace-open.chat-open:not(.workspace-maximized) .workbench-content,
+  .layout-swapped.workspace-open.chat-open:not(.workspace-maximized) .workbench-content {
     grid-template-columns: minmax(0, 1fr) 7px minmax(0, 1fr);
   }
 }

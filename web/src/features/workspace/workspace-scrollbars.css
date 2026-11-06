@@ -1,0 +1,79 @@
+/* 【Web 工作台】【面板滚动】保留滚动条空间，悬停、聚焦和滚动时逐级显示滑块 */
+.workspace-pane {
+  --panel-scrollbar-thumb: color-mix(in srgb, var(--ink-soft) 30%, transparent);
+  --panel-scrollbar-hover: color-mix(in srgb, var(--ink-soft) 52%, transparent);
+  --panel-scrollbar-active: color-mix(in srgb, var(--ink-soft) 68%, transparent);
+}
+
+.workspace-pane ::-webkit-scrollbar {
+  width: 0.625rem;
+  height: 0.625rem;
+}
+
+.workspace-pane ::-webkit-scrollbar-thumb {
+  border: 0.1875rem solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  background-clip: padding-box;
+}
+
+.workspace-pane :is(:hover, :focus-within, .is-scrolling)::-webkit-scrollbar-thumb {
+  background: var(--panel-scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+.workspace-pane :is(:hover, :focus-within, .is-scrolling)::-webkit-scrollbar-thumb:hover {
+  background: var(--panel-scrollbar-hover);
+  background-clip: padding-box;
+}
+
+.workspace-pane ::-webkit-scrollbar-thumb:active {
+  background: var(--panel-scrollbar-active);
+  background-clip: padding-box;
+}
+
+@supports not selector(::-webkit-scrollbar-button) {
+  .workspace-pane :is(:hover, :focus-within, .is-scrolling),
+  .workspace-pane .xterm .xterm-viewport:is(:hover, :focus-within, .is-scrolling) {
+    scrollbar-color: var(--panel-scrollbar-thumb) transparent;
+  }
+}
+
+/* 【Web 工作台】【终端滚动】Blink 沿用自定义滑块，避免标准属性覆盖尺寸和状态色 */
+@supports selector(::-webkit-scrollbar-button) {
+  .workspace-pane .xterm .xterm-viewport {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+}
+
+/* 【Web 工作台】【编辑器滚动】Monaco 使用自绘滑块，单独适配同一套圆角与状态色 */
+.workspace-pane .monaco-scrollable-element > .scrollbar > .slider {
+  border-radius: var(--radius-pill);
+  background: var(--panel-scrollbar-thumb);
+}
+
+.workspace-pane .monaco-scrollable-element > .scrollbar.vertical > .slider {
+  left: 0.1875rem !important;
+  width: calc(100% - 0.375rem) !important;
+}
+
+.workspace-pane .monaco-scrollable-element > .scrollbar.horizontal > .slider {
+  top: 0.1875rem !important;
+  height: calc(100% - 0.375rem) !important;
+}
+
+.workspace-pane .monaco-scrollable-element > .scrollbar > .slider:hover {
+  background: var(--panel-scrollbar-hover);
+}
+
+.workspace-pane .monaco-scrollable-element > .scrollbar > .slider.active {
+  background: var(--panel-scrollbar-active);
+}
+
+@media (pointer: coarse) {
+  .workspace-pane ::-webkit-scrollbar-thumb {
+    background: var(--panel-scrollbar-thumb);
+    background-clip: padding-box;
+  }
+}

@@ -10,7 +10,7 @@ export type WorkspaceLayoutState = {
   swapped: boolean;
 };
 
-const DEFAULT_WORKSPACE_WIDTH = 520;
+export const DEFAULT_WORKSPACE_WIDTH = 520;
 const MIN_WORKSPACE_WIDTH = 320;
 const RESERVED_WORKSPACE_WIDTH = 610;
 const RESERVED_WORKBENCH_WIDTH = 367;

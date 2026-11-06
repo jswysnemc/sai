@@ -20,14 +20,15 @@ const PANEL_SHORTCUTS: Partial<Record<WorkspacePanelAction, string>> = {
  * - `props`: 功能打开回调
  *
  * 返回:
- * - 居中的功能列表
+ * - 带标题的居中功能列表
  */
 export function WorkspaceEmptyState({ onOpen }: WorkspaceEmptyStateProps) {
   const { t } = useI18n();
   const modifier = modKeyLabel();
   return (
     <div className="workspace-pane-empty">
-      <div className="workspace-pane-empty-actions">
+      <div className="workspace-pane-empty-actions" role="group" aria-labelledby="workspace-pane-empty-title">
+        <p id="workspace-pane-empty-title" className="workspace-pane-empty-title">{t("Open a panel", "打开面板")}</p>
         {ACTIVE_WORKSPACE_PANEL_OPTIONS.map((option) => {
           const Icon = option.icon;
           const shortcut = PANEL_SHORTCUTS[option.type];
@@ -35,7 +36,7 @@ export function WorkspaceEmptyState({ onOpen }: WorkspaceEmptyStateProps) {
             <button type="button" key={option.type} onClick={() => onOpen(option.type)}>
               <Icon size={16} aria-hidden />
               <span>{t(option.labelEn, option.labelZh)}</span>
-              {shortcut ? <kbd>{modifier}+{shortcut}</kbd> : <kbd aria-hidden="true" />}
+              {shortcut && <kbd>{modifier}+{shortcut}</kbd>}
             </button>
           );
         })}

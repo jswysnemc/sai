@@ -1,5 +1,5 @@
 import { Activity, Bot, ChevronLeft, FileCode2, GitCompareArrows, Globe, Maximize2, MessageSquarePlus, Minimize2, PanelRightClose, Plus, SquareTerminal, X } from "../../shared/ui/icons";
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { Button } from "../../shared/ui/button/button";
 import { ContextActionMenu } from "../../shared/ui/menu/context-action-menu";
 import { FileTypeIcon } from "../../shared/ui/file-icon";
@@ -7,6 +7,7 @@ import { ActionMenu } from "../../shared/ui/menu/action-menu";
 import type { PaneTab, WorkspacePanelTab } from "./workspace-tab";
 import { ACTIVE_WORKSPACE_PANEL_OPTIONS, workspacePanelTitle, type WorkspacePanelAction } from "./workspace-panel-options";
 import { WorkspaceTabSwitcher } from "./workspace-tab-switcher";
+import { revealTab, useTabStripScroll } from "./use-tab-strip-scroll";
 import type { FileTreeGitEntry } from "./use-workspace-git-entries";
 import { useI18n } from "../i18n/use-i18n";
 
@@ -33,29 +34,7 @@ export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
   const { t } = useI18n();
   const tabsRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
-  useEffect(() => {
-    const scroller = tabsRef.current;
-    if (!scroller) return;
-    /**
-     * 检查标签溢出，并将当前标签保持在可视范围内。
-     * @returns 无返回值
-     */
-    const updateOverflow = () => {
-      const overflow = scroller.scrollWidth - scroller.clientWidth > 1;
-      scroller.dataset.overflowLeft = overflow && scroller.scrollLeft > 1 ? "true" : "false";
-      scroller.dataset.overflowRight = overflow && scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1 ? "true" : "false";
-      scroller.querySelector<HTMLElement>('[aria-selected="true"]')
-        ?.scrollIntoView({ block: "nearest", inline: "nearest" });
-    };
-    updateOverflow();
-    scroller.addEventListener("scroll", updateOverflow, { passive: true });
-    const observer = new ResizeObserver(updateOverflow);
-    observer.observe(scroller);
-    return () => {
-      scroller.removeEventListener("scroll", updateOverflow);
-      observer.disconnect();
-    };
-  }, [props.activeTabId, props.tabs]);
+  useTabStripScroll(tabsRef, props.activeTabId, props.tabs);
 
   /**
    * 切换键盘焦点并同步激活标签。
@@ -78,7 +57,7 @@ export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
     props.onActivate(props.tabs[next].id);
     const button = tabsRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next];
     button?.focus();
-    button?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    revealTab(button);
   };
 
   return (
@@ -138,18 +117,19 @@ export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
               </div>
             );
           })}
-          <ActionMenu
-            className="workspace-tab-actions"
-            label={t("Add panel", "添加面板")}
-            trigger={<Plus size={14} />}
-            items={ACTIVE_WORKSPACE_PANEL_OPTIONS.map((item) => ({
-              id: item.type,
-              label: t(item.labelEn, item.labelZh),
-              icon: <item.icon size={16} />,
-              onSelect: () => props.onAdd(item.type)
-            }))}
-          />
         </div>
+        {/* 添加按钮放在 tablist 之外：标签溢出滚动时它仍固定在可见末尾 */}
+        <ActionMenu
+          className="workspace-tab-actions"
+          label={t("Add panel", "添加面板")}
+          trigger={<Plus size={14} />}
+          items={ACTIVE_WORKSPACE_PANEL_OPTIONS.map((item) => ({
+            id: item.type,
+            label: t(item.labelEn, item.labelZh),
+            icon: <item.icon size={16} />,
+            onSelect: () => props.onAdd(item.type)
+          }))}
+        />
       </div>
       <div className="workspace-tab-layout hidden md:flex">
         <Button variant="ghost" size="icon" onClick={props.onToggleMaximized} title={props.maximized ? t("Exit full screen", "退出全屏") : t("Full screen", "全屏")} aria-label={props.maximized ? t("Exit full screen", "退出全屏") : t("Full screen", "全屏")} aria-pressed={props.maximized}>
