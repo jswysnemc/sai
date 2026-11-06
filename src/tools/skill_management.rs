@@ -1,3 +1,4 @@
+use super::skills::frontmatter::parse_skill_frontmatter;
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
 use anyhow::{bail, Context, Result};
@@ -52,12 +53,13 @@ pub(crate) fn list_managed_skills(
                 continue;
             }
             let raw = std::fs::read_to_string(&file)?;
-            let name = frontmatter_value(&raw, "name").unwrap_or_else(|| directory_name.clone());
+            let metadata = parse_skill_frontmatter(&raw);
+            let name = metadata.name.unwrap_or_else(|| directory_name.clone());
             // 2. 同名 skill 按优先级保留一项
             if !seen_names.insert(name.clone()) {
                 continue;
             }
-            let description = frontmatter_value(&raw, "description").unwrap_or_default();
+            let description = metadata.description.unwrap_or_default();
             skills.push(ManagedSkill {
                 id: format!("{scope}:{directory_name}"),
                 name,
@@ -242,43 +244,19 @@ fn validate_directory_name(name: &str) -> Result<()> {
     Ok(())
 }
 
-/// 校验 Skill 文档包含可用的 YAML frontmatter。
+/// 【技能管理】【内容校验】校验文档包含非空名称与简介
+///
+/// 参数：`content` 为完整 SKILL.md 文本
+/// 返回：校验成功或包含缺失字段说明的错误
 fn validate_skill_content(content: &str) -> Result<()> {
-    if frontmatter_value(content, "name")
-        .unwrap_or_default()
-        .trim()
-        .is_empty()
-    {
+    let metadata = parse_skill_frontmatter(content);
+    if metadata.name.is_none() {
         bail!("SKILL.md frontmatter requires a non-empty name");
     }
-    if frontmatter_value(content, "description")
-        .unwrap_or_default()
-        .trim()
-        .is_empty()
-    {
+    if metadata.description.is_none() {
         bail!("SKILL.md frontmatter requires a non-empty description");
     }
     Ok(())
-}
-
-/// 读取简单 YAML frontmatter 字段。
-fn frontmatter_value(raw: &str, key: &str) -> Option<String> {
-    let mut lines = raw.lines();
-    if lines.next()? != "---" {
-        return None;
-    }
-    for line in lines {
-        if line.trim() == "---" {
-            break;
-        }
-        let Some((name, value)) = line.split_once(':') else {
-            continue;
-        };
-        if name.trim() == key {
-            return Some(value.trim().trim_matches('"').to_string());
-        }
-    }
-    None
 }
 
 #[cfg(test)]

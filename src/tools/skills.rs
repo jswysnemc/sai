@@ -4,6 +4,9 @@ use anyhow::{bail, Result};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
+pub(crate) mod frontmatter;
+use frontmatter::parse_skill_frontmatter;
+
 /// 生成 skill 目录提示。
 ///
 /// skill 的可见性分三档，由 Agent 档案决定：
@@ -202,12 +205,15 @@ fn skill_entries(config: &AppConfig, paths: &SaiPaths) -> Result<Vec<SkillEntry>
                 continue;
             }
             let raw = std::fs::read_to_string(&skill_file)?;
-            let name = skill_name(&raw, &entry.file_name().to_string_lossy());
+            let metadata = parse_skill_frontmatter(&raw);
+            let name = metadata
+                .name
+                .unwrap_or_else(|| entry.file_name().to_string_lossy().to_string());
             // 2. 同名 skill 按扫描顺序去重，先出现者优先
             if !seen_names.insert(name.clone()) {
                 continue;
             }
-            let description = frontmatter_value(&raw, "description").unwrap_or_default();
+            let description = metadata.description.unwrap_or_default();
             entries.push(SkillEntry {
                 name,
                 description,
@@ -312,10 +318,6 @@ pub fn skills_jev_prompt(paths: &SaiPaths) -> String {
     )
 }
 
-fn skill_name(raw: &str, fallback: &str) -> String {
-    frontmatter_value(raw, "name").unwrap_or_else(|| fallback.to_string())
-}
-
 /// 按名称读取完整 skill 文档。
 ///
 /// 参数:
@@ -398,30 +400,19 @@ fn load_skill_document(
     bail!("skill not found: {name}");
 }
 
-fn frontmatter_value(raw: &str, key: &str) -> Option<String> {
-    let mut lines = raw.lines();
-    if lines.next()? != "---" {
-        return None;
-    }
-    for line in lines {
-        if line == "---" {
-            break;
-        }
-        let Some((name, value)) = line.split_once(':') else {
-            continue;
-        };
-        if name.trim() == key {
-            return Some(value.trim().trim_matches('"').to_string());
-        }
-    }
-    None
-}
+#[cfg(test)]
+#[path = "skills/frontmatter_tests.rs"]
+mod frontmatter_tests;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn test_paths(root: &std::path::Path) -> SaiPaths {
+    /// 构造技能目录测试路径，供目录与 YAML 解析回归测试共用
+    ///
+    /// 参数：`root` 为临时目录根路径
+    /// 返回：配置、数据与缓存均指向临时目录的路径集合
+    pub(super) fn test_paths(root: &std::path::Path) -> SaiPaths {
         SaiPaths {
             config_dir: root.join("config"),
             config_file: root.join("config/config.jsonc"),
