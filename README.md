@@ -438,3 +438,5 @@ No. Subtasks with write permissions automatically run in isolated `.sai-subagent
 Sai is originated from [Miyu](https://github.com/SHORiN-KiWATA/Miyu). Sincere gratitude to [SHORiN-KiWATA](https://github.com/SHORiN-KiWATA) for the open-source foundational architecture. Sai continues to maintain, refactor, and extend these capabilities.
 
 This project is licensed under the [MIT](LICENSE) License.
+
+[Linux.do](https://linux.do/)
