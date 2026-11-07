@@ -436,3 +436,5 @@ Linux 基于 `bubblewrap`、macOS 基于 `Seatbelt` 实现内核级文件写隔�
 本项目源自 [Miyu](https://github.com/SHORiN-KiWATA/Miyu)。感谢上游作者 [SHORiN-KiWATA](https://github.com/SHORiN-KiWATA) 开源的基础架构与核心理念。Sai 在此基础上持续维护、重构并演进。
 
 本项目依据 [MIT](LICENSE) 许可证开源。
+
+[linux.do](https://linux.do/)
