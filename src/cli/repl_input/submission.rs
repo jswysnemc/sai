@@ -13,6 +13,16 @@ pub(in crate::cli) struct ReplInputSubmission {
 }
 
 impl ReplInputSubmission {
+    /// 【终端】【命令提交】读取已展开的命令正文，避免把输入区占位符存入业务状态。
+    /// 参数: 无；返回: 原位展开附件的文本，控制队列提交则返回命令原文。
+    pub(in crate::cli) fn command_input(&self) -> &str {
+        if self.echo.text.is_empty() {
+            &self.raw_input
+        } else {
+            &self.echo.text
+        }
+    }
+
     /// 【终端】【输入提交】在清空输入前冻结正文、附件和回显元数据。
     ///
     /// 参数: `mode` 为提交模式，`raw_input` 为输入框内容，`clipboard` 为已登记附件
@@ -71,3 +81,7 @@ pub(in crate::cli) struct ReplInputDraft {
     pub(in crate::cli) text: String,
     pub(in crate::cli) clipboard_state: ReplClipboardState,
 }
+
+#[cfg(test)]
+#[path = "submission_tests.rs"]
+mod tests;

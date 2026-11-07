@@ -394,8 +394,10 @@ impl ReplRuntime {
         // 斜杠命令与 shell 不是聊天正文：进控制队列等本轮结束后由主循环执行。
         // 混进消息队列会被当成提问发给模型，或阻塞后续排队消息
         // 立即执行与退出命令已在 handle_stream_key 层拦截，这里只收置灰命令
-        if is_stream_command_text(&text) {
-            self.control_queue.push_back(text);
+        // 1. 【终端】【命令提交】分类前展开正文，整条命令粘贴与仅粘贴参数保持一致
+        let command = self.stream_draft.clipboard.echo_text_for_submit(&text).text;
+        if is_stream_command_text(&command) {
+            self.control_queue.push_back(command);
             self.stream_draft = StreamComposerDraft {
                 mode: Some(mode),
                 ..StreamComposerDraft::default()

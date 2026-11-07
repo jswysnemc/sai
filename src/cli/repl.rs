@@ -260,7 +260,8 @@ pub(super) async fn run_repl(
         external_events.cancel();
         external_events.resume();
         apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
-        let input = submission.raw_input.trim();
+        let command_input = submission.command_input().to_string();
+        let input = command_input.trim();
         if runtime.handle_tui_command(input)?
             || view_commands::handle(input, paths, &mut config, &mut runtime)?
         {

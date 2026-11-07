@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod goal_tests;
 mod keys;
 #[cfg(test)]
 mod takeover_tests;
@@ -302,7 +304,10 @@ fn dispatch_stream_command(
     runtime: &mut ReplRuntime,
     ctx: &StreamCommandContext,
 ) -> Result<StreamInputAction> {
-    let text = runtime.stream_draft().text.trim().to_string();
+    // 1. 【终端】【命令提交】使用完整正文识别命令，避免整条粘贴被当作普通聊天
+    let draft = runtime.stream_draft();
+    let text = draft.clipboard.echo_text_for_submit(&draft.text).text;
+    let text = text.trim().to_string();
     if text.is_empty() {
         return Ok(StreamInputAction::Continue);
     }

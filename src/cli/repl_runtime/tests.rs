@@ -267,6 +267,33 @@ fn slash_commands_go_to_the_control_queue() {
     assert_eq!(runtime.take_next_control_command(), None);
 }
 
+/// 【目标】【控制队列】清空草稿附件前保存完整命令，撤回和再次提交不丢失正文。
+/// 参数: 无；返回: 无，正文或预算丢失时断言失败。
+#[test]
+fn goal_control_queue_expands_pasted_objective_before_clearing_draft() {
+    let mut runtime = ReplRuntime::new(5_000, options());
+    let body = "完整目标需求\n".repeat(30).trim().to_string();
+    let draft = runtime.stream_draft_mut();
+    draft.text = "/goal ".into();
+    draft.cursor = draft.text.chars().count();
+    draft
+        .clipboard
+        .paste_text_into_input(&mut draft.text, &mut draft.cursor, body.clone());
+    draft.text.push_str(" --tokens 5000");
+    let expected = format!("/goal {body} --tokens 5000");
+    assert!(runtime
+        .enqueue_stream_draft(crate::agent::AgentMode::Yolo)
+        .unwrap());
+    assert!(runtime.stream_draft().text.is_empty());
+    assert!(runtime.take_submission_queue().is_empty());
+    assert_eq!(runtime.queued_control_commands(), vec![expected.clone()]);
+    assert_eq!(runtime.undo_last_queued().unwrap(), Some(expected.clone()));
+    assert!(runtime
+        .enqueue_stream_draft(crate::agent::AgentMode::Yolo)
+        .unwrap());
+    assert_eq!(runtime.take_next_control_command(), Some(expected));
+}
+
 /// 【TUI】【控制队列】验证 shell 前缀同样走控制队列。
 #[test]
 fn shell_prefix_goes_to_the_control_queue() {

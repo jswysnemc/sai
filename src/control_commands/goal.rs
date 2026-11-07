@@ -3,6 +3,9 @@ use crate::i18n::text as t;
 use crate::state::StateStore;
 use anyhow::{bail, Result};
 
+mod arguments;
+use arguments::parse_objective_and_budget;
+
 /// `/goal` 子命令。
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum GoalCommand {
@@ -139,57 +142,6 @@ fn status_outcome(
         message: goal_summary(&goal),
         should_continue: continue_when_active && goal.status.is_active(),
     })
-}
-
-/// 从目标文本中提取可选 Token 预算。
-///
-/// 参数:
-/// - `input`: 目标和参数文本
-///
-/// 返回:
-/// - 目标文本及可选预算
-fn parse_objective_and_budget(input: &str) -> Result<(String, Option<u64>)> {
-    let parts = input.split_whitespace().collect::<Vec<_>>();
-    let mut objective = Vec::new();
-    let mut token_budget = None;
-    let mut index = 0;
-    while index < parts.len() {
-        let part = parts[index];
-        if part == "--tokens" {
-            let value = parts
-                .get(index + 1)
-                .ok_or_else(|| anyhow::anyhow!("--tokens requires a positive integer"))?;
-            token_budget = Some(parse_budget(value)?);
-            index += 2;
-            continue;
-        }
-        if let Some(value) = part.strip_prefix("--tokens=") {
-            token_budget = Some(parse_budget(value)?);
-            index += 1;
-            continue;
-        }
-        objective.push(part);
-        index += 1;
-    }
-    if objective.is_empty() {
-        bail!("goal objective cannot be empty")
-    }
-    Ok((objective.join(" "), token_budget))
-}
-
-/// 解析正整数 Token 预算。
-///
-/// 参数:
-/// - `value`: 预算文本
-///
-/// 返回:
-/// - 正整数预算
-fn parse_budget(value: &str) -> Result<u64> {
-    value
-        .parse::<u64>()
-        .ok()
-        .filter(|value| *value > 0)
-        .ok_or_else(|| anyhow::anyhow!("--tokens requires a positive integer"))
 }
 
 /// 格式化 Goal 状态摘要。
