@@ -165,7 +165,9 @@ class FullscreenPartsTests(unittest.TestCase):
     def assert_background_command_stops(self, command):
         """command 为后台测试命令；等待实际启动后验证退出确认与终止，返回无。"""
         with CommandModel(command) as model, TerminalSession(model.config(), columns=100, rows=30) as terminal:
-            terminal.send(b"BG\r")
+            terminal.send(b"BG")
+            terminal.wait_for(lambda: "→ BG" in terminal.text())
+            terminal.send(b"\r")
             terminal.wait_for(lambda: "FINISHED" in terminal.text(), timeout=20)
             # 1. 【终端回归】【进程就绪】任务登记先于 shell 执行，不以模型回复作为进程启动信号
             terminal.wait_for(lambda: bool(sleep_pids(terminal.root)), timeout=10)
