@@ -4,6 +4,7 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyModifiers};
 
 mod history;
+mod images;
 mod mentions;
 mod submission;
 

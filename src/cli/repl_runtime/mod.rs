@@ -4,6 +4,7 @@ mod background_logs;
 mod bottom_panel;
 mod composer;
 mod composer_frame;
+mod composer_images;
 mod composer_mouse;
 mod composer_selection;
 mod context_handoff;
@@ -669,7 +670,7 @@ impl ReplRuntime {
                     .note_scrolled(outcome.scrolled_rows.saturating_sub(absorbed));
                 // 【终端】【帧同步】滚动或历史收缩会擦除输入区，必须重新绘制完整输入框
                 if outcome.scrolled_rows > 0 || new_total < old_total {
-                    self.last_composer_signature = None;
+                    self.invalidate_composer_paint()?;
                 }
                 self.queue_composer()?;
                 self.commit_frame()
@@ -729,7 +730,7 @@ impl ReplRuntime {
             reflow::replay(&mut self.frame, &self.viewport, &window.lines)?
         };
         // 整区重放后屏幕内容已被覆盖，必须强制重绘 composer
-        self.last_composer_signature = None;
+        self.invalidate_composer_paint()?;
         self.queue_composer()?;
         self.commit_frame()?;
         self.stream.reset(&window, painted);

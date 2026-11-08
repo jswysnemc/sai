@@ -40,6 +40,9 @@ impl ReplRuntime {
                 Some(OverlayPlacement::bottom(size.cols, size.rows).panel_lines);
         }
         self.pause_for_permission_prompt()?;
+        if let Some(signature) = &self.last_composer_signature {
+            signature.clear_images(&mut self.frame)?;
+        }
         let placement = self.question_overlay_placement();
         queue!(
             self.frame,

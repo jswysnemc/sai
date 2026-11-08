@@ -1,3 +1,4 @@
+mod image_strip;
 mod input_geometry;
 mod input_hint;
 mod input_viewport;
@@ -51,6 +52,7 @@ pub(super) struct ComposerSignature {
     panel_actions: Vec<(usize, PanelAction)>,
     queue_hits: Vec<super::queue_panel_view::QueueHit>,
     hidden_rows: usize,
+    images: Vec<image_strip::PlacedTile>,
 }
 
 impl ComposerSignature {
@@ -111,6 +113,7 @@ impl ComposerSignature {
 /// 可从输入 source 按当前终端宽度重绘的 REPL composer。
 #[derive(Clone)]
 pub(super) struct ComposerFrame {
+    images: image_strip::ComposerImages,
     selection: super::composer_selection::ComposerSelection,
     chrome: ReplChrome,
     input: String,
@@ -190,6 +193,7 @@ impl ComposerFrame {
         slash_selection: usize,
     ) -> Self {
         Self {
+            images: Default::default(),
             selection: Default::default(),
             chrome,
             input,
@@ -346,7 +350,8 @@ impl ComposerFrame {
         // 输入条自身厚度：内部上下背景边距 + 输入行
         let input_block = CHROME_INPUT_INNER_PAD_ROWS
             .saturating_mul(2)
-            .saturating_add(layout.input_rows);
+            .saturating_add(layout.input_rows)
+            .saturating_add(layout.image_strip.height() as u16);
         // slash / mention / shell 提示时收起状态行，输入上方保留一行空白
         if layout.mention_panel.is_visible() {
             return panel_rows
@@ -384,6 +389,7 @@ pub(super) use key_hints::{KeyHintContext, KeyNotice};
 
 /// composer 在单一终端宽度下的计算结果。
 struct ComposerLayout {
+    image_strip: image_strip::ImageStrip,
     first_visual_row: usize,
     styled_display_lines: Vec<String>,
     input_rows: u16,

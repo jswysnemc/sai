@@ -8,7 +8,7 @@ use crate::cli::repl_commands::is_stream_command_text;
 use anyhow::Result;
 
 impl ReplRuntime {
-    /// 更新 composer source，并在可视历史增高时从 source 重放。
+    /// 【输入图片】【草稿更新】更新输入框内容和附件，并在可视历史增高时重放。
     ///
     /// 参数:
     /// - `chrome`: 当前输入框 chrome 状态
@@ -17,10 +17,12 @@ impl ReplRuntime {
     /// - `is_pasted`: 是否为粘贴内容
     /// - `clipboard_blocks`: 剪贴板原子块区间
     /// - `slash_selection`: slash 面板当前选中项
+    /// - `image_sources`: 按草稿顺序排列的真实图片来源
     ///
     /// 返回:
     /// - composer 顶部行号与视觉行数
-    pub(in crate::cli) fn update_composer(
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn update_composer_content(
         &mut self,
         chrome: &ReplChrome,
         input: &str,
@@ -28,6 +30,7 @@ impl ReplRuntime {
         is_pasted: bool,
         clipboard_blocks: Vec<ReplClipboardBlockSpan>,
         slash_selection: usize,
+        image_sources: Vec<String>,
     ) -> Result<(u16, u16)> {
         let size = TerminalSize::current();
         let mut frame = ComposerFrame::new(
@@ -38,6 +41,7 @@ impl ReplRuntime {
             clipboard_blocks,
             slash_selection,
         );
+        frame.set_images(image_sources, self.composer.as_mut());
         frame.set_mention_candidates(self.mention_candidates(input, cursor));
         frame.set_panel_lines(self.bottom_panel_lines(usize::from(size.cols)));
         // 运行期间置灰打断类命令：排队会让用户不知道命令何时才执行，
@@ -551,12 +555,12 @@ impl ReplRuntime {
             return self.draw_composer();
         }
         let draft = self.stream_draft.clone();
-        self.update_composer(
+        self.update_composer_with_clipboard(
             &chrome,
             &draft.text,
             draft.cursor,
             draft.is_pasted,
-            draft.clipboard.block_spans(&draft.text),
+            &draft.clipboard,
             draft.slash_selection,
         )?;
         self.draw_composer()
@@ -567,6 +571,7 @@ impl ReplRuntime {
     /// 返回:
     /// - 操作结果
     pub(in crate::cli) fn end_composer(&mut self) -> Result<()> {
+        self.invalidate_composer_paint()?;
         self.composer = None;
         // composer 已撤下，下次出现时必须实绘
         self.last_composer_signature = None;
@@ -589,7 +594,7 @@ impl ReplRuntime {
             self.reflow.schedule_immediate();
             self.maybe_reflow_due(false)?;
         }
-        Ok(())
+        self.commit_frame()
     }
 
     /// 判断布局变化后是否需要重放可视历史。

@@ -13,6 +13,9 @@ impl ReplRuntime {
     ) -> Result<crate::question_tui::OverlayPlacement> {
         self.question_overlay_height = Some(height.max(1));
         self.pause_for_permission_prompt()?;
+        if let Some(signature) = &self.last_composer_signature {
+            signature.clear_images(&mut self.frame)?;
+        }
         // 1. 【上下文】【尺寸交接】缩放期间使用临时绘制视口，不能沿用尚未提交的旧坐标
         let viewport = self.drawing_viewport();
         let size = viewport.size();

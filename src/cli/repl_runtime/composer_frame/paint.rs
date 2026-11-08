@@ -16,6 +16,10 @@ impl ComposerFrame {
         let top = viewport.composer_top();
         let height = viewport.composer_height();
         let mut layout = self.layout(cols);
+        // 1. 【输入图片】【高度降级】辅助图片不能挤掉正文或遭到半幅裁剪
+        if self.visual_lines(&layout, cols).len() > usize::from(height) {
+            layout.image_strip = Default::default();
+        }
         // 1. 【终端】【引用面板】先按实际视口收缩候选窗口，避免末尾选中项遭到裁剪
         if layout.mention_panel.is_visible() {
             let other_rows = self
@@ -50,6 +54,7 @@ impl ComposerFrame {
         let footer_start = lines.len().saturating_sub(footer_rows);
         let cursor_offset = self.top_lines(cols).len()
             + usize::from(CHROME_INPUT_PAD_ROWS + CHROME_INPUT_INNER_PAD_ROWS)
+            + layout.image_strip.height()
             + usize::from(layout.cursor_row_offset);
         let hidden_rows = lines
             .len()
@@ -69,6 +74,13 @@ impl ComposerFrame {
                 .min(usize::from(height.saturating_sub(1))) as u16,
         );
         let mut signature = ComposerSignature {
+            images: layout.image_strip.placements(
+                top.saturating_add(
+                    (self.top_lines(cols).len()
+                        + usize::from(CHROME_INPUT_PAD_ROWS + CHROME_INPUT_INNER_PAD_ROWS))
+                    .saturating_sub(hidden_rows) as u16,
+                ),
+            ),
             footer_geometry: Some(InputGeometry::from_rendered_lines(
                 &lines[footer_start..footer_end],
                 cols,
@@ -174,20 +186,36 @@ impl ComposerFrame {
         let same_geometry =
             previous.filter(|old| old.top == top && old.height == height && old.cols == cols);
         let previous_lines = same_geometry.map(|old| old.lines.as_slice());
+        let images_changed = previous.is_none_or(|old| old.images != signature.images);
+        let images_repaint = images_changed || signature.image_rows_changed(previous_lines);
+        if images_changed {
+            if let Some(old) = previous {
+                old.clear_images(output)?;
+            }
+        }
         // 3. 光标单独恢复；内容相同时不切换隐藏状态，也不重写静态行
-        let changed = previous_lines != Some(signature.lines.as_slice());
+        let changed = previous_lines != Some(signature.lines.as_slice()) || images_changed;
         if changed {
             queue!(output, Hide)?;
-            paint_changed_rows(output, top, cols, &signature.lines, previous_lines)?;
+            paint_changed_rows(
+                output,
+                top,
+                cols,
+                &signature.lines,
+                if images_changed { None } else { previous_lines },
+            )?;
         }
         // 4. 布局改变后清理区域下方的旧内容，稳定布局只更新发生变化的行
         let end_row = top.saturating_add(height);
         if same_geometry.is_none() && end_row < viewport.size().rows {
             queue!(output, MoveTo(0, end_row), Clear(ClearType::FromCursorDown))?;
         }
+        if images_repaint {
+            signature.paint_images(output)?;
+        }
         let cursor_changed =
             previous.is_none_or(|old| old.cursor_col != cursor_col || old.cursor_row != cursor_row);
-        if changed || cursor_changed || same_geometry.is_none() {
+        if changed || images_repaint || cursor_changed || same_geometry.is_none() {
             signature.restore_cursor(output)?;
         }
         Ok((cursor_row, signature))
@@ -200,6 +228,13 @@ impl ComposerFrame {
         let mut lines = self.top_lines(cols);
         lines.extend((0..CHROME_INPUT_PAD_ROWS).map(|_| String::new()));
         lines.extend((0..CHROME_INPUT_INNER_PAD_ROWS).map(|_| chrome_input_pad_row(cols)));
+        lines.extend(
+            layout
+                .image_strip
+                .lines()
+                .iter()
+                .map(|line| chrome_input_row(ChromeInputPrefix::Continuation, line, cols)),
+        );
         let first_prefix = if self.input.starts_with('!') {
             ChromeInputPrefix::Shell
         } else {

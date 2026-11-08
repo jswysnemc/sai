@@ -205,6 +205,7 @@ impl ReplRuntime {
             return Ok(());
         }
         // 1. 主屏未提交的绘制先送达，再切到备用屏
+        self.invalidate_composer_paint()?;
         self.commit_frame()?;
         self.fullscreen = Some(FullscreenSession::enter()?);
         // 2. 【终端】【视图同步】呈现方式跟随实际屏幕，避免内联布局进入备用屏
@@ -428,6 +429,10 @@ impl ReplRuntime {
             session.images = images;
         }
         if session.state.previous.is_none() {
+            // 1. 【输入图片】【整屏补绘】正文删除所有放置后，输入框也必须重新提交缩略图
+            if let Some(signature) = &mut self.last_composer_signature {
+                signature.invalidate_images();
+            }
             write!(
                 self.frame,
                 "{}",

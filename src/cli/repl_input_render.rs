@@ -36,12 +36,12 @@ pub(super) fn render_repl_input(
     slash_selection: usize,
     runtime: &mut ReplRuntime,
 ) -> Result<()> {
-    let (next_input_row, current_rows) = runtime.update_composer(
+    let (next_input_row, current_rows) = runtime.update_composer_with_clipboard(
         chrome,
         input,
         cursor,
         is_pasted,
-        clipboard_state.block_spans(input),
+        clipboard_state,
         slash_selection,
     )?;
     *input_row = next_input_row;

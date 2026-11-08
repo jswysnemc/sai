@@ -23,7 +23,7 @@ impl ReplRuntime {
         preview.update(size, height, lines.len());
         reflow::replay(&mut self.frame, &preview, &lines)?;
         self.resize_preview = Some(preview);
-        self.last_composer_signature = None;
+        self.invalidate_composer_paint()?;
         self.queue_composer()?;
         self.commit_frame()
     }
