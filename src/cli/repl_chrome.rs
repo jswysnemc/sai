@@ -136,6 +136,7 @@ impl ReplChrome {
             AgentMode::Audited => "audit",
             AgentMode::AutoAudit => "auto-audit",
             AgentMode::Plan => "plan",
+            AgentMode::CodeModel => "code-model",
         }
     }
 }
@@ -345,6 +346,7 @@ fn colorize_left_status(mode: AgentMode, left_text: &str, context_ratio: f32) ->
         AgentMode::Audited => format!("\x1b[35m{mode_text}\x1b[0m"),
         AgentMode::AutoAudit => format!("\x1b[38;5;141m{mode_text}\x1b[0m"),
         AgentMode::Plan => format!("\x1b[36m{mode_text}\x1b[0m"),
+        AgentMode::CodeModel => format!("\x1b[34m{mode_text}\x1b[0m"),
     };
     let context_color = if context_ratio >= 0.9 {
         "\x1b[31m"

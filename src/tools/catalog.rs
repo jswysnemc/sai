@@ -132,6 +132,7 @@ fn catalog_entries(registry: ToolRegistry) -> Vec<ToolCatalogEntry> {
     let mut entries = registry
         .definitions()
         .into_iter()
+        .filter(|definition| definition.function.name != super::codemode::NAME)
         .map(|def| {
             catalog_entry(
                 def.function.name,

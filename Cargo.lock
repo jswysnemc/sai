@@ -5056,7 +5056,6 @@ dependencies = [
  "rodio",
  "rusqlite",
  "russh",
- "rust-embed",
  "rustc-hash",
  "sai-codemode",
  "sai-plugin-runtime",

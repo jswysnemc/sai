@@ -73,10 +73,5 @@ pub(in crate::cli) fn repl_should_browse_history(
 /// 返回:
 /// - 下一模式
 pub(super) fn cycle_repl_mode(mode: AgentMode) -> AgentMode {
-    match mode {
-        AgentMode::Yolo => AgentMode::Audited,
-        AgentMode::Audited => AgentMode::AutoAudit,
-        AgentMode::AutoAudit => AgentMode::Yolo,
-        AgentMode::Plan => AgentMode::Plan,
-    }
+    mode.next()
 }

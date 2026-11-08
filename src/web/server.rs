@@ -22,10 +22,15 @@ use std::sync::Arc;
 /// 参数:
 /// - `paths`: Sai 路径集合
 /// - `args`: Web 服务参数
+/// - `assets_dir`: 已验证且固定版本的前端资源目录
 ///
 /// 返回:
 /// - 服务运行结果
-pub(super) async fn run(paths: &SaiPaths, args: WebArgs) -> Result<()> {
+pub(super) async fn run(
+    paths: &SaiPaths,
+    args: WebArgs,
+    assets_dir: std::path::PathBuf,
+) -> Result<()> {
     AppConfig::init_files(paths)?;
     let token = generate_token();
     let secrets = crate::config::SecretsConfig::load(paths)?;
@@ -62,6 +67,7 @@ pub(super) async fn run(paths: &SaiPaths, args: WebArgs) -> Result<()> {
     let mut app = Router::new()
         .merge(api::router(state.clone()))
         .fallback(assets::serve)
+        .layer(axum::Extension(assets::WebAssets::new(assets_dir)?))
         .with_state(state.clone());
     if !detached {
         app = app.layer(axum::middleware::from_fn(super::server_logging::request));

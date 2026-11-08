@@ -262,6 +262,17 @@ impl ToolVisibility {
             .is_some_and(|config| config.mode == crate::config::CodeMode::Only)
     }
 
+    /// 【CodeMode】【会话声明】会话模式覆盖旧配置中的入口开关，保留加载历史
+    /// 参数: mode 为当前会话模式；返回: 无
+    pub(crate) fn set_session_mode(&mut self, mode: super::AgentMode) {
+        let config = self.codemode.get_or_insert_with(Default::default);
+        config.mode = if mode == super::AgentMode::CodeModel {
+            crate::config::CodeMode::Only
+        } else {
+            crate::config::CodeMode::Off
+        };
+    }
+
     /// 判断当前工具调用是否为统一调用外壳。
     ///
     /// 参数:

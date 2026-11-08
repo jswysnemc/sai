@@ -303,6 +303,7 @@ pub(super) fn colored_mode_label(mode: AgentMode) -> String {
         AgentMode::Audited => "\x1b[35m[AUDIT]\x1b[0m".to_string(),
         AgentMode::AutoAudit => "\x1b[38;5;141m[AUTO-AUDIT]\x1b[0m".to_string(),
         AgentMode::Plan => "\x1b[36m[PLAN]\x1b[0m".to_string(),
+        AgentMode::CodeModel => "\x1b[34m[CODE-MODEL]\x1b[0m".to_string(),
     }
 }
 

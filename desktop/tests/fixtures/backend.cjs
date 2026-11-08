@@ -6,7 +6,7 @@ if (mode === 'hang') {
 } else {
   const server = http.createServer((_request, response) => {
     response.setHeader('Content-Type', 'application/json');
-    response.end(JSON.stringify({ ok: mode !== 'unhealthy', version: '0.2.4' }));
+    response.end(JSON.stringify({ ok: mode !== 'unhealthy', version: '0.2.4', assets: process.env.SAI_WEB_ASSETS_DIR }));
   });
   const port = Number(process.argv[process.argv.indexOf('--port') + 1]);
   server.listen(port, '127.0.0.1', () => {

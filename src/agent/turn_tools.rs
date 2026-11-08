@@ -55,6 +55,7 @@ impl Agent {
         )
         .await;
         loop {
+            self.sync_codemode_session();
             // 1. 模型请求开始前只消费一条就绪消息，避免合并多个完成回执
             if pending_gap_delivery.is_none() {
                 if let Some(candidate) = self
@@ -197,6 +198,7 @@ impl Agent {
                 &result,
             )?;
             messages.push(assistant_tool_message(&result));
+            self.sync_codemode_session();
             let prepared_calls = tool_invocation::prepare_tool_calls(
                 &self.tool_visibility,
                 &self.tools,

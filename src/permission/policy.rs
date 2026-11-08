@@ -18,6 +18,7 @@ pub(crate) enum PermissionProfileMode {
     Yolo,
     Audited,
     AutoAudit,
+    CodeModel,
     Plan,
 }
 
@@ -35,6 +36,7 @@ impl PermissionProfileMode {
             Self::Audited => "audited",
             Self::AutoAudit => "auto_audit",
             Self::Plan => "plan",
+            Self::CodeModel => "code-model",
         }
     }
 
@@ -45,6 +47,7 @@ impl PermissionProfileMode {
             Self::Audited => 1,
             Self::AutoAudit => 2,
             Self::Plan => 3,
+            Self::CodeModel => 4,
         }
     }
 
@@ -54,6 +57,7 @@ impl PermissionProfileMode {
             1 => Self::Audited,
             2 => Self::AutoAudit,
             3 => Self::Plan,
+            4 => Self::CodeModel,
             _ => Self::Yolo,
         }
     }
@@ -322,7 +326,9 @@ impl PermissionProfile {
         // 2. TODO 仅维护会话计划，不参与权限审计交互或日志记录
         if matches!(
             self.current_mode(),
-            PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
+            PermissionProfileMode::Audited
+                | PermissionProfileMode::AutoAudit
+                | PermissionProfileMode::CodeModel
         ) && tool == "todo"
         {
             return Ok(false);
@@ -341,7 +347,9 @@ impl PermissionProfile {
         }
         if matches!(
             self.current_mode(),
-            PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
+            PermissionProfileMode::Audited
+                | PermissionProfileMode::AutoAudit
+                | PermissionProfileMode::CodeModel
         ) && tool == "background_command"
             && !approved
         {
@@ -382,7 +390,9 @@ impl PermissionProfile {
         let escape_sandbox = tool == "run_command" && requires_sandbox_escape(arguments);
         if matches!(
             self.current_mode(),
-            PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
+            PermissionProfileMode::Audited
+                | PermissionProfileMode::AutoAudit
+                | PermissionProfileMode::CodeModel
         ) && escape_sandbox
             && !approved
         {
@@ -398,7 +408,9 @@ impl PermissionProfile {
         self.record(tool, AuditDecision::Allowed, arguments, None);
         Ok(matches!(
             self.current_mode(),
-            PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
+            PermissionProfileMode::Audited
+                | PermissionProfileMode::AutoAudit
+                | PermissionProfileMode::CodeModel
         ) && tool == "run_command"
             && crate::sandbox::sandbox_requested()
             && !(approved && escape_sandbox))
@@ -421,7 +433,9 @@ impl PermissionProfile {
     ) -> bool {
         if !matches!(
             self.current_mode(),
-            PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
+            PermissionProfileMode::Audited
+                | PermissionProfileMode::AutoAudit
+                | PermissionProfileMode::CodeModel
         ) || tool == "todo"
         {
             return false;
@@ -456,7 +470,9 @@ impl PermissionProfile {
         if self.current_mode() == PermissionProfileMode::Yolo
             || (matches!(
                 self.current_mode(),
-                PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
+                PermissionProfileMode::Audited
+                    | PermissionProfileMode::AutoAudit
+                    | PermissionProfileMode::CodeModel
             ) && tool == "todo")
         {
             return;

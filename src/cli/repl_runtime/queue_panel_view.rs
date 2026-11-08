@@ -151,6 +151,7 @@ pub(super) fn render_at(
             AgentMode::Audited => "audit",
             AgentMode::AutoAudit => "auto",
             AgentMode::Plan => "plan",
+            AgentMode::CodeModel => "code-model",
         };
         let timing = timing_label(item.insert_at);
         let color = if item.insert_at == QueueInsertAt::Request {

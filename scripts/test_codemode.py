@@ -70,7 +70,7 @@ class CodeModeAgentTests(unittest.TestCase):
                     environment[key] = str(root / folder)
                 environment["TERM"] = "dumb"
                 binary = Path(os.environ.get("SAI_TEST_BINARY", Path(__file__).resolve().parents[1] / "target/debug/sai"))
-                result = subprocess.run([str(binary), "--lang", "en-US", "ask", "Execute the regression scripts"],
+                result = subprocess.run([str(binary), "--lang", "en-US", "--code-model", "ask", "Execute the regression scripts"],
                                         cwd=root, env=environment, text=True, capture_output=True, timeout=30)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertIn("integration-complete", result.stdout)

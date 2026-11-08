@@ -10,7 +10,7 @@ COPY web/ ./
 RUN node scripts/copy-material-icons.mjs \
     && npm run build
 
-# 2. 编译 Sai 二进制（嵌入 web/dist）
+# 2. 编译 Sai 二进制
 FROM rust:1-bookworm AS builder
 WORKDIR /src
 
@@ -28,7 +28,6 @@ COPY crates ./crates
 COPY assets ./assets
 COPY sidecars ./sidecars
 COPY src ./src
-COPY --from=web /src/web/dist ./web/dist
 
 RUN cargo build --release --locked \
     && strip target/release/sai
@@ -47,12 +46,14 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /src/target/release/sai /usr/local/bin/sai
+COPY --from=web /src/web/dist /usr/share/sai/web
 
 # 配置与状态目录可挂载到宿主机
 ENV XDG_CONFIG_HOME=/config \
     XDG_STATE_HOME=/state \
     XDG_DATA_HOME=/data \
-    XDG_CACHE_HOME=/cache
+    XDG_CACHE_HOME=/cache \
+    SAI_WEB_ASSETS_DIR=/usr/share/sai/web
 
 VOLUME ["/config", "/state", "/data", "/cache", "/workspace"]
 WORKDIR /workspace

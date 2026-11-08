@@ -1,6 +1,6 @@
 use super::*;
 
-/// 【终端】【会话模式】处理 `/plan`、`/audit`、`/yolo`、`/auto` 与 `/auto-audit`。
+/// 【终端】【会话模式】处理权限模式命令和 `/code-model`。
 ///
 /// 参数: `input` 为提交文本，`mode` 为当前权限模式，`runtime` 为终端界面
 /// 返回: 命中模式命令并完成切换时返回 true
@@ -35,6 +35,7 @@ fn parse(input: &str) -> Option<AgentMode> {
         "/audit" => Some(AgentMode::Audited),
         "/yolo" => Some(AgentMode::Yolo),
         "/auto" | "/auto-audit" => Some(AgentMode::AutoAudit),
+        "/code-model" => Some(AgentMode::CodeModel),
         _ => None,
     }
 }
@@ -49,6 +50,7 @@ mod tests {
         assert_eq!(parse("/audit"), Some(AgentMode::Audited));
         assert_eq!(parse("/yolo"), Some(AgentMode::Yolo));
         assert_eq!(parse("/auto-audit"), Some(AgentMode::AutoAudit));
+        assert_eq!(parse("/CODE-MODEL"), Some(AgentMode::CodeModel));
         assert_eq!(parse("/auto now"), None);
     }
 }

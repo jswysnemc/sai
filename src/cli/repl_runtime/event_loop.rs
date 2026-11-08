@@ -418,12 +418,7 @@ fn complete_stream_mention(runtime: &mut ReplRuntime) -> Result<bool> {
 
 /// 循环切换 Agent 模式。
 fn cycle_mode(mode: AgentMode) -> AgentMode {
-    match mode {
-        AgentMode::Yolo => AgentMode::Audited,
-        AgentMode::Audited => AgentMode::AutoAudit,
-        AgentMode::AutoAudit => AgentMode::Yolo,
-        AgentMode::Plan => AgentMode::Plan,
-    }
+    mode.next()
 }
 
 /// 在光标处插入字符。

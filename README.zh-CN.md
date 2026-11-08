@@ -168,23 +168,17 @@ Markdown 无序列表按层级使用短横线、中点和横线，文本读取�
 
 ### 从源码编译
 
-开发环境需要：Rust stable、Node.js 22、pnpm。
+CLI 编译需要 Rust stable 与下列平台依赖。本地构建 Web 前端还需要 Node.js 22 和 npm，前端遵循仓库中的 `package-lock.json`。
 
 ```bash
 # 1. 获取仓库代码
 git clone https://github.com/jswysnemc/sai.git
 cd sai
 
-# 2. 构建前端静态资源 (Web 工作台)
-cd web
-pnpm install --frozen-lockfile
-pnpm build
-cd ..
-
-# 3. 编译发布版可执行程序
+# 2. 编译发布版可执行程序，无需先构建前端
 cargo build --release --locked
 
-# 4. 验证运行
+# 3. 验证运行
 ./target/release/sai --version
 ```
 
@@ -213,13 +207,13 @@ sudo pacman -U ~/.cache/sai/packages/sai-<version>-1-x86_64.pkg.tar.zst
 
 每次推送到 `main` 分支均会触发自动化构建，可在 [GitHub Actions](https://github.com/jswysnemc/sai/actions) 下载各平台构件；正式发布版本请前往 [GitHub Releases](https://github.com/jswysnemc/sai/releases) 下载。
 
-内嵌 Web 工作台的 CLI 可执行文件（终端界面与 `sai web`）：
+CLI 可执行文件（终端界面与 `sai web`，首次启动 Web 时下载前端资源）：
 
 - `sai-linux-x86_64`
 - `sai-windows-x86_64.exe`
 - `sai-macos-arm64`
 
-桌面安装包（Electron 外壳，内含同一套内嵌 Web 的后端）：
+桌面安装包（Electron 外壳、后端二进制及独立前端文件，支持离线使用）：
 
 - Linux：`sai-desktop-*-linux-*.AppImage`、`sai-desktop-*-linux-*.tar.gz`
 - macOS：`sai-desktop-*-mac-*.dmg`、`sai-desktop-*-mac-*.zip`
@@ -312,9 +306,14 @@ sai ask -w "Rust 最近版本发布的主要特性"       # 启用原生网页�
 
 ```bash
 sai web --port 4096
+sai web update
 ```
 
 系统会自动调用默认浏览器打开 `http://localhost:4096`。若需局域网或公网访问，请先通过 `sai web-password set` 设定口令，再通过 `--host 0.0.0.0` 开放监听。
+
+首次启动 Web 从与 CLI 同版本的 GitHub Release 下载 `sai-web.tar.gz` 并校验 SHA-256；已有缓存时可以离线启动。`sai web update` 只更新对应版本的前端资源，不启动服务；现有服务重启后使用新资源。下载失败保留旧缓存。开发或离线部署可设置 `SAI_WEB_ASSETS_DIR` 指向本地 `web/dist`，详见 [Web 分发说明与可行性评估](docs/web-distribution.md)。
+
+终端中通过 `/code-model` 或 Shift+Tab 进入 [code-model 模式](docs/codemode.md)，切换顺序为 YOLO → AUDIT → AUTO-AUDIT → CODE-MODEL → YOLO。该模式使用 JavaScript 编排当前可用工具，保留权限审核；执行入口不加入普通工具组。单轮调用可使用 `sai --code-model ask "任务内容"`。
 
 ### 6. 终端命令接管（Shell Hook）
 
@@ -358,7 +357,7 @@ exec $SHELL        # 重新载入当前 Shell
 | `sai compact` | 手动触发当前会话上下文归纳压缩 |
 | `sai clear [--memory]` | 清理当前会话上下文或长期记忆 |
 
-全局标志：`--lang en-US|zh-CN`、`--plan`、`--audited`、`--auto-audit`、`--yolo`、`--thinking LEVEL`、`-c`（剪贴板）、`-w`（网络搜索）。
+全局标志：`--lang en-US|zh-CN`、`--plan`、`--audited`、`--auto-audit`、`--yolo`、`--code-model`、`--thinking LEVEL`、`-c`（剪贴板）、`-w`（网络搜索）。
 
 ---
 
@@ -373,7 +372,7 @@ Sai 围绕统一的核心调度器（Runner）与 Agent 内核构建。各入口
 - **底层引擎**：Rust 2021 Edition、Tokio 异步运行时、rusqlite（SQLite WAL 与 FTS5 引擎）。
 - **LLM 通讯**：reqwest + rustls，全双工 SSE 流式解码，三协议自适应转换层。
 - **终端界面**：crossterm、termimad、syntect 代码高亮、KaTeX 终端渲染支持。
-- **工作台后端**：axum 高并发 HTTP 与 WebSocket 服务，集成静态资源内嵌打包。
+- **工作台后端**：axum HTTP 与 WebSocket 服务，从本地缓存读取与后端版本匹配的前端资源。
 - **工作台前端**：React 19、Vite 8、TypeScript、TailwindCSS、Monaco Editor、xterm.js、Mermaid。
 
 ---

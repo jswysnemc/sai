@@ -24,6 +24,7 @@ pub const REPL_COMMANDS: &[&str] = &[
     "/yolo",
     "/auto",
     "/auto-audit",
+    "/code-model",
     "/jev",
     "/sandbox",
     "/tree",

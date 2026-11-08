@@ -147,6 +147,9 @@ pub(in crate::cli) fn run_immediate_stream_command(
 /// 返回:
 /// - 模式切换命令的目标模式；其它输入为空
 fn stream_mode_switch(input: &str) -> Option<AgentMode> {
+    if input.eq_ignore_ascii_case("/code-model") {
+        return Some(AgentMode::CodeModel);
+    }
     if input.eq_ignore_ascii_case("/plan") {
         return Some(AgentMode::Plan);
     }
@@ -188,6 +191,10 @@ mod tests {
         assert_eq!(stream_mode_switch("/AUDIT"), Some(AgentMode::Audited));
         assert_eq!(stream_mode_switch("/yolo"), Some(AgentMode::Yolo));
         assert_eq!(stream_mode_switch("/auto"), Some(AgentMode::AutoAudit));
+        assert_eq!(
+            stream_mode_switch("/CODE-MODEL"),
+            Some(AgentMode::CodeModel)
+        );
         assert_eq!(
             stream_mode_switch("/auto-audit"),
             Some(AgentMode::AutoAudit)

@@ -180,6 +180,7 @@ pub async fn run(cli: Cli) -> Result<()> {
     }
 
     if !paths.config_file.exists()
+        && !matches!(&cli.command, Some(Command::Web(args)) if args.command.is_some())
         && !matches!(
             cli.command,
             Some(
@@ -355,6 +356,8 @@ fn cli_mode_override(cli: &Cli) -> Option<AgentMode> {
         Some(AgentMode::AutoAudit)
     } else if cli.yolo {
         Some(AgentMode::Yolo)
+    } else if cli.code_model {
+        Some(AgentMode::CodeModel)
     } else {
         None
     }
@@ -503,7 +506,7 @@ pub(crate) fn build_tool_registry_with_cached_mcp(
 ) -> Result<tools::ToolRegistry> {
     let registry = if config.tools.enabled {
         match mode {
-            AgentMode::Yolo | AgentMode::Audited | AgentMode::AutoAudit => {
+            AgentMode::Yolo | AgentMode::Audited | AgentMode::AutoAudit | AgentMode::CodeModel => {
                 tools::builtin_registry_with_cached_mcp(config, paths)
             }
             AgentMode::Plan => tools::readonly_registry(config, paths),
@@ -533,10 +536,12 @@ fn build_tool_registry_with_mcp_notices(
 ) -> Result<(tools::ToolRegistry, Vec<String>)> {
     let (registry, notices) = if config.tools.enabled {
         match mode {
-            AgentMode::Yolo | AgentMode::Audited | AgentMode::AutoAudit if discover_mcp => {
+            AgentMode::Yolo | AgentMode::Audited | AgentMode::AutoAudit | AgentMode::CodeModel
+                if discover_mcp =>
+            {
                 tools::builtin_registry_with_mcp_notices(config, paths)
             }
-            AgentMode::Yolo | AgentMode::Audited | AgentMode::AutoAudit => (
+            AgentMode::Yolo | AgentMode::Audited | AgentMode::AutoAudit | AgentMode::CodeModel => (
                 tools::builtin_registry_without_mcp(config, paths),
                 Vec::new(),
             ),

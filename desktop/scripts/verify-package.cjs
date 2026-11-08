@@ -20,6 +20,7 @@ module.exports = async function verifyPackage(context) {
   }));
   if (manifest.platform !== platform || manifest.arch !== arch) throw new Error('后端平台或架构与安装包不符');
   const binary = await fs.readFile(path.join(directory, platform === 'win' ? 'sai.exe' : 'sai'));
+  await fs.access(path.join(directory, 'web', 'index.html'));
   verifyBinaryTarget(binary, key);
   if (createHash('sha256').update(binary).digest('hex') !== manifest.sha256) {
     throw new Error('Sai 后端校验失败，请重新构建');

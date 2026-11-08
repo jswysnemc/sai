@@ -4,6 +4,8 @@
 !/docs/releases/*
 !/docs/computer-use.md
 !/docs/apply-patch.md
+!/docs/codemode.md
+!/docs/web-distribution.md
 /web/dist/
 /.idea/
 /.vscode/

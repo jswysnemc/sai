@@ -1,5 +1,5 @@
-mod ask_question;
 pub(crate) mod apply_patch;
+mod ask_question;
 pub(crate) mod browser;
 mod calculator;
 mod catalog;
@@ -226,7 +226,6 @@ pub(crate) fn builtin_registry_with_cached_mcp(
 /// - 内置工具与 MCP 管理工具组成的注册表
 pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     let mut registry = ToolRegistry::new();
-    codemode::register(&mut registry, &config.codemode);
     crate::gateways::channel_tools::register_unbound_channel_message_tool(
         &mut registry,
         paths,

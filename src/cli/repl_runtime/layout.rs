@@ -153,7 +153,9 @@ pub(super) fn live_preview_cap(size: TerminalSize) -> usize {
 pub(super) fn transcript_mode(mode: AgentMode) -> TranscriptMode {
     match mode {
         AgentMode::Plan => TranscriptMode::Plan,
-        AgentMode::Audited | AgentMode::AutoAudit | AgentMode::Yolo => TranscriptMode::Yolo,
+        AgentMode::Audited | AgentMode::AutoAudit | AgentMode::Yolo | AgentMode::CodeModel => {
+            TranscriptMode::Yolo
+        }
     }
 }
 

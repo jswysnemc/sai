@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { chmod, copyFile, mkdir, readFile, writeFile, access } from 'node:fs/promises';
+import { chmod, copyFile, cp, mkdir, readFile, writeFile, access, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { parseArgs } from 'node:util';
 import path from 'node:path';
@@ -18,7 +18,7 @@ const { values } = parseArgs({ options: {
 const target = targets.resolveTarget(values);
 const destination = paths.backendStagingDir(root, target.key);
 
-// 1. 【桌面构建】【静态资源】先构建前端，确保 Rust 编译时嵌入当前 Web 工作台
+// 1. 【桌面构建】【静态资源】前端单独随安装包分发，不嵌入 Rust 二进制
 if (!values.reuse) {
   targets.requireNativeHost(target);
   run('npm', ['ci'], path.join(source, 'web'));
@@ -48,6 +48,9 @@ if (target.key === targets.resolveTarget().key) {
   }
 }
 await mkdir(destination, { recursive: true });
+await access(path.join(source, 'web/dist/index.html'));
+await rm(path.join(destination, 'web'), { recursive: true, force: true });
+await cp(path.join(source, 'web/dist'), path.join(destination, 'web'), { recursive: true });
 await copyFile(binary, path.join(destination, name));
 await chmod(path.join(destination, name), 0o755);
 await copyFile(path.join(source, 'LICENSE'), path.join(destination, 'LICENSE'));

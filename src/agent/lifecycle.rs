@@ -50,7 +50,7 @@ impl Agent {
         tools.start_plugin_session(state.session_id())?;
         tools.inherit_plugin_storage_session(&state.state_dir().to_string_lossy());
         tools.set_plugin_model_client(&client);
-        tools::codemode::register_for_agent(&mut tools, &config);
+        tools::codemode::register_for_agent(&mut tools, &config, mode);
         let tools_enabled = config.tools.enabled && config.active_model_tools_enabled()?;
         let base_system_prompt =
             build_base_system_prompt(&config, paths, tools_enabled, extra_system_prompt)?;
@@ -87,6 +87,7 @@ impl Agent {
         // skill 提示词只给名称与简介，正文一律靠 load 读取，因此有可见 skill 时同样注册
         let mut tool_visibility =
             ToolVisibility::from_config_with_anchor(&config, anchor_enabled, anchor_promoted);
+        tool_visibility.set_session_mode(mode);
         if tools_enabled
             && (tool_visibility.is_progressive()
                 || (config.skills.enabled && config.has_visible_skills()))
@@ -250,7 +251,7 @@ impl Agent {
         );
         tools.continue_plugin_session(&self.tools);
         tools.set_plugin_model_client(&self.client);
-        tools::codemode::register_for_agent(&mut tools, &self.config);
+        tools::codemode::register_for_agent(&mut tools, &self.config, mode);
         let loaded = if !self.tool_visibility.is_progressive() {
             Vec::new()
         } else {
@@ -263,6 +264,7 @@ impl Agent {
         let anchor_promoted = anchor_enabled && session_anchor_promoted(&self.state)?;
         self.tool_visibility =
             ToolVisibility::from_config_with_anchor(&self.config, anchor_enabled, anchor_promoted);
+        self.tool_visibility.set_session_mode(mode);
         if self.tools_enabled && self.tool_visibility.is_progressive() {
             jev_routing::register_tool_gateways(&mut tools, &self.tool_visibility);
         }
@@ -294,6 +296,8 @@ impl Agent {
     /// 返回:
     /// - 无
     pub fn replace_tools(&mut self, mut tools: ToolRegistry) {
+        let mode = self.mode();
+        self.tool_visibility.set_session_mode(mode);
         tools.rebind_interactive_session(
             &self.config,
             &self.paths,
@@ -302,7 +306,7 @@ impl Agent {
         );
         tools.continue_plugin_session(&self.tools);
         tools.set_plugin_model_client(&self.client);
-        tools::codemode::register_for_agent(&mut tools, &self.config);
+        tools::codemode::register_for_agent(&mut tools, &self.config, mode);
         let loaded = self.tool_visibility.loaded_tool_names();
         crate::goal::register_tools_for_config(&mut tools, self.state.goal_file(), &self.config)
             .expect("failed to register goal tools");
@@ -376,7 +380,7 @@ impl Agent {
         );
         tools.continue_plugin_session(&self.tools);
         tools.set_plugin_model_client(&client);
-        tools::codemode::register_for_agent(&mut tools, &config);
+        tools::codemode::register_for_agent(&mut tools, &config, mode);
         let compaction_runtime =
             compaction_model::resolve_compaction_runtime(&config, &self.paths)?;
         self.config = config;
@@ -395,6 +399,7 @@ impl Agent {
         let anchor_promoted = anchor_enabled && session_anchor_promoted(&self.state)?;
         self.tool_visibility =
             ToolVisibility::from_config_with_anchor(&self.config, anchor_enabled, anchor_promoted);
+        self.tool_visibility.set_session_mode(mode);
         if self.tools_enabled
             && (self.tool_visibility.is_progressive()
                 || (self.config.skills.enabled && self.config.has_visible_skills()))
@@ -423,6 +428,7 @@ impl Agent {
     /// 返回:
     /// - 切换是否成功
     pub fn replace_state(&mut self, state: StateStore) -> Result<()> {
+        let mode = self.mode();
         let external_wake_policy =
             external_wake_policy::ExternalWakePolicy::capture(&self.paths, &state)?;
         self.tools.rebind_interactive_session(
@@ -448,6 +454,7 @@ impl Agent {
         let anchor_promoted = anchor_enabled && session_anchor_promoted(&self.state)?;
         self.tool_visibility =
             ToolVisibility::from_config_with_anchor(&self.config, anchor_enabled, anchor_promoted);
+        self.tool_visibility.set_session_mode(mode);
         if self.tool_visibility.is_progressive() {
             let loaded = self.state.load_loaded_tools()?;
             self.restore_loaded_tools(&loaded);

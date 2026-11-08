@@ -70,7 +70,7 @@ fn status_text(mode: AgentMode) -> String {
             "Current mode Plan: inspection commands run in a read-only sandbox.",
             "当前为计划模式：检查命令在只读沙箱中执行。",
         ),
-        AgentMode::Audited | AgentMode::AutoAudit => t(
+        AgentMode::Audited | AgentMode::AutoAudit | AgentMode::CodeModel => t(
             "Current mode audited: run_command uses the workspace sandbox unless an escalation is approved.",
             "当前为审核模式：run_command 使用工作区沙箱，批准提升的命令除外。",
         ),

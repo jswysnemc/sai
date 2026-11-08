@@ -33,8 +33,18 @@ use anyhow::Result;
 /// 返回:
 /// - 服务运行结果
 pub(crate) async fn run(paths: &SaiPaths, args: WebArgs) -> Result<()> {
+    let update = args.command.is_some();
+    let directory = assets::distribution::ensure(paths, update).await?;
+    if update {
+        println!(
+            "Sai Web {}: {}",
+            env!("CARGO_PKG_VERSION"),
+            directory.display()
+        );
+        return Ok(());
+    }
     if daemon::detach_if_interactive(&args)? {
         return Ok(());
     }
-    server::run(paths, args).await
+    server::run(paths, args, directory).await
 }

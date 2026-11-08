@@ -26,18 +26,20 @@ pub(crate) fn register(registry: &mut ToolRegistry, config: &CodeModeConfig) {
     ));
 }
 
-/// 【CodeMode】【档案边界】使用 config 注册脚本入口，返回无；独占白名单必须显式允许入口。
-pub(crate) fn register_for_agent(registry: &mut ToolRegistry, config: &crate::config::AppConfig) {
-    if config
-        .agent_runtime
-        .as_ref()
-        .is_some_and(|runtime| runtime.exclusive)
-        && !crate::config::whitelist_allows_tool(config, NAME)
-    {
-        registry.remove(NAME);
-        return;
-    }
-    register(registry, &config.codemode);
+/// 【CodeMode】【会话入口】按会话模式注册脚本入口，嵌套目录沿用已过滤的注册表
+/// 参数: registry 为会话工具，config 为脚本配置，mode 为会话模式；返回: 无
+pub(crate) fn register_for_agent(
+    registry: &mut ToolRegistry,
+    config: &crate::config::AppConfig,
+    mode: crate::agent::AgentMode,
+) {
+    let mut execution = config.codemode.clone();
+    execution.mode = if mode == crate::agent::AgentMode::CodeModel {
+        CodeMode::Only
+    } else {
+        CodeMode::Off
+    };
+    register(registry, &execution);
 }
 
 /// 【CodeMode】【目录适配】从当前 registry 生成可调用工具目录，返回排除递归入口的目录。

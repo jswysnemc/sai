@@ -29,6 +29,10 @@ pub struct Cli {
     #[arg(long, conflicts_with_all = ["plan", "audited", "auto_audit"])]
     pub yolo: bool,
 
+    /// 使用 JavaScript 编排工具，保留人工权限审核
+    #[arg(long, conflicts_with_all = ["plan", "audited", "auto_audit", "yolo"])]
+    pub code_model: bool,
+
     #[arg(short = 'c', long = "clipb")]
     pub clipb: bool,
 
@@ -214,6 +218,9 @@ pub struct ToolArgs {
 
 #[derive(Debug, Args)]
 pub struct WebArgs {
+    #[command(subcommand)]
+    pub command: Option<WebCommand>,
+
     // 历史拼写误植的别名保留兼容，但不再出现在 --help 中
     #[arg(long, alias = "prot", default_value_t = 4096)]
     pub port: u16,
@@ -235,6 +242,12 @@ pub struct WebArgs {
 
     #[arg(long, value_name = "PATH")]
     pub workspace: Option<PathBuf>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum WebCommand {
+    /// 重新下载与当前 Sai 版本匹配的 Web 前端资源
+    Update,
 }
 
 #[derive(Debug, Args)]

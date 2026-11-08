@@ -3,6 +3,7 @@ mod codemode;
 mod codemode_dispatch;
 mod codemode_readonly;
 mod codemode_scheduler;
+mod codemode_session;
 #[cfg(test)]
 mod codemode_tests;
 mod compaction;

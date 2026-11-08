@@ -48,6 +48,7 @@ const EXTRA_REPL_COMMANDS: &[&str] = &[
     "/yolo",
     "/auto",
     "/auto-audit",
+    "/code-model",
     "/providers",
     "/config",
     "/undo",
@@ -62,8 +63,15 @@ const EXTRA_REPL_COMMANDS: &[&str] = &[
 ];
 
 /// 其中只切换权限模式的命令：等价于 Shift+Tab 热切换，可立即生效。
-const STREAM_IMMEDIATE_EXTRA_COMMANDS: &[&str] =
-    &["/plan", "/audit", "/yolo", "/auto", "/auto-audit", "/tui"];
+const STREAM_IMMEDIATE_EXTRA_COMMANDS: &[&str] = &[
+    "/plan",
+    "/audit",
+    "/yolo",
+    "/auto",
+    "/auto-audit",
+    "/code-model",
+    "/tui",
+];
 
 /// 判断输入在模型运行期间的执行策略。
 ///
@@ -321,6 +329,7 @@ fn command_description(command: &str) -> &'static str {
         ),
         "/yolo" => t("switch to YOLO mode", "切换到 YOLO 模式"),
         "/auto" | "/auto-audit" => t("switch to auto-audit mode", "切换到自动审核模式"),
+        "/code-model" => t("compose tools with JavaScript", "切换到脚本编排模式"),
         "/jev" => t(
             "Jev routing and permission audit status and switches",
             "Jev 暴露决策与权限审核的状态和开关",
@@ -493,7 +502,14 @@ mod tests {
     /// 权限模式切换等价于 Shift+Tab 热切换，运行期间同样立即生效。
     #[test]
     fn mode_switch_commands_run_immediately() {
-        for command in ["/plan", "/audit", "/yolo", "/auto", "/auto-audit"] {
+        for command in [
+            "/plan",
+            "/audit",
+            "/yolo",
+            "/auto",
+            "/auto-audit",
+            "/code-model",
+        ] {
             assert_eq!(
                 stream_command_policy(command),
                 StreamCommandPolicy::Immediate,

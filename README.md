@@ -151,23 +151,17 @@ Run `sai config` to open the hierarchical configurator covering providers, model
 
 ### Build from source
 
-Prerequisites: Rust stable, Node.js 22, pnpm.
+CLI prerequisites: Rust stable and the platform libraries listed below. Building the Web frontend locally also requires Node.js 22 and npm (the frontend uses `package-lock.json`).
 
 ```bash
 # 1. Clone repository
 git clone https://github.com/jswysnemc/sai.git
 cd sai
 
-# 2. Build web assets (Web workbench)
-cd web
-pnpm install --frozen-lockfile
-pnpm build
-cd ..
-
-# 3. Build release binary
+# 2. Build release binary (no frontend build required)
 cargo build --release --locked
 
-# 4. Verify
+# 3. Verify
 ./target/release/sai --version
 ```
 
@@ -196,13 +190,13 @@ sudo pacman -U ~/.cache/sai/packages/sai-<version>-1-x86_64.pkg.tar.zst
 
 Automated builds run on every push to `main`, available under [GitHub Actions](https://github.com/jswysnemc/sai/actions). Tagged releases can be downloaded from [GitHub Releases](https://github.com/jswysnemc/sai/releases).
 
-Web-embedded CLI binaries (TUI plus `sai web`):
+CLI binaries (TUI plus `sai web`, with frontend assets downloaded on first Web startup):
 
 - `sai-linux-x86_64`
 - `sai-windows-x86_64.exe`
 - `sai-macos-arm64`
 
-Desktop installers (Electron shell around the same web-embedded backend):
+Desktop installers (Electron shell, backend binary and separate frontend files for offline use):
 
 - Linux: `sai-desktop-*-linux-*.AppImage`, `sai-desktop-*-linux-*.tar.gz`
 - macOS: `sai-desktop-*-mac-*.dmg`, `sai-desktop-*-mac-*.zip`
@@ -314,9 +308,14 @@ sai ask -w "Latest features in Rust stable"       # Trigger web search
 
 ```bash
 sai web --port 4096
+sai web update
 ```
 
 Opens `http://localhost:4096` in your browser. Set access passwords with `sai web-password set` before binding to `--host 0.0.0.0`.
+
+The first Web launch downloads `sai-web.tar.gz` and its SHA-256 checksum from the GitHub Release matching the CLI version. Cached assets work offline. `sai web update` refreshes that version without starting a server; restart an existing server to use the update. Failed downloads preserve the previous cache. Set `SAI_WEB_ASSETS_DIR` to a local `web/dist` build for development or offline deployment. See [Web distribution](docs/web-distribution.md).
+
+Use `/code-model` or Shift+Tab in the terminal to enter [code-model mode](docs/codemode.md). The cycle is YOLO → AUDIT → AUTO-AUDIT → CODE-MODEL → YOLO. In code-model mode, JavaScript composes the available tools while retaining permission checks; its execution entry is absent from ordinary tool groups. One-shot commands can use `sai --code-model ask "..."`.
 
 ### 6. Shell interception (Hooks)
 
@@ -336,6 +335,7 @@ exec $SHELL        # Reload shell
 | `sai` | Start interactive terminal REPL |
 | `sai ask <message>` | Send a one-shot query; supports `-c` for image, `-w` for web search |
 | `sai web [--port N] [--host ADDR] [--no-open]` | Launch the Web workbench |
+| `sai web update` | Refresh the frontend assets matching this CLI version |
 | `sai web-password set/clear/status` | Manage Web access passwords |
 | `sai init` | Initialize default configuration and state directories |
 | `sai paths` | Print filesystem paths for config, data, cache, and state |
@@ -360,7 +360,7 @@ exec $SHELL        # Reload shell
 | `sai compact` | Manually trigger conversation context compaction |
 | `sai clear [--memory]` | Clear active session turns or long-term memory |
 
-Global options: `--lang en-US|zh-CN`, `--plan`, `--audited`, `--auto-audit`, `--yolo`, `--thinking LEVEL`, `-c` (clipboard), `-w` (web search).
+Global options: `--lang en-US|zh-CN`, `--plan`, `--audited`, `--auto-audit`, `--yolo`, `--code-model`, `--thinking LEVEL`, `-c` (clipboard), `-w` (web search).
 
 ---
 
@@ -375,7 +375,7 @@ Sai centers on a shared Runner and Agent engine. Entry points (REPL, CLI, Web, G
 - **Core engine**: Rust 2021 Edition, Tokio async runtime, rusqlite (SQLite WAL and FTS5).
 - **LLM client**: reqwest + rustls, full-duplex SSE streaming parser, triple-protocol adapter.
 - **Terminal UI**: crossterm, termimad, syntect syntax highlighting, KaTeX terminal math.
-- **Web backend**: axum HTTP / WebSocket server with embedded asset bundling.
+- **Web backend**: axum HTTP / WebSocket server with version-matched frontend assets cached locally.
 - **Web frontend**: React 19, Vite 8, TypeScript, TailwindCSS, Monaco Editor, xterm.js, Mermaid.
 
 ---

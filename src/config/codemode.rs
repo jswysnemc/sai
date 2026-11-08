@@ -4,9 +4,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CodeMode {
-    #[default]
     On,
     Only,
+    #[default]
     Off,
 }
 
@@ -19,10 +19,10 @@ pub struct CodeModeConfig {
 }
 
 impl Default for CodeModeConfig {
-    /// 【CodeMode】【默认配置】无参数，返回保留直接工具声明的默认配置。
+    /// 【CodeMode】【默认配置】无参数，返回等待会话模式启用的脚本配置。
     fn default() -> Self {
         Self {
-            mode: CodeMode::On,
+            mode: CodeMode::Off,
             inline_budget: 3000,
             timeout_ms: 60_000,
         }

@@ -129,6 +129,7 @@ fn on_only_off_have_consistent_declarations_and_execution_gates() {
 fn codemode_is_available_under_progressive_and_anchor_catalogs() {
     for anchored in [false, true] {
         let mut config = AppConfig::default();
+        config.codemode.mode = CodeMode::Only;
         config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
             deferred_tools: vec!["*".into()],
             ..Default::default()
@@ -155,6 +156,7 @@ fn codemode_is_available_under_progressive_and_anchor_catalogs() {
 fn dynamic_catalog_respects_current_registry_and_inline_budget() {
     let mut registry = registry(Arc::default());
     let mut config = crate::config::CodeModeConfig::default();
+    config.mode = CodeMode::Only;
     crate::tools::codemode::register(&mut registry, &config);
     let first = crate::tools::codemode::definition(&registry, &config).unwrap();
     assert!(first.function.description.contains("Echo text"));
@@ -222,7 +224,7 @@ async fn nested_write_requests_real_permission_and_denial_prevents_execution() {
     let counter = Arc::new(AtomicUsize::new(0));
     let mut agent = agent(
         &paths,
-        AgentMode::Audited,
+        AgentMode::CodeModel,
         AppConfig::default(),
         counter.clone(),
     );
@@ -268,7 +270,7 @@ async fn replacing_registry_keeps_wrapper_without_stale_nested_tools() {
     let paths = SaiPaths::for_tests(root.path());
     let mut agent = agent(
         &paths,
-        AgentMode::Yolo,
+        AgentMode::CodeModel,
         AppConfig::default(),
         Arc::default(),
     );
@@ -289,7 +291,7 @@ async fn replacing_registry_keeps_wrapper_without_stale_nested_tools() {
 #[test]
 fn config_roundtrip_and_limits_are_validated() {
     let mut config = AppConfig::default();
-    assert_eq!(config.codemode.mode, CodeMode::On);
+    assert_eq!(config.codemode.mode, CodeMode::Off);
     let value = serde_json::to_value(&config).unwrap();
     let restored: AppConfig = serde_json::from_value(value).unwrap();
     assert_eq!(restored.codemode.timeout_ms, 60_000);
@@ -347,7 +349,7 @@ async fn concurrent_readonly_tools_preserve_workspace_scope() {
 }
 
 #[test]
-fn exclusive_whitelist_requires_explicit_codemode_and_never_adds_nested_tools() {
+fn session_mode_adds_only_the_gateway_to_exclusive_whitelists() {
     for allowed in [false, true] {
         let mut config = AppConfig::default();
         config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
@@ -360,8 +362,59 @@ fn exclusive_whitelist_requires_explicit_codemode_and_never_adds_nested_tools() 
             ..Default::default()
         });
         let mut registry = ToolRegistry::new();
-        crate::tools::codemode::register_for_agent(&mut registry, &config);
-        assert_eq!(registry.contains("codemode"), allowed);
+        crate::tools::codemode::register_for_agent(&mut registry, &config, AgentMode::CodeModel);
+        assert!(registry.contains("codemode"));
         assert!(crate::tools::codemode::catalog(&registry).is_empty());
     }
+}
+
+/// 【CodeMode】【模式回归】验证旧配置不会暴露入口，热切换和重载按会话模式恢复声明
+/// 参数: 无；返回: 无
+#[test]
+fn session_switches_control_declarations_and_execution() {
+    let root = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(root.path());
+    let mut config = AppConfig::default();
+    config.codemode.mode = CodeMode::On;
+    let mut agent = agent(&paths, AgentMode::Yolo, config, Arc::default());
+    assert!(!agent.tools.contains("codemode"));
+    assert!(agent.tool_visibility.is_visible("echo"));
+    agent.apply_live_mode(AgentMode::CodeModel);
+    assert_eq!(agent.mode(), AgentMode::CodeModel);
+    agent.sync_codemode_session();
+    assert_eq!(agent.tool_visibility.definitions(&agent.tools).len(), 1);
+    assert!(agent.tool_visibility.is_visible("codemode"));
+    assert!(!agent.tool_visibility.is_visible("echo"));
+    assert!(matches!(
+        tool_gate::evaluate_tool_gate(
+            &agent.tools,
+            &agent.tool_visibility,
+            &call("echo", json!({"text":"x"}))
+        ),
+        tool_gate::ToolGate::Reject(_)
+    ));
+    let replacement = registry(Arc::default());
+    agent.switch_mode(AgentMode::Audited, replacement).unwrap();
+    assert!(!agent.tools.contains("codemode"));
+    assert!(agent.tool_visibility.is_visible("echo"));
+    let replacement = registry(Arc::default());
+    agent
+        .switch_mode(AgentMode::CodeModel, replacement)
+        .unwrap();
+    assert_eq!(agent.mode(), AgentMode::CodeModel);
+    assert!(agent.tool_visibility.is_codemode_only());
+}
+
+/// 【CodeMode】【工具目录回归】旧配置开启入口也不会使其出现在工具组或基础注册表中
+/// 参数: 无；返回: 无
+#[test]
+fn gateway_is_absent_from_default_tools_and_catalog_groups() {
+    let root = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(root.path());
+    let mut config = AppConfig::default();
+    config.codemode.mode = CodeMode::On;
+    assert!(!crate::tools::builtin_registry_without_mcp(&config, &paths).contains("codemode"));
+    assert!(!crate::tools::tool_catalog(&config, &paths)
+        .iter()
+        .any(|entry| entry.name == "codemode"));
 }

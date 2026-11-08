@@ -43,7 +43,9 @@ class Backend {
       ...this.prefixArgs, 'web', '--host', '127.0.0.1', '--port', String(this.port), '--no-open',
       ...(this.workspace ? ['--workspace', this.workspace] : []),
     ], {
-      cwd: this.cwd, env: this.env, stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: this.cwd,
+      env: { ...this.env, SAI_WEB_ASSETS_DIR: this.env.SAI_WEB_ASSETS_DIR || path.join(path.dirname(this.executable), 'web') },
+      stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true, detached: process.platform !== 'win32',
     });
     this.closed = new Promise((resolve) => {

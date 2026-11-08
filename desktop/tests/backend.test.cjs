@@ -35,6 +35,8 @@ test('启动等待完整输出与健康响应，重复停止后端口关闭', as
     const url = await backend.start();
     assert.equal(url.searchParams.get('token'), 'test-secret_token');
     assert.equal(await checkHealth(url.origin), true);
+    const health = await fetch(`${url.origin}/health`).then((response) => response.json());
+    assert.equal(health.assets, process.env.SAI_WEB_ASSETS_DIR || path.join(path.dirname(process.execPath), 'web'));
     await Promise.all([backend.stop(), backend.stop()]);
     assert.equal(await checkHealth(url.origin), false);
     assert.notEqual(backend.child.exitCode, null);

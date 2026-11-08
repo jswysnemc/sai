@@ -27,6 +27,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  web:
+    name: Web assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build web assets
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Package versioned web assets
+        env:
+          RELEASE_TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
+        run: node web/scripts/package-release.mjs
+
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sai-web
+          path: target/web-release/sai-web.tar.gz*
+          if-no-files-found: error
+
   build:
     name: CLI ${{ matrix.asset }}
     strategy:
@@ -59,19 +93,6 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install ripgrep --no-progress --yes
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-
-      - name: Build web assets
-        working-directory: web
-        run: |
-          npm ci
-          npm run build
-
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -80,7 +101,7 @@ jobs:
         with:
           shared-key: release-${{ matrix.os }}
 
-      - name: Build web-embedded release binary
+      - name: Build release binary
         run: cargo build --release --locked
 
       - name: Prepare asset
@@ -216,7 +237,7 @@ jobs:
 
   publish:
     name: Publish GitHub Release
-    needs: [build, desktop]
+    needs: [build, desktop, web]
     if: github.event_name == 'push' || inputs.publish || inputs.tag != ''
     runs-on: ubuntu-latest
     steps:
