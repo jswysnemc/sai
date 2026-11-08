@@ -97,7 +97,7 @@ class ActivityChainTests(unittest.TestCase):
                     arguments=["--lang", "en-US"]) as terminal:
                 terminal.send(b"Inspect many details\r")
                 terminal.wait_for(model.ready.is_set)
-                model.fragments.put('{"command":"\n' + "\n".join(f"DETAIL-{index:02}" for index in range(30)) + "\n")
+                model.fragments.put('{"command":"\\n' + "\\n".join(f"DETAIL-{index:02}" for index in range(30)) + "\\n")
                 terminal.wait_for(lambda: "DETAIL-29" in terminal.text())
                 group = self.row_of(terminal, "Preparing")
                 composer = self.row_of(terminal, "→")
@@ -108,7 +108,7 @@ class ActivityChainTests(unittest.TestCase):
                 self.assertEqual(self.row_of(terminal, "Preparing"), group)
                 self.assertEqual(self.row_of(terminal, "→"), composer)
                 self.assertIn("Click to follow latest", terminal.text())
-                model.fragments.put("\n".join(f"DETAIL-{index:02}" for index in range(30, 35)) + "\n")
+                model.fragments.put("\\n".join(f"DETAIL-{index:02}" for index in range(30, 35)) + "\\n")
                 terminal.pump(.5)
                 self.assertIn("DETAIL-19", terminal.text())
                 self.assertNotIn("DETAIL-34", terminal.text())

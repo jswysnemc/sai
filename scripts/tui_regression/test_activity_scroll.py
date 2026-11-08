@@ -20,7 +20,7 @@ class ActivityScrollTests(unittest.TestCase):
         """参数 model 为模型替身，terminal 为终端；输出长详情并等待显示，返回无。"""
         terminal.send(b"Inspect detailed output\r")
         terminal.wait_for(model.ready.is_set)
-        model.fragments.put('{"command":"\n' + "\n".join(f"DETAIL-{index:02}" for index in range(40)) + "\n")
+        model.fragments.put('{"command":"\\n' + "\\n".join(f"DETAIL-{index:02}" for index in range(40)) + "\\n")
         terminal.wait_for(lambda: "DETAIL-39" in terminal.text())
 
     def test_keyboard_navigation_keeps_tool_context_and_composer(self):
@@ -125,8 +125,8 @@ class ActivityScrollTests(unittest.TestCase):
                     arguments=["--lang", "en-US"]) as terminal:
                 terminal.send(b"Inspect wrapped details\r")
                 terminal.wait_for(model.ready.is_set)
-                model.fragments.put('{"command":"\n' + "\n".join(
-                    f"READ-{index:02} " + "abcdefghij " * 7 for index in range(30)) + "\n")
+                model.fragments.put('{"command":"\\n' + "\\n".join(
+                    f"READ-{index:02} " + "abcdefghij " * 7 for index in range(30)) + "\\n")
                 terminal.wait_for(lambda: "READ-29" in terminal.text())
                 terminal.send(b"\x1b[5;3~")
                 terminal.wait_for(lambda: "READ-29" not in terminal.text())

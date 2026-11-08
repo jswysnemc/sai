@@ -48,7 +48,7 @@ class ActivityPresentationTests(unittest.TestCase):
                     arguments=["--lang", "zh-CN"]) as terminal:
                 terminal.send("用户任务\r".encode())
                 terminal.wait_for(model.ready.is_set)
-                model.fragments.put('{"command":"\n' + "\n".join(f"DETAIL-{index:02}" for index in range(40)) + "\n")
+                model.fragments.put('{"command":"\\n' + "\\n".join(f"DETAIL-{index:02}" for index in range(40)) + "\\n")
                 terminal.wait_for(lambda: "DETAIL-39" in terminal.text())
                 self.assertIn("Preparing", terminal.text())
                 self.assertIn("Add a follow-up to the queue", terminal.text())

@@ -30,6 +30,7 @@ jobs:
   web:
     name: Web assets
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,10 +44,16 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      - name: Check release versions
+        env:
+          RELEASE_TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
+        run: node scripts/release/check-versions.mjs
+
       - name: Build web assets
         working-directory: web
         run: |
           npm ci
+          npm test
           npm run build
 
       - name: Package versioned web assets
@@ -63,6 +70,7 @@ jobs:
 
   build:
     name: CLI ${{ matrix.asset }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -103,6 +111,27 @@ jobs:
 
       - name: Build release binary
         run: cargo build --release --locked
+
+      - name: Set up uv
+        if: runner.os == 'Linux'
+        uses: astral-sh/setup-uv@v6
+
+      - name: Verify codemode execution and terminal permissions
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          SAI_TEST_BINARY: ${{ github.workspace }}/target/release/sai
+        run: |
+          uv run --with pyte==0.8.2 python -m unittest discover -s scripts/tui_regression -p 'test_code*.py' -v 2>&1 | tee codemode-terminal.log
+          uv run --python 3.12 scripts/test_codemode.py 2>&1 | tee codemode-integration.log
+
+      - name: Upload codemode regression logs
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: codemode-release-logs
+          path: codemode-*.log
+          if-no-files-found: ignore
 
       - name: Prepare asset
         shell: bash
