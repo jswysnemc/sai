@@ -11,7 +11,6 @@ import unittest
 from terminal import TerminalSession
 from test_fullscreen import fullscreen_ready
 
-HOVER_FG = "\x1b[22;38;2;255;255;255m"
 LONG_COMMAND = " && \\\n".join(f"echo STEP-{index}" for index in range(12))
 
 
@@ -111,11 +110,11 @@ class FullscreenPartsTests(unittest.TestCase):
             terminal.wait_for(lambda: row_of(terminal, "STEP-11") is not None)
             title = row_of(terminal, "Ran $ echo STEP-0")
             self.assertIsNotNone(title, terminal.text())
-            # 1. 悬停标题行：语义图标临时替换为展开状态图标并提亮
-            mark = len(terminal.raw)
+            # 1. 【全屏视图】【悬停】语义图标临时替换为展开状态图标，并通过背景突出整块内容
+            background = terminal.screen.buffer[title][4].bg
             terminal.send(f"\x1b[<35;5;{title + 1}M".encode())
             terminal.wait_for(lambda: lines(terminal)[title].lstrip().startswith("▾ Ran"), timeout=5)
-            self.assertIn(HOVER_FG.encode(), bytes(terminal.raw[mark:]))
+            self.assertNotEqual(terminal.screen.buffer[title][4].bg, background)
             # 2. 点击标题：命令续行和输出一起收起，标题保留
             mouse(terminal, 4, title)
             terminal.wait_for(lambda: row_of(terminal, "STEP-6") is None, timeout=5)

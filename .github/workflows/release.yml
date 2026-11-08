@@ -116,13 +116,13 @@ jobs:
         if: runner.os == 'Linux'
         uses: astral-sh/setup-uv@v6
 
-      - name: Verify codemode execution and terminal permissions
+      - name: Verify terminal and codemode regressions
         if: runner.os == 'Linux'
         shell: bash
         env:
           SAI_TEST_BINARY: ${{ github.workspace }}/target/release/sai
         run: |
-          uv run --with pyte==0.8.2 python -m unittest discover -s scripts/tui_regression -p 'test_code*.py' -v 2>&1 | tee codemode-terminal.log
+          uv run scripts/tui_regression.py 2>&1 | tee codemode-terminal.log
           uv run --python 3.12 scripts/test_codemode.py 2>&1 | tee codemode-integration.log
 
       - name: Upload codemode regression logs
