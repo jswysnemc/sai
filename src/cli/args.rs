@@ -29,8 +29,8 @@ pub struct Cli {
     #[arg(long, conflicts_with_all = ["plan", "audited", "auto_audit"])]
     pub yolo: bool,
 
-    /// 使用 JavaScript 编排工具，保留人工权限审核
-    #[arg(long, conflicts_with_all = ["plan", "audited", "auto_audit", "yolo"])]
+    /// 使用 JavaScript 编排工具，保留独立选择的权限模式
+    #[arg(long, global = true)]
     pub code_model: bool,
 
     #[arg(short = 'c', long = "clipb")]

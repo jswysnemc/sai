@@ -313,7 +313,7 @@ sai web update
 
 首次启动 Web 从与 CLI 同版本的 GitHub Release 下载 `sai-web.tar.gz` 并校验 SHA-256；已有缓存时可以离线启动。`sai web update` 只更新对应版本的前端资源，不启动服务；现有服务重启后使用新资源。下载失败保留旧缓存。开发或离线部署可设置 `SAI_WEB_ASSETS_DIR` 指向本地 `web/dist`，详见 [Web 分发说明与可行性评估](docs/web-distribution.md)。
 
-终端中通过 `/code-model` 或 Shift+Tab 进入 [code-model 模式](docs/codemode.md)，切换顺序为 YOLO → AUDIT → AUTO-AUDIT → CODE-MODEL → YOLO。该模式使用 JavaScript 编排当前可用工具，保留权限审核；执行入口不加入普通工具组。单轮调用可使用 `sai --code-model ask "任务内容"`。
+终端中通过 `/code-model` 切换 [code-model 模式](docs/codemode.md)，也可使用 `/code-model on|off` 显式开启或关闭。JavaScript 工具编排与权限策略相互独立：Shift+Tab 按 YOLO → AUDIT → AUTO-AUDIT → YOLO 切换权限策略，同时保留 code-model 状态。嵌套工具遵循当前权限策略，工具卡片中的 JavaScript 支持语法着色。单轮调用可组合两项设置，例如 `sai --yolo --code-model ask "任务内容"`；单独使用 `--code-model` 会保留配置中的权限策略。
 
 ### 6. 终端命令接管（Shell Hook）
 

@@ -104,10 +104,7 @@ impl Agent {
         }
         let memory = MemoryStore::new(&config, paths);
         memory.init()?;
-        let live_mode = tools
-            .permission_mode_handle()
-            .unwrap_or_else(|| std::sync::Arc::new(std::sync::atomic::AtomicU8::new(mode.as_u8())));
-        live_mode.store(mode.as_u8(), std::sync::atomic::Ordering::SeqCst);
+        let live_mode = super::LiveAgentMode::new(mode, tools.permission_mode_handle());
         tools.set_permission_mode(mode.permission_profile_mode());
         // 配置指定外部内核时在此构建；构建失败直接报错而不是静默退回原生，
         // 否则用户以为换了内核，实际仍在用 sai 自己的循环
@@ -155,7 +152,7 @@ impl Agent {
     /// 返回:
     /// - 当前模式
     pub fn mode(&self) -> AgentMode {
-        AgentMode::from_u8(self.live_mode.load(std::sync::atomic::Ordering::SeqCst))
+        self.live_mode.get()
     }
 
     /// 返回当前工具注册表对应的模式。
@@ -167,7 +164,7 @@ impl Agent {
     }
 
     /// 返回可在运行期热切换的模式句柄。
-    pub fn live_mode_handle(&self) -> std::sync::Arc<std::sync::atomic::AtomicU8> {
+    pub fn live_mode_handle(&self) -> std::sync::Arc<super::LiveAgentMode> {
         self.live_mode.clone()
     }
 
@@ -208,12 +205,11 @@ impl Agent {
     /// - 无
     #[allow(dead_code)]
     pub fn apply_live_mode(&self, mode: AgentMode) {
-        self.live_mode
-            .store(mode.as_u8(), std::sync::atomic::Ordering::SeqCst);
+        self.live_mode.set(mode);
         self.tools
             .set_permission_mode(mode.permission_profile_mode());
         // 切到 YOLO：立刻允许所有待审请求，避免继续点「允许一次」
-        if mode == AgentMode::Yolo {
+        if mode.permission() == crate::agent::PermissionMode::Yolo {
             let _ = crate::permission::allow_all_pending_for_session(self.session_id());
         }
     }
@@ -268,14 +264,8 @@ impl Agent {
         if self.tools_enabled && self.tool_visibility.is_progressive() {
             jev_routing::register_tool_gateways(&mut tools, &self.tool_visibility);
         }
+        self.live_mode.bind_registry(&mut tools, mode);
         self.tools = tools;
-        // 与工具权限配置共享原子模式，保证运行中 Shift+Tab 立即生效
-        self.live_mode = self
-            .tools
-            .permission_mode_handle()
-            .unwrap_or_else(|| std::sync::Arc::new(std::sync::atomic::AtomicU8::new(mode.as_u8())));
-        self.live_mode
-            .store(mode.as_u8(), std::sync::atomic::Ordering::SeqCst);
         self.tools
             .set_permission_mode(mode.permission_profile_mode());
         // 1. 按新模式注册表恢复会话已加载集合，不保留当前模式不存在的工具
@@ -314,6 +304,7 @@ impl Agent {
         if self.tools_enabled && self.tool_visibility.is_progressive() {
             jev_routing::register_tool_gateways(&mut tools, &self.tool_visibility);
         }
+        self.live_mode.bind_registry(&mut tools, mode);
         self.tools = tools;
         self.tool_visibility
             .restore_loaded_tools(&self.tools, &loaded);
@@ -388,8 +379,7 @@ impl Agent {
         self.compaction_client = compaction_runtime.client;
         self.compaction_model_label = compaction_runtime.label;
         self.mode = mode;
-        self.live_mode
-            .store(mode.as_u8(), std::sync::atomic::Ordering::SeqCst);
+        self.live_mode.set(mode);
         self.tools_enabled =
             self.config.tools.enabled && self.config.active_model_tools_enabled()?;
         crate::goal::register_tools_for_config(&mut tools, self.state.goal_file(), &self.config)?;
@@ -406,6 +396,7 @@ impl Agent {
         {
             jev_routing::register_tool_gateways(&mut tools, &self.tool_visibility);
         }
+        self.live_mode.bind_registry(&mut tools, mode);
         self.tools = tools;
         if self.tool_visibility.is_progressive() {
             let loaded = self.state.load_loaded_tools()?;

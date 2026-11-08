@@ -400,7 +400,7 @@ impl Agent {
                         messages.push(ChatMessage::tool(call.id, output));
                         continue;
                     }
-                    if self.mode() == AgentMode::Plan
+                    if self.mode().permission() == crate::agent::PermissionMode::Plan
                         && self
                             .tools
                             .permission_for_call(&call.function.name, &call.function.arguments)?

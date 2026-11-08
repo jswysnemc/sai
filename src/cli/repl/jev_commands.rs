@@ -145,7 +145,10 @@ fn status_text(config: &AppConfig, mode: AgentMode) -> String {
         .to_string(),
     };
     // 3. 审核：只在自动审核权限模式下参与
-    let audit = match (config.jev.audit.enabled, mode == AgentMode::AutoAudit) {
+    let audit = match (
+        config.jev.audit.enabled,
+        mode.permission() == crate::agent::PermissionMode::AutoAudit,
+    ) {
         (false, _) => t("off", "关闭").to_string(),
         (true, true) => t("on", "开启").to_string(),
         (true, false) => t("on, applies after /auto", "开启，切换 /auto 后生效").to_string(),

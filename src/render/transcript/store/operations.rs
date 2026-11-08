@@ -135,118 +135,6 @@ impl TranscriptStore {
         self.push_cell(HistoryCell::failure(text));
     }
 
-    /// 记录等待用户选择的权限事件。
-    ///
-    /// 参数:
-    /// - `request`: 权限请求
-    ///
-    /// 返回:
-    /// - 无
-    pub(crate) fn push_permission_request(
-        &mut self,
-        request: crate::permission::PermissionRequest,
-    ) {
-        self.finalize_live_tail();
-        // 优先挂到当前活动工具；若活动索引已漂移，回退扫描最近匹配工具，避免审计 UI 丢失
-        if let Some(index) = self.active_tool_index {
-            if self.attach_permission_at(index, &request) {
-                return;
-            }
-        }
-        for index in (0..self.cells.len()).rev() {
-            if self.attach_permission_at(index, &request) {
-                self.active_tool_index = Some(index);
-                return;
-            }
-        }
-    }
-
-    /// 更新指定权限事件的最终决定。
-    ///
-    /// 参数:
-    /// - `request_id`: 权限请求标识
-    /// - `decision`: 用户决定
-    ///
-    /// 返回:
-    /// - 是否找到并更新了权限事件
-    pub(crate) fn resolve_permission(
-        &mut self,
-        request_id: &str,
-        decision: crate::permission::PermissionDecision,
-    ) -> bool {
-        self.update_permission_cells(|cell| match cell {
-            HistoryCell::Tool(ToolCell::Invocation(view)) => {
-                view.resolve_permission(request_id, decision.clone())
-            }
-            HistoryCell::Diff(cell) => cell.resolve_permission(request_id, decision.clone()),
-            _ => false,
-        })
-    }
-
-    /// 更新指定权限事件的拒绝回复草稿。
-    ///
-    /// 参数:
-    /// - `request_id`: 权限请求标识
-    /// - `draft`: 回复草稿；空值表示返回权限选择
-    ///
-    /// 返回:
-    /// - 是否找到并更新了权限事件
-    pub(crate) fn set_permission_reply_draft(
-        &mut self,
-        request_id: &str,
-        draft: Option<String>,
-    ) -> bool {
-        self.update_permission_cells(|cell| match cell {
-            HistoryCell::Tool(ToolCell::Invocation(view)) => {
-                view.set_permission_reply(request_id, draft.clone())
-            }
-            HistoryCell::Diff(cell) => cell.set_permission_reply(request_id, draft.clone()),
-            _ => false,
-        })
-    }
-
-    /// 更新指定权限事件的当前高亮选项。
-    ///
-    /// 参数:
-    /// - `request_id`: 权限请求标识
-    /// - `selected`: 高亮选项
-    ///
-    /// 返回:
-    /// - 是否找到并更新了权限事件
-    pub(crate) fn set_permission_choice(
-        &mut self,
-        request_id: &str,
-        selected: crate::render::PermissionChoice,
-    ) -> bool {
-        self.update_permission_cells(|cell| match cell {
-            HistoryCell::Tool(ToolCell::Invocation(view)) => {
-                view.set_permission_choice(request_id, selected)
-            }
-            HistoryCell::Diff(cell) => cell.set_permission_choice(request_id, selected),
-            _ => false,
-        })
-    }
-
-    /// 从最新 cell 向前查找并更新权限事件，命中时标脏。
-    ///
-    /// 参数:
-    /// - `update`: 权限更新函数，命中时返回 true
-    ///
-    /// 返回:
-    /// - 是否找到并更新了权限事件
-    fn update_permission_cells<F>(&mut self, mut update: F) -> bool
-    where
-        F: FnMut(&mut HistoryCell) -> bool,
-    {
-        for index in (0..self.cells.len()).rev() {
-            if update(&mut self.cells[index]) {
-                self.mark_dirty(index);
-                return true;
-            }
-        }
-        false
-    }
-
     /// 记录 REPL 本地 Shell 命令与输出。
     ///
     /// 参数:
@@ -269,6 +157,19 @@ impl TranscriptStore {
     /// - 无
     pub(crate) fn push_welcome(&mut self, cell: WelcomeCell) {
         self.push_cell(HistoryCell::welcome(cell));
+    }
+
+    /// 【会话模式】【标题同步】参数 permissions 为当前组合标签；更新最近会话标题并返回无。
+    pub(crate) fn update_welcome_permissions(&mut self, permissions: String) {
+        for (index, cell) in self.cells.iter_mut().enumerate().rev() {
+            if let HistoryCell::Welcome(cell) = cell {
+                if cell.permissions != permissions {
+                    cell.permissions = permissions;
+                    self.mark_dirty(index);
+                }
+                break;
+            }
+        }
     }
 
     /// 记录模型流式文本片段，并在种类变化时收敛旧尾部。
@@ -570,39 +471,6 @@ impl TranscriptStore {
         cell.finish_with_output(ok, output);
         self.mark_dirty(index);
         true
-    }
-
-    /// 将权限审计挂到指定 transcript 单元。
-    ///
-    /// 参数:
-    /// - `index`: cell 索引
-    /// - `request`: 权限请求
-    ///
-    /// 返回:
-    /// - 是否成功附着
-    fn attach_permission_at(
-        &mut self,
-        index: usize,
-        request: &crate::permission::PermissionRequest,
-    ) -> bool {
-        let attached = match self.cells.get_mut(index) {
-            Some(HistoryCell::Tool(ToolCell::Invocation(view))) if view.name == request.tool => {
-                view.request_permission_with_auto_audit(request.id.clone(), request.auto_audit);
-                view.set_permission_sandbox(request.sandbox.clone());
-                true
-            }
-            Some(HistoryCell::Diff(cell))
-                if crate::render::stream_text::is_file_edit_tool(&request.tool) =>
-            {
-                cell.request_permission_with_auto_audit(request.id.clone(), request.auto_audit);
-                true
-            }
-            _ => false,
-        };
-        if attached {
-            self.mark_dirty(index);
-        }
-        attached
     }
 
     /// 更新当前活动工具单元。

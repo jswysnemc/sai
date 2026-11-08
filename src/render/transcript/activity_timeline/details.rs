@@ -77,7 +77,10 @@ fn invocation(view: &ToolView, cell: &HistoryCell, width: usize, title_width: us
             &visible_title,
         )
     } else {
-        let args = remaining_arguments(&view.arguments, &visible_title);
+        let args = (view.name == "codemode")
+            .then(|| tool_view::render_codemode_arguments(&view.arguments))
+            .flatten()
+            .unwrap_or_else(|| remaining_arguments(&view.arguments, &visible_title));
         let output = view
             .outcome
             .as_ref()

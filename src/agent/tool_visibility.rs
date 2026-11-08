@@ -266,7 +266,7 @@ impl ToolVisibility {
     /// 参数: mode 为当前会话模式；返回: 无
     pub(crate) fn set_session_mode(&mut self, mode: super::AgentMode) {
         let config = self.codemode.get_or_insert_with(Default::default);
-        config.mode = if mode == super::AgentMode::CodeModel {
+        config.mode = if mode.uses_codemode() {
             crate::config::CodeMode::Only
         } else {
             crate::config::CodeMode::Off

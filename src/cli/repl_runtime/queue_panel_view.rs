@@ -4,7 +4,6 @@ use super::panel_mouse::PanelAction;
 use super::queue_panel::{QueuePanelAction, QueuePanelState};
 use super::viewport::TerminalSize;
 use super::{QueueInsertAt, QueuedSubmission};
-use crate::agent::AgentMode;
 use crate::cli::repl_text::visible_width;
 use crate::i18n::text as t;
 use crate::render::ansi_clip::{clip_ansi_to_width, strip_ansi};
@@ -146,13 +145,7 @@ pub(super) fn render_at(
     let mut rows = vec![row(heading, PanelAction::QueueToggle, width)];
     // 2. 【用户队列】【可见消息】每条只占一行，首项标记表示当前时机组内的优先顺序
     for (index, item) in items.iter().enumerate().take(end).skip(start) {
-        let mode = match item.mode {
-            AgentMode::Yolo => "yolo",
-            AgentMode::Audited => "audit",
-            AgentMode::AutoAudit => "auto",
-            AgentMode::Plan => "plan",
-            AgentMode::CodeModel => "code-model",
-        };
+        let mode = item.mode.key();
         let timing = timing_label(item.insert_at);
         let color = if item.insert_at == QueueInsertAt::Request {
             STEER

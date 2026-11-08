@@ -1,8 +1,10 @@
-# code-model 模式
+# codemode 工具模式
 
-code-model 是会话模式，通过 `/code-model` 或 Shift+Tab 启用。
-单轮任务可使用 `sai --code-model ask "任务内容"`。
-Shift+Tab 按 YOLO → AUDIT → AUTO-AUDIT → CODE-MODEL → YOLO 循环；计划模式需显式退出。
+codemode 是工具调用方式，与 YOLO、人工审核、自动审核、计划等权限模式独立。
+`/code-model` 切换工具方式，`/code-model on` 和 `/code-model off` 显式开启或关闭；权限保持不变。
+单轮任务可使用 `sai --yolo --code-model ask "任务内容"`，也可组合 `--audited`、`--auto-audit` 或 `--plan`。
+只指定 `--code-model` 时沿用对应入口的默认权限。
+Shift+Tab 按 YOLO → AUDIT → AUTO-AUDIT → YOLO 循环，并保留工具方式；计划模式需显式退出。
 切换在输入期间和模型执行期间均可使用，下一次请求使用新的工具声明。
 普通模式不暴露脚本入口，工具设置也不将它列入任何分组。
 
@@ -23,14 +25,21 @@ Shift+Tab 按 YOLO → AUDIT → AUTO-AUDIT → CODE-MODEL → YOLO 循环；计
 }
 ```
 
-- 会话模式决定是否启用脚本入口，旧配置中的 `mode` 字段仍可读取，但不再启用普通模式下的工具。
+- 会话工具模式决定是否启用脚本入口。配置中的 `mode: "on"` 或 `"only"` 在终端启动时默认启用，`"off"` 为默认值。
 - code-model 中模型只接收脚本入口；直接工具及调用网关也在执行门禁处拒绝。
 - `inline_budget`：内联工具声明的估算 token 预算，最大 32000。
 - `timeout_ms`：整个脚本的硬超时，包含启动、工具执行及审批等待，范围为 1–600000。
 
 脚本入口由会话模式提供，无需加入 `enabled_tools`。嵌套工具仍受当前档案白名单约束，
-脚本不能访问过滤后的注册表之外的工具。code-model 使用人工权限审核和工作区沙箱，
-写入、外部路径与沙箱提升沿用既有审批流程。
+脚本不能访问过滤后的注册表之外的工具。YOLO 与 codemode 组合时无需逐条确认；
+人工审核、自动审核和计划模式分别沿用各自权限与沙箱策略，启停 codemode 不改变权限。
+
+终端标题与状态栏同时展示权限和工具方式。嵌套审批附着在脚本卡片上，并显示实际工具、
+命令及作用范围；等待期间脚本截止仍然有效。运行中和历史记录中的 JavaScript 使用语法高亮。
+
+旧会话值 `code-model` 按“人工审核 + codemode”读取，避免恢复会话时扩大权限。
+新组合使用 `yolo+code-model`、`audited+code-model`、`auto-audit+code-model`、
+`plan+code-model` 保存和传递，原有 `yolo` 等值仍表示直接工具方式。
 
 ## 脚本接口
 

@@ -43,7 +43,7 @@ pub(crate) fn begin_sync(state_dir: &Path, mode: crate::agent::AgentMode) -> Res
 /// 【计划模式】【初始状态】参数为执行权限，返回独立规划记录；不允许把 Plan 作为恢复权限。
 fn planning_record(mode: crate::agent::AgentMode) -> Result<PlanRecord> {
     anyhow::ensure!(
-        mode != crate::agent::AgentMode::Plan,
+        mode.permission() != crate::agent::PermissionMode::Plan,
         "Plan is not an execution permission mode"
     );
     Ok(PlanRecord {

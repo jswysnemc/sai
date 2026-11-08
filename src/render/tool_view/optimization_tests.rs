@@ -49,7 +49,10 @@ fn approval_keeps_target_before_controls_for_all_views() {
             text.matches("Review scope:").count() + text.matches("当前审阅对象").count(),
             1
         );
-        assert!(render(&view, ToolCallDisplayMode::Hidden).is_empty());
+        let hidden = plain(&render(&view, ToolCallDisplayMode::Hidden));
+        assert!(hidden.contains("Allow once"), "{hidden}");
+        assert!(hidden.contains("/tmp/target.txt"), "{hidden}");
+        assert!(!hidden.contains("DO_NOT_PRINT") && !hidden.contains("PRIVATE_CONTENT"));
     }
 }
 

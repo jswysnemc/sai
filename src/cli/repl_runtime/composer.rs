@@ -61,6 +61,15 @@ impl ReplRuntime {
         frame.set_panels_dismissed(self.panels_dismissed.is_some());
         frame.set_key_hints(self.key_hint_context());
         frame.set_shortcuts(self.shortcuts_open, self.paste_image_key());
+        if self
+            .last_chrome
+            .as_ref()
+            .is_none_or(|previous| previous.mode != chrome.mode)
+        {
+            self.transcript.update_welcome_permissions(
+                crate::cli::repl::sandbox_commands::welcome_mode_label(chrome.mode),
+            );
+        }
         self.last_chrome = Some(chrome.clone());
         self.composer = Some(frame);
         // 全屏视图：输入框固定在底部，不参与主屏腾行与重排
@@ -373,7 +382,7 @@ impl ReplRuntime {
     pub(in crate::cli) fn stream_mode(&self, fallback: AgentMode) -> AgentMode {
         self.live_mode_handle
             .as_ref()
-            .map(|handle| AgentMode::from_u8(handle.load(std::sync::atomic::Ordering::SeqCst)))
+            .map(|handle| handle.get())
             .or(self.stream_draft.mode)
             .or_else(|| self.composer.as_ref().map(|frame| frame.chrome().mode))
             .unwrap_or(fallback)

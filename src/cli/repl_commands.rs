@@ -329,7 +329,10 @@ fn command_description(command: &str) -> &'static str {
         ),
         "/yolo" => t("switch to YOLO mode", "切换到 YOLO 模式"),
         "/auto" | "/auto-audit" => t("switch to auto-audit mode", "切换到自动审核模式"),
-        "/code-model" => t("compose tools with JavaScript", "切换到脚本编排模式"),
+        "/code-model" => t(
+            "toggle JavaScript tools; keep permissions",
+            "切换脚本工具，保留权限模式",
+        ),
         "/jev" => t(
             "Jev routing and permission audit status and switches",
             "Jev 暴露决策与权限审核的状态和开关",

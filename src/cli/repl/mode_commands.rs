@@ -10,47 +10,15 @@ pub(super) fn handle(
     runtime: &mut ReplRuntime,
     state_dir: &std::path::Path,
 ) -> Result<bool> {
-    let Some(next) = parse(input) else {
+    let Some(next) = mode.command(input) else {
         return Ok(false);
     };
-    if next == AgentMode::Plan && *mode != AgentMode::Plan {
+    if next.permission() == crate::agent::PermissionMode::Plan
+        && mode.permission() != crate::agent::PermissionMode::Plan
+    {
         crate::plan::store::begin_sync(state_dir, *mode)?;
     }
     *mode = next;
     runtime.record_meta(format!("{}: {}", t("mode", "模式"), mode.label()))?;
     Ok(true)
-}
-
-/// 把模式命令映射到权限模式。
-///
-/// 参数:
-/// - `input`: 已去除首尾空白的输入
-///
-/// 返回:
-/// - 目标模式；非模式命令返回空
-fn parse(input: &str) -> Option<AgentMode> {
-    let input = input.to_ascii_lowercase();
-    match input.as_str() {
-        "/plan" => Some(AgentMode::Plan),
-        "/audit" => Some(AgentMode::Audited),
-        "/yolo" => Some(AgentMode::Yolo),
-        "/auto" | "/auto-audit" => Some(AgentMode::AutoAudit),
-        "/code-model" => Some(AgentMode::CodeModel),
-        _ => None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn maps_every_mode_command() {
-        assert_eq!(parse("/PLAN"), Some(AgentMode::Plan));
-        assert_eq!(parse("/audit"), Some(AgentMode::Audited));
-        assert_eq!(parse("/yolo"), Some(AgentMode::Yolo));
-        assert_eq!(parse("/auto-audit"), Some(AgentMode::AutoAudit));
-        assert_eq!(parse("/CODE-MODEL"), Some(AgentMode::CodeModel));
-        assert_eq!(parse("/auto now"), None);
-    }
 }

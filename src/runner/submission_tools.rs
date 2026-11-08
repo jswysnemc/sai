@@ -99,7 +99,7 @@ pub(super) fn build_submission_tool_registry(
     if matches!(
         source,
         SubmissionSource::Command | SubmissionSource::ShellIntercept
-    ) && mode != AgentMode::Plan
+    ) && mode.permission() != crate::agent::PermissionMode::Plan
         && config.tools.enabled
     {
         tools::register_ask_question(&mut registry);
@@ -107,7 +107,9 @@ pub(super) fn build_submission_tool_registry(
         // todo 与会话绑定，同一会话的后续命令能接着读到上一轮的计划
         tools::register_todo(&mut registry, state_dir);
     }
-    if mode != AgentMode::Plan && should_apply_command_mode_exit_policy(source) {
+    if mode.permission() != crate::agent::PermissionMode::Plan
+        && should_apply_command_mode_exit_policy(source)
+    {
         tools::register_command_mode_background(&mut registry, config, paths, session_id);
     }
     // 1. 【工具目录】【来源兼容】网关沿用原目录边界，不公开需要会话界面查看的待办工具

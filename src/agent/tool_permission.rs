@@ -1,4 +1,4 @@
-use super::{Agent, AgentEvent, AgentMode};
+use super::{Agent, AgentEvent};
 use crate::llm::{ChatMessage, ToolCall};
 use crate::permission::{self, PermissionDecision};
 use anyhow::{bail, Result};
@@ -38,7 +38,7 @@ impl Agent {
         }
         self.tools.record_permission_requested(name, arguments)?;
         // 1. 【权限】【自动审核】沿用当前供应商与会话上下文，失败时保留人工审批
-        let auto = if self.mode() == AgentMode::AutoAudit {
+        let auto = if self.mode().permission() == crate::agent::PermissionMode::AutoAudit {
             permission::AutoAuditBackend::resolve(&self.config, &self.paths).ok()
         } else {
             None

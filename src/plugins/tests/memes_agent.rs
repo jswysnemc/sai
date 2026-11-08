@@ -173,7 +173,7 @@ async fn memes_agent_rechecks_live_mode_before_delivery() {
         root.path().to_path_buf(),
         agent.chat_stream_with_images("Linux", vec![], Some("mode-switch".into()), |event| {
             if matches!(event, AgentEvent::FlushContent) {
-                mode.store(AgentMode::Plan.as_u8(), Ordering::SeqCst);
+                mode.set(AgentMode::Plan);
             }
             Ok(())
         }),

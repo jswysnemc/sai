@@ -31,12 +31,15 @@ mod jev_prompt_tests;
 mod jev_prompt_turn_tests;
 mod jev_routing;
 mod lifecycle;
+mod live_mode;
 mod load_request;
 mod message_context;
 mod message_gap;
 mod message_request;
 mod message_usage;
 mod mode;
+#[cfg(test)]
+mod mode_tests;
 mod model_context;
 pub(crate) mod model_json;
 mod plan_execution;
@@ -103,7 +106,8 @@ pub(crate) use instruction_files::{extract_instruction_files, load_instruction_p
 pub(crate) use inter_message::{
     InterMessage, InterMessageEvent, InterMessageKind, InterMessageSource,
 };
-pub use mode::AgentMode;
+pub use live_mode::LiveAgentMode;
+pub use mode::{AgentMode, PermissionMode, ToolMode};
 pub(crate) use model_json::first_json_object;
 pub(crate) use system_prompt::{build_base_system_prompt, build_base_system_prompt_for_phase};
 pub(crate) use tool_invocation::resolve_execution_call;

@@ -32,13 +32,13 @@ impl Agent {
 
     /// 【计划模式】【进入规划】无参数，保存原执行模式并切换只读约束，返回操作结果。
     async fn enter_plan(&self) -> Result<String> {
-        if self.mode() != AgentMode::Plan {
+        if self.mode().permission() != crate::agent::PermissionMode::Plan {
             let previous = self.mode();
             plan::store::begin(self.state.state_dir(), previous).await?;
             if self.mode() != previous {
                 bail!("session mode changed while entering Plan; retry only if still requested");
             }
-            self.apply_live_mode(AgentMode::Plan);
+            self.apply_live_mode(previous.with_permission(crate::agent::PermissionMode::Plan));
         }
         Ok(serde_json::json!({"mode":"plan", "instruction":"Explore read-only, clarify material choices, then call exit_plan_mode with the complete Markdown plan. Do not edit project files or external state."}).to_string())
     }
@@ -49,7 +49,7 @@ impl Agent {
         arguments: &str,
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<String> {
-        if self.mode() != AgentMode::Plan {
+        if self.mode().permission() != crate::agent::PermissionMode::Plan {
             bail!("exit_plan_mode is only available in Plan mode");
         }
         let submission = PlanSubmission::parse(arguments)?;
@@ -57,8 +57,9 @@ impl Agent {
         let target = previous
             .as_ref()
             .and_then(|record| AgentMode::parse(Some(&record.execution_mode)).ok())
-            .filter(|mode| *mode != AgentMode::Plan)
-            .unwrap_or(AgentMode::Audited);
+            .filter(|mode| mode.permission() != crate::agent::PermissionMode::Plan)
+            .unwrap_or(AgentMode::Audited)
+            .with_codemode(self.mode().uses_codemode());
         let mut record = PlanRecord {
             title: submission.title,
             plan: submission.plan,
@@ -94,7 +95,7 @@ impl Agent {
             && !self
                 .cancel_requested
                 .load(std::sync::atomic::Ordering::SeqCst)
-            && self.mode() == AgentMode::Plan;
+            && self.mode().permission() == crate::agent::PermissionMode::Plan;
         if !approved {
             record.status = if answer.is_some() {
                 "changes_requested"
@@ -110,7 +111,7 @@ impl Agent {
         let registry = self.plan_execution_registry(target)?;
         record.status = "approved".into();
         plan::store::save(self.state.state_dir(), &record).await?;
-        if self.mode() != AgentMode::Plan
+        if self.mode().permission() != crate::agent::PermissionMode::Plan
             || self
                 .cancel_requested
                 .load(std::sync::atomic::Ordering::SeqCst)
@@ -149,7 +150,7 @@ impl Agent {
                 crate::runtime_cwd::current_dir()?,
                 audit,
             )
-            .with_mode_handle(self.live_mode.clone()),
+            .with_mode_handle(self.live_mode.permission_handle()),
         );
         Ok(registry)
     }

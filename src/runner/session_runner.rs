@@ -379,7 +379,9 @@ impl<'paths> SessionRunner<'paths> {
                 config, self.paths, source, mode, session_id, state_dir,
             ),
         }?;
-        if mode != AgentMode::Plan && source == SubmissionSource::Gateway {
+        if mode.permission() != crate::agent::PermissionMode::Plan
+            && source == SubmissionSource::Gateway
+        {
             crate::cron::register_tool(&mut registry, self.paths.clone(), session_id.to_string());
         }
         // 白名单过滤与 TUI 共用同一份实现，避免两条路径语义漂移
@@ -387,7 +389,7 @@ impl<'paths> SessionRunner<'paths> {
             crate::runner::submission_tools::apply_enabled_tools_filter(registry, config, source)?;
         let workspace = crate::runtime_cwd::current_dir()?;
         let profile_mode = mode.permission_profile_mode();
-        let audit = (mode != AgentMode::Yolo).then(|| {
+        let audit = (mode.permission() != crate::agent::PermissionMode::Yolo).then(|| {
             PermissionAuditLog::new(
                 state_dir.join("permission-audit.jsonl"),
                 session_id.to_string(),

@@ -1,187 +1,183 @@
-/// Agent 单轮运行模式。
+/// 会话权限策略，与工具调用方式相互独立。
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum AgentMode {
+pub enum PermissionMode {
     Yolo,
     Audited,
     AutoAudit,
-    CodeModel,
     Plan,
 }
 
+/// 工具调用方式，不改变会话权限。
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ToolMode {
+    Native,
+    CodeModel,
+}
+
+/// 会话模式由权限策略和工具调用方式组合而成。
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct AgentMode {
+    permission: PermissionMode,
+    tools: ToolMode,
+}
+
+#[allow(non_upper_case_globals)]
 impl AgentMode {
-    /// 解析外部传入的模式名称。
-    ///
-    /// 参数:
-    /// - `value`: 可选模式文本；缺省为 YOLO
-    ///
-    /// 返回:
-    /// - 合法 Agent 模式
+    pub const Yolo: Self = Self::new(PermissionMode::Yolo, ToolMode::Native);
+    pub const Audited: Self = Self::new(PermissionMode::Audited, ToolMode::Native);
+    pub const AutoAudit: Self = Self::new(PermissionMode::AutoAudit, ToolMode::Native);
+    pub const Plan: Self = Self::new(PermissionMode::Plan, ToolMode::Native);
+    /// 旧会话的独立 code-model 值保留人工审核语义。
+    pub const CodeModel: Self = Self::new(PermissionMode::Audited, ToolMode::CodeModel);
+
+    /// 【会话模式】【组合】参数为权限策略和工具方式；返回完整会话模式。
+    pub const fn new(permission: PermissionMode, tools: ToolMode) -> Self {
+        Self { permission, tools }
+    }
+
+    /// 【会话模式】【权限读取】无参数；返回当前权限策略。
+    pub fn permission(self) -> PermissionMode {
+        self.permission
+    }
+
+    /// 【会话模式】【工具读取】无参数；返回是否通过脚本调用工具。
+    pub fn uses_codemode(self) -> bool {
+        self.tools == ToolMode::CodeModel
+    }
+
+    /// 【会话模式】【权限切换】参数 permission 为新策略；返回保留工具方式的模式。
+    pub fn with_permission(self, permission: PermissionMode) -> Self {
+        Self { permission, ..self }
+    }
+
+    /// 【会话模式】【工具切换】参数 enabled 决定是否启用脚本；返回保留权限策略的模式。
+    pub fn with_codemode(self, enabled: bool) -> Self {
+        Self {
+            tools: if enabled {
+                ToolMode::CodeModel
+            } else {
+                ToolMode::Native
+            },
+            ..self
+        }
+    }
+
+    /// 【会话模式】【协议解析】参数 value 为存储值；返回模式，旧 code-model 按人工审核读取。
     pub(crate) fn parse(value: Option<&str>) -> anyhow::Result<Self> {
-        match value.unwrap_or("yolo").trim().to_ascii_lowercase().as_str() {
-            "plan" => Ok(Self::Plan),
-            "audited" | "audit" => Ok(Self::Audited),
-            "auto_audit" | "auto-audit" | "auto" => Ok(Self::AutoAudit),
-            "code-model" | "code_model" | "codemode" => Ok(Self::CodeModel),
-            "yolo" | "" => Ok(Self::Yolo),
-            value => anyhow::bail!("unsupported run mode: {value}"),
+        let value = value.unwrap_or("yolo").trim().to_ascii_lowercase();
+        if matches!(value.as_str(), "code-model" | "code_model" | "codemode") {
+            return Ok(Self::CodeModel);
+        }
+        let (permission, tools) = value.split_once('+').unwrap_or((&value, "native"));
+        let permission = match permission {
+            "yolo" | "" => PermissionMode::Yolo,
+            "audited" | "audit" => PermissionMode::Audited,
+            "auto_audit" | "auto-audit" | "auto" => PermissionMode::AutoAudit,
+            "plan" => PermissionMode::Plan,
+            _ => anyhow::bail!("unsupported run mode: {value}"),
+        };
+        let tools = match tools {
+            "native" => ToolMode::Native,
+            "code-model" | "code_model" | "codemode" => ToolMode::CodeModel,
+            _ => anyhow::bail!("unsupported tool mode: {tools}"),
+        };
+        Ok(Self::new(permission, tools))
+    }
+
+    /// 【会话模式】【命令解析】参数 input 为完整命令；返回只更新指定维度的模式或空值。
+    pub(crate) fn command(self, input: &str) -> Option<Self> {
+        match input.trim().to_ascii_lowercase().as_str() {
+            "/yolo" => Some(self.with_permission(PermissionMode::Yolo)),
+            "/audit" => Some(self.with_permission(PermissionMode::Audited)),
+            "/auto" | "/auto-audit" => Some(self.with_permission(PermissionMode::AutoAudit)),
+            "/plan" => Some(self.with_permission(PermissionMode::Plan)),
+            "/code-model" => Some(self.with_codemode(!self.uses_codemode())),
+            "/code-model on" => Some(self.with_codemode(true)),
+            "/code-model off" => Some(self.with_codemode(false)),
+            _ => None,
         }
     }
 
-    /// 返回终端界面使用的模式标签。
-    ///
-    /// 返回:
-    /// - 稳定的大写模式名称
+    /// 【会话模式】【显示名称】无参数；返回同时表达权限和工具方式的标签。
     pub fn label(self) -> &'static str {
-        match self {
-            Self::Yolo => "YOLO",
-            Self::Audited => "AUDIT",
-            Self::AutoAudit => "AUTO-AUDIT",
-            Self::CodeModel => "CODE-MODEL",
-            Self::Plan => "PLAN",
+        match (self.permission, self.tools) {
+            (PermissionMode::Yolo, ToolMode::Native) => "YOLO",
+            (PermissionMode::Audited, ToolMode::Native) => "AUDIT",
+            (PermissionMode::AutoAudit, ToolMode::Native) => "AUTO-AUDIT",
+            (PermissionMode::Plan, ToolMode::Native) => "PLAN",
+            (PermissionMode::Yolo, ToolMode::CodeModel) => "YOLO + CODE-MODEL",
+            (PermissionMode::Audited, ToolMode::CodeModel) => "AUDIT + CODE-MODEL",
+            (PermissionMode::AutoAudit, ToolMode::CodeModel) => "AUTO-AUDIT + CODE-MODEL",
+            (PermissionMode::Plan, ToolMode::CodeModel) => "PLAN + CODE-MODEL",
         }
     }
 
-    /// 返回状态标签使用的稳定模式名称。
-    ///
-    /// 返回:
-    /// - 小写模式标识
+    /// 【会话模式】【存储名称】无参数；返回可往返解析的稳定协议值。
     pub(crate) fn key(self) -> &'static str {
-        match self {
-            Self::Yolo => "yolo",
-            Self::Audited => "audited",
-            Self::AutoAudit => "auto-audit",
-            Self::CodeModel => "code-model",
-            Self::Plan => "plan",
+        match (self.permission, self.tools) {
+            (PermissionMode::Yolo, ToolMode::Native) => "yolo",
+            (PermissionMode::Audited, ToolMode::Native) => "audited",
+            (PermissionMode::AutoAudit, ToolMode::Native) => "auto-audit",
+            (PermissionMode::Plan, ToolMode::Native) => "plan",
+            (PermissionMode::Yolo, ToolMode::CodeModel) => "yolo+code-model",
+            (PermissionMode::Audited, ToolMode::CodeModel) => "audited+code-model",
+            (PermissionMode::AutoAudit, ToolMode::CodeModel) => "auto-audit+code-model",
+            (PermissionMode::Plan, ToolMode::CodeModel) => "plan+code-model",
         }
     }
 
-    /// 返回工具注册表使用的权限策略模式。
-    ///
-    /// 返回:
-    /// - 与当前 Agent 模式一致的权限策略
+    /// 【会话模式】【权限适配】无参数；仅将权限维度传给工具注册表。
     pub(crate) fn permission_profile_mode(self) -> crate::permission::PermissionProfileMode {
-        match self {
-            Self::Yolo => crate::permission::PermissionProfileMode::Yolo,
-            Self::Audited => crate::permission::PermissionProfileMode::Audited,
-            Self::AutoAudit => crate::permission::PermissionProfileMode::AutoAudit,
-            Self::CodeModel => crate::permission::PermissionProfileMode::CodeModel,
-            Self::Plan => crate::permission::PermissionProfileMode::Plan,
+        match self.permission {
+            PermissionMode::Yolo => crate::permission::PermissionProfileMode::Yolo,
+            PermissionMode::Audited => crate::permission::PermissionProfileMode::Audited,
+            PermissionMode::AutoAudit => crate::permission::PermissionProfileMode::AutoAudit,
+            PermissionMode::Plan => crate::permission::PermissionProfileMode::Plan,
         }
     }
 
-    /// 返回当前模式追加到系统提示词中的约束说明。
-    ///
-    /// 返回:
-    /// - 对应模式的静态提示词
-    pub(crate) fn reminder(self) -> &'static str {
-        match self {
-            Self::Yolo => crate::prompts::YOLO_REMINDER,
-            Self::Audited => crate::prompts::AUDITED_REMINDER,
-            Self::AutoAudit => crate::prompts::AUTO_AUDIT_REMINDER,
-            Self::CodeModel => "<mode name=\"code-model\">Use codemode to execute JavaScript and compose tools.<name>(args). Discover tools with searchTools or describeTool. Direct tool calls are unavailable. Each nested tool retains normal permission checks and may require human approval. Await every tool call and emit only useful results.</mode>",
-            Self::Plan => crate::prompts::PLAN_REMINDER,
+    /// 【会话模式】【提示约束】无参数；返回权限说明和可选的脚本工具说明。
+    pub(crate) fn reminder(self) -> String {
+        let permission = match self.permission {
+            PermissionMode::Yolo => crate::prompts::YOLO_REMINDER,
+            PermissionMode::Audited => crate::prompts::AUDITED_REMINDER,
+            PermissionMode::AutoAudit => crate::prompts::AUTO_AUDIT_REMINDER,
+            PermissionMode::Plan => crate::prompts::PLAN_REMINDER,
+        };
+        if self.uses_codemode() {
+            format!("{permission}\n<mode name=\"code-model\">Use codemode to execute JavaScript and compose tools.<name>(args). Discover tools with searchTools or describeTool. Direct tool calls are unavailable. Nested tools follow the independent permission mode above. Await every tool call and emit only useful results.</mode>")
+        } else {
+            permission.into()
         }
     }
 
-    /// 是否需要权限审计（人工或自动）。
-    ///
-    /// 返回:
-    /// - Audited / AutoAudit / CodeModel 为 true
+    /// 【会话模式】【审核判断】无参数；返回当前权限策略是否需要人工或自动审核。
     #[allow(dead_code)]
     pub(crate) fn needs_permission_audit(self) -> bool {
-        matches!(self, Self::Audited | Self::AutoAudit | Self::CodeModel)
+        matches!(
+            self.permission,
+            PermissionMode::Audited | PermissionMode::AutoAudit
+        )
     }
 
-    /// 编码为原子状态值。
-    pub(crate) fn as_u8(self) -> u8 {
-        match self {
-            Self::Yolo => 0,
-            Self::Audited => 1,
-            Self::AutoAudit => 2,
-            Self::Plan => 3,
-            Self::CodeModel => 4,
-        }
-    }
-
-    /// 从原子状态值解码。
-    pub(crate) fn from_u8(value: u8) -> Self {
-        match value {
-            1 => Self::Audited,
-            2 => Self::AutoAudit,
-            3 => Self::Plan,
-            4 => Self::CodeModel,
-            _ => Self::Yolo,
-        }
-    }
-
-    /// 【会话模式】【快捷切换】返回 Shift+Tab 的下一模式；计划模式保持到显式退出
-    /// 参数: self 为当前模式；返回: 下一会话模式
+    /// 【会话模式】【快捷切换】无参数；循环权限并保留工具方式，计划模式保持不变。
     pub(crate) fn next(self) -> Self {
-        match self {
-            Self::Yolo => Self::Audited,
-            Self::Audited => Self::AutoAudit,
-            Self::AutoAudit => Self::CodeModel,
-            Self::CodeModel => Self::Yolo,
-            Self::Plan => Self::Plan,
-        }
+        self.with_permission(match self.permission {
+            PermissionMode::Yolo => PermissionMode::Audited,
+            PermissionMode::Audited => PermissionMode::AutoAudit,
+            PermissionMode::AutoAudit => PermissionMode::Yolo,
+            PermissionMode::Plan => PermissionMode::Plan,
+        })
     }
 }
 
 impl From<crate::config::DefaultPermissionMode> for AgentMode {
+    /// 【会话模式】【默认权限】参数 value 为配置权限；返回使用直接工具的会话模式。
     fn from(value: crate::config::DefaultPermissionMode) -> Self {
         match value {
             crate::config::DefaultPermissionMode::Yolo => Self::Yolo,
             crate::config::DefaultPermissionMode::Audited => Self::Audited,
             crate::config::DefaultPermissionMode::AutoAudit => Self::AutoAudit,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// 验证各模式提示可识别且保持紧凑。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 无
-    #[test]
-    fn mode_prompts_are_compact_and_identifiable() {
-        for (mode, name, max_chars) in [
-            (AgentMode::Yolo, "yolo", 500),
-            (AgentMode::Audited, "audited", 500),
-            (AgentMode::AutoAudit, "auto-audit", 400),
-            (AgentMode::Plan, "plan", 600),
-            (AgentMode::CodeModel, "code-model", 600),
-        ] {
-            let prompt = mode.reminder();
-            assert!(prompt.contains(&format!("name=\"{name}\"")));
-            assert!(prompt.chars().count() <= max_chars);
-        }
-    }
-
-    /// 【会话模式】【切换回归】校验快捷切换顺序、原子表示及权限表示一致
-    /// 参数: 无；返回: 无
-    #[test]
-    fn mode_cycle_and_atomic_encoding_include_code_model() {
-        let mut mode = AgentMode::Yolo;
-        for expected in [
-            AgentMode::Audited,
-            AgentMode::AutoAudit,
-            AgentMode::CodeModel,
-            AgentMode::Yolo,
-        ] {
-            mode = mode.next();
-            assert_eq!(mode, expected);
-            assert_eq!(AgentMode::from_u8(mode.as_u8()), mode);
-            assert_eq!(mode.permission_profile_mode().as_u8(), mode.as_u8());
-        }
-        assert_eq!(
-            AgentMode::parse(Some("code-model")).unwrap(),
-            AgentMode::CodeModel
-        );
     }
 }

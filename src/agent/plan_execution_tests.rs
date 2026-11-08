@@ -10,6 +10,44 @@ fn agent(paths: &SaiPaths, mode: AgentMode) -> Agent {
     Agent::new(config, paths, state, client, ToolRegistry::new(), mode).unwrap()
 }
 
+/// 【计划模式】【独立工具回归】无参数；审批恢复权限时保留用户在规划期间选择的工具方式。
+#[tokio::test]
+async fn plan_exit_preserves_latest_tool_mode() {
+    for enabled in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(root.path());
+        let mut agent = agent(&paths, AgentMode::Yolo.with_codemode(!enabled));
+        let handle = agent.live_mode_handle();
+        agent
+            .execute_plan_tool("enter_plan_mode", "{}", &mut |_| Ok(()))
+            .await
+            .unwrap();
+        agent.apply_live_mode(agent.mode().with_codemode(enabled));
+        let result = agent
+            .execute_plan_tool(
+                "exit_plan_mode",
+                r#"{"title":"Scope","plan":"Implement the requested change"}"#,
+                &mut |event| {
+                    if let AgentEvent::QuestionRequested(pending) = event {
+                        crate::question::resolve_question(
+                            &pending.id,
+                            crate::question::QuestionResponse::Answered(vec![vec![
+                                crate::plan::APPROVE.into(),
+                            ]]),
+                        )?;
+                    }
+                    Ok(())
+                },
+            )
+            .await
+            .unwrap();
+        assert!(!result.failed, "{}", result.output);
+        assert_eq!(agent.mode(), AgentMode::Yolo.with_codemode(enabled));
+        assert_eq!(handle.get(), agent.mode());
+        assert!(std::sync::Arc::ptr_eq(&handle, &agent.live_mode_handle()));
+    }
+}
+
 /// 【计划模式】【审批回归】计划全文持久化并展示，批准后恢复模式和共享句柄；无参数和返回值。
 #[tokio::test]
 async fn approved_plan_restores_execution_and_shared_mode() {
@@ -118,10 +156,7 @@ async fn stale_plan_approval_cannot_override_current_mode() {
             r#"{"title":"Design","plan":"Plan details"}"#,
             &mut |event| {
                 if let AgentEvent::QuestionRequested(pending) = event {
-                    handle.store(
-                        AgentMode::AutoAudit.as_u8(),
-                        std::sync::atomic::Ordering::SeqCst,
-                    );
+                    handle.set(AgentMode::AutoAudit);
                     crate::question::resolve_question(
                         &pending.id,
                         crate::question::QuestionResponse::Answered(vec![vec![

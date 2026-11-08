@@ -1,4 +1,4 @@
-use super::{Agent, AgentEvent, AgentMode};
+use super::{Agent, AgentEvent};
 use crate::llm::{ChatMessage, ToolCall, ToolCallFunction};
 use crate::tools::{codemode, ToolPermission};
 use anyhow::{bail, Result};
@@ -29,7 +29,7 @@ impl Agent {
             "ask_question" | "enter_plan_mode" | "exit_plan_mode"
         );
         if !interactive
-            && self.mode() == AgentMode::Plan
+            && self.mode().permission() == crate::agent::PermissionMode::Plan
             && self.tools.permission_for_call(&name, &arguments)? != ToolPermission::ReadOnly
         {
             bail!("Plan mode blocked non-read-only tool: {name}");

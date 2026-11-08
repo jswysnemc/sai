@@ -12,12 +12,14 @@ class CodeModelTests(unittest.TestCase):
     def test_shift_tab_and_slash_command_enter_code_model(self):
         """【会话模式】【空闲切换】参数为测试实例；返回无，检查快捷键及命令实际显示。"""
         with TerminalSession(arguments=["--yolo"]) as terminal:
+            terminal.send(b"/code-model\r")
+            terminal.wait_for(lambda: "code-model" in terminal.text().lower())
             for _ in range(3):
                 terminal.send(b"\x1b[Z")
-            terminal.wait_for(lambda: "code-model" in terminal.text().lower())
+            terminal.wait_for(lambda: "yolo+code-model" in terminal.text().lower())
             terminal.send(b"/yolo\r")
             terminal.pump(.3)
-            terminal.send(b"/code-model\r")
+            terminal.send(b"/code-model on\r")
             terminal.wait_for(lambda: "CODE-MODEL" in terminal.text())
 
     def test_code_model_command_works_during_generation(self):

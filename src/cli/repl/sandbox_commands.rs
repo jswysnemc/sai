@@ -24,8 +24,8 @@ pub(super) fn handle(input: &str, runtime: &mut ReplRuntime, mode: AgentMode) ->
 ///
 /// 返回:
 /// - 例如 `AUDIT · sandbox bwrap`
-pub(super) fn welcome_mode_label(mode: AgentMode) -> String {
-    if mode == AgentMode::Yolo {
+pub(in crate::cli) fn welcome_mode_label(mode: AgentMode) -> String {
+    if mode.permission() == crate::agent::PermissionMode::Yolo {
         return mode.label().to_string();
     }
     format!(
@@ -61,16 +61,16 @@ fn sandbox_tag(status: &crate::sandbox::SandboxStatus) -> String {
 /// - 状态说明与当前模式提示
 fn status_text(mode: AgentMode) -> String {
     let status = crate::sandbox::sandbox_status();
-    let scope = match mode {
-        AgentMode::Yolo => t(
+    let scope = match mode.permission() {
+        crate::agent::PermissionMode::Yolo => t(
             "Current mode YOLO: commands run without the sandbox.",
             "当前为 YOLO 模式：命令不经过沙箱。",
         ),
-        AgentMode::Plan => t(
+        crate::agent::PermissionMode::Plan => t(
             "Current mode Plan: inspection commands run in a read-only sandbox.",
             "当前为计划模式：检查命令在只读沙箱中执行。",
         ),
-        AgentMode::Audited | AgentMode::AutoAudit | AgentMode::CodeModel => t(
+        crate::agent::PermissionMode::Audited | crate::agent::PermissionMode::AutoAudit => t(
             "Current mode audited: run_command uses the workspace sandbox unless an escalation is approved.",
             "当前为审核模式：run_command 使用工作区沙箱，批准提升的命令除外。",
         ),

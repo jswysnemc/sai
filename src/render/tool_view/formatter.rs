@@ -1,16 +1,16 @@
 use super::model::{PermissionAuditView, ToolView};
 use crate::permission::PermissionDecision;
-use crate::render::ToolCallDisplayMode;
 use crate::render::activity_animation::render_activity_line;
 use crate::render::command_output::render_command_block_with_action;
 use crate::render::command_result_block::{
     render_command_result_view_with_limit, render_completed_command_output,
     render_live_command_output,
 };
-use crate::render::status_style::{ToolHealth, color_status};
+use crate::render::status_style::{color_status, ToolHealth};
 use crate::render::tool_event_line::{
-    ToolVerbTense, tool_event_label_tense, tool_event_text, tool_status_line, tool_verb,
+    tool_event_label_tense, tool_event_text, tool_status_line, tool_verb, ToolVerbTense,
 };
+use crate::render::ToolCallDisplayMode;
 use serde_json::Value;
 
 /// 渲染完整工具生命周期视图。
@@ -27,6 +27,16 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
 
 /// 渲染工具生命周期；进行中且 `frame > 0` 时用扫光代替静态 `run` 徽标。
 pub(crate) fn render_framed(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -> String {
+    let mode = if mode == ToolCallDisplayMode::Hidden
+        && view
+            .permission
+            .as_ref()
+            .is_some_and(|audit| audit.decision.is_none())
+    {
+        ToolCallDisplayMode::Summary
+    } else {
+        mode
+    };
     if mode == ToolCallDisplayMode::Hidden && view.name != "compress_context" {
         return String::new();
     }
@@ -130,6 +140,12 @@ fn render_body(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -> Stri
             label
         };
         let mut output = render_activity_line(&label, "", frame);
+        if view.name == "codemode" && mode == ToolCallDisplayMode::Full {
+            if let Some(code) = super::codemode::render_arguments(&view.arguments) {
+                output.push('\n');
+                output.push_str(&code);
+            }
+        }
         if let Some(progress) = visible_progress(view.progress.as_deref()) {
             output.push_str(&render_progress_note(progress));
         }
@@ -187,7 +203,10 @@ fn render_body(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -> Stri
         }
     } else if arguments_ready_for_display(&view.arguments) {
         output.push('\n');
-        output.push_str(&render_payload("args", &view.arguments));
+        let code = (view.name == "codemode")
+            .then(|| super::codemode::render_arguments(&view.arguments))
+            .flatten();
+        output.push_str(&code.unwrap_or_else(|| render_payload("args", &view.arguments)));
     }
     if let Some(progress) = visible_progress(view.progress.as_deref()) {
         output.push_str(&render_progress_note(progress));
@@ -471,7 +490,7 @@ fn arguments_ready_for_display(arguments: &str) -> bool {
 /// - Codex 风格的层级载荷块
 fn render_payload(label: &str, payload: &str) -> String {
     use crate::render::fold_text::{
-        FoldedDisplayLine, fold_preview_lines, terminal_wrap_width, wrap_display_lines,
+        fold_preview_lines, terminal_wrap_width, wrap_display_lines, FoldedDisplayLine,
     };
     let formatted = super::structured_payload::format(payload.trim());
     // 【终端】【工具载荷】1. 保留原文，仅按显示行折叠，全文模式可还原全部内容

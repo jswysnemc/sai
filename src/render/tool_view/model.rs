@@ -34,6 +34,8 @@ pub(crate) struct PermissionAuditView {
     pub(crate) auto_audit: bool,
     /// 命令获批后的沙箱范围
     pub(crate) sandbox: Option<crate::permission::SandboxScope>,
+    pub(crate) tool: Option<String>,
+    pub(crate) arguments: Option<String>,
 }
 
 impl PermissionAuditView {
@@ -65,6 +67,8 @@ impl PermissionAuditView {
             decision: None,
             auto_audit,
             sandbox: None,
+            tool: None,
+            arguments: None,
         }
     }
 

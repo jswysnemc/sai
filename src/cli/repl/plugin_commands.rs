@@ -133,8 +133,7 @@ async fn run(input: &str, agent: &Agent, runtime: &mut ReplRuntime) -> Result<()
         registry.record_permission_requested(&name, &arguments)?;
         let (request, receiver) =
             crate::permission::request_permission(agent.session_id(), &name, &arguments);
-        runtime.record_permission_request(request.clone())?;
-        crate::cli::prompt_permission_request_tui(&request, runtime)?;
+        runtime.wait_for_permission_prompt(request.clone()).await?;
         let decision = receiver.await?;
         runtime.resolve_permission(&request.id, decision.clone())?;
         match decision {

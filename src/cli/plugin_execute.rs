@@ -46,7 +46,11 @@ pub(super) async fn tool(
 ) -> Result<String> {
     let arguments: serde_json::Value =
         serde_json::from_str(arguments).context("plugin tool arguments must be JSON")?;
-    let registry = registry(config, paths, matches!(mode, AgentMode::Plan))?;
+    let registry = registry(
+        config,
+        paths,
+        mode.permission() == crate::agent::PermissionMode::Plan,
+    )?;
     let name = [format!("lua__{id}__{local}"), local.to_string()]
         .into_iter()
         .find(|name| registry.plugin_owner(name) == Some(id))

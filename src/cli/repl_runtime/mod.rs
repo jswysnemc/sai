@@ -16,10 +16,12 @@ mod history_replay;
 mod history_restore;
 mod key_notice;
 mod layout;
+mod live_mode;
 mod live_usage;
 mod mention_completion;
 mod mention_panel;
 mod panel_mouse;
+mod permission_prompt;
 mod placeholder_tips;
 mod question_handoff;
 #[cfg(test)]
@@ -109,8 +111,9 @@ pub(super) struct ReplRuntime {
     /// 运行期间输入的斜杠命令，本轮结束后按序交主循环执行
     control_queue: VecDeque<String>,
     /// 运行中权限模式热切换句柄（与 Agent 共享）
-    live_mode_handle: Option<std::sync::Arc<std::sync::atomic::AtomicU8>>,
+    live_mode_handle: Option<std::sync::Arc<crate::agent::LiveAgentMode>>,
     live_session_id: Option<String>,
+    permission_prompts: VecDeque<permission_prompt::PendingPermissionPrompt>,
     /// 最近一次 composer chrome，供流式阶段重建输入框
     last_chrome: Option<ReplChrome>,
     /// 底部主/子 agent 切换面板状态
@@ -264,6 +267,7 @@ impl ReplRuntime {
             control_queue: VecDeque::new(),
             live_mode_handle: None,
             live_session_id: None,
+            permission_prompts: VecDeque::new(),
             last_chrome: None,
             agent_panel: agent_panel::AgentPanelState::default(),
             panel_pointer: None,
@@ -352,39 +356,6 @@ impl ReplRuntime {
     pub(super) fn update_options(&mut self, row_cap: usize, options: TranscriptRenderOptions) {
         self.transcript.set_row_cap(row_cap);
         self.options = options;
-    }
-
-    /// 绑定当前轮 Agent 的热切换模式句柄。
-    pub(in crate::cli) fn bind_live_mode(
-        &mut self,
-        handle: std::sync::Arc<std::sync::atomic::AtomicU8>,
-        session_id: impl Into<String>,
-    ) {
-        self.live_mode_handle = Some(handle);
-        self.live_session_id = Some(session_id.into());
-    }
-
-    pub(in crate::cli) fn clear_live_mode(&mut self) {
-        self.live_mode_handle = None;
-        self.live_session_id = None;
-    }
-
-    pub(in crate::cli) fn apply_stream_mode_live(
-        &mut self,
-        fallback: crate::agent::AgentMode,
-    ) -> crate::agent::AgentMode {
-        use crate::agent::AgentMode;
-        use std::sync::atomic::Ordering;
-        let mode = self.stream_draft.mode.unwrap_or(fallback);
-        if let Some(handle) = self.live_mode_handle.as_ref() {
-            handle.store(mode.as_u8(), Ordering::SeqCst);
-        }
-        if mode == AgentMode::Yolo {
-            if let Some(session_id) = self.live_session_id.as_deref() {
-                let _ = crate::permission::allow_all_pending_for_session(session_id);
-            }
-        }
-        mode
     }
 
     /// 在流式阶段采样终端尺寸。

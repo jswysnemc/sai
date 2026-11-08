@@ -298,12 +298,13 @@ pub(super) fn wrapped_line_rows(prefix: &str, text: &str, cols: usize) -> usize 
 
 #[allow(dead_code)]
 pub(super) fn colored_mode_label(mode: AgentMode) -> String {
-    match mode {
-        AgentMode::Yolo => "\x1b[38;5;208m[YOLO]\x1b[0m".to_string(),
-        AgentMode::Audited => "\x1b[35m[AUDIT]\x1b[0m".to_string(),
-        AgentMode::AutoAudit => "\x1b[38;5;141m[AUTO-AUDIT]\x1b[0m".to_string(),
-        AgentMode::Plan => "\x1b[36m[PLAN]\x1b[0m".to_string(),
-        AgentMode::CodeModel => "\x1b[34m[CODE-MODEL]\x1b[0m".to_string(),
+    match mode.permission() {
+        crate::agent::PermissionMode::Yolo => format!("\x1b[38;5;208m[{}]\x1b[0m", mode.label()),
+        crate::agent::PermissionMode::Audited => format!("\x1b[35m[{}]\x1b[0m", mode.label()),
+        crate::agent::PermissionMode::AutoAudit => {
+            format!("\x1b[38;5;141m[{}]\x1b[0m", mode.label())
+        }
+        crate::agent::PermissionMode::Plan => format!("\x1b[36m[{}]\x1b[0m", mode.label()),
     }
 }
 

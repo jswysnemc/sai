@@ -19,7 +19,7 @@ mod mode_commands;
 mod model_selection;
 mod navigation;
 mod plugin_commands;
-mod sandbox_commands;
+pub(super) mod sandbox_commands;
 mod session_commands;
 mod session_resume;
 mod session_support;

@@ -315,7 +315,7 @@ Opens `http://localhost:4096` in your browser. Set access passwords with `sai we
 
 The first Web launch downloads `sai-web.tar.gz` and its SHA-256 checksum from the GitHub Release matching the CLI version. Cached assets work offline. `sai web update` refreshes that version without starting a server; restart an existing server to use the update. Failed downloads preserve the previous cache. Set `SAI_WEB_ASSETS_DIR` to a local `web/dist` build for development or offline deployment. See [Web distribution](docs/web-distribution.md).
 
-Use `/code-model` or Shift+Tab in the terminal to enter [code-model mode](docs/codemode.md). The cycle is YOLO → AUDIT → AUTO-AUDIT → CODE-MODEL → YOLO. In code-model mode, JavaScript composes the available tools while retaining permission checks; its execution entry is absent from ordinary tool groups. One-shot commands can use `sai --code-model ask "..."`.
+Use `/code-model` in the terminal to toggle [code-model mode](docs/codemode.md), or `/code-model on|off` to set it explicitly. JavaScript tool composition and permission policy are independent: Shift+Tab cycles YOLO → AUDIT → AUTO-AUDIT → YOLO while preserving code-model mode. Nested tools follow the selected permission policy, and JavaScript receives syntax highlighting in tool cards. One-shot commands can combine both settings, for example `sai --yolo --code-model ask "..."`; `--code-model` alone preserves the configured permission policy.
 
 ### 6. Shell interception (Hooks)
 

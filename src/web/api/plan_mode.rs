@@ -25,7 +25,7 @@ async fn enter(
 ) -> WebResult<Json<Value>> {
     let mode = AgentMode::parse(Some(&request.execution_mode))
         .map_err(|error| WebError::bad_request(error.to_string()))?;
-    if mode == AgentMode::Plan {
+    if mode.permission() == crate::agent::PermissionMode::Plan {
         return Err(WebError::bad_request(
             "execution_mode must be a normal permission mode",
         ));

@@ -34,7 +34,7 @@ pub(crate) fn register_for_agent(
     mode: crate::agent::AgentMode,
 ) {
     let mut execution = config.codemode.clone();
-    execution.mode = if mode == crate::agent::AgentMode::CodeModel {
+    execution.mode = if mode.uses_codemode() {
         CodeMode::Only
     } else {
         CodeMode::Off

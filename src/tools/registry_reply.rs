@@ -198,8 +198,8 @@ impl ToolRegistry {
     fn reply_writable(&self, allowed: bool) -> bool {
         allowed
             && self.permission_mode_handle().is_none_or(|mode| {
-                crate::agent::AgentMode::from_u8(mode.load(Ordering::SeqCst))
-                    != crate::agent::AgentMode::Plan
+                crate::permission::PermissionProfileMode::from_u8(mode.load(Ordering::SeqCst))
+                    != crate::permission::PermissionProfileMode::Plan
             })
     }
 }

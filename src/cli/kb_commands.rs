@@ -46,7 +46,8 @@ pub(super) async fn run_kb(paths: &SaiPaths, args: KbArgs, mode: Option<AgentMod
             plugin: "knowledge-base",
             command,
             arguments,
-            allow_writes: !matches!(mode, Some(AgentMode::Plan)),
+            allow_writes: !mode
+                .is_some_and(|mode| mode.permission() == crate::agent::PermissionMode::Plan),
         },
     )
     .await?;

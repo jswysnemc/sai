@@ -220,10 +220,10 @@ fn repl_only_help_lines() -> Vec<String> {
         ),
         format!("  /auto-audit {}", t("same as /auto", "与 /auto 相同")),
         format!(
-            "  /code-model {}",
+            "  /code-model [on|off] {}",
             t(
-                "compose tools with JavaScript (audited)",
-                "通过 JavaScript 编排工具，保留权限审核"
+                "toggle JavaScript tools without changing permissions",
+                "切换 JavaScript 工具编排，保留当前权限模式"
             )
         ),
         format!(
@@ -279,8 +279,8 @@ fn repl_key_help_lines(paste_image_key: PasteImageKey) -> Vec<String> {
         format!(
             "  Shift+Tab   {}",
             t(
-                "cycle yolo / audit / auto-audit / code-model (plan stays until explicit exit)",
-                "循环 yolo / audit / auto-audit / code-model（计划模式需显式退出）"
+                "cycle yolo / audit / auto-audit; preserve tool mode (plan requires explicit exit)",
+                "循环 yolo / audit / auto-audit，保留工具方式（计划模式需显式退出）"
             )
         ),
         format!(

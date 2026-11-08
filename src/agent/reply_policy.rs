@@ -1,4 +1,4 @@
-use super::{Agent, AgentEvent, AgentMode};
+use super::{Agent, AgentEvent};
 use crate::tools::PreparedPluginReplies;
 use anyhow::Result;
 use std::sync::atomic::Ordering;
@@ -10,7 +10,10 @@ impl Agent {
     pub(super) async fn prepare_reply_policies(&mut self, input: &str) -> PreparedPluginReplies {
         let mut prepared = self
             .tools
-            .prepare_plugin_replies(input, self.mode() != AgentMode::Plan)
+            .prepare_plugin_replies(
+                input,
+                self.mode().permission() != crate::agent::PermissionMode::Plan,
+            )
             .await;
         self.plugin_reply_contexts = std::mem::take(&mut prepared.contexts);
         prepared
@@ -27,7 +30,7 @@ impl Agent {
         F: FnMut(AgentEvent) -> Result<()>,
     {
         if !prepared.has_delivery()
-            || self.mode() == AgentMode::Plan
+            || self.mode().permission() == crate::agent::PermissionMode::Plan
             || self.cancel_requested.load(Ordering::SeqCst)
         {
             return;
@@ -38,7 +41,10 @@ impl Agent {
         }
         for (id, (instance, text)) in self
             .tools
-            .complete_plugin_replies(prepared, self.mode() != AgentMode::Plan)
+            .complete_plugin_replies(
+                prepared,
+                self.mode().permission() != crate::agent::PermissionMode::Plan,
+            )
             .await
         {
             if let Some(text) = text {

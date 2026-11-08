@@ -43,6 +43,8 @@ mod keyboard_enhancement;
 mod localization;
 mod memory_commands;
 mod message;
+mod mode;
+use mode::{cli_mode_override, resolve_agent_mode};
 mod model_select;
 mod models_picker;
 mod permission_prompt;
@@ -104,10 +106,7 @@ use fuzzy_select::inline_fuzzy_select;
 use history::run_history;
 use init::{remove_shell_hooks, run_init, InitKind};
 use input_flags::parse_message_input_flags;
-use interaction::{
-    handle_agent_event, prompt_permission_request, prompt_permission_request_tui,
-    prompt_question_request_tui,
-};
+use interaction::{handle_agent_event, prompt_permission_request, prompt_question_request_tui};
 use kb_commands::run_kb;
 pub(crate) use localization::parse;
 use memory_commands::{clear_memory, run_memory};
@@ -235,7 +234,8 @@ pub async fn run(cli: Cli) -> Result<()> {
         Some(Command::Ask(ref args)) => {
             // 子命令自带的模式标志优先于顶层;都没有时维持 None,
             // 让 resolve_agent_mode 回退到配置默认
-            let mode_override = cli_mode_override(&cli).or({
+            let mut overrides = cli_mode_override(&cli).unwrap_or_default();
+            overrides.permission = overrides.permission.or({
                 if args.plan {
                     Some(AgentMode::Plan)
                 } else if args.audited {
@@ -248,7 +248,7 @@ pub async fn run(cli: Cli) -> Result<()> {
                     None
                 }
             });
-            let mode = resolve_agent_mode(&paths, mode_override, PermissionSurface::Cli)?;
+            let mode = resolve_agent_mode(&paths, Some(overrides), PermissionSurface::Cli)?;
             let input =
                 parse_message_input_flags(args.message.clone(), args.clipb, args.web_search);
             run_chat_with_options(
@@ -289,10 +289,28 @@ pub async fn run(cli: Cli) -> Result<()> {
             let mode = resolve_agent_mode(&paths, mode_override, PermissionSurface::Tui)?;
             sessions::run_resume(&paths, args, mode, thinking_override.clone()).await
         }
-        Some(Command::Kb(args)) => run_kb(&paths, args, mode_override).await,
+        Some(Command::Kb(args)) => {
+            run_kb(
+                &paths,
+                args,
+                mode_override
+                    .map(|value| resolve_agent_mode(&paths, Some(value), PermissionSurface::Cli))
+                    .transpose()?,
+            )
+            .await
+        }
         Some(Command::Memory(args)) => run_memory(&paths, args),
         Some(Command::Skills(args)) => run_skills(&paths, args),
-        Some(Command::Plugins(args)) => plugins::run(&paths, args, mode_override).await,
+        Some(Command::Plugins(args)) => {
+            plugins::run(
+                &paths,
+                args,
+                mode_override
+                    .map(|value| resolve_agent_mode(&paths, Some(value), PermissionSurface::Cli))
+                    .transpose()?,
+            )
+            .await
+        }
         Some(Command::Ps(args)) => run_background_commands(&paths, args).await,
         Some(Command::Gateway(args)) => run_gateway(&paths, args).await,
         Some(Command::WeixinLogin(args)) => {
@@ -347,46 +365,6 @@ pub async fn run(cli: Cli) -> Result<()> {
 ///
 /// 返回:
 /// - 显式模式；未指定时返回空
-fn cli_mode_override(cli: &Cli) -> Option<AgentMode> {
-    if cli.plan {
-        Some(AgentMode::Plan)
-    } else if cli.audited {
-        Some(AgentMode::Audited)
-    } else if cli.auto_audit {
-        Some(AgentMode::AutoAudit)
-    } else if cli.yolo {
-        Some(AgentMode::Yolo)
-    } else if cli.code_model {
-        Some(AgentMode::CodeModel)
-    } else {
-        None
-    }
-}
-
-/// 合并命令行覆盖与持久化默认权限模式。
-///
-/// 参数:
-/// - `paths`: Sai 路径集合
-/// - `mode_override`: 命令行显式模式
-/// - `surface`: 调用入口（TUI 或 CLI）
-///
-/// 返回:
-/// - 当前入口应采用的 Agent 模式
-fn resolve_agent_mode(
-    paths: &SaiPaths,
-    mode_override: Option<AgentMode>,
-    surface: PermissionSurface,
-) -> Result<AgentMode> {
-    if let Some(mode) = mode_override {
-        return Ok(mode);
-    }
-    let config = AppConfig::load_or_default(paths)?;
-    Ok(match surface {
-        PermissionSurface::Tui => config.permission.tui_mode().into(),
-        PermissionSurface::Cli => config.permission.cli_mode().into(),
-    })
-}
-
 /// 权限默认值适用的终端入口。
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum PermissionSurface {
@@ -405,7 +383,7 @@ async fn run_tool(paths: &SaiPaths, mode: AgentMode, args: ToolArgs) -> Result<(
     let mut registry = build_tool_registry_without_mcp(&config, paths, mode)?;
     registry.start_plugin_session("cli-tool")?;
     let profile_mode = mode.permission_profile_mode();
-    let audit = (mode != AgentMode::Yolo).then(|| {
+    let audit = (mode.permission() != crate::agent::PermissionMode::Yolo).then(|| {
         crate::permission::PermissionAuditLog::new(
             paths.data_dir.join("permission-audit-cli.jsonl"),
             "cli-tool",
@@ -505,11 +483,13 @@ pub(crate) fn build_tool_registry_with_cached_mcp(
     mode: AgentMode,
 ) -> Result<tools::ToolRegistry> {
     let registry = if config.tools.enabled {
-        match mode {
-            AgentMode::Yolo | AgentMode::Audited | AgentMode::AutoAudit | AgentMode::CodeModel => {
+        match mode.permission() {
+            crate::agent::PermissionMode::Yolo
+            | crate::agent::PermissionMode::Audited
+            | crate::agent::PermissionMode::AutoAudit => {
                 tools::builtin_registry_with_cached_mcp(config, paths)
             }
-            AgentMode::Plan => tools::readonly_registry(config, paths),
+            crate::agent::PermissionMode::Plan => tools::readonly_registry(config, paths),
         }
     } else {
         tools::ToolRegistry::new()
@@ -535,17 +515,23 @@ fn build_tool_registry_with_mcp_notices(
     discover_mcp: bool,
 ) -> Result<(tools::ToolRegistry, Vec<String>)> {
     let (registry, notices) = if config.tools.enabled {
-        match mode {
-            AgentMode::Yolo | AgentMode::Audited | AgentMode::AutoAudit | AgentMode::CodeModel
+        match mode.permission() {
+            crate::agent::PermissionMode::Yolo
+            | crate::agent::PermissionMode::Audited
+            | crate::agent::PermissionMode::AutoAudit
                 if discover_mcp =>
             {
                 tools::builtin_registry_with_mcp_notices(config, paths)
             }
-            AgentMode::Yolo | AgentMode::Audited | AgentMode::AutoAudit | AgentMode::CodeModel => (
+            crate::agent::PermissionMode::Yolo
+            | crate::agent::PermissionMode::Audited
+            | crate::agent::PermissionMode::AutoAudit => (
                 tools::builtin_registry_without_mcp(config, paths),
                 Vec::new(),
             ),
-            AgentMode::Plan => (tools::readonly_registry(config, paths), Vec::new()),
+            crate::agent::PermissionMode::Plan => {
+                (tools::readonly_registry(config, paths), Vec::new())
+            }
         }
     } else {
         (tools::ToolRegistry::new(), Vec::new())
@@ -648,7 +634,7 @@ fn build_repl_tool_registry_for_session_with_mcp(
             Vec::new(),
         )
     };
-    if mode != AgentMode::Plan && config.tools.enabled {
+    if mode.permission() != crate::agent::PermissionMode::Plan && config.tools.enabled {
         tools::register_interactive_tools(
             &mut registry,
             config,
@@ -665,7 +651,7 @@ fn build_repl_tool_registry_for_session_with_mcp(
         crate::runner::SubmissionSource::Repl,
     )?;
     let workspace = crate::runtime_cwd::current_dir()?;
-    let audit = (mode != AgentMode::Yolo).then(|| {
+    let audit = (mode.permission() != crate::agent::PermissionMode::Yolo).then(|| {
         crate::permission::PermissionAuditLog::new(
             state_dir.join("permission-audit.jsonl"),
             session_id.to_string(),

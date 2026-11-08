@@ -151,11 +151,11 @@ pub(super) fn live_preview_cap(size: TerminalSize) -> usize {
 /// 返回:
 /// - transcript 使用的输入模式
 pub(super) fn transcript_mode(mode: AgentMode) -> TranscriptMode {
-    match mode {
-        AgentMode::Plan => TranscriptMode::Plan,
-        AgentMode::Audited | AgentMode::AutoAudit | AgentMode::Yolo | AgentMode::CodeModel => {
-            TranscriptMode::Yolo
-        }
+    match mode.permission() {
+        crate::agent::PermissionMode::Plan => TranscriptMode::Plan,
+        crate::agent::PermissionMode::Audited
+        | crate::agent::PermissionMode::AutoAudit
+        | crate::agent::PermissionMode::Yolo => TranscriptMode::Yolo,
     }
 }
 

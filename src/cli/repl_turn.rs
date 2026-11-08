@@ -244,9 +244,7 @@ pub(super) async fn execute_repl_turn(
     // 终端模式恢复失败也不能跳过流状态清理，先记录结果最后上报
     let guard_result = stream_terminal_guard.finish(&mut io::stdout());
     let leftover_draft = {
-        runtime.stream_draft_mut().mode = Some(AgentMode::from_u8(
-            final_mode_handle.load(std::sync::atomic::Ordering::SeqCst),
-        ));
+        runtime.stream_draft_mut().mode = Some(final_mode_handle.get());
         runtime.clear_live_mode();
         runtime.finish_stream()?;
         let draft = runtime.stream_draft().text.trim().to_string();
@@ -333,10 +331,7 @@ fn close_pager(
 fn handle_turn_event(event: crate::runner::RunnerEvent, runtime: &mut ReplRuntime) -> Result<()> {
     if let crate::runner::RunnerEvent::Agent(AgentEvent::PermissionRequested(request)) = &event {
         // 1. 先清掉 working 动效，再挂权限控件，避免最后一行重叠
-        runtime.pause_for_permission_prompt()?;
-        runtime.record_permission_request(request.clone())?;
-        prompt_permission_request_tui(request, runtime)?;
-        restore_stream_terminal_modes()?;
+        runtime.begin_permission_prompt(request.clone())?;
     } else if let crate::runner::RunnerEvent::Agent(AgentEvent::QuestionRequested(pending)) = &event
     {
         prompt_question_request_tui(pending, runtime)?;

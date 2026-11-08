@@ -4,6 +4,7 @@ mod input_echo;
 mod live_reasoning;
 mod live_tail;
 mod operations;
+mod permission;
 mod subagent_panel;
 mod todo_snapshot;
 mod tool_timing;

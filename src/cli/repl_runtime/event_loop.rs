@@ -80,6 +80,7 @@ impl ReplRuntime {
 /// 返回:
 /// - 处理是否成功
 pub(crate) fn process_stream_tick(runtime: &mut ReplRuntime) -> Result<()> {
+    runtime.refresh_permission_prompt()?;
     runtime.poll_mention_completion()?;
     runtime.observe_terminal_size(true)?;
     runtime.maybe_reflow_due(true)?;
@@ -115,6 +116,9 @@ pub(crate) fn process_stream_input(
         let Some(input) = next_ready_event(runtime)? else {
             break;
         };
+        if runtime.handle_permission_input(&input)? {
+            continue;
+        }
         // 全屏视图先处理鼠标与浏览键，其余按键仍交给输入框
         if runtime.handle_fullscreen_event(&input)? == super::FullscreenEvent::Consumed {
             if runtime.apply_stream_mouse_cursor() {

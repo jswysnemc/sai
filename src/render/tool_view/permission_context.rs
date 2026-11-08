@@ -14,8 +14,11 @@ pub(crate) fn render(view: &ToolView) -> String {
     {
         return String::new();
     }
-    let args = serde_json::from_str::<Value>(&view.arguments).unwrap_or_default();
-    let action = args["action"].as_str().unwrap_or(&view.name);
+    let audit = view.permission.as_ref().unwrap();
+    let arguments = audit.arguments.as_deref().unwrap_or(&view.arguments);
+    let tool = audit.tool.as_deref().unwrap_or(&view.name);
+    let args = serde_json::from_str::<Value>(arguments).unwrap_or_default();
+    let action = args["action"].as_str().unwrap_or(tool);
     let mut rows = vec![format!("{}: {}", t("Action", "操作"), clean(action))];
     // 1. 【终端】【审批对象】只使用目标字段，不读取正文、口令或任意嵌套字段
     for (key, label) in [

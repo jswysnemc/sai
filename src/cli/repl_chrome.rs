@@ -131,13 +131,7 @@ impl ReplChrome {
     /// 返回:
     /// - `yolo` / `plan`
     pub(super) fn mode_plain(&self) -> &'static str {
-        match self.mode {
-            AgentMode::Yolo => "yolo",
-            AgentMode::Audited => "audit",
-            AgentMode::AutoAudit => "auto-audit",
-            AgentMode::Plan => "plan",
-            AgentMode::CodeModel => "code-model",
-        }
+        self.mode.key()
     }
 }
 
@@ -341,12 +335,11 @@ fn colorize_left_status(mode: AgentMode, left_text: &str, context_ratio: f32) ->
         .map(|rest| rest.join("  "))
         .unwrap_or_default();
 
-    let mode_colored = match mode {
-        AgentMode::Yolo => format!("\x1b[38;5;208m{mode_text}\x1b[0m"),
-        AgentMode::Audited => format!("\x1b[35m{mode_text}\x1b[0m"),
-        AgentMode::AutoAudit => format!("\x1b[38;5;141m{mode_text}\x1b[0m"),
-        AgentMode::Plan => format!("\x1b[36m{mode_text}\x1b[0m"),
-        AgentMode::CodeModel => format!("\x1b[34m{mode_text}\x1b[0m"),
+    let mode_colored = match mode.permission() {
+        crate::agent::PermissionMode::Yolo => format!("\x1b[38;5;208m{mode_text}\x1b[0m"),
+        crate::agent::PermissionMode::Audited => format!("\x1b[35m{mode_text}\x1b[0m"),
+        crate::agent::PermissionMode::AutoAudit => format!("\x1b[38;5;141m{mode_text}\x1b[0m"),
+        crate::agent::PermissionMode::Plan => format!("\x1b[36m{mode_text}\x1b[0m"),
     };
     let context_color = if context_ratio >= 0.9 {
         "\x1b[31m"

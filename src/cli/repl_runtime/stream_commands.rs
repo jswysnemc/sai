@@ -122,12 +122,14 @@ pub(in crate::cli) fn run_immediate_stream_command(
         }
         Ok(Some(_)) => Ok(()),
         Err(error) => runtime.record_meta(error.to_string()),
-        Ok(None) => match stream_mode_switch(input) {
+        Ok(None) => match runtime.stream_mode(ctx.turn_mode).command(input) {
             // 权限模式切换等价于 Shift+Tab 热切换：只改运行期草稿模式，
             // 由共享的 live 句柄通知 Agent，不需要 &mut Agent
             Some(mode) => {
                 let previous = runtime.stream_mode(ctx.turn_mode);
-                if mode == AgentMode::Plan && previous != AgentMode::Plan {
+                if mode.permission() == crate::agent::PermissionMode::Plan
+                    && previous.permission() != crate::agent::PermissionMode::Plan
+                {
                     crate::plan::store::begin_sync(std::path::Path::new(&ctx.owner_key), previous)?;
                 }
                 runtime.stream_draft_mut().mode = Some(mode);
@@ -137,32 +139,6 @@ pub(in crate::cli) fn run_immediate_stream_command(
             None => Ok(()),
         },
     }
-}
-
-/// 返回输入对应的权限模式切换目标。
-///
-/// 参数:
-/// - `input`: 已去除首尾空白的命令原文
-///
-/// 返回:
-/// - 模式切换命令的目标模式；其它输入为空
-fn stream_mode_switch(input: &str) -> Option<AgentMode> {
-    if input.eq_ignore_ascii_case("/code-model") {
-        return Some(AgentMode::CodeModel);
-    }
-    if input.eq_ignore_ascii_case("/plan") {
-        return Some(AgentMode::Plan);
-    }
-    if input.eq_ignore_ascii_case("/audit") {
-        return Some(AgentMode::Audited);
-    }
-    if input.eq_ignore_ascii_case("/yolo") {
-        return Some(AgentMode::Yolo);
-    }
-    if input.eq_ignore_ascii_case("/auto") || input.eq_ignore_ascii_case("/auto-audit") {
-        return Some(AgentMode::AutoAudit);
-    }
-    None
 }
 
 /// 生成模式切换的提示文本。
@@ -183,25 +159,6 @@ fn mode_notice(mode: AgentMode) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// 模式切换命令解析到对应模式。
-    #[test]
-    fn mode_switch_commands_map_to_modes() {
-        assert_eq!(stream_mode_switch("/plan"), Some(AgentMode::Plan));
-        assert_eq!(stream_mode_switch("/AUDIT"), Some(AgentMode::Audited));
-        assert_eq!(stream_mode_switch("/yolo"), Some(AgentMode::Yolo));
-        assert_eq!(stream_mode_switch("/auto"), Some(AgentMode::AutoAudit));
-        assert_eq!(
-            stream_mode_switch("/CODE-MODEL"),
-            Some(AgentMode::CodeModel)
-        );
-        assert_eq!(
-            stream_mode_switch("/auto-audit"),
-            Some(AgentMode::AutoAudit)
-        );
-        assert_eq!(stream_mode_switch("/model"), None);
-        assert_eq!(stream_mode_switch("hello"), None);
-    }
 
     /// 模式提示带上模式名，用户能确认切到了哪个。
     #[test]

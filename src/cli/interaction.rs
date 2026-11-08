@@ -1,10 +1,8 @@
 use super::repl_runtime::ReplRuntime;
 use super::{permission_prompt, terminal_restore};
 use crate::agent::AgentEvent;
-use crate::i18n::text as t;
 use crate::render;
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use std::io::{self, Write};
 
 /// 将单次 CLI Agent 事件转发到流式渲染器或权限交互。
@@ -139,101 +137,6 @@ pub(super) fn prompt_permission_request(
     } else {
         Ok(None)
     }
-}
-
-/// 在 TUI 原始模式中读取权限选择，并更新既有工具视图。
-///
-/// 参数:
-/// - `request`: 已经写入 transcript 的权限请求
-/// - `runtime`: REPL 运行期
-///
-/// 返回:
-/// - 权限决定提交结果
-pub(super) fn prompt_permission_request_tui(
-    request: &crate::permission::PermissionRequest,
-    runtime: &mut ReplRuntime,
-) -> Result<()> {
-    use crate::permission::{PermissionInteractionState, PermissionTransition};
-
-    let mut state = PermissionInteractionState::new();
-    let mut stdout = io::stdout();
-    // 1. 独占 raw 输入，避免与主循环输入框事件竞争
-    let mut terminal_guard = terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
-    // 2. 选择项附着在工具视图下方（working 动效已在事件消费侧暂停）
-    runtime.update_permission_choice(&request.id, state.selected())?;
-    runtime.update_permission_reply(&request.id, state.reply_draft().map(str::to_string))?;
-
-    let result = (|| -> Result<()> {
-        loop {
-            // 自动审核已提交时退出交互，交还主循环
-            if !crate::permission::is_permission_pending(&request.id) {
-                return Ok(());
-            }
-            if !event::poll(std::time::Duration::from_millis(120))? {
-                continue;
-            }
-            let event = event::read()?;
-            // Ctrl+C / Ctrl+D 视为拒绝，避免审计循环无法退出
-            if permission_prompt::is_interrupt(&event) {
-                if !crate::permission::is_permission_pending(&request.id) {
-                    return Ok(());
-                }
-                return crate::permission::decide_permission(
-                    &request.id,
-                    crate::permission::PermissionDecision::Deny { reply: None },
-                );
-            }
-            if let Event::Resize(cols, rows) = event {
-                runtime.observe_input_resize(cols, rows)?;
-                runtime.update_permission_choice(&request.id, state.selected())?;
-                runtime.update_permission_reply(
-                    &request.id,
-                    state.reply_draft().map(str::to_string),
-                )?;
-                continue;
-            }
-            // Shift+Tab / BackTab：立即切到 YOLO 并放行当前会话全部待审
-            if let Event::Key(key) = &event {
-                if key.kind != KeyEventKind::Release {
-                    let shift_tab = matches!(key.code, KeyCode::BackTab)
-                        || (matches!(key.code, KeyCode::Tab)
-                            && key.modifiers.contains(KeyModifiers::SHIFT));
-                    if shift_tab {
-                        runtime.stream_draft_mut().mode = Some(crate::agent::AgentMode::Yolo);
-                        let _ = runtime.apply_stream_mode_live(crate::agent::AgentMode::Yolo);
-                        let _ =
-                            crate::permission::allow_all_pending_for_session(&request.session_id);
-                        // 切 YOLO + 放行全部待审的影响面覆盖本会话后续所有调用，
-                        // 落一条可见记录，否则用户不知道之后为何不再弹确认
-                        runtime.record_meta(t(
-                            "Shift+Tab: switched to YOLO and allowed all pending requests in this session.",
-                            "Shift+Tab：已切换为 YOLO，并放行本会话全部待审请求。",
-                        ).to_string())?;
-                        return Ok(());
-                    }
-                }
-            }
-            match state.handle_event(event) {
-                PermissionTransition::Continue => {
-                    runtime.update_permission_choice(&request.id, state.selected())?;
-                    runtime.update_permission_reply(
-                        &request.id,
-                        state.reply_draft().map(str::to_string),
-                    )?;
-                }
-                PermissionTransition::Submit(decision) => {
-                    if !crate::permission::is_permission_pending(&request.id) {
-                        return Ok(());
-                    }
-                    return crate::permission::decide_permission(&request.id, decision);
-                }
-            }
-        }
-    })();
-
-    // 3. 恢复终端模式，交回后续流式输出和下一轮输入
-    let _ = terminal_guard.finish(&mut stdout);
-    result
 }
 
 /// 在终端读取结构化提问答案。

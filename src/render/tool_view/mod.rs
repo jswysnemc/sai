@@ -4,6 +4,7 @@ mod background_list;
 mod background_notice;
 mod browser;
 mod capability;
+mod codemode;
 pub(crate) mod command_output_buffer;
 mod computer_use;
 mod context_compression;
@@ -54,6 +55,7 @@ pub(crate) use conversation_notice::ConversationNoticeKind;
 
 pub(crate) use background::{background_pager_body, background_task_command};
 pub(crate) use capability::render_capability_output;
+pub(crate) use codemode::render_arguments as render_codemode_arguments;
 pub(crate) use context_compression::{compression_progress_label, compression_result_label};
 pub(crate) use formatter::edit_stat_status;
 pub(crate) use formatter::{render, render_call, render_framed, render_permission, render_result};
