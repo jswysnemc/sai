@@ -45,6 +45,7 @@ pub(super) struct Output {
 pub(super) struct TaskManager {
     pub tasks: Vec<Task>,
     pub selected_id: Option<String>,
+    pub hovered: Option<String>,
     pub filter: Filter,
     pub pager: bool,
     pub stream: Stream,
@@ -66,6 +67,7 @@ impl Default for TaskManager {
         Self {
             tasks: Vec::new(),
             selected_id: None,
+            hovered: None,
             filter: Filter::All,
             pager: false,
             stream: Stream::Stdout,

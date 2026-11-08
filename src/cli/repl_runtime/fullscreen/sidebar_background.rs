@@ -3,8 +3,7 @@
 use crate::cli::repl_runtime::{ReplRuntime, viewport::TerminalSize};
 use crate::{config::AppConfig, paths::SaiPaths};
 use anyhow::Result;
-use crossterm::{cursor::Hide, event::Event, queue};
-use std::io::Write;
+use crossterm::event::Event;
 
 impl ReplRuntime {
     /// 【终端侧栏】【概览刷新】分别采样任务和 Git，任一分组变化即请求重绘。
@@ -43,37 +42,20 @@ impl ReplRuntime {
         if !self.background_panel_active() {
             return Ok(false);
         }
-        let size = TerminalSize::current();
-        self.background_panel.handle(event, (size.cols, size.rows));
+        // 1. 【后台任务】【命中几何】使用上一帧实际绘制的分区，保证鼠标坐标与可见面板一致
+        let rect = self
+            .fullscreen
+            .as_ref()
+            .and_then(|session| session.state.layout)
+            .map_or_else(
+                || {
+                    let size = TerminalSize::current();
+                    crate::cli::repl_background::PanelRect::inset(size.cols, 0, size.rows)
+                },
+                |layout| super::background_overlay::panel_rect(&layout),
+            );
+        self.background_panel.handle(event, rect);
         self.paint_fullscreen()?;
         Ok(true)
-    }
-
-    /// 【后台任务】【浮层输出】覆盖完整终端帧并撤销旧绘制基线，后续关闭时完整恢复。
-    /// 参数: 无；返回: 帧写入结果，由调用方提交。
-    pub(in crate::cli::repl_runtime) fn queue_background_panel(&mut self) -> Result<()> {
-        let size = TerminalSize::current();
-        let lines = self.background_panel.render((size.cols, size.rows));
-        queue!(self.frame, Hide)?;
-        if self.background_panel.previous.is_none() {
-            write!(
-                self.frame,
-                "{}",
-                crate::render::terminal_image::kitty_delete_placements()
-            )?;
-        }
-        crate::render::terminal_rows::paint_changed_rows(
-            &mut self.frame,
-            0,
-            usize::from(size.cols),
-            &lines,
-            self.background_panel.previous.as_deref(),
-        )?;
-        self.background_panel.previous = Some(lines);
-        self.last_composer_signature = None;
-        if let Some(session) = self.fullscreen.as_mut() {
-            session.state.previous = None;
-        }
-        Ok(())
     }
 }

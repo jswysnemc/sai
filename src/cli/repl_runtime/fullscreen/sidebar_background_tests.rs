@@ -20,6 +20,19 @@ fn sidebar_text(runtime: &ReplRuntime) -> String {
     )
 }
 
+/// 【后台任务测试】【画面读取】读取上一帧整屏行（不含输入框），浮层叠加在其中。
+/// 参数: runtime 为运行期；返回: 带样式的整屏行。
+fn screen_rows(runtime: &ReplRuntime) -> Vec<String> {
+    runtime
+        .fullscreen
+        .as_ref()
+        .unwrap()
+        .state
+        .previous
+        .clone()
+        .unwrap()
+}
+
 /// 【后台任务测试】【按键发送】通过真实全屏事件分发器执行按键。
 /// 参数: runtime 为运行期，code 为键码；返回: 无。
 fn key(runtime: &mut ReplRuntime, code: KeyCode) {
@@ -97,14 +110,7 @@ fn background_sidebar_opens_manager_without_submitting_or_losing_draft() {
             let scroll = runtime.fullscreen.as_ref().unwrap().state.scroll;
             click(&mut runtime, SidebarAction::Background(None));
             assert!(runtime.background_panel_active());
-            let text = strip_ansi(
-                &runtime
-                    .background_panel
-                    .previous
-                    .as_ref()
-                    .unwrap()
-                    .join("\n"),
-            );
+            let text = strip_ansi(&screen_rows(&runtime).join("\n"));
             assert!(text.contains("Background tasks"), "{text}");
             assert!(text.contains("Esc"), "{text}");
             assert_eq!(
@@ -113,8 +119,9 @@ fn background_sidebar_opens_manager_without_submitting_or_losing_draft() {
                     .unwrap(),
                 FullscreenEvent::Consumed
             );
+            // 1. 【后台任务测试】【输入框保留】浮层只覆盖正文，输入框照常绘制且内容不变
             runtime.draw_composer().unwrap();
-            assert!(runtime.last_composer_signature.is_none());
+            assert!(runtime.last_composer_signature == signature);
             key(&mut runtime, KeyCode::Esc);
             assert!(!runtime.background_panel_active());
             assert!(runtime.last_composer_signature == signature);
@@ -162,8 +169,8 @@ fn background_manager_stays_visible_at_small_sizes_and_when_collapsed() {
             assert!(sidebar_text(&runtime).contains("Manage tasks"));
             click(&mut runtime, SidebarAction::Background(None));
             assert!(runtime.background_panel_active());
-            for line in runtime.background_panel.previous.as_ref().unwrap() {
-                assert!(crate::render::ansi_clip::ansi_visible_width(line) <= usize::from(cols));
+            for line in screen_rows(&runtime) {
+                assert!(crate::render::ansi_clip::ansi_visible_width(&line) <= usize::from(cols));
             }
             key(&mut runtime, KeyCode::Esc);
         });
@@ -295,9 +302,9 @@ async fn background_sidebar_refreshes_persisted_tasks_and_opens_selected_logs() 
                 || runtime.process_idle_tick().unwrap(),
             );
             if runtime
-                .background_panel
-                .previous
+                .fullscreen
                 .as_ref()
+                .and_then(|session| session.state.previous.as_ref())
                 .is_some_and(|lines| lines.iter().any(|line| line.contains("LOG-FIXTURE")))
             {
                 break;
@@ -322,7 +329,7 @@ async fn background_sidebar_refreshes_persisted_tasks_and_opens_selected_logs() 
     );
 }
 
-/// 【后台任务测试】【流式隔离】模型输出继续更新历史，浮层及缩放不覆盖草稿，关闭后恢复正文。
+/// 【后台任务测试】【流式隔离】模型输出继续更新历史，浮层遮住正文且缩放后跟随新尺寸，关闭后恢复正文。
 /// 参数: 无；返回: 无。
 #[test]
 fn background_manager_survives_stream_refresh_and_terminal_resize() {
@@ -351,13 +358,13 @@ fn background_manager_survives_stream_refresh_and_terminal_resize() {
                 runtime
                     .handle_fullscreen_event(&Event::Resize(60, 12))
                     .unwrap();
-                let lines = runtime.background_panel.previous.as_ref().unwrap();
-                assert_eq!(lines.len(), 12);
+                let lines = screen_rows(&runtime);
                 assert!(
                     lines
                         .iter()
-                        .all(|line| crate::render::ansi_clip::ansi_visible_width(line) <= 60)
+                        .all(|line| crate::render::ansi_clip::ansi_visible_width(line) == 60)
                 );
+                assert!(strip_ansi(&lines.join("\n")).contains("Background tasks"));
                 assert!(
                     !lines
                         .iter()
@@ -402,6 +409,55 @@ fn background_manager_yields_to_permission_prompt() {
             runtime.pause_for_permission_prompt().unwrap();
             assert!(!runtime.background_panel_active());
             assert!(runtime.last_composer_signature == signature);
+        },
+    );
+}
+
+/// 【后台任务测试】【叠加绘制】面板只覆盖正文行与会话列，标题行和右侧侧栏保持可见。
+/// 参数: 无；返回: 无。
+#[test]
+fn background_manager_overlays_body_and_keeps_header_and_sidebar() {
+    TerminalSize::with_size(
+        TerminalSize {
+            cols: 160,
+            rows: 30,
+        },
+        || {
+            let mut runtime = runtime(3);
+            runtime.enter_fullscreen().unwrap();
+            runtime.paint_fullscreen().unwrap();
+            let before = screen_rows(&runtime);
+            click(&mut runtime, SidebarAction::Background(None));
+            let after = screen_rows(&runtime);
+            let layout = runtime.fullscreen.as_ref().unwrap().state.layout.unwrap();
+            let side = usize::from(layout.sidebar.unwrap().left);
+            assert_eq!(before[0], after[0]);
+            let plain = after
+                .iter()
+                .map(|line| strip_ansi(line))
+                .collect::<Vec<_>>();
+            let top = usize::from(layout.body_top);
+            let bottom = top + usize::from(layout.body_height) - 1;
+            assert!(plain[top].starts_with(" ╭"), "{}", plain[top]);
+            assert!(plain[bottom].starts_with(" ╰"), "{}", plain[bottom]);
+            // 1. 【后台任务测试】【列边界】面板右框紧贴会话列，侧栏列保持原样
+            for line in &plain[top..=bottom] {
+                let chars = line.chars().collect::<Vec<_>>();
+                assert_eq!(chars.len(), usize::from(layout.cols), "{line}");
+                assert!(matches!(chars[side - 2], '╮' | '│' | '┃' | '╯'), "{line}");
+                assert_eq!(chars[side - 1], ' ', "{line}");
+            }
+            let sidebar = |rows: &[String]| {
+                rows.iter()
+                    .map(|line| strip_ansi(line).chars().skip(side).collect::<String>())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            };
+            assert!(sidebar(&after).contains("Manage tasks"));
+            assert_eq!(sidebar(&before), sidebar(&after));
+            key(&mut runtime, KeyCode::Esc);
+            runtime.paint_fullscreen().unwrap();
+            assert_eq!(screen_rows(&runtime), before);
         },
     );
 }

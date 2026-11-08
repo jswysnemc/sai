@@ -1,299 +1,116 @@
-//! 紧凑圆角任务面板：状态列表、内联详情与边框操作提示。
+//! 圆角任务面板：标题、列表或日志正文与底框提示的帧组装，尺寸由调用方给出的矩形决定。
 
 use super::{
-    model::{safe_text, Filter, Stream, Task, TaskManager},
-    service::Request,
+    list_body,
+    model::{safe_text, Stream, TaskManager},
+    panel_rect::PanelRect,
+    view_hints::footer,
 };
-use crate::config_tui::theme::{BOLD, BRAND, DANGER, DIM, MUTED, OK, RESET};
 use crate::i18n::text as t;
 use crate::render::ansi_clip::{ansi_visible_width, clip_ansi_to_width};
-use std::time::Instant;
+use crate::render::panel_palette::{fg, PanelPalette};
+use std::ops::Range;
 
 pub(super) struct TaskFrame {
+    /// 面板自身的行，每行恰好占 rect.width 列，不含左侧偏移
     pub lines: Vec<String>,
+    /// 任务行的终端行号与任务标识
     pub targets: Vec<(u16, String)>,
     pub page_rows: usize,
-    pub x: u16,
-    pub width: u16,
+    pub rect: PanelRect,
 }
 
-/// 【后台任务】【面板组装】按真实终端大小绘制紧凑单体面板，窄终端不越界。
-/// 参数: manager 为状态，size 为列数和行数；返回: 帧内容与点击区域。
-pub(super) fn render(manager: &mut TaskManager, size: (u16, u16)) -> TaskFrame {
-    let (cols, rows) = size;
-    let width = cols.saturating_sub(2).min(90).max(1).min(cols);
-    let x = cols.saturating_sub(width) / 2;
-    let inner = usize::from(width.saturating_sub(4));
-    let height = rows.min(if manager.pager { 18 } else { 16 });
-    let y = rows.saturating_sub(height).min(2);
-    let page_rows = usize::from(height.saturating_sub(if manager.pager { 4 } else { 9 })).max(1);
+impl TaskFrame {
+    /// 【后台任务】【整屏定位】独立管理屏幕没有底层内容，按矩形位置补齐上方空行与左侧空格。
+    /// 参数: 无；返回: 从终端首行开始的整屏行。
+    pub fn placed(&self) -> Vec<String> {
+        let indent = " ".repeat(usize::from(self.rect.x));
+        let mut lines = vec![String::new(); usize::from(self.rect.y)];
+        lines.extend(self.lines.iter().map(|line| format!("{indent}{line}")));
+        lines
+    }
+}
+
+/// 【后台任务】【面板组装】按给定矩形绘制面板，列表模式在任务与尾部输出之间分配高度。
+/// 参数: manager 为状态，rect 为面板外框所在矩形；返回: 面板行与点击区域。
+pub(super) fn render(manager: &mut TaskManager, rect: PanelRect) -> TaskFrame {
+    let palette = PanelPalette::current();
+    let inner = usize::from(rect.width.saturating_sub(4));
+    let body_rows = usize::from(rect.height.saturating_sub(2));
     let mut targets = Vec::new();
-    let mut body = Vec::new();
-    let title;
-    if manager.pager {
-        let id = manager.selected_id.as_deref().unwrap_or_default();
-        title = format!(
-            "{BOLD}{}: {}{RESET} {BRAND}[{}]{RESET} {}",
-            t("Task logs", "任务日志"),
-            safe_text(id),
-            stream_name(manager.stream),
-            if manager.follow {
-                t("Follow on", "跟随开启")
-            } else {
-                t("Follow off", "跟随暂停")
-            }
-        );
-        body = super::pager_view::rows(manager, inner, page_rows);
+    let mut thumb = 0..0;
+    let (title, body, page_rows) = if manager.pager {
+        // 1. 【后台任务】【日志模式】首行为缓冲区提示，其余正文行全部用于日志
+        let page_rows = body_rows.saturating_sub(1).max(1);
+        let (body, rows) = super::pager_view::rows(manager, inner, page_rows);
+        thumb = rows;
+        (pager_title(manager, &palette), body, page_rows)
     } else {
-        let running = manager
-            .tasks
-            .iter()
-            .filter(|task| task.status == "running")
-            .count();
-        title = format!(
-            "{BRAND}◆ {BOLD}{}{RESET} {MUTED}{running}/{} {}{RESET}",
-            t("Background tasks", "后台任务管理"),
-            manager.tasks.len(),
-            t("running", "运行中")
-        );
-        let filters = [
-            (Filter::All, t("All", "全部"), manager.tasks.len()),
-            (Filter::Running, t("Running", "运行中"), running),
-            (
-                Filter::Finished,
-                t("Finished", "已结束"),
-                manager.tasks.len() - running,
-            ),
-        ];
-        body.push(
-            filters
-                .iter()
-                .enumerate()
-                .map(|(index, (filter, name, count))| {
-                    if *filter == manager.filter {
-                        format!("{BRAND}[{} {name} {count}]{RESET}", index + 1)
-                    } else {
-                        format!("{MUTED}{} {name} {count}{RESET}", index + 1)
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("  "),
-        );
-        body.push(format!("{DIM}{}{RESET}", "─".repeat(inner)));
-        let visible = manager.visible();
-        let selected = visible
-            .iter()
-            .position(|index| Some(&manager.tasks[*index].id) == manager.selected_id.as_ref())
-            .unwrap_or(0);
-        let start = selected
-            .saturating_sub(page_rows - 1)
-            .min(visible.len().saturating_sub(page_rows));
-        for index in visible.iter().skip(start).take(page_rows) {
-            let task = &manager.tasks[*index];
-            targets.push((y + 1 + body.len() as u16, task.id.clone()));
-            body.push(task_row(
-                task,
-                Some(&task.id) == manager.selected_id.as_ref(),
-                inner,
-            ));
-        }
-        if visible.is_empty() {
-            body.push(format!(
-                "{MUTED}{}{RESET}",
-                if manager.loading {
-                    t("Loading tasks...", "正在获取任务…")
-                } else {
-                    t("No matching tasks", "暂无匹配任务")
-                }
-            ));
-        }
-        while body.len() < page_rows + 2 {
-            body.push(String::new());
-        }
-        body.push(format!(
-            "{DIM}── {} {}{RESET}",
-            t("Details", "选中详情"),
-            "─".repeat(inner.saturating_sub(14))
-        ));
-        body.extend(detail_rows(manager));
-    }
-    if let Some(request) = &manager.confirm {
-        // 1. 【后台任务】【目标确认】确认内容保存任务标识，不随列表刷新改变目标
-        let message = match request {
-            Request::Stop { id, force } => format!(
-                "{} {}",
-                if *force {
-                    t("Force stop", "强制停止")
-                } else {
-                    t("Stop", "停止")
-                },
-                safe_text(id)
-            ),
-            Request::Cleanup => t(
-                "Clean finished records; keep logs",
-                "清理已结束记录，保留日志",
-            )
-            .into(),
-            Request::Refresh => String::new(),
-        };
-        body.clear();
-        targets.clear();
-        body.push(format!("{DANGER}{message}{RESET}"));
-        if let Request::Stop { id, .. } = request {
-            if let Some(task) = manager.tasks.iter().find(|task| &task.id == id) {
-                body.push(safe_text(&task.label));
-                body.push(safe_text(&task.command));
-            }
-        }
-    }
+        let top = rect.y.saturating_add(1);
+        let (body, tasks) = list_body::rows(manager, inner, body_rows, top, &mut targets, &palette);
+        (list_title(manager, &palette), body, tasks)
+    };
     let footer = footer(manager, inner);
-    let mut panel = vec![border('╭', '╮', &title, width)];
-    panel.extend(
-        body.into_iter()
-            .take(usize::from(height.saturating_sub(2)))
-            .map(|line| boxed(&line, width)),
-    );
-    if height >= 2 {
-        panel.push(border('╰', '╯', &footer, width));
-    }
-    panel.truncate(usize::from(rows));
-    let mut lines = vec![String::new(); usize::from(y)];
+    // 2. 【后台任务】【外框组装】右边框兼作日志滚动位置，滑块所在行使用粗线
+    let mut lines = vec![border('╭', '╮', &title, rect.width, &palette)];
     lines.extend(
-        panel
-            .into_iter()
-            .map(|line| format!("{}{line}", " ".repeat(usize::from(x)))),
+        body.into_iter()
+            .take(body_rows)
+            .enumerate()
+            .map(|(index, line)| boxed(&line, rect.width, thumb.contains(&index), &palette)),
     );
+    if rect.height >= 2 {
+        lines.push(border('╰', '╯', &footer, rect.width, &palette));
+    }
+    lines.truncate(usize::from(rect.height));
+    // 3. 【后台任务】【命中裁剪】极小高度下被底框挤掉的任务行不再响应点击
+    let bottom = rect.y.saturating_add(rect.height.saturating_sub(1));
+    targets.retain(|(row, _)| *row < bottom);
     TaskFrame {
         lines,
         targets,
         page_rows,
-        x,
-        width,
+        rect,
     }
 }
 
-/// 【后台任务】【单行条目】按列宽排列状态、名称、PID 与相对耗时。
-/// 参数: task 为条目，selected 为选中状态，width 为内容宽度；返回: 样式文本。
-fn task_row(task: &Task, selected: bool, width: usize) -> String {
-    let (tag, color) = match task.status.as_str() {
-        "running" => ("RUN", OK),
-        "exited" => ("EXIT", MUTED),
-        "stopped" => ("STOP", BRAND),
-        "timed_out" => ("TIME", DANGER),
-        "failed" => ("FAIL", DANGER),
-        _ => ("?", MUTED),
-    };
-    let end = if task.status == "running" {
-        crate::tools::command::unix_seconds()
-    } else {
-        task.updated_at
-    };
-    let duration = duration(end.saturating_sub(task.started_at));
-    let metadata = if width >= 55 {
-        format!("pid {:<7} {duration:>8}", task.pid)
-    } else {
-        format!("{duration:>8}")
-    };
-    let label_width = width.saturating_sub(11 + metadata.len());
-    let name = fit(
-        &safe_text(if task.label.is_empty() {
-            &task.command
-        } else {
-            &task.label
-        }),
-        label_width,
-    );
-    let padding = label_width.saturating_sub(ansi_visible_width(&name));
+/// 【后台任务】【列表标题】强调色标记、加粗名称与减淡的运行计数。
+/// 参数: manager 为状态，palette 为主题；返回: 嵌入上边框的标题。
+fn list_title(manager: &TaskManager, palette: &PanelPalette) -> String {
+    let running = manager
+        .tasks
+        .iter()
+        .filter(|task| task.status == "running")
+        .count();
     format!(
-        "{} {color}[{tag:<4}]{RESET} {}{name}{RESET}{} {MUTED}{metadata}{RESET}",
-        if selected { ">" } else { " " },
-        if selected { BOLD } else { "" },
-        " ".repeat(padding)
+        "{}◆\x1b[39m \x1b[1m{}\x1b[22m {}{running}/{} {}\x1b[0m",
+        fg(palette.accent),
+        t("Background tasks", "后台任务管理"),
+        fg(palette.muted),
+        manager.tasks.len(),
+        t("running", "运行中")
     )
 }
 
-/// 【后台任务】【内联详情】提供标识、目录、命令及当前流末行预览。
-/// 参数: manager 为任务状态；返回: 四行紧凑详情。
-fn detail_rows(manager: &TaskManager) -> Vec<String> {
-    let Some(task) = manager.selected() else {
-        return vec![t("No selected task", "无选中任务").into()];
-    };
-    let timeout = if task.timeout_seconds == 0 {
-        t("unlimited", "无限制").into()
+/// 【后台任务】【日志标题】任务标识加粗，输出通道使用强调色，跟随状态减淡。
+/// 参数: manager 为状态，palette 为主题；返回: 嵌入上边框的标题。
+fn pager_title(manager: &TaskManager, palette: &PanelPalette) -> String {
+    let id = manager.selected_id.as_deref().unwrap_or_default();
+    let follow = if manager.follow {
+        t("Follow on", "跟随开启")
     } else {
-        format!("{}s", task.timeout_seconds)
+        t("Follow off", "跟随暂停")
     };
-    let preview = if manager.output_id != manager.selected_id {
-        t("Loading output...", "正在读取输出…").into()
-    } else if let Some(error) = &manager.output_error {
-        format!("{}: {}", t("Read failed", "读取失败"), safe_text(error))
-    } else {
-        manager
-            .log_lines()
-            .last()
-            .cloned()
-            .unwrap_or_else(|| t("No output", "暂无输出").into())
-    };
-    vec![
-        format!(
-            "ID: {} · PID {} · {}: {timeout}",
-            safe_text(&task.id),
-            task.pid,
-            t("Timeout", "超时")
-        ),
-        format!("{}: {}", t("Directory", "目录"), safe_text(&task.cwd)),
-        format!("{}: {}", t("Command", "命令"), safe_text(&task.command)),
-        format!("{MUTED}[{}] {preview}{RESET}", stream_name(manager.stream)),
-    ]
+    format!(
+        "\x1b[1m{}: {}\x1b[22m {}· {}{}{} · {follow}\x1b[0m",
+        t("Task logs", "任务日志"),
+        safe_text(id),
+        fg(palette.muted),
+        fg(palette.accent),
+        stream_name(manager.stream),
+        fg(palette.muted),
+    )
 }
-
-/// 【后台任务】【页脚提示】显示当前状态下可用的按键与瞬态反馈。
-/// 参数: manager 为状态，width 为可用宽度；返回: 底框文本。
-fn footer(manager: &TaskManager, width: usize) -> String {
-    if manager.confirm.is_some() {
-        return t(
-            "Enter/y confirm · Esc/n cancel",
-            "Enter/y 确认 · Esc/n 取消",
-        )
-        .into();
-    }
-    if manager.busy {
-        return t("Working...", "正在执行操作…").into();
-    }
-    if let Some((text, error, expiry)) = &manager.notice {
-        if *error || Instant::now() < *expiry {
-            return format!("{}{text}{RESET}", if *error { DANGER } else { OK });
-        }
-    }
-    if manager.pager {
-        if width < 55 {
-            t(
-                "Esc back · Tab stream · f follow · arrows scroll",
-                "Esc 返回 · Tab 通道 · f 跟随 · ↑↓ 滚动",
-            )
-            .into()
-        } else {
-            t(
-                "Esc back · Tab stream · f follow · PgUp/PgDn page · g/G first/last",
-                "Esc 返回 · Tab 通道 · f 跟随 · PgUp/PgDn 翻页 · g/G 首尾",
-            )
-            .into()
-        }
-    } else if width < 55 {
-        t(
-            "Esc back · Enter logs · Tab filter · s/f stop · x clean",
-            "Esc 返回 · Enter 日志 · Tab 筛选 · s/f 停止 · x 清理",
-        )
-        .into()
-    } else {
-        t(
-            "Esc back · Enter logs · Tab filter · s stop · f force · x clean · r refresh",
-            "Esc 返回 · Enter 日志 · Tab 筛选 · s 停止 · f 强制 · x 清理 · r 刷新",
-        )
-        .into()
-    }
-}
-
 /// 【后台任务】【流名称】返回稳定输出通道标记。
 /// 参数: stream 为输出流；返回: 通道名。
 pub(super) fn stream_name(stream: Stream) -> &'static str {
@@ -303,6 +120,7 @@ pub(super) fn stream_name(stream: Stream) -> &'static str {
         Stream::All => "ALL",
     }
 }
+
 /// 【后台任务】【相对时长】将秒数格式化为紧凑时间。
 /// 参数: seconds 为秒数；返回: 时长。
 pub(super) fn duration(seconds: u64) -> String {
@@ -314,6 +132,7 @@ pub(super) fn duration(seconds: u64) -> String {
         format!("{seconds}s")
     }
 }
+
 /// 【后台任务】【宽度约束】仅超宽时截断，保留可信样式。
 /// 参数: text 为文本，width 为列宽；返回: 不超宽的文本。
 pub(super) fn fit(text: &str, width: usize) -> String {
@@ -323,28 +142,54 @@ pub(super) fn fit(text: &str, width: usize) -> String {
         clip_ansi_to_width(text, width, if width > 0 { "…" } else { "" })
     }
 }
-/// 【后台任务】【边框绘制】生成带嵌入信息的圆角边框。
-/// 参数: left/right 为边角，label 为可信样式文本，width 为外框宽度；返回: 边框行。
-fn border(left: char, right: char, label: &str, width: u16) -> String {
+
+/// 【后台任务】【日志滑块】按视口与缓冲区比例计算滑块所在的日志行，未溢出时不显示。
+/// 参数: offset 为首行偏移，visible 为视口行数，total 为日志总行数；返回: 相对日志首行的滑块范围。
+pub(super) fn thumb(offset: usize, visible: usize, total: usize) -> Range<usize> {
+    if total <= visible || visible == 0 {
+        return 0..0;
+    }
+    let size = (visible * visible / total).clamp(1, visible);
+    let travel = visible - size;
+    let maximum = total - visible;
+    let top = offset.min(maximum) * travel / maximum;
+    top..top + size
+}
+
+/// 【后台任务】【边框绘制】生成带嵌入信息的圆角边框，外框使用主题弱化色。
+/// 参数: left/right 为边角，label 为可信样式文本，width 为外框宽度，palette 为主题；返回: 边框行。
+fn border(left: char, right: char, label: &str, width: u16, palette: &PanelPalette) -> String {
     if width < 2 {
         return fit(&left.to_string(), usize::from(width));
     }
-    let label = fit(&format!(" {label} "), usize::from(width - 2));
+    let frame = fg(palette.muted);
+    let label = if label.is_empty() {
+        String::new()
+    } else {
+        fit(&format!(" {label}\x1b[0m "), usize::from(width - 2))
+    };
     format!(
-        "{DIM}{left}{RESET}{label}{DIM}{}{right}{RESET}",
+        "{frame}{left}\x1b[0m{label}{frame}{}{right}\x1b[0m",
         "─".repeat(usize::from(width - 2).saturating_sub(ansi_visible_width(&label)))
     )
 }
-/// 【后台任务】【内容边框】补齐内容行并保持外框宽度。
-/// 参数: text 为可信样式文本，width 为外框宽度；返回: 带边框内容。
-fn boxed(text: &str, width: u16) -> String {
+
+/// 【后台任务】【内容边框】补齐内容行并保持外框宽度，滑块所在行的右边框改为粗线。
+/// 参数: text 为可信样式文本，width 为外框宽度，thumb 为是否滑块行，palette 为主题；返回: 带边框内容。
+fn boxed(text: &str, width: u16, thumb: bool, palette: &PanelPalette) -> String {
     if width < 4 {
         return fit("││", usize::from(width));
     }
+    let frame = fg(palette.muted);
     let inner = usize::from(width - 4);
     let text = fit(text, inner);
+    let (right, color) = if thumb {
+        ('┃', fg(palette.text))
+    } else {
+        ('│', frame.clone())
+    };
     format!(
-        "{DIM}│{RESET} {text}{RESET}{} {DIM}│{RESET}",
+        "{frame}│\x1b[0m {text}\x1b[0m{} {color}{right}\x1b[0m",
         " ".repeat(inner.saturating_sub(ansi_visible_width(&text)))
     )
 }

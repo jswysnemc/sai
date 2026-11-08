@@ -1,14 +1,19 @@
 //! 后台任务管理入口，列表和日志视图共享状态与异步任务服务。
 
 mod input;
+mod list_body;
 mod model;
 #[cfg(test)]
 mod model_tests;
 mod pager_view;
 mod panel;
+mod panel_rect;
 mod screen;
 mod service;
+mod task_style;
 mod view;
+mod view_hints;
+mod view_list;
 #[cfg(test)]
 mod view_tests;
 
@@ -23,8 +28,10 @@ use std::time::{Duration, Instant};
 
 pub(in crate::cli) use model::Task;
 pub(in crate::cli) use panel::EmbeddedTaskPanel;
+pub(in crate::cli) use panel_rect::PanelRect;
+pub(in crate::cli) use task_style::status_style;
 
-/// 【后台任务】【管理入口】运行紧凑任务面板，接口请求不阻塞键盘与终端尺寸更新。
+/// 【后台任务】【管理入口】运行占满终端的任务面板，接口请求不阻塞键盘与终端尺寸更新。
 /// 参数: paths 为应用路径，config 为当前配置；返回: 终端交互结果。
 pub(super) async fn run_repl_background_manager(
     paths: &SaiPaths,
@@ -49,8 +56,8 @@ pub(super) async fn run_repl_background_manager(
         }
         manager.busy = service.mutating();
         let size = crossterm::terminal::size()?;
-        let frame = view::render(&mut manager, size);
-        screen.draw(&frame.lines, size)?;
+        let frame = view::render(&mut manager, PanelRect::inset(size.0, 0, size.1));
+        screen.draw(&frame.placed(), size)?;
 
         // 2. 【后台任务】【输入分流】日志模式与列表模式独立处理，释放事件不重复执行操作
         if !event::poll(Duration::from_millis(80))? {

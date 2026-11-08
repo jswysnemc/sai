@@ -1,5 +1,6 @@
 pub(crate) mod activity_animation;
 pub(crate) mod ansi_clip;
+pub(crate) mod ansi_overlay;
 pub(crate) mod ansi_style;
 #[cfg(test)]
 mod apply_patch_tests;
@@ -46,6 +47,7 @@ mod markdown_inline_code;
 mod markdown_list;
 mod markdown_quote;
 pub(crate) mod omitted_line;
+pub(crate) mod panel_palette;
 mod permission;
 pub(crate) mod render_expand;
 pub(crate) mod render_width;

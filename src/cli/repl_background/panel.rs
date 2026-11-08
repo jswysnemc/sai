@@ -3,6 +3,7 @@
 use super::{
     Task, input,
     model::TaskManager,
+    panel_rect::PanelRect,
     service::{Request, TaskService},
     view,
 };
@@ -16,7 +17,6 @@ pub(in crate::cli) struct EmbeddedTaskPanel {
     service: Option<TaskService>,
     next_refresh: Option<Instant>,
     pub active: bool,
-    pub previous: Option<Vec<String>>,
     pub error: Option<String>,
 }
 
@@ -41,7 +41,6 @@ impl EmbeddedTaskPanel {
     /// 参数: 无；返回: 无。
     pub fn dismiss(&mut self) {
         self.active = false;
-        self.previous = None;
         self.next_refresh = None;
         self.manager.confirm = None;
     }
@@ -53,11 +52,11 @@ impl EmbeddedTaskPanel {
             self.manager.selected_id = Some(task.id.clone());
         }
         self.manager.filter = Default::default();
+        self.manager.hovered = None;
         self.manager.pager = false;
         self.manager.confirm = None;
         self.manager.reconcile();
         self.active = true;
-        self.previous = None;
         self.next_refresh = None;
         if self.service.is_none() {
             self.manager.loading = false;
@@ -124,9 +123,9 @@ impl EmbeddedTaskPanel {
     }
 
     /// 【后台任务】【输入隔离】复用列表、日志、停止确认处理，所有事件都留在浮层内。
-    /// 参数: event 为终端事件，size 为当前尺寸；返回: 无。
-    pub fn handle(&mut self, event: &Event, size: (u16, u16)) {
-        let frame = view::render(&mut self.manager, size);
+    /// 参数: event 为终端事件，rect 为面板当前所在矩形；返回: 无。
+    pub fn handle(&mut self, event: &Event, rect: PanelRect) {
+        let frame = view::render(&mut self.manager, rect);
         let effect = match event {
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 input::handle(&mut self.manager, *key, frame.page_rows)
@@ -152,11 +151,9 @@ impl EmbeddedTaskPanel {
         }
     }
 
-    /// 【后台任务】【浮层绘制】复用自适应管理界面，补齐空行以覆盖旧正文和输入区域。
-    /// 参数: size 为终端尺寸；返回: 不超过屏幕范围的完整帧。
-    pub fn render(&mut self, size: (u16, u16)) -> Vec<String> {
-        let mut lines = view::render(&mut self.manager, size).lines;
-        lines.resize(usize::from(size.1), String::new());
-        lines
+    /// 【后台任务】【浮层绘制】按调用方给出的矩形绘制面板，由调用方叠加到底层画面上。
+    /// 参数: rect 为面板外框所在矩形；返回: 面板行，每行恰好占 rect.width 列。
+    pub fn render(&mut self, rect: PanelRect) -> Vec<String> {
+        view::render(&mut self.manager, rect).lines
     }
 }

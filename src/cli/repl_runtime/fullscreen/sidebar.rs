@@ -239,7 +239,13 @@ impl ReplRuntime {
     /// 参数: action 为命中的动作；返回: 无。
     pub(super) fn apply_sidebar_action(&mut self, action: SidebarAction) {
         match action {
-            SidebarAction::Background(index) => self.background_panel.open(index),
+            SidebarAction::Background(index) => {
+                // 1. 【后台任务】【悬停交接】面板接管鼠标后侧栏收不到移出事件，打开前清除悬停高亮
+                if let Some(session) = self.fullscreen.as_mut() {
+                    session.sidebar.hovered = None;
+                }
+                self.background_panel.open(index);
+            }
             SidebarAction::Toggle(section) => self
                 .fullscreen
                 .as_mut()

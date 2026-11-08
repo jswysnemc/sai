@@ -41,13 +41,8 @@ pub(super) fn rows(panel: &EmbeddedTaskPanel, collapsed: bool, width: usize) -> 
         rows.push(row(item("No background commands", width, true), None));
     }
     for (index, task) in tasks.iter().enumerate() {
-        let (status, color) = match task.status.as_str() {
-            "running" => ("running", palette.accent),
-            "failed" => ("failed", palette.removed),
-            "timed_out" => ("timeout", palette.removed),
-            "stopped" => ("stopped", palette.muted),
-            _ => ("exited", palette.muted),
-        };
+        // 1. 【终端侧栏】【状态一致】与后台任务面板共用状态短词和配色
+        let (status, color) = crate::cli::repl_background::status_style(&task.status, &palette);
         let label = if task.label.trim().is_empty() {
             &task.command
         } else {

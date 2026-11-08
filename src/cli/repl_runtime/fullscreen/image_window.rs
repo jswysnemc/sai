@@ -108,6 +108,24 @@ pub(super) fn placement_signature(rows: &[String]) -> Vec<(usize, String)> {
         .collect()
 }
 
+/// 【全屏视图】【图片遮挡】移除行内全部 Kitty 放置序列，供浮层覆盖正文时使用。
+///
+/// 放置序列按单元格绘制图片，只覆盖字符无法遮住它；移除后放置签名随之变化，
+/// 绘制流程会删除终端上的旧放置，浮层关闭后签名恢复，图片重新落下。
+///
+/// 参数:
+/// - `line`: 终端行
+///
+/// 返回:
+/// - 不含放置序列的行
+pub(super) fn strip_placements(line: &str) -> String {
+    let mut output = line.to_string();
+    for placement in parse_placements(line).into_iter().rev() {
+        output.replace_range(placement.start..placement.end, "");
+    }
+    output
+}
+
 /// 生成裁剪后的放置序列。
 ///
 /// 参数:

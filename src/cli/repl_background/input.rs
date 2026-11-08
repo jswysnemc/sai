@@ -106,11 +106,20 @@ pub(super) fn handle(manager: &mut TaskManager, key: KeyEvent, rows: usize) -> E
     Effect::None
 }
 
-/// 【后台任务】【鼠标操作】列表点击选择，日志滚轮从当前视口移动，确认期间不切换目标。
+/// 【后台任务】【鼠标操作】指针移动更新悬停行，列表点击选择，日志滚轮从当前视口移动，确认期间不切换目标。
 /// 参数: manager 为状态，mouse 为输入，frame 为可见行几何；返回: 外部操作。
 pub(super) fn mouse(manager: &mut TaskManager, mouse: MouseEvent, frame: &TaskFrame) -> Effect {
-    if manager.confirm.is_some() || mouse.column < frame.x || mouse.column >= frame.x + frame.width
-    {
+    let inside = frame.rect.contains(mouse.column, mouse.row);
+    if matches!(mouse.kind, MouseEventKind::Moved) {
+        // 1. 【后台任务】【悬停反馈】只记录指针下的任务行，离开面板或经过非任务行时清除
+        manager.hovered = frame
+            .targets
+            .iter()
+            .find(|(row, _)| inside && *row == mouse.row)
+            .map(|(_, id)| id.clone());
+        return Effect::None;
+    }
+    if manager.confirm.is_some() || !inside {
         return Effect::None;
     }
     match mouse.kind {

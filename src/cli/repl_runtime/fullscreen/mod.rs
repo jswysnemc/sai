@@ -11,6 +11,7 @@ mod activity_viewport;
 mod activity_viewport_hints;
 mod activity_visibility;
 mod activity_window;
+mod background_overlay;
 #[cfg(test)]
 mod block_interaction_tests;
 mod block_scrollbar;
@@ -264,10 +265,6 @@ impl ReplRuntime {
             return Ok(());
         }
         self.tick_sidebar();
-        if self.background_panel_active() {
-            self.queue_background_panel()?;
-            return self.commit_frame();
-        }
         // 1. 【终端审查】【会话隔离】先退出旧会话审查，再计算新的聊天布局
         let viewing = self.transcript.viewing_subagent_id().map(str::to_string);
         if let Some(session) = self.fullscreen.as_mut() {
@@ -422,6 +419,10 @@ impl ReplRuntime {
         );
         header_controls::overlay(&self.sidebar_control, &layout, &mut painted.rows);
         image_viewer_view::overlay(&session.image_viewer, &layout, &mut painted.rows);
+        // 3. 【后台任务】【叠加绘制】任务面板覆盖正文行与会话列，标题、输入框和侧栏保持原样
+        if self.background_panel.active {
+            background_overlay::overlay(&mut self.background_panel, &layout, &mut painted.rows);
+        }
         // 图片位置变化时先删除旧放置并整屏重画，未变化的行也要重新落下图片
         let images = image_window::placement_signature(&painted.rows);
         if session.images != images {
