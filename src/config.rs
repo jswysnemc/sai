@@ -20,6 +20,7 @@ mod jev_legacy;
 mod mcp_file;
 mod mesh;
 mod model;
+mod model_context;
 mod model_endpoints;
 mod model_metadata;
 mod model_thinking;

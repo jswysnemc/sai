@@ -7,6 +7,8 @@ use unicode_width::UnicodeWidthStr;
 const MODEL_COLUMN_WIDTH: usize = 46;
 /// 思考等级列可用的最大展示宽度
 const THINKING_COLUMN_WIDTH: usize = 12;
+/// 上下文列可用的最大展示宽度
+const CONTEXT_COLUMN_WIDTH: usize = 28;
 /// 模型列最多展示的行数
 const MODEL_VISIBLE_ROWS: usize = 12;
 /// 两列之间的间隔
@@ -29,7 +31,7 @@ pub(super) const SELECTED_STYLE: &str = "\x1b[38;2;92;176;194m";
 pub(super) const DIM_STYLE: &str = "\x1b[2m";
 pub(super) const RESET: &str = "\x1b[0m";
 
-/// 【CLI】【模型选择】渲染无品牌 Logo 的双列选择界面。
+/// 【CLI】【模型选择】按终端宽度渲染模型、思考及可选上下文列。
 ///
 /// 参数:
 /// - `state`: 当前选择状态
@@ -37,16 +39,30 @@ pub(super) const RESET: &str = "\x1b[0m";
 /// 返回:
 /// - 逐行 ANSI 文本
 pub(super) fn render(state: &PickerState) -> Vec<String> {
-    let mut lines = header_lines(state);
+    let width = crossterm::terminal::size()
+        .map(|(width, _)| width as usize)
+        .unwrap_or(100);
+    render_with_width(state, width.saturating_sub(1))
+}
+
+/// 【终端】【模型选择】使用固定宽度渲染，窄终端只展示当前聚焦列。
+/// 参数: `state` 为选择状态，`width` 为可用显示宽度；返回: 固定行数的面板内容
+pub(super) fn render_with_width(state: &PickerState, width: usize) -> Vec<String> {
+    let widths = column_widths(state, width);
+    let mut lines = header_lines(state, width);
     lines.push(String::new());
-    lines.push(column_titles(state));
+    lines.push(column_titles(state, widths));
     let (model_start, models) = state.model_window(MODEL_VISIBLE_ROWS);
     // 内容区固定 MODEL_VISIBLE_ROWS 行，与 frame_row_count 对齐，避免帧高抖动
     for index in 0..MODEL_VISIBLE_ROWS {
-        lines.push(row_line(state, models, model_start, index));
+        lines.push(row_line(state, models, model_start, index, widths));
     }
-    lines.push(String::new());
-    lines.push(footer_line());
+    let status = state
+        .context_selection()
+        .map(|context| context.status())
+        .unwrap_or_default();
+    lines.push(format!("{DIM_STYLE}{}{RESET}", truncate(&status, width)));
+    lines.push(footer_line(state, width));
     debug_assert_eq!(lines.len(), FRAME_FIXED_ROWS as usize);
     lines
 }
@@ -58,39 +74,93 @@ pub(super) fn render(state: &PickerState) -> Vec<String> {
 ///
 /// 返回:
 /// - 标题与过滤提示行
-fn header_lines(state: &PickerState) -> Vec<String> {
+fn header_lines(state: &PickerState, width: usize) -> Vec<String> {
     let filter = if state.filter().is_empty() {
         t("type to filter", "输入内容过滤").to_string()
     } else {
         state.filter().to_string()
     };
     vec![
-        format!("{FOCUS_STYLE}{}{RESET}", t("Model selection", "模型选择")),
         format!(
-            "{DIM_STYLE}{}:{RESET} {filter}  {DIM_STYLE}({}/{}){RESET}",
-            t("Filter", "过滤"),
-            state.models().len(),
-            state.total_model_count()
+            "{FOCUS_STYLE}{}{RESET}",
+            truncate(t("Model selection", "模型选择"), width)
+        ),
+        format!(
+            "{DIM_STYLE}{}{RESET}",
+            truncate(
+                &format!(
+                    "{}: {filter}  ({}/{})",
+                    t("Filter", "过滤"),
+                    state.models().len(),
+                    state.total_model_count()
+                ),
+                width
+            )
         ),
     ]
 }
 
-/// 渲染两列标题，聚焦列加亮。
+/// 【终端】【模型选择】分配紧凑列宽，空间不足时保留聚焦列。
+/// 参数: `state` 为选择状态，`width` 为终端可用宽度；返回: 模型、思考、上下文列宽
+fn column_widths(state: &PickerState, width: usize) -> [usize; 3] {
+    let minimum = if state.context_enabled() { 70 } else { 45 };
+    if width < minimum {
+        return match state.column() {
+            PickerColumn::Model => [width, 0, 0],
+            PickerColumn::Thinking => [0, width, 0],
+            PickerColumn::Context => [0, 0, width],
+        };
+    }
+    let context = if state.context_enabled() {
+        CONTEXT_COLUMN_WIDTH
+    } else {
+        0
+    };
+    let gaps = if state.context_enabled() { 2 } else { 1 } * COLUMN_GAP;
+    [
+        MODEL_COLUMN_WIDTH.min(width.saturating_sub(THINKING_COLUMN_WIDTH + context + gaps)),
+        THINKING_COLUMN_WIDTH,
+        context,
+    ]
+}
+
+/// 【终端】【模型选择】拼接可见列并保留固定列间距。
+/// 参数: `cells` 为各列内容，`widths` 为各列宽度；返回: 一行列内容
+fn join_columns(cells: [String; 3], widths: [usize; 3]) -> String {
+    cells
+        .into_iter()
+        .zip(widths)
+        .filter_map(|(cell, width)| (width > 0).then_some(cell))
+        .collect::<Vec<_>>()
+        .join(&" ".repeat(COLUMN_GAP))
+}
+
+/// 渲染列标题，聚焦列加亮。
 ///
 /// 参数:
 /// - `state`: 当前选择状态
+/// - `widths`: 模型、思考和上下文列宽
 ///
 /// 返回:
 /// - 标题行
-fn column_titles(state: &PickerState) -> String {
+fn column_titles(state: &PickerState, widths: [usize; 3]) -> String {
     let model_focused = state.column() == PickerColumn::Model;
     let model = column_title(
         t("Provider / model", "供应商 / 模型"),
-        MODEL_COLUMN_WIDTH,
+        widths[0],
         model_focused,
     );
-    let thinking = column_title(t("Thinking", "思考"), THINKING_COLUMN_WIDTH, !model_focused);
-    format!("{model}{}{thinking}", " ".repeat(COLUMN_GAP))
+    let thinking = column_title(
+        t("Thinking", "思考"),
+        widths[1],
+        state.column() == PickerColumn::Thinking,
+    );
+    let context = column_title(
+        t("Context limit", "上下文上限"),
+        widths[2],
+        state.column() == PickerColumn::Context,
+    );
+    join_columns([model, thinking, context], widths)
 }
 
 /// 渲染单个列标题。
@@ -105,18 +175,19 @@ fn column_titles(state: &PickerState) -> String {
 fn column_title(label: &str, width: usize, focused: bool) -> String {
     let marker = if focused { "▸ " } else { "  " };
     let style = if focused { FOCUS_STYLE } else { DIM_STYLE };
-    let text = format!("{marker}{label}");
+    let text = truncate(&format!("{marker}{label}"), width);
     let padding = width.saturating_sub(UnicodeWidthStr::width(text.as_str()));
     format!("{style}{text}{RESET}{}", " ".repeat(padding))
 }
 
-/// 渲染一行两列内容。
+/// 渲染一行可见列内容。
 ///
 /// 参数:
 /// - `state`: 当前选择状态
 /// - `models`: 当前模型窗口
 /// - `model_start`: 模型窗口起始下标
 /// - `index`: 窗口内行下标
+/// - `widths`: 模型、思考和上下文列宽
 ///
 /// 返回:
 /// - 定宽内容行
@@ -125,6 +196,7 @@ fn row_line(
     models: &[ProviderModelChoice],
     model_start: usize,
     index: usize,
+    widths: [usize; 3],
 ) -> String {
     let model_focused = state.column() == PickerColumn::Model;
     let model_label = models
@@ -145,15 +217,23 @@ fn row_line(
         model_label.as_deref(),
         !state.models().is_empty() && model_start + index == state.model_index(),
         model_focused,
-        MODEL_COLUMN_WIDTH,
+        widths[0],
     );
     let thinking_cell = item_cell(
         level,
         index == state.level_index(),
-        !model_focused,
-        THINKING_COLUMN_WIDTH,
+        state.column() == PickerColumn::Thinking,
+        widths[1],
     );
-    format!("{model_cell}{}{thinking_cell}", " ".repeat(COLUMN_GAP))
+    let context = state.context_selection();
+    let context_label = context.and_then(|context| context.label(index));
+    let context_cell = item_cell(
+        context_label.as_deref(),
+        context.is_some_and(|context| context.index() == index),
+        state.column() == PickerColumn::Context,
+        widths[2],
+    );
+    join_columns([model_cell, thinking_cell, context_cell], widths)
 }
 
 /// 渲染单个候选项。
@@ -187,16 +267,23 @@ fn item_cell(label: Option<&str>, selected: bool, focused: bool, width: usize) -
 
 /// 渲染操作提示。
 ///
+/// 参数: `state` 为选择状态，`width` 为最大显示宽度
+///
 /// 返回:
 /// - 提示行
-fn footer_line() -> String {
-    format!(
-        "{DIM_STYLE}{}{RESET}",
+fn footer_line(state: &PickerState, width: usize) -> String {
+    let hint = if state.column() == PickerColumn::Context {
         t(
-            "Type to filter · Backspace edit · Ctrl+U clear · ↑/↓ choose · ←/→ switch · Tab subagents · Enter save · Esc cancel",
-            "输入过滤 · Backspace 删除 · Ctrl+U 清空 · ↑/↓ 选择 · ←/→ 切换 · Tab 子智能体 · Enter 保存 · Esc 取消",
+            "↑↓ choose · ←→ switch · Enter save · Esc cancel · Type tokens · Ctrl+U clear",
+            "↑↓ 选择 · ←→ 切换 · Enter 保存 · Esc 取消 · 输入数值 · Ctrl+U 清空",
         )
-    )
+    } else {
+        t(
+            "↑↓ choose · ←→ switch · Enter save · Esc cancel · Tab subagents · Type to filter",
+            "↑↓ 选择 · ←→ 切换 · Enter 保存 · Esc 取消 · Tab 子智能体 · 输入过滤",
+        )
+    };
+    format!("{DIM_STYLE}{}{RESET}", truncate(hint, width))
 }
 
 /// 将文本截断到指定显示宽度。
@@ -208,6 +295,9 @@ fn footer_line() -> String {
 /// 返回:
 /// - 不超过最大宽度的文本
 pub(super) fn truncate(text: &str, width: usize) -> String {
+    if width == 0 {
+        return String::new();
+    }
     if UnicodeWidthStr::width(text) <= width {
         return text.to_string();
     }

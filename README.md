@@ -280,7 +280,7 @@ Common REPL commands and controls:
 - Natural conversation input;
 - `/plan`: Enter read-only planning mode;
 - `/sandbox`: Inspect active sandbox policies;
-- `/model`: Switch models, adjust reasoning tiers, or set subagent models;
+- `/model`: Switch models, adjust reasoning tiers and context limits, or set subagent models. Context options include 200k, 300k, 400k, 500k, custom input, and Maximum; limits are saved per provider/model without overwriting the capacity fetched from the API;
 - `/view`: Toggle between the fullscreen and inline views and save the choice; `/view fullscreen` and `/view inline` select a view explicitly;
 - `/context`: Open a centered context overlay with a segmented usage chart, per-category usage, the auto-compaction reserve, and this turn's input, cache hits, cache writes and output; `Esc` closes it;
 - `?`: Toggle shortcut help sheet;
@@ -341,7 +341,7 @@ exec $SHELL        # Reload shell
 | `sai paths` | Print filesystem paths for config, data, cache, and state |
 | `sai config` | Open the terminal config TUI |
 | `sai config validate` | Validate syntax of configuration files |
-| `sai models` | Interactive model and thinking-chain selector |
+| `sai models` | Interactive model, thinking, and context-limit selector |
 | `sai providers [index]` | Inspect or switch the active provider |
 | `sai set thinking [level]` | Configure default thinking-chain intensity |
 | `sai fish-init` / `bash-init` / `zsh-init` / `powershell-init` | Install command-not-found shell integration hooks |

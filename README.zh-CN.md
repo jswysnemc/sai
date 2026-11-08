@@ -297,7 +297,7 @@ sai
 - 输入文本直接发起多轮对话；
 - 输入 `/plan` 切换至只读安全规划模式；
 - 输入 `/sandbox` 检查当前沙盒保护策略；
-- 输入 `/model` 调整当前模型、思考等级或为子智能体设置专属模型；
+- 输入 `/model` 调整当前模型、思考等级、上下文上限或为子智能体设置专属模型；上下文列支持 200k、300k、400k、500k、自定义输入和“最大”，按供应商与模型保存，且不覆盖 API 获取的容量；
 - 空输入状态下按 `?` 查看快捷键面板，按 `Ctrl+O` 在全屏与内联视图间切换。
 
 ### 4. 单轮问答与快速任务
@@ -339,7 +339,7 @@ exec $SHELL        # 重新载入当前 Shell
 | `sai paths` | 打印当前配置、数据、缓存与状态目录的绝对路径 |
 | `sai config` | 打开终端配置 TUI |
 | `sai config validate` | 校验配置文件语法与有效性 |
-| `sai models` | 交互式模型与思考强度选择器 |
+| `sai models` | 交互式模型、思考强度与上下文上限选择器 |
 | `sai providers [index]` | 查阅或切换当前生效的模型供应商 |
 | `sai set thinking [level]` | 调整模型默认思考强度档位 |
 | `sai fish-init` / `bash-init` / `zsh-init` / `powershell-init` | 输出或配置对应 Shell 的智能接管 Hook |

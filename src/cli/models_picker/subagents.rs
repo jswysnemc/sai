@@ -119,7 +119,9 @@ fn choose(
             KeyCode::Right => picker.focus_thinking(),
             KeyCode::Tab => match picker.column() {
                 super::state::PickerColumn::Model => picker.focus_thinking(),
-                super::state::PickerColumn::Thinking => picker.focus_model(),
+                super::state::PickerColumn::Thinking | super::state::PickerColumn::Context => {
+                    picker.focus_model()
+                }
             },
             KeyCode::Backspace => picker.pop_filter(),
             KeyCode::Delete => picker.clear_filter(),

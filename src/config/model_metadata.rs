@@ -32,6 +32,13 @@ pub struct ModelMetadata {
         skip_serializing_if = "Option::is_none"
     )]
     pub context_chars: Option<usize>,
+    /// 【上下文】【模型上限】用户选择的使用上限，独立于目录返回的容量；空表示最大
+    #[serde(
+        default,
+        deserialize_with = "deserialize_optional_context_chars",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub context_limit_tokens: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_output_tokens: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -68,6 +75,7 @@ impl ModelMetadata {
     /// - 没有上下文长度、工具开关和标签时返回 true
     pub fn is_empty(&self) -> bool {
         self.context_chars.is_none()
+            && self.context_limit_tokens.is_none()
             && self.max_output_tokens.is_none()
             && self.tools_enabled.is_none()
             && self.tags.is_empty()

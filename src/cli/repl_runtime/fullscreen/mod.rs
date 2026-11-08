@@ -12,6 +12,9 @@ mod activity_viewport_hints;
 mod activity_visibility;
 mod activity_window;
 mod background_overlay;
+mod block_hover;
+#[cfg(test)]
+mod block_hover_tests;
 #[cfg(test)]
 mod block_interaction_tests;
 mod block_scrollbar;

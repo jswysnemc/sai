@@ -1,38 +1,34 @@
 //! 分界线拖动；优先于聊天选择和审查面板处理鼠标。
 
+#[cfg(test)]
+#[path = "sidebar_resize_tests.rs"]
+mod tests;
+
 use super::input::Effect;
 use super::sidebar_control::SidebarControl;
 use super::sidebar_palette::{fg, SidebarPalette};
 use crate::cli::repl_runtime::ReplRuntime;
 use crossterm::event::{Event, MouseButton, MouseEventKind};
 
-/// 【终端侧栏】【分界反馈】按实际列坐标绘制细线和居中手柄，悬停提亮，拖动增加线宽
+/// 【终端侧栏】【分界反馈】整条分界使用相同细线，悬停与拖动只改变颜色
 /// 参数：control 为交互，rows 为绘制行，column 为分界列，row_offset 为首行坐标，height 为总高度
 /// 返回：无，只修改分界字符，不改变聊天或面板背景
 pub(super) fn decorate_divider(
     control: &SidebarControl,
     rows: &mut [String],
     column: usize,
-    row_offset: usize,
-    height: usize,
+    _row_offset: usize,
+    _height: usize,
 ) {
     let palette = SidebarPalette::current();
     let active = control.divider_hovered || control.dragging;
-    for (index, row) in rows.iter_mut().enumerate() {
-        let grip = (row_offset + index).abs_diff(height / 2) <= 1;
+    for row in rows.iter_mut() {
         let color = if active {
             palette.accent
-        } else if grip {
-            palette.muted
         } else {
             palette.border
         };
-        let glyph = if grip || control.dragging {
-            "┃"
-        } else {
-            "│"
-        };
-        *row = replace_divider(row, column, &format!("\x1b[0m{}{glyph}\x1b[0m", fg(color)));
+        *row = replace_divider(row, column, &format!("\x1b[0m{}│\x1b[0m", fg(color)));
     }
 }
 

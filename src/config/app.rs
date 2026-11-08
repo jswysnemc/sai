@@ -1,6 +1,4 @@
-use super::app_validation::{
-    default_context_chars_for_provider_model, validate_provider_model_metadata,
-};
+use super::app_validation::validate_provider_model_metadata;
 use super::model::*;
 use super::secrets::{set_private_permissions, write_private_file};
 use crate::default_models::OPENCODE_PROVIDER_ID;
@@ -610,9 +608,7 @@ impl AppConfig {
     pub fn active_context_window_tokens(&self) -> Result<usize> {
         let provider = self.provider(None)?;
         Ok(provider
-            .model_context_chars_for(&provider.default_model)
-            .or_else(|| default_context_chars_for_provider_model(provider, &provider.default_model))
-            .unwrap_or(self.context.default_max_chars))
+            .effective_context_tokens_for(&provider.default_model, self.context.default_max_chars))
     }
 
     pub fn upsert_provider(&mut self, provider: ProviderConfig) {

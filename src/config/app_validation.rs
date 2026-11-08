@@ -59,6 +59,13 @@ pub(super) fn validate_provider_model_metadata(provider: &ProviderConfig) -> Res
                 model
             );
         }
+        if metadata.context_limit_tokens == Some(0) {
+            bail!(
+                "provider {} model_metadata context_limit_tokens for {} must be greater than 0",
+                provider.id,
+                model
+            );
+        }
         if metadata.max_output_tokens == Some(0) {
             bail!(
                 "provider {} model_metadata max_output_tokens for {} must be greater than 0",

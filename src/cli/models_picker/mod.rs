@@ -1,3 +1,6 @@
+mod context;
+#[cfg(test)]
+mod context_tests;
 mod render;
 mod state;
 mod subagents;
@@ -10,7 +13,7 @@ use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::terminal::{self, Clear, ClearType};
 use crossterm::{execute, queue};
-use state::PickerState;
+use state::{PickerColumn, PickerState};
 use std::io::{self, IsTerminal, Write};
 
 /// 可选思考等级，与 `/thinking` 命令保持一致。
@@ -48,9 +51,9 @@ pub(super) fn run(paths: &SaiPaths) -> Result<()> {
     }
 }
 
-/// 【CLI/TUI】【模型选择】运行交互式双列选择并写回配置。
+/// 【CLI/TUI】【模型选择】运行交互式三列选择并写回配置。
 ///
-/// 与独立 `sai models` 相同：↑↓ 当前列移动，←→ 切换模型/思考列，
+/// 与独立 `sai models` 相同：↑↓ 当前列移动，←→ 切换模型/思考/上下文列，
 /// 输入过滤，Enter 保存，Esc 取消。可在 REPL 已启用 raw mode 时嵌套调用。
 ///
 /// 参数:
@@ -94,6 +97,7 @@ pub(super) fn run_interactive(paths: &SaiPaths) -> Result<PickerOutcome> {
         &current_model,
         normalized_level(&current_level),
     );
+    picker.enable_context(&config);
 
     // 2. 进入交互循环
     let Some(()) = run_loop(&mut picker, &mut config, paths)? else {
@@ -114,13 +118,24 @@ pub(super) fn run_interactive(paths: &SaiPaths) -> Result<PickerOutcome> {
     config.set_active_provider_model(&selected.provider_id, &selected.model)?;
     let level = picker.selected_level();
     apply_level(&mut config, &selected.provider_id, level)?;
+    let context = picker
+        .context_selection()
+        .ok_or_else(|| anyhow::anyhow!("missing model context selection"))?;
+    let limit = context.selected_limit()?;
+    config
+        .providers
+        .iter_mut()
+        .find(|provider| provider.id == selected.provider_id)
+        .ok_or_else(|| anyhow::anyhow!("unknown provider: {}", selected.provider_id))?
+        .set_model_context_limit_tokens_for(&selected.model, limit);
     config.save(paths)?;
     let message = format!(
-        "{}: {} · {}: {}",
+        "{}: {} · {}: {} · {}",
         t("model", "模型"),
         selected.label(),
         t("thinking", "思考"),
-        level
+        level,
+        context.status(),
     );
     Ok(PickerOutcome::Saved {
         message,
@@ -173,19 +188,34 @@ fn run_loop(
         draw_at(&mut stdout, anchor_y, frame_rows, &lines)?;
 
         let key = read_key()?;
+        if picker.column() == PickerColumn::Context {
+            if let Some(context) = picker.context_selection_mut() {
+                if context.handle_key(key) {
+                    continue;
+                }
+            }
+        }
         match key.code {
             KeyCode::Esc => {
                 clear_frame(&mut stdout, anchor_y, frame_rows)?;
                 return Ok(None);
             }
             KeyCode::Enter if picker.selected_model().is_some() => {
+                if let Some(context) = picker.context_selection_mut() {
+                    if !context.validate() {
+                        while picker.column() != PickerColumn::Context {
+                            picker.focus_right();
+                        }
+                        continue;
+                    }
+                }
                 clear_frame(&mut stdout, anchor_y, frame_rows)?;
                 return Ok(Some(()));
             }
             KeyCode::Up => picker.move_up(),
             KeyCode::Down => picker.move_down(),
-            KeyCode::Left => picker.focus_model(),
-            KeyCode::Right => picker.focus_thinking(),
+            KeyCode::Left => picker.focus_left(),
+            KeyCode::Right => picker.focus_right(),
             KeyCode::Tab => {
                 // 子智能体模型设置与主选择器共用同一锚点绘制区
                 subagents::run(&mut stdout, anchor_y, frame_rows, config, paths)?;

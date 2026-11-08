@@ -1,4 +1,6 @@
-use crate::config::ProviderModelChoice;
+use super::context::ContextSelection;
+use crate::config::{AppConfig, ProviderModelChoice};
+use std::collections::HashMap;
 
 /// 选择器当前聚焦的列。
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -7,6 +9,8 @@ pub(super) enum PickerColumn {
     Model,
     /// 思考等级列
     Thinking,
+    /// 上下文上限列
+    Context,
 }
 
 /// models 命令的交互选择状态。
@@ -22,6 +26,7 @@ pub(super) struct PickerState {
     model_index: usize,
     level_index: usize,
     column: PickerColumn,
+    contexts: Option<HashMap<String, ContextSelection>>,
 }
 
 impl PickerState {
@@ -61,7 +66,70 @@ impl PickerState {
             model_index,
             level_index,
             column: PickerColumn::Model,
+            contexts: None,
         }
+    }
+
+    /// 【终端】【上下文选择】为主模型选择器加载独立的模型上限草稿。
+    /// 参数: `config` 为应用配置；返回: 无
+    pub(super) fn enable_context(&mut self, config: &AppConfig) {
+        self.contexts = Some(
+            self.all_models
+                .iter()
+                .filter_map(|choice| {
+                    let provider = config
+                        .providers
+                        .iter()
+                        .find(|provider| provider.id == choice.provider_id)?;
+                    Some((
+                        choice.value(),
+                        ContextSelection::new(
+                            provider.model_context_limit_tokens_for(&choice.model),
+                            provider.model_context_capacity_tokens_for(&choice.model),
+                            config.context.default_max_chars,
+                        ),
+                    ))
+                })
+                .collect(),
+        );
+    }
+
+    /// 【终端】【上下文选择】判断是否展示第三列，子任务选择器保持原有列数。
+    /// 参数: 无；返回: 是否启用上下文选择
+    pub(super) fn context_enabled(&self) -> bool {
+        self.contexts.is_some()
+    }
+
+    /// 【终端】【上下文选择】读取当前模型草稿，模型筛选无结果时返回空。
+    /// 参数: 无；返回: 当前模型的上限选择
+    pub(super) fn context_selection(&self) -> Option<&ContextSelection> {
+        self.contexts.as_ref()?.get(&self.selected_model()?.value())
+    }
+
+    /// 【终端】【上下文选择】编辑当前模型草稿，避免污染其他模型。
+    /// 参数: 无；返回: 当前模型的可变上限选择
+    pub(super) fn context_selection_mut(&mut self) -> Option<&mut ContextSelection> {
+        let key = self.selected_model()?.value();
+        self.contexts.as_mut()?.get_mut(&key)
+    }
+
+    /// 【终端】【模型选择】将焦点移到相邻的左列。
+    /// 参数: 无；返回: 无
+    pub(super) fn focus_left(&mut self) {
+        match self.column {
+            PickerColumn::Context => self.focus_thinking(),
+            _ => self.focus_model(),
+        }
+    }
+
+    /// 【终端】【模型选择】将焦点移到相邻的右列。
+    /// 参数: 无；返回: 无
+    pub(super) fn focus_right(&mut self) {
+        self.column = match self.column {
+            PickerColumn::Model => PickerColumn::Thinking,
+            _ if self.context_enabled() => PickerColumn::Context,
+            _ => PickerColumn::Thinking,
+        };
     }
 
     /// 在当前列内上移一项。
@@ -72,6 +140,11 @@ impl PickerState {
         match self.column {
             PickerColumn::Model => self.model_index = self.model_index.saturating_sub(1),
             PickerColumn::Thinking => self.level_index = self.level_index.saturating_sub(1),
+            PickerColumn::Context => {
+                if let Some(context) = self.context_selection_mut() {
+                    context.move_selection(false);
+                }
+            }
         }
     }
 
@@ -86,6 +159,11 @@ impl PickerState {
             }
             PickerColumn::Thinking => {
                 self.level_index = next_index(self.level_index, self.levels.len());
+            }
+            PickerColumn::Context => {
+                if let Some(context) = self.context_selection_mut() {
+                    context.move_selection(true);
+                }
             }
         }
     }

@@ -95,11 +95,14 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
         };
         let document_row = state.scroll + row;
         let body = match hovered_span {
-            Some(span) if state.pointer_row == Some(row) => {
-                if document_row == span.control {
-                    super::hover::tint_line(&super::guide_button::render(&body, span.expanded))
+            Some(span)
+                if (span.start..span.end).contains(&document_row)
+                    && !matches!(&preview, Some((preview_row, _)) if *preview_row == row) =>
+            {
+                if document_row == span.control && state.pointer_row == Some(row) {
+                    super::block_hover::tint(&super::guide_button::render(&body, span.expanded))
                 } else {
-                    super::hover::tint_line(&body)
+                    super::block_hover::tint(&body)
                 }
             }
             _ => body,
