@@ -72,7 +72,7 @@ async fn discarded_response_aborts_unfinished_reads() {
         &std::env::current_dir().unwrap(),
     );
     let abort = cache.pending.lock().unwrap()["read"].handle.abort_handle();
-    cache.retain_confirmed(&[]);
+    cache.retain_confirmed(&[call("write", "write_file"), call("read", "read_file")]);
     tokio::task::yield_now().await;
     assert!(abort.is_finished());
 }

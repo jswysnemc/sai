@@ -7,6 +7,7 @@ use tokio::task::JoinHandle;
 
 /// 【工具流】【预执行任务】只缓存本响应的只读前缀，丢弃任务时同步请求取消。
 struct PendingRead {
+    index: usize,
     call: ToolCall,
     handle: JoinHandle<Result<ToolOutput>>,
 }
@@ -85,7 +86,14 @@ impl StreamedTools {
         self.pending
             .get_mut()
             .unwrap_or_else(|error| error.into_inner())
-            .insert(call.id.clone(), PendingRead { call, handle });
+            .insert(
+                call.id.clone(),
+                PendingRead {
+                    index,
+                    call,
+                    handle,
+                },
+            );
     }
 
     /// 【工具流】【响应校验】丢弃最终响应未确认或参数不一致的读取；参数为最终调用，返回无。
@@ -93,7 +101,11 @@ impl StreamedTools {
         self.pending
             .get_mut()
             .unwrap_or_else(|error| error.into_inner())
-            .retain(|_, read| calls.iter().any(|call| same_call(call, &read.call)));
+            .retain(|_, read| {
+                calls
+                    .get(read.index)
+                    .is_some_and(|call| same_call(call, &read.call))
+            });
     }
 
     /// 【工具流】【结果复用】在正常门禁和调用记录完成后取回结果，等待期间取消仍终止任务。
