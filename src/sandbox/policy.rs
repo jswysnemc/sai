@@ -114,8 +114,19 @@ impl SandboxPolicy {
             &settings.config.env_passthrough,
         );
         if let Some(dir) = &temp_dir {
-            env.retain(|(key, _)| key != "TMPDIR");
-            env.push((OsString::from("TMPDIR"), dir.clone().into_os_string()));
+            let names: &[&str] = if cfg!(windows) {
+                &["TMPDIR", "TMP", "TEMP"]
+            } else {
+                &["TMPDIR"]
+            };
+            env.retain(|(key, _)| {
+                !names
+                    .iter()
+                    .any(|name| key.to_string_lossy().eq_ignore_ascii_case(name))
+            });
+            for name in names {
+                env.push((OsString::from(name), dir.clone().into_os_string()));
+            }
         }
         env.push((
             OsString::from("SAI_SANDBOX"),

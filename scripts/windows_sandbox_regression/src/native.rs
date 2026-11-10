@@ -91,6 +91,15 @@ pub(crate) fn run() -> Result<()> {
         !outside_write.status.success() && !outside.join("escaped.txt").exists(),
         "outside write escaped"
     );
+    let default_read = crate::sandbox::launch(&policy, "", "Get-Content read.txt")?
+        .into_std()
+        .output()?;
+    anyhow::ensure!(
+        default_read.status.success()
+            && String::from_utf8_lossy(&default_read.stdout).contains("visible"),
+        "default shell read failed: {}",
+        String::from_utf8_lossy(&default_read.stderr)
+    );
     println!("Windows AppContainer read/write isolation regressions passed");
     Ok(())
 }

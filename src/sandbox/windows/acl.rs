@@ -13,7 +13,6 @@ use windows_sys::Win32::Storage::FileSystem::{
 
 const READ: u32 = FILE_GENERIC_READ | FILE_GENERIC_EXECUTE;
 const WRITE: u32 = FILE_GENERIC_WRITE | DELETE;
-const DENY_WRITE: u32 = 0x2 | 0x4 | 0x10 | 0x100 | DELETE | 0x40000 | 0x80000 | 0x40;
 
 /// 【Windows沙箱】【路径授权】只增删本次容器 SID 的权限项，不还原整个 DACL 覆盖其他并发修改。
 pub(super) struct Grants {
@@ -22,7 +21,7 @@ pub(super) struct Grants {
     journal: super::journal::Journal,
 }
 impl Grants {
-    /// 【Windows沙箱】【权限应用】先授权工作区和工具读取，再对保护路径应用显式拒绝。
+    /// 【Windows沙箱】【权限应用】按允许清单授权工作区，保护路径从允许权限中扣除。
     /// 参数：容器 SID、解析策略和 Shell 路径；返回自动回收授权的守卫。
     pub(super) fn apply(
         sid: PSID,
@@ -35,69 +34,66 @@ impl Grants {
             paths: Vec::new(),
             journal,
         };
-        grants.add(&policy.cwd, READ, GRANT_ACCESS)?;
-        for root in &policy.writable_roots {
-            grants.add(root, READ | WRITE, GRANT_ACCESS)?;
-        }
-        // 1. 【Windows沙箱】【工具目录】仅授权实际 Shell 安装目录，PATH 不能隐式扩展文件读取范围
-        if let Some(parent) = shell.parent().filter(|path| !system_directory(path)) {
-            grants.add(parent, READ, GRANT_ACCESS)?;
-        }
-        grants.deny_tree(&super::journal::root()?, READ | DENY_WRITE)?;
-        for path in &policy.deny_read {
-            if path.exists() {
-                grants.deny_tree(path, READ | DENY_WRITE)?;
-            }
-        }
+        // 1. 【Windows沙箱】【允许清单】AppContainer 不依赖拒绝 ACE；保护路径必须从允许授权中排除
+        let mut hidden = policy.deny_read.clone();
+        hidden.push(super::journal::root()?);
+        let mut protected = policy.write_protected.clone();
         for path in &policy.write_protected {
-            if !path.exists() && path.parent().is_some_and(Path::is_dir) {
-                std::fs::create_dir(path)?;
-            }
-            if path.exists() {
-                grants.deny_tree(path, DENY_WRITE)?;
-                // 1. 【Windows沙箱】【祖先保护】禁止把保护路径的祖先整体移动后替换路径
-                for ancestor in path.ancestors().skip(1).take_while(|parent| {
-                    policy
-                        .writable_roots
-                        .iter()
-                        .any(|root| parent.starts_with(root))
-                }) {
-                    grants.journal.register(ancestor)?;
-                    update_exact(ancestor, sid, DELETE, DENY_ACCESS, false)?;
-                    if !grants.paths.iter().any(|entry| entry == ancestor) {
-                        grants.paths.push(ancestor.into());
-                    }
+            if !path.exists() {
+                // 2. 【Windows沙箱】【缺失保护】收窄到现存祖先，避免以后创建子目录绕过保护
+                if let Some(parent) = path.ancestors().skip(1).find(|parent| parent.exists()) {
+                    protected.push(parent.into());
                 }
             }
+        }
+        grants.allow_tree(&policy.cwd, READ, &hidden, &[])?;
+        for root in &policy.writable_roots {
+            grants.allow_tree(root, READ | WRITE, &hidden, &protected)?;
+        }
+        if let Some(parent) = shell.parent().filter(|path| !system_directory(path)) {
+            grants.allow_tree(parent, READ, &hidden, &[])?;
         }
         Ok(grants)
     }
 
-    /// 【Windows沙箱】【拒绝继承】为现存后代添加显式拒绝，防止子对象显式允许覆盖父目录拒绝。
-    /// 参数：保护路径和拒绝权限；返回结果，重解析点拒绝启动。
-    fn deny_tree(&mut self, path: &Path, rights: u32) -> Result<()> {
+    /// 【Windows沙箱】【分段授权】遇到受保护后代时只授权目录本身，分别处理子路径。
+    /// 参数：路径、请求权限、隐藏路径和只读路径；返回授权结果。
+    fn allow_tree(
+        &mut self,
+        path: &Path,
+        mut rights: u32,
+        hidden: &[PathBuf],
+        protected: &[PathBuf],
+    ) -> Result<()> {
         use std::os::windows::fs::MetadataExt;
+        if hidden.iter().any(|blocked| path.starts_with(blocked)) {
+            return Ok(());
+        }
         let metadata = std::fs::symlink_metadata(path)?;
         anyhow::ensure!(
             metadata.file_attributes() & 0x400 == 0,
-            "protected path is a reparse point: {}",
+            "sandbox grant path is a reparse point: {}",
             path.display()
         );
-        self.add(path, rights, DENY_ACCESS)?;
-        if metadata.is_dir() {
-            for item in std::fs::read_dir(path)? {
-                self.deny_tree(&item?.path(), rights)?;
-            }
+        if protected.iter().any(|readonly| path.starts_with(readonly)) {
+            rights &= READ;
         }
-        Ok(())
-    }
-
-    /// 【Windows沙箱】【授权写入】添加单个权限项并登记清理路径；参数为路径、访问位和方式，返回结果。
-    fn add(&mut self, path: &Path, rights: u32, mode: ACCESS_MODE) -> Result<()> {
+        let split = hidden
+            .iter()
+            .chain(protected)
+            .any(|blocked| blocked != path && blocked.starts_with(path));
+        if split {
+            rights &= !DELETE;
+        }
         self.journal.register(path)?;
-        update(path, self.sid, rights, mode)?;
+        update_exact(path, self.sid, rights, GRANT_ACCESS, !split)?;
         if !self.paths.iter().any(|existing| existing == path) {
-            self.paths.push(path.to_path_buf());
+            self.paths.push(path.into());
+        }
+        if split && metadata.is_dir() {
+            for entry in std::fs::read_dir(path)? {
+                self.allow_tree(&entry?.path(), rights, hidden, protected)?;
+            }
         }
         Ok(())
     }
