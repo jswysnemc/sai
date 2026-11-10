@@ -2,15 +2,14 @@ use super::identity::wide;
 use crate::sandbox::SandboxPolicy;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
-use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, INVALID_HANDLE_VALUE};
+use windows_sys::Win32::Foundation::LocalFree;
 use windows_sys::Win32::Security::Authorization::*;
 use windows_sys::Win32::Security::{
     EqualSid, GetAce, ACCESS_ALLOWED_ACE, ACE_HEADER, ACL, DACL_SECURITY_INFORMATION,
     PSECURITY_DESCRIPTOR, PSID, SUB_CONTAINERS_AND_OBJECTS_INHERIT,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    CreateFileW, DELETE, FILE_FLAG_BACKUP_SEMANTICS, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ,
-    FILE_GENERIC_WRITE, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    DELETE, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_GENERIC_WRITE,
 };
 
 const READ: u32 = FILE_GENERIC_READ | FILE_GENERIC_EXECUTE;
@@ -210,46 +209,27 @@ fn update_exact(
                 )
             }
         } else {
-            // 2. 【Windows沙箱】【仅改本体】仅请求 WRITE_DAC 并直接写入本对象，避免申请额外访问触发共享冲突
-            let handle = unsafe {
-                CreateFileW(
-                    path_wide.as_ptr(),
-                    0x00040000,
-                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                    std::ptr::null(),
-                    OPEN_EXISTING,
-                    FILE_FLAG_BACKUP_SEMANTICS,
-                    std::ptr::null_mut(),
-                )
-            };
-            if handle == INVALID_HANDLE_VALUE {
-                std::io::Error::last_os_error().raw_os_error().unwrap_or(5) as u32
-            } else {
-                let code = unsafe {
-                    let mut descriptor: windows_sys::Win32::Security::SECURITY_DESCRIPTOR =
-                        std::mem::zeroed();
-                    let pointer = (&mut descriptor
-                        as *mut windows_sys::Win32::Security::SECURITY_DESCRIPTOR)
-                        .cast();
-                    if windows_sys::Win32::Security::InitializeSecurityDescriptor(pointer, 1) == 0
-                        || windows_sys::Win32::Security::SetSecurityDescriptorDacl(
-                            pointer, 1, new_acl, 0,
-                        ) == 0
-                        || windows_sys::Win32::Security::SetKernelObjectSecurity(
-                            handle,
-                            DACL_SECURITY_INFORMATION,
-                            pointer,
-                        ) == 0
-                    {
-                        std::io::Error::last_os_error().raw_os_error().unwrap_or(5) as u32
-                    } else {
-                        0
-                    }
-                };
-                unsafe {
-                    CloseHandle(handle);
+            // 2. 【Windows沙箱】【仅改本体】SetFileSecurity 不传播到后代，适用于目录本身的遍历授权
+            unsafe {
+                let mut descriptor: windows_sys::Win32::Security::SECURITY_DESCRIPTOR =
+                    std::mem::zeroed();
+                let pointer = (&mut descriptor
+                    as *mut windows_sys::Win32::Security::SECURITY_DESCRIPTOR)
+                    .cast();
+                if windows_sys::Win32::Security::InitializeSecurityDescriptor(pointer, 1) == 0
+                    || windows_sys::Win32::Security::SetSecurityDescriptorDacl(
+                        pointer, 1, new_acl, 0,
+                    ) == 0
+                    || windows_sys::Win32::Security::SetFileSecurityW(
+                        path_wide.as_ptr(),
+                        DACL_SECURITY_INFORMATION,
+                        pointer,
+                    ) == 0
+                {
+                    std::io::Error::last_os_error().raw_os_error().unwrap_or(5) as u32
+                } else {
+                    0
                 }
-                code
             }
         };
         if code == 0 {
