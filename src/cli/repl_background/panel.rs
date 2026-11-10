@@ -1,11 +1,11 @@
 //! 嵌入主终端事件循环的后台任务管理状态，不接管终端输入或备用屏幕。
 
 use super::{
-    Task, input,
+    input,
     model::TaskManager,
     panel_rect::PanelRect,
     service::{Request, TaskService},
-    view,
+    view, Task,
 };
 use crate::{config::AppConfig, paths::SaiPaths};
 use crossterm::event::{Event, KeyEventKind};
@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 #[derive(Default)]
 pub(in crate::cli) struct EmbeddedTaskPanel {
     manager: TaskManager,
+    session_id: Option<String>,
     service: Option<TaskService>,
     next_refresh: Option<Instant>,
     pub active: bool,
@@ -23,11 +24,20 @@ pub(in crate::cli) struct EmbeddedTaskPanel {
 impl EmbeddedTaskPanel {
     /// 【后台任务】【环境绑定】更新应用配置，不改变选择、任务快照或进行中的写操作。
     /// 参数: paths 为应用路径，config 为配置；返回: 无。
-    pub fn bind(&mut self, paths: &SaiPaths, config: &AppConfig) {
+    pub fn bind(&mut self, paths: &SaiPaths, config: &AppConfig, session_id: &str) {
+        if self.session_id.as_deref() != Some(session_id) {
+            // 1. 【后台任务】【会话切换】丢弃旧读取与快照，避免显示或操作前一个会话任务
+            self.service = None;
+            self.manager = TaskManager::default();
+            self.manager.session_scoped = true;
+            self.session_id = Some(session_id.to_string());
+            self.active = false;
+            self.error = None;
+        }
         if self.service.as_ref().is_some_and(TaskService::busy) {
             return;
         }
-        self.service = Some(TaskService::new(paths, config));
+        self.service = Some(TaskService::new(paths, config, Some(session_id)));
         self.next_refresh = None;
     }
 

@@ -43,6 +43,7 @@ pub(super) struct Output {
 }
 
 pub(super) struct TaskManager {
+    pub session_scoped: bool,
     pub tasks: Vec<Task>,
     pub selected_id: Option<String>,
     pub hovered: Option<String>,
@@ -65,6 +66,7 @@ impl Default for TaskManager {
     /// 参数: 无；返回: 默认列表和日志状态。
     fn default() -> Self {
         Self {
+            session_scoped: false,
             tasks: Vec::new(),
             selected_id: None,
             hovered: None,

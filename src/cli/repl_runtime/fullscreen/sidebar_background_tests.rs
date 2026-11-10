@@ -2,7 +2,7 @@
 
 use super::runtime_tests::{chrome, mouse, runtime};
 use super::sidebar_action::{SidebarAction, SidebarSection};
-use crate::cli::repl_runtime::{FullscreenEvent, ReplRuntime, viewport::TerminalSize};
+use crate::cli::repl_runtime::{viewport::TerminalSize, FullscreenEvent, ReplRuntime};
 use crate::render::ansi_clip::strip_ansi;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
 
@@ -177,7 +177,7 @@ fn background_manager_stays_visible_at_small_sizes_and_when_collapsed() {
     }
 }
 
-/// 【后台任务测试】【存储样本】创建非当前会话命令和隐藏网关，不启动或停止真实进程。
+/// 【后台任务测试】【存储样本】创建当前会话命令、其他会话命令和隐藏网关，不启动或停止真实进程。
 /// 参数: paths 为临时应用路径；返回: 任务存储与可见任务。
 fn seed(
     paths: &crate::paths::SaiPaths,
@@ -192,7 +192,7 @@ fn seed(
         id: "sidebar-background".into(),
         runtime_process_id: None,
         runtime_owner_kind: Some("session".into()),
-        runtime_owner_id: Some("another-session".into()),
+        runtime_owner_id: Some("sidebar-test".into()),
         runtime_process_kind: None,
         goal_id: None,
         label: "PERSISTED-COMMAND".into(),
@@ -213,7 +213,10 @@ fn seed(
     let mut gateway = task.clone();
     gateway.id = "hidden-gateway".into();
     gateway.runtime_owner_kind = Some("gateway".into());
-    store.save(&[task.clone(), gateway]).unwrap();
+    let mut other = task.clone();
+    other.id = "other-session-task".into();
+    other.runtime_owner_id = Some("another-session".into());
+    store.save(&[task.clone(), gateway, other]).unwrap();
     (store, task)
 }
 
@@ -244,7 +247,7 @@ async fn wait_status(runtime: &mut ReplRuntime, status: &str) {
     .unwrap();
 }
 
-/// 【后台任务测试】【持久化链路】没有启动卡片也会加载跨会话任务，自动更新终态并打开真实日志。
+/// 【后台任务测试】【持久化链路】没有启动卡片也只加载当前会话任务，消费完成项后从侧栏移除。
 /// 参数: 无；返回: 无。
 #[tokio::test]
 async fn background_sidebar_refreshes_persisted_tasks_and_opens_selected_logs() {
@@ -252,7 +255,11 @@ async fn background_sidebar_refreshes_persisted_tasks_and_opens_selected_logs() 
     let paths = crate::paths::SaiPaths::for_tests(temp.path());
     let (store, mut task) = seed(&paths);
     let mut runtime = runtime(0);
-    runtime.configure_background_tasks(&paths, &crate::config::AppConfig::default());
+    runtime.configure_background_tasks(
+        &paths,
+        &crate::config::AppConfig::default(),
+        "sidebar-test",
+    );
     TerminalSize::with_size(
         TerminalSize {
             cols: 160,
@@ -277,8 +284,8 @@ async fn background_sidebar_refreshes_persisted_tasks_and_opens_selected_logs() 
         },
     );
     task.status = "exited".into();
-    task.completion_notified = true;
-    store.save(&[task]).unwrap();
+    task.completion_notified = false;
+    store.upsert(task).unwrap();
     wait_status(&mut runtime, "exited").await;
     assert!(sidebar_text(&runtime).contains("exited"));
     TerminalSize::with_size(
@@ -314,7 +321,7 @@ async fn background_sidebar_refreshes_persisted_tasks_and_opens_selected_logs() 
     })
     .await
     .unwrap();
-    assert!(store.load().unwrap()[0].completion_notified);
+    assert!(!store.load().unwrap()[0].completion_notified);
     TerminalSize::with_size(
         TerminalSize {
             cols: 160,
@@ -327,6 +334,47 @@ async fn background_sidebar_refreshes_persisted_tasks_and_opens_selected_logs() 
             assert!(!runtime.background_panel_active());
         },
     );
+    crate::tools::command::acknowledge_background_completions(
+        &paths,
+        "sidebar-test",
+        &["sidebar-background".into()],
+    )
+    .unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            TerminalSize::with_size(
+                TerminalSize {
+                    cols: 160,
+                    rows: 30,
+                },
+                || runtime.process_idle_tick().unwrap(),
+            );
+            if runtime.background_panel.tasks().is_empty() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert!(!sidebar_text(&runtime).contains("PERSISTED-COMMAND"));
+    assert!(store
+        .load()
+        .unwrap()
+        .iter()
+        .any(|task| task.id == "sidebar-background"));
+    assert_eq!(
+        std::fs::read_to_string(store.logs_dir().join("out.log")).unwrap(),
+        "LOG-FIXTURE\n"
+    );
+    runtime.configure_background_tasks(
+        &paths,
+        &crate::config::AppConfig::default(),
+        "another-session",
+    );
+    assert!(runtime.background_panel.tasks().is_empty());
+    wait_status(&mut runtime, "running").await;
+    assert_eq!(runtime.background_panel.tasks()[0].id, "other-session-task");
 }
 
 /// 【后台任务测试】【流式隔离】模型输出继续更新历史，浮层遮住正文且缩放后跟随新尺寸，关闭后恢复正文。
@@ -359,30 +407,24 @@ fn background_manager_survives_stream_refresh_and_terminal_resize() {
                     .handle_fullscreen_event(&Event::Resize(60, 12))
                     .unwrap();
                 let lines = screen_rows(&runtime);
-                assert!(
-                    lines
-                        .iter()
-                        .all(|line| crate::render::ansi_clip::ansi_visible_width(line) == 60)
-                );
+                assert!(lines
+                    .iter()
+                    .all(|line| crate::render::ansi_clip::ansi_visible_width(line) == 60));
                 assert!(strip_ansi(&lines.join("\n")).contains("Background tasks"));
-                assert!(
-                    !lines
-                        .iter()
-                        .any(|line| line.contains("STREAM-WHILE-MANAGING"))
-                );
+                assert!(!lines
+                    .iter()
+                    .any(|line| line.contains("STREAM-WHILE-MANAGING")));
                 key(&mut runtime, KeyCode::Esc);
             });
             runtime.paint_fullscreen().unwrap();
             let session = runtime.fullscreen.as_ref().unwrap();
-            assert!(
-                session
-                    .state
-                    .previous
-                    .as_ref()
-                    .unwrap()
-                    .iter()
-                    .any(|line| line.contains("STREAM-WHILE-MANAGING"))
-            );
+            assert!(session
+                .state
+                .previous
+                .as_ref()
+                .unwrap()
+                .iter()
+                .any(|line| line.contains("STREAM-WHILE-MANAGING")));
             assert_eq!(runtime.stream_draft.text, "stream draft");
         },
     );

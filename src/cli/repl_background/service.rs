@@ -2,8 +2,8 @@
 
 use super::model::{Output, Task};
 use crate::tools::command::{
-    cleanup_managed_background_tasks, list_managed_background_tasks,
-    read_managed_background_output, stop_background_task_for_user,
+    cleanup_background_tasks_in_scope, ensure_background_task_scope,
+    list_background_tasks_in_scope, read_managed_background_output, stop_background_task_for_user,
 };
 use crate::{config::AppConfig, i18n::text as t, paths::SaiPaths};
 use anyhow::Result;
@@ -25,6 +25,7 @@ pub(super) struct Update {
 pub(super) struct TaskService {
     paths: SaiPaths,
     config: AppConfig,
+    session_id: Option<String>,
     pending: Option<JoinHandle<Result<Update>>>,
     mutation: bool,
 }
@@ -32,10 +33,11 @@ pub(super) struct TaskService {
 impl TaskService {
     /// 【后台任务】【服务创建】保存路径与配置快照，不启动额外运行时。
     /// 参数: paths 为路径，config 为配置；返回: 服务实例。
-    pub fn new(paths: &SaiPaths, config: &AppConfig) -> Self {
+    pub fn new(paths: &SaiPaths, config: &AppConfig, session_id: Option<&str>) -> Self {
         Self {
             paths: paths.clone(),
             config: config.clone(),
+            session_id: session_id.map(str::to_string),
             pending: None,
             mutation: false,
         }
@@ -67,8 +69,17 @@ impl TaskService {
         self.mutation = request != Request::Refresh;
         let paths = self.paths.clone();
         let config = self.config.clone();
+        let session_id = self.session_id.clone();
         self.pending = Some(tokio::spawn(async move {
-            execute(&paths, &config, request, selected, output).await
+            execute(
+                &paths,
+                &config,
+                session_id.as_deref(),
+                request,
+                selected,
+                output,
+            )
+            .await
         }));
     }
     /// 【后台任务】【请求完成】只等待已经完成的请求，保持键盘循环响应。
@@ -109,6 +120,7 @@ impl Drop for TaskService {
 async fn execute(
     paths: &SaiPaths,
     config: &AppConfig,
+    session_id: Option<&str>,
     request: Request,
     selected: Option<String>,
     output: bool,
@@ -116,11 +128,12 @@ async fn execute(
     let notice = match request {
         Request::Refresh => None,
         Request::Stop { id, force } => {
+            ensure_background_task_scope(paths, &id, session_id)?;
             stop_background_task_for_user(paths, config, &id, force).await?;
             Some(t("Task ended", "任务已结束").to_string())
         }
         Request::Cleanup => {
-            cleanup_managed_background_tasks(paths, config, false).await?;
+            cleanup_background_tasks_in_scope(paths, config, false, session_id).await?;
             Some(
                 t(
                     "Finished records cleaned; logs kept",
@@ -134,9 +147,10 @@ async fn execute(
     struct TaskList {
         tasks: Vec<Task>,
     }
-    let mut tasks =
-        serde_json::from_str::<TaskList>(&list_managed_background_tasks(paths, config).await?)?
-            .tasks;
+    let mut tasks = serde_json::from_str::<TaskList>(
+        &list_background_tasks_in_scope(paths, config, session_id).await?,
+    )?
+    .tasks;
     tasks.sort_by(|a, b| {
         (b.status == "running")
             .cmp(&(a.status == "running"))
@@ -148,6 +162,7 @@ async fn execute(
         .or_else(|| tasks.first().map(|task| task.id.clone()));
     let output = if let Some(id) = target.filter(|_| output) {
         let result = async {
+            ensure_background_task_scope(paths, &id, session_id)?;
             let raw = read_managed_background_output(paths, config, &id, 2000).await?;
             Ok::<Output, anyhow::Error>(serde_json::from_str(&raw)?)
         }

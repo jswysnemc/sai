@@ -1,4 +1,4 @@
-//! 用户任务管理视图，独立于智能体的会话范围和完成通知消费语义。
+//! 后台任务管理接口，区分用户全局管理与会话活动面板。
 
 use super::background_refresh::refresh_background_tasks;
 use super::background_tasks::{is_gateway_owned_task, read_log_tail};
@@ -13,13 +13,47 @@ pub(crate) async fn list_managed_background_tasks(
     paths: &SaiPaths,
     config: &AppConfig,
 ) -> Result<String> {
+    list_background_tasks_in_scope(paths, config, None).await
+}
+
+/// 【后台任务】【会话列表】会话面板仅显示所属任务和未消费结果，全局管理保留全部历史。
+/// 参数：paths/config 为运行环境，session 为会话范围，空值表示全局；返回 JSON 列表。
+pub(crate) async fn list_background_tasks_in_scope(
+    paths: &SaiPaths,
+    config: &AppConfig,
+    session: Option<&str>,
+) -> Result<String> {
     let store = BackgroundCommandStore::new(paths.state_dir.clone());
-    let tasks = refresh_background_tasks(&store, config, |task| !is_gateway_owned_task(task))
+    let tasks = refresh_background_tasks(&store, config, |task| in_scope(task, session))
         .await?
         .into_iter()
-        .filter(|task| !is_gateway_owned_task(task))
+        .filter(|task| in_scope(task, session))
+        .filter(|task| session.is_none() || task.status == "running" || !task.completion_notified)
         .collect::<Vec<_>>();
     Ok(serde_json::to_string(&json!({ "tasks": tasks }))?)
+}
+
+/// 【后台任务】【范围校验】网关始终独立管理，指定会话时必须精确匹配归属。
+/// 参数：任务记录及可选会话；返回是否属于指定范围。
+fn in_scope(task: &super::store::BackgroundCommandTask, session: Option<&str>) -> bool {
+    !is_gateway_owned_task(task) && session.is_none_or(|id| task.owned_by_session(id))
+}
+
+/// 【后台任务】【操作校验】停止与日志操作使用相同会话边界，不接受跨会话任务标识。
+/// 参数：路径、任务标识及会话；返回验证结果。
+pub(crate) fn ensure_background_task_scope(
+    paths: &SaiPaths,
+    id: &str,
+    session: Option<&str>,
+) -> Result<()> {
+    anyhow::ensure!(
+        BackgroundCommandStore::new(paths.state_dir.clone())
+            .load()?
+            .iter()
+            .any(|task| task.id == id && in_scope(task, session)),
+        "background command not found in this scope: {id}"
+    );
+    Ok(())
 }
 
 /// 【后台任务】【管理输出】从可信任务记录读取有界日志，不确认或消费所属会话的完成通知。
@@ -60,13 +94,24 @@ pub(crate) async fn cleanup_managed_background_tasks(
     config: &AppConfig,
     remove_logs: bool,
 ) -> Result<String> {
+    cleanup_background_tasks_in_scope(paths, config, remove_logs, None).await
+}
+
+/// 【后台任务】【范围清理】只删除指定范围内已结束记录，保留其他会话与运行任务。
+/// 参数：路径、配置、是否删除日志及会话；返回实际清理结果。
+pub(crate) async fn cleanup_background_tasks_in_scope(
+    paths: &SaiPaths,
+    config: &AppConfig,
+    remove_logs: bool,
+    session: Option<&str>,
+) -> Result<String> {
     let store = BackgroundCommandStore::new(paths.state_dir.clone());
-    refresh_background_tasks(&store, config, |task| !is_gateway_owned_task(task)).await?;
+    refresh_background_tasks(&store, config, |task| in_scope(task, session)).await?;
     // 1. 【后台任务】【事务清理】在最新任务表内选择记录，不恢复刷新期间已经删除的任务
     let (removed, remaining) = store.update(|tasks| {
         let mut removed = Vec::new();
         tasks.retain(|task| {
-            if task.status == "running" || is_gateway_owned_task(task) {
+            if task.status == "running" || !in_scope(task, session) {
                 return true;
             }
             removed.push(task.clone());
@@ -74,10 +119,7 @@ pub(crate) async fn cleanup_managed_background_tasks(
         });
         Ok((
             removed,
-            tasks
-                .iter()
-                .filter(|task| !is_gateway_owned_task(task))
-                .count(),
+            tasks.iter().filter(|task| in_scope(task, session)).count(),
         ))
     })?;
     if remove_logs {
@@ -154,6 +196,41 @@ mod tests {
             .map(|task| task["id"].as_str().unwrap())
             .collect::<Vec<_>>();
         assert_eq!(ids, ["one", "two"]);
+    }
+
+    /// 【后台任务测试】【会话隔离】过滤已消费记录并限制清理范围，日志仍可按任务标识读取。
+    #[tokio::test]
+    async fn session_scope_hides_consumed_tasks_and_limits_cleanup() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(dir.path());
+        let config = AppConfig::default();
+        let store = BackgroundCommandStore::new(paths.state_dir.clone());
+        let tasks = seed(&store);
+        let first = tasks[0].runtime_owner_id.as_deref().unwrap();
+        let value: serde_json::Value = serde_json::from_str(
+            &list_background_tasks_in_scope(&paths, &config, Some(first))
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(value["tasks"].as_array().unwrap().len(), 1);
+        assert_eq!(value["tasks"][0]["id"], "one");
+        let consumed: serde_json::Value = serde_json::from_str(
+            &list_background_tasks_in_scope(&paths, &config, Some("session-two"))
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(consumed["tasks"].as_array().unwrap().is_empty());
+        assert!(ensure_background_task_scope(&paths, "two", Some(first)).is_err());
+        assert!(ensure_background_task_scope(&paths, "one", Some(first)).is_ok());
+        cleanup_background_tasks_in_scope(&paths, &config, false, Some(first))
+            .await
+            .unwrap();
+        let remaining = store.load().unwrap();
+        assert!(!remaining.iter().any(|task| task.id == "one"));
+        assert!(remaining.iter().any(|task| task.id == "two"));
+        assert!(remaining.iter().any(|task| task.id == "gateway"));
     }
 
     /// 【后台任务测试】【管理读取】日志读取有界，且不改变完成通知状态。

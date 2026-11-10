@@ -39,7 +39,7 @@ pub(super) async fn run_repl_background_manager(
 ) -> Result<()> {
     let mut screen = screen::TaskScreen::start()?;
     let mut manager = TaskManager::default();
-    let mut service = TaskService::new(paths, config);
+    let mut service = TaskService::new(paths, config, None);
     let mut next_refresh = Instant::now();
     loop {
         // 1. 【后台任务】【异步同步】读取完成的结果，错误留在面板中，不结束 REPL

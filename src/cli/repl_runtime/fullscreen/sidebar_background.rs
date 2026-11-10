@@ -1,6 +1,6 @@
 //! 后台任务面板与主终端的非阻塞交接，绘制和输入始终由原事件循环驱动。
 
-use crate::cli::repl_runtime::{ReplRuntime, viewport::TerminalSize};
+use crate::cli::repl_runtime::{viewport::TerminalSize, ReplRuntime};
 use crate::{config::AppConfig, paths::SaiPaths};
 use anyhow::Result;
 use crossterm::event::Event;
@@ -13,14 +13,15 @@ impl ReplRuntime {
         self.tick_sidebar_git() || background
     }
 
-    /// 【后台任务】【运行环境】绑定用户级管理接口，不限制到当前会话的启动卡片。
+    /// 【后台任务】【运行环境】绑定当前会话管理接口，不混入其他会话或已消费任务。
     /// 参数: paths 为路径，config 为配置；返回: 无。
     pub(in crate::cli) fn configure_background_tasks(
         &mut self,
         paths: &SaiPaths,
         config: &AppConfig,
+        session_id: &str,
     ) {
-        self.background_panel.bind(paths, config);
+        self.background_panel.bind(paths, config, session_id);
     }
 
     /// 【后台任务】【浮层状态】判断输入和自动轮次是否需要让位给管理界面。

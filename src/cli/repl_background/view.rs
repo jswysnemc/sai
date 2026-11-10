@@ -85,7 +85,11 @@ fn list_title(manager: &TaskManager, palette: &PanelPalette) -> String {
     format!(
         "{}◆\x1b[39m \x1b[1m{}\x1b[22m {}{running}/{} {}\x1b[0m",
         fg(palette.accent),
-        t("Background tasks", "后台任务管理"),
+        if manager.session_scoped {
+            t("Background tasks · Current session", "后台任务 · 当前会话")
+        } else {
+            t("Background tasks · All sessions", "后台任务 · 全部会话")
+        },
         fg(palette.muted),
         manager.tasks.len(),
         t("running", "运行中")

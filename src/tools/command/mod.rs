@@ -50,7 +50,9 @@ pub(crate) use background_attention::{
     acknowledge_background_attention, poll_background_attention, BackgroundAttentionNotice,
 };
 pub(crate) use background_manager::{
-    cleanup_managed_background_tasks, list_managed_background_tasks, read_managed_background_output,
+    cleanup_background_tasks_in_scope, cleanup_managed_background_tasks,
+    ensure_background_task_scope, list_background_tasks_in_scope, list_managed_background_tasks,
+    read_managed_background_output,
 };
 pub(crate) use goal_completions::{
     acknowledge_background_completions, poll_background_completions_in_scope,
