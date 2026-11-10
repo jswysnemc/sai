@@ -67,17 +67,8 @@ impl SubagentRunner {
                 messages.push(ChatMessage::plain("user", finalization_prompt()));
                 return self.finalize_without_tools(messages, round, stats).await;
             }
-            let definitions = tool_visibility
-                .definitions(&self.tools)
-                .into_iter()
-                .filter(|definition| {
-                    !excluded
-                        .iter()
-                        .any(|name| *name == definition.function.name)
-                })
-                .collect();
             let result = self
-                .request_with_context(messages, stats, tool_visibility, definitions, round, steps)
+                .request_with_context(messages, stats, tool_visibility, &excluded, round, steps)
                 .await?;
             stats.record_response(messages, &result);
             // 每轮结束把累计用量写回快照：底部面板据此实时显示 token，

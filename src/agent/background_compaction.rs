@@ -121,7 +121,7 @@ impl Agent {
             should_wait || pending.handle.as_ref().is_some_and(JoinHandle::is_finished)
         }) {
             let mut pending = self.background_compaction.take().unwrap();
-            let result = pending.handle.take().unwrap().await;
+            let result = pending.handle.as_mut().unwrap().await;
             match result {
                 Ok(Ok(result)) => {
                     // 1. 【上下文】【提交校验】等待期间也可能收到用户编辑，提交前再读取来源

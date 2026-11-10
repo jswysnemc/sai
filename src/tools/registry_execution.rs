@@ -5,7 +5,6 @@ use super::{
 use crate::plugins::PluginServices;
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
-use tokio::sync::mpsc;
 
 impl ToolRegistry {
     /// 【工具】【文本执行】解析参数并经过统一授权入口调用工具。
@@ -37,7 +36,7 @@ impl ToolRegistry {
         &self,
         name: &str,
         arguments: &str,
-        sender: mpsc::UnboundedSender<String>,
+        sender: impl Into<ToolProgress>,
     ) -> Result<ToolOutput> {
         let requested_name = name;
         let name = local_tool_name(name);
@@ -49,7 +48,7 @@ impl ToolRegistry {
             tool,
             name,
             &mut args,
-            ToolProgress::new(sender),
+            sender.into(),
             requested_name == DSH_BASH_EXECUTION_ALIAS,
         )
         .await

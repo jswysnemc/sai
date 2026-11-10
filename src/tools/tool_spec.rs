@@ -60,6 +60,7 @@ impl ToolOutput {
 #[derive(Clone, Default)]
 pub struct ToolProgress {
     sender: Option<mpsc::UnboundedSender<String>>,
+    bounded: Option<mpsc::Sender<String>>,
 }
 
 impl ToolProgress {
@@ -69,6 +70,7 @@ impl ToolProgress {
     pub fn new(sender: mpsc::UnboundedSender<String>) -> Self {
         Self {
             sender: Some(sender),
+            bounded: None,
         }
     }
 
@@ -76,8 +78,39 @@ impl ToolProgress {
     /// @param message 为进度文本
     /// @returns 无
     pub fn report(&self, message: impl Into<String>) {
+        if let Some(sender) = &self.bounded {
+            let mut message = message.into();
+            if message.len() > 65_536 {
+                let mut boundary = 65_536;
+                while !message.is_char_boundary(boundary) {
+                    boundary -= 1;
+                }
+                message.truncate(boundary);
+                message.push_str("…");
+            }
+            // 1. 【工具】【进度限流】丢弃拥堵时的中间通知，完整结果仍由工具返回值交付
+            let _ = sender.try_send(message);
+            return;
+        }
         if let Some(sender) = &self.sender {
             let _ = sender.send(message.into());
+        }
+    }
+}
+
+impl From<mpsc::UnboundedSender<String>> for ToolProgress {
+    /// 【工具】【兼容进度】转换旧消息通道；参数为发送端，返回进度句柄。
+    fn from(sender: mpsc::UnboundedSender<String>) -> Self {
+        Self::new(sender)
+    }
+}
+
+impl From<mpsc::Sender<String>> for ToolProgress {
+    /// 【工具】【有界进度】在生产入口限制积压；参数为发送端，返回进度句柄。
+    fn from(sender: mpsc::Sender<String>) -> Self {
+        Self {
+            sender: None,
+            bounded: Some(sender),
         }
     }
 }

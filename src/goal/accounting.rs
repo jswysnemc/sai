@@ -33,17 +33,11 @@ impl GoalAccounting {
     /// 【目标】【模型用量】成功请求按供应商实际用量增加水位
     /// 参数：`usage` 为供应商用量；返回持久化结果
     pub(crate) fn record(&self, usage: Option<&Usage>) -> Result<()> {
+        self.current_goal()?;
         let mut progress = self
             .progress
             .lock()
             .map_err(|_| anyhow::anyhow!("goal accounting lock poisoned"))?;
-        if progress.0.is_none() {
-            progress.0 = self
-                .store
-                .get()?
-                .filter(|goal| goal.status.is_active())
-                .map(|goal| goal.id);
-        }
         let Some(id) = progress.0.clone() else {
             return Ok(());
         };
@@ -83,14 +77,29 @@ impl GoalAccounting {
         Ok(())
     }
 
-    /// 【目标】【状态读取】只读取本轮绑定目标，替换目标后不沿用旧运行权限
+    /// 【目标】【状态读取】主轮次跟随显式目标变更，子任务仅读取原绑定目标
     /// 参数：无；返回当前匹配目标
     pub(crate) fn current_goal(&self) -> Result<Option<Goal>> {
-        let id = self.goal_id();
-        Ok(self
-            .store
-            .get()?
-            .filter(|goal| Some(&goal.id) == id.as_ref()))
+        let current = self.store.get()?;
+        let mut progress = self
+            .progress
+            .lock()
+            .map_err(|_| anyhow::anyhow!("goal accounting lock poisoned"))?;
+        // 1. 【目标】【目标切换】主轮次跟随显式目标变更，旧子任务继续绑定原目标
+        if self.source.starts_with("turn:")
+            && current.as_ref().map(|goal| &goal.id) != progress.0.as_ref()
+        {
+            progress.0 = current.as_ref().map(|goal| goal.id.clone());
+            progress.1 = current
+                .as_ref()
+                .and_then(|goal| goal.usage_sources.get(&self.source).copied())
+                .unwrap_or_default();
+            *self
+                .clock
+                .lock()
+                .map_err(|_| anyhow::anyhow!("goal clock lock poisoned"))? = (Instant::now(), 0);
+        }
+        Ok(current.filter(|goal| Some(&goal.id) == progress.0.as_ref()))
     }
 
     /// 【目标】【当前标识】返回本轮绑定目标，已替换目标不重新绑定
@@ -151,3 +160,7 @@ impl Drop for GoalTurnGuard {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "accounting_tests.rs"]
+mod tests;

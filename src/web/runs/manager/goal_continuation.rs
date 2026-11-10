@@ -341,9 +341,16 @@ async fn session_has_running_work(
     let Ok(config) = AppConfig::load(paths) else {
         return false;
     };
-    poll_background_completions_in_scope(paths, &config, session_id, None, |_| true)
-        .await
-        .is_ok_and(|(_, running)| running > 0)
+    let goal = state.goal().ok().flatten();
+    for goal_id in [None, goal.as_ref().map(|goal| goal.id.as_str())] {
+        if poll_background_completions_in_scope(paths, &config, session_id, goal_id, |_| true)
+            .await
+            .is_ok_and(|(_, running)| running > 0)
+        {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(test)]

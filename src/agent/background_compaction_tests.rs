@@ -163,3 +163,37 @@ async fn dropping_pending_summary_aborts_its_task() {
     tokio::task::yield_now().await;
     assert!(abort.is_finished());
 }
+
+/// 【上下文】【等待取消回归】取消正在等待摘要的调用也必须终止请求；无参数、无返回值。
+#[tokio::test]
+async fn cancelling_summary_wait_aborts_its_task() {
+    let root = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(root.path());
+    let (mut agent, request) = fixture(&paths);
+    let (_, source) = agent
+        .background_compaction_source(&request)
+        .unwrap()
+        .unwrap();
+    let handle =
+        tokio::spawn(async { futures_util::future::pending::<Result<ChatResult>>().await });
+    let abort = handle.abort_handle();
+    agent.background_compaction = Some(BackgroundCompaction {
+        request,
+        source,
+        handle: Some(handle),
+    });
+    let messages = vec![ChatMessage::plain("user", "latest user guidance")];
+    let mut on_event = |_| Ok(());
+    let wait =
+        agent.maintain_background_compaction("current", &messages, usize::MAX, &mut on_event);
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(20), wait)
+            .await
+            .is_err()
+    );
+    tokio::task::yield_now().await;
+    assert!(
+        abort.is_finished(),
+        "cancelled wait must not detach the summary request"
+    );
+}

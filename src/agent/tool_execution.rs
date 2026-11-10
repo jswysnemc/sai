@@ -47,7 +47,7 @@ impl Agent {
                 .await?;
             return self.finish_real_tool_execution(turn_id, call, execution, on_event, perf);
         }
-        let (progress_tx, mut progress_rx) = mpsc::unbounded_channel();
+        let (progress_tx, mut progress_rx) = mpsc::channel(128);
         let requested_name = if call.kind == deepseek_anchor::BASH_EXECUTION_KIND {
             crate::tools::DSH_BASH_EXECUTION_ALIAS
         } else {
@@ -96,7 +96,14 @@ impl Agent {
         slot: usize,
         progress: mpsc::Sender<(usize, String)>,
     ) -> RealToolExecution {
-        let (sender, mut receiver) = mpsc::unbounded_channel();
+        match self.stopped_goal() {
+            Ok(Some(goal)) => {
+                return tool_result(Err(anyhow::anyhow!(crate::goal::stop_prompt(&goal))))
+            }
+            Err(error) => return tool_result(Err(error)),
+            Ok(None) => {}
+        }
+        let (sender, mut receiver) = mpsc::channel(128);
         let requested_name = if call.kind == deepseek_anchor::BASH_EXECUTION_KIND {
             crate::tools::DSH_BASH_EXECUTION_ALIAS
         } else {

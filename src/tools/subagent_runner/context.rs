@@ -108,13 +108,14 @@ impl SubagentRunner {
         messages: &mut Vec<ChatMessage>,
         stats: &mut SubagentStats,
         visibility: &mut ToolVisibility,
-        definitions: Vec<ToolDefinition>,
+        excluded: &[&str],
         round: usize,
         steps: usize,
     ) -> Result<ChatResult> {
         self.compact_context(messages, stats, visibility, false)
             .await?;
         self.save_checkpoint(messages, stats, visibility, steps, false, &[])?;
+        let definitions = self.context_definitions(visibility, excluded);
         let result = self
             .request_model_round(messages.clone(), definitions.clone(), round)
             .await;
@@ -127,11 +128,29 @@ impl SubagentRunner {
                     return Err(error);
                 }
                 self.save_checkpoint(messages, stats, visibility, steps, false, &[])?;
-                self.request_model_round(messages.clone(), definitions, round)
-                    .await
+                self.request_model_round(
+                    messages.clone(),
+                    self.context_definitions(visibility, excluded),
+                    round,
+                )
+                .await
             }
             other => other,
         }
+    }
+
+    /// 【子任务】【声明同步】按压缩后的加载状态重建工具声明并保留禁用清单。
+    /// 参数：当前可见性和禁用名称；返回与执行门禁一致的声明。
+    fn context_definitions(
+        &self,
+        visibility: &ToolVisibility,
+        excluded: &[&str],
+    ) -> Vec<ToolDefinition> {
+        visibility
+            .definitions(&self.tools)
+            .into_iter()
+            .filter(|definition| !excluded.contains(&definition.function.name.as_str()))
+            .collect()
     }
 }
 
