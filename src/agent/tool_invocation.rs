@@ -256,7 +256,13 @@ impl Agent {
                     &provider_call.function.arguments,
                 );
                 self.record_simple_tool_result(turn_id, provider_call, false, &output)?;
-                on_event(AgentEvent::ToolResult {
+                on_event(AgentEvent::ToolCallIdentified {
+                    id: provider_call.id.clone(),
+                    name: provider_call.function.name.clone(),
+                    arguments: provider_call.function.arguments.clone(),
+                })?;
+                on_event(AgentEvent::ToolResultIdentified {
+                    id: provider_call.id.clone(),
                     name: provider_call.function.name.clone(),
                     ok: false,
                     output: output.clone(),
@@ -272,7 +278,13 @@ impl Agent {
             let output =
                 "tool error: goal execution stopped; summarize progress without starting new work";
             self.record_simple_tool_result(turn_id, provider_call, false, output)?;
-            on_event(AgentEvent::ToolResult {
+            on_event(AgentEvent::ToolCallIdentified {
+                id: provider_call.id.clone(),
+                name: call.function.name.clone(),
+                arguments: call.function.arguments.clone(),
+            })?;
+            on_event(AgentEvent::ToolResultIdentified {
+                id: provider_call.id.clone(),
                 name: call.function.name.clone(),
                 ok: false,
                 output: output.into(),

@@ -23,6 +23,7 @@ impl TranscriptStore {
             };
             if empty {
                 self.cells.remove(index);
+                self.removed_cell(index);
             }
         }
         self.cache.clear();

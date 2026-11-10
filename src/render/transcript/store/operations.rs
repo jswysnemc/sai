@@ -20,6 +20,8 @@ impl TranscriptStore {
             live_tool_call: None,
             live_animation_started: None,
             active_tool_index: None,
+            tool_call_ids: Default::default(),
+            target_tool_index: None,
             work_status: None,
             work_status_started: None,
             row_cap: row_cap.max(1),
@@ -439,6 +441,8 @@ impl TranscriptStore {
     pub(crate) fn clear(&mut self) {
         self.recent_details = Default::default();
         self.cells.clear();
+        self.tool_call_ids.clear();
+        self.target_tool_index = None;
         self.live_tail = None;
         self.live_tool_call = None;
         self.live_animation_started = None;
@@ -527,6 +531,9 @@ impl TranscriptStore {
     /// 并发同名调用不能只看最近一项：后完成的结果会误改后启动的那张卡，
     /// 先完成的结果则另开一行空 `Read ok`。
     fn find_pending_invocation_index(&self, name: &str) -> Option<usize> {
+        if let Some(index) = self.target_tool_index {
+            return matches!(self.cells.get(index), Some(HistoryCell::Tool(ToolCell::Invocation(view))) if view.name == name).then_some(index);
+        }
         self.cells
             .iter()
             .enumerate()
@@ -540,6 +547,9 @@ impl TranscriptStore {
 
     /// 找到仍在运行的编辑 Diff cell。
     fn find_pending_diff_index(&self) -> Option<usize> {
+        if let Some(index) = self.target_tool_index {
+            return matches!(self.cells.get(index), Some(HistoryCell::Diff(_))).then_some(index);
+        }
         self.cells
             .iter()
             .enumerate()
@@ -551,6 +561,13 @@ impl TranscriptStore {
 
     /// 找到仍在运行的子智能体 cell。
     fn find_pending_subagent_index(&self) -> Option<usize> {
+        if let Some(index) = self.target_tool_index {
+            return matches!(
+                self.cells.get(index),
+                Some(HistoryCell::Tool(ToolCell::Subagent(_)))
+            )
+            .then_some(index);
+        }
         self.cells
             .iter()
             .enumerate()

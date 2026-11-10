@@ -142,8 +142,13 @@ impl ReplRuntime {
             | AgentEvent::ToolCallIdentified {
                 name, arguments, ..
             } => {
-                self.transcript
-                    .push_tool_call(name.clone(), arguments.clone());
+                if let AgentEvent::ToolCallIdentified { id, .. } = agent_event {
+                    self.transcript
+                        .push_identified_tool_call(id, name.clone(), arguments.clone());
+                } else {
+                    self.transcript
+                        .push_tool_call(name.clone(), arguments.clone());
+                }
                 self.sync_transcript(true)?;
                 // 新子 agent 出现时底部 agent 面板需要重组
                 if name == "subagent" {
@@ -160,8 +165,14 @@ impl ReplRuntime {
             | AgentEvent::ToolResultIdentified {
                 name, ok, output, ..
             } => {
-                self.transcript
-                    .push_tool_result(name.clone(), *ok, output.clone());
+                if let AgentEvent::ToolResultIdentified { id, .. } = agent_event {
+                    self.transcript.with_identified_tool(id, name, |store| {
+                        store.push_tool_result(name.clone(), *ok, output.clone())
+                    });
+                } else {
+                    self.transcript
+                        .push_tool_result(name.clone(), *ok, output.clone());
+                }
                 self.sync_transcript(true)?;
                 // todo 快照 / 子 agent 状态更新会改变沉底面板内容
                 if name == "todo" || name == "subagent" {
@@ -183,14 +194,28 @@ impl ReplRuntime {
                 }
                 if name == "run_command" {
                     if let Some(chunk) = crate::tools::command::decode_command_output(message) {
-                        if self.transcript.push_command_output(name, &chunk) {
+                        let updated =
+                            if let AgentEvent::ToolProgressIdentified { id, .. } = agent_event {
+                                self.transcript.with_identified_tool(id, name, |store| {
+                                    store.push_command_output(name, &chunk)
+                                })
+                            } else {
+                                self.transcript.push_command_output(name, &chunk)
+                            };
+                        if updated {
                             return self.throttled_live_sync();
                         }
                         return Ok(());
                     }
                 }
-                self.transcript
-                    .push_tool_progress(name.clone(), message.clone());
+                if let AgentEvent::ToolProgressIdentified { id, .. } = agent_event {
+                    self.transcript.with_identified_tool(id, name, |store| {
+                        store.push_tool_progress(name.clone(), message.clone())
+                    });
+                } else {
+                    self.transcript
+                        .push_tool_progress(name.clone(), message.clone());
+                }
                 self.sync_transcript(true)
             }
             AgentEvent::PermissionRequested(request) => {

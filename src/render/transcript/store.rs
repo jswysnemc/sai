@@ -8,6 +8,7 @@ mod permission;
 mod response_reset;
 mod subagent_panel;
 mod todo_snapshot;
+mod tool_identity;
 mod tool_timing;
 mod work_activity;
 
@@ -75,6 +76,8 @@ pub(crate) struct TranscriptStore {
     pub(super) live_animation_started: Option<Instant>,
     /// 最近一次活动工具 cell；并发时真正的匹配走 FIFO 扫描，不依赖这一项。
     pub(super) active_tool_index: Option<usize>,
+    pub(super) tool_call_ids: std::collections::HashMap<String, usize>,
+    pub(super) target_tool_index: Option<usize>,
     pub(super) work_status: Option<WorkStatus>,
     pub(super) work_status_started: Option<Instant>,
     pub(super) row_cap: usize,

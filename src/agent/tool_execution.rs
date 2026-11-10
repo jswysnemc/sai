@@ -16,12 +16,6 @@ pub(super) struct RealToolExecution {
     pub(super) failed: bool,
 }
 
-/// 并发工具执行期间暂存的结果与进度。
-pub(super) struct BufferedRealToolExecution {
-    execution: RealToolExecution,
-    progress: Vec<String>,
-}
-
 impl Agent {
     /// 【Agent】【工具执行】执行已经通过协议、门禁和权限检查的真实工具。
     ///
@@ -94,70 +88,43 @@ impl Agent {
         }
     }
 
-    /// 【Agent】【并发工具】执行只读工具并暂存进度与结果。
-    ///
-    /// 参数:
-    /// - `call`: 已通过门禁与权限检查的只读调用
-    ///
-    /// 返回:
-    /// - 等待调用方按原始顺序提交的执行结果
-    pub(super) async fn execute_real_tool_buffered(
+    /// 【Agent】【并发工具】执行只读工具并持续向有界队列转发进度。
+    /// 参数：调用、槽位序号和进度通道；返回工具最终结果，取消时释放工具 future。
+    pub(super) async fn execute_concurrent_tool(
         &self,
         call: &ToolCall,
-    ) -> BufferedRealToolExecution {
-        let (progress_tx, mut progress_rx) = mpsc::unbounded_channel();
+        slot: usize,
+        progress: mpsc::Sender<(usize, String)>,
+    ) -> RealToolExecution {
+        let (sender, mut receiver) = mpsc::unbounded_channel();
         let requested_name = if call.kind == deepseek_anchor::BASH_EXECUTION_KIND {
             crate::tools::DSH_BASH_EXECUTION_ALIAS
         } else {
             &call.function.name
         };
-        let result = self
-            .tools
-            .call_with_progress(requested_name, &call.function.arguments, progress_tx)
-            .await;
-        let mut progress = Vec::new();
-        while let Ok(message) = progress_rx.try_recv() {
-            progress.push(message);
+        let future =
+            self.tools
+                .call_with_progress(requested_name, &call.function.arguments, sender);
+        tokio::pin!(future);
+        loop {
+            tokio::select! {
+                result = &mut future => {
+                    while let Ok(message) = receiver.try_recv() {
+                        if progress.send((slot, message)).await.is_err() { break; }
+                    }
+                    return tool_result(result);
+                }
+                Some(message) = receiver.recv() => {
+                    if progress.send((slot, message)).await.is_err() {
+                        return tool_result(Err(anyhow::anyhow!("concurrent tool receiver closed")));
+                    }
+                }
+            }
         }
-        BufferedRealToolExecution {
-            execution: tool_result(result),
-            progress,
-        }
-    }
-
-    /// 【Agent】【并发工具】按调用顺序提交暂存结果。
-    ///
-    /// 参数:
-    /// - `turn_id`: 当前持久化轮次标识
-    /// - `call`: 工具调用
-    /// - `buffered`: 暂存的进度与结果
-    /// - `on_event`: Agent 事件回调
-    /// - `perf`: 当前轮次性能标记器
-    ///
-    /// 返回:
-    /// - 已发出事件并持久化报告的执行结果
-    pub(super) fn finish_buffered_real_tool<F>(
-        &self,
-        turn_id: &str,
-        call: &ToolCall,
-        buffered: BufferedRealToolExecution,
-        on_event: &mut F,
-        perf: &mut PerfTrace,
-    ) -> Result<RealToolExecution>
-    where
-        F: FnMut(AgentEvent) -> Result<()>,
-    {
-        for message in buffered.progress {
-            on_event(AgentEvent::ToolProgress {
-                name: call.function.name.clone(),
-                message,
-            })?;
-        }
-        self.finish_real_tool_execution(turn_id, call, buffered.execution, on_event, perf)
     }
 
     /// 发出工具结果事件并保存可复用报告。
-    fn finish_real_tool_execution<F>(
+    pub(super) fn finish_real_tool_execution<F>(
         &self,
         turn_id: &str,
         call: &ToolCall,
