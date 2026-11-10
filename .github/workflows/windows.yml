@@ -54,9 +54,6 @@ jobs:
       - name: Run native terminal graphics regressions
         run: cargo test --locked --manifest-path scripts/windows_graphics_regression/Cargo.toml -- --nocapture
 
-      - name: Run native sandbox regressions
-        run: cargo run --locked --manifest-path scripts/windows_sandbox_regression/Cargo.toml
-
       - name: Run web tests
         working-directory: web
         run: npm test
@@ -77,3 +74,14 @@ jobs:
           name: sai-windows-x86_64
           path: target/release/sai.exe
           if-no-files-found: error
+
+  sandbox:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Run native sandbox regressions
+        run: cargo run --locked --manifest-path scripts/windows_sandbox_regression/Cargo.toml

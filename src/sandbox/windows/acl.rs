@@ -228,6 +228,7 @@ fn update_exact(
 fn system_directory(path: &Path) -> bool {
     let value = path
         .to_string_lossy()
+        .trim_start_matches(r"\\?\")
         .trim_end_matches('\\')
         .to_ascii_lowercase();
     ["SystemRoot", "ProgramFiles", "ProgramFiles(x86)"]
