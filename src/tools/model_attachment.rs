@@ -74,7 +74,6 @@ pub(crate) fn attachment_message(attachments: &[ToolModelAttachment]) -> Option<
 ///
 /// 返回:
 /// - 首段文本带附件标记时为 true
-#[cfg(test)]
 pub(crate) fn is_attachment_message(message: &ChatMessage) -> bool {
     use crate::llm::{ChatContent, ChatContentPart};
     let Some(ChatContent::Parts(parts)) = message.content.as_ref() else {
