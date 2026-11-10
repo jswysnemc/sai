@@ -16,6 +16,7 @@ mod background_wait_tests;
 mod cancellation_tests;
 mod exit_status;
 mod goal_completions;
+mod interactive;
 mod process;
 mod process_lifecycle;
 mod progress;

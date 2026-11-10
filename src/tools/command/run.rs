@@ -31,6 +31,12 @@ pub(crate) fn register(
     allow_command_execution: bool,
     runtime_owner: Option<BackgroundRuntimeOwner>,
 ) {
+    super::interactive::register(
+        registry,
+        config,
+        runtime_owner.clone(),
+        allow_command_execution,
+    );
     let shell = config.tools.command_shell.clone();
     let config = config.clone();
     let paths = paths.clone();
@@ -50,6 +56,8 @@ pub(crate) fn register(
                         "完整命令或 PowerShell 脚本。执行器已选择 Shell；不要再次启动 pwsh、powershell 或 cmd。"
                     )
                 },
+                "tty":{"type":"boolean","description":"Allocate a persistent PTY. Use write_stdin with the returned session_id for interactive input or output. Defaults to false."},
+                "yield_time_ms":{"type":"integer","minimum":0,"maximum":60000,"description":"With tty=true, wait up to this many milliseconds before returning. Default 1000."},
                 "timeout_seconds":{
                     "type":"integer",
                     "minimum":0,
@@ -181,6 +189,9 @@ async fn run_command(
         .and_then(Value::as_str)
         .map(str::to_string)
         .unwrap_or(shell);
+    if args["tty"].as_bool().unwrap_or(false) {
+        return super::interactive::start(&args, &shell, runtime_owner.as_ref()).await;
+    }
     // rtk 输出过滤：白名单命令改写为 rtk 代理，压缩进入上下文的命令输出
     let rewritten = super::rtk_filter::rewrite_command(
         &command,

@@ -81,6 +81,9 @@ fn render_body(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -> Stri
     {
         return rendered;
     }
+    if let Some(rendered) = super::interactive::render(view, mode) {
+        return rendered;
+    }
     if let Some(rendered) = super::background::render(view, mode, frame) {
         return rendered;
     }

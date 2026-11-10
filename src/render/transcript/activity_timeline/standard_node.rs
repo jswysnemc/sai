@@ -53,7 +53,14 @@ pub(super) fn render_cell(cell: &HistoryCell, width: usize, open: bool) -> Optio
                     }
                     HistoryCell::Tool(ToolCell::Invocation(view)) => {
                         let health = super::appearance::health(cell);
-                        let action = if super::node::awaiting_permission(cell) {
+                        let interactive_running = view.outcome.as_ref().is_some_and(|outcome| {
+                            serde_json::from_str::<serde_json::Value>(&outcome.output).is_ok_and(
+                                |value| value["mode"] == "interactive" && value["running"] == true,
+                            )
+                        });
+                        let action = if interactive_running {
+                            t("Running interactively", "交互命令运行中").to_string()
+                        } else if super::node::awaiting_permission(cell) {
                             "Awaiting approval".to_string()
                         } else if health == ToolHealth::Err {
                             view.outcome

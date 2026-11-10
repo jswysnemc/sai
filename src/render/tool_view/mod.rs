@@ -14,6 +14,7 @@ mod formatter;
 mod goal;
 mod image;
 mod interaction_target;
+mod interactive;
 mod loading;
 mod mcp_manager;
 mod model;
