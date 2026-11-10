@@ -84,7 +84,7 @@ pub(crate) fn resolve_shell(configured: &str) -> Result<PathBuf> {
         for root in std::env::split_paths(&path).filter(|path| path.is_absolute()) {
             for file in [root.join(candidate), root.join(format!("{candidate}.exe"))] {
                 if file.is_file() {
-                    return std::fs::canonicalize(file).context("resolve sandbox shell");
+                    return Ok(file);
                 }
             }
         }

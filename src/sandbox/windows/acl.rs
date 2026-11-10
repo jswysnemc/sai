@@ -66,7 +66,7 @@ impl Grants {
         protected: &[PathBuf],
     ) -> Result<()> {
         use std::os::windows::fs::MetadataExt;
-        if hidden.iter().any(|blocked| path.starts_with(blocked)) {
+        if hidden.iter().any(|blocked| under(path, blocked)) {
             return Ok(());
         }
         let metadata = std::fs::symlink_metadata(path)?;
@@ -75,13 +75,13 @@ impl Grants {
             "sandbox grant path is a reparse point: {}",
             path.display()
         );
-        if protected.iter().any(|readonly| path.starts_with(readonly)) {
+        if protected.iter().any(|readonly| under(path, readonly)) {
             rights &= READ;
         }
         let split = hidden
             .iter()
             .chain(protected)
-            .any(|blocked| blocked != path && blocked.starts_with(path));
+            .any(|blocked| !same_path(blocked, path) && under(blocked, path));
         if split {
             rights &= !DELETE;
         }
@@ -230,4 +230,25 @@ fn system_directory(path: &Path) -> bool {
                 .to_ascii_lowercase();
             value == root || value.starts_with(&format!("{root}\\"))
         })
+}
+
+/// 【Windows沙箱】【路径归一】按 Windows 大小写规则比较授权范围；参数为路径，返回统一文本。
+fn normalized(path: &Path) -> String {
+    path.to_string_lossy()
+        .trim_start_matches(r"\\?\")
+        .trim_end_matches(['\\', '/'])
+        .replace('/', "\\")
+        .to_lowercase()
+}
+
+/// 【Windows沙箱】【范围比较】按目录分隔符判断祖先，避免大小写与前缀误判；参数为路径及根，返回包含关系。
+fn under(path: &Path, root: &Path) -> bool {
+    let path = normalized(path);
+    let root = normalized(root);
+    path == root || path.starts_with(&format!("{root}\\"))
+}
+
+/// 【Windows沙箱】【路径相等】比较规范化路径；参数为两条路径，返回是否相同。
+fn same_path(first: &Path, second: &Path) -> bool {
+    normalized(first) == normalized(second)
 }

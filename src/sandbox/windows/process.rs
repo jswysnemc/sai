@@ -119,24 +119,28 @@ pub(super) fn run(
     startup.StartupInfo.hStdOutput = inherited[1];
     startup.StartupInfo.hStdError = inherited[2];
     startup.lpAttributeList = attributes.ptr();
-    let application = wide(&shell.to_string_lossy());
+    let shell_text = shell.to_string_lossy();
+    let shell_text = shell_text.strip_prefix(r"\\?\").unwrap_or(&shell_text);
+    let application = wide(shell_text);
     let command_line = if crate::platform::shell_selection::shell_flavor(shell.as_os_str())
         == crate::platform::shell_selection::ShellFlavor::Cmd
     {
         format!(
             "{} /D /S /C \"{}\"",
-            quote(&shell.to_string_lossy()),
+            quote(shell_text),
             args.last().context("cmd script missing")?.to_string_lossy()
         )
     } else {
-        std::iter::once(shell.to_string_lossy().into_owned())
+        std::iter::once(shell_text.to_string())
             .chain(args.iter().map(|arg| arg.to_string_lossy().into_owned()))
             .map(|arg| quote(&arg))
             .collect::<Vec<_>>()
             .join(" ")
     };
     let mut command = wide(&command_line);
-    let cwd = wide(&cwd.to_string_lossy());
+    let cwd_text = cwd.to_string_lossy();
+    let cwd_text = cwd_text.strip_prefix(r"\\?\").unwrap_or(&cwd_text);
+    let cwd = wide(cwd_text);
     let mut info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
     anyhow::ensure!(
         unsafe {
