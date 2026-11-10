@@ -13,6 +13,8 @@ use tokio::sync::oneshot;
 mod lifecycle;
 mod messaging;
 mod persistence;
+mod response_reset;
+pub(crate) use response_reset::rewind_response;
 mod queries;
 mod record_access;
 mod timeline_queries;

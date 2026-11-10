@@ -207,14 +207,14 @@ export function QueuedMessageRow(props: QueuedMessageRowProps) {
               onClick={() => runId && void perform("insert", () => props.onInsertAt(runId, props.run.insertAt === "request" ? "turn" : "request")).catch(() => undefined)}
               disabled={!runId || busy !== null}
               aria-label={props.run.insertAt === "request"
-                ? t("Insert at next model request; click to wait for the current turn", "下次模型请求时插入；点击改为等本轮结束")
-                : t("Wait for the current turn; click to insert at the next model request", "等本轮结束后插入；点击改为下次请求时插入")}
+                ? t("Send at the next tool gap; click to wait until the task is complete", "下一次工具间隙发送；点击改为任务完成后发送")
+                : t("Wait until the task is complete; click to send at the next tool gap", "任务完成后发送；点击改为下一次工具间隙发送")}
               title={props.run.insertAt === "request"
-                ? t("Next request", "下次请求")
-                : t("After this turn", "本轮之后")}
+                ? t("Send at the next tool gap", "下一次工具间隙发送")
+                : t("After task completion", "任务完成后发送")}
             >
               {busy === "insert" ? <Loader2 size={14} className="queued-busy-spin" /> : <Hourglass size={14} />}
-              <span>{props.run.insertAt === "request" ? t("Request", "请求") : t("Turn", "轮次")}</span>
+              <span>{props.run.insertAt === "request" ? t("Send now", "立即发送") : t("After task", "任务完成后")}</span>
             </Button>
             <Button
               className="queued-message-promote"
@@ -224,7 +224,7 @@ export function QueuedMessageRow(props: QueuedMessageRowProps) {
               title={t("Move to the front and insert at the next model request", "移到队首，下次模型请求时插入")}
             >
               {busy === "move" ? <Loader2 size={14} className="queued-busy-spin" /> : <ArrowUpToLine size={14} />}
-              <span>{t("Next request", "下次请求")}</span>
+              <span>{t("Send at the next tool gap", "下一次工具间隙发送")}</span>
             </Button>
             <Button
               className="queued-message-icon-action"

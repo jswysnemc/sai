@@ -384,7 +384,22 @@ impl RunManager {
             }
             let queued = {
                 let mut queues = self.queued.lock().await;
-                queues.get_mut(key).and_then(VecDeque::pop_front)
+                queues.get_mut(key).and_then(|queue| {
+                    let first = queue.front()?;
+                    let state = crate::state::StateStore::for_workspace_session(
+                        &self.paths,
+                        std::path::Path::new(&first.workspace.path),
+                        &first.request.session_id,
+                    )
+                    .ok()?;
+                    let goal_status = state.goal().ok()?.map(|goal| goal.status);
+                    // 1. 【消息队列】【目标边界】延后消息不抢占目标续轮，立即消息可越过等待项
+                    let index = queue.iter().position(|item| {
+                        item.request.kind != RunKind::Conversation
+                            || item.request.insert_at.ready_when_idle(goal_status)
+                    })?;
+                    queue.remove(index)
+                })
             };
             let Some(mut queued) = queued else {
                 return;

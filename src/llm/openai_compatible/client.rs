@@ -252,6 +252,7 @@ impl OpenAiCompatibleClient {
         .send()
         .await?;
         let mut status = response.status();
+        let mut retry_after = crate::llm::http_error::retry_header(response.headers());
         if let Some(debug) = debug.as_ref() {
             let _ = debug.write_response_headers(status.as_u16(), response.headers());
         }
@@ -284,6 +285,7 @@ impl OpenAiCompatibleClient {
                 .send()
                 .await?;
                 status = response.status();
+                retry_after = crate::llm::http_error::retry_header(response.headers());
                 if let Some(debug) = retry_debug.as_ref() {
                     let _ = debug.write_response_headers(status.as_u16(), response.headers());
                 }
@@ -292,20 +294,24 @@ impl OpenAiCompatibleClient {
                     if let Some(debug) = retry_debug.as_ref() {
                         let _ = debug.finish_error(status.as_u16(), &retry_body);
                     }
-                    bail!(
-                        "{} ({status}): {retry_body}",
-                        t("chat completions stream request failed", "聊天流式请求失败",)
-                    );
+                    return Err(crate::llm::http_error::ProviderHttpError {
+                        status: status.as_u16(),
+                        retry_after,
+                        message: retry_body,
+                    }
+                    .into());
                 }
                 debug = retry_debug;
             } else {
                 if let Some(debug) = debug.as_ref() {
                     let _ = debug.finish_error(status.as_u16(), &body);
                 }
-                bail!(
-                    "{} ({status}): {body}",
-                    t("chat completions stream request failed", "聊天流式请求失败",)
-                );
+                return Err(crate::llm::http_error::ProviderHttpError {
+                    status: status.as_u16(),
+                    retry_after,
+                    message: body,
+                }
+                .into());
             }
         }
 
@@ -366,7 +372,8 @@ impl OpenAiCompatibleClient {
                 &mut tool_calls,
                 &mut finish_reason,
                 &mut on_event,
-            )?.unwrap_or(false);
+            )?
+            .unwrap_or(false);
         }
         // 部分 OpenAI 兼容上游（含 OpenCode）正常收尾时只给 usage，
         // 既不发 [DONE] 也不带 finish_reason。有用量即可视为完整结束。
@@ -375,13 +382,7 @@ impl OpenAiCompatibleClient {
                 let _ =
                     debug.finish_error(0, "stream ended without [DONE], finish_reason or usage");
             }
-            bail!(
-                "{}",
-                t(
-                    "chat completions stream ended before the upstream signalled completion",
-                    "聊天流式响应在上游给出结束标记前中断",
-                )
-            );
+            return Err(crate::llm::http_error::IncompleteStream("chat completions".into()).into());
         }
         let result = finalize_stream_result(content, reasoning, usage, tool_calls.finish())?;
         if let Some(debug) = debug.as_ref() {
@@ -467,6 +468,7 @@ impl OpenAiCompatibleClient {
             .send()
             .await?;
         let status = response.status();
+        let retry_after = crate::llm::http_error::retry_header(response.headers());
         if let Some(debug) = debug.as_ref() {
             let _ = debug.write_response_headers(status.as_u16(), response.headers());
         }
@@ -478,10 +480,12 @@ impl OpenAiCompatibleClient {
             if let Some(debug) = debug.as_ref() {
                 let _ = debug.finish_error(status.as_u16(), &body);
             }
-            bail!(
-                "{} ({status}): {body}",
-                t("responses stream request failed", "Responses 流式请求失败")
-            );
+            return Err(crate::llm::http_error::ProviderHttpError {
+                status: status.as_u16(),
+                retry_after,
+                message: body,
+            }
+            .into());
         }
 
         let mut buffer = Utf8LineBuffer::default();

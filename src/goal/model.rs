@@ -103,4 +103,10 @@ pub(crate) struct Goal {
     /// Agent / 系统产生的按轮更新详情，旧文件缺失时按空列表处理。
     #[serde(default)]
     pub updates: Vec<GoalUpdateEntry>,
+    /// 连续无活动的自动续轮次数，用户恢复或实际进展时归零
+    #[serde(default)]
+    pub consecutive_empty_turns: u32,
+    /// 各运行来源已累计的 token 水位，重放检查点时避免重复收费
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub usage_sources: std::collections::HashMap<String, u64>,
 }

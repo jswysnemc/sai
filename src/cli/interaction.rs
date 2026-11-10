@@ -18,6 +18,23 @@ pub(super) fn handle_agent_event(
     event: AgentEvent,
 ) -> Result<()> {
     match event {
+        AgentEvent::ResponseReset {
+            content_chars,
+            reasoning_chars,
+            ..
+        } => {
+            if content_chars + reasoning_chars > 0 {
+                renderer.prepare_for_external_output()?;
+                println!(
+                    "{}",
+                    crate::i18n::text(
+                        "Response interrupted; regenerating the incomplete response.",
+                        "响应中断，正在重新生成未完成的回复。"
+                    )
+                );
+            }
+            Ok(())
+        }
         AgentEvent::Chunk(chunk) => renderer.write_chunk(chunk),
         AgentEvent::InterMessage(message) => {
             renderer.prepare_for_external_output()?;

@@ -34,6 +34,17 @@ impl SubagentRunner {
         let mut round = 0;
         loop {
             round += 1;
+            if let Some(goal) = self
+                .goal_accounting
+                .as_ref()
+                .map(|accounting| accounting.current_goal())
+                .transpose()?
+                .flatten()
+                .filter(|goal| !goal.status.is_active())
+            {
+                messages.push(ChatMessage::plain("user", crate::goal::stop_prompt(&goal)));
+                return self.finalize_without_tools(messages, round, stats).await;
+            }
             // 0. 步间注入排队的追加消息（不打断进行中的工具调用）
             self.inject_queued_messages(messages);
             // 1. 时限临近时注入软提醒；工具不受限，由子代理自行收敛
@@ -225,6 +236,25 @@ impl SubagentRunner {
         tool_visibility: &mut ToolVisibility,
         excluded: &[&str],
     ) -> (ToolOutput, bool, bool) {
+        if let Some(accounting) = &self.goal_accounting {
+            match accounting.current_goal() {
+                Ok(Some(goal)) if !goal.status.is_active() => {
+                    return (
+                        ToolOutput::text("tool error: parent goal execution stopped"),
+                        false,
+                        true,
+                    )
+                }
+                Err(error) => {
+                    return (
+                        ToolOutput::text(format!("tool error: {error:#}")),
+                        false,
+                        true,
+                    )
+                }
+                _ => {}
+            }
+        }
         if excluded.iter().any(|name| *name == call.function.name) {
             return (
                 ToolOutput::text(format!(

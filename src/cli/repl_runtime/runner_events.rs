@@ -75,6 +75,15 @@ impl ReplRuntime {
             self.arm_live_ticker();
         }
         match agent_event {
+            AgentEvent::ResponseReset {
+                content_chars,
+                reasoning_chars,
+                ..
+            } => {
+                self.transcript
+                    .rewind_response(*content_chars, *reasoning_chars);
+                self.sync_transcript(true)
+            }
             AgentEvent::Chunk(chunk) => {
                 self.transcript.push_chunk(chunk);
                 // 流式文本按固定节拍冲刷，避免长回复每个分片全量重排 markdown

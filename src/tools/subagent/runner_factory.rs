@@ -113,7 +113,20 @@ pub(super) fn build_subagent_runner(
                 )
                 .collect()
         });
+    let goal_accounting = subagent_state::subagent_snapshot(subagent_id)?
+        .goal_id
+        .map(|id| {
+            crate::goal::GoalAccounting::new(
+                crate::goal::GoalStore::new(
+                    std::path::Path::new(&context.owner_key).join("goal.json"),
+                ),
+                format!("subagent:{subagent_id}"),
+                Some(id),
+            )
+        })
+        .transpose()?;
     Ok(SubagentRunner::new(client, &system_prompt, tools, progress)
+        .with_goal_accounting(goal_accounting)
         .progressive_loading(
             profile.deferred_tools.clone(),
             context.config.clone(),

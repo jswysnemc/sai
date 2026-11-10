@@ -63,70 +63,67 @@ impl Agent {
         let mut saw_content = false;
         let mut saw_tool_progress = false;
         perf.mark(&format!("round {round} model request start"));
-        // 输出开始前允许瞬时断连重试；开始输出后重试会复制正文，因此立即返回错误
-        let emitted = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        // 重试策略来自配置：次数、首拍间隔与间隔方式都可在设置的运行时页调整
-        let retry = &self.config.retry;
-        let max_attempts = retry.clamped_max_attempts();
-        let initial_delay = retry.clamped_initial_delay();
-        let fixed_backoff = retry.is_fixed_backoff();
-        let mut attempt = 0u32;
-        let result = loop {
-            attempt += 1;
-            let _http_debug_request = crate::llm::HttpDebugRequestContextGuard::new(turn_id, round);
-            let emitted_flag = std::sync::Arc::clone(&emitted);
-            let request_result = self
-                .client
-                .chat_stream_events(messages.clone(), definitions.clone(), |event| match event {
-                    ChatStreamEvent::Chunk(chunk) => {
-                        emitted_flag.store(true, std::sync::atomic::Ordering::SeqCst);
-                        match chunk.kind {
-                            ChatStreamKind::Reasoning if !saw_reasoning => {
-                                saw_reasoning = true;
-                                perf.mark(&format!("round {round} first reasoning chunk"));
+        let _http_debug_request = crate::llm::HttpDebugRequestContextGuard::new(turn_id, round);
+        let response =
+            self.client
+                .chat_stream_events_retry(messages, definitions, &self.config.retry, |event| {
+                    match event {
+                        ChatStreamEvent::Chunk(chunk) => {
+                            match chunk.kind {
+                                ChatStreamKind::Reasoning if !saw_reasoning => {
+                                    saw_reasoning = true;
+                                    perf.mark(&format!("round {round} first reasoning chunk"));
+                                }
+                                ChatStreamKind::Content if !saw_content => {
+                                    saw_content = true;
+                                    perf.mark(&format!("round {round} first content chunk"));
+                                }
+                                _ => {}
                             }
-                            ChatStreamKind::Content if !saw_content => {
-                                saw_content = true;
-                                perf.mark(&format!("round {round} first content chunk"));
+                            on_event(AgentEvent::Chunk(chunk))
+                        }
+                        ChatStreamEvent::ToolCallProgress(progress) => {
+                            if !saw_tool_progress {
+                                saw_tool_progress = true;
+                                perf.mark(&format!("round {round} first tool args chunk"));
                             }
-                            _ => {}
+                            on_event(AgentEvent::ToolCallProgress(progress))
                         }
-                        on_event(AgentEvent::Chunk(chunk))
-                    }
-                    ChatStreamEvent::ToolCallProgress(progress) => {
-                        emitted_flag.store(true, std::sync::atomic::Ordering::SeqCst);
-                        if !saw_tool_progress {
-                            saw_tool_progress = true;
-                            perf.mark(&format!("round {round} first tool args chunk"));
-                        }
-                        on_event(AgentEvent::ToolCallProgress(progress))
+                        ChatStreamEvent::Reset {
+                            content_chars,
+                            reasoning_chars,
+                        } => on_event(AgentEvent::ResponseReset {
+                            content_chars,
+                            reasoning_chars,
+                            compaction: false,
+                        }),
+                        ChatStreamEvent::Reconnecting {
+                            attempt,
+                            max_attempts,
+                        } => on_event(AgentEvent::Reconnecting {
+                            attempt,
+                            max_attempts,
+                        }),
                     }
                 })
                 .await;
-            match request_result {
-                Ok(result) => break result,
-                Err(error) => {
-                    let can_retry = !emitted.load(std::sync::atomic::Ordering::SeqCst)
-                        && crate::llm::is_transient_transport_error(&error)
-                        && attempt < max_attempts;
-                    if !can_retry {
-                        return Err(error);
+        let result = match response {
+            Err(error) => {
+                if let Some(empty) = error.downcast_ref::<crate::llm::EmptyModelResponse>() {
+                    if self
+                        .goal_accounting
+                        .as_ref()
+                        .map(|accounting| accounting.current_goal())
+                        .transpose()?
+                        .flatten()
+                        .is_some_and(|goal| goal.status.is_active())
+                    {
+                        return Ok(empty.0.clone());
                     }
-                    // 先通知 UI 正在重连，再退避等待；否则界面会像卡住一样没有反馈
-                    on_event(AgentEvent::Reconnecting {
-                        attempt,
-                        max_attempts,
-                    })?;
-                    let delay_ms = if fixed_backoff {
-                        initial_delay.as_millis() as u64
-                    } else {
-                        // 指数退避：首拍为配置间隔，之后逐次翻倍，封顶 8 倍防溢出
-                        let shift = attempt.saturating_sub(1).min(3);
-                        (initial_delay.as_millis() as u64).saturating_mul(1u64 << shift)
-                    };
-                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
                 }
+                return Err(error);
             }
+            Ok(result) => result,
         };
         perf.mark(&format!("round {round} model request done"));
         Ok(result)

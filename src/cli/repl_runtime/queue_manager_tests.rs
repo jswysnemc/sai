@@ -79,7 +79,7 @@ fn undo_delete_restores_last_item_and_edit_is_not_undoable() {
     assert!(runtime.queue_panel.deleted.is_empty());
     runtime.enqueue_stream_draft(AgentMode::Yolo).unwrap();
     assert_eq!(runtime.lock_queue()[0].insert_at, QueueInsertAt::Request);
-    assert_eq!(runtime.queue_draft_timing, QueueInsertAt::Turn);
+    assert_eq!(runtime.queue_draft_timing, QueueInsertAt::Request);
 }
 
 /// 【队列测试】【附件恢复】删除恢复保留完整长文本附件，恢复栈上限二十条。

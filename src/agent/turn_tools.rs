@@ -40,6 +40,10 @@ impl Agent {
         let mut question_rounds = 0usize;
         let mut pending_gap_delivery = None;
         let mut turn_usage = None;
+        let mut goal_revision = self
+            .state
+            .goal()?
+            .map(|goal| (goal.id, goal.objective, goal.status));
         let hook_ctx = crate::hooks::HookContext {
             session_id: self.state.session_id().to_string(),
             workdir: crate::runtime_cwd::current_dir()
@@ -56,6 +60,32 @@ impl Agent {
         .await;
         loop {
             self.sync_codemode_session();
+            let current_goal = self.state.goal()?;
+            let current_revision = current_goal
+                .as_ref()
+                .map(|goal| (goal.id.clone(), goal.objective.clone(), goal.status));
+            if current_revision != goal_revision {
+                // 1. 【目标】【运行中编辑】显式目标变更在下一次工具间隙进入上下文
+                if let Some(goal) = current_goal {
+                    messages.push(ChatMessage::plain(
+                        "user",
+                        crate::goal::system_context(&goal),
+                    ));
+                }
+                goal_revision = current_revision;
+            }
+            if let Some(goal) = self.stopped_goal()? {
+                return self
+                    .finalize_stopped_goal(
+                        turn_id,
+                        &goal,
+                        messages,
+                        &mut turn_usage,
+                        on_event,
+                        perf,
+                    )
+                    .await;
+            }
             // 1. 模型请求开始前只消费一条就绪消息，避免合并多个完成回执
             if pending_gap_delivery.is_none() {
                 if let Some(candidate) = self
@@ -135,7 +165,7 @@ impl Agent {
             }))?;
             if result.tool_calls.is_empty() || !self.tools_enabled {
                 if let Some(candidate) = self
-                    .next_gap_message(inter_message_source, wait_for_external, true, on_event)
+                    .next_gap_message(inter_message_source, wait_for_external, false, on_event)
                     .await?
                 {
                     // 3. 已输出的助手消息属于同一持久化轮次，下一条消息在其后继续请求

@@ -49,6 +49,8 @@ export type RunErrorDetail = {
   detail: string;
 };
 
+import { resetResponse } from "./response-reset";
+
 export type LiveRunState = {
   /** 仅由历史补发重建；未经活动运行或新实时事件确认 */
   replayed?: boolean;
@@ -105,7 +107,7 @@ export const initialRunState: LiveRunState = {
   model: null,
   userInput: "",
   imageUrls: [],
-  insertAt: "turn",
+  insertAt: "request",
   content: "",
   reasoning: "",
   tools: [],
@@ -146,7 +148,7 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
       sessionId: action.sessionId,
       userInput: action.userInput,
       imageUrls: action.imageUrls ?? [],
-      insertAt: action.insertAt ?? "turn",
+      insertAt: action.insertAt ?? "request",
       model: action.model ?? null,
       status: "waiting_response",
       startedAtMs: Date.now(),
@@ -218,6 +220,8 @@ function reduceRunEvent(state: LiveRunState, event: WebEvent, locale: Locale): L
       const withClock = markFirstOutput(state, event.timestamp);
       return appendTextPart(closeActiveReasoning(withClock, event.timestamp), event.sequence, String(payload.text ?? ""));
     }
+    case "message.response.reset":
+      return resetResponse(state, Number(payload.content_chars ?? 0), Number(payload.reasoning_chars ?? 0), payload.compaction === true);
     case "message.reasoning.delta": {
       const withClock = markFirstOutput(state, event.timestamp);
       return appendReasoningPart(withClock, event.sequence, event.timestamp, String(payload.text ?? ""));

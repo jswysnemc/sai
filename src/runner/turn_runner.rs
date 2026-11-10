@@ -83,11 +83,20 @@ impl<'agent> TurnRunner<'agent> {
         {
             self.agent.resume_external_goal();
         }
+        let goal_enabled = input.mode.permission() != crate::agent::PermissionMode::Plan;
         let active_goal = self
             .agent
             .state()
             .goal()?
-            .filter(|goal| goal.status.is_active());
+            .filter(|goal| goal_enabled && goal.status.is_active());
+        let accounting = crate::goal::GoalAccounting::new(
+            crate::goal::GoalStore::new(self.agent.state().goal_file()),
+            format!("turn:{}", uuid::Uuid::new_v4()),
+            active_goal.as_ref().map(|goal| goal.id.clone()),
+        )?;
+        self.agent.goal_accounting = goal_enabled.then(|| accounting.clone());
+        let mut goal_guard = goal_enabled.then(|| crate::goal::GoalTurnGuard::new(accounting));
+        let mut had_activity = false;
         // 1. 【自动续聊】【消息投递】自动输入复用消息间隙的持久化、投递和确认边界
         let inter_message_source = if let Some(automatic) = &input.automatic_input {
             let Some(source) = super::automatic_source::AutomaticInputSource::new(
@@ -125,6 +134,15 @@ impl<'agent> TurnRunner<'agent> {
                     inter_message_source,
                     self.wait_for_external_events,
                     |event| {
+                        had_activity |= matches!(
+                            &event,
+                            crate::agent::AgentEvent::ToolCall { .. }
+                                | crate::agent::AgentEvent::ToolCallIdentified { .. }
+                                | crate::agent::AgentEvent::CompactionFinished {
+                                    applied: true,
+                                    ..
+                                }
+                        );
                         if matches!(&event, crate::agent::AgentEvent::Chunk(_)) {
                             let mut guard = first_output_cb.lock().unwrap();
                             if guard.is_none() {
@@ -141,19 +159,11 @@ impl<'agent> TurnRunner<'agent> {
             .map(|at| at.saturating_duration_since(started).as_millis() as u64)
             .unwrap_or(0);
         let duration_ms = first_output_at.unwrap_or(started).elapsed().as_millis() as u64;
-        let elapsed = started.elapsed().as_secs().max(1);
         let mut result = match result {
             Ok(result) => result,
             Err(error) => {
-                if let Some(goal) = active_goal {
-                    let _ = self
-                        .agent
-                        .state()
-                        .account_goal_progress(&goal.id, 0, elapsed);
-                    let _ = self
-                        .agent
-                        .state()
-                        .set_goal_status(crate::goal::GoalStatus::Blocked);
+                if let Some(guard) = &mut goal_guard {
+                    guard.finish(input.automatic_input.is_some(), had_activity, Some(&error))?;
                 }
                 return Err(error);
             }
@@ -166,16 +176,18 @@ impl<'agent> TurnRunner<'agent> {
             result.ttft_ms,
             result.usage.as_ref(),
         );
-        // 3. 只把本轮开始时已经活动的目标计入使用量
-        if let Some(goal) = active_goal {
-            let tokens = result
-                .usage
-                .as_ref()
-                .map(|usage| usage.total_tokens)
-                .unwrap_or_default();
-            self.agent
-                .state()
-                .account_goal_progress(&goal.id, tokens, elapsed)?;
+        // 3. 【目标】【运行收尾】内置模型逐请求核算，外部内核在完整轮次结束时核算
+        if self.agent.uses_external_engine() {
+            if let Some(accounting) = &self.agent.goal_accounting {
+                accounting.record(result.usage.as_ref())?;
+            }
+        }
+        if let Some(guard) = &mut goal_guard {
+            guard.finish(
+                input.automatic_input.is_some(),
+                had_activity || !result.content.trim().is_empty(),
+                None,
+            )?;
         }
         sink.on_runner_event(RunnerEvent::Completed(result.clone()))?;
         Ok(result)

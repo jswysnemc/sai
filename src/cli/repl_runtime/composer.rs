@@ -424,7 +424,7 @@ impl ReplRuntime {
         let mut item = QueuedSubmission::new(mode, text, clipboard);
         item.insert_at = self.queue_draft_timing;
         self.lock_queue().push_back(item);
-        self.queue_draft_timing = super::QueueInsertAt::Turn;
+        self.queue_draft_timing = super::QueueInsertAt::default();
         self.clamp_queue_panel();
         self.stream_draft = StreamComposerDraft {
             mode: Some(mode),
@@ -506,7 +506,7 @@ impl ReplRuntime {
         self.control_queue.clear();
         self.resume_submission_queue();
         self.queue_panel = Default::default();
-        self.queue_draft_timing = super::QueueInsertAt::Turn;
+        self.queue_draft_timing = super::QueueInsertAt::default();
         self.redraw_stream_composer()?;
         self.sync_transcript(false)?;
         Ok(count)

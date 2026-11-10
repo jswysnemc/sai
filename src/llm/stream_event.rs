@@ -2,6 +2,14 @@ use super::ChatStreamChunk;
 
 #[derive(Debug, Clone)]
 pub enum ChatStreamEvent {
+    Reset {
+        content_chars: usize,
+        reasoning_chars: usize,
+    },
+    Reconnecting {
+        attempt: u32,
+        max_attempts: u32,
+    },
     Chunk(ChatStreamChunk),
     ToolCallProgress(ToolCallStreamProgress),
 }

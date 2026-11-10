@@ -3,6 +3,7 @@ use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+mod runtime;
 
 static GOAL_FILE_LOCK: Mutex<()> = Mutex::new(());
 const MAX_GOAL_OBJECTIVE_CHARS: usize = 32_000;
@@ -53,7 +54,7 @@ impl GoalStore {
         validate_budget(token_budget)?;
         let _guard = goal_lock()?;
         if !replace_unfinished
-            && read_goal(&self.path)?.is_some_and(|goal| !goal.status.is_terminal())
+            && read_goal(&self.path)?.is_some_and(|goal| goal.status != GoalStatus::Complete)
         {
             bail!("an unfinished goal already exists; update or clear it before creating another")
         }
@@ -76,6 +77,8 @@ impl GoalStore {
                 status: Some(GoalStatus::Active.as_str().to_string()),
                 tokens_used: Some(0),
             }],
+            consecutive_empty_turns: 0,
+            usage_sources: Default::default(),
         };
         write_goal(&self.path, &goal)?;
         Ok(goal)
@@ -122,7 +125,7 @@ impl GoalStore {
                 goal.token_budget = token_budget;
             }
             if let Some(status) = status {
-                let next = if status == GoalStatus::Active
+                let next = if matches!(status, GoalStatus::Active | GoalStatus::Paused)
                     && goal
                         .token_budget
                         .is_some_and(|budget| goal.tokens_used >= budget)
@@ -140,6 +143,9 @@ impl GoalStore {
                     );
                 }
                 goal.status = next;
+                if next == GoalStatus::Active {
+                    goal.consecutive_empty_turns = 0;
+                }
             }
             if goal.status == GoalStatus::Active
                 && goal
@@ -179,7 +185,7 @@ impl GoalStore {
 
     pub(crate) fn set_status(&self, status: GoalStatus) -> Result<Goal> {
         self.update(|goal| {
-            let next = if status == GoalStatus::Active
+            let next = if matches!(status, GoalStatus::Active | GoalStatus::Paused)
                 && goal
                     .token_budget
                     .is_some_and(|budget| goal.tokens_used >= budget)
@@ -196,6 +202,9 @@ impl GoalStore {
                     &format!("Status -> {}", next.as_str()),
                     Utc::now().to_rfc3339(),
                 );
+            }
+            if next == GoalStatus::Active {
+                goal.consecutive_empty_turns = 0;
             }
             Ok(())
         })

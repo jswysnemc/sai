@@ -122,6 +122,7 @@ impl Agent {
         let external_wake_policy =
             external_wake_policy::ExternalWakePolicy::capture(paths, &state)?;
         Ok(Self {
+            goal_accounting: None,
             external_wake_policy,
             state,
             client,

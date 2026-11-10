@@ -38,6 +38,16 @@ pub(crate) async fn consume_progress(
 /// 返回:
 /// - 无
 fn dispatch_message(subagent_id: &str, message: &str) {
+    if let Some(payload) = message.strip_prefix("__subagent_reset__") {
+        if let Ok(value) = serde_json::from_str::<Value>(payload) {
+            subagent_state::rewind_response(
+                subagent_id,
+                value["content_chars"].as_u64().unwrap_or_default() as usize,
+                value["reasoning_chars"].as_u64().unwrap_or_default() as usize,
+            );
+        }
+        return;
+    }
     // 1. 结构化消息:工具调用开始/结束写入时间线并同步 step/phase
     if let Some(payload) = message.strip_prefix(TOOL_CALL_PREFIX) {
         if let Some((name, args)) = parse_tool_call(payload) {

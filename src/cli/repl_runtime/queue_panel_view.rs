@@ -39,8 +39,8 @@ pub(super) fn page_size() -> usize {
 /// 参数: timing 为消费时机；返回: 本地化标签。
 pub(super) fn timing_label(timing: QueueInsertAt) -> &'static str {
     match timing {
-        QueueInsertAt::Request => t("Steer", "次回插话"),
-        QueueInsertAt::Turn => t("Next turn", "下轮接力"),
+        QueueInsertAt::Request => t("Send now", "立即发送"),
+        QueueInsertAt::Turn => t("After task", "任务完成后"),
     }
 }
 
@@ -231,7 +231,7 @@ pub(super) fn render_at(
                 if short {
                     "s"
                 } else if streaming {
-                    t("s Steer now", "s 立即插话")
+                    t("s Send now", "s 立即发送")
                 } else {
                     t("s Send now", "s 立即发送")
                 },

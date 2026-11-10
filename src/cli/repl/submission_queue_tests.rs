@@ -48,12 +48,12 @@ fn reported_regression_failure_keeps_unsent_queue() {
     for (index, item) in items.into_iter().enumerate() {
         runtime.restore_queued_submission(index, item);
     }
-    let (_, active) = runtime.take_next_turn_submission().unwrap();
+    let (_, active) = runtime.take_next_turn_submission(None).unwrap();
     assert_eq!(active.id, ids[0]);
     notify_preserved_queue(&mut runtime).unwrap();
     assert_eq!(runtime.queue_len(), 2);
-    assert!(!runtime.has_ready_turn_submission());
-    assert!(runtime.take_next_turn_submission().is_none());
+    assert!(!runtime.has_ready_turn_submission(None));
+    assert!(runtime.take_next_turn_submission(None).is_none());
     runtime.resume_submission_queue();
     let pending = runtime.take_turn_interval_queue();
     assert_eq!(
@@ -100,7 +100,10 @@ fn restored_submission_keeps_position_and_all_attachments() {
     let id = item.id.clone();
     runtime.restore_queued_submission(1, item);
     runtime.restore_queued_submission(2, queued("later"));
-    let (position, item) = runtime.take_next_turn_submission().unwrap();
+    let (_, first) = runtime.take_next_turn_submission(None).unwrap();
+    let (position, item) = runtime.take_next_turn_submission(None).unwrap();
+    runtime.restore_queued_submission(0, first);
+    let position = position + 1;
     assert_eq!(position, 1);
     runtime.restore_queued_submission(position, item);
     let items = runtime.take_submission_queue();
@@ -111,10 +114,7 @@ fn restored_submission_keeps_position_and_all_attachments() {
     assert_eq!(items[1].clipboard.history_entry(&items[1].text), entry);
     let chat = items[1].clipboard.to_chat_input(&items[1].text);
     assert!(chat.message.contains(entry.attachments[0].content.trim()));
-    assert_eq!(
-        chat.image_urls,
-        ["data:image/png;base64,AAAA"]
-    );
+    assert_eq!(chat.image_urls, ["data:image/png;base64,AAAA"]);
     assert_eq!(items[2].text, "later");
 }
 
@@ -128,7 +128,7 @@ fn queued_control_command_does_not_overwrite_existing_draft() {
     runtime.stream_draft_mut().text = "unfinished draft".to_string();
     runtime.restore_queued_submission(0, queued("/model"));
     runtime.restore_queued_submission(1, queued("later"));
-    let (position, item) = runtime.take_next_turn_submission().unwrap();
+    let (position, item) = runtime.take_next_turn_submission(None).unwrap();
     restore_control_submission(&mut runtime, position, item).unwrap();
     assert_eq!(runtime.stream_draft().text, "unfinished draft");
     let items = runtime.take_submission_queue();
@@ -145,7 +145,7 @@ fn queued_control_command_returns_to_empty_draft() {
     let mut runtime = runtime();
     runtime.restore_queued_submission(0, queued("/model"));
     runtime.restore_queued_submission(1, queued("later"));
-    let (position, item) = runtime.take_next_turn_submission().unwrap();
+    let (position, item) = runtime.take_next_turn_submission(None).unwrap();
     restore_control_submission(&mut runtime, position, item).unwrap();
     assert_eq!(runtime.stream_draft().text, "/model");
     assert_eq!(runtime.stream_draft().cursor, 6);
@@ -162,7 +162,7 @@ async fn paused_queue_waits_for_a_user_submission() {
     let mut request = queued("next request");
     request.insert_at = QueueInsertAt::Request;
     runtime.restore_queued_submission(0, request);
-    assert!(!runtime.has_ready_turn_submission());
+    assert!(runtime.has_ready_turn_submission(None));
     runtime.restore_queued_submission(1, queued("next turn"));
     let source = runtime.inter_message_source();
     runtime.pause_submission_queue();
@@ -180,16 +180,16 @@ async fn paused_queue_waits_for_a_user_submission() {
         );
         runtime.resume_queue_for_submission(&submission);
         if automatic {
-            assert!(!runtime.has_ready_turn_submission());
-            assert!(runtime.take_next_turn_submission().is_none());
+            assert!(!runtime.has_ready_turn_submission(None));
+            assert!(runtime.take_next_turn_submission(None).is_none());
             assert!(source.peek().await.unwrap().is_none());
             assert_eq!(runtime.queue_len(), 2);
         } else {
-            assert!(runtime.has_ready_turn_submission());
+            assert!(runtime.has_ready_turn_submission(None));
             assert_eq!(source.peek().await.unwrap().unwrap().prompt, "next request");
             assert_eq!(
-                runtime.take_next_turn_submission().unwrap().1.text,
-                "next turn"
+                runtime.take_next_turn_submission(None).unwrap().1.text,
+                "next request"
             );
         }
     }
@@ -217,5 +217,5 @@ fn queue_panel_send_now_resumes_paused_submissions() {
         action,
         crate::cli::repl_runtime::QueuePanelIdleResult::SendNow(_)
     ));
-    assert!(runtime.has_ready_turn_submission());
+    assert!(runtime.has_ready_turn_submission(None));
 }

@@ -606,16 +606,7 @@ fn finalize_stream_result(
     } else {
         dsml_tool_calls
     };
-    if content.trim().is_empty() && tool_calls.is_empty() {
-        bail!(
-            "{}",
-            t(
-                "chat completions stream response was empty",
-                "聊天流式响应为空",
-            )
-        );
-    }
-    Ok(ChatResult {
+    let result = ChatResult {
         provider_content: None,
         content,
         reasoning: reasoning.filter(|text| !text.trim().is_empty()),
@@ -623,5 +614,9 @@ fn finalize_stream_result(
         tool_calls,
         duration_ms: 0,
         ttft_ms: 0,
-    })
+    };
+    if result.content.trim().is_empty() && result.tool_calls.is_empty() {
+        return Err(crate::llm::EmptyModelResponse(result).into());
+    }
+    Ok(result)
 }

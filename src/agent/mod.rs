@@ -21,6 +21,7 @@ mod external_events;
 mod external_tool_history;
 mod external_turn;
 mod external_wake_policy;
+mod goal_runtime;
 mod instruction_files;
 mod inter_message;
 mod jev_preselect_detail;

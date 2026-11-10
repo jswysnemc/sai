@@ -1,5 +1,5 @@
 use super::SubagentRunner;
-use crate::llm::{ChatMessage, ChatResult, ChatStreamChunk, ChatStreamKind, ToolDefinition};
+use crate::llm::{ChatMessage, ChatResult, ChatStreamEvent, ChatStreamKind, ToolDefinition};
 use anyhow::Result;
 
 impl SubagentRunner {
@@ -12,19 +12,42 @@ impl SubagentRunner {
         definitions: Vec<ToolDefinition>,
         round: usize,
     ) -> Result<ChatResult> {
-        self.tools
+        let retry = self
+            .progressive_context
+            .as_ref()
+            .map(|(config, _)| config.retry.clone())
+            .unwrap_or_default();
+        let result = self
+            .tools
             .plugin_events()
             .model_round(
                 serde_json::json!({"round":round,"kind":"subagent"}),
                 self.client
-                    .chat_stream(messages, definitions, |chunk: ChatStreamChunk| {
-                        match chunk.kind {
-                            ChatStreamKind::Reasoning => self.progress.reasoning(&chunk.text),
-                            ChatStreamKind::Content => self.progress.content(&chunk.text),
+                    .chat_stream_events_retry(messages, definitions, &retry, |event| {
+                        match event {
+                            ChatStreamEvent::Chunk(chunk) => match chunk.kind {
+                                ChatStreamKind::Reasoning => self.progress.reasoning(&chunk.text),
+                                ChatStreamKind::Content => self.progress.content(&chunk.text),
+                            },
+                            ChatStreamEvent::Reset {
+                                content_chars,
+                                reasoning_chars,
+                            } => self.progress.reset_response(content_chars, reasoning_chars),
+                            ChatStreamEvent::Reconnecting {
+                                attempt,
+                                max_attempts,
+                            } => self
+                                .progress
+                                .phase(format!("Reconnecting... {attempt}/{max_attempts}")),
+                            ChatStreamEvent::ToolCallProgress(_) => {}
                         }
                         Ok(())
                     }),
             )
-            .await
+            .await?;
+        if let Some(accounting) = &self.goal_accounting {
+            accounting.record(result.usage.as_ref())?;
+        }
+        Ok(result)
     }
 }

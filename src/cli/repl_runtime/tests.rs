@@ -244,7 +244,7 @@ fn enqueue_stream_draft_queues_and_clears_input() {
     assert_eq!(queued.len(), 1);
     assert_eq!(queued[0].text, "next task");
     assert_eq!(queued[0].mode, crate::agent::AgentMode::Audited);
-    assert_eq!(queued[0].insert_at, super::QueueInsertAt::Turn);
+    assert_eq!(queued[0].insert_at, super::QueueInsertAt::Request);
 }
 
 /// 【TUI】【控制队列】验证运行期间输入的斜杠命令不进消息队列。
@@ -516,7 +516,7 @@ fn queue_panel_send_now_promotes_the_selected_item() {
         ["three", "one", "two"]
     );
     assert_eq!(queued[0].insert_at, super::QueueInsertAt::Request);
-    assert_eq!(queued[1].insert_at, super::QueueInsertAt::Turn);
+    assert_eq!(queued[1].insert_at, super::QueueInsertAt::Request);
 }
 
 /// 【TUI】【队列管理】验证空闲态立即发送取出该项，其余仍留在队列。
@@ -563,35 +563,27 @@ fn queue_panel_tab_toggles_insert_point() {
         .unwrap();
 
     let queued = runtime.take_submission_queue();
-    assert_eq!(queued[0].insert_at, super::QueueInsertAt::Request);
+    assert_eq!(queued[0].insert_at, super::QueueInsertAt::Turn);
 }
 
 /// 【TUI】【队列管理】轮次排空留下请求间隔项。
 #[test]
-fn take_turn_interval_queue_leaves_request_items() {
-    use crossterm::event::{KeyCode, KeyModifiers};
-
+fn idle_queue_delivers_immediate_messages_after_task_waiters() {
     let mut runtime = ReplRuntime::new(5_000, options());
-    enqueue_messages(&mut runtime, &["turn", "request"]);
-    runtime
-        .handle_queue_panel_key(KeyCode::Up, KeyModifiers::CONTROL)
+    enqueue_messages(&mut runtime, &["after-task", "immediate"]);
+    runtime.lock_queue()[0].insert_at = super::QueueInsertAt::Turn;
+    let (_, first) = runtime
+        .take_next_turn_submission(Some(crate::goal::GoalStatus::Active))
         .unwrap();
-    runtime
-        .handle_queue_panel_key(KeyCode::Tab, KeyModifiers::NONE)
+    assert_eq!(first.text, "immediate");
+    assert!(!runtime.has_ready_turn_submission(Some(crate::goal::GoalStatus::Active)));
+    assert!(runtime
+        .take_next_turn_submission(Some(crate::goal::GoalStatus::Blocked))
+        .is_none());
+    let (_, later) = runtime
+        .take_next_turn_submission(Some(crate::goal::GoalStatus::Complete))
         .unwrap();
-
-    let taken = runtime.take_turn_interval_queue();
-    assert_eq!(
-        taken
-            .iter()
-            .map(|item| item.text.as_str())
-            .collect::<Vec<_>>(),
-        ["turn"]
-    );
-    let remaining = runtime.take_submission_queue();
-    assert_eq!(remaining.len(), 1);
-    assert_eq!(remaining[0].text, "request");
-    assert_eq!(remaining[0].insert_at, super::QueueInsertAt::Request);
+    assert_eq!(later.text, "after-task");
 }
 
 #[test]

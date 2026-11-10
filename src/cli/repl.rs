@@ -125,7 +125,7 @@ pub(super) async fn run_repl(
         }
         runtime.set_mention_skills(super::repl_mentions::load_mention_skills(&config, paths));
         // 2. 优先执行本终端运行期间排队的消息
-        if runtime.has_ready_turn_submission() {
+        if runtime.has_ready_turn_submission(agent.state().goal()?.map(|goal| goal.status)) {
             external_events.cancel();
             external_events.resume();
             let owner_key = state.state_dir().display().to_string();
@@ -215,7 +215,9 @@ pub(super) async fn run_repl(
                     if let Some(draft) = outcome.leftover_draft {
                         prefill = Some(draft);
                     }
-                    if runtime.has_ready_turn_submission() {
+                    if runtime
+                        .has_ready_turn_submission(agent.state().goal()?.map(|goal| goal.status))
+                    {
                         external_events.resume();
                     }
                     let exit = drain_submission_queue(

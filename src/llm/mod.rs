@@ -1,6 +1,12 @@
 mod assistant_content;
+mod empty_response;
+pub(crate) use empty_response::EmptyModelResponse;
 mod http_debug;
+pub(crate) mod http_error;
 mod openai_compatible;
+mod request_retry;
+#[cfg(test)]
+mod request_retry_tests;
 mod stream_event;
 mod thinking;
 mod tool_argument_stats;
@@ -19,6 +25,20 @@ pub(crate) use transport_retry::{
 };
 
 use serde::{Deserialize, Serialize};
+
+/// 【模型恢复】【文本撤销】按 Unicode 字符删除尾部，返回尚未删除的字符数
+/// 参数：文本及删除数量；返回超过文本长度的剩余数量
+pub(crate) fn remove_text_suffix(text: &mut String, count: usize) -> usize {
+    let length = text.chars().count();
+    let keep = length.saturating_sub(count);
+    let byte = text
+        .char_indices()
+        .nth(keep)
+        .map(|(offset, _)| offset)
+        .unwrap_or(text.len());
+    text.truncate(byte);
+    count.saturating_sub(length)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {

@@ -562,7 +562,7 @@ impl TranscriptStore {
     }
 
     /// 把活动指针拨回仍在运行的最后一张工具卡。
-    fn refresh_active_tool_index(&mut self) {
+    pub(super) fn refresh_active_tool_index(&mut self) {
         self.active_tool_index = self
             .cells
             .iter()

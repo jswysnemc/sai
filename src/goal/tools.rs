@@ -16,7 +16,7 @@ pub(crate) fn register(registry: &mut ToolRegistry, goal_file: PathBuf) {
     let create_store = GoalStore::new(goal_file.clone());
     registry.register(ToolSpec::new(
         "create_goal",
-        "Create a persistent active goal only when the user explicitly asks for ongoing autonomous work. Fails while an unfinished goal exists. Set token_budget only when the user provided a budget.",
+        "Create a goal only when explicitly requested by the user or system/developer instructions; do not infer goals from ordinary tasks. Set token_budget only when explicitly requested. Fails if an unfinished goal exists; use update_goal only for status.",
         json!({
             "type": "object",
             "properties": {
@@ -44,25 +44,26 @@ pub(crate) fn register(registry: &mut ToolRegistry, goal_file: PathBuf) {
     ));
 
     let update_store = GoalStore::new(goal_file);
-    registry.register(ToolSpec::new(
-        "update_goal",
-        "Record goal progress or set terminal status. Use note for each meaningful agent turn update. Set status to complete only after the full objective is verified, or blocked only after the same blocking condition repeats for at least three consecutive goal turns and progress is impossible without user input or an external change.",
-        json!({
-            "type": "object",
-            "properties": {
-                "status": {"type": "string", "enum": ["complete", "blocked"]},
-                "note": {
-                    "type": "string",
-                    "description": "Short progress summary for this goal turn; persisted in goal history."
-                }
+    registry.register(
+        ToolSpec::new(
+            "update_goal",
+            super::instructions::UPDATE_GOAL,
+            json!({
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string", "enum": ["complete", "blocked", "paused"]}
+
+                },
+                "required": ["status"],
+                "additionalProperties": false
+            }),
+            move |args| {
+                let store = update_store.clone();
+                async move { update_goal(&store, &args) }
             },
-            "additionalProperties": false
-        }),
-        move |args| {
-            let store = update_store.clone();
-            async move { update_goal(&store, &args) }
-        },
-    ).writes());
+        )
+        .writes(),
+    );
 }
 
 /// 创建模型请求的持续目标。
@@ -77,7 +78,7 @@ fn create_goal(store: &GoalStore, args: &Value) -> Result<String> {
     let objective = required_string(args, "objective")?;
     let token_budget = optional_u64(args, "token_budget")?;
     let goal = store.replace(&objective, token_budget, false)?;
-    Ok(serde_json::to_string_pretty(&goal)?)
+    goal_response(Some(goal), false)
 }
 
 /// 读取当前持续目标。
@@ -88,9 +89,34 @@ fn create_goal(store: &GoalStore, args: &Value) -> Result<String> {
 /// 返回:
 /// - JSON 格式目标或空目标结果
 fn get_goal(store: &GoalStore) -> Result<String> {
-    Ok(serde_json::to_string_pretty(&json!({
-        "goal": store.get()?
-    }))?)
+    goal_response(store.get()?, false)
+}
+
+/// 【目标】【工具结果】返回目标、剩余预算及完成时的用量报告，隐藏内部核算水位
+/// 参数：目标快照、是否完成；返回 JSON 工具结果
+fn goal_response(goal: Option<super::Goal>, complete: bool) -> Result<String> {
+    let remaining = goal.as_ref().and_then(|goal| {
+        goal.token_budget
+            .map(|budget| budget.saturating_sub(goal.tokens_used))
+    });
+    let report = goal
+        .as_ref()
+        .filter(|goal| complete && goal.status == GoalStatus::Complete)
+        .and_then(|goal| {
+            goal.token_budget.map(|budget| {
+                format!(
+                    "Goal completed using {} of {budget} tokens",
+                    goal.tokens_used
+                )
+            })
+        });
+    let mut value = serde_json::to_value(&goal)?;
+    if let Some(object) = value.as_object_mut() {
+        object.remove("usage_sources");
+    }
+    Ok(serde_json::to_string_pretty(
+        &json!({"goal": value, "remainingTokens": remaining, "completionBudgetReport": report}),
+    )?)
 }
 
 /// 更新模型请求的目标终态。
@@ -102,36 +128,15 @@ fn get_goal(store: &GoalStore) -> Result<String> {
 /// 返回:
 /// - JSON 格式更新结果
 fn update_goal(store: &GoalStore, args: &Value) -> Result<String> {
-    let note = args
-        .get("note")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string);
-    let status = args
-        .get("status")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-    if note.is_none() && status.is_none() {
-        bail!("update_goal requires status and/or note");
-    }
-    if let Some(note) = note.as_deref() {
-        store.append_progress(note)?;
-    }
-    let goal = if let Some(status) = status {
-        let status = match status.to_ascii_lowercase().as_str() {
-            "complete" => GoalStatus::Complete,
-            "blocked" => GoalStatus::Blocked,
-            _ => bail!("update_goal status must be complete or blocked"),
-        };
-        store.set_status(status)?
-    } else {
-        store
-            .get()?
-            .ok_or_else(|| anyhow::anyhow!("no active goal"))?
+    let status = required_string(args, "status")?;
+    let status = match status.as_str() {
+        "complete" => GoalStatus::Complete,
+        "blocked" => GoalStatus::Blocked,
+        "paused" => GoalStatus::Paused,
+        _ => bail!("update_goal status must be complete, blocked or paused"),
     };
-    Ok(serde_json::to_string_pretty(&goal)?)
+    let goal = store.set_status(status)?;
+    goal_response(Some(goal), status == GoalStatus::Complete)
 }
 
 /// 读取必填非空字符串参数。
@@ -184,6 +189,13 @@ mod tests {
         assert!(registry.contains("create_goal"));
         assert!(registry.contains("get_goal"));
         assert!(registry.contains("update_goal"));
+        let update = registry
+            .tool_infos()
+            .into_iter()
+            .find(|tool| tool.name == "update_goal")
+            .unwrap();
+        assert!(update.description.contains("user's explicit request"));
+        assert!(update.description.contains("three consecutive goal turns"));
 
         registry
             .call(

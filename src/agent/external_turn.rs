@@ -10,7 +10,7 @@ impl Agent {
     ///
     /// 返回:
     /// - 配置了可用的外部内核时为 true
-    pub(super) fn uses_external_engine(&self) -> bool {
+    pub(crate) fn uses_external_engine(&self) -> bool {
         self.external_engine.is_some()
     }
 

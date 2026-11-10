@@ -1,3 +1,5 @@
+mod accounting;
+mod instructions;
 mod model;
 mod prompt;
 mod store;
@@ -8,7 +10,9 @@ use crate::tools::ToolRegistry;
 use anyhow::Result;
 use std::path::PathBuf;
 
+pub(crate) use accounting::{GoalAccounting, GoalTurnGuard};
 pub(crate) use model::{Goal, GoalStatus, GoalUpdateEntry};
+pub(crate) use prompt::stop_prompt;
 pub(crate) use prompt::{continuation_prompt, is_continuation_input, system_context};
 pub(crate) use store::GoalStore;
 

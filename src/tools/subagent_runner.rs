@@ -198,6 +198,7 @@ pub(crate) fn wrap_subagent_inbox(from: &str, text: &str) -> String {
 }
 
 pub(crate) struct SubagentRunner {
+    goal_accounting: Option<crate::goal::GoalAccounting>,
     client: OpenAiCompatibleClient,
     system_prompt: String,
     tools: ToolRegistry,
@@ -233,6 +234,7 @@ impl SubagentRunner {
         crate::tools::computer_use::exclude_from_subagent(&mut tools);
         tools.set_plugin_model_client(&client);
         Self {
+            goal_accounting: None,
             client,
             system_prompt: system_prompt.into(),
             tools,
@@ -245,6 +247,16 @@ impl SubagentRunner {
             progressive_context: None,
             message_poll: None,
         }
+    }
+
+    /// 【子任务】【目标核算】将子模型实际用量计入创建时所属目标
+    /// 参数：核算句柄；返回更新后的执行器
+    pub(crate) fn with_goal_accounting(
+        mut self,
+        accounting: Option<crate::goal::GoalAccounting>,
+    ) -> Self {
+        self.goal_accounting = accounting;
+        self
     }
 
     /// 设置步间消息轮询回调。

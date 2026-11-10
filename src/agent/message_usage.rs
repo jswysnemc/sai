@@ -10,6 +10,9 @@ impl Agent {
     ///   返回:
     /// - 持久化是否成功
     pub(super) fn record_message_usage(&self, result: &ChatResult) -> Result<()> {
+        if let Some(accounting) = &self.goal_accounting {
+            accounting.record(result.usage.as_ref())?;
+        }
         let started_at = chrono::Utc::now().timestamp();
         match result.usage.as_ref() {
             Some(usage) => {

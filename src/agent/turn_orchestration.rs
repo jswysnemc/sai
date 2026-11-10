@@ -218,6 +218,14 @@ impl Agent {
         let mut on_event = on_event;
         let chunk_sink = partial_content_sink.clone();
         let mut emit_event = Box::new(move |event: AgentEvent| {
+            if let AgentEvent::ResponseReset {
+                content_chars,
+                reasoning_chars,
+                compaction: false,
+            } = &event
+            {
+                chunk_sink.rewind(*content_chars, *reasoning_chars);
+            }
             if let AgentEvent::Chunk(chunk) = &event {
                 chunk_sink.append(chunk.kind, &chunk.text);
             }

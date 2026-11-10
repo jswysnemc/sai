@@ -66,7 +66,9 @@ pub(super) async fn drain_submission_queue(
     tool_call_mode: render::ToolCallDisplayMode,
 ) -> Result<bool> {
     // 1. 【终端队列】【逐条执行】尚未开始的消息始终留在运行期，错误返回不会销毁局部批次
-    while let Some((position, item)) = runtime.take_next_turn_submission() {
+    while let Some((position, item)) =
+        runtime.take_next_turn_submission(agent.state().goal()?.map(|goal| goal.status))
+    {
         *mode = item.mode;
         if is_queued_control_command(item.text.trim()) {
             restore_control_submission(runtime, position, item)?;

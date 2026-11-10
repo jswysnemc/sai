@@ -5,6 +5,7 @@ mod live_reasoning;
 mod live_tail;
 mod operations;
 mod permission;
+mod response_reset;
 mod subagent_panel;
 mod todo_snapshot;
 mod tool_timing;

@@ -19,6 +19,13 @@ pub struct PartialTurnSink {
 }
 
 impl PartialTurnSink {
+    /// 【模型恢复】【部分正文】撤销失败请求的已显示片段
+    /// 参数：正文与推理字符数；返回无
+    pub(crate) fn rewind(&self, content_chars: usize, reasoning_chars: usize) {
+        let mut guard = self.inner.lock().unwrap_or_else(|error| error.into_inner());
+        crate::llm::remove_text_suffix(&mut guard.content, content_chars);
+        crate::llm::remove_text_suffix(&mut guard.reasoning, reasoning_chars);
+    }
     /// 创建空的流式内容累积句柄。
     ///
     /// 返回:

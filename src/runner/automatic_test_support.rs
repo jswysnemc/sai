@@ -27,6 +27,8 @@ pub(crate) enum TestResponse {
     Reply,
     Error,
     ToolCall,
+    Empty,
+    PauseGoal,
 }
 
 #[derive(Default)]
@@ -270,10 +272,18 @@ async fn chat_completion(
         .unwrap()
         .pop_front()
         .unwrap_or(TestResponse::Reply);
-    let body = match response {
+    let mut body = match response {
         TestResponse::Error => return rejection("Test provider rejected request"),
         TestResponse::Reply => json!({"choices":[{
             "delta":{"content":"后台任务已处理"},"finish_reason":"stop"
+        }]}),
+        TestResponse::Empty => {
+            json!({"choices":[{"delta":{"content":" "},"finish_reason":"stop"}]})
+        }
+        TestResponse::PauseGoal => json!({"choices":[{
+            "delta":{"tool_calls":[{"index":0,"id":"pause-goal","type":"function",
+                "function":{"name":"update_goal","arguments":"{\"status\":\"paused\"}"}}]},
+            "finish_reason":"tool_calls"
         }]}),
         TestResponse::ToolCall => json!({"choices":[{
             "delta":{"tool_calls":[{
@@ -282,6 +292,7 @@ async fn chat_completion(
             }]},"finish_reason":"tool_calls"
         }]}),
     };
+    body["usage"] = json!({"prompt_tokens":11,"completion_tokens":7,"total_tokens":18});
     (
         [(header::CONTENT_TYPE, "text/event-stream")],
         format!("data: {body}\n\ndata: [DONE]\n\n"),

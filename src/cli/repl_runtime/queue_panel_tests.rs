@@ -109,7 +109,7 @@ mod tests {
         assert!(joined.contains("(4)"));
         assert!(joined.contains("four"));
         assert!(!joined.contains('❯'));
-        assert!(joined.contains("下轮接力") || joined.contains("Next turn"));
+        assert!(joined.contains("任务完成后") || joined.contains("After task"));
     }
 
     #[test]
@@ -118,7 +118,7 @@ mod tests {
         let mut request = item("now");
         request.insert_at = QueueInsertAt::Request;
         let joined = panel.panel_lines(&[request], false).join("\n");
-        assert!(joined.contains("次回插话") || joined.contains("Steer"));
+        assert!(joined.contains("立即发送") || joined.contains("Send now"));
     }
 
     #[test]
@@ -130,18 +130,18 @@ mod tests {
         assert!(joined.contains('›'));
         assert!(joined.contains("second"));
         assert!(joined.contains("first"));
-        assert!(joined.contains("下轮接力") || joined.contains("Next turn"));
+        assert!(joined.contains("任务完成后") || joined.contains("After task"));
         assert!(joined.contains("Tab"));
         assert!(joined.contains("立即发送") || joined.contains("Send now"));
     }
 
     /// 【TUI】【队列】流式阶段 s 键文案是下次请求，不是立即发送。
     #[test]
-    fn streaming_help_says_next_request_instead_of_send_now() {
+    fn streaming_help_uses_immediate_delivery_semantics() {
         let mut panel = QueuePanelState::default();
         panel.activate(1);
         let joined = panel.panel_lines(&[item("queued")], true).join("\n");
-        assert!(joined.contains("次回插话") || joined.contains("Steer"));
-        assert!(!joined.contains("立即发送") && !joined.contains("Send now"));
+        assert!(joined.contains("立即发送") || joined.contains("Send now"));
+        assert!(joined.contains("立即发送") || joined.contains("Send now"));
     }
 }

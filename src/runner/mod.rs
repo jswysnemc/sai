@@ -7,6 +7,9 @@ pub(crate) mod automatic_test_support;
 mod continuation;
 mod control_runner;
 mod events;
+#[cfg(test)]
+mod goal_runtime_tests;
+mod message_delivery;
 mod ownership;
 pub(crate) mod process_liveness;
 mod session_actor;
@@ -22,6 +25,7 @@ use anyhow::Result;
 pub(crate) use automatic_input::{AutomaticInput, AutomaticInputEvent, AutomaticInputKind};
 pub(crate) use continuation::{ContinuationReason, RunnerContinuation};
 pub(crate) use events::{RunnerEvent, RunnerEventSink, RunnerOutput};
+pub(crate) use message_delivery::QueueInsertAt;
 pub(crate) use ownership::{active_run, ActiveRunGuard, ActiveRunLockRecord, SessionOwner};
 pub(crate) use session_actor::{ActorCmd, ActorHandle, SessionActor, SessionSubscription, Watcher};
 pub(crate) use session_presence::{session_instances, SessionPresenceGuard};

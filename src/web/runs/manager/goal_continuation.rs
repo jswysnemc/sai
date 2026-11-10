@@ -71,7 +71,7 @@ impl RunManager {
             .lock()
             .await
             .get(key)
-            .is_none_or(|queue| queue.is_empty());
+            .is_none_or(|queue| !queue.iter().any(blocks_goal_continuation));
         let goal_active = goal_is_active(
             &self.paths,
             &completed.workspace.path,
@@ -189,7 +189,7 @@ impl RunManager {
                         .lock()
                         .await
                         .get(&key)
-                        .is_some_and(|queue| !queue.is_empty());
+                        .is_some_and(|queue| queue.iter().any(blocks_goal_continuation));
                 if busy {
                     break;
                 }
@@ -216,6 +216,13 @@ impl RunManager {
             goal_waiters().lock().unwrap().remove(&key);
         });
     }
+}
+
+/// 【消息队列】【续轮优先级】立即消息和控制命令优先，完成后消息等待整个目标
+/// 参数：`queued` 为待发送运行；返回：是否优先于目标自动续轮
+fn blocks_goal_continuation(queued: &QueuedRun) -> bool {
+    queued.request.kind != RunKind::Conversation
+        || queued.request.insert_at == QueueInsertAt::Request
 }
 
 /// 返回进程内的续轮等待集合，避免同一会话重复等待。

@@ -266,6 +266,20 @@ impl Agent {
             }
         };
         self.record_tool_call_display(&provider_call.id, &call)?;
+        if self.stopped_goal()?.is_some()
+            && !matches!(call.function.name.as_str(), "get_goal" | "update_goal")
+        {
+            let output =
+                "tool error: goal execution stopped; summarize progress without starting new work";
+            self.record_simple_tool_result(turn_id, provider_call, false, output)?;
+            on_event(AgentEvent::ToolResult {
+                name: call.function.name.clone(),
+                ok: false,
+                output: output.into(),
+            })?;
+            messages.push(ChatMessage::tool(provider_call.id.clone(), output));
+            return Ok(None);
+        }
         Ok(Some(call))
     }
 }

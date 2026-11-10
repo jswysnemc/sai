@@ -167,6 +167,19 @@ impl EventAssembler {
     /// 转换 AgentEvent。
     fn map_agent_event(&mut self, event: AgentEvent) -> Vec<WebEvent> {
         match event {
+            AgentEvent::ResponseReset {
+                content_chars,
+                reasoning_chars,
+                compaction,
+            } => {
+                self.content_started = false;
+                for prepared in self.prepared_tools.drain(..) {
+                    self.tool_ids_by_index.remove(&prepared.index);
+                }
+                vec![self.event("message.response.reset", json!({
+                    "content_chars": content_chars, "reasoning_chars": reasoning_chars, "compaction": compaction
+                }))]
+            }
             AgentEvent::Chunk(chunk) => {
                 let (status, kind) = match chunk.kind {
                     ChatStreamKind::Content => {

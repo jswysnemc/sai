@@ -390,18 +390,37 @@ impl Agent {
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<String> {
         let _http_debug_session = crate::llm::HttpDebugSessionGuard::new(self.state.session_id());
-        let result = self
-            .compaction_client
-            .chat_stream_events(messages, definitions, |event| match event {
-                ChatStreamEvent::Chunk(chunk)
-                    if chunk.kind == ChatStreamKind::Content && !chunk.text.is_empty() =>
-                {
-                    on_event(AgentEvent::CompactionDelta { text: chunk.text })
-                }
-                ChatStreamEvent::Chunk(_) | ChatStreamEvent::ToolCallProgress(_) => Ok(()),
-            })
-            .await?;
+        let result =
+            self.compaction_client
+                .chat_stream_events_retry(messages, definitions, &self.config.retry, |event| {
+                    match event {
+                        ChatStreamEvent::Chunk(chunk)
+                            if chunk.kind == ChatStreamKind::Content && !chunk.text.is_empty() =>
+                        {
+                            on_event(AgentEvent::CompactionDelta { text: chunk.text })
+                        }
+                        ChatStreamEvent::Reset { content_chars, .. } => {
+                            on_event(AgentEvent::ResponseReset {
+                                content_chars,
+                                reasoning_chars: 0,
+                                compaction: true,
+                            })
+                        }
+                        ChatStreamEvent::Reconnecting {
+                            attempt,
+                            max_attempts,
+                        } => on_event(AgentEvent::Reconnecting {
+                            attempt,
+                            max_attempts,
+                        }),
+                        ChatStreamEvent::Chunk(_) | ChatStreamEvent::ToolCallProgress(_) => Ok(()),
+                    }
+                })
+                .await?;
         if let Some(usage) = &result.usage {
+            if let Some(accounting) = &self.goal_accounting {
+                accounting.record(Some(usage))?;
+            }
             self.state.add_auxiliary_usage(usage)?;
             let _ = crate::usage_history::record_model_call(
                 &self.paths,

@@ -23,7 +23,9 @@ impl ReplQueueSource {
         }
         let queue = self.lock();
         queue.iter().find_map(|item| {
-            if item.insert_at != QueueInsertAt::Request {
+            if item.insert_at != QueueInsertAt::Request
+                || crate::cli::repl_commands::is_stream_command_text(item.text.trim())
+            {
                 return None;
             }
             let chat = item.clipboard.to_chat_input(&item.text);
@@ -137,12 +139,15 @@ impl ReplRuntime {
     ///
     /// 参数: 无
     /// 返回: 可以自动开始下一轮时为真；仅有请求间隔消息时为假
-    pub(in crate::cli) fn has_ready_turn_submission(&self) -> bool {
+    pub(in crate::cli) fn has_ready_turn_submission(
+        &self,
+        goal_status: Option<crate::goal::GoalStatus>,
+    ) -> bool {
         !self.submission_queue_paused.load(Ordering::Acquire)
             && self
                 .lock_queue()
                 .iter()
-                .any(|item| item.insert_at == QueueInsertAt::Turn)
+                .any(|item| item.insert_at.ready_when_idle(goal_status))
     }
 
     /// 【终端队列】【逐条执行】只取出下一条轮次间隔消息，其余消息继续留在管理面板中。
@@ -151,6 +156,7 @@ impl ReplRuntime {
     /// 返回: 原队列位置与待执行消息；没有轮次间隔消息时为空
     pub(in crate::cli) fn take_next_turn_submission(
         &mut self,
+        goal_status: Option<crate::goal::GoalStatus>,
     ) -> Option<(usize, QueuedSubmission)> {
         if self.submission_queue_paused.load(Ordering::Acquire) {
             return None;
@@ -159,7 +165,7 @@ impl ReplRuntime {
             let mut queue = self.lock_queue();
             let index = queue
                 .iter()
-                .position(|item| item.insert_at == QueueInsertAt::Turn)?;
+                .position(|item| item.insert_at.ready_when_idle(goal_status))?;
             queue.remove(index).map(|item| (index, item))
         };
         self.clamp_queue_panel();
@@ -193,7 +199,7 @@ impl ReplRuntime {
     #[cfg(test)]
     pub(in crate::cli) fn take_turn_interval_queue(&mut self) -> Vec<QueuedSubmission> {
         let mut taken = Vec::new();
-        while let Some((_, item)) = self.take_next_turn_submission() {
+        while let Some((_, item)) = self.take_next_turn_submission(None) {
             taken.push(item);
         }
         taken

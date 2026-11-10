@@ -26,6 +26,7 @@ impl StreamBudget {
     /// @returns 未超过上限时成功
     pub(super) fn observe(&mut self, event: &ChatStreamEvent) -> Result<()> {
         let added = match event {
+            ChatStreamEvent::Reset { .. } | ChatStreamEvent::Reconnecting { .. } => 0,
             ChatStreamEvent::Chunk(chunk) => chunk.text.len(),
             ChatStreamEvent::ToolCallProgress(progress) => {
                 let bytes = progress

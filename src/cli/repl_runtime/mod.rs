@@ -178,24 +178,7 @@ pub(super) struct StreamComposerDraft {
     pub(super) mode: Option<AgentMode>,
 }
 
-/// 排队消息插入当前对话的位置。
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::cli) enum QueueInsertAt {
-    /// 当前轮下一次模型请求前插入，续在同一轮
-    Request,
-    /// 本轮结束后作为新一轮插入
-    Turn,
-}
-
-impl QueueInsertAt {
-    /// 在请求间隔与轮次间隔之间切换。
-    pub(in crate::cli) fn toggle(self) -> Self {
-        match self {
-            Self::Request => Self::Turn,
-            Self::Turn => Self::Request,
-        }
-    }
-}
+pub(in crate::cli) use crate::runner::QueueInsertAt;
 
 /// 队列中的下一条用户提交。
 #[derive(Clone, Debug)]
@@ -209,7 +192,7 @@ pub(in crate::cli) struct QueuedSubmission {
 }
 
 impl QueuedSubmission {
-    /// 创建一条默认在轮次间隔插入的排队提交。
+    /// 创建默认在下一次工具间隙立即发送的排队提交。
     pub(in crate::cli) fn new(
         mode: AgentMode,
         text: String,
@@ -220,7 +203,7 @@ impl QueuedSubmission {
             mode,
             text,
             clipboard,
-            insert_at: QueueInsertAt::Turn,
+            insert_at: QueueInsertAt::default(),
         }
     }
 }
@@ -273,7 +256,7 @@ impl ReplRuntime {
             panel_pointer: None,
             subagent_input_error: None,
             queue_panel: queue_panel::QueuePanelState::default(),
-            queue_draft_timing: QueueInsertAt::Turn,
+            queue_draft_timing: QueueInsertAt::default(),
             last_cursor_row: None,
             last_composer_signature: None,
             mention_skills: Vec::new(),

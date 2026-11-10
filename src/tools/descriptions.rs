@@ -22,9 +22,7 @@ pub(crate) fn tool_description(name: &str, fallback: &str) -> String {
             "Replace exact text in a file. Prefer apply_patch for multiple related edits. Match the file content after read_file's line-number and tab prefix; never include that prefix in old_string or new_string.",
             "精确替换文件文本。多处关联修改优先使用 apply_patch。按 read_file 结果中行号和制表符之后的原文匹配，old_string 与 new_string 都不要包含行号前缀。",
         ),
-        "create_goal" => t("Create a persistent goal.", "创建持续目标。"),
-        "get_goal" => t("Read the active goal.", "读取当前目标。"),
-        "update_goal" => t("Update the active goal.", "更新当前目标。"),
+        "create_goal" | "get_goal" | "update_goal" => return fallback.to_string(),
         "trash_path" => t("Move a path to system Trash.", "把路径移入系统回收站。"),
         "check_os_info" => t("Read basic system information.", "读取基础系统信息。"),
         "read_file" => t(

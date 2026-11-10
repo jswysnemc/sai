@@ -1,15 +1,6 @@
 use super::*;
 
-/// 排队消息插入当前对话的位置。
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum QueueInsertAt {
-    /// 当前轮下一次模型请求前插入，续在同一轮
-    Request,
-    /// 本轮结束后作为新一轮插入
-    #[default]
-    Turn,
-}
+pub(crate) use crate::runner::QueueInsertAt;
 
 /// 启动一轮 Web 对话所需参数。
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -8,6 +8,18 @@ use serde_json::Value;
 /// 返回:
 /// - 可自动重试则为 true
 pub(crate) fn is_transient_transport_error(error: &anyhow::Error) -> bool {
+    if let Some(error) = error.downcast_ref::<super::http_error::ProviderHttpError>() {
+        return matches!(error.status, 408 | 425 | 429 | 500 | 502 | 503 | 504);
+    }
+    if error
+        .downcast_ref::<super::http_error::IncompleteStream>()
+        .is_some()
+    {
+        return true;
+    }
+    if let Some(error) = error.downcast_ref::<reqwest::Error>() {
+        return error.is_timeout() || error.is_connect() || error.is_body();
+    }
     error.chain().any(|item| {
         let message = item.to_string().to_ascii_lowercase();
         is_transient_message(&message)

@@ -41,6 +41,9 @@ impl InterMessageSource for WebMessageQueue {
         };
         for queued in queue {
             // 控制命令保持独立运行，不能越过前面的压缩/续轮去合并用户消息
+            if queued.request.kind == RunKind::GoalContinuation {
+                continue;
+            }
             if queued.request.kind != RunKind::Conversation {
                 return Ok(None);
             }

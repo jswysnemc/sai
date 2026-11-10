@@ -62,6 +62,7 @@ impl OpenAiCompatibleClient {
             .send_anthropic_request(&url, &request, claude, &session_id, api_key)
             .await?;
         let status = response.status();
+        let retry_after = crate::llm::http_error::retry_header(response.headers());
         if let Some(debug) = debug.as_ref() {
             let _ = debug.write_response_headers(status.as_u16(), response.headers());
         }
@@ -100,6 +101,8 @@ impl OpenAiCompatibleClient {
                     .send_anthropic_request(&url, &fallback_request, claude, &session_id, api_key)
                     .await?;
                 let fallback_status = fallback_response.status();
+                let fallback_retry_after =
+                    crate::llm::http_error::retry_header(fallback_response.headers());
                 if let Some(debug) = debug.as_ref() {
                     let _ = debug.write_response_headers(
                         fallback_status.as_u16(),
@@ -115,23 +118,21 @@ impl OpenAiCompatibleClient {
                         let _ = debug.finish_error(fallback_status.as_u16(), &fallback_body);
                     }
                     let hint = claude_protocol_hint(&self.provider);
-                    bail!(
-                        "{} ({fallback_status}): {fallback_body}{hint}",
-                        t(
-                            "anthropic messages stream request failed",
-                            "Anthropic Messages 流式请求失败"
-                        )
-                    );
+                    return Err(crate::llm::http_error::ProviderHttpError {
+                        status: fallback_status.as_u16(),
+                        retry_after: fallback_retry_after,
+                        message: format!("{fallback_body}{hint}"),
+                    }
+                    .into());
                 }
             } else {
                 let hint = claude_protocol_hint(&self.provider);
-                bail!(
-                    "{} ({status}): {body}{hint}",
-                    t(
-                        "anthropic messages stream request failed",
-                        "Anthropic Messages 流式请求失败"
-                    )
-                );
+                return Err(crate::llm::http_error::ProviderHttpError {
+                    status: status.as_u16(),
+                    retry_after,
+                    message: format!("{body}{hint}"),
+                }
+                .into());
             }
         };
 
@@ -175,7 +176,12 @@ impl OpenAiCompatibleClient {
 /// 【Anthropic】【结果组装】同时保留展示文本与协议原始块；参数为流状态，返回完整结果。
 fn finalize_anthropic_result(state: AnthropicStreamState) -> Result<ChatResult> {
     let blocks = state.original_content.finish()?;
-    let mut result = finalize_stream_result(state.content, state.reasoning, state.usage, state.tool_calls.finish())?;
+    let mut result = finalize_stream_result(
+        state.content,
+        state.reasoning,
+        state.usage,
+        state.tool_calls.finish(),
+    )?;
     if !blocks.is_empty() {
         result.provider_content = Some(crate::llm::ProviderAssistantContent::Anthropic(blocks));
     }

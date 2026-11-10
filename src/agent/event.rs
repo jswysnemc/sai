@@ -17,6 +17,12 @@ pub struct CompactionError {
 /// Agent 向 CLI、TUI 与 Web 发送的统一运行事件。
 #[derive(Debug, Clone)]
 pub enum AgentEvent {
+    /// 撤销失败请求的部分输出；计数使用 Unicode 字符，不影响之前完成的请求
+    ResponseReset {
+        content_chars: usize,
+        reasoning_chars: usize,
+        compaction: bool,
+    },
     Chunk(ChatStreamChunk),
     /// 当前模型回合中插入的完成回执、Goal 续作或排队用户消息。
     InterMessage(super::InterMessageEvent),
@@ -24,9 +30,7 @@ pub enum AgentEvent {
     WaitingExternal,
     /// 传输层瞬时故障后正在自动重连。
     ///
-    /// 仅在模型尚未产出任何正文/工具参数时发出；一旦开始输出就不再重试，
-    /// 避免把已经流式写出的内容再复制一遍。UI 用它展示「重连中 N/M」，
-    /// 而不是把错误当成最终失败。
+    /// 失败尝试的部分输出先经 ResponseReset 撤销，再展示重连次数
     Reconnecting {
         attempt: u32,
         max_attempts: u32,

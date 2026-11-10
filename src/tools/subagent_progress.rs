@@ -18,6 +18,16 @@ pub(crate) struct SubagentProgress {
 }
 
 impl SubagentProgress {
+    /// 【子任务】【响应恢复】通知宿主撤销失败尝试的展示文本
+    /// 参数：正文与推理字符数；返回无
+    pub(crate) fn reset_response(&self, content_chars: usize, reasoning_chars: usize) {
+        self.progress.report(format!(
+            "__subagent_reset__{}",
+            json!({
+                "content_chars": content_chars, "reasoning_chars": reasoning_chars
+            })
+        ));
+    }
     /// 创建子代理进度回调封装。
     ///
     /// 参数:
