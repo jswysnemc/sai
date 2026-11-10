@@ -27,12 +27,12 @@ class StartupRenderingTests(unittest.TestCase):
             self.assertIn("model test", mark_rows[1][1])
             self.assertEqual(sum(line.count("\uf0db") for line in screen), 1)
             self.assertNotIn("[x]", "\n".join(line[120:] for line in screen[:3]))
-            self.assertNotIn(b"\x1b_G", terminal.raw)
+            self.assertNotRegex(bytes(terminal.raw), rb"\x1b_Ga=[tpdT]")
 
     def test_plain_terminal_does_not_receive_kitty_graphics(self):
-        """无参数；欢迎页和首次输入不发送 Kitty 图片控制序列，避免显示协议正文。"""
+        """无参数；欢迎页允许能力查询，但不发送 Kitty 图片传输或放置序列。"""
         with TerminalSession(arguments=["--lang", "en-US"]) as terminal:
-            self.assertNotIn(b"\x1b_G", terminal.raw)
+            self.assertNotRegex(bytes(terminal.raw), rb"\x1b_Ga=[tpdT]")
             self.assertNotIn("Ga=d", terminal.text())
             terminal.send(b"FIRST-INPUT")
             terminal.wait_for(lambda: "FIRST-INPUT" in terminal.text())

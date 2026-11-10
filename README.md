@@ -52,6 +52,8 @@ Unordered Markdown lists use small round bullets with aligned continuation lines
 
 In fullscreen view, clicking an image in the transcript or a visible input thumbnail opens the same centered image viewer over the current screen. Content outside the viewer stays visible. Press `Esc`, use the close button, or click outside the image (including the padding inside the viewer) to return. Closing preserves the draft, attachments, cursor position, and reading position. Dragging does not open or dismiss the viewer.
 
+On Unix, unknown interactive terminals (including Herdr) are queried once at startup for Kitty graphics support, with a 200 ms timeout. A successful response enables image previews even with `TERM=xterm-256color` and no Kitty environment variables. Known terminal protocols retain their existing selection; redirected output and tmux sessions skip the query.
+
 ![Sai REPL chat and streaming rendering](pics/repl.png)
 
 Activity groups align with the user-message guide column, while child steps retain their two-column inset. Read tools use the ordinary tool bullet; `$` is reserved for commands. Active todo items use `→`, including the animated fixed todo panel. Goal continuations and in-turn queued deliveries also render as tool notifications without navigation points; genuine user turns retain their usual message style and navigation. History restoration follows the same rules and preserves queued image attachments.

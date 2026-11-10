@@ -11,6 +11,7 @@ pub(super) fn initialize_runtime(
 ) -> Result<ReplRuntime> {
     // 1. 【终端】【启动展示】先查询颜色和光标，避免与键盘输入争用终端
     render::terminal_palette::initialize_terminal_palette();
+    let pending_input = render::terminal_image::initialize_terminal_graphics();
     if crossterm::cursor::position()
         .map(|(col, _)| col != 0)
         .unwrap_or(false)
@@ -22,13 +23,17 @@ pub(super) fn initialize_runtime(
         tool_call_mode: render::ToolCallDisplayMode::from_config(&config.display.tool_calls),
     };
     let mut runtime = ReplRuntime::new(config.display.repl_transcript_row_cap, options);
+    // 2. 【终端图片】【输入保留】探测期间的按键交回正式输入循环，保持原有事件顺序
+    for event in pending_input {
+        runtime.queue_input_event(event);
+    }
     runtime.configure_sidebar(config.display.sidebar);
     render::configure_display_rendering(&config.display);
     if render::tui_mode::prefers_fullscreen() {
         runtime.toggle_fullscreen()?;
     }
     runtime.set_paste_image_key(config.input.paste_image_key);
-    // 2. 【终端】【启动展示】欢迎信息与历史保存源数据，样式切换时重新渲染
+    // 3. 【终端】【启动展示】欢迎信息与历史保存源数据，样式切换时重新渲染
     runtime.record_welcome(
         env!("CARGO_PKG_VERSION").to_string(),
         repl_welcome_model(config),
@@ -41,7 +46,7 @@ pub(super) fn initialize_runtime(
         runtime.record_meta(notice)?;
     }
     record_repl_history(&mut runtime, state)?;
-    // 3. 【终端】【启动展示】重量级初始化前先呈现输入框
+    // 4. 【终端】【启动展示】重量级初始化前先呈现输入框
     let chrome = ReplChrome::from_runtime(config, paths, state, mode);
     runtime.update_composer(&chrome, "", 0, false, Vec::new(), 0)?;
     runtime.draw_composer()?;

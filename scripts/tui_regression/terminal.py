@@ -114,7 +114,7 @@ class TerminalSession:
                 return
             self.raw.extend(data)
             decoded = self.decoder.decode(data)
-            self.stream.feed(self.filter_graphics(decoded) if self.kitty_graphics else decoded)
+            self.stream.feed(self.filter_graphics(decoded))
             if b"\x1b[6n" in data:
                 self.send(f"\x1b[{self.screen.cursor.y + 1};{self.screen.cursor.x + 1}R".encode())
             if b"\x1b]10;?" in data:
@@ -141,8 +141,18 @@ class TerminalSession:
             end = self.graphics_pending.find("\x1b\\")
             if end < 0:
                 break
+            # 1. 【终端】【图片探测】按实际查询编号应答，兼容控制序列跨读取块到达
+            command = self.graphics_pending[3:end]
+            control = dict(field.split("=", 1) for field in command.split(";", 1)[0].split(",") if "=" in field)
+            if control.get("a") == "q" and "i" in control:
+                self.reply_graphics_query(control)
             self.graphics_pending = self.graphics_pending[end + 2:]
         return "".join(output)
+
+    def reply_graphics_query(self, control):
+        """【终端】【图片应答】参数 control 为查询字段；支持 Kitty 时返回成功协议，应答函数返回无。"""
+        if self.kitty_graphics:
+            self.send(f"\x1b_Gi={control['i']};OK\x1b\\".encode())
 
     def wait_for(self, predicate, timeout=10):
         """等待 predicate 成立，timeout 为秒数；超时包含屏幕证据。"""

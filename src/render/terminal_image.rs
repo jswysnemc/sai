@@ -1,8 +1,11 @@
 mod buffered;
 mod composer_tile;
+mod probe;
+mod probe_response;
 
 pub(crate) use buffered::render_buffered_image;
 pub(crate) use composer_tile::{composer_tile_environment, render_composer_tile, ComposerTile};
+pub(crate) use probe::initialize_terminal_graphics;
 
 /// 【终端图片】【预览环境】读取协议能力和单元格尺寸，防止缓存跨尺寸错误复用。
 /// 参数: 无；返回: 协议能力与渲染上限。

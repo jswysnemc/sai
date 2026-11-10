@@ -118,7 +118,8 @@ class ComposerImageTests(unittest.TestCase):
                              arguments=["--lang", "en-US"]) as terminal:
             terminal.send(b"\x1b[A")
             terminal.wait_for(lambda: "[image 3 640x480]" in terminal.text())
-            self.assertNotIn(b"\x1b_G", terminal.raw)
+            self.assertNotIn(b"\x1b_Ga=t", terminal.raw)
+            self.assertNotIn(b"\x1b_Ga=p", terminal.raw)
             self.assertNotIn(b"1337;File", terminal.raw)
 
 

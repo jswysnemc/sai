@@ -189,9 +189,8 @@ pub(crate) mod test_override {
 
 /// 判断当前终端是否支持 Kitty 图形协议。
 ///
-/// 环境变量只能覆盖一部分终端：Ghostty / foot / Konsole / rio 都实现了
-/// Kitty 协议，但不设 `KITTY_WINDOW_ID`。漏判会让 mermaid 与 `$$…$$`
-/// 公式静默降级成粗糙的半块栅格。
+/// 【终端图片】【能力选择】优先使用启动时的真实应答，再兼容已知终端环境。
+/// 参数: 无；启动探测只执行一次，渲染期间不读取终端输入。
 ///
 /// tmux 需要显式开启 allow-passthrough 才会转发图形序列，默认不透传，
 /// 因此在 tmux 里不按终端名推断支持——宁可降级，也不要吐出一串被吞掉的
@@ -203,6 +202,9 @@ fn supports_kitty_graphics() -> bool {
     #[cfg(test)]
     if let Some(value) = test_override::kitty() {
         return value;
+    }
+    if probe::kitty_supported() {
+        return true;
     }
     if std::env::var_os("KITTY_WINDOW_ID").is_some() {
         return true;
