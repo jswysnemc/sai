@@ -72,10 +72,14 @@ pub(super) async fn resolve(host: &str, port: u16, domains: &[String]) -> Result
         allowed(host, domains),
         "network domain is not allowed: {host}"
     );
-    let addresses = tokio::net::lookup_host((host, port))
-        .await
-        .context("resolve approved network domain")?
-        .collect::<Vec<_>>();
+    let addresses = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        tokio::net::lookup_host((host, port)),
+    )
+    .await
+    .context("network domain resolution timed out")?
+    .context("resolve approved network domain")?
+    .collect::<Vec<_>>();
     anyhow::ensure!(
         !addresses.is_empty() && addresses.iter().all(|address| public(address.ip())),
         "network domain resolved to a non-public address"

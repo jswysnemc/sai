@@ -51,6 +51,8 @@ fn apply() -> io::Result<()> {
         statement(0x06, 0x00050000 | libc::EPERM as u32),
         jump(libc::SYS_io_uring_register as u32, 0, 1),
         statement(0x06, 0x00050000 | libc::EPERM as u32),
+        jump(libc::SYS_socketpair as u32, 0, 1),
+        statement(0x06, 0x00050000 | libc::EPERM as u32),
         jump(libc::SYS_socket as u32, 0, 5),
         statement(0x20, 16),
         jump(libc::AF_INET as u32, 3, 0),

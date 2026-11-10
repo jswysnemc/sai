@@ -76,17 +76,24 @@ impl Agent {
         let visibility = self.tool_visibility.clone();
         let accounting = self.goal_accounting.clone();
         let cwd = crate::runtime_cwd::current_dir()?;
+        let declared_tools = definitions
+            .iter()
+            .map(|definition| definition.function.name.clone())
+            .collect::<std::collections::HashSet<_>>();
+        let tools_enabled = self.tools_enabled;
         let response =
             self.client
                 .chat_stream_events_retry(messages, definitions, &self.config.retry, |event| {
                     match event {
                         ChatStreamEvent::ToolCallReady { index, call } => {
-                            if accounting
-                                .as_ref()
-                                .map(|value| value.current_goal())
-                                .transpose()?
-                                .flatten()
-                                .is_none_or(|goal| goal.status.is_active())
+                            if tools_enabled
+                                && declared_tools.contains(&call.function.name)
+                                && accounting
+                                    .as_ref()
+                                    .map(|value| value.current_goal())
+                                    .transpose()?
+                                    .flatten()
+                                    .is_none_or(|goal| goal.status.is_active())
                             {
                                 streamed.ready(index, call, &tools, &visibility, &cwd);
                             }

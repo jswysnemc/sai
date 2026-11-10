@@ -27,6 +27,12 @@ if sys.platform == 'linux':
         pass
     else:
         raise AssertionError('Unix socket bypass')
+    try:
+        socket.socketpair(socket.AF_UNIX, socket.SOCK_DGRAM)
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError('Unix socketpair bypass')
 try:
     connection = socket.create_connection(("1.1.1.1", 443), 2)
 except OSError:
