@@ -136,6 +136,7 @@ impl Agent {
         manual: bool,
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<bool> {
+        self.background_compaction = None;
         on_event(AgentEvent::CompactionStarted {
             turn_count: request.turn_count(),
             model: self.compaction_model_label.clone(),
@@ -235,7 +236,7 @@ impl Agent {
     ///
     /// 返回:
     /// - 无
-    fn record_evicted_turns(&self, request: &CompactionRequest) {
+    pub(super) fn record_evicted_turns(&self, request: &CompactionRequest) {
         let mut evicted = Vec::new();
         for turn in &request.compact_turns {
             if !turn.user_content.trim().is_empty() {
@@ -269,7 +270,7 @@ impl Agent {
     ///
     /// 返回:
     /// - 装配完成的摘要正文
-    fn finalize_summary(&self, request: &CompactionRequest, summary: &str) -> String {
+    pub(super) fn finalize_summary(&self, request: &CompactionRequest, summary: &str) -> String {
         let budget = crate::state::summary_char_limit(self.context_char_budget)
             .saturating_div(4)
             .min(super::compaction_schema::DEFAULT_USER_SECTION_BUDGET);

@@ -75,10 +75,10 @@ pub use tool_history::{
     ToolCallStatus, ToolHistorySummary, ToolResultMaintenanceMode, ToolResultMaintenanceStats,
 };
 pub use turns::{
-    turns_to_entries, ConversationDb, SessionTreeIndex, StoredConversationEntry, Turn,
+    turns_to_entries, ConversationDb, SessionTreeIndex, StoredConversationEntry, Turn, TurnStatus,
 };
 #[cfg(test)]
-pub use turns::{SessionTree, TurnStatus, TurnTreeNode};
+pub use turns::{SessionTree, TurnTreeNode};
 pub use usage::UsageSnapshot;
 /// 撤销最后一轮对话及其工作树修改后的结果。
 #[derive(Debug, Clone)]

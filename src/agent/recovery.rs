@@ -44,6 +44,16 @@ impl Agent {
             None => self.context_token_cache.count(messages),
         };
         let policy = self.compaction_budget_policy();
+        if self
+            .maintain_background_compaction(turn_id, messages, occupancy, on_event)
+            .await?
+        {
+            return Ok(true);
+        }
+        // 【上下文】【预计算保留】摘要请求进行中时不改写其来源工具结果
+        if self.background_compaction.is_some() {
+            return Ok(false);
+        }
         match classify_context_pressure_with(occupancy, self.context_char_budget, policy) {
             ContextPressure::Relaxed => return Ok(false),
             ContextPressure::SnipStale => {
