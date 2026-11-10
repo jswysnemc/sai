@@ -2,13 +2,15 @@ use super::identity::wide;
 use crate::sandbox::SandboxPolicy;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
-use windows_sys::Win32::Foundation::LocalFree;
+use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, INVALID_HANDLE_VALUE};
 use windows_sys::Win32::Security::Authorization::*;
 use windows_sys::Win32::Security::{
-    ACL, DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, SUB_CONTAINERS_AND_OBJECTS_INHERIT,
+    EqualSid, GetAce, ACCESS_ALLOWED_ACE, ACE_HEADER, ACL, DACL_SECURITY_INFORMATION,
+    PSECURITY_DESCRIPTOR, PSID, SUB_CONTAINERS_AND_OBJECTS_INHERIT,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    DELETE, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_GENERIC_WRITE,
+    CreateFileW, DELETE, FILE_FLAG_BACKUP_SEMANTICS, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ,
+    FILE_GENERIC_WRITE, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
 };
 
 const READ: u32 = FILE_GENERIC_READ | FILE_GENERIC_EXECUTE;
@@ -191,19 +193,54 @@ fn update_exact(
             ptstrName: sid.cast(),
         },
     };
+    let propagate = inherit && (mode != REVOKE_ACCESS || has_inheritable_sid(old_acl, sid));
     let mut new_acl = std::ptr::null_mut();
     let code = unsafe { SetEntriesInAclW(1, &entry, old_acl, &mut new_acl) };
     let result = if code == 0 {
-        let code = unsafe {
-            SetNamedSecurityInfoW(
-                path_wide.as_ptr(),
-                SE_FILE_OBJECT,
-                DACL_SECURITY_INFORMATION,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                new_acl,
-                std::ptr::null(),
-            )
+        let code = if propagate {
+            unsafe {
+                SetNamedSecurityInfoW(
+                    path_wide.as_ptr(),
+                    SE_FILE_OBJECT,
+                    DACL_SECURITY_INFORMATION,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    new_acl,
+                    std::ptr::null(),
+                )
+            }
+        } else {
+            // 2. 【Windows沙箱】【仅改本体】MAXIMUM_ALLOWED 句柄禁止向祖先目录的全部后代重新传播已有 ACE
+            let handle = unsafe {
+                CreateFileW(
+                    path_wide.as_ptr(),
+                    0x02000000,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                    std::ptr::null(),
+                    OPEN_EXISTING,
+                    FILE_FLAG_BACKUP_SEMANTICS,
+                    std::ptr::null_mut(),
+                )
+            };
+            if handle == INVALID_HANDLE_VALUE {
+                std::io::Error::last_os_error().raw_os_error().unwrap_or(5) as u32
+            } else {
+                let code = unsafe {
+                    SetSecurityInfo(
+                        handle,
+                        SE_FILE_OBJECT,
+                        DACL_SECURITY_INFORMATION,
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        new_acl,
+                        std::ptr::null(),
+                    )
+                };
+                unsafe {
+                    CloseHandle(handle);
+                }
+                code
+            }
         };
         if code == 0 {
             Ok(())
@@ -261,4 +298,28 @@ fn under(path: &Path, root: &Path) -> bool {
 /// 【Windows沙箱】【路径相等】比较规范化路径；参数为两条路径，返回是否相同。
 fn same_path(first: &Path, second: &Path) -> bool {
     normalized(first) == normalized(second)
+}
+
+/// 【Windows沙箱】【继承识别】撤回前识别本次 SID 是否拥有可继承 ACE，避免无关目录树遍历。
+/// 参数：DACL 与目标 SID；返回是否需要传播撤回。
+fn has_inheritable_sid(acl: *mut ACL, sid: PSID) -> bool {
+    if acl.is_null() {
+        return false;
+    }
+    unsafe {
+        for index in 0..(*acl).AceCount as u32 {
+            let mut entry = std::ptr::null_mut();
+            if GetAce(acl, index, &mut entry) == 0 {
+                return true;
+            }
+            let header = &*(entry as *const ACE_HEADER);
+            if header.AceType <= 1 && header.AceFlags & 3 != 0 {
+                let ace = &*(entry as *const ACCESS_ALLOWED_ACE);
+                if EqualSid((&ace.SidStart as *const u32).cast_mut().cast(), sid) != 0 {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
