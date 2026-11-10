@@ -28,7 +28,7 @@ export function SandboxSettings({ config, onConfigChange }: RuntimeSettingsProps
 
   const networkOptions = [
     { value: "deny" as const, label: t("Blocked", "断开"), description: t("Commands that need the network ask for an escalation", "需要联网的命令走提升审批") },
-    { value: "allow" as const, label: t("Allowed", "允许"), description: t("Only the filesystem is restricted", "只限制文件系统") }
+    { value: "allow" as const, label: t("Allowed", "允许"), description: t("Optionally limit access to approved domains", "可进一步限制为允许的域名") }
   ];
 
   return (
@@ -57,6 +57,9 @@ export function SandboxSettings({ config, onConfigChange }: RuntimeSettingsProps
         <SettingsField label={t("Network", "网络")} configKey="sandbox.network" anchor="runtime.sandbox.network" span="full">
           <ChoicePills value={network} options={networkOptions} onChange={(value) => update({ network: value })} ariaLabel={t("Sandbox network", "沙箱网络")} />
         </SettingsField>
+        {network === "allow" && <SettingsField label={t("Allowed network domains", "允许的网络域名")} hint={t("One domain per line; *.example.com allows subdomains. Empty allows all networks. Domain limits currently support Linux and macOS.", "每行一个域名；*.example.com 允许子域。留空表示允许全部网络。域名限制目前支持 Linux 和 macOS。")} configKey="sandbox.allowed_domains" anchor="runtime.sandbox.allowed_domains" span="full">
+          <SkListInput value={sandbox.allowed_domains ?? []} onChange={(value) => update({ allowed_domains: value })} placeholder="github.com" />
+        </SettingsField>}
         <SettingsField label={t("Extra writable roots", "额外可写目录")} hint={t("One path per line, e.g. build caches. ~/ expands to the home directory.", "每行一个路径，例如构建缓存；~/ 表示家目录。")} configKey="sandbox.writable_roots" anchor="runtime.sandbox.writable_roots">
           <SkListInput value={sandbox.writable_roots ?? []} onChange={(value) => update({ writable_roots: value })} placeholder="~/.cargo/registry" />
         </SettingsField>

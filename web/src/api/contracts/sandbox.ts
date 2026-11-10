@@ -6,6 +6,7 @@ export type SandboxConfig = {
   /** 是否启用沙箱，缺省为开启 */
   enabled?: boolean;
   network?: SandboxNetworkMode;
+  allowed_domains?: string[];
   /** 工作区之外额外允许写入的目录 */
   writable_roots?: string[];
   /** 在内置凭据目录之外额外隐藏的路径 */
@@ -25,6 +26,7 @@ export type SandboxStatusResponse = {
   available: boolean;
   reason?: string;
   network: SandboxNetworkMode;
+  allowed_domains?: string[];
   scrub_env: boolean;
   writable_roots: string[];
   deny_read: string[];

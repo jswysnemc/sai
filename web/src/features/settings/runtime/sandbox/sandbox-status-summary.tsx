@@ -34,11 +34,12 @@ export function SandboxStatusSummary({ status, loading, failed, onRetry }: Sandb
         <StatusBadge tone={verdict.tone} dot>{verdict.label}</StatusBadge>
         {status.backend !== "none" && <StatusBadge mono>{status.backend}</StatusBadge>}
         <StatusBadge tone={status.network === "allow" ? "warning" : "neutral"}>
-          {status.network === "allow" ? t("Network allowed", "允许网络") : t("Network blocked", "断开网络")}
+          {status.network === "allow" ? (status.allowed_domains?.length ? t("Approved domains", "允许的域名") : t("Network allowed", "允许网络")) : t("Network blocked", "断开网络")}
         </StatusBadge>
       </div>
       {verdict.notice && <InlineNotice tone={verdict.tone === "danger" ? "danger" : "warning"}>{verdict.notice}</InlineNotice>}
       <dl className="sandbox-paths">
+        {!!status.allowed_domains?.length && <SandboxPathRow label={t("Network domains", "网络域名")} items={status.allowed_domains} />}
         <SandboxPathRow label={t("Writable", "可写")} items={status.writable_roots} />
         <SandboxPathRow label={t("Read-only inside writable", "可写目录中的只读路径")} items={status.write_protected} />
         <SandboxPathRow label={t("Hidden", "隐藏")} items={status.deny_read} />
