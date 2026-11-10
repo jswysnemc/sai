@@ -95,7 +95,44 @@ impl Capabilities {
             this.owned.push(value);
             this.entries.push(SID_AND_ATTRIBUTES { Sid: value, Attributes: SE_GROUP_ENABLED as u32 });
         }
+        this.named("lpacInstrumentation")?;
         Ok(this)
+    }
+
+    /// 【Windows沙箱】【日志能力】按系统 API 派生受限能力，仅用于 Shell ETW 注册。
+    /// 参数：能力名称；返回派生结果，所有 SID 由当前集合回收。
+    fn named(&mut self, name: &str) -> Result<()> {
+        let (mut groups, mut values) = (std::ptr::null_mut(), std::ptr::null_mut());
+        let (mut group_count, mut count) = (0, 0);
+        anyhow::ensure!(
+            unsafe {
+                windows_sys::Win32::Security::DeriveCapabilitySidsFromName(
+                    wide(name).as_ptr(),
+                    &mut groups,
+                    &mut group_count,
+                    &mut values,
+                    &mut count,
+                )
+            } != 0,
+            "derive capability {name}: {}",
+            std::io::Error::last_os_error()
+        );
+        unsafe {
+            for index in 0..group_count as usize {
+                LocalFree(*groups.add(index));
+            }
+            LocalFree(groups.cast());
+            for index in 0..count as usize {
+                let sid = *values.add(index);
+                self.owned.push(sid);
+                self.entries.push(SID_AND_ATTRIBUTES {
+                    Sid: sid,
+                    Attributes: SE_GROUP_ENABLED as u32,
+                });
+            }
+            LocalFree(values.cast());
+        }
+        Ok(())
     }
 }
 impl Drop for Capabilities {

@@ -220,7 +220,7 @@ fn system_directory(path: &Path) -> bool {
         .trim_start_matches(r"\\?\")
         .trim_end_matches('\\')
         .to_ascii_lowercase();
-    ["SystemRoot", "ProgramFiles", "ProgramFiles(x86)"]
+    ["SystemRoot"]
         .iter()
         .filter_map(std::env::var_os)
         .any(|root| {
