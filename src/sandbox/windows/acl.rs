@@ -37,14 +37,12 @@ impl Grants {
         // 1. 【Windows沙箱】【允许清单】AppContainer 不依赖拒绝 ACE；保护路径必须从允许授权中排除
         let mut hidden = policy.deny_read.clone();
         hidden.push(super::journal::root()?);
-        let mut protected = policy.write_protected.clone();
-        for path in &policy.write_protected {
-            if !path.exists() {
-                // 2. 【Windows沙箱】【缺失保护】收窄到现存祖先，避免以后创建子目录绕过保护
-                if let Some(parent) = path.ancestors().skip(1).find(|parent| parent.exists()) {
-                    protected.push(parent.into());
-                }
-            }
+        let protected = &policy.write_protected;
+        // 1. 【Windows沙箱】【目录遍历】PowerShell 解析路径需要读取祖先本身，不授予后代继承权限
+        for ancestor in policy.cwd.ancestors().skip(1) {
+            grants.journal.register(ancestor)?;
+            update_exact(ancestor, sid, READ, GRANT_ACCESS, false)?;
+            grants.paths.push(ancestor.into());
         }
         grants.allow_tree(&policy.cwd, READ, &hidden, &[])?;
         for root in &policy.writable_roots {
@@ -66,6 +64,7 @@ impl Grants {
         protected: &[PathBuf],
     ) -> Result<()> {
         use std::os::windows::fs::MetadataExt;
+        let original_rights = rights;
         if hidden.iter().any(|blocked| under(path, blocked)) {
             return Ok(());
         }
@@ -84,6 +83,17 @@ impl Grants {
             .any(|blocked| !same_path(blocked, path) && under(blocked, path));
         if split {
             rights &= !DELETE;
+            // 1. 【Windows沙箱】【缺失子路径】禁止在最近存在的父目录创建子目录，仍允许普通文件写入
+            if protected.iter().any(|child| {
+                !child.exists()
+                    && child
+                        .ancestors()
+                        .skip(1)
+                        .find(|parent| parent.exists())
+                        .is_some_and(|parent| same_path(parent, path))
+            }) {
+                rights &= !0x4;
+            }
         }
         self.journal.register(path)?;
         update_exact(path, self.sid, rights, GRANT_ACCESS, !split)?;
@@ -92,7 +102,7 @@ impl Grants {
         }
         if split && metadata.is_dir() {
             for entry in std::fs::read_dir(path)? {
-                self.allow_tree(&entry?.path(), rights, hidden, protected)?;
+                self.allow_tree(&entry?.path(), original_rights, hidden, protected)?;
             }
         }
         Ok(())

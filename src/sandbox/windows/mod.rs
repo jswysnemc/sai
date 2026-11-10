@@ -53,7 +53,7 @@ pub(crate) fn serve(payload: &str) -> Result<u32> {
             .unwrap_or(&path)
             .replace('\'', "''");
         format!(
-            "Set-Location -LiteralPath '{path}' -ErrorAction Stop; {}",
+            "try {{ Set-Location -LiteralPath '{path}' -ErrorAction Stop }} catch {{ [Console]::Error.WriteLine($_); exit 125 }}; {}",
             launch.command
         )
     } else {

@@ -91,6 +91,20 @@ pub(crate) fn run() -> Result<()> {
         !outside_write.status.success() && !outside.join("escaped.txt").exists(),
         "outside write escaped"
     );
+    policy.write_protected.push(workspace.join(".git/hooks"));
+    let regular_write = execute(&policy, "echo still-allowed> regular.txt")?;
+    anyhow::ensure!(
+        regular_write.status.success() && workspace.join("regular.txt").exists(),
+        "missing protected directory must not disable regular file writes"
+    );
+    let _ = execute(
+        &policy,
+        "mkdir .git\\hooks & echo escaped> .git\\hooks\\pre-commit",
+    )?;
+    anyhow::ensure!(
+        !workspace.join(".git/hooks/pre-commit").exists(),
+        "missing protected directory escaped"
+    );
     let default_read = crate::sandbox::launch(&policy, "", "Get-Content read.txt")?
         .into_std()
         .output()?;
