@@ -466,6 +466,35 @@ struct PartialToolCall {
     arguments: String,
 }
 
+impl PartialToolCall {
+    /// 【模型流】【完整调用】复制已闭合参数并保留原始标识；参数为顺序，返回可执行调用。
+    fn ready(&self, index: usize) -> Option<ToolCall> {
+        if self.name.trim().is_empty()
+            || !serde_json::from_str::<Value>(&self.arguments)
+                .ok()?
+                .is_object()
+        {
+            return None;
+        }
+        Some(ToolCall {
+            id: if self.id.is_empty() {
+                format!("call-fallback-{index}")
+            } else {
+                self.id.clone()
+            },
+            kind: if self.kind.is_empty() {
+                "function".into()
+            } else {
+                self.kind.clone()
+            },
+            function: ToolCallFunction {
+                name: self.name.clone(),
+                arguments: self.arguments.clone(),
+            },
+        })
+    }
+}
+
 impl ToolCallAccumulator {
     fn push(&mut self, delta: ToolCallDelta) -> Option<ToolCallStreamProgress> {
         while self.calls.len() <= delta.index {

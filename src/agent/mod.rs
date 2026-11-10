@@ -60,6 +60,7 @@ mod runtime_context;
 #[cfg(test)]
 mod session_binding_tests;
 mod skill_load;
+mod streamed_tools;
 pub(crate) mod system_prompt;
 mod tool_attachments;
 mod tool_batch_execution;

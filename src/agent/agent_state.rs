@@ -9,6 +9,7 @@ use crate::tools::ToolRegistry;
 
 /// 保存单个会话 Agent 的运行依赖和可变状态。
 pub struct Agent {
+    pub(super) streamed_tools: super::streamed_tools::StreamedTools,
     pub(super) background_compaction: Option<super::background_compaction::BackgroundCompaction>,
     pub(crate) goal_accounting: Option<crate::goal::GoalAccounting>,
     pub(super) external_wake_policy: super::external_wake_policy::ExternalWakePolicy,

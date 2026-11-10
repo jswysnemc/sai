@@ -20,3 +20,7 @@ include!("openai_compatible/text_filters.rs");
 include!("openai_compatible/tests.rs");
 include!("openai_compatible/stream_error_tests.rs");
 include!("openai_compatible/tag_strip.rs");
+
+#[cfg(test)]
+#[path = "openai_compatible/stream_ready_tests.rs"]
+mod stream_ready_tests;

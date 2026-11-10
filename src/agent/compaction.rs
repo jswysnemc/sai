@@ -414,7 +414,9 @@ impl Agent {
                             attempt,
                             max_attempts,
                         }),
-                        ChatStreamEvent::Chunk(_) | ChatStreamEvent::ToolCallProgress(_) => Ok(()),
+                        ChatStreamEvent::Chunk(_)
+                        | ChatStreamEvent::ToolCallProgress(_)
+                        | ChatStreamEvent::ToolCallReady { .. } => Ok(()),
                     }
                 })
                 .await?;

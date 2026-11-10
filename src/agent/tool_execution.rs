@@ -47,6 +47,9 @@ impl Agent {
                 .await?;
             return self.finish_real_tool_execution(turn_id, call, execution, on_event, perf);
         }
+        if let Some(execution) = self.streamed_tools.take(call).await {
+            return self.finish_real_tool_execution(turn_id, call, execution, on_event, perf);
+        }
         let (progress_tx, mut progress_rx) = mpsc::channel(128);
         let requested_name = if call.kind == deepseek_anchor::BASH_EXECUTION_KIND {
             crate::tools::DSH_BASH_EXECUTION_ALIAS
@@ -102,6 +105,9 @@ impl Agent {
             }
             Err(error) => return tool_result(Err(error)),
             Ok(None) => {}
+        }
+        if let Some(execution) = self.streamed_tools.take(call).await {
+            return execution;
         }
         let (sender, mut receiver) = mpsc::channel(128);
         let requested_name = if call.kind == deepseek_anchor::BASH_EXECUTION_KIND {
@@ -171,7 +177,7 @@ impl Agent {
 }
 
 /// 把注册表执行结果转换为统一内部结果。
-fn tool_result(result: anyhow::Result<crate::tools::ToolOutput>) -> RealToolExecution {
+pub(super) fn tool_result(result: anyhow::Result<crate::tools::ToolOutput>) -> RealToolExecution {
     match result {
         Ok(mut tool_output) => RealToolExecution {
             output: std::mem::take(&mut tool_output.content),

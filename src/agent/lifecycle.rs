@@ -123,6 +123,7 @@ impl Agent {
             external_wake_policy::ExternalWakePolicy::capture(paths, &state)?;
         Ok(Self {
             background_compaction: None,
+            streamed_tools: Default::default(),
             goal_accounting: None,
             external_wake_policy,
             state,

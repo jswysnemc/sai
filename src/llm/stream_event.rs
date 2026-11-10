@@ -10,6 +10,11 @@ pub enum ChatStreamEvent {
         attempt: u32,
         max_attempts: u32,
     },
+    /// 【模型流】【调用就绪】完整调用已结束，index 为本响应工具顺序
+    ToolCallReady {
+        index: usize,
+        call: super::ToolCall,
+    },
     Chunk(ChatStreamChunk),
     ToolCallProgress(ToolCallStreamProgress),
 }

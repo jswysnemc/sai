@@ -135,6 +135,13 @@ where
             }
         }
     }
+    if finish_reason.is_some() {
+        for (index, partial) in tool_calls.calls.iter().enumerate() {
+            if let Some(call) = partial.ready(index) {
+                on_event(ChatStreamEvent::ToolCallReady { index, call })?;
+            }
+        }
+    }
     Ok(Some(false))
 }
 
@@ -267,8 +274,20 @@ where
         }
         "response.output_item.done" => {
             if let Some(item) = event.item {
+                let id = item.call_id.clone().or_else(|| item.id.clone());
+                let function = item.kind == "function_call";
                 if let Some(progress) = tool_calls.finish_item(item) {
                     on_event(ChatStreamEvent::ToolCallProgress(progress))?;
+                }
+                if function {
+                    let index = id
+                        .and_then(|id| tool_calls.calls.iter().position(|call| call.id == id))
+                        .or_else(|| tool_calls.calls.len().checked_sub(1));
+                    if let Some(index) = index {
+                        if let Some(call) = tool_calls.calls[index].ready(index) {
+                            on_event(ChatStreamEvent::ToolCallReady { index, call })?;
+                        }
+                    }
                 }
             }
         }
@@ -405,6 +424,19 @@ where
                         state.thinking_signature = delta.signature;
                     }
                     _ => {}
+                }
+            }
+        }
+        "content_block_stop" => {
+            if let Some(block) = event.index {
+                if let Some(partial) = state.tool_calls.calls.get(block) {
+                    let index = state.tool_calls.calls[..block]
+                        .iter()
+                        .filter(|call| !call.name.is_empty())
+                        .count();
+                    if let Some(call) = partial.ready(index) {
+                        on_event(ChatStreamEvent::ToolCallReady { index, call })?;
+                    }
                 }
             }
         }

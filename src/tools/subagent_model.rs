@@ -39,7 +39,8 @@ impl SubagentRunner {
                             } => self
                                 .progress
                                 .phase(format!("Reconnecting... {attempt}/{max_attempts}")),
-                            ChatStreamEvent::ToolCallProgress(_) => {}
+                            ChatStreamEvent::ToolCallProgress(_)
+                            | ChatStreamEvent::ToolCallReady { .. } => {}
                         }
                         Ok(())
                     }),

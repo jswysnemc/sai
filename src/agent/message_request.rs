@@ -64,10 +64,31 @@ impl Agent {
         let mut saw_tool_progress = false;
         perf.mark(&format!("round {round} model request start"));
         let _http_debug_request = crate::llm::HttpDebugRequestContextGuard::new(turn_id, round);
+        self.streamed_tools = Default::default();
+        let mut streamed = super::streamed_tools::StreamedTools::default();
+        streamed.cancel = self.cancel_requested.clone();
+        streamed.accounting = self.goal_accounting.clone();
+        let cancel = self.cancel_requested.clone();
+        let tools = self.tools.clone();
+        let visibility = self.tool_visibility.clone();
+        let accounting = self.goal_accounting.clone();
+        let cwd = crate::runtime_cwd::current_dir()?;
         let response =
             self.client
                 .chat_stream_events_retry(messages, definitions, &self.config.retry, |event| {
                     match event {
+                        ChatStreamEvent::ToolCallReady { index, call } => {
+                            if accounting
+                                .as_ref()
+                                .map(|value| value.current_goal())
+                                .transpose()?
+                                .flatten()
+                                .is_none_or(|goal| goal.status.is_active())
+                            {
+                                streamed.ready(index, call, &tools, &visibility, &cwd);
+                            }
+                            Ok(())
+                        }
                         ChatStreamEvent::Chunk(chunk) => {
                             match chunk.kind {
                                 ChatStreamKind::Reasoning if !saw_reasoning => {
@@ -92,11 +113,16 @@ impl Agent {
                         ChatStreamEvent::Reset {
                             content_chars,
                             reasoning_chars,
-                        } => on_event(AgentEvent::ResponseReset {
-                            content_chars,
-                            reasoning_chars,
-                            compaction: false,
-                        }),
+                        } => {
+                            streamed = Default::default();
+                            streamed.cancel = cancel.clone();
+                            streamed.accounting = accounting.clone();
+                            on_event(AgentEvent::ResponseReset {
+                                content_chars,
+                                reasoning_chars,
+                                compaction: false,
+                            })
+                        }
                         ChatStreamEvent::Reconnecting {
                             attempt,
                             max_attempts,
@@ -125,6 +151,8 @@ impl Agent {
             }
             Ok(result) => result,
         };
+        streamed.retain_confirmed(&result.tool_calls);
+        self.streamed_tools = streamed;
         perf.mark(&format!("round {round} model request done"));
         Ok(result)
     }
