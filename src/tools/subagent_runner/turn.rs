@@ -26,7 +26,10 @@ impl SubagentRunner {
             .iter()
             .map(String::as_str)
             .collect::<Vec<_>>();
-        let mut steps = 0usize;
+        let mut steps = self
+            .load_checkpoint()?
+            .filter(|saved| !saved.turn_complete)
+            .map_or(0, |saved| saved.steps);
         let mut repeat_guard = ProgressGuard::default();
         // 运行时限只提醒一次，避免每轮刷屏挤占上下文
         let started = tokio::time::Instant::now();
@@ -47,6 +50,7 @@ impl SubagentRunner {
             }
             // 0. 步间注入排队的追加消息（不打断进行中的工具调用）
             self.inject_queued_messages(messages);
+            self.save_checkpoint(messages, stats, tool_visibility, steps, false, &[])?;
             // 1. 时限临近时注入软提醒；工具不受限，由子代理自行收敛
             if !deadline_reminded && self.session_deadline_seconds > 0 {
                 let elapsed = started.elapsed().as_secs();
@@ -63,20 +67,17 @@ impl SubagentRunner {
                 messages.push(ChatMessage::plain("user", finalization_prompt()));
                 return self.finalize_without_tools(messages, round, stats).await;
             }
+            let definitions = tool_visibility
+                .definitions(&self.tools)
+                .into_iter()
+                .filter(|definition| {
+                    !excluded
+                        .iter()
+                        .any(|name| *name == definition.function.name)
+                })
+                .collect();
             let result = self
-                .request_model_round(
-                    messages.clone(),
-                    tool_visibility
-                        .definitions(&self.tools)
-                        .into_iter()
-                        .filter(|definition| {
-                            !excluded
-                                .iter()
-                                .any(|name| *name == definition.function.name)
-                        })
-                        .collect(),
-                    round,
-                )
+                .request_with_context(messages, stats, tool_visibility, definitions, round, steps)
                 .await?;
             stats.record_response(messages, &result);
             // 每轮结束把累计用量写回快照：底部面板据此实时显示 token，
@@ -86,6 +87,7 @@ impl SubagentRunner {
                 return Ok(result);
             }
             messages.push(result.assistant_message());
+            self.save_checkpoint(messages, stats, tool_visibility, steps, false, &[])?;
             let mut attachments = Vec::new();
             repeat_guard.begin_round();
             for provider_call in result.tool_calls {
@@ -138,6 +140,7 @@ impl SubagentRunner {
                     .tool_call_detail(&call.function.name, &call.function.arguments);
                 let repeat_verdict =
                     repeat_guard.observe(&call.function.name, &call.function.arguments);
+                self.save_checkpoint(messages, stats, tool_visibility, steps, false, &attachments)?;
                 let started = tokio::time::Instant::now();
                 let (output, ok, _) = match repeat_verdict {
                     RepeatVerdict::Stop { seen } => (
@@ -177,11 +180,13 @@ impl SubagentRunner {
                     _ => context_output,
                 };
                 messages.push(ChatMessage::tool(provider_call.id, context_output));
+                self.save_checkpoint(messages, stats, tool_visibility, steps, false, &attachments)?;
             }
             if let Some(message) = crate::tools::model_attachment::attachment_message(&attachments)
             {
                 messages.push(message);
             }
+            self.save_checkpoint(messages, stats, tool_visibility, steps, false, &[])?;
             // 【子任务】【循环防护】2. 连续无进展时撤下工具，仅请求一次已有结果汇总
             if repeat_guard.finish_round() {
                 stats.loop_detected = true;

@@ -46,6 +46,7 @@ fn subagent_constructor_excludes_the_computer_use_family() {
 /// 【子任务】【循环测试】本地模型接口与无副作用工具，记录真实请求及执行次数。
 struct Harness {
     runner: SubagentRunner,
+    config: AppConfig,
     requests: Arc<Mutex<Vec<Value>>>,
     executions: Arc<AtomicUsize>,
     ignore_tool_removal: Arc<AtomicBool>,
@@ -125,6 +126,7 @@ impl Harness {
             SubagentRunner::new(client, "完成审查后返回结果。", tools, progress).max_steps(12);
         Self {
             runner,
+            config,
             requests,
             executions,
             ignore_tool_removal,
@@ -528,3 +530,6 @@ async fn failed_commands_report_failure_in_progress_and_stats() {
     }
     assert!(found);
 }
+
+#[path = "checkpoint_tests.rs"]
+mod checkpoint_tests;

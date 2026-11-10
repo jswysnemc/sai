@@ -13,6 +13,23 @@ pub(crate) struct PersistedSubagent {
     pub(crate) snapshot: SubagentSnapshot,
     pub(crate) timeline: Vec<SubagentTimelineEntry>,
     pub(crate) finish_notified: bool,
+    #[serde(default)]
+    pub(crate) checkpoint: Option<super::subagent_runner::checkpoint::SubagentCheckpoint>,
+    #[serde(default)]
+    pub(crate) execution: Option<SubagentExecutionContext>,
+    #[serde(default)]
+    pub(crate) inbox: Vec<super::subagent_state::SubagentInboxMessage>,
+    #[serde(default)]
+    pub(crate) message_log: Vec<super::subagent_state::SubagentInboxMessage>,
+    #[serde(default)]
+    pub(crate) stop_request: Option<super::subagent_state::SubagentStopRequest>,
+}
+
+/// 【子任务】【恢复环境】保存原始工作目录及工作树，恢复时不另建分支。
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct SubagentExecutionContext {
+    pub(crate) cwd: PathBuf,
+    pub(crate) worktree: Option<super::subagent_worktree::SubagentWorktree>,
 }
 
 /// 读取父会话的子智能体记录。
@@ -100,6 +117,11 @@ mod tests {
                 text: "done".to_string(),
             }],
             finish_notified: false,
+            checkpoint: None,
+            execution: None,
+            inbox: Vec::new(),
+            message_log: Vec::new(),
+            stop_request: None,
         };
 
         save(&owner_key, std::slice::from_ref(&record)).unwrap();

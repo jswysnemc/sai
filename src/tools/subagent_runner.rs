@@ -1,5 +1,7 @@
 pub(crate) use super::subagent_progress::{ProgressMode, SubagentProgress};
 mod accounting;
+pub(crate) mod checkpoint;
+mod context;
 #[path = "subagent_model.rs"]
 mod model;
 mod progress_guard;
@@ -15,7 +17,7 @@ use crate::paths::SaiPaths;
 use anyhow::Result;
 use serde_json::{json, Value};
 
-#[derive(Default)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 pub(crate) struct SubagentStats {
     pub(crate) tool_calls: usize,
     pub(crate) tool_ok: usize,
@@ -29,7 +31,7 @@ pub(crate) struct SubagentStats {
     pub(crate) loop_detected: bool,
 }
 
-#[derive(Clone, Copy, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) enum TokenEstimateMethod {
     #[default]
     None,
@@ -198,6 +200,7 @@ pub(crate) fn wrap_subagent_inbox(from: &str, text: &str) -> String {
 }
 
 pub(crate) struct SubagentRunner {
+    checkpoint_id: Option<String>,
     goal_accounting: Option<crate::goal::GoalAccounting>,
     client: OpenAiCompatibleClient,
     system_prompt: String,
@@ -234,6 +237,7 @@ impl SubagentRunner {
         crate::tools::computer_use::exclude_from_subagent(&mut tools);
         tools.set_plugin_model_client(&client);
         Self {
+            checkpoint_id: None,
             goal_accounting: None,
             client,
             system_prompt: system_prompt.into(),
@@ -350,9 +354,12 @@ impl SubagentRunner {
     /// 返回:
     /// - 子代理最终结果和统计信息
     pub(crate) async fn run(&self, prompt: &str) -> Result<(ChatResult, SubagentStats)> {
-        let mut stats = SubagentStats::default();
-        let mut messages = self.initial_messages(prompt);
-        let mut tool_visibility = self.fresh_tool_visibility();
+        if let Some(saved) = self.load_checkpoint()? {
+            if let Some(result) = saved.completed_result() {
+                return Ok((result, saved.stats));
+            }
+        }
+        let (mut messages, mut stats, mut tool_visibility) = self.restore_session(prompt)?;
         let result = self
             .tools
             .plugin_events()
@@ -361,6 +368,8 @@ impl SubagentRunner {
                 self.chat_with_tools(&mut messages, &mut stats, &mut tool_visibility),
             )
             .await?;
+        messages.push(result.assistant_message());
+        self.save_checkpoint(&messages, &stats, &tool_visibility, 0, true, &[])?;
         self.report_stats(&stats);
         Ok((result, stats))
     }
@@ -420,6 +429,7 @@ impl SubagentRunner {
         if !result.content.trim().is_empty() {
             messages.push(result.assistant_message());
         }
+        self.save_checkpoint(messages, stats, tool_visibility, 0, true, &[])?;
         self.report_stats(stats);
         Ok(result)
     }

@@ -127,9 +127,10 @@ pub(super) fn build_subagent_runner(
         .transpose()?;
     Ok(SubagentRunner::new(client, &system_prompt, tools, progress)
         .with_goal_accounting(goal_accounting)
+        .with_checkpoint(subagent_id)
         .progressive_loading(
             profile.deferred_tools.clone(),
-            context.config.clone(),
+            crate::config::subagent_runtime_config(&context.config, &profile)?,
             context.paths.clone(),
         )
         .max_steps(max_steps)

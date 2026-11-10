@@ -346,19 +346,7 @@ pub(super) fn classify_compaction_error(err: &anyhow::Error) -> FailureKind {
 /// 返回:
 /// - 是否属于上下文溢出
 pub(super) fn is_context_overflow_error(err: &anyhow::Error) -> bool {
-    let message = format!("{err:#}").to_ascii_lowercase();
-    [
-        "context_length_exceeded",
-        "maximum context",
-        "context window",
-        "context length",
-        "too many tokens",
-        "tokens exceed",
-        "prompt is too long",
-        "input is too long",
-    ]
-    .iter()
-    .any(|needle| message.contains(needle))
+    crate::llm::is_context_overflow_error(err)
 }
 
 #[cfg(test)]

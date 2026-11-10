@@ -93,6 +93,8 @@ pub(crate) fn create_subagent_for_owner_goal(
         turns_completed: 0,
     };
     let mut record = SubagentRecord {
+        checkpoint: None,
+        execution: None,
         owner_key: owner_key.to_string(),
         snapshot: snapshot.clone(),
         cancel: Some(cancel_tx),
@@ -214,7 +216,13 @@ pub(crate) fn park_subagent(id: &str, result: Option<String>, stats: Option<Valu
     record.snapshot.status = "idle".to_string();
     record.snapshot.result = result;
     record.snapshot.stats = stats;
-    record.snapshot.turns_completed += 1;
+    if !record
+        .checkpoint
+        .as_ref()
+        .is_some_and(|saved| saved.turn_complete)
+    {
+        record.snapshot.turns_completed += 1;
+    }
     record.snapshot.phase = Some(if is_zh() {
         "待命中，等待追加消息".to_string()
     } else {

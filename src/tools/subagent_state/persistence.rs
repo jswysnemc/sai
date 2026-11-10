@@ -44,19 +44,30 @@ pub(super) fn ensure_owner_loaded(owner_key: &str) {
                 .to_string()
             });
             snapshot.status = "interrupted".to_string();
-            snapshot.pending_messages = 0;
+
             snapshot.updated_at = unix_seconds();
         }
+        // 2. 【子任务】【消息恢复】重投尚未进入检查点的消息，消费与对话保持一致
+        let mut message_log = persisted.message_log;
+        let consumed = persisted
+            .checkpoint
+            .as_ref()
+            .map_or(0, |saved| saved.consumed_messages);
+        let mut inbox = message_log.split_off(consumed.min(message_log.len()));
+        inbox.extend(persisted.inbox);
+        snapshot.pending_messages = inbox.len();
         let mut record = SubagentRecord {
+            checkpoint: persisted.checkpoint,
+            execution: persisted.execution,
             owner_key: persisted.owner_key,
             snapshot,
             cancel: None,
             finish_notified: persisted.finish_notified,
             timeline: SubagentTimeline::from_entries(persisted.timeline),
             event_journal: SubagentEventJournal::new(),
-            inbox: Vec::new(),
-            message_log: Vec::new(),
-            stop_request: None,
+            inbox,
+            message_log,
+            stop_request: persisted.stop_request,
         };
         publish_record(&mut record);
         subagents.insert(record.snapshot.id.clone(), record);
@@ -66,17 +77,30 @@ pub(super) fn ensure_owner_loaded(owner_key: &str) {
 
 /// 保存指定父会话当前全部子智能体记录。
 pub(super) fn persist_owner_locked(subagents: &HashMap<String, SubagentRecord>, owner_key: &str) {
+    let _ = persist_owner_checked(subagents, owner_key);
+}
+
+/// 【子任务】【检查点落盘】原子提交状态并向调用方传播错误；参数为记录表与归属键，返回保存结果。
+pub(super) fn persist_owner_checked(
+    subagents: &HashMap<String, SubagentRecord>,
+    owner_key: &str,
+) -> Result<()> {
     let records = subagents
         .values()
         .filter(|record| record.owner_key == owner_key)
         .map(|record| PersistedSubagent {
+            checkpoint: record.checkpoint.clone(),
+            execution: record.execution.clone(),
+            inbox: record.inbox.clone(),
+            message_log: record.message_log.clone(),
+            stop_request: record.stop_request,
             owner_key: record.owner_key.clone(),
             snapshot: record.snapshot.clone(),
             timeline: record.timeline.entries(),
             finish_notified: record.finish_notified,
         })
         .collect::<Vec<_>>();
-    let _ = subagent_persistence::save(owner_key, &records);
+    subagent_persistence::save(owner_key, &records)
 }
 
 /// 获取当前 Unix 秒数。

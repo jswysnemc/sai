@@ -77,6 +77,11 @@ fn persist_subagent(state_dir: &Path, id: &str) {
     subagent_persistence::save(
         &owner_key,
         std::slice::from_ref(&PersistedSubagent {
+            checkpoint: None,
+            execution: None,
+            inbox: Vec::new(),
+            message_log: Vec::new(),
+            stop_request: None,
             owner_key: owner_key.clone(),
             snapshot: SubagentSnapshot {
                 id: id.to_string(),

@@ -10,7 +10,11 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
 use tokio::sync::oneshot;
 
+mod checkpoint;
 mod lifecycle;
+pub(crate) use checkpoint::{
+    archive_context, load_checkpoint, prepare_resume, save_checkpoint, set_execution_context,
+};
 mod messaging;
 mod persistence;
 mod response_reset;
@@ -19,6 +23,8 @@ mod queries;
 mod record_access;
 mod timeline_queries;
 
+#[cfg(test)]
+mod checkpoint_tests;
 #[cfg(test)]
 mod tests;
 
@@ -114,6 +120,8 @@ pub(crate) struct SubagentProgressUpdate {
 }
 
 struct SubagentRecord {
+    checkpoint: Option<super::subagent_runner::checkpoint::SubagentCheckpoint>,
+    execution: Option<super::subagent_persistence::SubagentExecutionContext>,
     owner_key: String,
     snapshot: SubagentSnapshot,
     cancel: Option<oneshot::Sender<()>>,
@@ -162,7 +170,7 @@ pub(crate) struct MeshMessageMeta {
 }
 
 /// 持久子智能体的优雅结束请求。
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub(crate) struct SubagentStopRequest {
     /// 结束时是否把 worktree 变更 apply 回主工作区
     pub(crate) apply: bool,
