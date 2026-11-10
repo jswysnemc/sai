@@ -18,6 +18,9 @@ async fn interactive_input_is_scoped_and_completed_sessions_are_removed() {
     .await
     .is_err());
     assert!(sessions().lock().unwrap().contains_key(id));
+    assert_eq!(management::list(Some(&owner.owner_id)).unwrap().len(), 1);
+    assert!(management::list(Some("unrelated")).unwrap().is_empty());
+    assert!(management::output(id, Some("unrelated")).is_err());
     let final_result: Value = serde_json::from_str(
         &interact(
             &owner_key(&owner),
@@ -35,6 +38,7 @@ async fn interactive_input_is_scoped_and_completed_sessions_are_removed() {
         .contains("received:中文输入"));
     assert!(final_result["session_id"].is_null());
     assert!(!sessions().lock().unwrap().contains_key(id));
+    assert!(management::list(Some(&owner.owner_id)).unwrap().is_empty());
 }
 
 /// 【交互命令】【取消回归】启动工具取消后清理子进程和注册记录，不遗留后台 Shell。

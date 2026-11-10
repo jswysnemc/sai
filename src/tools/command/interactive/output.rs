@@ -13,6 +13,15 @@ pub(super) struct OutputBuffer {
 }
 
 impl OutputBuffer {
+    /// 【交互命令】【快照读取】复制未消费缓冲供管理面板展示；无参数，返回文本和截断标记。
+    pub(super) fn peek(&self) -> (String, bool) {
+        let bytes = self.bytes.iter().copied().collect::<Vec<_>>();
+        (
+            String::from_utf8_lossy(&bytes).into_owned(),
+            self.omitted > 0,
+        )
+    }
+
     /// 【交互命令】【输出追加】容量不足时移除最早字节；参数为原始输出，返回无。
     fn append(&mut self, bytes: &[u8]) {
         for byte in bytes {

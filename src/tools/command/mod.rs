@@ -17,6 +17,7 @@ mod cancellation_tests;
 mod exit_status;
 mod goal_completions;
 mod interactive;
+pub(crate) use interactive::management as interactive_management;
 mod process;
 mod process_lifecycle;
 mod progress;

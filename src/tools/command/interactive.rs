@@ -1,3 +1,4 @@
+pub(crate) mod management;
 mod output;
 mod session;
 #[cfg(test)]

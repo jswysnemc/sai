@@ -128,12 +128,17 @@ async fn execute(
     let notice = match request {
         Request::Refresh => None,
         Request::Stop { id, force } => {
-            ensure_background_task_scope(paths, &id, session_id)?;
-            stop_background_task_for_user(paths, config, &id, force).await?;
+            if id.starts_with("pty_") {
+                crate::tools::command::interactive_management::stop(&id, session_id)?;
+            } else {
+                ensure_background_task_scope(paths, &id, session_id)?;
+                stop_background_task_for_user(paths, config, &id, force).await?;
+            }
             Some(t("Task ended", "任务已结束").to_string())
         }
         Request::Cleanup => {
             cleanup_background_tasks_in_scope(paths, config, false, session_id).await?;
+            crate::tools::command::interactive_management::cleanup(session_id);
             Some(
                 t(
                     "Finished records cleaned; logs kept",
@@ -151,6 +156,9 @@ async fn execute(
         &list_background_tasks_in_scope(paths, config, session_id).await?,
     )?
     .tasks;
+    for task in crate::tools::command::interactive_management::list(session_id)? {
+        tasks.push(serde_json::from_value(task)?);
+    }
     tasks.sort_by(|a, b| {
         (b.status == "running")
             .cmp(&(a.status == "running"))
@@ -162,8 +170,12 @@ async fn execute(
         .or_else(|| tasks.first().map(|task| task.id.clone()));
     let output = if let Some(id) = target.filter(|_| output) {
         let result = async {
-            ensure_background_task_scope(paths, &id, session_id)?;
-            let raw = read_managed_background_output(paths, config, &id, 2000).await?;
+            let raw = if id.starts_with("pty_") {
+                crate::tools::command::interactive_management::output(&id, session_id)?
+            } else {
+                ensure_background_task_scope(paths, &id, session_id)?;
+                read_managed_background_output(paths, config, &id, 2000).await?
+            };
             Ok::<Output, anyhow::Error>(serde_json::from_str(&raw)?)
         }
         .await

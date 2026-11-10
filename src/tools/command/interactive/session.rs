@@ -10,6 +10,9 @@ use std::sync::{Arc, Mutex};
 pub(super) struct InteractiveSession {
     pub(super) owner: String,
     pub(super) pid: u32,
+    pub(super) command: String,
+    pub(super) cwd: std::path::PathBuf,
+    pub(super) started_at: u64,
     _master: Mutex<Box<dyn MasterPty + Send>>,
     writer: Mutex<Box<dyn Write + Send>>,
     child: Mutex<Box<dyn Child + Send + Sync>>,
@@ -89,6 +92,9 @@ impl InteractiveSession {
             return Ok(Self {
                 owner,
                 pid,
+                command: command.to_string(),
+                cwd: cwd.to_path_buf(),
+                started_at: crate::tools::command::unix_seconds(),
                 _master: Mutex::new(pair.master),
                 writer: Mutex::new(writer),
                 child: Mutex::new(child),
@@ -148,6 +154,14 @@ impl InteractiveSession {
             .lock()
             .unwrap_or_else(|error| error.into_inner())
             .take()
+    }
+
+    /// 【交互命令】【只读快照】查看面板输出不消费模型的未读结果；无参数，返回文本与截断标记。
+    pub(super) fn peek_output(&self) -> (String, bool) {
+        self.output
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .peek()
     }
 
     /// 【交互命令】【取消清理】终止整棵进程树；无参数、无返回值。
