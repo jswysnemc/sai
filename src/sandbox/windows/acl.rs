@@ -22,7 +22,7 @@ pub(super) struct Grants {
     journal: super::journal::Journal,
 }
 impl Grants {
-    /// 【Windows沙箱】【权限应用】保护路径先拒绝，再允许工作区和工具读取。
+    /// 【Windows沙箱】【权限应用】先授权工作区和工具读取，再对保护路径应用显式拒绝。
     /// 参数：容器 SID、解析策略和 Shell 路径；返回自动回收授权的守卫。
     pub(super) fn apply(
         sid: PSID,
@@ -35,6 +35,14 @@ impl Grants {
             paths: Vec::new(),
             journal,
         };
+        grants.add(&policy.cwd, READ, GRANT_ACCESS)?;
+        for root in &policy.writable_roots {
+            grants.add(root, READ | WRITE, GRANT_ACCESS)?;
+        }
+        // 1. 【Windows沙箱】【工具目录】仅授权实际 Shell 安装目录，PATH 不能隐式扩展文件读取范围
+        if let Some(parent) = shell.parent().filter(|path| !system_directory(path)) {
+            grants.add(parent, READ, GRANT_ACCESS)?;
+        }
         grants.deny_tree(&super::journal::root()?, READ | DENY_WRITE)?;
         for path in &policy.deny_read {
             if path.exists() {
@@ -61,14 +69,6 @@ impl Grants {
                     }
                 }
             }
-        }
-        grants.add(&policy.cwd, READ, GRANT_ACCESS)?;
-        for root in &policy.writable_roots {
-            grants.add(root, READ | WRITE, GRANT_ACCESS)?;
-        }
-        // 1. 【Windows沙箱】【工具目录】仅授权实际 Shell 安装目录，PATH 不能隐式扩展文件读取范围
-        if let Some(parent) = shell.parent().filter(|path| !system_directory(path)) {
-            grants.add(parent, READ, GRANT_ACCESS)?;
         }
         Ok(grants)
     }

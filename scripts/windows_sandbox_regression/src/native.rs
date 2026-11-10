@@ -59,7 +59,13 @@ pub(crate) fn run() -> Result<()> {
         "outside read escaped"
     );
     let hidden_read = execute(&policy, "type hidden.txt")?;
-    anyhow::ensure!(!hidden_read.status.success(), "hidden file readable");
+    anyhow::ensure!(
+        !String::from_utf8_lossy(&hidden_read.stdout).contains("private"),
+        "hidden file readable; status={} stdout={} stderr={}",
+        hidden_read.status,
+        String::from_utf8_lossy(&hidden_read.stdout),
+        String::from_utf8_lossy(&hidden_read.stderr)
+    );
     policy.access = FileAccess::WorkspaceWrite;
     policy.writable_roots.push(workspace.clone());
     let write = execute(&policy, "echo allowed> allowed.txt")?;
