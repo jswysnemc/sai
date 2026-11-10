@@ -3,6 +3,7 @@ use super::*;
 use crate::agent::repeat_guard::{self, RepeatVerdict};
 use crate::agent::{evaluate_tool_gate, resolve_execution_call, ToolGate};
 use crate::tools::tool_output_for_context;
+use crate::tools::ToolOutput;
 use std::time::Duration;
 
 impl SubagentRunner {
@@ -49,7 +50,7 @@ impl SubagentRunner {
             if self.max_steps > 0 && steps >= self.max_steps {
                 stats.budget_reached = true;
                 messages.push(ChatMessage::plain("user", finalization_prompt()));
-                return self.finalize_without_tools(messages, round).await;
+                return self.finalize_without_tools(messages, round, stats).await;
             }
             let result = self
                 .request_model_round(
@@ -66,17 +67,15 @@ impl SubagentRunner {
                     round,
                 )
                 .await?;
-            stats.add_usage_or_estimate(result.usage.as_ref(), &[]);
+            stats.record_response(messages, &result);
             // 每轮结束把累计用量写回快照：底部面板据此实时显示 token，
             // 否则长任务期间数字要等到任务结束才出现
             self.progress.stats(stats.public());
             if result.tool_calls.is_empty() {
                 return Ok(result);
             }
-            messages.push(
-                ChatMessage::assistant(result.content.clone(), Some(result.tool_calls.clone()))
-                    .with_reasoning(result.reasoning.clone()),
-            );
+            messages.push(result.assistant_message());
+            let mut attachments = Vec::new();
             repeat_guard.begin_round();
             for provider_call in result.tool_calls {
                 if self.max_steps > 0 && steps >= self.max_steps {
@@ -131,7 +130,7 @@ impl SubagentRunner {
                 let started = tokio::time::Instant::now();
                 let (output, ok, _) = match repeat_verdict {
                     RepeatVerdict::Stop { seen } => (
-                        repeat_guard::stop_notice(&call.function.name, seen),
+                        ToolOutput::text(repeat_guard::stop_notice(&call.function.name, seen)),
                         false,
                         true,
                     ),
@@ -140,6 +139,8 @@ impl SubagentRunner {
                             .await
                     }
                 };
+                attachments.extend(output.model_attachments);
+                let output = output.content;
                 if !matches!(repeat_verdict, RepeatVerdict::Stop { .. }) {
                     repeat_guard.record(
                         &call.function.name,
@@ -166,6 +167,10 @@ impl SubagentRunner {
                 };
                 messages.push(ChatMessage::tool(provider_call.id, context_output));
             }
+            if let Some(message) = crate::tools::model_attachment::attachment_message(&attachments)
+            {
+                messages.push(message);
+            }
             // 【子任务】【循环防护】2. 连续无进展时撤下工具，仅请求一次已有结果汇总
             if repeat_guard.finish_round() {
                 stats.loop_detected = true;
@@ -175,7 +180,9 @@ impl SubagentRunner {
                     "Repeated calls produced no new results; summarizing available findings"
                 });
                 messages.push(ChatMessage::plain("user", "<subagent_loop_detected>连续多轮工具调用没有产生新结果，已停止重复执行。不要再请求工具，不要把未完成的工作说成已完成。请基于已有结果输出已完成部分、未完成部分及阻碍，交回主代理处理。</subagent_loop_detected>"));
-                return self.finalize_without_tools(messages, round + 1).await;
+                return self
+                    .finalize_without_tools(messages, round + 1, stats)
+                    .await;
             }
         }
     }
@@ -186,10 +193,12 @@ impl SubagentRunner {
         &self,
         messages: &[ChatMessage],
         round: usize,
+        stats: &mut SubagentStats,
     ) -> Result<ChatResult> {
         let result = self
             .request_model_round(messages.to_vec(), Vec::new(), round)
             .await?;
+        stats.record_response(messages, &result);
         anyhow::ensure!(
             result.tool_calls.is_empty(),
             "subagent finalization requested tools after execution was stopped"
@@ -215,24 +224,24 @@ impl SubagentRunner {
         call: &crate::llm::ToolCall,
         tool_visibility: &mut ToolVisibility,
         excluded: &[&str],
-    ) -> (String, bool, bool) {
+    ) -> (ToolOutput, bool, bool) {
         if excluded.iter().any(|name| *name == call.function.name) {
             return (
-                format!(
+                ToolOutput::text(format!(
                     "tool error: tool {} is disabled for this subagent",
                     call.function.name
-                ),
+                )),
                 false,
                 true,
             );
         }
         if let ToolGate::Reject(output) = evaluate_tool_gate(&self.tools, tool_visibility, call) {
-            return (output, false, true);
+            return (ToolOutput::text(output), false, true);
         }
         if tool_visibility.is_loader_call(&call.function.name) {
             let Some((config, paths)) = self.progressive_context.as_ref() else {
                 return (
-                    "tool error: progressive loading context is unavailable".to_string(),
+                    ToolOutput::text("tool error: progressive loading context is unavailable"),
                     false,
                     true,
                 );
@@ -243,31 +252,59 @@ impl SubagentRunner {
                 config,
                 paths,
             ) {
-                Ok(output) => (output, true, false),
-                Err(error) => (format!("tool error: {error:#}"), false, true),
+                Ok(output) => (ToolOutput::text(output), true, false),
+                Err(error) => (
+                    ToolOutput::text(format!("tool error: {error:#}")),
+                    false,
+                    true,
+                ),
             };
         }
         match tokio::time::timeout(
             Duration::from_secs(self.timeout_seconds.max(5)),
-            self.tools
-                .call(&call.function.name, &call.function.arguments),
+            self.call_tool_with_progress(call),
         )
         .await
         {
             Ok(Ok(output)) => {
-                let ok = tool_succeeded(&call.function.name, &output);
+                let ok = tool_succeeded(&call.function.name, &output.content);
                 (output, ok, false)
             }
             // 同一参数连续执行失败时计入拒绝统计，避免业务校验错误导致无限重试
-            Ok(Err(error)) => (format!("tool error: {error:#}"), false, true),
-            Err(_) => (
-                format!(
-                    "tool error: {} timed out after {}s",
-                    call.function.name, self.timeout_seconds
-                ),
+            Ok(Err(error)) => (
+                ToolOutput::text(format!("tool error: {error:#}")),
                 false,
                 true,
             ),
+            Err(_) => (
+                ToolOutput::text(format!(
+                    "tool error: {} timed out after {}s",
+                    call.function.name, self.timeout_seconds
+                )),
+                false,
+                true,
+            ),
+        }
+    }
+
+    /// 【子任务】【工具进度】执行期间转发进度并保留全部模型附件
+    /// 参数：`call` 为已授权调用；返回：文本与图片输出或执行错误
+    async fn call_tool_with_progress(&self, call: &crate::llm::ToolCall) -> Result<ToolOutput> {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let future =
+            self.tools
+                .call_with_progress(&call.function.name, &call.function.arguments, sender);
+        tokio::pin!(future);
+        loop {
+            tokio::select! {
+                result = &mut future => {
+                    while let Ok(message) = receiver.try_recv() {
+                        self.progress.phase(message);
+                    }
+                    return result;
+                }
+                Some(message) = receiver.recv() => self.progress.phase(message),
+            }
         }
     }
 }

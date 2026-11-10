@@ -1,4 +1,5 @@
 pub(crate) use super::subagent_progress::{ProgressMode, SubagentProgress};
+mod accounting;
 #[path = "subagent_model.rs"]
 mod model;
 mod progress_guard;
@@ -348,10 +349,6 @@ impl SubagentRunner {
                 self.chat_with_tools(&mut messages, &mut stats, &mut tool_visibility),
             )
             .await?;
-        stats.add_usage_or_estimate(
-            result.usage.as_ref(),
-            &[&self.system_prompt, prompt, &result.content],
-        );
         self.report_stats(&stats);
         Ok((result, stats))
     }
@@ -409,9 +406,8 @@ impl SubagentRunner {
             .await?;
         // 1. 段末把最终回复写回共享对话，后续任务段才能看到完整历史
         if !result.content.trim().is_empty() {
-            messages.push(ChatMessage::assistant(result.content.clone(), None));
+            messages.push(result.assistant_message());
         }
-        stats.add_usage_or_estimate(result.usage.as_ref(), &[&result.content]);
         self.report_stats(stats);
         Ok(result)
     }

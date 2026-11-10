@@ -90,7 +90,7 @@ impl Harness {
                     } else {
                         json!({"reasoning_content":"已审查当前包，继续下一项。", "tool_calls":calls})
                     };
-                    let response = json!({"choices":[{"index":0,"delta":delta,"finish_reason":"stop"}]});
+                    let response = json!({"choices":[{"index":0,"delta":delta,"finish_reason":"stop"}],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18}});
                     ([("content-type", "text/event-stream")], format!("data: {response}\n\ndata: [DONE]\n\n"))
                 }
             },
@@ -145,6 +145,97 @@ impl Harness {
 /// 【子任务】【循环测试】生成流式工具调用；参数为序号、名称与参数，返回 JSON。
 fn call(round: usize, name: &str, args: Value) -> Value {
     json!({"index":0,"id":format!("call-{round}"),"type":"function","function":{"name":name,"arguments":args.to_string()}})
+}
+
+/// 【子任务】【用量测试】普通结束仅累计一次最终响应；无参数、无返回值
+#[tokio::test]
+async fn final_response_usage_is_counted_once() {
+    let harness = Harness::new(|_| Vec::new(), unchanged_output).await;
+    let (_, stats) = harness.run().await;
+    assert_eq!(stats.prompt_tokens, 11);
+    assert_eq!(stats.completion_tokens, 7);
+    assert_eq!(stats.total_tokens, 18);
+}
+
+/// 【子任务】【用量测试】跨任务段累计真实调用用量，不重复累计段末响应；无参数、无返回值
+#[tokio::test]
+async fn persistent_turn_usage_counts_each_response_once() {
+    let harness = Harness::new(|_| Vec::new(), unchanged_output).await;
+    let mut messages = harness.runner.initial_messages("审查软件包");
+    let mut stats = SubagentStats::default();
+    let mut visibility = harness.runner.fresh_tool_visibility();
+    for expected in [18, 36] {
+        harness
+            .runner
+            .run_turn(&mut messages, &mut stats, &mut visibility)
+            .await
+            .unwrap();
+        assert_eq!(stats.total_tokens, expected);
+    }
+}
+
+/// 【子任务】【用量测试】工具预算触发的最后汇总同样累计一次；无参数、无返回值
+#[tokio::test]
+async fn budget_finalization_usage_is_counted_once() {
+    let mut harness = Harness::new(
+        |round| {
+            vec![call(
+                round,
+                "run_command",
+                json!({"command":"read package"}),
+            )]
+        },
+        unchanged_output,
+    )
+    .await;
+    harness.runner.max_steps = 1;
+    let (_, stats) = harness.run().await;
+    assert!(stats.budget_reached);
+    assert_eq!(harness.requests.lock().unwrap().len(), 2);
+    assert_eq!(stats.total_tokens, 36);
+}
+
+/// 【子任务】【图片测试】图片工具结果必须进入下一轮模型请求；无参数、无返回值
+#[tokio::test]
+async fn tool_images_reach_the_next_model_request() {
+    let mut harness = Harness::new(
+        |round| {
+            if round == 0 {
+                vec![call(round, "inspect_image", json!({}))]
+            } else {
+                Vec::new()
+            }
+        },
+        unchanged_output,
+    )
+    .await;
+    harness.runner.tools.register(ToolSpec::new_with_output(
+        "inspect_image",
+        "Inspect image",
+        json!({"type":"object","properties":{}}),
+        |_| async {
+            Ok(
+                crate::tools::ToolOutput::text("image returned").with_model_attachments([
+                    crate::tools::ToolModelAttachment::new(
+                        "data:image/png;base64,AA==",
+                        "fixture.png",
+                        "fixture image",
+                    ),
+                ]),
+            )
+        },
+    ));
+    harness.run().await;
+    let requests = harness.requests.lock().unwrap();
+    let messages = requests[1]["messages"].as_array().unwrap();
+    let images: Vec<_> = messages
+        .iter()
+        .filter_map(|m| m["content"].as_array())
+        .flatten()
+        .filter(|p| p["type"] == "image_url")
+        .collect();
+    assert_eq!(images.len(), 1);
+    assert_eq!(images[0]["image_url"]["url"], "data:image/png;base64,AA==");
 }
 
 /// 【子任务】【循环测试】生成含变化审计编号的相同命令结果；参数为次数，返回文本。

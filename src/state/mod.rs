@@ -41,7 +41,7 @@ pub use compaction::{
     CompactionApplyOutcome, CompactionBudgetPolicy, CompactionRequest, CompactionSummary,
     ContextPressure, ResolvedCompactionPolicy,
 };
-pub(crate) use compaction::{summary_char_limit, validate_summary};
+pub(crate) use compaction::{estimate_chat_messages_tokens, summary_char_limit, validate_summary};
 pub use context_epoch::{ContextEpochProjection, ContextEpochSummary, ContextSourceInput};
 pub use failure_recovery::{FailureKind, RecoverySnapshot, RecoveryStatus};
 #[allow(unused_imports)]
