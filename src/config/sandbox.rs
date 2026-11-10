@@ -47,6 +47,9 @@ pub struct SandboxConfig {
     /// 沙箱内网络策略
     #[serde(default)]
     pub network: SandboxNetworkMode,
+    /// network=allow 时仅允许这些域名的 HTTP/HTTPS；空列表保留完整网络
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowed_domains: Vec<String>,
     /// 工作区之外额外允许写入的目录，例如构建缓存；支持 `~/` 前缀
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub writable_roots: Vec<String>,
@@ -66,6 +69,7 @@ impl Default for SandboxConfig {
         Self {
             enabled: true,
             network: SandboxNetworkMode::Deny,
+            allowed_domains: Vec::new(),
             writable_roots: Vec::new(),
             deny_read: Vec::new(),
             scrub_env: true,

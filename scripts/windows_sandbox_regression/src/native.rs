@@ -26,6 +26,7 @@ pub(crate) fn run() -> Result<()> {
         write_protected: vec![protected.clone()],
         deny_read: vec![hidden.clone()],
         network: false,
+        allowed_domains: Vec::new(),
         temp_dir: None,
         env: Vec::new(),
         scrubbed_env: Vec::new(),

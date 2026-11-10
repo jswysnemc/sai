@@ -61,6 +61,17 @@ async fn main() -> Result<()> {
             .ok_or_else(|| anyhow::anyhow!("missing sandbox launch payload"))?;
         std::process::exit(sandbox::windows::serve(&payload)? as i32);
     }
+    if let Some(kind) = std::env::args().nth(1).filter(|kind| {
+        matches!(
+            kind.as_str(),
+            sandbox::network::WORKER_ARG | sandbox::network::BRIDGE_ARG
+        )
+    }) {
+        let payload = std::env::args()
+            .nth(2)
+            .ok_or_else(|| anyhow::anyhow!("missing network launch payload"))?;
+        std::process::exit(sandbox::network::serve(&kind, &payload).await?);
+    }
     let cli = cli::parse();
     match cli::run(cli).await {
         Ok(()) => Ok(()),

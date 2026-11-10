@@ -104,6 +104,7 @@ pub(super) fn probe() -> Result<()> {
         write_protected: Vec::new(),
         deny_read: Vec::new(),
         network: false,
+        allowed_domains: Vec::new(),
         temp_dir: None,
         env: Vec::new(),
         scrubbed_env: Vec::new(),

@@ -10,6 +10,7 @@ mod env_scrub;
 mod linux_bwrap;
 #[cfg(any(target_os = "macos", test))]
 mod macos_seatbelt;
+pub(crate) mod network;
 mod policy;
 mod protected_paths;
 mod settings;
@@ -59,7 +60,11 @@ pub(crate) fn wrap_shell(policy: &SandboxPolicy, shell: &str, command: &str) -> 
         );
     }
     // 2. 构造平台命令
-    let mut process = platform_command(policy, shell, command)?;
+    let mut process = if policy.network && !policy.allowed_domains.is_empty() {
+        network::command(policy, shell, command)?
+    } else {
+        platform_command(policy, shell, command)?
+    };
     // 3. 只传入清理后的环境变量
     process.env_clear();
     process.envs(policy.env.iter().map(|(key, value)| (key, value)));

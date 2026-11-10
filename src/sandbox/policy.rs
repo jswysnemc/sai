@@ -40,6 +40,9 @@ pub(crate) struct SandboxPolicy {
     pub deny_read: Vec<PathBuf>,
     /// 是否保留网络
     pub network: bool,
+    /// 明确允许的公网域名；非空时由代理限制出口
+    #[serde(default)]
+    pub allowed_domains: Vec<String>,
     /// 私有临时目录
     pub temp_dir: Option<PathBuf>,
     /// 命令最终使用的环境变量
@@ -125,6 +128,7 @@ impl SandboxPolicy {
             write_protected,
             deny_read,
             network: settings.config.network == SandboxNetworkMode::Allow,
+            allowed_domains: settings.config.allowed_domains.clone(),
             temp_dir,
             env,
             scrubbed_env,

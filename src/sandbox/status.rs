@@ -15,6 +15,8 @@ pub(crate) struct SandboxStatus {
     pub backend: BackendAvailability,
     /// 网络策略
     pub network: &'static str,
+    /// 命令代理允许的域名
+    pub allowed_domains: Vec<String>,
     /// 是否清理密钥环境变量
     pub scrub_env: bool,
     /// 当前工作区解析出的可写目录
@@ -49,6 +51,7 @@ pub(crate) fn sandbox_status() -> SandboxStatus {
         platform_supported: super::settings::platform_supported(),
         backend: backend_availability(),
         network: settings.config.network.as_str(),
+        allowed_domains: settings.config.allowed_domains.clone(),
         scrub_env: settings.config.scrub_env,
         writable_roots: policy
             .as_ref()
@@ -124,6 +127,12 @@ impl SandboxStatus {
                 format!("  {label}: {}", items.join(", "))
             }
         };
+        if !self.allowed_domains.is_empty() {
+            lines.push(list(
+                t("network domains", "网络域名"),
+                &self.allowed_domains,
+            ));
+        }
         lines.push(list(t("writable", "可写"), &self.writable_roots));
         lines.push(list(
             t("read-only inside writable", "可写目录中的只读路径"),

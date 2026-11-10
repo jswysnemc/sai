@@ -74,6 +74,13 @@ pub(super) fn edit_sandbox_settings(stdout: &mut io::Stdout, config: &mut AppCon
             ),
             sandbox.env_passthrough.join(", "),
         ),
+        Field::new(
+            t(
+                "Allowed network domains (comma separated)",
+                "允许的网络域名（逗号分隔）",
+            ),
+            sandbox.allowed_domains.join(", "),
+        ),
     ];
     loop {
         if !run_form(stdout, t(" SANDBOX ", " 沙箱 "), &mut fields)? {
@@ -107,6 +114,10 @@ fn parse_fields(fields: &[Field]) -> Result<SandboxConfig> {
         writable_roots: split_list(&fields[3].value),
         deny_read: split_list(&fields[4].value),
         env_passthrough: split_list(&fields[5].value),
+        allowed_domains: fields
+            .get(6)
+            .map(|field| split_list(&field.value))
+            .unwrap_or_default(),
     })
 }
 

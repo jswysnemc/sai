@@ -13,6 +13,7 @@ pub(crate) struct SandboxPolicy {
     pub write_protected: Vec<PathBuf>,
     pub deny_read: Vec<PathBuf>,
     pub network: bool,
+    pub allowed_domains: Vec<String>,
     pub temp_dir: Option<PathBuf>,
     #[serde(skip)]
     pub env: Vec<(OsString, OsString)>,

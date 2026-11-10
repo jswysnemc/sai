@@ -35,7 +35,14 @@ jobs:
             libwayland-dev \
             libxkbcommon-dev \
             pkg-config \
+            bubblewrap \
             ripgrep
+
+      - name: Enable sandbox namespaces for regression tests
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -84,6 +91,11 @@ jobs:
         env:
           SAI_TEST_BINARY: ${{ github.workspace }}/target/release/sai
         run: uv run scripts/tui_regression.py 2>&1 | tee terminal-regressions.log
+
+      - name: Run restricted network regressions
+        env:
+          SAI_TEST_BINARY: ${{ github.workspace }}/target/release/sai
+        run: python3 scripts/network-sandbox-regression.py
 
       - name: Run codemode integration regressions
         shell: bash

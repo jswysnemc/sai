@@ -77,6 +77,7 @@ mod tests {
             write_protected: vec![root.join(".git/hooks"), root.join("missing/hooks")],
             deny_read: vec![secret, root.join("token"), root.join("absent")],
             network,
+            allowed_domains: Vec::new(),
             temp_dir: None,
             env: Vec::new(),
             scrubbed_env: Vec::new(),

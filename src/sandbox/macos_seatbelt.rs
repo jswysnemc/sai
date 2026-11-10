@@ -106,7 +106,7 @@ pub(crate) fn seatbelt_profile(policy: &SandboxPolicy) -> String {
     // 4. 网络：允许时放行全部出入站，拒绝时只保留本机 Unix 域套接字
     if policy.network {
         profile.push_str("(allow network*)\n(allow system-socket)\n");
-    } else {
+    } else if policy.allowed_domains.is_empty() {
         profile.push_str(UNIX_SOCKET_RULES);
     }
     if policy.access == FileAccess::ReadOnly {
@@ -144,6 +144,7 @@ mod tests {
             write_protected: vec![PathBuf::from("/w/.git/hooks")],
             deny_read: vec![PathBuf::from("/Users/me/.ssh")],
             network,
+            allowed_domains: Vec::new(),
             temp_dir: None,
             env: Vec::new(),
             scrubbed_env: Vec::new(),
