@@ -210,11 +210,11 @@ fn update_exact(
                 )
             }
         } else {
-            // 2. 【Windows沙箱】【仅改本体】MAXIMUM_ALLOWED 句柄禁止向祖先目录的全部后代重新传播已有 ACE
+            // 2. 【Windows沙箱】【仅改本体】仅请求 WRITE_DAC 并直接写入本对象，避免申请额外访问触发共享冲突
             let handle = unsafe {
                 CreateFileW(
                     path_wide.as_ptr(),
-                    0x02000000,
+                    0x00040000,
                     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                     std::ptr::null(),
                     OPEN_EXISTING,
@@ -226,15 +226,25 @@ fn update_exact(
                 std::io::Error::last_os_error().raw_os_error().unwrap_or(5) as u32
             } else {
                 let code = unsafe {
-                    SetSecurityInfo(
-                        handle,
-                        SE_FILE_OBJECT,
-                        DACL_SECURITY_INFORMATION,
-                        std::ptr::null_mut(),
-                        std::ptr::null_mut(),
-                        new_acl,
-                        std::ptr::null(),
-                    )
+                    let mut descriptor: windows_sys::Win32::Security::SECURITY_DESCRIPTOR =
+                        std::mem::zeroed();
+                    let pointer = (&mut descriptor
+                        as *mut windows_sys::Win32::Security::SECURITY_DESCRIPTOR)
+                        .cast();
+                    if windows_sys::Win32::Security::InitializeSecurityDescriptor(pointer, 1) == 0
+                        || windows_sys::Win32::Security::SetSecurityDescriptorDacl(
+                            pointer, 1, new_acl, 0,
+                        ) == 0
+                        || windows_sys::Win32::Security::SetKernelObjectSecurity(
+                            handle,
+                            DACL_SECURITY_INFORMATION,
+                            pointer,
+                        ) == 0
+                    {
+                        std::io::Error::last_os_error().raw_os_error().unwrap_or(5) as u32
+                    } else {
+                        0
+                    }
                 };
                 unsafe {
                     CloseHandle(handle);
@@ -245,7 +255,8 @@ fn update_exact(
         if code == 0 {
             Ok(())
         } else {
-            Err(std::io::Error::from_raw_os_error(code as i32)).context("write sandbox DACL")
+            Err(std::io::Error::from_raw_os_error(code as i32))
+                .with_context(|| format!("write sandbox DACL {}", path.display()))
         }
     } else {
         Err(std::io::Error::from_raw_os_error(code as i32)).context("merge sandbox DACL")
