@@ -127,6 +127,7 @@ impl Agent {
         perf.mark("start turn");
         let turn_id = turn_id.unwrap_or_else(new_turn_id);
         // 停止标志按轮清零：上一轮的停止不能影响本轮的终态归因
+        let _streamed_read_guard = self.streamed_tools.guard();
         self.cancel_requested
             .store(false, std::sync::atomic::Ordering::SeqCst);
         // 配置了外部内核时整轮交出去执行；下方全部是 sai 自带内核的路径，

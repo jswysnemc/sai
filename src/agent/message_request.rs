@@ -64,8 +64,11 @@ impl Agent {
         let mut saw_tool_progress = false;
         perf.mark(&format!("round {round} model request start"));
         let _http_debug_request = crate::llm::HttpDebugRequestContextGuard::new(turn_id, round);
+        let cleanup = self.streamed_tools.cleanup.clone();
         self.streamed_tools = Default::default();
+        self.streamed_tools.cleanup = cleanup.clone();
         let mut streamed = super::streamed_tools::StreamedTools::default();
+        streamed.cleanup = cleanup.clone();
         streamed.cancel = self.cancel_requested.clone();
         streamed.accounting = self.goal_accounting.clone();
         let cancel = self.cancel_requested.clone();
@@ -115,6 +118,7 @@ impl Agent {
                             reasoning_chars,
                         } => {
                             streamed = Default::default();
+                            streamed.cleanup = cleanup.clone();
                             streamed.cancel = cancel.clone();
                             streamed.accounting = accounting.clone();
                             on_event(AgentEvent::ResponseReset {

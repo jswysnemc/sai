@@ -22,12 +22,34 @@ impl Drop for PendingRead {
 #[derive(Default)]
 pub(super) struct StreamedTools {
     pending: Mutex<HashMap<String, PendingRead>>,
+    pub(super) cleanup: std::sync::Arc<Mutex<Vec<tokio::task::AbortHandle>>>,
     next: usize,
     sealed: bool,
     pub(super) cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub(super) accounting: Option<crate::goal::GoalAccounting>,
 }
+/// 【工具流】【轮次清理】正常结束、错误和取消均终止本轮尚未消费的预执行。
+pub(super) struct StreamedReadGuard(std::sync::Arc<Mutex<Vec<tokio::task::AbortHandle>>>);
+impl Drop for StreamedReadGuard {
+    /// 【工具流】【统一收尾】无参数、无返回值；完成任务的 abort 不改变已交付结果。
+    fn drop(&mut self) {
+        for handle in self
+            .0
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .drain(..)
+        {
+            handle.abort();
+        }
+    }
+}
+
 impl StreamedTools {
+    /// 【工具流】【轮次守卫】共享取消记录；无参数，返回在轮次退出时清理的守卫。
+    pub(super) fn guard(&self) -> StreamedReadGuard {
+        StreamedReadGuard(self.cleanup.clone())
+    }
+
     /// 【工具流】【就绪处理】仅调度连续且通过全部门禁的文件读取，参数完整后才启动。
     /// 参数：响应顺序、调用、注册表、可见性和工作目录；返回无。
     pub(super) fn ready(
@@ -83,6 +105,10 @@ impl StreamedTools {
                 }
             }
         }));
+        self.cleanup
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .push(handle.abort_handle());
         self.pending
             .get_mut()
             .unwrap_or_else(|error| error.into_inner())
