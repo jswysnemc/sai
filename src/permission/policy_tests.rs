@@ -158,7 +158,7 @@ fn audited_profile_skips_todo_audit() {
     ));
 }
 
-/// 验证审计模式在有沙箱实现的平台（Linux、macOS）请求命令沙箱。
+/// 验证审计模式在有沙箱实现的平台（Linux、macOS、Windows）请求命令沙箱。
 ///
 /// 参数:
 /// - 无
@@ -166,7 +166,7 @@ fn audited_profile_skips_todo_audit() {
 /// 返回:
 /// - 无
 #[test]
-fn audited_run_command_only_requests_linux_sandbox() {
+fn audited_run_command_requests_supported_platform_sandbox() {
     let profile = PermissionProfile::new(
         PermissionProfileMode::Audited,
         PathBuf::from("/workspace/project"),
@@ -184,7 +184,7 @@ fn audited_run_command_only_requests_linux_sandbox() {
     assert_eq!(sandboxed, crate::sandbox::sandbox_requested());
     assert_eq!(
         crate::sandbox::sandbox_requested(),
-        cfg!(any(target_os = "linux", target_os = "macos"))
+        cfg!(any(target_os = "linux", target_os = "macos", windows))
     );
 }
 
