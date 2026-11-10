@@ -18,7 +18,7 @@ impl CommandTreeGuard {
             readers: Vec::new(),
             killed: false,
             #[cfg(windows)]
-            job: Some(super::windows_job::attach(pid)?),
+            job: super::windows_job::attach(pid)?,
         })
     }
 

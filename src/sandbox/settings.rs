@@ -71,7 +71,7 @@ pub(crate) fn current() -> SandboxSettings {
 /// 返回:
 /// - Linux 与 macOS 返回 `true`
 pub(crate) fn platform_supported() -> bool {
-    cfg!(any(target_os = "linux", target_os = "macos"))
+    cfg!(any(target_os = "linux", target_os = "macos", windows))
 }
 
 /// 判断审核模式的 Shell 命令是否应进入沙箱。

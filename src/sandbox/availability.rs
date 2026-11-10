@@ -59,7 +59,7 @@ fn probe() -> BackendAvailability {
 }
 
 /// 执行一次后端探测。
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 fn probe() -> BackendAvailability {
     BackendAvailability {
         backend: "none",
@@ -102,5 +102,16 @@ fn probe_result(
         backend,
         available: reason.is_none(),
         reason,
+    }
+}
+
+/// 【沙箱】【Windows 探测】容器创建失败时返回原因，不降低隔离等级；无参数，返回后端状态。
+#[cfg(windows)]
+fn probe() -> BackendAvailability {
+    let result = super::windows::probe();
+    BackendAvailability {
+        backend: "appcontainer",
+        available: result.is_ok(),
+        reason: result.err().map(|error| format!("{error:#}")),
     }
 }

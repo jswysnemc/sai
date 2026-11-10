@@ -7,7 +7,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 /// 沙箱文件系统权限级别。
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) enum FileAccess {
     /// 只允许写私有临时目录，供计划模式使用
     ReadOnly,
@@ -26,7 +26,7 @@ impl FileAccess {
 }
 
 /// 单次命令使用的已解析沙箱策略；所有路径均为规范化的绝对路径。
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct SandboxPolicy {
     /// 文件系统权限级别
     pub access: FileAccess,
@@ -43,6 +43,7 @@ pub(crate) struct SandboxPolicy {
     /// 私有临时目录
     pub temp_dir: Option<PathBuf>,
     /// 命令最终使用的环境变量
+    #[serde(skip)]
     pub env: Vec<(OsString, OsString)>,
     /// 被移除的密钥变量名，用于状态展示
     pub scrubbed_env: Vec<String>,

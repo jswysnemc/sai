@@ -3,9 +3,6 @@
 //! Linux 使用 bubblewrap，macOS 使用 Seatbelt（sandbox-exec）；其余平台不隔离，
 //! 由权限层的逐条审批兜底。策略按单次命令解析，配置快照随配置加载更新。
 
-// Windows 没有沙箱后端，命令包装与策略字段只在状态展示与测试中出现
-#![cfg_attr(windows, allow(dead_code))]
-
 mod availability;
 mod denial;
 mod env_scrub;
@@ -18,6 +15,8 @@ mod protected_paths;
 mod settings;
 mod status;
 mod temp_dir;
+#[cfg(windows)]
+pub(crate) mod windows;
 
 #[cfg(all(test, target_os = "linux"))]
 mod linux_bwrap_tests;
@@ -90,7 +89,13 @@ fn platform_command(policy: &SandboxPolicy, shell: &str, command: &str) -> Resul
 }
 
 /// 其余平台没有沙箱实现。
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 fn platform_command(_policy: &SandboxPolicy, _shell: &str, _command: &str) -> Result<Command> {
     bail!("sandboxed commands are not supported on this platform")
+}
+
+/// 【沙箱】【Windows 包装】创建受控启动器；参数为策略、Shell 和脚本，返回原生命令。
+#[cfg(windows)]
+fn platform_command(policy: &SandboxPolicy, shell: &str, command: &str) -> Result<Command> {
+    windows::command(policy, shell, command)
 }

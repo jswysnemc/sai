@@ -45,11 +45,17 @@ jobs:
       - name: Install ripgrep
         run: choco install ripgrep --no-progress --yes
 
+      - name: Build native command worker
+        run: cargo build --locked
+
       - name: Run Rust tests
         run: cargo test --locked
 
       - name: Run native terminal graphics regressions
         run: cargo test --locked --manifest-path scripts/windows_graphics_regression/Cargo.toml -- --nocapture
+
+      - name: Run native sandbox regressions
+        run: cargo run --locked --manifest-path scripts/windows_sandbox_regression/Cargo.toml
 
       - name: Run web tests
         working-directory: web

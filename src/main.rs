@@ -52,6 +52,15 @@ async fn main() -> Result<()> {
     {
         return sai_codemode::worker::serve();
     }
+    #[cfg(windows)]
+    if std::env::args_os().nth(1).as_deref()
+        == Some(std::ffi::OsStr::new(sandbox::windows::WORKER_ARG))
+    {
+        let payload = std::env::args()
+            .nth(2)
+            .ok_or_else(|| anyhow::anyhow!("missing sandbox launch payload"))?;
+        std::process::exit(sandbox::windows::serve(&payload)? as i32);
+    }
     let cli = cli::parse();
     match cli::run(cli).await {
         Ok(()) => Ok(()),

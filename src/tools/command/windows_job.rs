@@ -6,11 +6,14 @@ use windows_sys::Win32::System::JobObjects::{
     SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
     JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
 };
-use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE};
+use windows_sys::Win32::System::Threading::{
+    GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_QUOTA,
+    PROCESS_TERMINATE,
+};
 
 /// 【命令】【Windows 进程树】创建关闭即终止的 Job 并绑定进程
 /// 参数：`pid` 为命令进程标识；返回拥有 Job 生命周期的句柄
-pub(super) fn attach(pid: u32) -> Result<OwnedHandle> {
+pub(super) fn attach(pid: u32) -> Result<Option<OwnedHandle>> {
     unsafe {
         let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
         if job.is_null() {
@@ -28,16 +31,29 @@ pub(super) fn attach(pid: u32) -> Result<OwnedHandle> {
         {
             return Err(std::io::Error::last_os_error()).context("configure command job");
         }
-        let process = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, 0, pid);
+        let process = OpenProcess(
+            PROCESS_SET_QUOTA | PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION,
+            0,
+            pid,
+        );
         if process.is_null() {
-            return Err(std::io::Error::last_os_error().into());
+            let error = std::io::Error::last_os_error();
+            if error.raw_os_error() == Some(87) {
+                return Ok(None);
+            }
+            return Err(error.into());
         }
         let attached = AssignProcessToJobObject(job, process);
         let error = std::io::Error::last_os_error();
+        let mut exit_code = 259;
+        let exited = GetExitCodeProcess(process, &mut exit_code) != 0 && exit_code != 259;
         CloseHandle(process);
+        if attached == 0 && exited {
+            return Ok(None);
+        }
         if attached == 0 {
             return Err(error).context("attach command to job");
         }
-        Ok(owned)
+        Ok(Some(owned))
     }
 }

@@ -309,32 +309,19 @@ fn shell_commands(
     configured_shell: &str,
     sandbox: Option<&SandboxPolicy>,
 ) -> Result<Vec<(String, Command)>> {
-    if sandbox.is_some() {
-        bail!("audited sandbox mode is not supported on Windows")
+    if let Some(policy) = sandbox {
+        return Ok(vec![(
+            "appcontainer".into(),
+            crate::sandbox::wrap_shell(policy, configured_shell, command)?,
+        )]);
     }
-    if let Some(shell) = configured_shell_path(configured_shell) {
-        return Ok(vec![shell_command_entry(command, &shell)]);
-    }
-    let mut pwsh = Command::new("pwsh");
-    pwsh.args(crate::platform::shell_selection::script_args(
-        crate::platform::shell_selection::ShellFlavor::PowerShell,
-        command,
-    ));
-
-    let mut powershell = Command::new("powershell");
-    powershell.args(crate::platform::shell_selection::script_args(
-        crate::platform::shell_selection::ShellFlavor::PowerShell,
-        command,
-    ));
-
-    let mut cmd = Command::new("cmd");
-    cmd.arg("/S").arg("/C").arg(command);
-
-    Ok(vec![
-        ("pwsh".to_string(), inherit_env(pwsh)),
-        ("powershell".to_string(), inherit_env(powershell)),
-        ("cmd".to_string(), inherit_env(cmd)),
-    ])
+    Ok(vec![(
+        "windows-job".into(),
+        inherit_env(crate::sandbox::windows::unrestricted_command(
+            configured_shell,
+            command,
+        )?),
+    )])
 }
 
 /// 构造按需沙箱化的 shell 命令候选列表。
@@ -387,25 +374,10 @@ pub(crate) fn build_shell_commands_for_args(
 ) -> Result<Vec<(String, Command)>> {
     #[cfg(windows)]
     {
-        if sandbox.is_some() {
-            bail!("audited sandbox mode is not supported on Windows")
-        }
-        let candidates = if let Some(shell) = configured_shell_path(configured_shell) {
-            vec![(shell.clone(), shell_flavor_for_program(&shell))]
-        } else {
-            vec![
-                ("pwsh".to_string(), ShellFlavor::PowerShell),
-                ("powershell".to_string(), ShellFlavor::PowerShell),
-                ("cmd".to_string(), ShellFlavor::Cmd),
-            ]
-        };
-        return Ok(candidates
-            .into_iter()
-            .map(|(shell, flavor)| {
-                let line = command_line_for_flavor(command, args, flavor);
-                shell_command_entry(&line, &shell)
-            })
-            .collect());
+        let shell = crate::sandbox::windows::resolve_shell(configured_shell)?;
+        let flavor = crate::platform::shell_selection::shell_flavor(shell.as_os_str());
+        let line = command_line_for_flavor(command, args, flavor);
+        return build_shell_commands(&line, &shell.to_string_lossy(), sandbox);
     }
     #[cfg(not(windows))]
     {
