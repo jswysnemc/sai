@@ -66,14 +66,7 @@ impl Grants {
         for root in &policy.writable_roots {
             grants.add(root, READ | WRITE, GRANT_ACCESS)?;
         }
-        // 1. 【Windows沙箱】【工具目录】只授予 PATH 中工具目录读取，不扩展为整个用户目录
-        if let Some(path) = std::env::var_os("PATH") {
-            for root in
-                std::env::split_paths(&path).filter(|root| root.is_dir() && !system_directory(root))
-            {
-                grants.add(&root, READ, GRANT_ACCESS)?;
-            }
-        }
+        // 1. 【Windows沙箱】【工具目录】仅授权实际 Shell 安装目录，PATH 不能隐式扩展文件读取范围
         if let Some(parent) = shell.parent().filter(|path| !system_directory(path)) {
             grants.add(parent, READ, GRANT_ACCESS)?;
         }
