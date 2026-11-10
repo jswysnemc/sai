@@ -12,7 +12,13 @@ const HEIGHT: usize = 3;
 const GAP: usize = 1;
 const MAX_VISIBLE: usize = 64;
 type Environment = (bool, bool, bool, (usize, usize));
-type TileCache = HashMap<u64, Option<Arc<ComposerTile>>>;
+type TileCache = HashMap<u64, Option<Arc<SourceTile>>>;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct SourceTile {
+    source: Arc<str>,
+    graphic: ComposerTile,
+}
 
 #[derive(Clone, Default)]
 pub(super) struct ComposerImages {
@@ -22,7 +28,7 @@ pub(super) struct ComposerImages {
 
 #[derive(Default)]
 pub(super) struct ImageStrip {
-    tiles: Vec<Option<Arc<ComposerTile>>>,
+    tiles: Vec<Option<Arc<SourceTile>>>,
     hidden: usize,
     badge_visible: bool,
 }
@@ -31,7 +37,7 @@ pub(super) struct ImageStrip {
 pub(super) struct PlacedTile {
     column: u16,
     row: u16,
-    tile: Arc<ComposerTile>,
+    tile: Arc<SourceTile>,
 }
 
 impl ComposerFrame {
@@ -92,7 +98,12 @@ impl ComposerImages {
                 let tile = previous.remove(&key).unwrap_or_else(|| {
                     terminal_image::render_composer_tile(source)
                         .ok()
-                        .map(Arc::new)
+                        .map(|graphic| {
+                            Arc::new(SourceTile {
+                                source: Arc::from(source.as_str()),
+                                graphic,
+                            })
+                        })
                 });
                 cache.1.insert(key, tile.clone());
                 tile
@@ -165,6 +176,24 @@ impl ImageStrip {
 }
 
 impl ComposerSignature {
+    /// 【输入图片】【点击命中】仅匹配最后一帧实际绘制的缩略图，排除间隔和隐藏附件。
+    /// 参数: column/row 为屏幕坐标；返回: 命中图片的来源引用。
+    pub(in crate::cli::repl_runtime) fn image_source_at(
+        &self,
+        column: u16,
+        row: u16,
+    ) -> Option<&Arc<str>> {
+        self.images
+            .iter()
+            .find(|image| {
+                column >= image.column
+                    && usize::from(column - image.column) < WIDTH
+                    && row >= image.row
+                    && usize::from(row - image.row) < HEIGHT
+            })
+            .map(|image| &image.tile.source)
+    }
+
     /// 【输入图片】【背景覆盖】仅当图片占位行发生变化时补绘，普通打字不重传图片。
     /// 参数: previous 为相同位置的旧文本行；返回: 是否需要补绘。
     pub(super) fn image_rows_changed(&self, previous: Option<&[String]>) -> bool {
@@ -182,7 +211,7 @@ impl ComposerSignature {
         output: &mut impl Write,
     ) -> io::Result<()> {
         for image in &self.images {
-            output.write_all(image.tile.cleanup.as_bytes())?;
+            output.write_all(image.tile.graphic.cleanup.as_bytes())?;
         }
         Ok(())
     }
@@ -192,7 +221,7 @@ impl ComposerSignature {
     pub(super) fn paint_images(&self, output: &mut impl Write) -> io::Result<()> {
         for image in &self.images {
             queue!(output, MoveTo(image.column, image.row))?;
-            output.write_all(image.tile.payload.as_bytes())?;
+            output.write_all(image.tile.graphic.payload.as_bytes())?;
         }
         Ok(())
     }

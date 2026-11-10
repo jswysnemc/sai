@@ -19,6 +19,7 @@ mod block_hover_tests;
 mod block_interaction_tests;
 mod block_scrollbar;
 mod bottom_button;
+mod composer_image_input;
 mod git_preview;
 mod git_preview_code;
 #[cfg(test)]
@@ -39,6 +40,9 @@ pub(super) mod hover;
 mod hover_color;
 mod image_viewer;
 mod image_viewer_input;
+mod image_viewer_layout;
+#[cfg(test)]
+mod image_viewer_overlay_tests;
 #[cfg(test)]
 mod image_viewer_tests;
 mod image_viewer_view;
@@ -421,7 +425,7 @@ impl ReplRuntime {
             0,
         );
         header_controls::overlay(&self.sidebar_control, &layout, &mut painted.rows);
-        image_viewer_view::overlay(&session.image_viewer, &layout, &mut painted.rows);
+        image_viewer_view::overlay(&mut session.image_viewer, &layout, &mut painted.rows);
         // 3. 【后台任务】【叠加绘制】任务面板覆盖正文行与会话列，标题、输入框和侧栏保持原样
         if self.background_panel.active {
             background_overlay::overlay(&mut self.background_panel, &layout, &mut painted.rows);

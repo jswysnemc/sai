@@ -1,8 +1,11 @@
-use super::image_viewer_view::ViewerLayout;
+use super::image_viewer_layout::ViewerLayout;
 use super::runtime_tests::{chrome, mouse, runtime};
 use crate::cli::repl_runtime::{viewport::TerminalSize, FullscreenEvent, ReplRuntime};
 use crate::render::{ansi_clip::strip_ansi, terminal_image::test_override};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
+
+#[path = "composer_image_tests.rs"]
+mod composer;
 
 /// 【图片浮窗测试】【图片样本】创建非透明大图，并通过真实读图卡片进入全屏。
 /// 参数: kitty 为协议能力；返回: 临时目录、运行期和原图路径。
@@ -291,5 +294,93 @@ fn user_data_image_opens_from_a_reserved_row() {
         Some(source.as_str())
     );
     assert!(!text(&runtime).contains("data:image"));
+    test_override::set(None, None, None);
+}
+
+/// 【图片浮窗测试】【图片外关闭】字符与图形预览均按实际图片范围关闭，留白和输入区也可返回。
+/// 参数: 无；返回: 无。
+#[test]
+fn outside_click_closes_without_clicking_through() {
+    for kitty in [true, false] {
+        let (_directory, mut runtime, _) = fixture(kitty);
+        for target in 0..3 {
+            let (column, row) = image_position(&runtime);
+            click(&mut runtime, column, row);
+            let area = runtime
+                .fullscreen
+                .as_ref()
+                .unwrap()
+                .image_viewer
+                .image_area
+                .unwrap();
+            for (column, row) in [
+                (area.left, area.top),
+                (area.left + area.width - 1, area.top + area.height - 1),
+            ] {
+                click(&mut runtime, column as u16, row as u16);
+                assert!(runtime.image_viewer_active());
+            }
+            let composer = runtime.last_composer_signature.clone();
+            let layout = runtime.fullscreen.as_ref().unwrap().state.layout.unwrap();
+            let (column, row) = match target {
+                0 => (area.left - 1, area.top),
+                1 => (0, 0),
+                _ => (3, usize::from(layout.composer_top) + 1),
+            };
+            click(&mut runtime, column as u16, row as u16);
+            assert!(!runtime.image_viewer_active());
+            assert!(runtime.last_composer_signature == composer);
+            assert!(text(&runtime).contains("Viewed image"));
+            assert!(runtime
+                .composer_selection
+                .take_cursor("kept draft")
+                .is_none());
+        }
+    }
+    test_override::set(None, None, None);
+}
+
+/// 【图片浮窗测试】【关闭手势】拖动、单独释放与跨越图片边界都不能触发关闭。
+/// 参数: 无；返回: 无。
+#[test]
+fn dismissal_requires_a_complete_click_outside_the_image() {
+    let (_directory, mut runtime, _) = fixture(true);
+    let (column, row) = image_position(&runtime);
+    click(&mut runtime, column, row);
+    let area = runtime
+        .fullscreen
+        .as_ref()
+        .unwrap()
+        .image_viewer
+        .image_area
+        .unwrap();
+    for events in [
+        vec![mouse(MouseEventKind::Up(MouseButton::Left), 0, 0)],
+        vec![
+            mouse(
+                MouseEventKind::Down(MouseButton::Left),
+                area.left as u16,
+                area.top as u16,
+            ),
+            mouse(MouseEventKind::Up(MouseButton::Left), 0, 0),
+        ],
+        vec![
+            mouse(MouseEventKind::Down(MouseButton::Left), 0, 0),
+            mouse(MouseEventKind::Drag(MouseButton::Left), 1, 0),
+            mouse(MouseEventKind::Up(MouseButton::Left), 0, 0),
+        ],
+        vec![
+            mouse(MouseEventKind::Down(MouseButton::Left), 0, 0),
+            Event::Resize(60, 20),
+            mouse(MouseEventKind::Up(MouseButton::Left), 0, 0),
+        ],
+    ] {
+        for event in events {
+            runtime.handle_fullscreen_event(&event).unwrap();
+        }
+        assert!(runtime.image_viewer_active());
+    }
+    click(&mut runtime, 0, 0);
+    assert!(!runtime.image_viewer_active());
     test_override::set(None, None, None);
 }

@@ -126,6 +126,53 @@ pub(super) fn strip_placements(line: &str) -> String {
     output
 }
 
+/// 【全屏视图】【局部遮挡】移除与浮层矩形相交的图形指令，保留外围图片和全部文字。
+/// 参数: rows 为屏幕行，left/top/width/height 为浮层矩形；返回: 无。
+pub(super) fn mask_placements(
+    rows: &mut [String],
+    left: usize,
+    top: usize,
+    width: usize,
+    height: usize,
+) {
+    for (row, line) in rows.iter_mut().enumerate().take(top + height) {
+        for placement in parse_placements(line).into_iter().rev() {
+            // 1. 【全屏视图】【跨行遮挡】首行位于浮层上方的图片也可能延伸进浮层
+            let bottom = row.saturating_add(placement.rows);
+            let right = placement
+                .col
+                .saturating_add(placement.cols.unwrap_or(usize::MAX));
+            if bottom > top && placement.col < left + width && right > left {
+                line.replace_range(placement.start..placement.end, "");
+            }
+        }
+        // 2. 【全屏视图】【协议兼容】内联图片同样按跨行矩形遮挡，不能依赖文字覆盖图像像素
+        let mut index = 0;
+        while let Some(offset) = line[index..].find('\x1b') {
+            let start = index + offset;
+            let end = crate::render::terminal_image::escape_sequence_end(line, start)
+                .max(start + 1)
+                .min(line.len());
+            let sequence = &line[start..end];
+            let inline = sequence.starts_with("\x1b]1337;File=")
+                || crate::render::terminal_image::sixel_image_cells(sequence).is_some();
+            if inline {
+                let (columns, image_rows) = crate::render::image_reference::dimensions(sequence);
+                let column = crate::render::ansi_clip::ansi_visible_width(&line[..start]);
+                if row.saturating_add(image_rows) > top
+                    && column < left + width
+                    && column.saturating_add(columns) > left
+                {
+                    line.replace_range(start..end, "");
+                    index = start;
+                    continue;
+                }
+            }
+            index = end;
+        }
+    }
+}
+
 /// 生成裁剪后的放置序列。
 ///
 /// 参数:

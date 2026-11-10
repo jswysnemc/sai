@@ -70,7 +70,7 @@ impl ReplRuntime {
                 _ => session.state.wheel_boundary.clear(),
             }
         }
-        if self.background_panel_event(event)? {
+        if !self.image_viewer_active() && self.background_panel_event(event)? {
             return Ok(FullscreenEvent::Consumed);
         }
         let latest = self.coalesce_sidebar_drag(event)?;

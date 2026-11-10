@@ -194,3 +194,41 @@ fn image_strip_caches_duplicate_sources_independently() {
     assert_eq!(narrow.tiles.len(), 1);
     assert_eq!(frame.images.cache.borrow().1.len(), 1);
 }
+
+/// 【输入图片】【命中回归】可见边缘返回对应来源，间隔、隐藏图片和失效签名不能点击。
+/// 参数: 无；返回: 无。
+#[test]
+fn image_hits_follow_visible_tiles_and_clipping() {
+    let _guard = ProtocolGuard::new(true);
+    let first = image_file();
+    let second = image_file();
+    let sources = vec![
+        first.path().to_string_lossy().into_owned(),
+        second.path().to_string_lossy().into_owned(),
+    ];
+    let mut frame = frame();
+    frame.set_images(sources.clone(), None);
+    let (_, mut signature) = draw(&frame, 80, frame.height(80), 5, None);
+    for (index, source) in sources.iter().enumerate() {
+        for column in 3 + index * 7..9 + index * 7 {
+            for row in 6..9 {
+                assert_eq!(
+                    signature
+                        .image_source_at(column as u16, row)
+                        .map(|source| &**source),
+                    Some(source.as_str())
+                );
+            }
+        }
+    }
+    for (column, row) in [(2, 6), (9, 6), (16, 6), (3, 5), (3, 9)] {
+        assert!(signature.image_source_at(column, row).is_none());
+    }
+    let (_, narrow) = draw(&frame, 15, frame.height(15), 5, None);
+    assert!(narrow.image_source_at(3, 6).is_some());
+    assert!(narrow.image_source_at(10, 6).is_none());
+    let (_, short) = draw(&frame, 80, 5, 5, None);
+    assert!(short.image_source_at(3, 6).is_none());
+    signature.invalidate_images();
+    assert!(signature.image_source_at(3, 6).is_none());
+}

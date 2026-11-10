@@ -8,6 +8,7 @@ import unittest
 from kitty_assertions import placements
 from terminal import TerminalSession
 from test_activity_images import png_image
+from test_fullscreen import click
 
 
 def prepare_history(root, environment, binary):
@@ -41,6 +42,41 @@ def active_placements(raw):
 
 class ComposerImageTests(unittest.TestCase):
     """【输入图片】【回归环境】使用隔离输入历史，不读取系统剪贴板或调用外部模型。"""
+
+    def test_composer_image_click_and_outside_return_preserve_attachments(self):
+        """无参数；输入区图片复用大图浮窗，点击图片内保持打开，点击外部恢复可编辑草稿。"""
+        with TerminalSession(columns=90, rows=32, prepare=prepare_history,
+                             arguments=["--lang", "en-US", "--view", "fullscreen"],
+                             kitty_graphics=True) as terminal:
+            terminal.send(b"\x1b[A")
+            terminal.wait_for(lambda: len(active_placements(terminal.raw)) == 3)
+            terminal.send(b"kept draft")
+            terminal.wait_for(lambda: "kept draft" in terminal.text())
+            row, column, _ = placements(bytes(terminal.raw), 90, 32)[-1]
+            click(terminal, column + 1, row + 1)
+            terminal.wait_for(lambda: "Image · Attached image" in terminal.text())
+            self.assertIn("click outside to close", terminal.text())
+            self.assertNotIn("data:image", terminal.text())
+            preview = next(item for item in reversed(placements(bytes(terminal.raw), 90, 32))
+                           if item[2] > 3)
+            click(terminal, preview[1] + 1, preview[0] + 1)
+            terminal.pump(.2)
+            self.assertIn("Image · Attached image", terminal.text())
+            terminal.send(b"must not insert")
+            terminal.pump(.2)
+            self.assertNotIn("must not insert", terminal.text())
+            terminal.resize(65, 28)
+            terminal.pump(.4)
+            self.assertIn("Image · Attached image", terminal.text())
+            preview = next(item for item in reversed(placements(bytes(terminal.raw), 65, 28))
+                           if item[2] > 3)
+            click(terminal, preview[1] - 1, preview[0])
+            terminal.wait_for(lambda: "Image · Attached image" not in terminal.text())
+            self.assertEqual(len(active_placements(terminal.raw)), 3)
+            self.assertIn("kept draft", terminal.text())
+            self.assertIn("[image 3 640x480]", terminal.text())
+            terminal.send(b"x")
+            terminal.wait_for(lambda: "kept draftx" in terminal.text())
 
     def test_composer_images_restore_resize_switch_and_delete(self):
         """无参数；图片按六列三行展示，打字不重传，窄屏与删除清理旧放置。"""

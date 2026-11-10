@@ -50,6 +50,8 @@ Groups indent all child steps consistently; a single step displays its full cont
 
 Unordered Markdown lists use small round bullets with aligned continuation lines. Image reads follow the same recent-detail policy; user image attachments start collapsed. Expanded images show left-aligned previews capped at 24 columns by 8 rows using the existing Kitty protocol or terminal fallback. A lone image-read step opens automatically. Image previews respect both the timeline viewport and the outer transcript window. SVG blocks preserve all image rows so following text does not overlap the image. Both views retain the shared input box and permission-colored user message marker.
 
+In fullscreen view, clicking an image in the transcript or a visible input thumbnail opens the same centered image viewer over the current screen. Content outside the viewer stays visible. Press `Esc`, use the close button, or click outside the image (including the padding inside the viewer) to return. Closing preserves the draft, attachments, cursor position, and reading position. Dragging does not open or dismiss the viewer.
+
 ![Sai REPL chat and streaming rendering](pics/repl.png)
 
 Activity groups align with the user-message guide column, while child steps retain their two-column inset. Read tools use the ordinary tool bullet; `$` is reserved for commands. Active todo items use `→`, including the animated fixed todo panel. Goal continuations and in-turn queued deliveries also render as tool notifications without navigation points; genuine user turns retain their usual message style and navigation. History restoration follows the same rules and preserves queued image attachments.
