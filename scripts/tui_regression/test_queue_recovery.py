@@ -12,7 +12,7 @@ class QueueRecoveryTests(unittest.TestCase):
 
     def assert_queue_recovered(self, interrupt):
         """interrupt 选择失败或中断路径；验证剩余消息及附件后返回无。"""
-        with QueueModel(interrupt) as model, TerminalSession(model.config(), columns=100, rows=30) as terminal:
+        with QueueModel(interrupt) as model, TerminalSession(model.config(), columns=100, rows=30, arguments=["--lang", "en-US"]) as terminal:
             terminal.send(b"INITIAL\r")
             terminal.wait_for(model.started.is_set)
             terminal.wait_for(lambda: "INITIAL-START" in terminal.text())
@@ -33,21 +33,25 @@ class QueueRecoveryTests(unittest.TestCase):
                 terminal.send(b"\x03")
             else:
                 terminal.wait_for(lambda: "QUEUE-FAILURE-FIXTURE" in terminal.visible_text(history=True))
-            terminal.wait_for(lambda: any(label in terminal.text(history=True) for label in
-                                         ["已保留 2", "kept 2", "已丢弃 2", "discarded 2"]))
+            terminal.wait_for(lambda: "Queued (3)" in terminal.text())
             history = terminal.text(history=True)
-            self.assertNotIn("已丢弃 2", history)
-            self.assertNotIn("discarded 2", history)
+            self.assertNotIn("discarded", history)
             self.assertEqual(model.received, ["INITIAL", "QUEUED_FAILURE"])
-            # 1. 【终端队列】【显式继续】进入管理面板发送首条保留消息，后续消息按原顺序执行
+            # 1. 【终端队列】【显式继续】未确认的失败消息也保留，用户删除它后继续发送其余消息
             terminal.send(b"\x1b[1;5A")
             terminal.wait_for(lambda: "QUEUED_LAST" in terminal.text())
             terminal.send(b"\x1b[H")
             terminal.pump(.1)
+            terminal.send(b"dd")
+            terminal.wait_for(lambda: "Queue manager (2)" in terminal.text())
             terminal.send(b"s")
             terminal.wait_for(lambda: "QUEUED_LAST-DONE" in terminal.text(), timeout=15)
-            self.assertEqual(model.received, ["INITIAL", "QUEUED_FAILURE", "QUEUED_LONG", "QUEUED_LAST"])
-            self.assertIn(long_text.strip(), json.dumps(model.requests[2], ensure_ascii=False))
+            # 2. 【终端队列】【立即指导】恢复消息与下一条立即指导可进入同一请求，原文及先后顺序必须完整保留
+            self.assertEqual(model.received, ["INITIAL", "QUEUED_FAILURE", "QUEUED_LAST"])
+            request_text = json.dumps(model.requests[2], ensure_ascii=False)
+            self.assertIn(long_text.strip(), request_text)
+            self.assertLess(request_text.index("QUEUED_LONG"), request_text.index("QUEUED_LAST"))
+            terminal.wait_for(lambda: "Queued (" not in terminal.text())
 
     def test_failed_queued_turn_keeps_later_submissions(self):
         """排队首条返回 HTTP 错误后保留其余两条消息；无参数，返回无。"""

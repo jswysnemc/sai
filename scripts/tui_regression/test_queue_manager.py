@@ -9,14 +9,14 @@ from test_input_mouse import locate
 
 
 def enqueue(terminal, text):
-    """参数为终端和消息；使用 Enter 排入下轮，返回无。"""
+    """参数为终端和消息；使用 Enter 排为立即发送，返回无。"""
     terminal.send(text.encode() + b"\r")
     terminal.wait_for(lambda: text in terminal.text())
 
 
 def manager_rows(terminal):
     """参数为终端；返回队列可见消息行，忽略草稿和聊天正文。"""
-    return [line for line in lines(terminal) if "#" in line and ("Next turn" in line or "Steer" in line)]
+    return [line for line in lines(terminal) if "#" in line and ("Send now" in line or "After task" in line)]
 
 
 class QueueManagerTests(unittest.TestCase):
@@ -41,7 +41,7 @@ class QueueManagerTests(unittest.TestCase):
                 terminal.send(b"t")
                 terminal.wait_for(lambda: any("› #1" in line and "QUEUE-11" in line for line in manager_rows(terminal)))
                 terminal.send(b"\t")
-                terminal.wait_for(lambda: any("› #1" in line and "Steer" in line for line in manager_rows(terminal)))
+                terminal.wait_for(lambda: any("› #1" in line and "After task" in line for line in manager_rows(terminal)))
                 terminal.send(b"d")
                 terminal.wait_for(lambda: "Delete this message?" in terminal.text())
                 terminal.send(b"\x1b")
@@ -51,14 +51,14 @@ class QueueManagerTests(unittest.TestCase):
                 terminal.wait_for(lambda: "Queue manager (11)" in terminal.text())
                 terminal.send(b"u")
                 terminal.wait_for(lambda: "Queue manager (12)" in terminal.text())
-                self.assertTrue(any("› #1" in line and "QUEUE-11" in line and "Steer" in line for line in manager_rows(terminal)))
+                self.assertTrue(any("› #1" in line and "QUEUE-11" in line and "After task" in line for line in manager_rows(terminal)))
                 terminal.send(b"\r")
                 terminal.wait_for(lambda: "Queue manager" not in terminal.text())
                 terminal.send(b"-EDIT\r")
                 terminal.wait_for(lambda: "QUEUE-11-EDIT" in terminal.text())
                 terminal.send(b"\x1bm")
                 terminal.wait_for(lambda: "Queue manager (12)" in terminal.text())
-                self.assertTrue(any("QUEUE-11-EDIT" in line and "Steer" in line for line in manager_rows(terminal)))
+                self.assertTrue(any("QUEUE-11-EDIT" in line and "After task" in line for line in manager_rows(terminal)))
 
     def test_mouse_list_scroll_controls_and_input_focus(self):
         """无参数；鼠标仅滚动队列、按钮独立反色，点击输入退出管理但保留队列，返回无。"""
@@ -102,8 +102,8 @@ class QueueManagerTests(unittest.TestCase):
                 terminal.wait_for(lambda: "KEPT-EDIT-DRAFT" in terminal.text())
                 self.assertNotIn("Queue manager", terminal.text())
 
-    def test_ctrl_enter_queues_steer_without_changing_plain_enter(self):
-        """无参数；增强键盘协议下 Ctrl+Enter 插话，普通 Enter 仍然排入下轮，返回无。"""
+    def test_ctrl_enter_and_plain_enter_both_default_to_send_now(self):
+        """无参数；增强键盘协议下 Ctrl+Enter 与普通 Enter 均默认立即发送，返回无。"""
         with ActivityModel() as model:
             with TerminalSession(model.config(), columns=100, rows=32, kitty_keyboard=True,
                                  arguments=["--lang", "en-US"]) as terminal:
@@ -116,8 +116,8 @@ class QueueManagerTests(unittest.TestCase):
                 terminal.send(b"\x1b[1;5A")
                 terminal.wait_for(lambda: "Queue manager (2)" in terminal.text())
                 rows = manager_rows(terminal)
-                self.assertTrue(any("STEER-MESSAGE" in row and "Steer" in row for row in rows))
-                self.assertTrue(any("NEXT-MESSAGE" in row and "Next turn" in row for row in rows))
+                self.assertTrue(any("STEER-MESSAGE" in row and "Send now" in row for row in rows))
+                self.assertTrue(any("NEXT-MESSAGE" in row and "Send now" in row for row in rows))
 
 
 if __name__ == "__main__":
