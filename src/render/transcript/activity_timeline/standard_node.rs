@@ -165,14 +165,26 @@ fn finish(mut lines: Vec<AnsiLine>, width: usize, open: bool) -> RenderedNode {
 
     // 2. 【终端】【折叠裁切】非展开状态只保留首行摘要
     if !open {
+        let omitted = lines.len() > 1;
         lines.truncate(1);
+        if omitted && width > 0 {
+            if let Some(line) = lines.first_mut() {
+                let prefix =
+                    crate::render::ansi_clip::clip_ansi_to_width(line.as_str(), width - 1, "");
+                *line = line.with_text(format!("{prefix}…\x1b[0m"), 0);
+            }
+        }
     }
 
     // 3. 【终端】【安全截断】逐行检查列宽并使用 ANSI 安全函数截断
     for line in &mut lines {
         if crate::render::ansi_clip::ansi_visible_width(line.as_str()) > width {
             *line = line.with_text(
-                crate::render::ansi_clip::clip_ansi_to_width(line.as_str(), width, ""),
+                if width == 0 {
+                    String::new()
+                } else {
+                    crate::render::ansi_clip::clip_ansi_to_width(line.as_str(), width, "…")
+                },
                 0,
             );
         }

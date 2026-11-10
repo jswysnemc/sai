@@ -48,7 +48,7 @@ fn invocation(view: &ToolView, cell: &HistoryCell, width: usize, title_width: us
     }
     let arguments = serde_json::from_str::<Value>(&view.arguments).unwrap_or_default();
     let title = super::summary::for_cell(cell, title_width, super::node::awaiting_permission(cell));
-    let visible_title = crate::render::clip_to_width(&title, title_width, "");
+    let visible_title = crate::render::clip_to_width(&title, title_width, "…");
     let mut body = if let Some(preview) = tool_view::render_read_image_preview(view, width) {
         with_missing_path(
             preview,

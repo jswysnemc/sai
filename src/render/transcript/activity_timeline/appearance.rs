@@ -43,7 +43,11 @@ pub(super) fn health(cell: &HistoryCell) -> ToolHealth {
 /// 参数: `title` 为纯文本摘要，`health` 为状态，`thinking` 为是否思考，`width` 为宽度；返回: 标题行。
 pub(super) fn title(title: &str, health: ToolHealth, thinking: bool, width: usize) -> AnsiLine {
     let plain = crate::render::ansi_clip::strip_ansi(title).replace(['\n', '\r', '\t'], " ");
-    let clipped = crate::render::clip_to_width(&plain, width, "");
+    let clipped = if width == 0 {
+        String::new()
+    } else {
+        crate::render::clip_to_width(&plain, width, "…")
+    };
     let (action, metadata) = clipped.split_once(" · ").unwrap_or((&clipped, ""));
     let color = match health {
         ToolHealth::Ok => "\x1b[32m",

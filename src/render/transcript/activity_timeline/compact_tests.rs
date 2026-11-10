@@ -70,6 +70,37 @@ fn clipped_summary_keeps_complete_command_in_details() {
     tui_mode::set_override(None);
 }
 
+/// 【终端】【命令省略测试】窄窗口中的单行标题显示省略号，中文与颜色不会突破边界。
+#[test]
+fn truncated_command_headers_show_ellipsis_within_display_width() {
+    use crate::render::ansi_clip::{ansi_visible_width, strip_ansi};
+    for width in [1, 2, 12, 30, 50] {
+        let title = super::appearance::title(
+            "$ printf 中文命令与更多参数 abcdefghijklmnopqrstuvwxyz",
+            crate::render::status_style::ToolHealth::Pending,
+            false,
+            width,
+        );
+        assert!(strip_ansi(title.as_str()).ends_with('…'));
+        assert!(ansi_visible_width(title.as_str()) <= width);
+    }
+    let mut store = TranscriptStore::new(200);
+    store.push_tool_call(
+        "run_command".into(),
+        serde_json::json!({"command":"printf 中文命令 && ".repeat(12)}).to_string(),
+    );
+    let document = store.render_fullscreen(
+        30,
+        &options(),
+        &HashSet::from([ParagraphKey::activity(0, false)]),
+    );
+    assert!(text(&document).contains('…'));
+    assert!(document
+        .lines
+        .iter()
+        .all(|line| ansi_visible_width(line.as_str()) <= 30));
+}
+
 /// 【终端】【用户附件测试】两种布局都默认折叠图片，点击展开使用 Kitty 并保持原有用户圆点。
 /// 参数: 无；返回: 无。
 #[test]
