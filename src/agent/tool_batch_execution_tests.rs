@@ -127,3 +127,87 @@ async fn fast_results_are_persisted_while_slow_tools_are_still_running() {
         ["slow", "fast"]
     );
 }
+
+/// 【目标】【并发暂停回归】前批工具暂停目标后，等待容量的工具必须拒绝启动并保留对应结果。
+/// 参数：无；返回断言结果。
+#[tokio::test]
+async fn paused_goal_blocks_tools_waiting_for_concurrency_capacity() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let root = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(root.path());
+    let config = AppConfig {
+        load_instruction_files: false,
+        ..Default::default()
+    };
+    let state = StateStore::new(&paths).unwrap();
+    let goals = crate::goal::GoalStore::new(state.goal_file());
+    let goal = goals.replace("inspect", None, false).unwrap();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let observed = calls.clone();
+    let control = goals.clone();
+    let mut tools = ToolRegistry::new();
+    tools.register(ToolSpec::new(
+        "probe",
+        "read",
+        serde_json::json!({"type":"object"}),
+        move |_| {
+            let observed = observed.clone();
+            let control = control.clone();
+            async move {
+                observed.fetch_add(1, Ordering::SeqCst);
+                control.set_status(crate::goal::GoalStatus::Paused)?;
+                Ok("first read".into())
+            }
+        },
+    ));
+    let client = OpenAiCompatibleClient::from_config(&config, &paths).unwrap();
+    let mut agent = Agent::new(config, &paths, state, client, tools, AgentMode::Yolo).unwrap();
+    agent.goal_accounting = Some(
+        crate::goal::GoalAccounting::new(goals, "turn:pause-test".into(), Some(goal.id)).unwrap(),
+    );
+    agent.state.start_turn("batch", "inspect").unwrap();
+    let group = (0..12)
+        .map(|index| {
+            let call = ToolCall {
+                id: format!("read-{index}"),
+                kind: "function".into(),
+                function: ToolCallFunction {
+                    name: "probe".into(),
+                    arguments: format!("{{\"index\":{index}}}"),
+                },
+            };
+            SequencedToolCall {
+                sequence: index + 1,
+                provider_call: call.clone(),
+                execution_call: Ok(call),
+            }
+        })
+        .collect();
+    let mut messages = Vec::new();
+    agent
+        .execute_concurrent_read_only_group(
+            "batch",
+            1,
+            None,
+            group,
+            &mut Vec::new(),
+            &mut messages,
+            &mut RepeatGuard::default(),
+            &mut |_| Ok(()),
+            &mut PerfTrace::new("pause-test"),
+            &HookContext {
+                session_id: agent.state.session_id().into(),
+                workdir: root.path().display().to_string(),
+                tool_name: None,
+                extra: Default::default(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(messages.len(), 12);
+    assert!(messages
+        .iter()
+        .skip(1)
+        .all(|message| serde_json::to_string(message).unwrap().contains("paused")));
+}
