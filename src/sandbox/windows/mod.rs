@@ -42,7 +42,24 @@ pub(crate) fn serve(payload: &str) -> Result<u32> {
         serde_json::from_slice(&base64::engine::general_purpose::STANDARD.decode(payload)?)?;
     let shell = resolve_shell(&launch.shell)?;
     let flavor = crate::platform::shell_selection::shell_flavor(shell.as_os_str());
-    let args = crate::platform::shell_selection::script_args(flavor, &launch.command);
+    let cwd = match &launch.policy {
+        Some(policy) => policy.cwd.clone(),
+        None => std::env::current_dir()?,
+    };
+    let script = if flavor.uses_powershell_syntax() {
+        let path = cwd.to_string_lossy();
+        let path = path
+            .strip_prefix(r"\\?\")
+            .unwrap_or(&path)
+            .replace('\'', "''");
+        format!(
+            "Set-Location -LiteralPath '{path}' -ErrorAction Stop; {}",
+            launch.command
+        )
+    } else {
+        launch.command.clone()
+    };
+    let args = crate::platform::shell_selection::script_args(flavor, &script);
     let Some(policy) = launch.policy else {
         return process::run(
             None,
