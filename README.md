@@ -52,7 +52,7 @@ Unordered Markdown lists use small round bullets with aligned continuation lines
 
 In fullscreen view, clicking an image in the transcript or a visible input thumbnail opens the same centered image viewer over the current screen. Content outside the viewer stays visible. Press `Esc`, use the close button, or click outside the image (including the padding inside the viewer) to return. Closing preserves the draft, attachments, cursor position, and reading position. Dragging does not open or dismiss the viewer.
 
-On Unix, unknown interactive terminals (including Herdr) are queried once at startup for Kitty graphics support, with a 200 ms timeout. A successful response enables image previews even with `TERM=xterm-256color` and no Kitty environment variables. Known terminal protocols retain their existing selection; redirected output and tmux sessions skip the query.
+On Unix, unknown interactive terminals (including Herdr) are queried once at startup for Kitty graphics support, with a 200 ms timeout. A successful response enables image previews even with `TERM=xterm-256color` and no Kitty environment variables. Windows also queries Kitty support (including in Ely Terminal), then checks Sixel through primary device attributes if needed, with a separate 200 ms timeout. Windows queries preserve native input records and restore the exact console modes; `WT_SESSION` alone no longer enables Sixel. The existing iTerm2 selection is retained. Redirected output and tmux sessions skip querying.
 
 ![Sai REPL chat and streaming rendering](pics/repl.png)
 

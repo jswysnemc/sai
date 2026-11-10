@@ -203,8 +203,8 @@ fn supports_kitty_graphics() -> bool {
     if let Some(value) = test_override::kitty() {
         return value;
     }
-    if probe::kitty_supported() {
-        return true;
+    if let Some(value) = probe::kitty_supported() {
+        return value;
     }
     if std::env::var_os("KITTY_WINDOW_ID").is_some() {
         return true;
@@ -238,14 +238,22 @@ fn supports_iterm_inline_image() -> bool {
         .unwrap_or(false)
 }
 
-/// 判断当前终端是否支持 Windows Terminal 使用的 Sixel 图形协议。
+/// 【终端图片】【Sixel 选择】Windows 使用实际设备属性，其余平台保留已有兼容判断。
+/// 参数: 无。
 ///
 /// 返回:
-/// - 是否可能支持 Sixel 图形协议
+/// - 是否支持 Sixel 图形协议
 fn supports_windows_terminal_sixel() -> bool {
     #[cfg(test)]
     if let Some(value) = test_override::sixel() {
         return value;
+    }
+    if let Some(value) = probe::sixel_supported() {
+        return value;
+    }
+    // 1. 【终端图片】【Windows 能力】会话标识不代表图形支持，原生平台必须等待实际应答
+    if cfg!(windows) {
+        return false;
     }
     std::env::var_os("WT_SESSION").is_some()
         || std::env::var("TERM_PROGRAM")

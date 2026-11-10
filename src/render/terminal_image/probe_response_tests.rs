@@ -34,7 +34,7 @@ fn accepts_matching_success_with_combined_or_split_escape() {
             .into_iter()
             .filter_map(|event| response.push(event))
             .collect();
-        assert_eq!(results, [true]);
+        assert_eq!(results, [ProbeReply::Kitty(true)]);
         assert!(response.into_input().is_empty());
     }
 }
@@ -52,7 +52,7 @@ fn rejects_errors_and_unrelated_ids() {
         .into_iter()
         .filter_map(|event| response.push(event))
         .collect();
-    assert_eq!(results, [false]);
+    assert_eq!(results, [ProbeReply::Kitty(false)]);
     assert!(response.into_input().is_empty());
 }
 
@@ -115,6 +115,55 @@ fn rejects_oversized_response() {
     let result = events(&text, false)
         .into_iter()
         .find_map(|event| response.push(event));
-    assert_eq!(result, Some(false));
+    assert_eq!(result, Some(ProbeReply::Kitty(false)));
     assert!(response.into_input().is_empty());
+}
+
+/// 【终端图片】【Sixel 应答】能力编号 4 必须位于选项中，设备型号或编号 14 不能误报。
+/// 参数: 无；返回: 无。
+#[test]
+fn detects_sixel_only_from_device_options() {
+    for (reply, expected) in [
+        ("\x1b[?61;4;6;22c", true),
+        ("\x1b[?1;0c", false),
+        ("\x1b[?4c", false),
+        ("\x1b[?62;14;22c", false),
+    ] {
+        let mut response = ProbeResponse::new(31);
+        let results: Vec<_> = events(reply, true)
+            .into_iter()
+            .filter_map(|event| response.push(event))
+            .collect();
+        assert_eq!(results, [ProbeReply::Sixel(expected)]);
+        assert!(response.into_input().is_empty());
+    }
+}
+
+/// 【终端图片】【输入区分】非设备属性 CSI 不能变成图形能力响应。
+/// 参数: 无；返回: 无。
+#[test]
+fn keeps_non_query_escape_input() {
+    let input = events("\x1b[A\x1b[>4c", true);
+    let mut response = ProbeResponse::new(31);
+    for event in input.clone() {
+        assert_eq!(response.push(event), None);
+    }
+    assert_eq!(response.into_input(), input);
+}
+
+/// 【终端图片】【原始记录】通用解析器保留记录对象，查询切换时只丢弃残缺协议。
+/// 参数: 无；返回: 无。
+#[test]
+fn query_boundary_keeps_original_record_order() {
+    let mut response = ProbeResponse::<u32>::new(31);
+    response.push_fragment(Some("draft".into()), 10);
+    response.push_fragment(Some("\x1b_Gi=31;O".into()), 20);
+    response.push_fragment(None, 30);
+    response.finish_query();
+    assert_eq!(
+        response.push_fragment(Some("\x1b[?61;4c".into()), 40),
+        Some(ProbeReply::Sixel(true))
+    );
+    response.push_fragment(Some("tail".into()), 50);
+    assert_eq!(response.into_input(), [10, 30, 50]);
 }

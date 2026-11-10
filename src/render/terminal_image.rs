@@ -2,6 +2,8 @@ mod buffered;
 mod composer_tile;
 mod probe;
 mod probe_response;
+#[cfg(windows)]
+mod probe_windows;
 
 pub(crate) use buffered::render_buffered_image;
 pub(crate) use composer_tile::{composer_tile_environment, render_composer_tile, ComposerTile};

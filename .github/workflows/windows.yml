@@ -48,6 +48,9 @@ jobs:
       - name: Run Rust tests
         run: cargo test --locked
 
+      - name: Run native terminal graphics regressions
+        run: cargo test --locked --manifest-path scripts/windows_graphics_regression/Cargo.toml -- --nocapture
+
       - name: Run web tests
         working-directory: web
         run: npm test
