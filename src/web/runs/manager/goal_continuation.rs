@@ -63,7 +63,9 @@ impl RunManager {
         completed: &QueuedRun,
         status: RunCheckpointStatus,
     ) {
-        if self.shutting_down.load(std::sync::atomic::Ordering::SeqCst) {
+        if self.shutting_down.load(std::sync::atomic::Ordering::SeqCst)
+            || !goal_execution_available(&self.paths, &completed.request)
+        {
             return;
         }
         let queue_empty = self
@@ -193,11 +195,13 @@ impl RunManager {
                 if busy {
                     break;
                 }
-                if !goal_is_active(
-                    &manager.paths,
-                    &completed.workspace.path,
-                    &completed.request.session_id,
-                ) {
+                if !goal_execution_available(&manager.paths, &completed.request)
+                    || !goal_is_active(
+                        &manager.paths,
+                        &completed.workspace.path,
+                        &completed.request.session_id,
+                    )
+                {
                     break;
                 }
                 if session_has_running_work(
@@ -266,6 +270,39 @@ fn mark_unread_if_unfocused(paths: &SaiPaths, workspace_path: &str, session_id: 
             ..crate::state::SidebarIndexPatch::default()
         },
     );
+}
+
+/// 【Web】【续作条件】与实际轮次使用相同模型和工具设置，禁止无目标工具时反复空转。
+/// 参数：路径与待续轮请求；返回是否可以继续执行目标。
+fn goal_execution_available(paths: &SaiPaths, request: &StartRunRequest) -> bool {
+    let Ok(mode) = crate::agent::AgentMode::parse(request.mode.as_deref()) else {
+        return false;
+    };
+    if mode.permission() == crate::agent::PermissionMode::Plan {
+        return false;
+    }
+    let config = resolve_run_config(
+        paths,
+        request.agent_id.as_deref(),
+        request.provider_id.as_deref(),
+        request.model.as_deref(),
+        request.thinking_level.as_deref(),
+    )
+    .and_then(|config| {
+        config
+            .map(Ok)
+            .unwrap_or_else(|| AppConfig::load_or_default(paths))
+    });
+    config.is_ok_and(|config| {
+        config.tools.enabled
+            && config.active_model_tools_enabled().unwrap_or(false)
+            && !config.agent.engine.is_external()
+            && (!config
+                .agent_runtime
+                .as_ref()
+                .is_some_and(|runtime| runtime.exclusive)
+                || crate::config::whitelist_allows_tool(&config, "update_goal"))
+    })
 }
 
 fn goal_is_active(paths: &SaiPaths, workspace_path: &str, session_id: &str) -> bool {

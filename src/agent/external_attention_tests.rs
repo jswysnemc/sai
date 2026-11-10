@@ -55,6 +55,8 @@ async fn regression_background_silence_wakes_the_session() {
         super::super::external_wake_policy::ExternalWakePolicy::capture(&paths, &state).unwrap();
     let (_, store) = quiet_task(&paths, state.session_id());
     let monitor = ExternalEventMonitor {
+        live_mode: crate::agent::LiveAgentMode::new(crate::agent::AgentMode::Yolo, None),
+        goal_tools_available: true,
         paths,
         state,
         config: AppConfig::default(),
@@ -82,6 +84,8 @@ async fn reopening_ignores_old_background_attention() {
     let policy =
         super::super::external_wake_policy::ExternalWakePolicy::capture(&paths, &state).unwrap();
     let monitor = ExternalEventMonitor {
+        live_mode: crate::agent::LiveAgentMode::new(crate::agent::AgentMode::Yolo, None),
+        goal_tools_available: true,
         paths,
         state,
         config: AppConfig::default(),

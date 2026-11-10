@@ -65,6 +65,8 @@ pub(crate) struct ExternalEventMonitor {
     paths: SaiPaths,
     config: AppConfig,
     state: StateStore,
+    live_mode: std::sync::Arc<super::LiveAgentMode>,
+    goal_tools_available: bool,
     scope: std::sync::Arc<super::external_wake_policy::ExternalWakeScope>,
 }
 
@@ -145,6 +147,8 @@ impl Agent {
             paths: self.paths.clone(),
             config: self.config.clone(),
             state: self.state.clone(),
+            live_mode: self.live_mode.clone(),
+            goal_tools_available: self.tools_enabled && self.tools.contains("update_goal"),
             scope: self.external_wake_policy.scope(),
         }
     }
@@ -343,10 +347,12 @@ impl ExternalEventMonitor {
         if running_subagents || running_background > 0 {
             return Ok(ExternalEventPoll::Waiting);
         }
-        if self
-            .state
-            .goal()?
-            .is_some_and(|goal| goal.id == goal_id && goal.status.is_active())
+        if self.goal_tools_available
+            && self.live_mode.get().permission() != super::PermissionMode::Plan
+            && self
+                .state
+                .goal()?
+                .is_some_and(|goal| goal.id == goal_id && goal.status.is_active())
         {
             return Ok(ExternalEventPoll::Ready(
                 ExternalEventWake::GoalContinuation,

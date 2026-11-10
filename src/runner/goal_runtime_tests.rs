@@ -131,3 +131,31 @@ async fn three_empty_automatic_turns_block_the_goal() {
         );
     }
 }
+
+/// 【目标】【规划模式】自动续轮在规划模式不发送请求，也不改变目标状态或用量。
+#[tokio::test]
+async fn plan_mode_defers_goal_continuation_without_spending_tokens() {
+    let mut harness = AutomaticTestHarness::new().await;
+    let goal = harness
+        .agent
+        .state()
+        .replace_goal("finish implementation", Some(100), false)
+        .unwrap();
+    harness.agent.apply_live_mode(AgentMode::Plan);
+    harness.agent.resume_external_goal();
+    assert!(tokio::time::timeout(
+        std::time::Duration::from_millis(30),
+        harness.agent.external_event_monitor().wait_for_wake()
+    )
+    .await
+    .is_err());
+    harness
+        .submit(UserInputSubmission::new("", AgentMode::Plan).with_goal_continuation())
+        .await
+        .unwrap();
+    assert_eq!(harness.request_count(), 0);
+    let saved = harness.agent.state().goal().unwrap().unwrap();
+    assert_eq!(saved.id, goal.id);
+    assert_eq!(saved.status, GoalStatus::Active);
+    assert_eq!(saved.tokens_used, 0);
+}

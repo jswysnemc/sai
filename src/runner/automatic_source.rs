@@ -31,6 +31,9 @@ impl AutomaticInputSource {
         agent: &Agent,
         next: Option<Arc<dyn InterMessageSource>>,
     ) -> Result<Option<Self>> {
+        if input.kind == AutomaticInputKind::GoalContinuation && !agent.goal_execution_available() {
+            return Ok(None);
+        }
         let monitor = agent.external_event_monitor();
         if let Some(batch) = &input.external_event {
             if !monitor.is_pending(batch)? {

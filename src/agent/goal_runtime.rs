@@ -5,6 +5,14 @@ use crate::perf_trace::PerfTrace;
 use anyhow::Result;
 
 impl Agent {
+    /// 【目标】【续作条件】规划模式或目标工具不可用时不启动自动执行。
+    /// 参数：无；返回当前运行环境是否支持目标完成与状态更新。
+    pub(crate) fn goal_execution_available(&self) -> bool {
+        self.mode().permission() != super::PermissionMode::Plan
+            && self.tools_enabled
+            && self.tools.contains("update_goal")
+    }
+
     /// 【目标】【执行边界】读取当前运行中已停止的目标，普通无目标对话保持独立
     /// 参数：无；返回需要收尾的目标
     pub(super) fn stopped_goal(&self) -> Result<Option<Goal>> {

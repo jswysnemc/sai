@@ -1,4 +1,4 @@
-use crate::goal::{Goal, GoalStatus};
+use crate::goal::{Goal, GoalStatus, GoalStore};
 use crate::i18n::text as t;
 use crate::state::StateStore;
 use anyhow::{bail, Result};
@@ -78,9 +78,18 @@ pub fn execute_goal_command(
     state: &StateStore,
     command: GoalCommand,
 ) -> Result<GoalCommandOutcome> {
+    execute_goal_store_command(&GoalStore::new(state.goal_file()), command)
+}
+
+/// 【目标】【运行期控制】直接操作绑定会话的目标文件，不重开数据库或修改全局当前会话。
+/// 参数：目标存储和用户命令；返回展示文本及是否需要续作。
+pub(crate) fn execute_goal_store_command(
+    store: &GoalStore,
+    command: GoalCommand,
+) -> Result<GoalCommandOutcome> {
     match command {
         GoalCommand::Show => Ok(GoalCommandOutcome {
-            message: match state.goal()? {
+            message: match store.get()? {
                 Some(goal) => goal_summary(&goal),
                 None => t(
                     "No goal is set. Usage: /goal <objective> [--tokens N]",
@@ -94,23 +103,23 @@ pub fn execute_goal_command(
             objective,
             token_budget,
         } => {
-            let goal = state.replace_goal(&objective, token_budget, false)?;
+            let goal = store.replace(&objective, token_budget, false)?;
             Ok(GoalCommandOutcome {
                 message: goal_summary(&goal),
                 should_continue: true,
             })
         }
         GoalCommand::Edit { objective } => {
-            let goal = state.edit_goal(&objective)?;
+            let goal = store.edit(&objective)?;
             Ok(GoalCommandOutcome {
                 message: goal_summary(&goal),
                 should_continue: goal.status.is_active(),
             })
         }
-        GoalCommand::Pause => status_outcome(state, GoalStatus::Paused, false),
-        GoalCommand::Resume => status_outcome(state, GoalStatus::Active, true),
+        GoalCommand::Pause => status_outcome(store, GoalStatus::Paused, false),
+        GoalCommand::Resume => status_outcome(store, GoalStatus::Active, true),
         GoalCommand::Clear => {
-            let cleared = state.clear_goal()?;
+            let cleared = store.clear()?;
             Ok(GoalCommandOutcome {
                 message: if cleared {
                     t("Goal cleared", "目标已清除").to_string()
@@ -133,11 +142,11 @@ pub fn execute_goal_command(
 /// 返回:
 /// - Goal 命令结果
 fn status_outcome(
-    state: &StateStore,
+    store: &GoalStore,
     status: GoalStatus,
     continue_when_active: bool,
 ) -> Result<GoalCommandOutcome> {
-    let goal = state.set_goal_status(status)?;
+    let goal = store.set_status(status)?;
     Ok(GoalCommandOutcome {
         message: goal_summary(&goal),
         should_continue: continue_when_active && goal.status.is_active(),

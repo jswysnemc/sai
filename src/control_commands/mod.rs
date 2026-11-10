@@ -17,6 +17,7 @@ pub use context_info::{
     context_info_for_mode, context_info_for_mode_with_update, context_info_plain,
     context_info_plain_with_update,
 };
+pub(crate) use goal::execute_goal_store_command;
 pub use goal::{execute_goal_command, GoalCommand};
 pub use help::help_text;
 pub use model::run_model_command;

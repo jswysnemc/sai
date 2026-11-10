@@ -109,6 +109,7 @@ pub(in crate::cli) fn stream_command_policy(input: &str) -> StreamCommandPolicy 
             | crate::control_commands::ControlCommand::Context { .. }
             | crate::control_commands::ControlCommand::Rename { .. }
             | crate::control_commands::ControlCommand::Subagents
+            | crate::control_commands::ControlCommand::Goal(_)
             | crate::control_commands::ControlCommand::SubagentMessage { .. },
         )) => StreamCommandPolicy::Immediate,
         Ok(Some(_)) => StreamCommandPolicy::Disabled,

@@ -97,6 +97,16 @@ pub(in crate::cli) fn run_immediate_stream_command(
             );
             runtime.record_meta(info.unwrap_or_else(|error| error.to_string()))
         }
+        Ok(Some(ControlCommand::Goal(command))) => {
+            let store =
+                crate::goal::GoalStore::new(std::path::Path::new(&ctx.owner_key).join("goal.json"));
+            let outcome = crate::control_commands::execute_goal_store_command(&store, command);
+            runtime.record_meta(
+                outcome
+                    .map(|outcome| outcome.message)
+                    .unwrap_or_else(|error| error.to_string()),
+            )
+        }
         Ok(Some(ControlCommand::Subagents)) => runtime.record_meta(
             crate::cli::repl::subagent_commands::format_subagent_list(&ctx.owner_key),
         ),
