@@ -556,16 +556,22 @@ mod tests {
         )
     }
 
-    /// 候选列表必须非空，且在 Windows 上提供多个回退项。
-    ///
-    /// 首选 shell 不存在时要能换下一个，否则未装 pwsh 的机器上会出现
-    /// 「sai 自带命令能跑、外部内核跑不了」的割裂。
+    /// 【外部终端】【命令回归】候选列表非空，Windows 在解析 Shell 回退后必须使用可信 Job 启动器。
+    /// 参数：无；返回断言结果。
     #[test]
     fn shell_candidates_are_never_empty() {
         let candidates = crate::tools::command::build_shell_commands("echo hi", "", None).unwrap();
         assert!(!candidates.is_empty());
         #[cfg(windows)]
-        assert!(candidates.len() > 1, "Windows 需要提供回退候选");
+        {
+            assert_eq!(candidates.len(), 1);
+            assert_eq!(candidates[0].0, "windows-job");
+            assert!(candidates[0]
+                .1
+                .as_std()
+                .get_args()
+                .any(|argument| argument == crate::sandbox::windows::WORKER_ARG));
+        }
     }
 
     /// 终端生命周期：创建后可读输出、可等待退出、释放后不再可见。

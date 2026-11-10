@@ -330,9 +330,8 @@ fn shell_commands(
 /// 外部内核执行命令时走的沙箱与 sai 自带的 run_command 必须完全一致，
 /// 各写一份迟早会分叉出治理缺口。
 ///
-/// 返回的是**候选列表**而非单条命令：Windows 上依次为 pwsh、powershell、cmd，
-/// 调用方要在首选不存在（`ErrorKind::NotFound`）时继续尝试下一个，
-/// 否则未装 pwsh 的机器上会出现「自带命令能跑、外部内核跑不了」的割裂。
+/// Windows 在构造时按 pwsh、powershell、cmd 查找实际存在的 Shell，
+/// 再返回可信启动器；它在用户脚本执行前绑定 Job，ACP 与内置命令使用相同边界。
 ///
 /// 参数:
 /// - `command`: 待执行命令
