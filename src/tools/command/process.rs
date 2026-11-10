@@ -177,6 +177,10 @@ async fn run_command_with_timeout(
         }
     })?;
     let pid = child.id();
+    let mut lifecycle = super::process_lifecycle::CommandTreeGuard::new(
+        pid.ok_or_else(|| CommandRunError::Other(anyhow::anyhow!("command process has no id")))?,
+    )
+    .map_err(CommandRunError::Other)?;
     let mut stdout = child.stdout.take();
     let mut stderr = child.stderr.take();
     let stdout_progress = progress.clone();
@@ -187,6 +191,8 @@ async fn run_command_with_timeout(
     let stderr_task = tokio::spawn(async move {
         read_pipe(&mut stderr, stderr_progress, CommandOutputStream::Stderr).await
     });
+    lifecycle.track_reader(stdout_task.abort_handle());
+    lifecycle.track_reader(stderr_task.abort_handle());
     let status = match tokio::time::timeout(duration, child.wait()).await {
         Ok(Ok(status)) => status,
         Ok(Err(err)) => return Err(CommandRunError::Other(err.into())),
@@ -201,6 +207,7 @@ async fn run_command_with_timeout(
             return Err(CommandRunError::Timeout);
         }
     };
+    lifecycle.terminate();
     let stdout = stdout_task
         .await
         .map_err(|err| CommandRunError::Other(err.into()))?
@@ -615,11 +622,11 @@ pub(crate) fn process_exists(pid: u32) -> bool {
             crate::platform::job_control::suppress_console_window(&mut command);
             command.output()
         }
-            .map(|output| {
-                crate::platform::output_encoding::decode_output(&output.stdout)
-                    .contains(&pid.to_string())
-            })
-            .unwrap_or(false)
+        .map(|output| {
+            crate::platform::output_encoding::decode_output(&output.stdout)
+                .contains(&pid.to_string())
+        })
+        .unwrap_or(false)
     }
     #[cfg(not(any(unix, windows)))]
     {

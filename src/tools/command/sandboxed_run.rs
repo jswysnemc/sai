@@ -30,7 +30,7 @@ pub(super) async fn run_workspace_sandboxed(
     annotated_output(output, &policy)
 }
 
-/// 【沙箱命令】【计划模式】后端可用时在只读沙箱中执行检查命令，否则保持原有直接执行。
+/// 【沙箱命令】【计划模式】只在可用的只读沙箱中执行检查命令
 ///
 /// 参数:
 /// - `command`: Shell 命令文本
@@ -40,15 +40,23 @@ pub(super) async fn run_workspace_sandboxed(
 /// 返回:
 /// - JSON 格式命令结果
 pub(super) async fn run_plan_command(command: &str, timeout: u64, shell: &str) -> Result<String> {
-    // 1. 未启用或本机无后端时退回命令拒绝名单，不因缺少 bwrap 让计划模式无法检查代码
-    if !crate::sandbox::sandbox_requested() || !crate::sandbox::backend_availability().available {
-        let output = run_shell_command(command, timeout, shell, None).await?;
-        return super::run::foreground_output(output);
-    }
+    // 1. 【沙箱命令】【只读边界】命令文本检查不能替代操作系统隔离，禁止退回直接执行
+    require_readonly_backend(
+        crate::sandbox::sandbox_requested(),
+        crate::sandbox::backend_availability().available,
+    )?;
     // 2. 只读沙箱兜住拒绝名单漏掉的写入，例如 python -c、find -delete
     let policy = SandboxPolicy::for_current_workspace(FileAccess::ReadOnly, None)?;
     let output = run_shell_command(command, timeout, shell, Some(&policy)).await?;
     annotated_output(output, &policy)
+}
+
+/// 【沙箱命令】【只读校验】没有隔离能力时返回明确错误
+/// 参数：是否启用、后端是否可用；返回能否执行计划模式命令
+fn require_readonly_backend(enabled: bool, available: bool) -> Result<()> {
+    anyhow::ensure!(enabled && available,
+        "Plan mode requires an enabled, available read-only sandbox. Use read_file/list_files/search tools until the sandbox is available.");
+    Ok(())
 }
 
 /// 序列化命令结果；沙箱拦截导致失败时写入 `sandbox_denial`。
@@ -83,6 +91,15 @@ fn annotated_output(output: std::process::Output, policy: &SandboxPolicy) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 【沙箱命令】【降级测试】关闭或不可用时必须拒绝执行，不依赖命令黑名单；无参数、无返回值
+    #[test]
+    fn readonly_commands_never_fall_back_to_unrestricted_execution() {
+        assert!(require_readonly_backend(false, true).is_err());
+        assert!(require_readonly_backend(true, false).is_err());
+        assert!(require_readonly_backend(false, false).is_err());
+        assert!(require_readonly_backend(true, true).is_ok());
+    }
 
     /// 构造测试策略。
     fn policy(access: FileAccess) -> SandboxPolicy {

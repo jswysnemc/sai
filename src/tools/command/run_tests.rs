@@ -62,9 +62,15 @@ async fn readonly_command_runs_with_platform_shell() {
     #[cfg(not(windows))]
     let command = "printf hello";
 
-    let result = run_readonly_command(json!({"command": command}), String::new())
-        .await
-        .unwrap();
+    let result = run_readonly_command(json!({"command": command}), String::new()).await;
+    if !crate::sandbox::sandbox_requested() || !crate::sandbox::backend_availability().available {
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("read-only sandbox"));
+        return;
+    }
+    let result = result.unwrap();
     let data: Value = serde_json::from_str(&result).unwrap();
     assert_eq!(data["mode"], "foreground");
     assert_eq!(data["success"], true);

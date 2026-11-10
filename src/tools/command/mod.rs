@@ -1,9 +1,9 @@
 mod background;
 mod background_actions;
 mod background_attention;
-mod background_manager;
 #[cfg(test)]
 mod background_consumption_tests;
+mod background_manager;
 mod background_refresh;
 mod background_runtime;
 mod background_schema;
@@ -12,9 +12,12 @@ pub(crate) mod background_timeout;
 mod background_wait;
 #[cfg(test)]
 mod background_wait_tests;
+#[cfg(test)]
+mod cancellation_tests;
 mod exit_status;
 mod goal_completions;
 mod process;
+mod process_lifecycle;
 mod progress;
 mod rtk_filter;
 mod rtk_probe;
@@ -23,6 +26,8 @@ mod sandboxed_run;
 mod store;
 #[cfg(test)]
 mod test_support;
+#[cfg(windows)]
+mod windows_job;
 
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
@@ -44,7 +49,9 @@ pub(crate) use background::{
 pub(crate) use background_attention::{
     acknowledge_background_attention, poll_background_attention, BackgroundAttentionNotice,
 };
-pub(crate) use background_manager::{cleanup_managed_background_tasks, list_managed_background_tasks, read_managed_background_output};
+pub(crate) use background_manager::{
+    cleanup_managed_background_tasks, list_managed_background_tasks, read_managed_background_output,
+};
 pub(crate) use goal_completions::{
     acknowledge_background_completions, poll_background_completions_in_scope,
     poll_session_background_completions, BackgroundCompletionNotice,
