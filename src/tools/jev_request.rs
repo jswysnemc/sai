@@ -42,7 +42,7 @@ impl CapabilityRequest {
 pub(crate) fn register(registry: &mut ToolRegistry) {
     registry.register(ToolSpec::new(
             REQUEST_CAPABILITY_NAME,
-            "Ask the Jev router for additional tools or skills. Only basic tools are exposed up front; everything else is exposed on demand. Describe in plain language what you need to do next (for example \"search the web for recent release notes\" or \"draw an architecture diagram\"). Jev picks matching tools and skills that are not exposed yet and returns their schemas or documents. Call exposed tools through invoke_tool. Resources already exposed in this conversation are never returned again; reuse the earlier result instead of asking twice.",
+            "Ask the Jev router for additional tools or skills. Only basic tools are exposed up front; everything else is exposed on demand. Describe in plain language what you need to do next (for example \"search the web for recent release notes\" or \"draw an architecture diagram\"). Jev picks matching tools and skills that are not exposed yet and returns their schemas or documents. Follow the current tool-mode instruction: exposed schemas are shared by invoke_tool and tools[name](args) inside codemode where enabled. Resources already exposed in this conversation are never returned again; reuse the earlier result instead of asking twice.",
             json!({
                 "type": "object",
                 "properties": {

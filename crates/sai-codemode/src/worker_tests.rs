@@ -171,9 +171,15 @@ fn initialization_timeout_is_reported_without_requiring_script_output() {
 
 #[test]
 fn discovery_and_exit_work() {
-    let events = run("text((await searchTools('echo'))[0].name); text((await describeTool('echo')).declaration); store('x', 2); exit(); text('unreachable')", &[], 1000);
+    let events = run("text((await searchTools('echo'))[0].name); text(await describeTool('echo')); store('x', 2); exit(); text('unreachable')", &[], 1000);
     assert!(completion(&events).0.is_none(), "{events:?}");
     assert_eq!(events.len(), 3);
+    let WorkerEvent::Output { value, .. } = &events[1] else {
+        panic!("missing tool description");
+    };
+    let description: serde_json::Value = serde_json::from_str(value).unwrap();
+    assert_eq!(description["parameters"], json!({"type":"object"}));
+    assert!(description.get("declaration").is_none());
     assert_eq!(completion(&events).1["x"], json!({"value":2}));
 }
 

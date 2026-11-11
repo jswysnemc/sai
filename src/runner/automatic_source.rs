@@ -17,6 +17,20 @@ pub(super) struct AutomaticInputSource {
 }
 
 impl AutomaticInputSource {
+    /// 【自动续聊】【待发回执】无参数；返回仍有效的自动输入，不改变用户队列。
+    fn pending_message(&self) -> Result<Option<InterMessage>> {
+        if let Some(batch) = &self.batch {
+            if !self.monitor.is_pending(batch)? {
+                self.pending.store(false, Ordering::Release);
+                return Ok(None);
+            }
+        }
+        Ok(self
+            .pending
+            .load(Ordering::Acquire)
+            .then(|| self.message.clone()))
+    }
+
     /// 【自动续聊】【消息投递】解析自动输入并丢弃已消费的排队通知。
     ///
     /// 参数:
@@ -86,16 +100,17 @@ impl InterMessageSource for AutomaticInputSource {
                 return Ok(Some(message));
             }
         }
-        if let Some(batch) = &self.batch {
-            if !self.monitor.is_pending(batch)? {
-                self.pending.store(false, Ordering::Release);
-                return Ok(None);
+        self.pending_message()
+    }
+
+    /// 【自动续聊】【实时模式】参数 mode 为当前模式；先读取匹配策略的用户消息，再读取自动回执。
+    async fn peek_for_mode(&self, mode: crate::agent::AgentMode) -> Result<Option<InterMessage>> {
+        if let Some(next) = &self.next {
+            if let Some(message) = next.peek_for_mode(mode).await? {
+                return Ok(Some(message));
             }
         }
-        Ok(self
-            .pending
-            .load(Ordering::Acquire)
-            .then(|| self.message.clone()))
+        self.pending_message()
     }
 
     /// 【自动续聊】【通知确认】请求成功后确认自动事件或转交用户队列确认。

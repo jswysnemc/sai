@@ -110,7 +110,8 @@ async fn usage(
         usage_context_window(&base_config, &query).map_err(WebError::from)?;
     let config =
         resolve_usage_config(&state.paths, &base_config, &query).map_err(WebError::from)?;
-    let mode = AgentMode::parse(query.mode.as_deref()).map_err(WebError::from)?;
+    let mode = AgentMode::parse_configured(query.mode.as_deref(), config.codemode.mode)
+        .map_err(WebError::from)?;
     let Some(store) = usage_store(&state, &query)? else {
         return empty::usage(&state, &base_config, context_window_tokens);
     };

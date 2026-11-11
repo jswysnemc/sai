@@ -59,7 +59,7 @@ impl Agent {
             .and_then(|record| AgentMode::parse(Some(&record.execution_mode)).ok())
             .filter(|mode| mode.permission() != crate::agent::PermissionMode::Plan)
             .unwrap_or(AgentMode::Audited)
-            .with_codemode(self.mode().uses_codemode());
+            .with_code_mode(self.mode().codemode());
         let mut record = PlanRecord {
             title: submission.title,
             plan: submission.plan,
@@ -108,18 +108,31 @@ impl Agent {
             return Ok(serde_json::json!({"approved":false,"mode":self.mode().key(),"feedback":record.feedback,"instruction":"Do not implement this plan. Remain in planning and incorporate feedback; do not resubmit unchanged after cancellation."}).to_string());
         }
         // 2. 【计划模式】【批准交接】重建执行工具但保留共享模式句柄，审批通过后才恢复权限
-        let registry = self.plan_execution_registry(target)?;
         record.status = "approved".into();
-        plan::store::save(self.state.state_dir(), &record).await?;
-        if self.mode().permission() != crate::agent::PermissionMode::Plan
-            || self
-                .cancel_requested
-                .load(std::sync::atomic::Ordering::SeqCst)
-        {
-            record.status = "cancelled".into();
+        let target = loop {
+            let current = self.mode();
+            if current.permission() != crate::agent::PermissionMode::Plan
+                || self
+                    .cancel_requested
+                    .load(std::sync::atomic::Ordering::SeqCst)
+            {
+                record.status = "cancelled".into();
+                plan::store::save(self.state.state_dir(), &record).await?;
+                bail!("session mode changed or the turn stopped before plan execution");
+            }
+            // 3. 【计划模式】【实时工具方式】审批等待及存储期间的工具选择以最新值为准
+            let target = target.with_code_mode(current.codemode());
+            record.execution_mode = target.key().into();
             plan::store::save(self.state.state_dir(), &record).await?;
-            bail!("session mode changed or the turn stopped before plan execution");
-        }
+            if self.mode() == current
+                && !self
+                    .cancel_requested
+                    .load(std::sync::atomic::Ordering::SeqCst)
+            {
+                break target;
+            }
+        };
+        let registry = self.plan_execution_registry(target)?;
         self.switch_mode(target, registry)?;
         Ok(serde_json::json!({"approved":true,"mode":target.key(),"plan":record.plan,"plan_file":self.state.state_dir().join("plan.json"),"instruction":"The user approved this plan. Continue implementation now, following the approved scope and current execution permissions."}).to_string())
     }

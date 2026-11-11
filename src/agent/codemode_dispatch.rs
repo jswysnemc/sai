@@ -1,5 +1,5 @@
 use super::{Agent, AgentEvent};
-use crate::llm::{ChatMessage, ToolCall, ToolCallFunction};
+use crate::llm::{ChatMessage, ToolCall};
 use crate::tools::{codemode, ToolPermission};
 use anyhow::{bail, Result};
 use sai_codemode::protocol::WorkerEvent;
@@ -15,15 +15,9 @@ impl Agent {
         questions: &mut usize,
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<Value> {
-        let (id, name, arguments) = codemode::dispatch::validate(&self.tools, event)?;
-        let call = ToolCall {
-            id: format!("codemode-nested-{id}"),
-            kind: "function".into(),
-            function: ToolCallFunction {
-                name: name.clone(),
-                arguments: arguments.clone(),
-            },
-        };
+        let (_, call) = self.prepare_codemode_call(&event)?;
+        let name = call.function.name.clone();
+        let arguments = call.function.arguments.clone();
         let interactive = matches!(
             name.as_str(),
             "ask_question" | "enter_plan_mode" | "exit_plan_mode"
@@ -116,9 +110,14 @@ impl Agent {
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<crate::tools::ToolOutput> {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let requested_name = if call.kind == super::deepseek_anchor::BASH_EXECUTION_KIND {
+            crate::tools::DSH_BASH_EXECUTION_ALIAS
+        } else {
+            &call.function.name
+        };
         let future =
             self.tools
-                .call_with_progress(&call.function.name, &call.function.arguments, sender);
+                .call_with_progress(requested_name, &call.function.arguments, sender);
         tokio::pin!(future);
         loop {
             tokio::select! {

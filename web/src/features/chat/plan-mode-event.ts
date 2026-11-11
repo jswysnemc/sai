@@ -13,9 +13,10 @@ export function planModeFromEvent(event: WebEvent): RunMode | undefined {
   try {
     const result = JSON.parse(event.payload.output) as Record<string, unknown>;
     if (name === "exit_plan_mode" && result.approved !== true) return;
-    if (name === "enter_plan_mode") return result.mode === "plan" ? "plan" : undefined;
-    switch (result.mode) {
-      case "yolo": case "audited": return result.mode;
+    const mode = typeof result.mode === "string" ? result.mode.split("+")[0] : undefined;
+    if (name === "enter_plan_mode") return mode === "plan" ? "plan" : undefined;
+    switch (mode) {
+      case "yolo": case "audited": return mode;
       case "auto-audit": return "auto_audit";
       default: return;
     }

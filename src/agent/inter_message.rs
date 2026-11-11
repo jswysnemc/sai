@@ -75,6 +75,11 @@ pub(crate) trait InterMessageSource: Send + Sync {
     /// - 当前队首消息；队列为空时返回空
     async fn peek(&self) -> Result<Option<InterMessage>>;
 
+    /// 【消息队列】【实时模式】参数 mode 为当前会话策略；返回可按该策略合并的消息，默认沿用无模式队列。
+    async fn peek_for_mode(&self, _mode: super::AgentMode) -> Result<Option<InterMessage>> {
+        self.peek().await
+    }
+
     /// 确认消息已经包含在一次成功的模型请求中。
     ///
     /// 参数:

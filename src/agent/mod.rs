@@ -1,6 +1,7 @@
 mod agent_state;
 mod background_compaction;
 mod codemode;
+mod codemode_call;
 mod codemode_dispatch;
 mod codemode_readonly;
 mod codemode_scheduler;

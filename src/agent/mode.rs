@@ -12,6 +12,7 @@ pub enum PermissionMode {
 pub enum ToolMode {
     Native,
     CodeModel,
+    CodeModelOnly,
 }
 
 /// 会话模式由权限策略和工具调用方式组合而成。
@@ -42,7 +43,28 @@ impl AgentMode {
 
     /// 【会话模式】【工具读取】无参数；返回是否通过脚本调用工具。
     pub fn uses_codemode(self) -> bool {
-        self.tools == ToolMode::CodeModel
+        self.tools != ToolMode::Native
+    }
+
+    /// 【会话模式】【脚本策略】无参数；返回混合、独占或关闭策略。
+    pub(crate) fn codemode(self) -> crate::config::CodeMode {
+        match self.tools {
+            ToolMode::Native => crate::config::CodeMode::Off,
+            ToolMode::CodeModel => crate::config::CodeMode::On,
+            ToolMode::CodeModelOnly => crate::config::CodeMode::Only,
+        }
+    }
+
+    /// 【会话模式】【脚本配置】参数 mode 为脚本策略；返回保留权限的完整模式。
+    pub(crate) fn with_code_mode(self, mode: crate::config::CodeMode) -> Self {
+        Self {
+            tools: match mode {
+                crate::config::CodeMode::Off => ToolMode::Native,
+                crate::config::CodeMode::On => ToolMode::CodeModel,
+                crate::config::CodeMode::Only => ToolMode::CodeModelOnly,
+            },
+            ..self
+        }
     }
 
     /// 【会话模式】【权限切换】参数 permission 为新策略；返回保留工具方式的模式。
@@ -79,9 +101,28 @@ impl AgentMode {
         let tools = match tools {
             "native" => ToolMode::Native,
             "code-model" | "code_model" | "codemode" => ToolMode::CodeModel,
+            "code-model-only" => ToolMode::CodeModelOnly,
             _ => anyhow::bail!("unsupported tool mode: {tools}"),
         };
         Ok(Self::new(permission, tools))
+    }
+
+    /// 【会话模式】【入口默认值】参数为请求模式及配置策略；未显式指定工具方式时沿用配置，返回完整模式。
+    pub(crate) fn parse_configured(
+        value: Option<&str>,
+        default: crate::config::CodeMode,
+    ) -> anyhow::Result<Self> {
+        let mode = Self::parse(value)?;
+        let explicit = value.is_some_and(|value| {
+            let value = value.trim().to_ascii_lowercase();
+            value.contains('+')
+                || matches!(value.as_str(), "code-model" | "code_model" | "codemode")
+        });
+        Ok(if explicit {
+            mode
+        } else {
+            mode.with_code_mode(default)
+        })
     }
 
     /// 【会话模式】【命令解析】参数 input 为完整命令；返回只更新指定维度的模式或空值。
@@ -94,6 +135,7 @@ impl AgentMode {
             "/code-model" => Some(self.with_codemode(!self.uses_codemode())),
             "/code-model on" => Some(self.with_codemode(true)),
             "/code-model off" => Some(self.with_codemode(false)),
+            "/code-model only" => Some(self.with_code_mode(crate::config::CodeMode::Only)),
             _ => None,
         }
     }
@@ -109,6 +151,10 @@ impl AgentMode {
             (PermissionMode::Audited, ToolMode::CodeModel) => "AUDIT + CODE-MODEL",
             (PermissionMode::AutoAudit, ToolMode::CodeModel) => "AUTO-AUDIT + CODE-MODEL",
             (PermissionMode::Plan, ToolMode::CodeModel) => "PLAN + CODE-MODEL",
+            (PermissionMode::Yolo, ToolMode::CodeModelOnly) => "YOLO + CODE-MODEL-ONLY",
+            (PermissionMode::Audited, ToolMode::CodeModelOnly) => "AUDIT + CODE-MODEL-ONLY",
+            (PermissionMode::AutoAudit, ToolMode::CodeModelOnly) => "AUTO-AUDIT + CODE-MODEL-ONLY",
+            (PermissionMode::Plan, ToolMode::CodeModelOnly) => "PLAN + CODE-MODEL-ONLY",
         }
     }
 
@@ -123,6 +169,10 @@ impl AgentMode {
             (PermissionMode::Audited, ToolMode::CodeModel) => "audited+code-model",
             (PermissionMode::AutoAudit, ToolMode::CodeModel) => "auto-audit+code-model",
             (PermissionMode::Plan, ToolMode::CodeModel) => "plan+code-model",
+            (PermissionMode::Yolo, ToolMode::CodeModelOnly) => "yolo+code-model-only",
+            (PermissionMode::Audited, ToolMode::CodeModelOnly) => "audited+code-model-only",
+            (PermissionMode::AutoAudit, ToolMode::CodeModelOnly) => "auto-audit+code-model-only",
+            (PermissionMode::Plan, ToolMode::CodeModelOnly) => "plan+code-model-only",
         }
     }
 
@@ -145,7 +195,12 @@ impl AgentMode {
             PermissionMode::Plan => crate::prompts::PLAN_REMINDER,
         };
         if self.uses_codemode() {
-            format!("{permission}\n<mode name=\"code-model\">Use codemode to execute JavaScript and compose tools.<name>(args). Discover tools with searchTools or describeTool. Direct tool calls are unavailable. Nested tools follow the independent permission mode above. Await every tool call and emit only useful results.</mode>")
+            let strategy = if self.codemode() == crate::config::CodeMode::Only {
+                "Execute business tools through codemode. Native load and request_capability remain available for discovery and loading."
+            } else {
+                "Use native calls for simple operations. Use codemode for loops, dependent operations or filtering intermediate results. Loaded deferred tools may be called through invoke_tool or codemode."
+            };
+            format!("{permission}\n<mode name=\"code-model\">{strategy} Both paths share the existing tool descriptions and argument schemas. Load deferred tools before using them; request_capability follows Jev routing when enabled. In scripts use tools[name](args), await every call and emit only useful results. Nested calls retain the same permissions; completed side effects are not rolled back.</mode>")
         } else {
             permission.into()
         }

@@ -29,12 +29,12 @@ impl WebMessageQueue {
             target_run_id,
         }
     }
-}
 
-#[async_trait::async_trait]
-impl InterMessageSource for WebMessageQueue {
-    /// 查看队首用户消息，不改变队列和检查点。
-    async fn peek(&self) -> Result<Option<InterMessage>> {
+    /// 【Web队列】【策略筛选】参数 active_mode 为消费时的实时策略；返回匹配项，其他任务留待独立执行。
+    async fn peek_matching(
+        &self,
+        active_mode: Option<crate::agent::AgentMode>,
+    ) -> Result<Option<InterMessage>> {
         let queues = self.manager.queued.lock().await;
         let Some(queue) = queues.get(&self.session_key) else {
             return Ok(None);
@@ -50,6 +50,12 @@ impl InterMessageSource for WebMessageQueue {
             if queued.request.insert_at != super::QueueInsertAt::Request {
                 continue;
             }
+            // 1. 【Web队列】【模式保留】不同策略的任务保持独立，不能作为普通指导丢弃模式
+            if active_mode.is_some_and(|active| {
+                crate::agent::AgentMode::parse(queued.request.mode.as_deref()).ok() != Some(active)
+            }) {
+                continue;
+            }
             return Ok(Some(InterMessage::queued_user(
                 queued.info.run_id.clone(),
                 queued.info.input.clone(),
@@ -57,6 +63,19 @@ impl InterMessageSource for WebMessageQueue {
             )));
         }
         Ok(None)
+    }
+}
+
+#[async_trait::async_trait]
+impl InterMessageSource for WebMessageQueue {
+    /// 【Web队列】【读取】无参数；返回下一条排队消息，不确认消费。
+    async fn peek(&self) -> Result<Option<InterMessage>> {
+        self.peek_matching(None).await
+    }
+
+    /// 【Web队列】【实时模式】参数 mode 为 Agent 当前模式；返回可合并消息，避免使用启动时的旧策略。
+    async fn peek_for_mode(&self, mode: crate::agent::AgentMode) -> Result<Option<InterMessage>> {
+        self.peek_matching(Some(mode)).await
     }
 
     /// 在 provider 成功接收消息后确认队首输入。
@@ -103,3 +122,7 @@ impl InterMessageSource for WebMessageQueue {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "message_queue_mode_tests.rs"]
+mod mode_tests;

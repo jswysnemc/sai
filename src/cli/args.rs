@@ -29,9 +29,17 @@ pub struct Cli {
     #[arg(long, conflicts_with_all = ["plan", "audited", "auto_audit"])]
     pub yolo: bool,
 
-    /// 使用 JavaScript 编排工具，保留独立选择的权限模式
-    #[arg(long, global = true)]
+    /// 普通工具与 JavaScript 编排并存，保留独立选择的权限模式
+    #[arg(long, global = true, conflicts_with_all = ["code_model_only", "no_code_model"])]
     pub code_model: bool,
+
+    /// 业务工具仅通过 JavaScript 执行，仍保留工具发现和加载入口
+    #[arg(long, global = true, conflicts_with_all = ["code_model", "no_code_model"])]
+    pub code_model_only: bool,
+
+    /// 关闭 JavaScript 编排，仅使用普通工具
+    #[arg(long, global = true, conflicts_with_all = ["code_model", "code_model_only"])]
+    pub no_code_model: bool,
 
     #[arg(short = 'c', long = "clipb")]
     pub clipb: bool,

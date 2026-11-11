@@ -40,6 +40,7 @@ const RUNTIME_FIELDS = [
   ["context.experimental_context_blocks", "Experimental tool-result compression", "实验性工具结果压缩", "tools"],
   ["memory.extraction_model", "Session memory extraction model", "会话记忆点提取模型", "tools"],
   ["tools.command_filter", "Command output filter mode", "命令输出过滤器档位", "tools"],
+  ["codemode.mode", "Default tool mode", "默认工具方式", "tools"],
   ["tools.command_filter_denylist", "Exclude a command", "排除命令", "tools"],
   ["mesh.cross_session", "Cross-session messaging", "跨会话投递", "tools"],
   ["debug.enabled", "Enable API debug", "开启 API 调试", "tools"],

@@ -1,5 +1,5 @@
 use super::{Agent, AgentEvent};
-use crate::llm::{ToolCall, ToolCallFunction};
+use crate::llm::ToolCall;
 use crate::tools::{codemode, ToolOutput, ToolPermission};
 use anyhow::Result;
 use sai_codemode::protocol::WorkerEvent;
@@ -11,40 +11,23 @@ pub(super) type ReadCompletion = (u64, ToolCall, Result<ToolOutput>);
 impl Agent {
     /// 【CodeMode】【并发资格】校验 event，返回可并发只读调用；交互、授权和写调用保持串行。
     pub(super) fn codemode_readonly_call(&self, event: &WorkerEvent) -> Option<(u64, ToolCall)> {
-        let WorkerEvent::Call {
-            id,
-            name,
-            arguments,
-        } = event
-        else {
+        let (id, call) = self.prepare_codemode_call(event).ok()?;
+        let name = &call.function.name;
+        if matches!(
+            name.as_str(),
+            "ask_question" | "enter_plan_mode" | "exit_plan_mode"
+        ) {
             return None;
-        };
-        if codemode::dispatch::is_gateway(name)
-            || matches!(
-                name.as_str(),
-                "ask_question" | "enter_plan_mode" | "exit_plan_mode"
-            )
+        }
+        if self.tools.permission(name).ok()? != ToolPermission::ReadOnly
+            || self
+                .tools
+                .requires_permission(name, &call.function.arguments)
+                .ok()?
         {
             return None;
         }
-        let arguments = serde_json::to_string(arguments).ok()?;
-        if self.tools.validate_arguments(name, &arguments).is_err()
-            || self.tools.permission(name).ok()? != ToolPermission::ReadOnly
-            || self.tools.requires_permission(name, &arguments).ok()?
-        {
-            return None;
-        }
-        Some((
-            *id,
-            ToolCall {
-                id: format!("codemode-nested-{id}"),
-                kind: "function".into(),
-                function: ToolCallFunction {
-                    name: name.clone(),
-                    arguments,
-                },
-            },
-        ))
+        Some((id, call))
     }
 
     /// 【CodeMode】【只读调度】把 id/call 加入 jobs，progress 交付摘要；返回无。

@@ -23,7 +23,8 @@ async fn enter(
     Path(id): Path<String>,
     Json(request): Json<EnterPlanRequest>,
 ) -> WebResult<Json<Value>> {
-    let mode = AgentMode::parse(Some(&request.execution_mode))
+    let config = crate::config::AppConfig::load_or_default(&state.paths).map_err(WebError::from)?;
+    let mode = AgentMode::parse_configured(Some(&request.execution_mode), config.codemode.mode)
         .map_err(|error| WebError::bad_request(error.to_string()))?;
     if mode.permission() == crate::agent::PermissionMode::Plan {
         return Err(WebError::bad_request(

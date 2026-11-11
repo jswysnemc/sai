@@ -29,7 +29,10 @@ pub(crate) fn evaluate_tool_gate(
     call: &ToolCall,
 ) -> ToolGate {
     let name = call.function.name.as_str();
-    if visibility.is_codemode_only() && name != crate::tools::codemode::NAME {
+    if visibility.is_codemode_only()
+        && name != crate::tools::codemode::NAME
+        && !super::ToolVisibility::is_discovery_gateway(name)
+    {
         return ToolGate::Reject(
             "tool error: direct tool calls are disabled; use codemode and tools.<name>(args)"
                 .into(),

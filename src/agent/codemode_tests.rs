@@ -9,6 +9,9 @@ use std::sync::{
     Arc,
 };
 
+#[path = "codemode_hybrid_tests.rs"]
+mod hybrid;
+
 /// 【CodeMode】【测试注册表】参数 counter 为执行计数器，返回包含读写工具的注册表。
 fn registry(counter: Arc<AtomicUsize>) -> ToolRegistry {
     let mut registry = ToolRegistry::new();
@@ -110,17 +113,21 @@ fn on_only_off_have_consistent_declarations_and_execution_gates() {
         );
         if mode == CodeMode::Only {
             assert_eq!(definitions.len(), 1);
-            for name in [
-                crate::tools::LOAD_NAME,
-                crate::tools::INVOKE_NAME,
-                "dsh_bash",
-            ] {
+            for name in [crate::tools::INVOKE_NAME, "dsh_bash"] {
                 assert!(tool_invocation::resolve_execution_call(
                     &visibility,
                     &call(name, json!({}))
                 )
                 .is_err());
             }
+            assert!(tool_invocation::resolve_execution_call(
+                &visibility,
+                &call(
+                    crate::tools::LOAD_NAME,
+                    json!({"type":"tool","keywords":["echo"]})
+                )
+            )
+            .is_ok());
         }
     }
 }
@@ -155,19 +162,30 @@ fn codemode_is_available_under_progressive_and_anchor_catalogs() {
 #[test]
 fn dynamic_catalog_respects_current_registry_and_inline_budget() {
     let mut registry = registry(Arc::default());
-    let mut config = crate::config::CodeModeConfig::default();
-    config.mode = CodeMode::Only;
+    let mut config = crate::config::CodeModeConfig {
+        mode: CodeMode::Only,
+        ..Default::default()
+    };
     crate::tools::codemode::register(&mut registry, &config);
-    let first = crate::tools::codemode::definition(&registry, &config).unwrap();
+    let mut visibility = tool_visibility::ToolVisibility::new(Vec::new());
+    visibility.set_session_mode(AgentMode::CodeModel.with_code_mode(CodeMode::Only));
+    let first = visibility.definitions(&registry).pop().unwrap();
     assert!(first.function.description.contains("Echo text"));
     registry.remove("echo");
-    let next = crate::tools::codemode::definition(&registry, &config).unwrap();
+    let next = visibility.definitions(&registry).pop().unwrap();
     assert!(!next.function.description.contains("Echo text"));
-    assert!(!crate::tools::codemode::catalog(&registry)
+    assert!(!crate::tools::codemode::catalog(registry.definitions())
         .iter()
         .any(|entry| entry.name == "echo" || entry.name == "codemode"));
     config.inline_budget = 0;
-    assert!(!crate::tools::codemode::definition(&registry, &config)
+    let app = AppConfig {
+        codemode: config,
+        ..Default::default()
+    };
+    let visibility = tool_visibility::ToolVisibility::from_config(&app);
+    assert!(!visibility
+        .definitions(&registry)
+        .pop()
         .unwrap()
         .function
         .description
@@ -181,7 +199,7 @@ async fn nested_tools_validate_and_do_not_bypass_whitelist_or_plan_mode() {
     let counter = Arc::new(AtomicUsize::new(0));
     let mut agent = agent(
         &paths,
-        AgentMode::Plan,
+        AgentMode::Plan.with_codemode(true),
         AppConfig::default(),
         counter.clone(),
     );
@@ -291,7 +309,7 @@ async fn replacing_registry_keeps_wrapper_without_stale_nested_tools() {
 #[test]
 fn config_roundtrip_and_limits_are_validated() {
     let mut config = AppConfig::default();
-    assert_eq!(config.codemode.mode, CodeMode::Off);
+    assert_eq!(config.codemode.mode, CodeMode::On);
     let value = serde_json::to_value(&config).unwrap();
     let restored: AppConfig = serde_json::from_value(value).unwrap();
     assert_eq!(restored.codemode.timeout_ms, 60_000);
@@ -364,7 +382,7 @@ fn session_mode_adds_only_the_gateway_to_exclusive_whitelists() {
         let mut registry = ToolRegistry::new();
         crate::tools::codemode::register_for_agent(&mut registry, &config, AgentMode::CodeModel);
         assert!(registry.contains("codemode"));
-        assert!(crate::tools::codemode::catalog(&registry).is_empty());
+        assert!(crate::tools::codemode::catalog(registry.definitions()).is_empty());
     }
 }
 
@@ -382,16 +400,16 @@ fn session_switches_control_declarations_and_execution() {
     agent.apply_live_mode(AgentMode::CodeModel);
     assert_eq!(agent.mode(), AgentMode::CodeModel);
     agent.sync_codemode_session();
-    assert_eq!(agent.tool_visibility.definitions(&agent.tools).len(), 1);
+    assert!(agent.tool_visibility.definitions(&agent.tools).len() > 1);
     assert!(agent.tool_visibility.is_visible("codemode"));
-    assert!(!agent.tool_visibility.is_visible("echo"));
+    assert!(agent.tool_visibility.is_visible("echo"));
     assert!(matches!(
         tool_gate::evaluate_tool_gate(
             &agent.tools,
             &agent.tool_visibility,
             &call("echo", json!({"text":"x"}))
         ),
-        tool_gate::ToolGate::Reject(_)
+        tool_gate::ToolGate::Proceed
     ));
     let replacement = registry(Arc::default());
     agent.switch_mode(AgentMode::Audited, replacement).unwrap();
@@ -402,7 +420,7 @@ fn session_switches_control_declarations_and_execution() {
         .switch_mode(AgentMode::CodeModel, replacement)
         .unwrap();
     assert_eq!(agent.mode(), AgentMode::CodeModel);
-    assert!(agent.tool_visibility.is_codemode_only());
+    assert!(!agent.tool_visibility.is_codemode_only());
 }
 
 /// 【CodeMode】【工具目录回归】旧配置开启入口也不会使其出现在工具组或基础注册表中

@@ -13,22 +13,26 @@ fn agent(paths: &SaiPaths, mode: AgentMode) -> Agent {
 /// 【计划模式】【独立工具回归】无参数；审批恢复权限时保留用户在规划期间选择的工具方式。
 #[tokio::test]
 async fn plan_exit_preserves_latest_tool_mode() {
-    for enabled in [false, true] {
+    for tools in [
+        crate::config::CodeMode::Off,
+        crate::config::CodeMode::On,
+        crate::config::CodeMode::Only,
+    ] {
         let root = tempfile::tempdir().unwrap();
         let paths = SaiPaths::for_tests(root.path());
-        let mut agent = agent(&paths, AgentMode::Yolo.with_codemode(!enabled));
+        let mut agent = agent(&paths, AgentMode::Yolo);
         let handle = agent.live_mode_handle();
         agent
             .execute_plan_tool("enter_plan_mode", "{}", &mut |_| Ok(()))
             .await
             .unwrap();
-        agent.apply_live_mode(agent.mode().with_codemode(enabled));
         let result = agent
             .execute_plan_tool(
                 "exit_plan_mode",
                 r#"{"title":"Scope","plan":"Implement the requested change"}"#,
                 &mut |event| {
                     if let AgentEvent::QuestionRequested(pending) = event {
+                        handle.set(handle.get().with_code_mode(tools));
                         crate::question::resolve_question(
                             &pending.id,
                             crate::question::QuestionResponse::Answered(vec![vec![
@@ -42,9 +46,14 @@ async fn plan_exit_preserves_latest_tool_mode() {
             .await
             .unwrap();
         assert!(!result.failed, "{}", result.output);
-        assert_eq!(agent.mode(), AgentMode::Yolo.with_codemode(enabled));
+        assert_eq!(agent.mode(), AgentMode::Yolo.with_code_mode(tools));
         assert_eq!(handle.get(), agent.mode());
         assert!(std::sync::Arc::ptr_eq(&handle, &agent.live_mode_handle()));
+        let record = crate::plan::store::load(agent.state.state_dir())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(record.execution_mode, agent.mode().key());
     }
 }
 

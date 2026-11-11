@@ -15,4 +15,12 @@ describe("plan mode events", () => {
     expect(planModeFromEvent(event("exit_plan_mode", { approved: true, mode: "yolo" }, true))).toBeUndefined();
     expect(planModeFromEvent(event("run_command", { approved: true, mode: "yolo" }))).toBeUndefined();
   });
+
+  it("preserves permission updates with hybrid and exclusive script modes", () => {
+    for (const tools of ["code-model", "code-model-only", "native"]) {
+      expect(planModeFromEvent(event("enter_plan_mode", { mode: `plan+${tools}` }))).toBe("plan");
+      expect(planModeFromEvent(event("exit_plan_mode", { approved: true, mode: `audited+${tools}` }))).toBe("audited");
+      expect(planModeFromEvent(event("exit_plan_mode", { approved: true, mode: `auto-audit+${tools}` }))).toBe("auto_audit");
+    }
+  });
 });

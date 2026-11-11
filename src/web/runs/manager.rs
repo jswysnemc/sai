@@ -146,7 +146,7 @@ impl RunManager {
     pub(crate) async fn start(
         &self,
         workspace: WorkspaceInfo,
-        request: StartRunRequest,
+        mut request: StartRunRequest,
     ) -> Result<ActiveRunInfo> {
         validate_start_request(&request)?;
         if request.kind == RunKind::Conversation
@@ -156,7 +156,14 @@ impl RunManager {
         {
             bail!("message cannot be empty");
         }
-        AgentMode::parse(request.mode.as_deref())?;
+        let config = crate::config::AppConfig::load_or_default(&self.paths)?;
+        let mode = AgentMode::parse_configured(request.mode.as_deref(), config.codemode.mode)?;
+        // 1. 【Web】【工具方式】入队时固定完整策略，后续配置变更不改写已排队任务
+        request.mode = Some(if mode.uses_codemode() {
+            mode.key().to_string()
+        } else {
+            format!("{}+native", mode.key())
+        });
         let _scheduling = self.scheduling.lock().await;
         if self.shutting_down.load(std::sync::atomic::Ordering::SeqCst) {
             bail!("Web server is shutting down");

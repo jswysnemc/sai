@@ -13,8 +13,8 @@ import unittest
 class CodeModeAgentTests(unittest.TestCase):
     """覆盖模型声明、并行读取、输出过滤、状态提交和失败恢复。"""
 
-    def execute(self, scripts, timeout_ms=60000):
-        """【CodeMode】【会话运行】参数 scripts 为模型脚本序列；返回进程结果和所有模型请求。"""
+    def execute(self, scripts, timeout_ms=60000, mode="only", deferred=False):
+        """【CodeMode】【会话运行】scripts 为脚本或原生调用，mode 为策略，deferred 指定延迟读取；返回结果与请求。"""
         requests = []
 
         class Handler(BaseHTTPRequestHandler):
@@ -33,9 +33,11 @@ class CodeModeAgentTests(unittest.TestCase):
                 self.send_header("Connection", "close")
                 self.end_headers()
                 if "tools" in request and index < len(scripts):
+                    item = scripts[index]
+                    name, arguments = ("codemode", {"code": item}) if isinstance(item, str) else (item["name"], item["arguments"])
                     delta = {"tool_calls": [{"index": 0, "id": f"script-{index}",
-                             "type": "function", "function": {"name": "codemode",
-                             "arguments": json.dumps({"code": scripts[index]})}}]}
+                             "type": "function", "function": {"name": name,
+                             "arguments": json.dumps(arguments)}}]}
                     reason = "tool_calls"
                 else:
                     delta = {"content": "integration-complete"}
@@ -58,9 +60,14 @@ class CodeModeAgentTests(unittest.TestCase):
                           "providers": [{"id": "fixture", "display_name": "Fixture",
                           "base_url": f"http://127.0.0.1:{server.server_port}/v1",
                           "api_key": "local-fixture", "models": ["fixture"], "default_model": "fixture"}],
-                          "codemode": {"mode": "only", "timeout_ms": timeout_ms},
+                          "codemode": {"timeout_ms": timeout_ms},
                           "skills": {"enabled": False}, "load_instruction_files": False,
                           "display": {"fullscreen": False}}
+                if mode is not None:
+                    config["codemode"]["mode"] = mode
+                if deferred:
+                    config.update(agents=[{"id": "fixture-agent", "name": "Fixture", "enabled_tools": ["read_file"], "deferred_tools": ["read_file"]}],
+                                  cli_agent="fixture-agent", default_agent="fixture-agent")
                 target = root / "config/sai/config.jsonc"
                 target.parent.mkdir(parents=True)
                 target.write_text(json.dumps(config))
@@ -70,7 +77,7 @@ class CodeModeAgentTests(unittest.TestCase):
                     environment[key] = str(root / folder)
                 environment["TERM"] = "dumb"
                 binary = Path(os.environ.get("SAI_TEST_BINARY", Path(__file__).resolve().parents[1] / "target/debug/sai"))
-                result = subprocess.run([str(binary), "--lang", "en-US", "--code-model", "ask", "Execute the regression scripts"],
+                result = subprocess.run([str(binary), "--lang", "en-US", "ask", "Execute the regression scripts"],
                                         cwd=root, env=environment, text=True, capture_output=True, timeout=30)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertIn("integration-complete", result.stdout)
@@ -79,7 +86,14 @@ class CodeModeAgentTests(unittest.TestCase):
                     if "tools" not in request:
                         continue
                     names = [tool["function"]["name"] for tool in request.get("tools", [])]
-                    self.assertEqual(names, ["codemode"])
+                    if mode == "off":
+                        self.assertNotIn("codemode", names)
+                    else:
+                        self.assertIn("codemode", names)
+                    if mode == "only":
+                        self.assertTrue(set(names) <= {"codemode", "load", "request_capability"}, names)
+                    elif not deferred:
+                        self.assertIn("read_file", names)
                 return result, [request for request in requests if "tools" in request]
             finally:
                 server.shutdown()
@@ -109,6 +123,41 @@ class CodeModeAgentTests(unittest.TestCase):
         outputs = [message["content"] for message in requests[-1]["messages"] if message["role"] == "tool"]
         self.assertTrue(any("partial-output" in value and "timed out" in value for value in outputs), outputs)
         self.assertTrue(any("store-clean" in value for value in outputs), outputs)
+
+    @unittest.skipUnless(os.name == "posix", "XDG configuration isolation requires a POSIX host")
+    def test_default_hybrid_uses_native_and_script_calls_with_one_description(self):
+        """【CodeMode】【混合链路】无参数；验证缺省配置下两种真实调用成功，声明没有复制。"""
+        _, requests = self.execute([
+            {"name": "read_file", "arguments": {"path": "two.txt"}},
+            "return 'script:' + String(await tools.read_file({path:'two.txt'})).includes('needle');",
+        ], mode=None)
+        for request in requests:
+            definitions = {item["function"]["name"]: item["function"] for item in request["tools"]}
+            self.assertNotIn(definitions["read_file"]["description"], definitions["codemode"]["description"])
+        outputs = [message["content"] for message in requests[-1]["messages"] if message["role"] == "tool"]
+        self.assertTrue(any("needle" in value for value in outputs), outputs)
+        self.assertTrue(any("script:true" in value for value in outputs), outputs)
+
+    @unittest.skipUnless(os.name == "posix", "XDG configuration isolation requires a POSIX host")
+    def test_deferred_schema_is_shared_by_invoke_and_script(self):
+        """【CodeMode】【加载链路】无参数；验证隐藏工具不能从脚本发现，加载一次后两条执行路径均可用。"""
+        for mode in ["on", "only"]:
+            calls = [
+                "return {hidden: !ALL_TOOLS.some(t=>t.name==='read_file'), absent: (await describeTool('read_file')) === undefined};",
+                {"name": "load", "arguments": {"type": "tool", "keywords": ["read_file"]}},
+                "return 'script:' + String(await tools.read_file({path:'two.txt'})).includes('needle');",
+            ]
+            if mode == "on":
+                calls.append({"name": "invoke_tool", "arguments": {"tool_name": "read_file", "arguments": {"path": "two.txt"}}})
+            with self.subTest(mode=mode):
+                _, requests = self.execute(calls, mode=mode, deferred=True)
+                outputs = [message["content"] for message in requests[-1]["messages"] if message["role"] == "tool"]
+                self.assertTrue(any('"hidden":true' in value and '"absent":true' in value for value in outputs), outputs)
+                self.assertTrue(any("script:true" in value for value in outputs), outputs)
+                for request in requests:
+                    self.assertNotIn("read_file", [item["function"]["name"] for item in request["tools"]])
+                    loaded = [message for message in request["messages"] if message["role"] == "tool" and '"definition"' in str(message["content"])]
+                    self.assertLessEqual(len(loaded), 1)
 
 
 if __name__ == "__main__":

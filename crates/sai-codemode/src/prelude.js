@@ -103,7 +103,12 @@
         }
         writes[key] = json === undefined ? null : { value: values[key] };
     });
-    expose("describeTool", async (name) => seed.catalog.find((entry) => entry.name === name));
+    expose("describeTool", async (name) => {
+        const entry = seed.catalog.find((item) => item.name === name);
+        if (!entry) return undefined;
+        // 3. 【CodeMode】【说明去重】只返回原始参数定义，不同时输出等价的 TypeScript 声明
+        return { name: entry.name, description: entry.description, parameters: entry.parameters };
+    });
     expose("searchTools", async (query, options = {}) => {
         const terms = String(query).toLowerCase().split(/\s+/).filter(Boolean);
         const limit = Math.max(0, Math.min(50, Number(options.limit ?? 8) || 0));
@@ -114,7 +119,7 @@
             .slice(0, limit).map(({ entry: { name, description } }) => ({ name, description }));
     });
 
-    // 3. 【CodeMode】【内置保护】冻结可到达的内置原型，仍允许脚本创建普通实例
+    // 4. 【CodeMode】【内置保护】冻结可到达的内置原型，仍允许脚本创建普通实例
     for (const name of Object.getOwnPropertyNames(globalThis)) {
         const descriptor = Object.getOwnPropertyDescriptor(globalThis, name);
         if (name !== "globalThis" && descriptor && "value" in descriptor) {

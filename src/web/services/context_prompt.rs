@@ -316,15 +316,9 @@ fn build_tools_markdown_section(
     // 4. 与 Agent::new 对齐：过滤后再挂 goal 工具与渐进 load
     //    create_goal / get_goal / update_goal / load 不依赖 enabled_tools 白名单
     crate::goal::register_tools_for_config(&mut registry, store.goal_file(), config)?;
-    let deferred = config.agent_deferred_tools();
-    let progressive = !deferred.is_empty();
-    if progressive {
-        tools::register_progressive_loader(&mut registry, deferred);
-    }
-
-    // 5. 渐进模式只展示固定网关，已加载状态不会改变供应商 tools 数组
-    let visible_names = tools::progressive::visible_tool_names(&registry, deferred);
-    let definitions = registry.definitions_for_names(&visible_names);
+    // 5. 【工具目录】【预览】复用真实会话的工具方式、Jev 和按需加载状态
+    let definitions =
+        crate::agent::ToolVisibility::session_definitions(config, store, &mut registry, mode)?;
     if definitions.is_empty() {
         return Ok(ToolsMarkdownSection {
             markdown: String::new(),
@@ -343,10 +337,10 @@ fn build_tools_markdown_section(
             )
             .replace("{count}", &definitions.len().to_string())
     ));
-    if progressive {
+    if !config.agent_deferred_tools().is_empty() || config.jev.routing.enabled {
         out.push_str(locale.text(
-            "Progressive loading is enabled: the provider-visible tool list is fixed to load and invoke_tool. The load result returns the target schema; invoke_tool dispatches the validated real call.\n\n",
-            "渐进加载已开启：供应商可见工具固定为 load 与 invoke_tool。load 结果返回目标 Schema，invoke_tool 分派通过校验的真实调用。\n\n",
+            "Deferred tool schemas are provided by load or Jev, and shared by invoke_tool and codemode where enabled. They are not duplicated in this tool list.\n\n",
+            "按需工具定义由 load 或 Jev 提供，供当前允许的 invoke_tool 与 codemode 共用，不再重复加入此工具列表。\n\n",
         ));
     }
     for definition in &definitions {

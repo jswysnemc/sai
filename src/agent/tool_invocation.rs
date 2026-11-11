@@ -308,7 +308,10 @@ pub(crate) fn resolve_execution_call(
     visibility: &ToolVisibility,
     provider_call: &ToolCall,
 ) -> Result<ToolCall> {
-    if visibility.is_codemode_only() && provider_call.function.name != tools::codemode::NAME {
+    if visibility.is_codemode_only()
+        && provider_call.function.name != tools::codemode::NAME
+        && !ToolVisibility::is_discovery_gateway(&provider_call.function.name)
+    {
         bail!("direct tool calls are disabled; use codemode");
     }
     if visibility.is_anchor_enabled()

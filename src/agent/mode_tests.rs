@@ -19,18 +19,54 @@ fn legacy_and_combined_modes_round_trip() {
         AgentMode::AutoAudit,
         AgentMode::Plan,
     ] {
-        for enabled in [false, true] {
-            let mode = permission.with_codemode(enabled);
+        for tools in [
+            crate::config::CodeMode::Off,
+            crate::config::CodeMode::On,
+            crate::config::CodeMode::Only,
+        ] {
+            let mode = permission.with_code_mode(tools);
             assert_eq!(AgentMode::parse(Some(mode.key())).unwrap(), mode);
             assert_eq!(
                 mode.permission_profile_mode(),
                 permission.permission_profile_mode()
             );
-            assert_eq!(mode.reminder().contains("name=\"code-model\""), enabled);
+            assert_eq!(
+                mode.reminder().contains("name=\"code-model\""),
+                tools != crate::config::CodeMode::Off
+            );
             assert!(mode.label().contains(permission.label()));
         }
     }
     assert!(AgentMode::parse(Some("yolo+invalid")).is_err());
+}
+
+/// 【会话模式】【默认配置】无参数；验证权限字段沿用配置，而显式工具方式不会被配置覆盖。
+#[test]
+fn configured_modes_preserve_explicit_tool_selection() {
+    use crate::config::CodeMode;
+    for default in [CodeMode::Off, CodeMode::On, CodeMode::Only] {
+        assert_eq!(
+            AgentMode::parse_configured(Some("yolo"), default)
+                .unwrap()
+                .codemode(),
+            default
+        );
+        assert_eq!(
+            AgentMode::parse_configured(None, default)
+                .unwrap()
+                .codemode(),
+            default
+        );
+        for (value, expected) in [
+            ("audited+native", CodeMode::Off),
+            ("audited+code-model", CodeMode::On),
+            ("audited+code-model-only", CodeMode::Only),
+        ] {
+            let mode = AgentMode::parse_configured(Some(value), default).unwrap();
+            assert_eq!(mode.codemode(), expected);
+            assert_eq!(mode.permission(), PermissionMode::Audited);
+        }
+    }
 }
 
 /// 【会话模式】【独立切换】无参数；验证工具开关与权限命令互不覆盖。

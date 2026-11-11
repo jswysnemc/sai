@@ -10,6 +10,10 @@ use std::time::Duration;
 
 const MESSAGE_GAP_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
+#[cfg(test)]
+#[path = "message_gap_mode_tests.rs"]
+mod mode_tests;
+
 /// 一条间隙消息成功进入模型请求后需要确认的来源。
 pub(super) enum GapMessageAck {
     None,
@@ -63,7 +67,12 @@ impl Agent {
         loop {
             // 1. 用户新要求具有最高优先级，并且保持 Web 队列中的可编辑顺序
             if let Some(source) = source {
-                if let Some(message) = source.peek().await? {
+                let mode = self.mode();
+                let message = source.peek_for_mode(mode).await?;
+                if self.mode() != mode {
+                    continue;
+                }
+                if let Some(message) = message {
                     let id = message.id.clone();
                     return Ok(Some(GapMessageCandidate {
                         message,

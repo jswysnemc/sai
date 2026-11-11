@@ -554,7 +554,7 @@ impl Agent {
 }
 
 /// 判断已保存会话是否已经产生 Anchored Standard 的晋升信号。
-fn session_anchor_promoted(state: &StateStore) -> Result<bool> {
+pub(super) fn session_anchor_promoted(state: &StateStore) -> Result<bool> {
     let history = state.project_history(None)?;
     Ok(history.checkpoint_context.is_some()
         || history
@@ -564,7 +564,7 @@ fn session_anchor_promoted(state: &StateStore) -> Result<bool> {
 }
 
 /// 确认当前模型启用锚定且真实启动工具都存在。
-fn deepseek_anchor_available(
+pub(super) fn deepseek_anchor_available(
     config: &AppConfig,
     tools_enabled: bool,
     tools: &ToolRegistry,

@@ -220,10 +220,10 @@ fn repl_only_help_lines() -> Vec<String> {
         ),
         format!("  /auto-audit {}", t("same as /auto", "与 /auto 相同")),
         format!(
-            "  /code-model [on|off] {}",
+            "  /code-model [on|off|only] {}",
             t(
-                "toggle JavaScript tools without changing permissions",
-                "切换 JavaScript 工具编排，保留当前权限模式"
+                "select hybrid, native or script-only tools without changing permissions",
+                "选择混合、普通或脚本独占调用，保留当前权限模式"
             )
         ),
         format!(

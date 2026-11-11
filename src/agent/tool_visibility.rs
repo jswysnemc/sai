@@ -34,6 +34,28 @@ pub(crate) struct ToolVisibility {
 }
 
 impl ToolVisibility {
+    /// 【工具目录】【会话预览】参数为配置、状态、注册表和模式；返回与真实会话一致的声明。
+    pub(crate) fn session_definitions(
+        config: &AppConfig,
+        state: &crate::state::StateStore,
+        registry: &mut ToolRegistry,
+        mode: super::AgentMode,
+    ) -> Result<Vec<ToolDefinition>> {
+        if !config.tools.enabled || !config.active_model_tools_enabled()? {
+            return Ok(Vec::new());
+        }
+        tools::codemode::register_for_agent(registry, config, mode);
+        let anchor = super::lifecycle::deepseek_anchor_available(config, true, registry)?;
+        let promoted = anchor && super::lifecycle::session_anchor_promoted(state)?;
+        let mut visibility = Self::from_config_with_anchor(config, anchor, promoted);
+        visibility.set_session_mode(mode);
+        if visibility.is_progressive() || (config.skills.enabled && config.has_visible_skills()) {
+            super::jev_routing::register_tool_gateways(registry, &visibility);
+        }
+        visibility.restore_loaded_tools(registry, &state.load_loaded_tools()?);
+        Ok(visibility.definitions(registry))
+    }
+
     /// 创建工具可见性状态。
     ///
     /// 参数:
@@ -154,12 +176,12 @@ impl ToolVisibility {
                 definitions.retain(|item| item.function.name != tools::codemode::NAME);
             } else {
                 if config.mode == crate::config::CodeMode::Only {
-                    definitions.clear();
+                    definitions.retain(|item| Self::is_discovery_gateway(&item.function.name));
                 } else {
                     definitions.retain(|item| item.function.name != tools::codemode::NAME);
                 }
                 if let Some(definition) = tools::codemode::definition(registry, config) {
-                    definitions.push(definition);
+                    definitions.push(self.codemode_definition(definition, registry, config));
                 }
             }
         }
@@ -205,7 +227,7 @@ impl ToolVisibility {
             if name == tools::codemode::NAME {
                 return config.mode != crate::config::CodeMode::Off;
             }
-            if config.mode == crate::config::CodeMode::Only {
+            if config.mode == crate::config::CodeMode::Only && !Self::is_discovery_gateway(name) {
                 return false;
             }
         }
@@ -266,11 +288,7 @@ impl ToolVisibility {
     /// 参数: mode 为当前会话模式；返回: 无
     pub(crate) fn set_session_mode(&mut self, mode: super::AgentMode) {
         let config = self.codemode.get_or_insert_with(Default::default);
-        config.mode = if mode.uses_codemode() {
-            crate::config::CodeMode::Only
-        } else {
-            crate::config::CodeMode::Off
-        };
+        config.mode = mode.codemode();
     }
 
     /// 判断当前工具调用是否为统一调用外壳。
@@ -374,11 +392,10 @@ impl ToolVisibility {
     ) -> Result<String> {
         let result = self.load_tools(registry, keywords)?;
         let already_loaded = result.is_already_loaded_request();
-        let instruction = if already_loaded {
-            "The requested schemas are available in this result. Do not call load for these targets again; call invoke_tool with the exact tool name and matching arguments."
-        } else {
-            "The requested tool schemas are now available. Call invoke_tool with the exact tool name and arguments matching its returned schema; do not emit a direct call to the concrete tool."
-        };
+        let instruction = format!(
+            "The requested schemas are available in this result. Do not call load for these tools again unless their schemas are missing from the current context. {}",
+            self.loaded_tool_instruction()
+        );
         let definitions = keywords
             .iter()
             .map(|name| {
@@ -459,6 +476,9 @@ impl ToolLoadResult {
 
 #[path = "jev_visibility.rs"]
 mod jev_visibility;
+
+#[path = "tool_visibility_codemode.rs"]
+mod codemode_visibility;
 
 #[cfg(test)]
 #[path = "tool_visibility_batch_tests.rs"]

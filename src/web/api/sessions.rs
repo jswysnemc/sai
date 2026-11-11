@@ -109,7 +109,10 @@ async fn context_prompt(
         .as_deref()
         .and_then(crate::i18n::Locale::parse)
         .unwrap_or_else(crate::i18n::locale);
-    let mode = crate::agent::AgentMode::parse(query.mode.as_deref()).map_err(WebError::from)?;
+    let config = crate::config::AppConfig::load_or_default(&state.paths).map_err(WebError::from)?;
+    let mode =
+        crate::agent::AgentMode::parse_configured(query.mode.as_deref(), config.codemode.mode)
+            .map_err(WebError::from)?;
     let prompt = super::super::services::context_prompt::load_session_context_prompt(
         &state.paths,
         &id,

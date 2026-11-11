@@ -1,6 +1,6 @@
 use super::{tool_execution::RealToolExecution, Agent, AgentEvent};
 use crate::llm::{ChatMessage, ToolCall};
-use crate::tools::codemode::{self, output};
+use crate::tools::codemode::output;
 use anyhow::{bail, Context, Result};
 use sai_codemode::output::Output;
 use sai_codemode::protocol::{ExecutionRequest, MAX_CODE_BYTES};
@@ -36,7 +36,7 @@ impl Agent {
         let request = ExecutionRequest {
             code: code.into(),
             timeout_ms: timeout,
-            catalog: codemode::catalog(&self.tools),
+            catalog: self.tool_visibility.codemode_catalog(&self.tools),
             store: self.state.load_codemode_store(turn_id)?,
         };
         let cancel = self.cancel_requested.clone();

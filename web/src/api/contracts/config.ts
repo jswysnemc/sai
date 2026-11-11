@@ -216,6 +216,12 @@ export type GitConfig = {
 };
 
 export type AppConfig = {
+  /** 普通工具与脚本共用定义；on 为混合，only 为脚本独占，off 为普通工具。 */
+  codemode?: {
+    mode?: "on" | "only" | "off";
+    inline_budget?: number;
+    timeout_ms?: number;
+  };
   /** 首次供应商引导状态；旧服务未返回时保持兼容 */
   provider_setup_complete?: boolean;
   active_provider: string;

@@ -5,6 +5,7 @@ import { RtkFilterSettings } from "../rtk-filter-settings";
 import { StructuredConfigFields } from "../structured-config-fields";
 import { ContextSettings } from "./context-settings";
 import { DebugSettings } from "./debug-settings";
+import { CodeModeSettings } from "./codemode-settings";
 import type { RuntimeSettingsProps } from "./runtime-settings-types";
 
 /** 终端专属显示字段，改到「终端与输入」里编辑，避免在输出显示重复出现。 */
@@ -40,6 +41,7 @@ export function RuntimeToolsSettings({ config, onConfigChange }: RuntimeSettings
   return (
     <>
       <ContextSettings config={config} onConfigChange={onConfigChange} />
+      <CodeModeSettings config={config} onConfigChange={onConfigChange} />
       <SettingsPanel title={t("Tool execution", "工具执行")} description={t("Control tool availability, shell commands, and background execution.", "控制工具可用性、Shell 命令与后台执行。")}>
         <StructuredConfigFields value={tools} configPath="tools" anchorPrefix="runtime.tools" onChange={(next) => onConfigChange({ ...config, tools: { ...config.tools, ...next } })} />
       </SettingsPanel>

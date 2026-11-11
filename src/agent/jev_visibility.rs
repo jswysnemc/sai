@@ -152,9 +152,9 @@ impl ToolVisibility {
         };
         // 3. 组装统一结果
         let instruction = if tools_json.is_empty() && skills_json.is_empty() {
-            "Jev found no additional tool or skill for this need. Continue with the tools already available, or call request_capability again with a more specific description."
+            "Jev found no additional tool or skill for this need. Continue with the tools already available, or call request_capability again with a more specific description.".to_string()
         } else {
-            "Jev exposed the resources below. Call exposed tools through invoke_tool with the exact tool name and arguments matching the returned schema; do not call them directly. Follow the exposed skill documents when they apply. These resources stay exposed for the rest of the conversation."
+            format!("Jev exposed the resources below. {} Follow the exposed skill documents when they apply.", self.loaded_tool_instruction())
         };
         Ok(serde_json::to_string_pretty(&json!({
             "ok": true,
@@ -215,9 +215,9 @@ impl ToolVisibility {
             }));
         }
         let instruction = if tools_json.is_empty() && skills_json.is_empty() {
-            "Jev found no additional tool or skill for this need. Continue with the tools already available, or call request_capability again with a more specific description."
+            "Jev found no additional tool or skill for this need. Continue with the tools already available, or call request_capability again with a more specific description.".to_string()
         } else {
-            "Jev exposed the tool schemas below. Call those tools through invoke_tool with the exact name and arguments matching the schema. Listed skills include only a name and description; call load with type skill and that exact name before following the document."
+            format!("Jev exposed the tool schemas below. {} Listed skills include only a name and description; call load with type skill and that exact name before following the document.", self.loaded_tool_instruction())
         };
         Ok(serde_json::to_string_pretty(&json!({
             "ok": true,

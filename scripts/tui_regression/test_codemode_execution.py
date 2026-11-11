@@ -29,7 +29,13 @@ class CodeModeExecutionTests(unittest.TestCase):
         """参数为配置和权限标志；返回同时开启脚本方式的测试终端。"""
         return TerminalSession(config, columns=120, rows=36,
                                arguments=["--lang", "en-US", permission, "--code-model"],
-                               ready=lambda terminal: "CODE-MODEL" in terminal.text())
+                               ready=lambda terminal: "CODE-MODEL" in terminal.text() and "%/" in terminal.text())
+
+    def submit(self, terminal):
+        """【CodeMode】【输入提交】参数 terminal 为已就绪终端；分开输入与回车，避免测试触发连续粘贴保护。"""
+        terminal.send(b"Execute the script")
+        terminal.pump(.2)
+        terminal.send(b"\r")
 
     def test_nested_permission_is_visible_and_allow_executes_only_after_decision(self):
         """无参数；验证两种布局均展示真实命令，获批前不执行，获批后完成。"""
@@ -37,7 +43,7 @@ class CodeModeExecutionTests(unittest.TestCase):
         for fullscreen in [True, False]:
             with self.subTest(fullscreen=fullscreen), ActivityModel("codemode", {"code": code}) as model:
                 with self.terminal(self.configuration(model, fullscreen=fullscreen)) as terminal:
-                    terminal.send(b"Execute the script\r")
+                    self.submit(terminal)
                     terminal.wait_for(lambda: "Allow once" in terminal.text())
                     self.assertIn("printf approved", terminal.text())
                     self.assertIn("run_command", terminal.text())
@@ -51,7 +57,7 @@ class CodeModeExecutionTests(unittest.TestCase):
         code = 'return await tools.run_command({command:"printf denied > result.txt"});'
         with ActivityModel("codemode", {"code": code}) as model:
             with self.terminal(self.configuration(model)) as terminal:
-                terminal.send(b"Execute the script\r")
+                self.submit(terminal)
                 terminal.wait_for(lambda: "Allow once" in terminal.text())
                 terminal.send(b"2")
                 terminal.wait_for(lambda: "ANSWER-END" in terminal.text())
@@ -63,7 +69,7 @@ class CodeModeExecutionTests(unittest.TestCase):
         code = 'return await tools.run_command({command:"printf expired > result.txt"});'
         with ActivityModel("codemode", {"code": code}) as model:
             with self.terminal(self.configuration(model, timeout_ms=1200)) as terminal:
-                terminal.send(b"Execute the script\r")
+                self.submit(terminal)
                 terminal.wait_for(lambda: "Allow once" in terminal.text())
                 terminal.wait_for(lambda: "ANSWER-END" in terminal.text(), timeout=6)
                 self.assertFalse((terminal.root / "result.txt").exists())
@@ -76,7 +82,7 @@ class CodeModeExecutionTests(unittest.TestCase):
         with ActivityModel("codemode", {"code": code}) as model:
             with self.terminal(self.configuration(model), "--yolo") as terminal:
                 self.assertIn("YOLO + CODE-MODEL", terminal.text())
-                terminal.send(b"Execute the script\r")
+                self.submit(terminal)
                 terminal.wait_for(lambda: "ANSWER-END" in terminal.text())
                 self.assertEqual((terminal.root / "result.txt").read_text(), "yolo")
                 self.assertFalse(any(record["decision"] == "requested" for record in self.audit(terminal)))
@@ -86,7 +92,7 @@ class CodeModeExecutionTests(unittest.TestCase):
         code = 'return await tools.run_command({command:"printf switched > result.txt"});'
         with ActivityModel("codemode", {"code": code}) as model:
             with self.terminal(self.configuration(model)) as terminal:
-                terminal.send(b"Execute the script\r")
+                self.submit(terminal)
                 terminal.wait_for(lambda: "Allow once" in terminal.text())
                 terminal.send(b"\x1b[Z")
                 terminal.wait_for(lambda: "ANSWER-END" in terminal.text())
@@ -98,7 +104,7 @@ class CodeModeExecutionTests(unittest.TestCase):
         code = 'return await tools.run_command({command:"printf blocked > result.txt"});'
         with ActivityModel("codemode", {"code": code}) as model:
             with self.terminal(self.configuration(model), "--plan") as terminal:
-                terminal.send(b"Execute the script\r")
+                self.submit(terminal)
                 terminal.wait_for(lambda: "ANSWER-END" in terminal.text())
                 self.assertFalse((terminal.root / "result.txt").exists())
                 self.assertNotIn("Allow once", terminal.text())
@@ -109,7 +115,7 @@ class CodeModeExecutionTests(unittest.TestCase):
         code = 'const result = await tools.run_command({command:"sleep 1; printf ready"});\ntext(result);'
         with ActivityModel("codemode", {"code": code}) as model:
             with self.terminal(self.configuration(model), "--yolo") as terminal:
-                terminal.send(b"Execute the script\r")
+                self.submit(terminal)
                 terminal.wait_for(lambda: "const result" in terminal.text())
                 self.assert_code_colors(terminal)
                 terminal.wait_for(lambda: "ANSWER-END" in terminal.text())

@@ -127,17 +127,13 @@ pub(super) fn estimate_context_breakdown_with_runtime(
     }
     apply_web_agent_tool_filter(config, &mut registry)?;
     // 渐进加载由当前 Agent 的 deferred_tools 决定，与真实会话保持一致
-    let deferred = config.agent_deferred_tools();
     if config.tools.enabled {
         crate::goal::register_tools_for_config(&mut registry, store.goal_file(), config)?;
-        if !deferred.is_empty() {
-            tools::register_progressive_loader(&mut registry, deferred);
-        }
     }
 
-    // 4. 按渐进式可见性选择当前工具定义
-    let visible_names = tools::progressive::visible_tool_names(&registry, deferred);
-    let definitions = registry.definitions_for_names(&visible_names);
+    // 4. 【工具目录】【用量】与真实会话共用定义投影，混合调用不重复计算业务说明
+    let definitions =
+        crate::agent::ToolVisibility::session_definitions(config, store, &mut registry, mode)?;
 
     // 4. 工具定义拆成 MCP 与非 MCP
     let mut tools_json_parts = Vec::new();
@@ -154,7 +150,7 @@ pub(super) fn estimate_context_breakdown_with_runtime(
     // 5. 技能：优先用 baseline 中的目录；否则按当前配置重新生成目录估算
     let skills_text = if skills_from_baseline.trim().is_empty() {
         if config.tools.enabled && config.skills.enabled {
-            if !deferred.is_empty() {
+            if !config.agent_deferred_tools().is_empty() || config.jev.routing.enabled {
                 tools::skills_catalog_prompt(config, paths).unwrap_or_default()
             } else {
                 tools::skills_prompt(config, paths).unwrap_or_default()

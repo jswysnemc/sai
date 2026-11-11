@@ -38,7 +38,7 @@ pub(crate) fn register_jev_loader(registry: &mut ToolRegistry, deferred: &[Strin
 }
 
 /// Jev 模式下 `load` 的描述。
-const JEV_LOADER_DESCRIPTION: &str = "Read a skill document that Jev named by description, or re-read a tool schema or skill document after context compaction. Set type to tool or skill and pass exact names in the keywords array. Do not use load to discover new capabilities; call request_capability instead. After a tool schema is available, call invoke_tool with its exact name and matching arguments.";
+const JEV_LOADER_DESCRIPTION: &str = "Read a skill document that Jev named by description, or re-read a tool schema or skill document after context compaction. Set type to tool or skill and pass exact names in the keywords array. Do not use load to discover new capabilities; call request_capability instead. Tool schemas are shared by invoke_tool and codemode where available; follow the current tool-mode instruction and use the exact name and matching arguments.";
 
 /// 按给定描述注册 `load`，存在延迟工具时同时注册 `invoke_tool`。
 ///
@@ -97,7 +97,7 @@ fn register_loader_described(
 fn register_invoker(registry: &mut ToolRegistry) {
     registry.register(ToolSpec::new(
         INVOKE_NAME,
-        "Invoke a tool whose full schema was returned by load. Pass the exact loaded tool name and an arguments object matching that schema. Concrete arguments are validated locally before the real tool enters its normal permission, audit, hook, progress, and execution pipeline.",
+        "Invoke a tool whose full schema was returned by load or Jev. Pass the exact loaded tool name and an arguments object matching that schema. The same schema also applies to tools[name](args) inside codemode when enabled; no second load is needed. Concrete arguments are validated locally before the real tool enters its normal permission, audit, hook, progress, and execution pipeline.",
         json!({
             "type": "object",
             "properties": {
@@ -206,7 +206,7 @@ pub(crate) fn loader_description(registry: &ToolRegistry, deferred: &[String]) -
             .push(format!("{} ({permission}) - {summary}", info.name));
     }
     let mut text = String::from(
-        "Load deferred tool schemas or skill documents before using them. Only tools listed below require load; tools already present as native definitions must be called directly. Set type to tool or skill and pass exact names in the keywords array, including when loading one item. Multiple resources can be loaded in one call. After loading a deferred tool, call invoke_tool with its exact name and arguments matching the returned schema. Do not emit a direct call to that deferred tool. Do not reload an already loaded tool unless its schema is no longer present in the conversation.\n",
+        "Load deferred tool schemas or skill documents before using them. Only tools listed below require load; resident tool schemas are already available. Set type to tool or skill and pass exact names in the keywords array, including when loading one item. Multiple resources can be loaded in one call. Loaded schemas are shared by invoke_tool and codemode where available; follow the current tool-mode instruction. Do not emit a native call to a deferred tool name. Do not reload an already loaded tool unless its schema is no longer present in the conversation.\n",
     );
     text.push_str("\nAvailable groups:\n");
     if groups.is_empty() {
