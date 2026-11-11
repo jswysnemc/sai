@@ -20,14 +20,14 @@ use std::time::Duration;
 /// 返回:
 /// - 浏览是否成功结束
 pub(super) fn open_transcript_pager(runtime: &mut ReplRuntime) -> Result<()> {
+    let _mouse = super::mouse_capture::MouseCapture::acquire()?;
     let was_raw = crossterm::terminal::is_raw_mode_enabled().unwrap_or(false);
     if !was_raw {
         crossterm::terminal::enable_raw_mode()?;
     }
     crate::cli::alternate_screen::enter_alternate_screen(&mut io::stdout())?;
-    execute!(io::stdout(), Hide, event::EnableMouseCapture)?;
+    execute!(io::stdout(), Hide)?;
     let result = run_pager_loop(runtime);
-    execute!(io::stdout(), event::DisableMouseCapture)?;
     crate::cli::alternate_screen::leave_alternate_screen(&mut io::stdout())?;
     execute!(io::stdout(), Show)?;
     if !was_raw {

@@ -109,11 +109,15 @@ impl ReplRuntime {
     /// 【终端】【面板悬停】记录指针位置，仅在命中对象变化时触发重绘。
     /// 参数: `column` 与 `row` 为屏幕坐标；返回: 悬停反馈是否变化。
     pub(super) fn move_panel_pointer(&mut self, column: u16, row: u16) -> bool {
+        let footer_before = self
+            .panel_pointer
+            .and_then(|(column, row)| self.footer_target_at(column, row));
         let before = self
             .panel_pointer
             .and_then(|(column, row)| self.panel_target_at(column, row));
         self.panel_pointer = Some((column, row));
         before != self.panel_target_at(column, row)
+            || footer_before != self.footer_target_at(column, row)
     }
 
     /// 【终端】【面板点击】待办切换紧凑模式，子代理标题展开列表，条目进入对应会话。

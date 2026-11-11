@@ -90,6 +90,10 @@ fn groups(paste_key: PasteImageKey) -> Vec<Group> {
                 ("Alt+↑ / ↓", t("Prev / next turn", "上一条 / 下一条消息")),
                 (t("Click", "点击"), t("Fold / unfold", "展开 / 收起")),
                 (t("Drag", "拖动"), t("Copy text", "复制文字")),
+                (
+                    "Shift+mouse",
+                    t("Terminal select / scroll", "终端选择 / 滚动"),
+                ),
             ],
         },
     ]
@@ -202,7 +206,8 @@ pub(in crate::cli::repl_runtime) fn render_shortcut_sheet(
     let mut left = stack(&[&blocks[0], &blocks[2]]);
     // 1. 【终端】【紧凑速查】运行中新增插话快捷键后，移除组间空行以保留全部操作
     left.lines.retain(|line| !line.is_empty());
-    let right = stack(&[&blocks[1], &blocks[3]]);
+    let mut right = stack(&[&blocks[1], &blocks[3]]);
+    right.lines.retain(|line| !line.is_empty());
     let body = if left.width + GROUP_GAP + right.width <= budget {
         side_by_side(&left, &right)
     } else {

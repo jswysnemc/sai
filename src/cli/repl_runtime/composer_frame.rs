@@ -39,6 +39,11 @@ use std::io::Write;
 /// 两次签名相同即代表重绘不会改变任何像素。
 #[derive(Clone, PartialEq, Eq)]
 pub(super) struct ComposerSignature {
+    pub(super) footer_actions: Vec<(
+        u16,
+        std::ops::Range<usize>,
+        crate::cli::repl_chrome::FooterAction,
+    )>,
     pub(super) input_geometry: Option<InputGeometry>,
     pub(super) footer_geometry: Option<InputGeometry>,
     top: u16,

@@ -17,9 +17,10 @@ const TIME_COLUMN: usize = 10;
 ///
 /// 返回:
 /// - 带样式的视觉行与选中行下标
-pub(super) fn body(picker: &Picker, width: usize) -> (Vec<String>, usize) {
+pub(super) fn body(picker: &Picker, width: usize) -> (Vec<String>, usize, Vec<(usize, usize)>) {
     let width = width.max(20);
     let mut lines = Vec::new();
+    let mut targets = Vec::new();
     let mut workspace = None;
     let mut selected = 0;
     for (position, index) in picker.visible.iter().enumerate() {
@@ -34,6 +35,7 @@ pub(super) fn body(picker: &Picker, width: usize) -> (Vec<String>, usize) {
             selected = lines.len();
         }
         // 2. 会话行：标题左对齐、相对时间右对齐
+        targets.push((lines.len(), position));
         lines.push(session_line(target, position == picker.selected, width));
     }
     if picker.all && picker.loading {
@@ -59,7 +61,7 @@ pub(super) fn body(picker: &Picker, width: usize) -> (Vec<String>, usize) {
             )
         ));
     }
-    (lines, selected)
+    (lines, selected, targets)
 }
 
 /// 生成工作区分组标题：当前目录带标签，路径按家目录缩写。

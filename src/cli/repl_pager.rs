@@ -7,8 +7,7 @@ use crate::render::transcript::{AnsiLine, ExpandableBlock, ExpandableBlockKind, 
 use anyhow::Result;
 use crossterm::cursor::{Hide, Show};
 use crossterm::event::{
-    self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
-    Event, KeyEvent, KeyEventKind,
+    self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyEvent, KeyEventKind,
 };
 use crossterm::execute;
 use crossterm::terminal;
@@ -26,6 +25,7 @@ use state::PagerState;
 
 /// 副屏会话。空闲时阻塞读键；运行中每次只取已经到达的按键，前台轮次继续被 poll。
 pub(in crate::cli) struct PagerScreen {
+    mouse: Option<super::mouse_capture::MouseCapture>,
     stdout: io::Stdout,
     was_raw: bool,
     keyboard: KeyboardEnhancementState,
@@ -46,6 +46,7 @@ impl PagerScreen {
     /// 参数: `start` 为初始段落，`count` 为进入时的段落数
     /// 返回: 已接管终端的副屏
     pub(in crate::cli) fn enter(start: usize, count: usize) -> Result<Self> {
+        let mouse = super::mouse_capture::MouseCapture::acquire()?;
         let mut stdout = io::stdout();
         let was_raw = terminal::is_raw_mode_enabled().unwrap_or(false);
         if !was_raw {
@@ -53,9 +54,9 @@ impl PagerScreen {
         }
         crate::cli::alternate_screen::enter_alternate_screen(&mut stdout)?;
         if was_raw {
-            execute!(stdout, Hide, EnableMouseCapture)?;
+            execute!(stdout, Hide)?;
         } else {
-            execute!(stdout, Hide, EnableBracketedPaste, EnableMouseCapture)?;
+            execute!(stdout, Hide, EnableBracketedPaste)?;
         }
         let keyboard = if was_raw {
             KeyboardEnhancementState::default()
@@ -63,6 +64,7 @@ impl PagerScreen {
             KeyboardEnhancementState::enable(&mut stdout)
         };
         Ok(Self {
+            mouse: Some(mouse),
             stdout,
             was_raw,
             keyboard,
@@ -106,7 +108,7 @@ impl PagerScreen {
             return Ok(());
         }
         self.active = false;
-        let _ = execute!(self.stdout, DisableMouseCapture);
+        self.mouse.take();
         if self.was_raw {
             let _ = execute!(self.stdout, Show);
             let _ = crate::cli::alternate_screen::leave_alternate_screen(&mut self.stdout);

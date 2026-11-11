@@ -200,7 +200,7 @@ pub(in crate::cli::repl_runtime) fn highlight_cols(line: &str, from: usize, to: 
 ///
 /// 返回:
 /// - OSC 52 序列
-pub(super) fn osc52_copy(text: &str) -> String {
+pub(in crate::cli::repl_runtime) fn osc52_copy(text: &str) -> String {
     format!(
         "\x1b]52;c;{}\x07",
         general_purpose::STANDARD.encode(text.as_bytes())

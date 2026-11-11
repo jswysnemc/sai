@@ -2,7 +2,7 @@ use super::model::Picker;
 use super::rows;
 use crate::config_tui::layout::content_frame;
 use crate::config_tui::theme::{
-    help_line, ACCENT, BOLD, BRAND, CORNER_BOTTOM_LEFT, CORNER_BOTTOM_RIGHT, CORNER_TOP_LEFT,
+    ACCENT, BOLD, BRAND, CORNER_BOTTOM_LEFT, CORNER_BOTTOM_RIGHT, CORNER_TOP_LEFT,
     CORNER_TOP_RIGHT, DIM, LINE_HORIZONTAL, LINE_VERTICAL, MUTED, RESET,
 };
 use crate::config_tui::ui::{begin_synced_frame, display_width, end_synced_frame, truncate};
@@ -30,7 +30,11 @@ const CHROME_ROWS: usize = 5;
 ///
 /// 返回:
 /// - 输出结果
-pub(super) fn draw(stdout: &mut io::Stdout, picker: &Picker, size: (u16, u16)) -> Result<()> {
+pub(super) fn draw(
+    stdout: &mut io::Stdout,
+    picker: &Picker,
+    size: (u16, u16),
+) -> Result<Vec<(u16, std::ops::Range<usize>, super::mouse::Target)>> {
     let (cols, rows) = size;
     // 1. 面板高度按已加载会话计算，同一快照内切换范围或搜索时外框不跳动
     let list_rows = picker.max_rows().max(MIN_LIST_ROWS);
@@ -43,10 +47,21 @@ pub(super) fn draw(stdout: &mut io::Stdout, picker: &Picker, size: (u16, u16)) -
 
     // 2. 组装框内各行：搜索、分隔、列表窗口、分隔、详情
     let (search, cursor_col) = rows::search_line(picker, inner);
-    let (body, selected) = rows::body(picker, inner);
+    let (body, selected, targets) = rows::body(picker, inner);
     let start = selected
         .saturating_sub(list_height.saturating_sub(1))
         .min(body.len().saturating_sub(list_height));
+    let mut hits = targets
+        .into_iter()
+        .filter(|(row, _)| (start..start + list_height).contains(row))
+        .map(|(row, index)| {
+            (
+                frame.y + 3 + (row - start) as u16,
+                usize::from(frame.x + 2)..usize::from(frame.x + frame.width.saturating_sub(2)),
+                super::mouse::Target::Item(index),
+            )
+        })
+        .collect::<Vec<_>>();
     let mut inside = vec![search, divider(inner)];
     inside.extend(body.into_iter().skip(start).take(list_height));
     inside.resize(list_height + 2, String::new());
@@ -57,7 +72,20 @@ pub(super) fn draw(stdout: &mut io::Stdout, picker: &Picker, size: (u16, u16)) -
     let mut lines = Vec::with_capacity(inside.len() + 2);
     lines.push(top_border(picker, frame.width));
     lines.extend(inside.iter().map(|line| boxed(line, inner)));
-    lines.push(bottom_border(cols, frame.width));
+    let buttons = super::mouse::buttons(usize::from(frame.width.saturating_sub(4)));
+    let button_row = frame.y.saturating_add(lines.len() as u16);
+    for column in 0..frame.width.saturating_sub(4) {
+        if let Some(target) = buttons.hit(column) {
+            let x = usize::from(frame.x + 2 + column);
+            hits.push((button_row, x..x + 1, target));
+        }
+    }
+    let fill = usize::from(frame.width).saturating_sub(display_width(&buttons.text) + 4);
+    lines.push(format!(
+        "{DIM}{CORNER_BOTTOM_LEFT} {RESET}{} {DIM}{}{CORNER_BOTTOM_RIGHT}{RESET}",
+        buttons.text,
+        LINE_HORIZONTAL.to_string().repeat(fill)
+    ));
     lines.truncate(usize::from(rows));
     let indent = " ".repeat(usize::from(frame.x));
     let lines = lines
@@ -72,7 +100,9 @@ pub(super) fn draw(stdout: &mut io::Stdout, picker: &Picker, size: (u16, u16)) -
     // 4. 光标停在搜索输入末尾，提示可直接输入
     let cursor_x = frame.x.saturating_add(2) + cursor_col.min(inner) as u16;
     queue!(stdout, MoveTo(cursor_x, frame.y.saturating_add(1)), Show)?;
-    end_synced_frame(stdout)
+    end_synced_frame(stdout)?;
+    hits.retain(|(row, _, _)| *row < rows);
+    Ok(hits)
 }
 
 /// 生成嵌入标题与会话数量的顶边框。
@@ -96,42 +126,6 @@ fn top_border(picker: &Picker, width: u16) -> String {
     let fill = usize::from(width).saturating_sub(label_width);
     format!(
         "{DIM}{CORNER_TOP_LEFT}{LINE_HORIZONTAL}{RESET} {BRAND}◆{RESET} {ACCENT}{BOLD}{title}{RESET} {MUTED}{count}{RESET} {DIM}{}{CORNER_TOP_RIGHT}{RESET}",
-        LINE_HORIZONTAL.to_string().repeat(fill)
-    )
-}
-
-/// 生成嵌入快捷键说明的底边框，窄终端使用短版本。
-///
-/// 参数:
-/// - `cols`: 终端列数
-/// - `width`: 外框宽度
-///
-/// 返回:
-/// - 底边框行
-fn bottom_border(cols: u16, width: u16) -> String {
-    let pairs: &[(&str, &str)] = if cols < 70 {
-        &[
-            ("Tab", t("scope", "范围")),
-            ("Enter", t("resume", "恢复")),
-            ("Esc", t("cancel", "取消")),
-        ]
-    } else {
-        &[
-            ("Tab", t("switch scope", "切换范围")),
-            ("↑↓", t("select", "选择")),
-            ("Enter", t("resume", "恢复")),
-            ("Esc", t("cancel", "取消")),
-        ]
-    };
-    let help = help_line(pairs);
-    let plain = pairs
-        .iter()
-        .map(|(key, text)| format!("{key} {text}"))
-        .collect::<Vec<_>>()
-        .join(" · ");
-    let fill = usize::from(width).saturating_sub(display_width(&plain) + 5);
-    format!(
-        "{DIM}{CORNER_BOTTOM_LEFT}{LINE_HORIZONTAL}{RESET} {help} {DIM}{}{CORNER_BOTTOM_RIGHT}{RESET}",
         LINE_HORIZONTAL.to_string().repeat(fill)
     )
 }

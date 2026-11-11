@@ -109,7 +109,6 @@ use super::ReplRuntime;
 use crate::render::terminal_rows::paint_changed_rows;
 use anyhow::Result;
 use crossterm::cursor::Hide;
-use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::terminal::{Clear, ClearType};
 use crossterm::{execute, queue};
 #[cfg(test)]
@@ -119,6 +118,7 @@ use std::io::{self, Write};
 
 /// 全屏会话：持有备用屏与鼠标捕获，销毁时恢复主屏。
 pub(super) struct FullscreenSession {
+    _mouse: crate::cli::mouse_capture::MouseCapture,
     state: FullscreenState,
     sidebar: sidebar::Sidebar,
     pane_tail: Option<pane_tail::PaneTail>,
@@ -141,14 +141,16 @@ impl FullscreenSession {
     /// 返回:
     /// - 新会话
     fn enter() -> Result<Self> {
+        let mouse = crate::cli::mouse_capture::MouseCapture::acquire()?;
         if !cfg!(test) {
             // 备用屏有独立的 Kitty 图片存储，进入时从空记录开始
             crate::render::terminal_image::set_kitty_alternate_screen(true);
             let mut stdout = io::stdout();
             crate::cli::alternate_screen::enter_alternate_screen(&mut stdout)?;
-            execute!(stdout, EnableMouseCapture, Clear(ClearType::All), Hide)?;
+            execute!(stdout, Clear(ClearType::All), Hide)?;
         }
         Ok(Self {
+            _mouse: mouse,
             state: FullscreenState::new(),
             sidebar: sidebar::Sidebar::default(),
             pane_tail: None,
@@ -169,7 +171,6 @@ impl Drop for FullscreenSession {
             return;
         }
         let mut stdout = io::stdout();
-        let _ = execute!(stdout, DisableMouseCapture);
         let _ = crate::cli::alternate_screen::leave_alternate_screen(&mut stdout);
         let _ = stdout.flush();
         crate::render::terminal_image::set_kitty_alternate_screen(false);

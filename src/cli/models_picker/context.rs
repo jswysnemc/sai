@@ -19,6 +19,13 @@ pub(super) struct ContextSelection {
 }
 
 impl ContextSelection {
+    /// 【终端】【鼠标上下文】参数为候选下标；选择有效选项并清除错误，返回无。
+    pub(super) fn select(&mut self, index: usize) {
+        if index < OPTION_COUNT {
+            self.index = index;
+            self.error = None;
+        }
+    }
     /// 【终端】【上下文选择】按已保存上限定位预设、自定义或最大选项。
     /// 参数: `limit` 为用户上限，`capacity` 为已知容量，`fallback` 为默认容量；返回: 编辑状态
     pub(super) fn new(limit: Option<usize>, capacity: Option<usize>, fallback: usize) -> Self {

@@ -44,6 +44,8 @@ mod localization;
 mod memory_commands;
 mod message;
 mod mode;
+mod mouse_capture;
+mod mouse_menu;
 use mode::{cli_mode_override, resolve_agent_mode};
 mod model_select;
 mod models_picker;

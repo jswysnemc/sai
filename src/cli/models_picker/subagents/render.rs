@@ -8,11 +8,9 @@ use crate::i18n::text as t;
 /// 返回: 固定高度的设置面板
 pub(super) fn list(state: &SubagentListState, frame_rows: u16, status: &str) -> Vec<String> {
     let rows = usize::from(frame_rows);
-    let budget = rows.saturating_sub(5).max(1);
-    let start = state
-        .index
-        .saturating_sub(budget / 2)
-        .min(state.targets.len().saturating_sub(budget));
+    let content = content_rows(rows);
+    let budget = content.len();
+    let start = window_start(state, budget);
     let mut lines = vec![
         format!(
             "{FOCUS_STYLE}{}{RESET}",
@@ -27,6 +25,9 @@ pub(super) fn list(state: &SubagentListState, frame_rows: u16, status: &str) -> 
         ),
         String::new(),
     ];
+    if rows < 6 {
+        lines.clear();
+    }
     for (offset, target) in state.targets.iter().skip(start).take(budget).enumerate() {
         let selected = start + offset == state.index;
         let marker = if selected { "›" } else { " " };
@@ -45,17 +46,43 @@ pub(super) fn list(state: &SubagentListState, frame_rows: u16, status: &str) -> 
             choice.thinking_level
         ));
     }
-    while lines.len() < rows.saturating_sub(2) {
+    while lines.len() < content.end {
         lines.push(String::new());
     }
-    lines.push(format!("{DIM_STYLE}{status}{RESET}"));
-    lines.push(format!(
-        "{DIM_STYLE}{}{RESET}",
-        t(
-            "↑/↓ choose · Enter configure · Esc back",
-            "↑/↓ 选择 · Enter 配置 · Esc 返回"
-        )
-    ));
+    if rows >= 6 {
+        lines.push(format!("{DIM_STYLE}{status}{RESET}"));
+    }
+    let width =
+        crossterm::terminal::size().map_or(80, |(cols, _)| usize::from(cols.saturating_sub(1)));
+    lines.push(controls(width).text);
+    for line in &mut lines {
+        *line = crate::render::ansi_clip::clip_ansi_to_width(line, width, "...");
+    }
     lines.truncate(rows);
     lines
+}
+
+/// 【终端】【子任务窗口】参数为状态和行预算；返回可见列表起点，绘制和点击共用。
+pub(super) fn window_start(state: &SubagentListState, budget: usize) -> usize {
+    state
+        .index
+        .saturating_sub(budget / 2)
+        .min(state.targets.len().saturating_sub(budget))
+}
+
+/// 【终端】【子任务返回】参数为可用列数；返回可点击返回按钮。
+pub(super) fn controls(width: usize) -> crate::cli::mouse_menu::ButtonRow<super::ListTarget> {
+    crate::cli::mouse_menu::ButtonRow::new(
+        [(t("Back", "返回").into(), super::ListTarget::Back)],
+        width,
+    )
+}
+
+/// 【终端】【子任务高度】参数为可用行数；返回候选内容区，矮屏优先保留返回按钮。
+pub(super) fn content_rows(rows: usize) -> std::ops::Range<usize> {
+    if rows >= 6 {
+        3..rows - 2
+    } else {
+        0..rows.saturating_sub(1)
+    }
 }

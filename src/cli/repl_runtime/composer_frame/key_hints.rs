@@ -67,8 +67,7 @@ fn hint(key: &'static str, label: &'static str) -> Hint {
 /// 返回:
 /// - 按键条目
 fn keys_for(context: KeyHintContext, input_empty: bool) -> Vec<Hint> {
-    let _ = context.fullscreen;
-    match (context.streaming, input_empty) {
+    let mut keys = match (context.streaming, input_empty) {
         (true, true) => vec![
             hint("Ctrl+C", t("stop", "停止")),
             hint("Ctrl+↑", t("queue manager", "队列管理")),
@@ -94,7 +93,14 @@ fn keys_for(context: KeyHintContext, input_empty: bool) -> Vec<Hint> {
             hint("Esc Esc", t("clear", "清空")),
             hint("Ctrl+W", t("delete word", "删词")),
         ],
+    };
+    if !context.fullscreen && !context.streaming && input_empty {
+        keys.insert(
+            1,
+            hint("Shift+mouse", t("terminal select/scroll", "终端选择/滚动")),
+        );
     }
+    keys
 }
 
 /// 【终端】【按键提示】渲染状态栏下方的按键提示行。

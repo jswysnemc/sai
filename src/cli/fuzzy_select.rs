@@ -1,4 +1,6 @@
+use super::mouse_menu::{ButtonRow, ClickTracker};
 use super::*;
+use crossterm::event::MouseEventKind;
 
 /// 与 `sai models` 一致的选中高亮（无反色黑底）。
 const FOCUS_STYLE: &str = "\x1b[1m\x1b[38;2;190;246;255m";
@@ -16,14 +18,15 @@ const RESET: &str = "\x1b[0m";
 /// 返回:
 /// - 选中项下标；取消时返回空
 pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
-    let menu_lines = inline_fuzzy_lines(items.len());
+    let mut menu_lines = inline_fuzzy_lines(items.len()).min(terminal::size()?.1);
     reserve_inline_fuzzy_space(menu_lines)?;
     let mut session = InlineRawMode::start()?;
     let matcher = SkimMatcherV2::default();
     let mut query = String::new();
     let mut selected = 0usize;
     let (_, cursor_y) = cursor::position().unwrap_or((0, menu_lines.saturating_sub(1)));
-    let anchor_y = cursor_y.saturating_sub(menu_lines.saturating_sub(1));
+    let mut anchor_y = cursor_y.saturating_sub(menu_lines.saturating_sub(1));
+    let mut click = ClickTracker::default();
 
     loop {
         let matches = fuzzy_matches(&matcher, items, &query);
@@ -39,12 +42,65 @@ pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
             &matches,
             selected,
         )?;
+        let input = match event::read()? {
+            Event::Resize(columns, rows) => {
+                click.clear();
+                clear_inline_fuzzy(
+                    &mut session.stdout,
+                    anchor_y.min(rows.saturating_sub(1)),
+                    menu_lines.min(rows.saturating_sub(anchor_y)),
+                )?;
+                menu_lines = inline_fuzzy_lines(items.len()).min(rows);
+                anchor_y = anchor_y.min(rows.saturating_sub(menu_lines));
+                let _ = columns;
+                continue;
+            }
+            Event::Mouse(mouse) => {
+                let width = usize::from(terminal::size()?.0.saturating_sub(2));
+                let row = mouse.row.checked_sub(anchor_y).map(usize::from);
+                let visible = matches.len().min(menu_lines.saturating_sub(2) as usize);
+                let scroll = inline_fuzzy_scroll_offset(selected, visible);
+                let target = row.and_then(|row| {
+                    if row == usize::from(menu_lines.saturating_sub(1)) {
+                        return fuzzy_buttons(width).hit(mouse.column);
+                    }
+                    (row > 0 && row <= visible && usize::from(mouse.column) < width)
+                        .then_some(FuzzyTarget::Item(scroll + row.saturating_sub(1)))
+                });
+                if let Some(target) = click.update(mouse, target) {
+                    match target {
+                        FuzzyTarget::Item(index) => {
+                            selected = index;
+                            continue;
+                        }
+                        FuzzyTarget::Key(code) => {
+                            Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
+                        }
+                    }
+                } else {
+                    if row.is_some_and(|row| row > 0 && row <= visible) {
+                        match mouse.kind {
+                            MouseEventKind::ScrollUp => selected = selected.saturating_sub(1),
+                            MouseEventKind::ScrollDown => {
+                                selected = (selected + 1).min(matches.len().saturating_sub(1))
+                            }
+                            _ => {}
+                        }
+                    }
+                    continue;
+                }
+            }
+            input => {
+                click.clear();
+                input
+            }
+        };
         if let Event::Key(KeyEvent {
             code,
             modifiers,
             kind,
             ..
-        }) = event::read()?
+        }) = input
         {
             if !should_process_inline_fuzzy_key(kind) {
                 continue;
@@ -124,7 +180,7 @@ fn draw_inline_fuzzy(
     selected: usize,
 ) -> Result<()> {
     let (cols, _) = terminal::size().unwrap_or((80, 24));
-    let width = cols.saturating_sub(2).max(24) as usize;
+    let width = cols.saturating_sub(2).max(1) as usize;
     let visible = matches.len().min(menu_lines.saturating_sub(2) as usize);
     let scroll = inline_fuzzy_scroll_offset(selected, visible);
     queue!(stdout, Hide)?;
@@ -181,13 +237,7 @@ fn draw_inline_fuzzy(
         stdout,
         MoveTo(0, anchor_y + menu_lines.saturating_sub(1)),
         Print(truncate_display(
-            &format!(
-                "{DIM_STYLE}{}{RESET}",
-                t(
-                    "Type to filter · ↑/↓ choose · Enter select · Esc cancel",
-                    "输入过滤 · ↑/↓ 选择 · Enter 确认 · Esc 取消",
-                )
-            ),
+            &format!("{DIM_STYLE}{}{RESET}", fuzzy_buttons(width).text),
             width
         ))
     )?;
@@ -239,40 +289,53 @@ fn inline_fuzzy_lines(item_count: usize) -> u16 {
 }
 
 fn truncate_display(value: &str, max: usize) -> String {
-    use unicode_width::UnicodeWidthStr;
-    if UnicodeWidthStr::width(value) <= max {
-        return value.to_string();
-    }
-    let mut output = String::new();
-    let mut used = 0usize;
-    for ch in value.chars() {
-        let char_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
-        if used + char_width > max.saturating_sub(1) {
-            break;
-        }
-        output.push(ch);
-        used += char_width;
-    }
-    output.push('…');
-    output
+    crate::render::ansi_clip::clip_ansi_to_width(value, max, "…")
 }
 
 struct InlineRawMode {
+    _mouse: super::mouse_capture::MouseCapture,
     stdout: io::Stdout,
     was_raw: bool,
 }
 
 impl InlineRawMode {
+    /// 【终端】【列表输入】无参数；先取得鼠标捕获，再启用原始模式，返回自动恢复守卫。
     fn start() -> Result<Self> {
+        let mouse = super::mouse_capture::MouseCapture::acquire()?;
         let was_raw = terminal::is_raw_mode_enabled().unwrap_or(false);
         if !was_raw {
             terminal::enable_raw_mode()?;
         }
         Ok(Self {
+            _mouse: mouse,
             stdout: io::stdout(),
             was_raw,
         })
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FuzzyTarget {
+    Item(usize),
+    Key(KeyCode),
+}
+
+/// 【终端】【列表按钮】参数为可用列数；返回确认与取消按钮及其显示列范围。
+fn fuzzy_buttons(width: usize) -> ButtonRow<FuzzyTarget> {
+    ButtonRow::new(
+        [
+            (t("Select", "确认").into(), FuzzyTarget::Key(KeyCode::Enter)),
+            (t("Cancel", "取消").into(), FuzzyTarget::Key(KeyCode::Esc)),
+        ],
+        width,
+    )
+    .with_hint(
+        t(
+            "Enter select · Esc cancel · ↑↓ choose",
+            "Enter 确认 · Esc 取消 · ↑↓ 选择",
+        ),
+        width,
+    )
 }
 
 impl Drop for InlineRawMode {

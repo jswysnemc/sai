@@ -3,7 +3,7 @@ use crate::question_tui::OverlayPlacement;
 use anyhow::Result;
 use crossterm::{
     cursor::{Hide, MoveTo, Show},
-    event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
+    event::{self, Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind},
     execute, queue,
     style::Print,
     terminal::{Clear, ClearType},
@@ -26,6 +26,8 @@ pub(super) fn show(
         crossterm::terminal::enable_raw_mode()?;
     }
     let result = (|| {
+        let _mouse = super::mouse_capture::MouseCapture::acquire()?;
+        let mut click = super::mouse_menu::ClickTracker::default();
         execute!(io::stdout(), Hide)?;
         let mut offset = 0usize;
         let mut dirty = true;
@@ -53,9 +55,33 @@ pub(super) fn show(
                     _ => {}
                 },
                 Event::Resize(_, _) => {
+                    click.clear();
                     placement = resize()?;
                     execute!(io::stdout(), Hide)?;
                     dirty = true;
+                }
+                Event::Mouse(mouse) => {
+                    let layout = Layout::new(view, placement, offset);
+                    let target = layout
+                        .close
+                        .as_ref()
+                        .filter(|(row, columns)| {
+                            *row == usize::from(mouse.row)
+                                && columns.contains(&usize::from(mouse.column))
+                        })
+                        .map(|_| ());
+                    if click.update(mouse, target).is_some() {
+                        return Ok(());
+                    }
+                    if (placement.anchor_y..placement.anchor_y + placement.panel_lines)
+                        .contains(&mouse.row)
+                    {
+                        match mouse.kind {
+                            MouseEventKind::ScrollUp => offset = offset.saturating_sub(3),
+                            MouseEventKind::ScrollDown => offset = offset.saturating_add(3),
+                            _ => {}
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -86,6 +112,7 @@ fn clear_panel(placement: OverlayPlacement) -> Result<()> {
 }
 
 struct Layout {
+    close: Option<(usize, std::ops::Range<usize>)>,
     x: usize,
     y: usize,
     offset: usize,
@@ -105,6 +132,13 @@ impl Layout {
         let close = format!("Esc {}", crate::i18n::text("Close", "关闭"));
         let used = crate::render::ansi_clip::ansi_visible_width(&header)
             + unicode_width::UnicodeWidthStr::width(close.as_str());
+        let close_hit = (used + 2 <= content_width).then(|| {
+            (
+                usize::from(placement.anchor_y) + 1,
+                inset + content_width - unicode_width::UnicodeWidthStr::width(close.as_str())
+                    ..inset + content_width,
+            )
+        });
         if used + 2 <= content_width {
             header.push_str(&format!("{}{close}", " ".repeat(content_width - used)));
         }
@@ -123,6 +157,7 @@ impl Layout {
         lines.push(rule);
         lines.truncate(height);
         Self {
+            close: close_hit,
             x: 0,
             y: usize::from(placement.anchor_y),
             offset,

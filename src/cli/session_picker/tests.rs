@@ -44,7 +44,7 @@ fn scope_search_and_grouping_keep_workspace_identity() {
     assert_eq!(picker.target().unwrap().workspace_path.as_ref(), Some(&a));
     picker.toggle();
     assert_eq!(picker.visible.len(), 2);
-    let (lines, _) = rows::body(&picker, 80);
+    let (lines, _, _) = rows::body(&picker, 80);
     assert_eq!(lines.len(), 4);
     assert!(lines[0].contains("workspace-a"));
     assert!(lines[2].contains("workspace-b"));

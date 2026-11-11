@@ -74,6 +74,18 @@ impl ComposerFrame {
                 .min(usize::from(height.saturating_sub(1))) as u16,
         );
         let mut signature = ComposerSignature {
+            footer_actions: if footer_rows > usize::from(KEY_HINT_ROWS) && footer_start < footer_end
+            {
+                self.chrome
+                    .footer_actions(&lines[footer_start], cols)
+                    .into_iter()
+                    .map(|(columns, action)| {
+                        (top.saturating_add(footer_start as u16), columns, action)
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            },
             images: layout.image_strip.placements(
                 top.saturating_add(
                     (self.top_lines(cols).len()
@@ -117,6 +129,23 @@ impl ComposerFrame {
                 .map(|line| crate::cli::repl_text::visible_width(line).min(cols))
                 .collect(),
         };
+        if let Some((column, row)) = self.panel_pointer {
+            if let Some((_, columns, _)) =
+                signature
+                    .footer_actions
+                    .iter()
+                    .find(|(candidate, columns, _)| {
+                        *candidate == row && columns.contains(&usize::from(column))
+                    })
+            {
+                let line = &mut signature.lines[usize::from(row - top)];
+                *line = super::super::fullscreen::selection::highlight_cols(
+                    line,
+                    columns.start,
+                    columns.end,
+                );
+            }
+        }
         if let Some(geometry) = &signature.input_geometry {
             if let Some(range) = self.selection.range(geometry) {
                 for (offset, line) in signature.lines.iter_mut().enumerate() {

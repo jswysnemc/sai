@@ -119,6 +119,28 @@ pub(crate) fn process_stream_input(
         if runtime.handle_permission_input(&input)? {
             continue;
         }
+        if let Some(action) = runtime.footer_action(&input) {
+            if let Some(command) = action.command() {
+                if stream_command_policy(command) == StreamCommandPolicy::Immediate {
+                    super::stream_commands::run_immediate_stream_command(runtime, ctx, command)?;
+                } else {
+                    runtime.record_meta(if crate::i18n::is_zh() {
+                        format!("{command} 需等本轮结束后再点击；当前草稿已保留")
+                    } else {
+                        format!("{command} is available after this turn finishes; draft preserved")
+                    })?;
+                }
+            } else {
+                handle_stream_key(runtime, ctx, KeyCode::BackTab, KeyModifiers::SHIFT)?;
+            }
+            runtime.redraw_stream_composer()?;
+            continue;
+        }
+        if runtime.handle_inline_composer_mouse(&input)? {
+            runtime.apply_stream_mouse_cursor();
+            runtime.redraw_stream_composer()?;
+            continue;
+        }
         // 全屏视图先处理鼠标与浏览键，其余按键仍交给输入框
         if runtime.handle_fullscreen_event(&input)? == super::FullscreenEvent::Consumed {
             if runtime.apply_stream_mouse_cursor() {

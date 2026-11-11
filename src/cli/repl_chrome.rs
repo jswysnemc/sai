@@ -1,4 +1,6 @@
 mod footer;
+mod footer_actions;
+pub(in crate::cli) use footer_actions::FooterAction;
 #[cfg(test)]
 mod plugin_tests;
 mod presentation;

@@ -100,7 +100,8 @@ class FullscreenTests(unittest.TestCase):
             mark = len(terminal.raw)
             terminal.send(b"\x0f")
             terminal.wait_for(lambda: "3/3" in lines(terminal)[0], timeout=5)
-            self.assertIn(ENTER_MOUSE, bytes(terminal.raw[mark:]))
+            raw = bytes(terminal.raw)
+            self.assertGreater(raw.rfind(ENTER_MOUSE), raw.rfind(LEAVE_MOUSE))
             screen = lines(terminal)
             self.assertIn("CHARLIE", screen[0])
             self.assertTrue(any("yolo" in line for line in screen[-3:]), "底栏应固定在最后几行")
@@ -125,11 +126,13 @@ class FullscreenTests(unittest.TestCase):
             terminal.send(b"DELTA\r")
             terminal.wait_for(lambda: "ANSWER-DELTA-7" in terminal.text(), timeout=15)
             terminal.wait_for(lambda: "4/4" in lines(terminal)[0])
-            # 6. 退出全屏：关闭鼠标捕获，主屏恢复，浮动标题消失
+            # 6. 退出全屏：主屏恢复且仍捕获底栏点击，浮动标题消失
             mark = len(terminal.raw)
             terminal.send(b"\x0f")
-            terminal.wait_for(lambda: LEAVE_MOUSE in bytes(terminal.raw[mark:]), timeout=5)
+            terminal.wait_for(lambda: b"\x1b[?1049l" in bytes(terminal.raw[mark:]), timeout=5)
             terminal.wait_for(lambda: "ANSWER-DELTA-7" in terminal.text() and "4/4" not in terminal.text())
+            raw = bytes(terminal.raw)
+            self.assertGreater(raw.rfind(ENTER_MOUSE), raw.rfind(LEAVE_MOUSE))
             terminal.send(b"!printf EXIT-OK\r")
             terminal.wait_for(lambda: "EXIT-OK" in terminal.text())
 

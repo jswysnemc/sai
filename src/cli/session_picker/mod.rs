@@ -1,5 +1,6 @@
 mod catalog;
 mod model;
+mod mouse;
 mod rows;
 #[cfg(test)]
 mod tests;
@@ -29,16 +30,18 @@ pub(super) fn select(
     let _terminal = TerminalGuard::start()?;
     let mut stdout = io::stdout();
     let mut dirty = true;
+    let mut mouse = mouse::Mouse::default();
     loop {
         dirty |= catalog.poll(&mut picker);
         if dirty {
-            view::draw(&mut stdout, &picker, terminal::size()?)?;
+            mouse.hits = view::draw(&mut stdout, &picker, terminal::size()?)?;
         }
         dirty = false;
         if !event::poll(Duration::from_millis(150))? {
             continue;
         }
-        match event::read()? {
+        match mouse.event(event::read()?, &mut picker) {
+            Event::Mouse(_) => dirty = true,
             Event::Resize(_, _) => dirty = true,
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 dirty = true;
@@ -91,15 +94,20 @@ pub(super) fn select(
 }
 
 struct TerminalGuard {
+    _mouse: crate::cli::mouse_capture::MouseCapture,
     was_raw: bool,
 }
 impl TerminalGuard {
     /// 【会话选择】【终端保护】启用独立屏幕，失败时恢复原终端状态。
     /// 参数: 无；返回: 自动恢复守卫
     fn start() -> Result<Self> {
+        let mouse = crate::cli::mouse_capture::MouseCapture::acquire()?;
         let was_raw = terminal::is_raw_mode_enabled()?;
         terminal::enable_raw_mode()?;
-        let guard = Self { was_raw };
+        let guard = Self {
+            was_raw,
+            _mouse: mouse,
+        };
         crate::cli::alternate_screen::enter_alternate_screen(&mut io::stdout())?;
         execute!(io::stdout(), Hide)?;
         Ok(guard)

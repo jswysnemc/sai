@@ -3,13 +3,13 @@
 use anyhow::Result;
 use crossterm::{
     cursor::{Hide, Show},
-    event::{DisableMouseCapture, EnableMouseCapture},
     execute,
     terminal::{self, Clear, ClearType},
 };
 use std::io::{self, Write};
 
 pub(super) struct TaskScreen {
+    _mouse: crate::cli::mouse_capture::MouseCapture,
     was_raw: bool,
     entered: bool,
     stdout: io::Stdout,
@@ -22,6 +22,7 @@ impl TaskScreen {
     /// 参数: 无；返回: 屏幕守卫。
     pub fn start() -> Result<Self> {
         let mut screen = Self {
+            _mouse: crate::cli::mouse_capture::MouseCapture::acquire()?,
             was_raw: terminal::is_raw_mode_enabled()?,
             entered: false,
             stdout: io::stdout(),
@@ -31,7 +32,7 @@ impl TaskScreen {
         terminal::enable_raw_mode()?;
         crate::cli::alternate_screen::enter_alternate_screen(&mut screen.stdout)?;
         screen.entered = true;
-        execute!(screen.stdout, Hide, EnableMouseCapture)?;
+        execute!(screen.stdout, Hide)?;
         write!(
             screen.stdout,
             "{}",
@@ -67,7 +68,7 @@ impl Drop for TaskScreen {
     /// 【后台任务】【终端恢复】恢复光标、鼠标和调用前的输入模式。
     /// 参数: 无；返回: 无。
     fn drop(&mut self) {
-        let _ = execute!(self.stdout, DisableMouseCapture, Show);
+        let _ = execute!(self.stdout, Show);
         if self.entered {
             let _ = crate::cli::alternate_screen::leave_alternate_screen(&mut self.stdout);
         }

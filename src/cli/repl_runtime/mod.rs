@@ -9,6 +9,7 @@ mod composer_mouse;
 mod composer_selection;
 mod context_handoff;
 mod event_loop;
+mod footer_mouse;
 mod fullscreen;
 mod history;
 mod history_insert;
@@ -92,6 +93,7 @@ pub(super) struct ReplRuntime {
     stream: StreamState,
     composer: Option<ComposerFrame>,
     composer_selection: composer_selection::ComposerSelection,
+    footer_mouse: footer_mouse::FooterMouse,
     next_live_refresh: Option<Instant>,
     live_sync_pending: bool,
     desynced: bool,
@@ -236,6 +238,7 @@ impl ReplRuntime {
             stream: StreamState::default(),
             composer: None,
             composer_selection: composer_selection::ComposerSelection::default(),
+            footer_mouse: footer_mouse::FooterMouse::default(),
             next_live_refresh: None,
             live_sync_pending: false,
             desynced: false,

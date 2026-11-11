@@ -12,6 +12,7 @@ use std::io::{self, Write};
 /// 正常路径调用 `finish` 显式恢复并拿到错误；错误或 panic 展开时
 /// Drop 执行尽力恢复，保证用户 shell 不会停留在 raw mode。
 pub(super) struct TerminalInputGuard {
+    mouse: Option<super::mouse_capture::MouseCapture>,
     enhancement: KeyboardEnhancementState,
     finished: bool,
     // --- 新增：Windows 控制台输出模式守卫 ---
@@ -30,6 +31,7 @@ impl TerminalInputGuard {
     pub(super) fn enable(stdout: &mut io::Stdout, show_cursor: bool) -> Result<Self> {
         // 进入 raw mode 前装好终止信号监听，被 kill 时同样能恢复终端
         super::terminal_signals::install();
+        let mouse = super::mouse_capture::MouseCapture::acquire()?;
         crate::platform::job_control::install();
         if let Err(err) = terminal::enable_raw_mode() {
             crate::platform::job_control::restore();
@@ -47,6 +49,7 @@ impl TerminalInputGuard {
         }
         self::enable_windows_output_mode();
         Ok(Self {
+            mouse: Some(mouse),
             enhancement: KeyboardEnhancementState::enable(stdout),
             finished: false,
             output_mode: true,
@@ -69,6 +72,7 @@ impl TerminalInputGuard {
         }
         self.release_windows_output_mode();
         self.finished = true;
+        self.mouse.take();
         let paste_result = execute!(stdout, DisableBracketedPaste);
         self.enhancement.disable(stdout);
         let raw_result = terminal::disable_raw_mode();
@@ -117,6 +121,7 @@ impl Drop for TerminalInputGuard {
             return;
         }
         self.finished = true;
+        self.mouse.take();
         self.release_windows_output_mode();
         let mut stdout = io::stdout();
         let _ = execute!(stdout, DisableBracketedPaste);

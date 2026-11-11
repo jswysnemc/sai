@@ -12,7 +12,7 @@ const CONTEXT_COLUMN_WIDTH: usize = 28;
 /// 模型列最多展示的行数
 const MODEL_VISIBLE_ROWS: usize = 12;
 /// 两列之间的间隔
-const COLUMN_GAP: usize = 3;
+pub(super) const COLUMN_GAP: usize = 3;
 /// 帧固定行数：标题 2 + 空行 + 列标题 + 内容窗口 + 空行 + 底栏
 const FRAME_FIXED_ROWS: u16 = 2 + 1 + 1 + MODEL_VISIBLE_ROWS as u16 + 1 + 1;
 
@@ -38,6 +38,7 @@ pub(super) const RESET: &str = "\x1b[0m";
 ///
 /// 返回:
 /// - 逐行 ANSI 文本
+#[cfg(test)]
 pub(super) fn render(state: &PickerState) -> Vec<String> {
     let width = crossterm::terminal::size()
         .map(|(width, _)| width as usize)
@@ -47,23 +48,44 @@ pub(super) fn render(state: &PickerState) -> Vec<String> {
 
 /// 【终端】【模型选择】使用固定宽度渲染，窄终端只展示当前聚焦列。
 /// 参数: `state` 为选择状态，`width` 为可用显示宽度；返回: 固定行数的面板内容
+#[cfg(test)]
 pub(super) fn render_with_width(state: &PickerState, width: usize) -> Vec<String> {
-    let widths = column_widths(state, width);
-    let mut lines = header_lines(state, width);
-    lines.push(String::new());
-    lines.push(column_titles(state, widths));
-    let (model_start, models) = state.model_window(MODEL_VISIBLE_ROWS);
+    render_sized(state, width, FRAME_FIXED_ROWS as usize, true)
+}
+
+/// 【终端】【模型绘制】参数为状态、宽高及子任务开关；返回与鼠标共享布局的可见行。
+pub(super) fn render_sized(
+    state: &PickerState,
+    width: usize,
+    rows: usize,
+    tasks: bool,
+) -> Vec<String> {
+    let layout = super::mouse::PickerLayout::new(state, width, rows);
+    let widths = layout.widths;
+    let mut lines = Vec::new();
+    if rows >= 7 {
+        lines.extend(header_lines(state, width));
+    }
+    if rows > 1 {
+        lines.push(super::mouse::tabs(state, width).text);
+    }
+    if rows >= 7 {
+        lines.push(column_titles(state, widths));
+    }
+    let (model_start, models) = state.model_window(layout.visible);
     // 内容区固定 MODEL_VISIBLE_ROWS 行，与 frame_row_count 对齐，避免帧高抖动
-    for index in 0..MODEL_VISIBLE_ROWS {
-        lines.push(row_line(state, models, model_start, index, widths));
+    for index in 0..layout.visible {
+        lines.push(row_line(state, models, model_start, index, &layout));
     }
     let status = state
         .context_selection()
         .map(|context| context.status())
         .unwrap_or_default();
-    lines.push(format!("{DIM_STYLE}{}{RESET}", truncate(&status, width)));
-    lines.push(footer_line(state, width));
-    debug_assert_eq!(lines.len(), FRAME_FIXED_ROWS as usize);
+    if rows >= 7 {
+        lines.push(format!("{DIM_STYLE}{}{RESET}", truncate(&status, width)));
+    }
+    lines.push(super::mouse::controls(width, tasks).text);
+    lines.truncate(rows);
     lines
 }
 
@@ -102,7 +124,7 @@ fn header_lines(state: &PickerState, width: usize) -> Vec<String> {
 
 /// 【终端】【模型选择】分配紧凑列宽，空间不足时保留聚焦列。
 /// 参数: `state` 为选择状态，`width` 为终端可用宽度；返回: 模型、思考、上下文列宽
-fn column_widths(state: &PickerState, width: usize) -> [usize; 3] {
+pub(super) fn column_widths(state: &PickerState, width: usize) -> [usize; 3] {
     let minimum = if state.context_enabled() { 70 } else { 45 };
     if width < minimum {
         return match state.column() {
@@ -196,8 +218,9 @@ fn row_line(
     models: &[ProviderModelChoice],
     model_start: usize,
     index: usize,
-    widths: [usize; 3],
+    layout: &super::mouse::PickerLayout,
 ) -> String {
+    let widths = layout.widths;
     let model_focused = state.column() == PickerColumn::Model;
     let model_label = models
         .get(index)
@@ -212,7 +235,9 @@ fn row_line(
             (index == 0 && state.models().is_empty())
                 .then(|| t("No matching models", "没有匹配的模型").to_string())
         });
-    let level = state.levels().get(index).copied();
+    let level_index = layout.starts[1] + index;
+    let context_index = layout.starts[2] + index;
+    let level = state.levels().get(level_index).copied();
     let model_cell = item_cell(
         model_label.as_deref(),
         !state.models().is_empty() && model_start + index == state.model_index(),
@@ -221,15 +246,15 @@ fn row_line(
     );
     let thinking_cell = item_cell(
         level,
-        index == state.level_index(),
+        level_index == state.level_index(),
         state.column() == PickerColumn::Thinking,
         widths[1],
     );
     let context = state.context_selection();
-    let context_label = context.and_then(|context| context.label(index));
+    let context_label = context.and_then(|context| context.label(context_index));
     let context_cell = item_cell(
         context_label.as_deref(),
-        context.is_some_and(|context| context.index() == index),
+        context.is_some_and(|context| context.index() == context_index),
         state.column() == PickerColumn::Context,
         widths[2],
     );
@@ -263,27 +288,6 @@ fn item_cell(label: Option<&str>, selected: bool, focused: bool, width: usize) -
     let text = truncate(&format!("{marker}{label}"), width);
     let padding = width.saturating_sub(UnicodeWidthStr::width(text.as_str()));
     format!("{style}{text}{RESET}{}", " ".repeat(padding))
-}
-
-/// 渲染操作提示。
-///
-/// 参数: `state` 为选择状态，`width` 为最大显示宽度
-///
-/// 返回:
-/// - 提示行
-fn footer_line(state: &PickerState, width: usize) -> String {
-    let hint = if state.column() == PickerColumn::Context {
-        t(
-            "↑↓ choose · ←→ switch · Enter save · Esc cancel · Type tokens · Ctrl+U clear",
-            "↑↓ 选择 · ←→ 切换 · Enter 保存 · Esc 取消 · 输入数值 · Ctrl+U 清空",
-        )
-    } else {
-        t(
-            "↑↓ choose · ←→ switch · Enter save · Esc cancel · Tab subagents · Type to filter",
-            "↑↓ 选择 · ←→ 切换 · Enter 保存 · Esc 取消 · Tab 子智能体 · 输入过滤",
-        )
-    };
-    format!("{DIM_STYLE}{}{RESET}", truncate(hint, width))
 }
 
 /// 将文本截断到指定显示宽度。

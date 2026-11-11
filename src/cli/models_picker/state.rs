@@ -30,6 +30,27 @@ pub(super) struct PickerState {
 }
 
 impl PickerState {
+    /// 【终端】【鼠标聚焦】参数为目标列；隐藏上下文列不可聚焦，返回无。
+    pub(super) fn focus(&mut self, column: PickerColumn) {
+        if column != PickerColumn::Context || self.context_enabled() {
+            self.column = column;
+        }
+    }
+
+    /// 【终端】【鼠标选择】参数为列与实际候选下标；越界点击不修改选项，返回无。
+    pub(super) fn select(&mut self, column: PickerColumn, index: usize) {
+        self.focus(column);
+        match column {
+            PickerColumn::Model if index < self.models.len() => self.model_index = index,
+            PickerColumn::Thinking if index < self.levels.len() => self.level_index = index,
+            PickerColumn::Context => {
+                if let Some(context) = self.context_selection_mut() {
+                    context.select(index);
+                }
+            }
+            _ => {}
+        }
+    }
     /// 创建选择状态，并定位到当前生效的供应商、模型与思考等级。
     ///
     /// 参数:

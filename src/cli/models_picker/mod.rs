@@ -1,6 +1,9 @@
 mod context;
 #[cfg(test)]
 mod context_tests;
+mod mouse;
+#[cfg(test)]
+mod mouse_tests;
 mod render;
 mod state;
 mod subagents;
@@ -10,7 +13,7 @@ use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use anyhow::{bail, Result};
 use crossterm::cursor::{Hide, MoveTo, Show};
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::terminal::{self, Clear, ClearType};
 use crossterm::{execute, queue};
 use state::{PickerColumn, PickerState};
@@ -173,21 +176,19 @@ fn run_loop(
         }
     }
     let _guard = ModeGuard { was_raw };
+    let _mouse = crate::cli::mouse_capture::MouseCapture::acquire()?;
 
     let mut stdout = io::stdout();
     execute!(stdout, Hide)?;
 
-    // 预留固定高度区域，避免在 composer 上滚动污染 transcript
-    let frame_rows = render::frame_row_count();
-    reserve_frame_space(frame_rows)?;
-    let (_, cursor_y) = crossterm::cursor::position().unwrap_or((0, frame_rows.saturating_sub(1)));
-    let anchor_y = cursor_y.saturating_sub(frame_rows.saturating_sub(1));
-
+    let mut frame = mouse::PickerFrame::new()?;
+    let mut click = Default::default();
     loop {
-        let lines = render::render(picker);
-        draw_at(&mut stdout, anchor_y, frame_rows, &lines)?;
-
-        let key = read_key()?;
+        let lines = render::render_sized(picker, frame.width, usize::from(frame.rows), true);
+        draw_at(&mut stdout, frame.anchor, frame.rows, &lines)?;
+        let Some(key) = frame.read(picker, &mut click, true)? else {
+            continue;
+        };
         if picker.column() == PickerColumn::Context {
             if let Some(context) = picker.context_selection_mut() {
                 if context.handle_key(key) {
@@ -196,8 +197,12 @@ fn run_loop(
             }
         }
         match key.code {
+            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                clear_frame(&mut stdout, frame.anchor, frame.rows)?;
+                return Ok(None);
+            }
             KeyCode::Esc => {
-                clear_frame(&mut stdout, anchor_y, frame_rows)?;
+                clear_frame(&mut stdout, frame.anchor, frame.rows)?;
                 return Ok(None);
             }
             KeyCode::Enter if picker.selected_model().is_some() => {
@@ -209,7 +214,7 @@ fn run_loop(
                         continue;
                     }
                 }
-                clear_frame(&mut stdout, anchor_y, frame_rows)?;
+                clear_frame(&mut stdout, frame.anchor, frame.rows)?;
                 return Ok(Some(()));
             }
             KeyCode::Up => picker.move_up(),
@@ -218,7 +223,7 @@ fn run_loop(
             KeyCode::Right => picker.focus_right(),
             KeyCode::Tab => {
                 // 子智能体模型设置与主选择器共用同一锚点绘制区
-                subagents::run(&mut stdout, anchor_y, frame_rows, config, paths)?;
+                subagents::run(&mut stdout, &mut frame, config, paths)?;
             }
             KeyCode::Backspace => picker.pop_filter(),
             KeyCode::Delete => picker.clear_filter(),
@@ -270,6 +275,7 @@ fn draw_at(
     frame_rows: u16,
     lines: &[String],
 ) -> Result<()> {
+    let width = usize::from(terminal::size()?.0.saturating_sub(1));
     for row in 0..frame_rows {
         queue!(
             stdout,
@@ -277,7 +283,12 @@ fn draw_at(
             Clear(ClearType::CurrentLine)
         )?;
         if let Some(line) = lines.get(row as usize) {
-            queue!(stdout, crossterm::style::Print(line))?;
+            queue!(
+                stdout,
+                crossterm::style::Print(crate::render::ansi_clip::clip_ansi_to_width(
+                    line, width, "..."
+                ))
+            )?;
         }
     }
     stdout.flush()?;
@@ -304,20 +315,6 @@ fn clear_frame(stdout: &mut io::Stdout, anchor_y: u16, frame_rows: u16) -> Resul
     queue!(stdout, MoveTo(0, anchor_y), Show)?;
     stdout.flush()?;
     Ok(())
-}
-
-/// 读取一次按键。
-///
-/// 返回:
-/// - 按键事件
-fn read_key() -> Result<KeyEvent> {
-    loop {
-        if let Event::Key(key) = event::read()? {
-            if key.kind != KeyEventKind::Release {
-                return Ok(key);
-            }
-        }
-    }
 }
 
 /// 归一化配置中的思考等级。
