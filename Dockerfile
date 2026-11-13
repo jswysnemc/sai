@@ -26,7 +26,6 @@ RUN apt-get update \
 COPY Cargo.toml Cargo.lock build.rs ./
 COPY crates ./crates
 COPY assets ./assets
-COPY sidecars ./sidecars
 COPY src ./src
 
 RUN cargo build --release --locked \
