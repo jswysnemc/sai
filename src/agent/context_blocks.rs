@@ -6,9 +6,7 @@ impl Agent {
     /// 【上下文】【实验开关】确认当前内置模型可以使用上下文工具
     /// 参数: 无；返回是否启用实验
     pub(super) fn context_blocks_enabled(&self) -> bool {
-        self.config.context.experimental_context_blocks
-            && self.tools_enabled
-            && !self.uses_external_engine()
+        self.config.context.experimental_context_blocks && self.tools_enabled
     }
 
     /// 【上下文】【请求投影】应用已提交摘要并失效旧请求的占用记录

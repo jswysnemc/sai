@@ -52,10 +52,10 @@ pub(super) fn render(cell: &ShellCell) -> String {
     }
     // 2. 输出体：过长结果同样首尾折叠
     if cell.output.is_empty() {
-        rendered.push_str("\n\x1b[2m  └ (no output)\x1b[0m");
+        rendered.push_str("\n\x1b[2m    (no output)\x1b[0m");
     } else {
         let out_lines = fold_display_text(cell.output.trim_end(), false, title);
-        for (index, line) in out_lines.iter().enumerate() {
+        for line in &out_lines {
             match line {
                 FoldedDisplayLine::Omitted { omitted, .. } => {
                     rendered.push('\n');
@@ -64,8 +64,8 @@ pub(super) fn render(cell: &ShellCell) -> String {
                     ));
                 }
                 FoldedDisplayLine::Line(line) => {
-                    let prefix = if index == 0 { "  └ " } else { "    " };
-                    rendered.push_str(&format!("\n\x1b[2m{prefix}{line}\x1b[0m"));
+                    // 【终端】【工具引导】前缀仅保留等宽缩进，公共引导列不重复叠加旧折角
+                    rendered.push_str(&format!("\n\x1b[2m    {line}\x1b[0m"));
                 }
             }
         }
@@ -73,7 +73,7 @@ pub(super) fn render(cell: &ShellCell) -> String {
     // 3. 非零退出码标记
     if cell.exit_code.is_some_and(|code| code != 0) {
         rendered.push_str(&format!(
-            "\n\x1b[31m✗ ({})\x1b[0m",
+            "\n\x1b[31m    ✗ ({})\x1b[0m",
             cell.exit_code.unwrap_or_default()
         ));
     }
@@ -157,7 +157,33 @@ mod tests {
         assert!(rendered.contains("two"));
         assert!(!rendered.contains("├─"));
         assert!(!rendered.contains("└─"));
-        assert!(rendered.contains("└"));
+        assert!(!rendered.contains("└"));
+    }
+
+    /// 【终端】【命令引导回归】无参数和返回值，保留正文竖线且状态行共用唯一布局引导列
+    #[test]
+    fn shared_guide_preserves_shell_output_symbols() {
+        let cell = super::super::cell::HistoryCell::shell(
+            "printf symbols".into(),
+            "│ original\n└ original".into(),
+            Some(1),
+        );
+        let lines = cell.display_lines(
+            80,
+            &super::super::TranscriptRenderOptions {
+                reasoning_mode: crate::render::ReasoningDisplayMode::Full,
+                tool_call_mode: crate::render::ToolCallDisplayMode::Full,
+            },
+        );
+        let plain = lines
+            .iter()
+            .map(|line| crate::render::ansi_clip::strip_ansi(line.as_str()))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(plain.contains("│   │ original"), "{plain}");
+        assert!(plain.contains("│   └ original"), "{plain}");
+        assert!(plain.contains("│   ✗ (1)"), "{plain}");
+        assert!(!plain.contains("│ └"), "{plain}");
     }
 
     #[test]

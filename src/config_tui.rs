@@ -14,6 +14,7 @@ mod model_endpoints;
 mod model_metadata_form;
 mod multi_select;
 mod onboarding;
+mod onboarding_models;
 mod plugin_fields;
 mod plugins;
 mod provider_fetch;

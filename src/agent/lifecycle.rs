@@ -38,7 +38,7 @@ impl Agent {
     /// 返回:
     /// - Agent 实例
     pub fn new_with_extra_system_prompt(
-        config: AppConfig,
+        mut config: AppConfig,
         paths: &SaiPaths,
         state: StateStore,
         client: OpenAiCompatibleClient,
@@ -46,6 +46,8 @@ impl Agent {
         mode: AgentMode,
         extra_system_prompt: Option<&str>,
     ) -> Result<Self> {
+        config.hooks =
+            crate::hooks::sources::resolve(&config, paths, &crate::runtime_cwd::current_dir()?)?;
         tools.rebind_interactive_session(&config, paths, state.session_id(), state.state_dir());
         tools.start_plugin_session(state.session_id())?;
         tools.inherit_plugin_storage_session(&state.state_dir().to_string_lossy());
@@ -106,22 +108,10 @@ impl Agent {
         memory.init()?;
         let live_mode = super::LiveAgentMode::new(mode, tools.permission_mode_handle());
         tools.set_permission_mode(mode.permission_profile_mode());
-        // 配置指定外部内核时在此构建；构建失败直接报错而不是静默退回原生，
-        // 否则用户以为换了内核，实际仍在用 sai 自己的循环
-        // 外部内核与自带工具共用同一份权限配置，换内核不会绕过治理
-        let governance = crate::acp::AcpGovernance::new(
-            crate::runtime_cwd::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
-            tools.permission_profile(),
-            config.clone(),
-            state.session_id().to_string(),
-            Some(paths),
-            Some(state.state_dir()),
-        );
-        let external_engine = crate::agent_engine::build_external_engine(&config.agent, governance)
-            .map_err(|error| anyhow::anyhow!("{error}"))?;
         let external_wake_policy =
             external_wake_policy::ExternalWakePolicy::capture(paths, &state)?;
         Ok(Self {
+            pending_hook_context: Vec::new(),
             background_compaction: None,
             streamed_tools: Default::default(),
             goal_accounting: None,
@@ -146,7 +136,6 @@ impl Agent {
             paths: paths.clone(),
             last_dynamic_sources: Vec::new(),
             plugin_reply_contexts: Default::default(),
-            external_engine,
         })
     }
 
@@ -269,6 +258,13 @@ impl Agent {
         }
         self.live_mode.bind_registry(&mut tools, mode);
         self.tools = tools;
+        if crate::hooks::lifecycle::started(self.session_id()) {
+            crate::hooks::lifecycle::register(
+                self.config.hooks.clone(),
+                self.tools.hook_context(),
+                self.tools.clone(),
+            );
+        }
         self.tools
             .set_permission_mode(mode.permission_profile_mode());
         // 1. 按新模式注册表恢复会话已加载集合，不保留当前模式不存在的工具
@@ -361,11 +357,16 @@ impl Agent {
     /// - 重载是否成功
     pub fn reload(
         &mut self,
-        config: AppConfig,
+        mut config: AppConfig,
         client: OpenAiCompatibleClient,
         mut tools: ToolRegistry,
         mode: AgentMode,
     ) -> Result<()> {
+        config.hooks = crate::hooks::sources::resolve(
+            &config,
+            &self.paths,
+            &crate::runtime_cwd::current_dir()?,
+        )?;
         tools.rebind_interactive_session(
             &config,
             &self.paths,
@@ -411,7 +412,15 @@ impl Agent {
         }
         self.memory = MemoryStore::new(&self.config, &self.paths);
         self.memory.init()?;
-        self.prepare_for_turn()
+        self.prepare_for_turn()?;
+        if crate::hooks::lifecycle::started(self.session_id()) {
+            crate::hooks::lifecycle::register(
+                self.config.hooks.clone(),
+                self.tools.hook_context(),
+                self.tools.clone(),
+            );
+        }
+        Ok(())
     }
 
     /// 切换会话状态（/new、/resume、/clear 后）。

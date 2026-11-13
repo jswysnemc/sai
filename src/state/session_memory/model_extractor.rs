@@ -1,6 +1,7 @@
+use super::extraction_interval::{self, ExtractionTicket, EXTRACTION_TOKEN_INTERVAL};
 use super::extractor::{clip_text, estimate_turn_chars, is_disabled, record_extraction_failure};
 use super::model::{NewSessionMemory, SessionMemory};
-use super::repository::{load_memory, upsert_memory};
+use super::repository::{load_memory, upsert_memory_on_conn};
 use crate::state::turns::{ConversationDb, Turn, TurnStatus};
 use crate::state::StateStore;
 use anyhow::Result;
@@ -8,6 +9,7 @@ use anyhow::Result;
 /// 模型提取 Session Memory 的预算配置。
 #[derive(Debug, Clone)]
 pub(crate) struct ModelExtractionConfig {
+    pub min_new_tokens: usize,
     pub max_prompt_chars: usize,
     pub max_source_chars: usize,
     pub max_summary_chars: usize,
@@ -31,6 +33,7 @@ impl ModelExtractionConfig {
         };
         let max_prompt_chars = base_budget.clamp(2_000, 24_000);
         Self {
+            min_new_tokens: EXTRACTION_TOKEN_INTERVAL,
             max_prompt_chars,
             max_source_chars: max_prompt_chars.saturating_sub(1_200).max(800),
             max_summary_chars: (max_prompt_chars / 3).clamp(800, 8_000),
@@ -49,6 +52,7 @@ pub(crate) struct ModelExtractionInput {
     config: ModelExtractionConfig,
     source_turns: Vec<Turn>,
     total_source_turn_count: usize,
+    ticket: ExtractionTicket,
 }
 
 /// 准备模型提取 Session Memory 的独立输入。
@@ -70,13 +74,25 @@ pub(crate) fn prepare_model_extraction_input(
         return Ok(None);
     }
     let completed_turns = db
-        .load_turns_after_seq(0, None)?
+        .active_branch_turns()?
         .into_iter()
         .filter(|turn| turn.status != TurnStatus::Running)
         .collect::<Vec<_>>();
     if completed_turns.is_empty() {
         return Ok(None);
     }
+    let Some(ticket) = extraction_interval::claim_extraction(
+        db,
+        session_id,
+        &completed_turns,
+        previous
+            .as_ref()
+            .map_or(0, |memory| memory.last_summarized_seq),
+        config.min_new_tokens,
+    )?
+    else {
+        return Ok(None);
+    };
     let source_turns = select_source_turns(&completed_turns, config.max_source_chars);
     let prompt = model_extraction_prompt(&source_turns, previous.as_ref(), config);
     Ok(Some(ModelExtractionInput {
@@ -85,6 +101,7 @@ pub(crate) fn prepare_model_extraction_input(
         config: config.clone(),
         source_turns,
         total_source_turn_count: completed_turns.len(),
+        ticket,
     }))
 }
 
@@ -116,7 +133,7 @@ impl StateStore {
         &self,
         input: &ModelExtractionInput,
         summary: &str,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         apply_model_extraction_summary(
             &self.conv_db,
             &self.session_id,
@@ -166,7 +183,7 @@ pub(crate) fn apply_model_extraction_summary(
     input: &ModelExtractionInput,
     summary: &str,
     config: &ModelExtractionConfig,
-) -> Result<()> {
+) -> Result<bool> {
     let summary = summary.trim();
     if summary.is_empty() {
         record_model_extraction_failure(
@@ -192,19 +209,40 @@ pub(crate) fn apply_model_extraction_summary(
         .source_turns
         .last()
         .ok_or_else(|| anyhow::anyhow!("session memory model extraction has no source turns"))?;
-    upsert_memory(
-        db,
+    // 1. 【会话记忆】【提交校验】压缩、重置或租约替换后不再写入过期结果
+    let mut conn = db.conn.lock().unwrap();
+    let tx = conn.transaction()?;
+    if !extraction_interval::owns_ticket(&tx, session_id, &input.ticket)? {
+        return Ok(false);
+    }
+    let source_exists: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM turns WHERE turn_id = ?1 AND seq = ?2)",
+        rusqlite::params![last_turn.turn_id, last_turn.seq],
+        |row| row.get(0),
+    )?;
+    if !source_exists {
+        drop(tx);
+        drop(conn);
+        extraction_interval::release_ticket(db, session_id, &input.ticket)?;
+        return Ok(false);
+    }
+    // 2. 【会话记忆】【原子提交】记忆正文和累计起点一起保存，恢复会话不会重复提取
+    upsert_memory_on_conn(
+        &tx,
         NewSessionMemory {
             session_id: session_id.to_string(),
             summary: summary.to_string(),
             last_summarized_turn_id: Some(last_turn.turn_id.clone()),
             last_summarized_seq: last_turn.seq,
-            checkpoint_id: crate::state::failure_recovery::latest_checkpoint_id(db)?,
+            checkpoint_id: crate::state::checkpoints::load_latest_checkpoint(&tx)?
+                .map(|checkpoint| checkpoint.id),
             source_turn_count: input.total_source_turn_count,
             token_estimate: crate::token_estimate::estimate_tokens(summary),
         },
     )?;
-    Ok(())
+    extraction_interval::reset_boundary(&tx, session_id, &input.ticket.boundary)?;
+    tx.commit()?;
+    Ok(true)
 }
 
 /// 记录模型提取 Session Memory 失败。
@@ -225,6 +263,9 @@ pub(crate) fn record_model_extraction_failure(
     input: &ModelExtractionInput,
     config: &ModelExtractionConfig,
 ) -> Result<()> {
+    if !extraction_interval::release_ticket(db, session_id, &input.ticket)? {
+        return Ok(());
+    }
     record_extraction_failure(
         db,
         session_id,
@@ -304,56 +345,5 @@ fn model_extraction_prompt(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::state::session_memory::repository::load_memory;
-    use tempfile::TempDir;
-
-    fn test_db() -> (TempDir, ConversationDb) {
-        let temp = tempfile::tempdir().unwrap();
-        let db = ConversationDb::open(temp.path()).unwrap();
-        (temp, db)
-    }
-
-    #[test]
-    fn model_extraction_input_respects_prompt_budget() {
-        let (_temp, db) = test_db();
-        db.start_turn("turn_1", &"user ".repeat(1_000)).unwrap();
-        db.complete_turn("turn_1", &"assistant ".repeat(1_000), None)
-            .unwrap();
-        let config = ModelExtractionConfig {
-            max_prompt_chars: 1_200,
-            max_source_chars: 900,
-            max_summary_chars: 400,
-            failure_threshold: 3,
-            disable_seconds: 3_600,
-        };
-
-        let input = prepare_model_extraction_input(&db, "default", &config)
-            .unwrap()
-            .expect("model extraction input");
-
-        assert!(input.prompt_chars <= config.max_prompt_chars);
-        assert!(input.prompt.contains("Recent source turns"));
-    }
-
-    #[test]
-    fn model_extraction_summary_updates_memory() {
-        let (_temp, db) = test_db();
-        db.start_turn("turn_1", "new task").unwrap();
-        db.complete_turn("turn_1", "new answer", None).unwrap();
-        let config = ModelExtractionConfig::for_context_limit(10_000);
-        let input = prepare_model_extraction_input(&db, "default", &config)
-            .unwrap()
-            .expect("model extraction input");
-
-        apply_model_extraction_summary(&db, "default", &input, "model memory summary", &config)
-            .unwrap();
-
-        let memory = load_memory(&db, "default").unwrap().unwrap();
-        assert_eq!(memory.summary, "model memory summary");
-        assert_eq!(memory.last_summarized_seq, 1);
-        assert_eq!(memory.source_turn_count, 1);
-        assert_eq!(memory.consecutive_failures, 0);
-    }
-}
+#[path = "model_extractor_tests.rs"]
+mod tests;

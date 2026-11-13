@@ -214,8 +214,8 @@ fn separator_details_and_footer_are_not_clickable() {
             let layout = session.state.layout.unwrap();
             let sidebar = &session.sidebar;
             let left = layout.sidebar.unwrap().left;
-            assert_eq!(sidebar.target_at(&layout, left + 1, 3), Some(0));
-            assert_eq!(sidebar.target_at(&layout, 154, 3), Some(0));
+            assert_eq!(sidebar.target_at(&layout, left + 1, 6), Some(0));
+            assert_eq!(sidebar.target_at(&layout, 154, 6), Some(0));
             assert_eq!(sidebar.target_at(&layout, 156, 0), None);
             assert_eq!(sidebar.target_at(&layout, left, 0), None);
             assert_eq!(sidebar.target_at(&layout, 159, 0), None);
@@ -247,7 +247,7 @@ fn subagents_can_fold_without_hiding_main_navigation() {
             );
             runtime.enter_fullscreen().unwrap();
             runtime
-                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 154, 3))
+                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 154, 6))
                 .unwrap();
             let sidebar = &runtime.fullscreen.as_ref().unwrap().sidebar;
             assert!(sidebar.sections.agents_collapsed);
@@ -258,7 +258,7 @@ fn subagents_can_fold_without_hiding_main_navigation() {
                 .any(|row| row.text.contains("CHILD-TASK")));
             assert!(sidebar.document.rows[1].text.contains("Main conversation"));
             runtime
-                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 154, 3))
+                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 154, 6))
                 .unwrap();
             assert!(runtime
                 .fullscreen
@@ -294,10 +294,10 @@ fn scrolled_heading_uses_document_offset_and_retains_fold_on_resize() {
             };
             runtime.paint_fullscreen().unwrap();
             runtime
-                .handle_fullscreen_event(&mouse(MouseEventKind::ScrollDown, 156, 4))
+                .handle_fullscreen_event(&mouse(MouseEventKind::ScrollDown, 156, 7))
                 .unwrap();
             let row = heading(&runtime, "Changes");
-            assert_eq!(row, 5);
+            assert_eq!(row, 8);
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 156, row))
                 .unwrap();

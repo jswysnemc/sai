@@ -43,6 +43,7 @@ mod runner_events;
 mod shell_hint_panel;
 mod slash_panel;
 mod ssh_card;
+mod startup_input;
 mod stream;
 mod stream_commands;
 mod viewport;
@@ -85,6 +86,7 @@ const SUBAGENT_REFRESH_INTERVAL: Duration = Duration::from_millis(150);
 
 /// REPL 的 source-backed transcript、inline viewport 与增量协调运行期。
 pub(super) struct ReplRuntime {
+    startup_input_guard: Option<crate::cli::terminal_restore::TerminalInputGuard>,
     transcript: TranscriptStore,
     options: TranscriptRenderOptions,
     viewport: InlineViewport,
@@ -230,6 +232,7 @@ impl ReplRuntime {
         let mut reflow = ReflowState::new();
         reflow.observe(viewport.size(), false);
         Self {
+            startup_input_guard: None,
             transcript: TranscriptStore::new(row_cap),
             options,
             viewport,

@@ -13,9 +13,19 @@ type Props = { hook: HookItem; onChange: (patch: Partial<HookItem>) => void };
 export function HookActionFields({ hook, onChange }: Props) {
   const { t } = useI18n();
   if ((hook.kind ?? "command") === "command") return <SettingsPanel title={t("Shell action", "Shell 动作")}>
-    <SettingsField span="full" label={t("Script", "脚本")} anchor="hooks.script" hint={t("Available variables: SAI_HOOK_EVENT, SAI_HOOK_NAME, SAI_SESSION_ID, SAI_WORKDIR, SAI_TOOL_NAME (tool events). Runs with sh -lc.", "可用变量：SAI_HOOK_EVENT、SAI_HOOK_NAME、SAI_SESSION_ID、SAI_WORKDIR、SAI_TOOL_NAME（工具事件）。通过 sh -lc 执行。")}>
+    <SettingsField span="full" label={t("Script", "脚本")} anchor="hooks.script" hint={t("Available variables: SAI_HOOK_EVENT, SAI_HOOK_NAME, SAI_SESSION_ID, SAI_WORKDIR, SAI_TOOL_NAME (tool events). JSON event on stdin; emit a single JSON object on stdout and diagnostics on stderr. Uses the configured platform shell.", "可用变量：SAI_HOOK_EVENT、SAI_HOOK_NAME、SAI_SESSION_ID、SAI_WORKDIR、SAI_TOOL_NAME（工具事件）。标准输入接收事件 JSON；标准输出只返回一个 JSON 对象，诊断写入标准错误。使用配置的平台 Shell。")}>
       <SkTextArea mono rows={10} value={hook.script ?? ""} onChange={(script) => onChange({ script })} />
     </SettingsField>
+    <FieldGrid>
+      <SettingsField label={t("Shell override", "指定 Shell")}><SkTextInput mono value={hook.shell ?? ""} onChange={(shell) => onChange({ shell })} /></SettingsField>
+      <SettingsField label={t("Windows command", "Windows 命令")}><SkTextInput mono value={hook.command_windows ?? ""} onChange={(command_windows) => onChange({ command_windows })} /></SettingsField>
+      <SettingsField label={t("Status message", "状态说明")}><SkTextInput value={hook.status_message ?? ""} onChange={(status_message) => onChange({ status_message })} /></SettingsField>
+      <SettingsField label={t("Monitored files", "监控文件")} hint={t("One relative source file per line; changed content requires another review.", "每行一个来源目录内的相对路径；内容变化后需要重新审查。") }><SkTextArea mono rows={3} value={(hook.files ?? []).join("\n")} onChange={(text) => onChange({ files: text.split("\n").map((name) => name.trim()).filter(Boolean) })} /></SettingsField>
+    </FieldGrid>
+  </SettingsPanel>;
+  if (hook.kind === "mcp_tool") return <SettingsPanel title={t("MCP action", "MCP 动作")}>
+    <SettingsField label={t("Registered MCP tool", "已注册 MCP 工具")}><SkTextInput mono value={hook.mcp_tool ?? ""} onChange={(mcp_tool) => onChange({ mcp_tool })}/></SettingsField>
+    <SettingsField label={t("Arguments JSON", "参数 JSON")} hint={t("Use ${field.nested} placeholders; whole placeholders preserve JSON types.", "支持 ${field.nested} 占位符；完整占位符保留 JSON 类型。") }><SkTextArea mono rows={6} value={typeof hook.mcp_arguments === "string" ? hook.mcp_arguments : JSON.stringify(hook.mcp_arguments ?? {}, null, 2)} onChange={(text) => { try { onChange({ mcp_arguments: JSON.parse(text) }); } catch { onChange({ mcp_arguments: text }); } }}/></SettingsField>
   </SettingsPanel>;
   const requests = hook.requests?.length ? hook.requests : [{ id: "1", url: "", method: "POST", headers: {}, body: "" }];
   return <>{requests.map((request, index) => {

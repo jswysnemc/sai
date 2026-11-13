@@ -21,9 +21,6 @@ import "./chat-composer.css";
 export function ChatComposer(props: ChatComposerProps) {
   const { t } = useI18n();
   const plan = usePlanModeControls(props.sessionId, props.mode, props.onModeChange);
-  const engineStatus = useQuery({ queryKey: ["engine-status"], queryFn: api.config.engineStatus, staleTime: 60_000 });
-  const externalEngine = engineStatus.data?.external === true ? engineStatus.data : null;
-  const enginePending = engineStatus.isLoading && !engineStatus.data;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const availability = resolveComposerAvailability({
     sessionAvailable: props.sessionAvailable,
@@ -77,7 +74,7 @@ export function ChatComposer(props: ChatComposerProps) {
         <div className="composer-footer">
           <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileChange} hidden />
           <Button variant="ghost" size="icon" className="composer-attach" onClick={() => fileInputRef.current?.click()} disabled={availability.inputDisabled || plan.busy} title={t("Attach images", "添加图片")} aria-label={t("Add images", "添加图片")}><Plus size={16} /></Button>
-          <ComposerModelControls composer={props} engine={externalEngine} loading={enginePending} />
+          <ComposerModelControls composer={props} />
           <div className="composer-actions">
             {availability.showStop ? (
               <Button variant="primary" size="icon" className="composer-send stop" onClick={props.onStop} aria-label={t("Stop run", "停止运行")} title={t("Stop run", "停止运行")}><Square size={12} fill="currentColor" /></Button>
@@ -90,7 +87,7 @@ export function ChatComposer(props: ChatComposerProps) {
         </div>
       </ComposerSurface>
       {plan.error && <p role="alert" className="px-3 text-sm">{plan.error}</p>}
-      <ComposerContextFooter composer={props} showUsage={!externalEngine && !enginePending} plan={plan} />
+      <ComposerContextFooter composer={props} showUsage plan={plan} />
       {props.showTemplateSuggestions && <TemplateQuickSuggestions
         scope="chat"
         disabled={availability.inputDisabled || plan.busy}

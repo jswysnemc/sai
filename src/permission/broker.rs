@@ -250,7 +250,7 @@ pub(crate) fn allow_all_pending_for_session(session_id: &str) -> usize {
 
 /// 丢弃指定会话下全部待审权限并关闭等待通道。
 ///
-/// ACP 轮次取消时需要以 cancelled 回包，直接关闭通道可让协议适配层
+/// 轮次取消时直接关闭通道，使交互等待方
 /// 区分用户拒绝与整个轮次已经终止。
 ///
 /// 参数:

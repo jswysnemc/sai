@@ -276,8 +276,8 @@ fn tool_progress_and_result_update_one_lifecycle_cell() {
         .map(|line| line.as_str())
         .collect::<String>();
 
-    assert_eq!(rendered.matches("args:").count(), 1);
-    assert_eq!(rendered.matches("output:").count(), 1);
+    assert_eq!(rendered.matches("args:").count(), 0);
+    assert_eq!(rendered.matches("output:").count(), 0);
     assert!(rendered.contains("reading"));
     assert!(rendered.contains("contents"));
 }
@@ -301,7 +301,7 @@ fn concurrent_same_name_tools_update_in_place_fifo() {
         .iter()
         .map(|line| strip_ansi(line.as_str()))
         .collect::<String>();
-    assert!(mid.contains("Read a.rs:1–20"), "{mid}");
+    assert!(mid.contains("Read a.rs"), "{mid}");
     assert!(mid.contains("Reading b.rs:10–49"), "{mid}");
     assert!(mid.contains("Reading c.rs"), "{mid}");
     assert!(!mid.contains("Explored"), "{mid}");
@@ -314,8 +314,8 @@ fn concurrent_same_name_tools_update_in_place_fifo() {
         .iter()
         .map(|line| strip_ansi(line.as_str()))
         .collect::<String>();
-    assert!(done.contains("Read a.rs:1–20"), "{done}");
-    assert!(done.contains("Read b.rs:10–49"), "{done}");
+    assert!(done.contains("Read a.rs"), "{done}");
+    assert!(done.contains("Read b.rs"), "{done}");
     assert!(done.contains("Read c.rs"), "{done}");
     assert!(!done.contains("Reading "), "{done}");
     assert_eq!(done.matches("Read ok").count(), 0, "{done}");

@@ -60,7 +60,7 @@ impl StreamedTools {
         visibility: &ToolVisibility,
         cwd: &PathBuf,
     ) {
-        if self.sealed || index != self.next {
+        if tools.has_control_pre_hooks() || self.sealed || index != self.next {
             return;
         }
         let name = call.function.name.as_str();
@@ -86,11 +86,8 @@ impl StreamedTools {
         let accounting = self.accounting.clone();
         let handle = tokio::spawn(crate::runtime_cwd::scope(cwd, async move {
             let (progress, _receiver) = tokio::sync::mpsc::channel(1);
-            let execution = registry.call_with_progress(
-                &request.function.name,
-                &request.function.arguments,
-                progress,
-            );
+            let prepared = registry.prepare_hooked_call(&request).await?;
+            let execution = registry.execute_prepared(&prepared, progress);
             tokio::pin!(execution);
             let mut tick = tokio::time::interval(std::time::Duration::from_millis(100));
             loop {

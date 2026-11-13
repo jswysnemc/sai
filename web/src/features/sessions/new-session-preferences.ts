@@ -1,15 +1,8 @@
 import type {
   AppConfig,
-  EngineStatusResponse,
   RunModelSelection,
   ThinkingLevel
 } from "../../api/contracts";
-import {
-  ACP_PROVIDER_ID,
-  acpThinkingLevels,
-  advertisedAcpModelChoices,
-  buildAcpModelChoices
-} from "../chat/acp-engine-options";
 import { buildChatModelChoices } from "../chat/chat-model-options";
 import type { ChatModelChoice } from "../chat/chat-model-options";
 import {
@@ -36,7 +29,7 @@ export type NewSessionPreferences = {
  */
 export function disabledNewSessionProviderName(config: AppConfig): string | null {
   const configured = resolveConfiguredNewSessionPreferences(config).model;
-  if (!configured || (config.agent?.engine ?? "native") !== "native") return null;
+  if (!configured) return null;
   const provider = (config.providers ?? []).find((item) => item.id === configured.providerId);
   if (!provider || isProviderEnabled(provider)) return null;
   return provider.display_name?.trim() || provider.id;
@@ -62,37 +55,12 @@ export function resolveConfiguredNewSessionPreferences(config: AppConfig): NewSe
  *
  * @param config 应用配置草稿
  * @param status 当前内核运行状态
- * @returns 普通供应商或 ACP 模型列表
+ * @returns 已配置供应商模型列表
  */
 export function buildNewSessionModelChoices(
-  config: AppConfig,
-  status?: EngineStatusResponse
+  config: AppConfig
 ): ChatModelChoice[] {
-  const engine = config.agent?.engine ?? "native";
-  if (engine === "native") {
-    return Array.isArray(config.providers) ? buildChatModelChoices(config) : [];
-  }
-
-  const matchingStatus = status?.engine === engine ? status : undefined;
-  if (matchingStatus?.acp_runtime) {
-    return advertisedAcpModelChoices(matchingStatus);
-  }
-  const choices = buildAcpModelChoices(matchingStatus, config);
-  const configured = resolveConfiguredNewSessionPreferences(config).model;
-  if (
-    configured?.providerId === ACP_PROVIDER_ID
-    && !choices.some((choice) => choice.model === configured.model)
-  ) {
-    return [
-      ...choices,
-      {
-        providerId: ACP_PROVIDER_ID,
-        providerName: matchingStatus?.label ?? "ACP",
-        model: configured.model
-      }
-    ];
-  }
-  return choices;
+  return Array.isArray(config.providers) ? buildChatModelChoices(config) : [];
 }
 
 /**
@@ -100,51 +68,27 @@ export function buildNewSessionModelChoices(
  *
  * @param config 应用配置草稿
  * @param status 当前内核运行状态
- * @returns 内置内核的完整等级，或 ACP 明确支持的等级与 auto
+ * @returns 完整思考等级与 auto
  */
 export function buildNewSessionThinkingLevels(
-  config: AppConfig,
-  status?: EngineStatusResponse
+  _config: AppConfig
 ): ThinkingLevel[] {
-  const engine = config.agent?.engine ?? "native";
-  if (engine === "native") return THINKING_OPTIONS.map((option) => option.value);
-  const matchingStatus = status?.engine === engine ? status : undefined;
-  if (!matchingStatus?.acp_runtime) return THINKING_OPTIONS.map((option) => option.value);
-  return Array.from(new Set<ThinkingLevel>(["auto", ...acpThinkingLevels(matchingStatus)]));
+  return THINKING_OPTIONS.map((option) => option.value);
 }
 
 /**
  * 【会话】【新会话默认值】解析当前内核能够实际应用的新会话偏好。
  *
- * ACP 已公布能力快照时只接受其中明确支持的模型与思考等级；首次握手前保留
- * 用户配置，已有能力快照中的失效配置则回退内核默认值。
+ * 用户显式配置优先，模型留空时跟随当前供应商选择。
  *
  * @param config 应用配置
  * @param status 当前内核运行状态
  * @returns 当前内核可以应用的模型与思考偏好
  */
 export function resolveEffectiveNewSessionPreferences(
-  config: AppConfig,
-  status?: EngineStatusResponse
+  config: AppConfig
 ): NewSessionPreferences {
-  const configured = resolveConfiguredNewSessionPreferences(config);
-  const engine = config.agent?.engine ?? "native";
-  if (engine === "native") return configured;
-
-  const matchingStatus = status?.engine === engine ? status : undefined;
-  if (!matchingStatus?.acp_runtime) return configured;
-
-  const advertisedModels = advertisedAcpModelChoices(matchingStatus);
-  const model = configured.model?.providerId === ACP_PROVIDER_ID
-    && advertisedModels.some((choice) => choice.model === configured.model?.model)
-    ? configured.model
-    : null;
-  const advertisedThinkingLevels = acpThinkingLevels(matchingStatus);
-  const thinkingLevel = configured.thinkingLevel === "auto"
-    || advertisedThinkingLevels.includes(configured.thinkingLevel)
-    ? configured.thinkingLevel
-    : "auto";
-  return { model, thinkingLevel };
+  return resolveConfiguredNewSessionPreferences(config);
 }
 
 /**
@@ -160,10 +104,9 @@ export function resolveEffectiveNewSessionPreferences(
  */
 export function initializeNewSessionPreferences(
   sessionId: string,
-  config: AppConfig,
-  status?: EngineStatusResponse
+  config: AppConfig
 ): NewSessionPreferences {
-  const preferences = resolveEffectiveNewSessionPreferences(config, status);
+  const preferences = resolveEffectiveNewSessionPreferences(config);
   writeStoredChatModelSelection(sessionId, preferences.model);
   writeStoredThinkingLevel(sessionId, preferences.thinkingLevel);
   return preferences;
@@ -182,21 +125,6 @@ export function clearNewSessionModelReference(
     ...session,
     new_session_provider_id: undefined,
     new_session_model: undefined
-  };
-}
-
-/**
- * 【会话】【新会话默认值】切换内核时重置与内核能力相关的默认值。
- *
- * @param session 当前会话配置
- * @returns 模型已清除且思考等级恢复 auto 的会话配置
- */
-export function resetNewSessionEnginePreferences(
-  session: AppConfig["session"]
-): NonNullable<AppConfig["session"]> {
-  return {
-    ...clearNewSessionModelReference(session),
-    new_session_thinking_level: "auto"
   };
 }
 

@@ -200,6 +200,7 @@ pub(crate) fn wrap_subagent_inbox(from: &str, text: &str) -> String {
 }
 
 pub(crate) struct SubagentRunner {
+    hook_agent_type: String,
     checkpoint_id: Option<String>,
     goal_accounting: Option<crate::goal::GoalAccounting>,
     client: OpenAiCompatibleClient,
@@ -237,6 +238,7 @@ impl SubagentRunner {
         crate::tools::computer_use::exclude_from_subagent(&mut tools);
         tools.set_plugin_model_client(&client);
         Self {
+            hook_agent_type: "subagent".into(),
             checkpoint_id: None,
             goal_accounting: None,
             client,
@@ -251,6 +253,12 @@ impl SubagentRunner {
             progressive_context: None,
             message_poll: None,
         }
+    }
+
+    /// 【Hooks】【子代理类型】参数为实际类型，返回用于类型匹配的执行器
+    pub(crate) fn with_hook_agent_type(mut self, agent_type: &str) -> Self {
+        self.hook_agent_type = agent_type.into();
+        self
     }
 
     /// 【子任务】【目标核算】将子模型实际用量计入创建时所属目标
@@ -293,6 +301,7 @@ impl SubagentRunner {
         config: AppConfig,
         paths: SaiPaths,
     ) -> Self {
+        self.tools.hooks = config.hooks.clone();
         self.tool_visibility = ToolVisibility::new(deferred_tools);
         self.progressive_context = Some((config, paths));
         self
@@ -360,6 +369,20 @@ impl SubagentRunner {
             }
         }
         let (mut messages, mut stats, mut tool_visibility) = self.restore_session(prompt)?;
+        let hook = crate::hooks::dispatch_with_tools(
+            &self.tools.hooks,
+            crate::hooks::HookEvent::SubagentStart,
+            &self
+                .tools
+                .hook_context()
+                .with("agent_type", &self.hook_agent_type)
+                .with("prompt", prompt),
+            Some(&self.tools),
+        )
+        .await;
+        for context in hook.context {
+            messages.push(ChatMessage::plain("user", context));
+        }
         let result = self
             .tools
             .plugin_events()
@@ -417,6 +440,19 @@ impl SubagentRunner {
         stats: &mut SubagentStats,
         tool_visibility: &mut ToolVisibility,
     ) -> Result<ChatResult> {
+        let hook = crate::hooks::dispatch_with_tools(
+            &self.tools.hooks,
+            crate::hooks::HookEvent::SubagentStart,
+            &self
+                .tools
+                .hook_context()
+                .with("agent_type", &self.hook_agent_type),
+            Some(&self.tools),
+        )
+        .await;
+        for context in hook.context {
+            messages.push(ChatMessage::plain("user", context));
+        }
         let result = self
             .tools
             .plugin_events()

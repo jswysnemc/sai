@@ -104,9 +104,7 @@ function SettingsWorkspace() {
                     ? <span className="settings-save-hint">{t(meta.saveHintEn, meta.saveHintZh)}</span>
                     : undefined}
                 />
-                {missingField && <InlineNotice>{missingField.startsWith("runtime.agent.acp.")
-                  ? t("This field is available when an external conversation engine is selected. Choose the engine above to configure it.", "选择外部对话内核后才会显示此字段，请在对话内核选项中选择对应内核。")
-                  : t("This field is unavailable for the current selection. Select the matching object or enable its related option, then search again.", "当前选择未显示此字段。请选择对应对象或启用相关选项后重新搜索。")}</InlineNotice>}
+                {missingField && <InlineNotice>{t("This field is unavailable for the current selection. Select the matching object or enable its related option, then search again.", "当前选择未显示此字段。请选择对应对象或启用相关选项后重新搜索。")}</InlineNotice>}
                 {meta?.subviews && section !== "providers" && (
                   <SettingsSubnav sectionId={section} subviews={meta.subviews} />
                 )}

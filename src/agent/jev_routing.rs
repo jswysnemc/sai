@@ -129,7 +129,7 @@ impl Agent {
         &mut self,
         turn_id: &str,
         recorded_call: &ToolCall,
-        call: ToolCall,
+        prepared: &crate::tools::PreparedToolCall,
         messages: &mut Vec<ChatMessage>,
         repeat_guard: &mut repeat_guard::RepeatGuard,
         on_event: &mut F,
@@ -137,13 +137,32 @@ impl Agent {
     where
         F: FnMut(AgentEvent) -> Result<()>,
     {
+        let call = &prepared.call;
         // 1. 请求 Jev 并转换失败为工具错误
-        let (ok, output) = match self
+        let (mut ok, output) = match self
             .handle_capability_request(&call.function.arguments, messages)
             .await
         {
             Ok(output) => (true, output),
             Err(error) => (false, tool_error_output(&error)),
+        };
+        let result = self
+            .tools
+            .finish_hooked_output(
+                prepared,
+                if ok {
+                    Ok(crate::tools::ToolOutput::text(output))
+                } else {
+                    Err(anyhow::anyhow!(output))
+                },
+            )
+            .await;
+        let output = match result {
+            Ok(output) => output.content,
+            Err(error) => {
+                ok = false;
+                tool_error_output(&error)
+            }
         };
         if !ok {
             repeat_guard.observe_rejected(&call.function.name, &call.function.arguments);
@@ -156,7 +175,7 @@ impl Agent {
         })?;
         let context_output = tools::tool_output_for_context(&call.function.name, &output);
         self.record_tool_result_completed(turn_id, recorded_call, ok, &output, &context_output)?;
-        messages.push(ChatMessage::tool(call.id, context_output));
+        messages.push(ChatMessage::tool(call.id.clone(), context_output));
         Ok(())
     }
 
@@ -201,7 +220,7 @@ impl Agent {
     ) -> Result<Selection> {
         let settings = &self.config.jev.routing;
         // 1. 收集候选，已暴露的资源不再参与判断
-        let mut candidates = if self.tools_enabled && self.external_engine.is_none() {
+        let mut candidates = if self.tools_enabled {
             self.tool_visibility
                 .jev_candidates(&self.tools, &self.config, &self.paths)
         } else {

@@ -130,13 +130,10 @@ impl Agent {
         let _streamed_read_guard = self.streamed_tools.guard();
         self.cancel_requested
             .store(false, std::sync::atomic::Ordering::SeqCst);
-        // 配置了外部内核时整轮交出去执行；下方全部是 sai 自带内核的路径，
-        // 两者只在这一处分流，原生行为不受影响
-        if self.uses_external_engine() {
-            return self
-                .run_external_turn(&input, image_urls, turn_id, on_event)
-                .await;
-        }
+        let _interrupt_hook = super::hooks_runtime::InterruptGuard::new(self, &turn_id);
+        let hook_reminder = self
+            .prepare_input_hooks(&input, &turn_id, &mut on_event)
+            .await?;
         self.state
             .start_turn_with_images(&turn_id, &input, &image_urls)?;
         // 按轮记录实际使用的模型，供时间线在相邻轮次模型变化时绘制切换分割线；
@@ -199,11 +196,15 @@ impl Agent {
         }
         let jev_block = jev_selection.block;
         perf.mark("jev preselect");
-        let turn_reminder = [plugin_reply_plan.reminder.as_deref(), jev_block.as_deref()]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>()
-            .join("\n\n");
+        let turn_reminder = [
+            plugin_reply_plan.reminder.as_deref(),
+            jev_block.as_deref(),
+            Some(hook_reminder.as_str()),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join("\n\n");
         let plugin_reply_reminder = (!turn_reminder.is_empty()).then_some(turn_reminder.as_str());
         let mut messages = settle_step(
             &mut guard,

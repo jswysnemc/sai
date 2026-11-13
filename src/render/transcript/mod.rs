@@ -4,6 +4,9 @@ pub(crate) mod activity_timeline;
 mod assistant_body;
 mod cell;
 pub(crate) mod command_output;
+mod continuation_indent;
+#[cfg(test)]
+mod continuation_indent_tests;
 pub(crate) mod copy_line;
 mod diff_cell;
 mod fullscreen_activity;
@@ -27,6 +30,7 @@ mod subagent_cell;
 mod subagent_document;
 mod subagent_view;
 mod tool_cell;
+pub(crate) mod tool_guides;
 pub(crate) mod unified_diff;
 mod user_echo_cell;
 mod user_image_preview;

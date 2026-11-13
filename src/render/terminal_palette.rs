@@ -25,7 +25,7 @@ pub(crate) fn initialize_terminal_palette() {
         }
         // 2. 【终端】【颜色探测】限制启动等待时间，并由查询库恢复原有终端模式
         let mut options = terminal_colorsaurus::QueryOptions::default();
-        options.timeout = Duration::from_millis(200);
+        options.timeout = Duration::from_millis(250);
         terminal_colorsaurus::color_palette(options)
             .ok()
             .map(|colors| {
@@ -35,6 +35,12 @@ pub(crate) fn initialize_terminal_palette() {
                 )
             })
     });
+}
+
+/// 【终端】【真实颜色】保留探测失败的未知状态，文字校正不使用动画绘制的兼容缺省色。
+/// 参数：无；返回：实际默认前景背景，未知时为空。
+pub(crate) fn terminal_default_colors() -> Option<(Rgb, Rgb)> {
+    DEFAULT_COLORS.get().copied().flatten()
 }
 
 /// 【终端】【颜色缓存】读取启动时缓存的颜色；逐帧渲染不会触发终端查询。

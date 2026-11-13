@@ -158,7 +158,21 @@ impl AnsiLine {
                 )));
                 continue;
             }
-            let mut wrapped = wrap_line(raw_line, width, right_margin, continuation_indent, false);
+            // 1. 【终端】【公共续行】未显式指定缩进时，从行号、引导线和字段前缀恢复正文列
+            let indent = if continuation_indent == 0 {
+                super::continuation_indent::column(&plain).min(width.saturating_sub(4))
+            } else {
+                continuation_indent
+            };
+            let guides = super::continuation_indent::guide_columns(&plain, indent);
+            let mut wrapped = wrap_line(raw_line, width, right_margin, indent, false);
+            for row in wrapped.iter_mut().skip(1) {
+                for column in &guides {
+                    let text =
+                        crate::render::ansi_overlay::overlay_columns(row.as_str(), *column, 1, "│");
+                    *row = row.with_text(text, 0);
+                }
+            }
             if let Some(first) = wrapped.first_mut() {
                 first.copy.join_previous = copy.join_previous && previous_tagged;
                 first.copy.content_start = copy.content_start;

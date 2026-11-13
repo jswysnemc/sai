@@ -190,7 +190,8 @@ async fn plan_execution_keeps_action_permissions_and_url_policy() {
     assert!(
         error
             .to_string()
-            .contains("invalid browser action arguments"),
+            .contains("invalid browser action arguments")
+            || error.to_string().contains("arguments do not match schema"),
         "{error:#}"
     );
 }

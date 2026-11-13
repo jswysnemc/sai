@@ -28,6 +28,7 @@ impl Agent {
             ..
         } = request;
         let mut tool_round = 0usize;
+        let mut stop_hook_active = false;
         let mut context_blocks_reminded = false;
         // 跨轮累计同一工具调用的重复次数，防止模型对同一参数无限重复
         let mut repeat_guard = repeat_guard::RepeatGuard::default();
@@ -114,6 +115,12 @@ impl Agent {
                 &hook_ctx,
             )
             .await;
+            for text in crate::hooks::drain(self.session_id()) {
+                messages.push(ChatMessage::plain("user", text));
+            }
+            for text in self.pending_hook_context.drain(..) {
+                messages.push(ChatMessage::plain("user", text));
+            }
             self.project_context_blocks(messages)?;
             self.compact_between_tool_rounds(tool_round, request, messages, on_event, perf)
                 .await?;
@@ -192,6 +199,31 @@ impl Agent {
                         on_event,
                     )?);
                     continue;
+                }
+                let stop = crate::hooks::dispatch_with_tools(
+                    &self.config.hooks,
+                    crate::hooks::HookEvent::Stop,
+                    &hook_ctx
+                        .clone()
+                        .with("turn_id", turn_id)
+                        .with("stop_hook_active", stop_hook_active)
+                        .with("last_assistant_message", &result.content),
+                    Some(&self.tools),
+                )
+                .await;
+                if !stop.stop && !stop_hook_active {
+                    if let Some(reason) = stop.deny {
+                        self.persist_intermediate_assistant(
+                            turn_id,
+                            tool_event_seq,
+                            &result,
+                            messages,
+                        )?;
+                        messages.push(ChatMessage::plain("user", reason));
+                        stop_hook_active = true;
+                        on_event(AgentEvent::FlushContent)?;
+                        continue;
+                    }
                 }
                 crate::hooks::dispatch(
                     &self.config.hooks,
@@ -335,6 +367,21 @@ impl Agent {
                         messages.push(ChatMessage::tool(call.id, output));
                         continue;
                     }
+                    let prepared = match self.authorize_tool_call(&call, messages, on_event).await {
+                        Ok(prepared) => prepared,
+                        Err(error) => {
+                            let output = error.to_string();
+                            self.record_simple_tool_result(turn_id, recorded_call, false, &output)?;
+                            on_event(AgentEvent::ToolResult {
+                                name: call.function.name.clone(),
+                                ok: false,
+                                output: output.clone(),
+                            })?;
+                            messages.push(ChatMessage::tool(call.id, output));
+                            continue;
+                        }
+                    };
+                    let call = prepared.call.clone();
                     if matches!(
                         call.function.name.as_str(),
                         "str_replace" | "write_file" | "apply_patch"
@@ -386,15 +433,16 @@ impl Agent {
                         }
                         let execution = if call.function.name == "ask_question" {
                             self.execute_question(&call.function.arguments, on_event)
-                                .await?
+                                .await
                         } else {
                             self.execute_plan_tool(
                                 &call.function.name,
                                 &call.function.arguments,
                                 on_event,
                             )
-                            .await?
+                            .await
                         };
+                        let execution = self.finish_special_hook(&prepared, execution).await;
                         if execution.failed {
                             repeat_guard
                                 .observe_rejected(&call.function.name, &call.function.arguments);
@@ -451,17 +499,6 @@ impl Agent {
                         messages.push(ChatMessage::tool(call.id, output));
                         continue;
                     }
-                    if let Err(error) = self.authorize_tool_call(&call, messages, on_event).await {
-                        let output = error.to_string();
-                        self.record_simple_tool_result(turn_id, recorded_call, false, &output)?;
-                        on_event(AgentEvent::ToolResult {
-                            name: call.function.name.clone(),
-                            ok: false,
-                            output: output.clone(),
-                        })?;
-                        messages.push(ChatMessage::tool(call.id, output));
-                        continue;
-                    }
                     if self.tool_visibility.is_loader_call(&call.function.name) {
                         let output = match self.tool_visibility.load_from_arguments(
                             &self.tools,
@@ -491,6 +528,15 @@ impl Agent {
                                 output
                             }
                         };
+                        let output = self
+                            .tools
+                            .finish_hooked_output(
+                                &prepared,
+                                Ok(crate::tools::ToolOutput::text(output)),
+                            )
+                            .await
+                            .map(|output| output.content)
+                            .unwrap_or_else(|error| format!("tool error: {error}"));
                         let context_output =
                             tools::tool_output_for_context(&call.function.name, &output);
                         self.record_tool_result_completed(
@@ -509,7 +555,7 @@ impl Agent {
                         self.respond_capability_request(
                             turn_id,
                             recorded_call,
-                            call,
+                            &prepared,
                             messages,
                             &mut repeat_guard,
                             on_event,
@@ -527,7 +573,7 @@ impl Agent {
                     )
                     .await;
                     let execution = match self
-                        .execute_real_tool(turn_id, &call, messages, on_event, perf)
+                        .execute_real_tool(turn_id, &prepared, messages, on_event, perf)
                         .await
                     {
                         Ok(execution) => execution,

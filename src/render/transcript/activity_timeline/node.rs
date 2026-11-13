@@ -87,6 +87,7 @@ pub(super) fn render_cell(
                 icon.to_string()
             };
             super::pulse::apply_marker(&mut node.lines, &marker);
+            super::super::tool_guides::decorate_node(&mut node.lines);
         }
         node
     };
@@ -132,6 +133,9 @@ pub(super) fn render_live(
             ),
         };
         super::pulse::apply_marker(&mut node.lines, &icon);
+        if matches!(kind, LiveNode::Tool) {
+            super::super::tool_guides::decorate_node(&mut node.lines);
+        }
         return node;
     }
     let options = TranscriptRenderOptions {
@@ -186,6 +190,7 @@ pub(super) fn render_live(
             crate::render::activity_animation::activity_frame_at(elapsed),
         );
         super::pulse::apply_marker(&mut node.lines, &marker);
+        super::super::tool_guides::decorate_node(&mut node.lines);
     }
     node
 }

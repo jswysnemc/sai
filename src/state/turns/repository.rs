@@ -435,6 +435,7 @@ impl ConversationDb {
              DELETE FROM context_epochs;
              DELETE FROM failure_recovery_records;
              DELETE FROM session_memory;
+             DELETE FROM session_memory_extraction_interval;
              DELETE FROM tool_calls;
              DELETE FROM tool_results;
              DELETE FROM tool_output_replacements;

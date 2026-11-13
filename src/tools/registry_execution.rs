@@ -24,6 +24,7 @@ impl ToolRegistry {
                 &mut args,
                 ToolProgress::default(),
                 requested_name == DSH_BASH_EXECUTION_ALIAS,
+                None,
             )
             .await?
             .content)
@@ -50,6 +51,31 @@ impl ToolRegistry {
             &mut args,
             sender.into(),
             requested_name == DSH_BASH_EXECUTION_ALIAS,
+            None,
+        )
+        .await
+    }
+
+    /// 【工具】【已准备执行】参数为最终调用与进度，返回经过实际授权和后置钩子的结果
+    pub(crate) async fn execute_prepared(
+        &self,
+        prepared: &super::PreparedToolCall,
+        progress: impl Into<ToolProgress>,
+    ) -> Result<ToolOutput> {
+        let requested = &prepared.call.function.name;
+        let name = local_tool_name(requested);
+        let tool = self
+            .tools
+            .get(name)
+            .with_context(|| format!("unknown tool: {name}"))?;
+        let mut args = parse_arguments(&prepared.call.function.arguments)?;
+        self.call_authorized(
+            tool,
+            name,
+            &mut args,
+            progress.into(),
+            requested == DSH_BASH_EXECUTION_ALIAS || prepared.call.kind == "sai-dsh-bash",
+            Some(prepared),
         )
         .await
     }
@@ -72,9 +98,52 @@ impl ToolRegistry {
         args: &mut Value,
         progress: ToolProgress,
         use_dsh_bash: bool,
+        prepared: Option<&super::PreparedToolCall>,
     ) -> Result<ToolOutput> {
         // 1. 【工具】【内部参数】`_sai_` 前缀只能由注册表注入，丢弃模型或外部调用方传入的同名字段
         strip_internal_arguments(args);
+        let owned;
+        let prepared = if let Some(prepared) = prepared {
+            prepared
+        } else {
+            let call = crate::llm::ToolCall {
+                id: uuid::Uuid::new_v4().to_string(),
+                kind: "function".into(),
+                function: crate::llm::ToolCallFunction {
+                    name: name.into(),
+                    arguments: args.to_string(),
+                },
+            };
+            owned = self.prepare_hooked_call(&call).await?;
+            &owned
+        };
+        *args = parse_arguments(&prepared.call.function.arguments)?;
+        // 1. 【Hooks】【最终参数审批】任何执行入口都不得绕过最终参数对应的批准
+        if self.requires_permission(name, &args.to_string())?
+            && !self
+                .permission_profile
+                .as_ref()
+                .is_some_and(|profile| profile.has_matching_approval(name, args))
+        {
+            let approval = crate::hooks::dispatch_with_tools(
+                &self.hooks,
+                crate::hooks::HookEvent::PermissionRequest,
+                &prepared.context,
+                Some(self),
+            )
+            .await;
+            if let Some(reason) = approval.deny {
+                bail!("PermissionRequest: {reason}");
+            }
+            if !approval.permission_allow {
+                bail!("Final tool arguments require approval before execution");
+            }
+            self.record_permission_approved(
+                name,
+                &args.to_string(),
+                Some("PermissionRequest hook"),
+            )?;
+        }
         let original_args = args.clone();
         if let Some(profile) = &self.permission_profile {
             // 网格工具按目标地址判定归属：投给别人的会话默认直接拒绝
@@ -165,7 +234,7 @@ impl ToolRegistry {
                 result.as_ref().map(|output| output.content.as_str()),
             );
         }
-        result
+        self.finish_hooked_output(prepared, result).await
     }
 }
 

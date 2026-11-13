@@ -43,7 +43,7 @@ pub enum AgentEvent {
     },
     /// 带 provider 稳定标识的工具调用。
     ///
-    /// ACP 的更新可能省略名称，但始终携带 `toolCallId`。保留该标识后，
+    /// 工具结果可能省略名称；保留调用标识后，
     /// Web 与历史存储不再依赖不稳定的标题关联生命周期。
     ToolCallIdentified {
         id: String,
@@ -99,14 +99,6 @@ pub enum AgentEvent {
     },
     FlushContent,
     ExternalOutput,
-    /// 外部对话内核已连接。
-    ///
-    /// 名称与版本来自 ACP 握手响应里的 agentInfo，只有真正连上子进程才拿得到，
-    /// 因此这是「本轮由谁执行」的运行时证据，而不是配置读数的复述。
-    EngineReady {
-        engine: String,
-        version: String,
-    },
     /// 用户消息发往模型前的 Jev 预选。
     ///
     /// 只通知界面。不写入助手工具调用，避免思考型模型缺少 reasoning。

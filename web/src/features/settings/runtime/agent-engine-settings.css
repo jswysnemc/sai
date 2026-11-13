@@ -1,6 +1,0 @@
-/* 【Web 设置】【对话内核】连接字段与能力面板的紧凑间距 */
-.agent-engine-settings {
-  display: grid;
-  gap: 0.75rem;
-  min-width: 0;
-}

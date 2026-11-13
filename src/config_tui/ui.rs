@@ -20,13 +20,23 @@ use super::theme::{
 
 /// 开始一帧同步更新。支持的终端会等整帧画完再提交，清屏不再闪一下。
 pub(crate) fn begin_synced_frame(stdout: &mut impl Write) -> Result<()> {
-    queue!(stdout, Print("\u{1b}[?2026h"))?;
+    queue!(
+        stdout,
+        Print(crate::render::readable_terminal_text(
+            &("\u{1b}[?2026h").to_string()
+        ))
+    )?;
     Ok(())
 }
 
 /// 结束同步更新并一次性刷出本帧。
 pub(crate) fn end_synced_frame(stdout: &mut impl Write) -> Result<()> {
-    queue!(stdout, Print("\u{1b}[?2026l"))?;
+    queue!(
+        stdout,
+        Print(crate::render::readable_terminal_text(
+            &("\u{1b}[?2026l").to_string()
+        ))
+    )?;
     stdout.flush()?;
     Ok(())
 }
@@ -88,9 +98,8 @@ pub(crate) fn draw_menu_with_details(
         queue!(
             stdout,
             MoveTo(inner_x, body_y),
-            Print(format!(
-                "{MUTED}{}{RESET}",
-                truncate(subtitle, inner_w as usize)
+            Print(crate::render::readable_terminal_text(
+                &(format!("{MUTED}{}{RESET}", truncate(subtitle, inner_w as usize))).to_string()
             ))
         )?;
         body_y = body_y.saturating_add(1);
@@ -115,12 +124,22 @@ pub(crate) fn draw_menu_with_details(
         let row_y = body_y.saturating_add(row as u16);
         queue!(stdout, MoveTo(inner_x, row_y))?;
         if index >= options.len() {
-            queue!(stdout, Print(" ".repeat(left_w as usize)))?;
+            queue!(
+                stdout,
+                Print(crate::render::readable_terminal_text(
+                    &(" ".repeat(left_w as usize)).to_string()
+                ))
+            )?;
             continue;
         }
         let (bar, style) = selection_marks(index == selected);
         let label = pad(&options[index], left_w.saturating_sub(2) as usize);
-        queue!(stdout, Print(format!("{bar}{style} {label}{RESET}")))?;
+        queue!(
+            stdout,
+            Print(crate::render::readable_terminal_text(
+                &(format!("{bar}{style} {label}{RESET}")).to_string()
+            ))
+        )?;
     }
     draw_scroll_indicator(
         stdout,
@@ -224,9 +243,12 @@ pub(crate) fn draw_status_bar(
             frame.x.saturating_add(2),
             frame.y.saturating_add(frame.height.saturating_sub(1))
         ),
-        Print(format!(
-            " {} ",
-            fit_status_bar(content, frame.width.saturating_sub(6) as usize)
+        Print(crate::render::readable_terminal_text(
+            &(format!(
+                " {} ",
+                fit_status_bar(content, frame.width.saturating_sub(6) as usize)
+            ))
+            .to_string()
         ))
     )?;
     Ok(())
@@ -308,9 +330,12 @@ fn draw_inner_divider(stdout: &mut io::Stdout, x: u16, y: u16, width: u16) -> Re
     queue!(
         stdout,
         MoveTo(x, y),
-        Print(format!(
-            "{DIM}├{}┤{RESET}",
-            LINE_HORIZONTAL.to_string().repeat(inner)
+        Print(crate::render::readable_terminal_text(
+            &(format!(
+                "{DIM}├{}┤{RESET}",
+                LINE_HORIZONTAL.to_string().repeat(inner)
+            ))
+            .to_string()
         ))
     )?;
     Ok(())
@@ -359,7 +384,7 @@ pub(super) fn draw_scroll_indicator(
         queue!(
             stdout,
             MoveTo(x, y.saturating_add(row as u16)),
-            Print(glyph)
+            Print(crate::render::readable_terminal_text(&(glyph).to_string()))
         )?;
     }
     Ok(())
@@ -380,9 +405,12 @@ pub(super) fn draw_wrapped_detail(
     queue!(
         stdout,
         MoveTo(x, y),
-        Print(format!(
-            "{BRAND}{BOLD}◈ {}{RESET}",
-            truncate(t("Details", "说明"), width.saturating_sub(2) as usize)
+        Print(crate::render::readable_terminal_text(
+            &(format!(
+                "{BRAND}{BOLD}◈ {}{RESET}",
+                truncate(t("Details", "说明"), width.saturating_sub(2) as usize)
+            ))
+            .to_string()
         ))
     )?;
     let lines = wrap_text(text, width as usize);
@@ -391,7 +419,9 @@ pub(super) fn draw_wrapped_detail(
         queue!(
             stdout,
             MoveTo(x, y.saturating_add(row as u16).saturating_add(2)),
-            Print(format!("{MUTED}{}{RESET}", pad(&line, width as usize)))
+            Print(crate::render::readable_terminal_text(
+                &(format!("{MUTED}{}{RESET}", pad(&line, width as usize))).to_string()
+            ))
         )?;
     }
     Ok(())
@@ -438,34 +468,37 @@ pub(crate) fn draw_box(
     queue!(
         stdout,
         MoveTo(x, y),
-        Print(format!(
-            "{DIM}{CORNER_TOP_LEFT}{horizontal}{CORNER_TOP_RIGHT}{RESET}"
+        Print(crate::render::readable_terminal_text(
+            &(format!("{DIM}{CORNER_TOP_LEFT}{horizontal}{CORNER_TOP_RIGHT}{RESET}")).to_string()
         ))
     )?;
     for row in 1..height.saturating_sub(1) {
         queue!(
             stdout,
             MoveTo(x, y + row),
-            Print(format!(
-                "{DIM}{LINE_VERTICAL}{RESET}{}{DIM}{LINE_VERTICAL}{RESET}",
-                " ".repeat(inner)
+            Print(crate::render::readable_terminal_text(
+                &(format!(
+                    "{DIM}{LINE_VERTICAL}{RESET}{}{DIM}{LINE_VERTICAL}{RESET}",
+                    " ".repeat(inner)
+                ))
+                .to_string()
             ))
         )?;
     }
     queue!(
         stdout,
         MoveTo(x, y + height.saturating_sub(1)),
-        Print(format!(
-            "{DIM}{CORNER_BOTTOM_LEFT}{horizontal}{CORNER_BOTTOM_RIGHT}{RESET}"
+        Print(crate::render::readable_terminal_text(
+            &(format!("{DIM}{CORNER_BOTTOM_LEFT}{horizontal}{CORNER_BOTTOM_RIGHT}{RESET}"))
+                .to_string()
         ))
     )?;
     // 标题嵌在顶边框上：品牌色菱形锚点 + 粗体标题，两侧留白与边框断开
     queue!(
         stdout,
         MoveTo(x + 2, y),
-        Print(format!(
-            " {BRAND}◆{RESET} {ACCENT}{BOLD}{}{RESET} ",
-            title.trim()
+        Print(crate::render::readable_terminal_text(
+            &(format!(" {BRAND}◆{RESET} {ACCENT}{BOLD}{}{RESET} ", title.trim())).to_string()
         ))
     )?;
     Ok(())
@@ -497,12 +530,15 @@ pub(crate) fn draw_column(
     let marker = if active { "▸ " } else { "  " };
     queue!(
         stdout,
-        Print(format!(
-            "{title_style}{}{RESET}",
-            pad(
-                &truncate(&format!("{marker}{}", title.trim()), width as usize),
-                width as usize
-            )
+        Print(crate::render::readable_terminal_text(
+            &(format!(
+                "{title_style}{}{RESET}",
+                pad(
+                    &truncate(&format!("{marker}{}", title.trim()), width as usize),
+                    width as usize
+                )
+            ))
+            .to_string()
         ))
     )?;
     let visible_rows = height.saturating_sub(2) as usize;
@@ -511,7 +547,12 @@ pub(crate) fn draw_column(
         let index = start + row;
         queue!(stdout, MoveTo(x, y + row as u16 + 1))?;
         if index >= items.len() {
-            queue!(stdout, Print(" ".repeat(width as usize)))?;
+            queue!(
+                stdout,
+                Print(crate::render::readable_terminal_text(
+                    &(" ".repeat(width as usize)).to_string()
+                ))
+            )?;
             continue;
         }
         let (bar, style) = selection_marks(index == selected && active);
@@ -529,9 +570,12 @@ pub(crate) fn draw_column(
         };
         queue!(
             stdout,
-            Print(format!(
-                "{bar}{style} {}{RESET}",
-                pad(&line, width.saturating_sub(2) as usize)
+            Print(crate::render::readable_terminal_text(
+                &(format!(
+                    "{bar}{style} {}{RESET}",
+                    pad(&line, width.saturating_sub(2) as usize)
+                ))
+                .to_string()
             ))
         )?;
     }

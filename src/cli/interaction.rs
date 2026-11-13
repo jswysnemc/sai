@@ -112,14 +112,6 @@ pub(super) fn handle_agent_event(
         AgentEvent::CompactionFinished { applied, error, .. } => {
             renderer.write_compaction_finished(applied, error.as_ref())
         }
-        AgentEvent::EngineReady { engine, version } => {
-            renderer.prepare_for_external_output()?;
-            println!(
-                "\x1b[2m• {} {engine} {version}\x1b[0m",
-                crate::render::terminal_text("connected to", "已连接")
-            );
-            Ok(())
-        }
         AgentEvent::JevPreselect { phase, detail } => {
             if let Some(line) = crate::render::format_jev_preselect(phase.as_str(), detail.as_str())
             {

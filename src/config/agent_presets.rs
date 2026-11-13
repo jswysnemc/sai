@@ -3,12 +3,6 @@ use super::agents::{
     AgentProfile, CLI_AGENT_ID, EXPLORE_AGENT_ID, GATEWAY_AGENT_ID, GENERAL_AGENT_ID, PLAN_AGENT_ID,
 };
 
-const CLI_AGENT_PROMPT: &str = include_str!("../prompts/cli-agent.md");
-const GENERAL_AGENT_PROMPT: &str = include_str!("../prompts/code-agent.md");
-const EXPLORE_AGENT_PROMPT: &str = include_str!("../prompts/explore-agent.md");
-const PLAN_AGENT_PROMPT: &str = include_str!("../prompts/plan-agent.md");
-const GATEWAY_AGENT_PROMPT: &str = include_str!("../prompts/gateway-agent.md");
-
 const GATEWAY_AGENT_TOOLS: &[&str] = &[
     "check_os_info",
     "read_file",
@@ -265,8 +259,8 @@ fn builtin_cli_agent() -> AgentProfile {
     AgentProfile {
         id: CLI_AGENT_ID.to_string(),
         name: "CLI 助手".to_string(),
-        description: "人格化终端助手：工具全量开放，适合日常排障与对话".to_string(),
-        system_prompt: CLI_AGENT_PROMPT.to_string(),
+        description: "终端助手：工具全量开放，适合日常排障与对话".to_string(),
+        system_prompt: String::new(),
         enabled_tools: Vec::new(),
         // 全量开放且无法穷举工具名，用通配符表达「基础工具直接可见，其余按需 load」
         deferred_tools: vec![DEFERRED_ALL_NON_BASE.to_string()],
@@ -289,7 +283,7 @@ fn builtin_general_agent() -> AgentProfile {
         id: GENERAL_AGENT_ID.to_string(),
         name: "代码 Agent".to_string(),
         description: "适合实现、测试、文档和常规工程任务；工具面向长程编程".to_string(),
-        system_prompt: GENERAL_AGENT_PROMPT.to_string(),
+        system_prompt: String::new(),
         enabled_tools: tools_to_owned(CODE_AGENT_TOOLS),
         deferred_tools: deferred_from_whitelist(CODE_AGENT_TOOLS, SEARCH_KEEP_VISIBLE),
         thinking_level: "auto".to_string(),
@@ -311,7 +305,7 @@ fn builtin_explore_agent() -> AgentProfile {
         id: EXPLORE_AGENT_ID.to_string(),
         name: "探索 Agent".to_string(),
         description: "适合只读检索、代码定位和资料探索；返回证据与路径".to_string(),
-        system_prompt: EXPLORE_AGENT_PROMPT.to_string(),
+        system_prompt: String::new(),
         enabled_tools: tools_to_owned(EXPLORE_AGENT_TOOLS),
         deferred_tools: deferred_from_whitelist(EXPLORE_AGENT_TOOLS, SEARCH_KEEP_VISIBLE),
         thinking_level: "auto".to_string(),
@@ -333,7 +327,7 @@ fn builtin_plan_agent() -> AgentProfile {
         id: PLAN_AGENT_ID.to_string(),
         name: "Plan Agent".to_string(),
         description: "只读调研与方案规划，不改系统状态".to_string(),
-        system_prompt: PLAN_AGENT_PROMPT.to_string(),
+        system_prompt: String::new(),
         enabled_tools: tools_to_owned(PLAN_AGENT_TOOLS),
         deferred_tools: deferred_from_whitelist(PLAN_AGENT_TOOLS, SEARCH_KEEP_VISIBLE),
         thinking_level: "auto".to_string(),
@@ -355,7 +349,7 @@ fn builtin_gateway_agent() -> AgentProfile {
         id: GATEWAY_AGENT_ID.to_string(),
         name: "网关 Agent".to_string(),
         description: "适合 QQ/微信等即时通讯网关：短回复、排障与查询".to_string(),
-        system_prompt: GATEWAY_AGENT_PROMPT.to_string(),
+        system_prompt: String::new(),
         enabled_tools: tools_to_owned(GATEWAY_AGENT_TOOLS),
         deferred_tools: deferred_from_whitelist(GATEWAY_AGENT_TOOLS, GATEWAY_KEEP_VISIBLE),
         thinking_level: "auto".to_string(),

@@ -157,10 +157,6 @@ impl StateStore {
         reasoning: Option<&str>,
     ) -> Result<()> {
         self.conv_db.complete_turn(turn_id, content, reasoning)?;
-        let _ = session_memory::extractor::extract_after_turn_with_default_summary(
-            &self.conv_db,
-            &self.session_id,
-        );
         Ok(())
     }
 
@@ -396,6 +392,16 @@ impl StateStore {
     /// 返回:
     /// - 活动分支轮次列表，按时间升序
     #[cfg_attr(not(test), allow(dead_code))]
+    /// 【会话记忆】【回放材料】参数为预算与预留量，返回压缩所需的有界补充记忆
+    pub(crate) fn compaction_memory(&self, budget: usize, reserved: usize) -> Result<String> {
+        session_memory::compaction_context::render_compaction_memory(
+            &self.conv_db,
+            &self.session_id,
+            budget,
+            reserved,
+        )
+    }
+
     pub fn load_turns(&self) -> Result<Vec<Turn>> {
         self.conv_db.active_branch_turns()
     }

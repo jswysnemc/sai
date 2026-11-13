@@ -62,6 +62,20 @@ impl PanelPalette {
         palette.hover_bg = blend(background, palette.text, 8);
         // 2. 【终端面板】【焦点层级】键盘焦点比鼠标悬停深一级，仍浅于分隔线
         palette.focus_bg = blend(background, palette.text, 13);
+        // 3. 【终端面板】【浅色可读性】状态、弱化文字和强调色均满足正文对比度，边框仍保持轻量
+        for color in [
+            &mut palette.text,
+            &mut palette.muted,
+            &mut palette.accent,
+            &mut palette.added,
+            &mut palette.removed,
+        ] {
+            *color = crate::render::terminal_contrast::readable_color_on(
+                *color,
+                background,
+                crate::render::terminal_contrast::MIN_TEXT_CONTRAST,
+            );
+        }
         palette
     }
 }

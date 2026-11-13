@@ -12,12 +12,14 @@ mod activity_viewport_hints;
 mod activity_visibility;
 mod activity_window;
 mod background_overlay;
-mod block_hover;
 #[cfg(test)]
 mod block_hover_tests;
 #[cfg(test)]
 mod block_interaction_tests;
 mod block_scrollbar;
+mod block_scrollbar_input;
+#[cfg(test)]
+mod block_scrollbar_input_tests;
 mod bottom_button;
 mod composer_image_input;
 mod git_preview;
@@ -80,6 +82,9 @@ mod sidebar_git;
 mod sidebar_git_view;
 #[cfg(test)]
 mod sidebar_interaction_tests;
+mod sidebar_metrics;
+#[cfg(test)]
+mod sidebar_metrics_tests;
 mod sidebar_palette;
 mod sidebar_regions;
 #[cfg(test)]
@@ -308,6 +313,12 @@ impl ReplRuntime {
         let Some(session) = self.fullscreen.as_mut() else {
             return Ok(());
         };
+        let chrome = self
+            .composer
+            .as_ref()
+            .map(|frame| frame.chrome())
+            .or(self.last_chrome.as_ref());
+        session.sidebar.metrics = sidebar_metrics::SidebarMetrics::new(chrome, &self.live_usage);
         // 2. 【全屏视图】【会话切换】段落键只在各自会话内有效，切换时清除旧命中与滚动状态
         let viewing_subagent = self.transcript.viewing_subagent_id().map(str::to_string);
         let view_changed = session.viewing_subagent != viewing_subagent;

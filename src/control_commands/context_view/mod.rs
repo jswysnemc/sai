@@ -23,7 +23,6 @@ pub(crate) struct ContextOverview {
     pub compact_trigger: usize,
     pub usage: Option<crate::llm::Usage>,
     pub usage_is_turn: bool,
-    pub external_engine: Option<String>,
 }
 
 impl ContextOverview {
@@ -48,13 +47,6 @@ pub(crate) fn render(view: &ContextOverview, width: usize, styled: bool) -> Vec<
         tokens(view.window),
         formatting::percent(view.used, view.window, true)
     )];
-    if let Some(engine) = &view.external_engine {
-        lines.push(format!(
-            "{engine} · {}",
-            t("managed by external engine", "由外部内核管理")
-        ));
-        return wrap(lines, width);
-    }
     lines.push(String::new());
     let legend = formatting::legend(view, styled);
     let legend_width = legend

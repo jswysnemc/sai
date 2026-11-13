@@ -105,7 +105,6 @@ mod tests {
 
         // 大文本：确保分词可完成且结果合理（非 0、非全字符数）
         for text in [
-            include_str!("prompts/sai.md"),
             include_str!("prompts/plan.md"),
             include_str!("../README.md"),
         ] {

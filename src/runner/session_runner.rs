@@ -249,10 +249,13 @@ impl<'paths> SessionRunner<'paths> {
         if config.skills.enabled {
             state.save_loaded_skills(&agent.loaded_skills())?;
         }
-        // Web 与网关每轮重建 Agent，返回前显式关闭 ACP 会话与子进程
-        let shutdown_result = agent.shutdown_external_engine().await;
+        if matches!(
+            submission.source,
+            SubmissionSource::Command | SubmissionSource::ShellIntercept
+        ) {
+            agent.finish_hooks().await;
+        }
         let result = result?;
-        shutdown_result?;
         if should_apply_command_mode_exit_policy(submission.source) {
             state.apply_command_mode_runtime_exit_policy()?;
             perf.mark("runtime exit policy");

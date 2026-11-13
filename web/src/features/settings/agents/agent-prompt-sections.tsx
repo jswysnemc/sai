@@ -14,13 +14,6 @@ type AgentPromptSectionsProps = {
 /** 后端不可用时的兜底清单，正常情况下由 /api/agent-options 提供。 */
 const FALLBACK_SECTIONS: PromptSectionOption[] = [
   {
-    id: "builtin_persona",
-    label_en: "Built-in persona",
-    label_zh: "内置人设",
-    hint_en: "Fallback persona used when this agent's own prompt is empty. Turn off for a truly blank prompt.",
-    hint_zh: "本 Agent 提示词为空时的兜底人设。要配出真正空白的提示词就关掉它。"
-  },
-  {
     id: "user_identity",
     label_en: "User identity",
     label_zh: "用户身份",

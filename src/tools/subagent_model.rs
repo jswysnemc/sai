@@ -17,10 +17,11 @@ impl SubagentRunner {
             .as_ref()
             .map(|(config, _)| config.retry.clone())
             .unwrap_or_default();
-        let result = self
-            .tools
-            .plugin_events()
-            .model_round(
+        let result = crate::hooks::model_scope(
+            self.tools.hooks.clone(),
+            self.tools.hook_context().with("round", round),
+            self.tools.clone(),
+            self.tools.plugin_events().model_round(
                 serde_json::json!({"round":round,"kind":"subagent"}),
                 self.client
                     .chat_stream_events_retry(messages, definitions, &retry, |event| {
@@ -44,8 +45,9 @@ impl SubagentRunner {
                         }
                         Ok(())
                     }),
-            )
-            .await?;
+            ),
+        )
+        .await?;
         if let Some(accounting) = &self.goal_accounting {
             accounting.record(result.usage.as_ref())?;
         }

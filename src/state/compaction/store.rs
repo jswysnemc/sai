@@ -202,6 +202,7 @@ impl StateStore {
     /// - `request`: 压缩请求
     /// - `context_limit_chars`: 当前模型上下文窗口字符数
     /// - `template`: 上下文压缩的系统提示词和输入模板
+    /// - `memory_enabled`: 是否允许会话记忆参与压缩
     ///
     /// 返回:
     /// - 可发送给压缩模型的提示词
@@ -210,13 +211,30 @@ impl StateStore {
         request: &CompactionRequest,
         context_limit_chars: usize,
         template: &crate::config::PromptTemplateConfig,
+        memory_enabled: bool,
     ) -> Result<crate::prompts::template::RenderedPrompt> {
         let empty_prompt = super::prompt::render_summary_prompt(
             template,
             request.previous_summary.as_deref(),
             "",
         )?;
-        let overhead = empty_prompt.total_chars();
+        // 1. 【会话记忆】【压缩预算】补充记忆也计入输入预算，不挤占必要历史和摘要输出
+        let memory_context = if memory_enabled {
+            crate::state::session_memory::compaction_context::render_compaction_memory(
+                &self.conv_db,
+                &self.session_id,
+                context_limit_chars,
+                empty_prompt
+                    .total_chars()
+                    .saturating_add(super::summary_char_limit(context_limit_chars))
+                    .saturating_add(SUMMARY_PROMPT_FIXED_RESERVE_CHARS),
+            )?
+        } else {
+            String::new()
+        };
+        let overhead = empty_prompt
+            .total_chars()
+            .saturating_add(memory_context.chars().count());
         let history_budget = context_limit_chars
             .saturating_sub(overhead)
             .saturating_sub(super::summary_char_limit(context_limit_chars))
@@ -233,11 +251,12 @@ impl StateStore {
                 .map(|(turn, skip, take)| (turn, *skip, *take)),
             history_budget,
         )?;
-        let prompt = super::prompt::render_summary_prompt(
+        let mut prompt = super::prompt::render_summary_prompt(
             template,
             request.previous_summary.as_deref(),
             &history.history,
         )?;
+        prompt.user = format!("{memory_context}{}", prompt.user);
         let prompt_chars = prompt.total_chars();
         if history.replacement_missing_count > 0 {
             self.record_recovery_failure(request.compact_turn_ids.last().map(String::as_str),
@@ -345,12 +364,19 @@ crate::state::failure_recovery::RecoveryMetrics { retry_count: 0, context_chars:
                 .unwrap_or_default()
         };
         let source_turn_count = request.source_turn_count_after_compaction(previous_count);
+        let memory_boundary = crate::state::session_memory::extraction_interval::capture_boundary(
+            &self.conv_db,
+            &self.session_id,
+            &self.conv_db.active_branch_turns()?,
+        )?;
         crate::state::checkpoints::apply_checkpoint_compaction(
             &self.conv_db,
             request,
             summary,
             source_turn_count,
             reason,
+            &self.session_id,
+            &memory_boundary,
         )?;
         // 1. 压缩后历史已变，旧的主对话 prompt_tokens 不再代表当前上下文
         // 2. 清空后 session_snapshot / 系统用量会回退到基于投影历史的实时估算

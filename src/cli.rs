@@ -29,12 +29,14 @@ mod args;
 mod background_commands;
 mod center_panel;
 mod chat;
+mod codemode_preferences;
 mod compaction;
 mod config_commands;
 mod confirm;
 mod context_panel;
 mod fuzzy_select;
 mod history;
+mod hooks_commands;
 mod init;
 mod input_flags;
 mod interaction;
@@ -275,6 +277,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             Ok(())
         }
         Some(Command::Config(args)) => run_config(&paths, args).await,
+        Some(Command::Hooks(args)) => hooks_commands::run(&paths, args),
         Some(Command::Models) => models_picker::run(&paths),
         Some(Command::Providers(args)) => run_providers(&paths, args),
         Some(Command::FishInit) => shell::fish::install(&paths),

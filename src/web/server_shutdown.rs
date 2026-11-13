@@ -80,6 +80,7 @@ pub(super) async fn cleanup(runs: RunManager, terminals: TerminalManager) {
             server_logging::write("资源清理失败", &format!("{error:#}"), true);
         }
     }
+    crate::hooks::lifecycle::finish_all().await;
 }
 
 #[cfg(test)]

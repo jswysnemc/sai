@@ -110,6 +110,15 @@ pub(super) fn handle(manager: &mut TaskManager, key: KeyEvent, rows: usize) -> E
 /// 参数: manager 为状态，mouse 为输入，frame 为可见行几何；返回: 外部操作。
 pub(super) fn mouse(manager: &mut TaskManager, mouse: MouseEvent, frame: &TaskFrame) -> Effect {
     let inside = frame.rect.contains(mouse.column, mouse.row);
+    if inside && mouse.kind == MouseEventKind::Down(MouseButton::Left) {
+        if let Some(key) = super::controls::hit(manager, mouse, frame) {
+            return handle(
+                manager,
+                KeyEvent::new(key, KeyModifiers::NONE),
+                frame.page_rows,
+            );
+        }
+    }
     if matches!(mouse.kind, MouseEventKind::Moved) {
         // 1. 【后台任务】【悬停反馈】只记录指针下的任务行，离开面板或经过非任务行时清除
         manager.hovered = frame

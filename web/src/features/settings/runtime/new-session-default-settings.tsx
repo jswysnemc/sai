@@ -1,6 +1,5 @@
 import type {
   AppConfig,
-  EngineStatusResponse,
   ThinkingLevel
 } from "../../../api/contracts";
 import { FieldGrid, SettingsField, SkSelect } from "../kit";
@@ -19,7 +18,6 @@ const DEFAULT_MODEL_VALUE = "";
 
 type NewSessionDefaultSettingsProps = {
   config: AppConfig;
-  status?: EngineStatusResponse;
   onConfigChange: (config: AppConfig) => void;
 };
 
@@ -31,15 +29,11 @@ type NewSessionDefaultSettingsProps = {
  */
 export function NewSessionDefaultSettings({
   config,
-  status,
   onConfigChange
 }: NewSessionDefaultSettingsProps) {
   const { t } = useI18n();
-  const engine = config.agent?.engine ?? "native";
-  const external = engine !== "native";
-  const matchingStatus = status?.engine === engine ? status : undefined;
   const preferences = resolveConfiguredNewSessionPreferences(config);
-  const modelChoices = buildNewSessionModelChoices(config, matchingStatus);
+  const modelChoices = buildNewSessionModelChoices(config);
   const disabledProviderName = disabledNewSessionProviderName(config);
   const configuredModelValue = preferences.model
     ? encodeModelChoice(preferences.model.providerId, preferences.model.model)
@@ -74,14 +68,14 @@ export function NewSessionDefaultSettings({
           "Start each new session with this model.",
           "每个新会话初始使用此模型。"
         ),
-      external ? choice.model : undefined
+      undefined
     ))
   ];
   const modelValue = modelOptions.some((option) => option.value === configuredModelValue)
     ? configuredModelValue
     : DEFAULT_MODEL_VALUE;
   const selectableThinkingLevels = new Set(
-    buildNewSessionThinkingLevels(config, matchingStatus)
+    buildNewSessionThinkingLevels(config)
   );
   const thinkingOptions = THINKING_OPTIONS
     .filter((option) => selectableThinkingLevels.has(option.value))
@@ -161,7 +155,7 @@ export function NewSessionDefaultSettings({
           menuMinimumWidth={280}
         />
       </SettingsField>
-      <SettingsField label={t("New session reasoning effort", "新会话思考等级")} configKey="session.new_session_thinking_level" anchor="runtime.session.new_session_thinking_level" hint={t("Auto uses the provider or ACP engine default.", "自动模式使用供应商或 ACP 内核的默认思考行为。")}>
+      <SettingsField label={t("New session reasoning effort", "新会话思考等级")} configKey="session.new_session_thinking_level" anchor="runtime.session.new_session_thinking_level" hint={t("Auto uses the provider default.", "自动模式使用供应商的默认思考行为。")}>
 
         <SkSelect
           value={thinkingValue}

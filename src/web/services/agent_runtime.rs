@@ -141,7 +141,7 @@ mod tests {
             .iter()
             .find(|profile| profile.id == "explore")
             .unwrap();
-        assert!(!stored.system_prompt.is_empty());
+        assert!(stored.system_prompt.is_empty());
         assert!(!stored.enabled_tools.is_empty());
     }
 

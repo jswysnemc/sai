@@ -46,6 +46,7 @@ pub(super) struct FullscreenState {
     pub(super) pointer_col: Option<u16>,
     /// 是否正在拖动滚动条
     pub(super) dragging: bool,
+    pub(super) block_drag: Option<super::block_scrollbar_input::BlockDrag>,
     /// 正文按下位置；松开时没有拖动则按点击处理
     pub(super) press: Option<super::selection::TextPoint>,
     /// 当前拖动选区

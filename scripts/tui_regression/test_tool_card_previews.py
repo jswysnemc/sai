@@ -1,6 +1,7 @@
 """【终端】【卡片预览回归】检查真实工具的默认预览、鼠标展开和失败诊断。"""
 
 import unittest
+import re
 
 from mock_activity_model import ActivityModel
 from terminal import TerminalSession
@@ -42,7 +43,7 @@ class ToolCardPreviewTests(unittest.TestCase):
                 terminal.send(b"Inspect failing command\r")
                 terminal.wait_for(lambda: "ANSWER-END" in terminal.text(), timeout=15)
                 self.assertIn("Failed · exit 17", terminal.text())
-                self.assertTrue(any(line.strip() == "fatal: missing dependency" for line in content_lines(terminal)))
+                self.assertTrue(any(re.fullmatch(r"[│┃]\s+fatal: missing dependency", line.strip()) for line in content_lines(terminal)))
                 self.assertNotIn("without stderr", terminal.text())
                 row = next(index for index, line in enumerate(lines(terminal)) if "$ " in line)
                 click(terminal, 6, row)

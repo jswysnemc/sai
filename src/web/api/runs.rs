@@ -70,6 +70,7 @@ async fn start(
         .start(workspace, request)
         .await
         .map_err(|error| WebError::conflict(error.to_string()))?;
+    crate::hooks::lifecycle::server_session(&info.session_id);
     Ok(Json(json!(info)))
 }
 

@@ -337,6 +337,7 @@ pub(super) async fn run_repl(
                         state = StateStore::new(paths)?;
                         state.init_files()?;
                         agent.replace_state(state.clone())?;
+                        agent.notify_hook_source("resume").await?;
                         prefill = None;
                         runtime.clear()?;
                         runtime.record_meta(message)?;
@@ -388,6 +389,7 @@ pub(super) async fn run_repl(
                         state = StateStore::new(paths)?;
                         state.init_files()?;
                         agent.replace_state(state.clone())?;
+                        agent.notify_hook_source("clear").await?;
                         if all {
                             agent.reset_memory()?;
                         }
@@ -492,7 +494,7 @@ pub(super) async fn run_repl(
                 continue;
             }
         }
-        if mode_commands::handle(input, &mut mode, &mut runtime, state.state_dir())? {
+        if mode_commands::handle(input, &mut mode, &mut runtime, paths, state.state_dir())? {
             continue;
         }
         if input.eq_ignore_ascii_case("/providers") {
@@ -550,7 +552,7 @@ pub(super) async fn run_repl(
         }
         // 剩余的 / 开头命令形态输入不再静默发给模型：拼错的命令、
         // 带多余参数的已知命令都在这里拦截并提示
-        if let Some(hint) = unknown_slash_command_hint(input, config.agent.engine.is_external()) {
+        if let Some(hint) = unknown_slash_command_hint(input) {
             runtime.record_meta(hint)?;
             continue;
         }
@@ -717,8 +719,8 @@ pub(super) async fn run_repl(
     // 在全屏视图里退出时先回到主屏：恢复提示要打在主屏上，
     // 键盘增强层也要在主屏上弹掉，否则 shell 里 Ctrl+C / Ctrl+L 失效
     runtime.leave_fullscreen()?;
+    agent.finish_hooks().await;
     let _ = crate::cli::alternate_screen::pop_all_enhancement(&mut std::io::stdout());
-    agent.shutdown_external_engine().await?;
     // 退出后给出恢复命令，便于下次接续同一会话（对齐 Claude `--resume`）
     print_repl_resume_hint(state.session_id());
     Ok(())

@@ -54,13 +54,6 @@ pub(crate) fn run_session(
     place: impl FnMut(u16) -> Result<crate::question_tui::OverlayPlacement>,
 ) -> Result<String> {
     let config = AppConfig::load_or_default(paths)?;
-    if config.agent.engine.is_external() {
-        return Ok(t(
-            "Context is managed by the external engine",
-            "上下文由外部内核自行管理",
-        )
-        .to_string());
-    }
     let state = StateStore::new(paths)?;
     let current = state.resolve_compaction_policy(&config.context)?;
     let defaults = CompactionBudgetPolicy::from_context(

@@ -105,7 +105,7 @@ fn wide_sidebar_moves_overviews_and_restores_bottom_at_narrow_width() {
             for line in screen(&runtime) {
                 assert!(unicode_width::UnicodeWidthStr::width(line.as_str()) <= 160);
             }
-            assert!(screen(&runtime)[3]
+            assert!(screen(&runtime)[6]
                 .chars()
                 .skip(usize::from(side.left))
                 .collect::<String>()
@@ -165,14 +165,14 @@ fn sidebar_scroll_and_click_do_not_move_or_select_conversation() {
                 + 4;
             let before = runtime.fullscreen.as_ref().unwrap().state.scroll;
             runtime
-                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), column, 5))
+                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), column, 8))
                 .unwrap();
             assert_eq!(
                 runtime.transcript.viewing_subagent_id(),
                 Some("sidebar-click")
             );
             runtime
-                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), column, 4))
+                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), column, 7))
                 .unwrap();
             assert!(runtime.transcript.viewing_subagent_id().is_none());
             let session = runtime.fullscreen.as_mut().unwrap();
@@ -193,7 +193,7 @@ fn sidebar_scroll_and_click_do_not_move_or_select_conversation() {
                 .scroll
                 .max(before);
             runtime
-                .handle_fullscreen_event(&mouse(MouseEventKind::ScrollDown, column, 7))
+                .handle_fullscreen_event(&mouse(MouseEventKind::ScrollDown, column, 9))
                 .unwrap();
             let session = runtime.fullscreen.as_ref().unwrap();
             assert_eq!(session.sidebar.scrolls.git, 3);

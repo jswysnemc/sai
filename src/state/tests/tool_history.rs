@@ -234,7 +234,7 @@ fn compaction_prompt_records_missing_tool_replacement() {
     let template = crate::config::PromptTemplatesConfig::default().compaction;
 
     let prompt = store
-        .build_compaction_summary_prompt(&request, 10_000, &template)
+        .build_compaction_summary_prompt(&request, 10_000, &template, true)
         .unwrap();
     let recovery = store.recovery_snapshot().unwrap();
 
@@ -276,7 +276,7 @@ fn compaction_prompt_records_missing_tool_result_ref_file() {
     let template = crate::config::PromptTemplatesConfig::default().compaction;
 
     let prompt = store
-        .build_compaction_summary_prompt(&request, 10_000, &template)
+        .build_compaction_summary_prompt(&request, 10_000, &template, true)
         .unwrap();
     let recovery = store.recovery_snapshot().unwrap();
 
@@ -310,7 +310,7 @@ fn compaction_prompt_rejects_over_budget_history() {
     let template = crate::config::PromptTemplatesConfig::default().compaction;
 
     let err = store
-        .build_compaction_summary_prompt(&request, 500, &template)
+        .build_compaction_summary_prompt(&request, 500, &template, true)
         .unwrap_err();
 
     assert!(format!("{err:#}").contains("tool history summary prompt over budget"));

@@ -87,12 +87,6 @@ pub(crate) fn context_overview(
     update: Option<super::ContextPolicyUpdate>,
 ) -> Result<ContextOverview> {
     let config = AppConfig::load_or_default(paths)?;
-    if config.agent.engine.is_external() {
-        return Ok(ContextOverview {
-            external_engine: Some(config.agent.engine.display_label().into()),
-            ..Default::default()
-        });
-    }
     let state = crate::state::StateStore::new(paths)?;
     apply_context_policy_update(&state, &config, update)?;
     let window = config.active_context_window_tokens().unwrap_or(128_000);
@@ -114,7 +108,6 @@ pub(crate) fn context_overview(
         compact_trigger,
         usage: turn_usage.or(snapshot.usage.last_conversation_usage),
         usage_is_turn,
-        external_engine: None,
     })
 }
 

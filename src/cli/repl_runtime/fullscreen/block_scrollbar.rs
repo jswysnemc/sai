@@ -3,6 +3,7 @@
 use super::sidebar_palette::{fg, Rgb, SidebarPalette};
 use crate::render::ansi_style::update_active_sgr;
 use crate::render::terminal_image::escape_sequence_end;
+use crate::render::transcript::tool_guides::output_line as output_gutter;
 use crate::render::transcript::AnsiLine;
 use std::ops::Range;
 
@@ -40,53 +41,6 @@ pub(super) fn decorate_output(
         };
         lines[row] = tint_gutter(&output_gutter(&lines[row], column), color);
     }
-}
-
-/// 【终端】【输出引导列】复用正文缩进中的一列，保留代码自身缩进、终端宽度及图片位置。
-/// 参数: `line` 为已有排版和复制信息的输出行，`column` 为节点固定引导列；返回: 带竖线的等宽输出行。
-fn output_gutter(line: &AnsiLine, column: usize) -> AnsiLine {
-    let text = line.as_str();
-    let mut index = 0;
-    let mut spaces = Vec::new();
-    while index < text.len() {
-        if text.as_bytes()[index] == b'\x1b' {
-            index = escape_sequence_end(text, index).max(index + 1);
-            continue;
-        }
-        let ch = text[index..].chars().next().unwrap_or_default();
-        if ch != ' ' {
-            // 1. 【终端】【引导线归一】旧命令前缀中的折角或竖线让位给固定引导列，不触碰原始正文
-            if matches!(ch, '│' | '└')
-                && spaces.len() != column
-                && spaces.len() < line.copy.content_start
-            {
-                let cleared = line.with_text(
-                    format!("{} {}", &text[..index], &text[index + ch.len_utf8()..]),
-                    0,
-                );
-                return output_gutter(&cleared, column);
-            }
-            if matches!(ch, '│' | '└') && spaces.len() == column {
-                return if ch == '│' {
-                    line.clone()
-                } else {
-                    line.with_text(
-                        format!("{}│{}", &text[..index], &text[index + ch.len_utf8()..]),
-                        0,
-                    )
-                };
-            }
-            break;
-        }
-        spaces.push(index);
-        index += 1;
-    }
-    let Some(&index) = spaces.get(column).filter(|_| spaces.len() >= column + 2) else {
-        return line.clone();
-    };
-    let mut result = line.with_text(format!("{}│{}", &text[..index], &text[index + 1..]), 0);
-    result.copy.content_start = result.copy.content_start.max(column + 2);
-    result
 }
 
 /// 【终端】【输出占比】将正文可见比例映射为滑块长度，滚动位置映射为滑块起点。

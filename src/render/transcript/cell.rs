@@ -121,6 +121,9 @@ impl HistoryCell {
                 );
             }
         }
+        if matches!(self, Self::Diff(_) | Self::Shell(_) | Self::Tool(_)) {
+            super::tool_guides::decorate_node(&mut lines);
+        }
         // 区块间距（交界处只保留一行空行）：
         // - Reasoning：仅前空一行（后空行会与 Markdown/Meta 的前空行叠成两行）
         // - Markdown / Meta：前空一行（承接思考/工具与正文、总览）

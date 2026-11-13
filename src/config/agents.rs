@@ -378,10 +378,6 @@ pub fn apply_agent_override(
 ) -> anyhow::Result<crate::config::AppConfig> {
     use anyhow::bail;
 
-    // 1. CLI 与 TUI 只使用内置内核，Web 与网关保留多内核能力
-    if matches!(surface, AgentSurface::Cli | AgentSurface::Tui) {
-        config.agent.engine = super::AgentEngineKind::Native;
-    }
     // 2. 显式选择优先，未指定时采用当前入口默认值
     let explicit = agent_id.map(str::trim).filter(|value| !value.is_empty());
     let selected = explicit.map(str::to_string).or_else(|| {
@@ -405,16 +401,11 @@ pub fn apply_agent_override(
     };
     // 4. 内置档案的供应商、模型和思考等级为空时沿用全局选择；只有用户明确配置
     //    过档案，或使用自定义档案时，才允许档案固定值覆盖当前选择
-    // 分段开关先落到运行配置：后续提示词组装与人设回退都读它
+    // 分段开关先落到运行配置，后续提示词组装读取统一配置
     config.prompt_sections = profile.prompt_sections.clone();
     if !profile.system_prompt.trim().is_empty() {
         config.system_prompt_file = None;
         config.system_prompt = Some(profile.system_prompt.clone());
-    } else if !profile.prompt_sections.builtin_persona {
-        // 关掉内置人设又没写自己的提示词，就是明确要空白；
-        // 这里必须写入空串并清掉文件路径，否则会一路回退到内置人设
-        config.system_prompt_file = None;
-        config.system_prompt = Some(String::new());
     }
     if profile_pins_model_selection(&profile) {
         if !profile.provider_id.trim().is_empty() {

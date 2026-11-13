@@ -296,7 +296,6 @@ fn goal_execution_available(paths: &SaiPaths, request: &StartRunRequest) -> bool
     config.is_ok_and(|config| {
         config.tools.enabled
             && config.active_model_tools_enabled().unwrap_or(false)
-            && !config.agent.engine.is_external()
             && (!config
                 .agent_runtime
                 .as_ref()

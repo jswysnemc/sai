@@ -1,5 +1,8 @@
 //! 后台任务管理入口，列表和日志视图共享状态与异步任务服务。
 
+mod controls;
+#[cfg(test)]
+mod controls_tests;
 mod input;
 mod list_body;
 mod model;

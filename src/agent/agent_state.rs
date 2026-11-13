@@ -9,6 +9,7 @@ use crate::tools::ToolRegistry;
 
 /// 保存单个会话 Agent 的运行依赖和可变状态。
 pub struct Agent {
+    pub(super) pending_hook_context: Vec<String>,
     pub(super) streamed_tools: super::streamed_tools::StreamedTools,
     pub(super) background_compaction: Option<super::background_compaction::BackgroundCompaction>,
     pub(crate) goal_accounting: Option<crate::goal::GoalAccounting>,
@@ -39,6 +40,4 @@ pub struct Agent {
     pub(super) last_dynamic_sources: Vec<DynamicContextSource>,
     /// 【回复策略】【上下文】只缓存当前仍启用实例提供的上下文快照
     pub(super) plugin_reply_contexts: crate::tools::PluginReplyContexts,
-    /// 外部对话内核；为空时使用内置循环
-    pub(super) external_engine: Option<Box<dyn crate::agent_engine::ExternalTurnEngine>>,
 }

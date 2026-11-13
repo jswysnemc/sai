@@ -1,9 +1,9 @@
+use super::hover_color::hover_default_fg;
 use super::runtime_tests::mouse;
 use super::state::ActivityNavigation;
 use crate::cli::repl_runtime::ReplRuntime;
 use crate::llm::{ChatStreamChunk, ChatStreamKind};
 use crate::render::ansi_clip::strip_ansi;
-use crate::render::panel_palette::{bg, PanelPalette};
 use crate::render::transcript::{ParagraphKey, TranscriptRenderOptions};
 use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
 use crossterm::event::{MouseButton, MouseEventKind};
@@ -104,7 +104,7 @@ fn block_interaction_reasoning_title_has_no_duplicate_position_hint() {
         .any(|line| line.as_str().contains('│')));
 }
 
-/// 【终端】【隐藏提示悬停回归】节点正文中的 hidden 行触发区块背景，不改写前景。
+/// 【终端】【隐藏提示悬停回归】节点正文中的 hidden 行触发前景提亮，不添加区块背景。
 /// 参数: 无；返回: 无。
 #[test]
 fn block_interaction_internal_hidden_line_highlights_on_hover() {
@@ -121,7 +121,8 @@ fn block_interaction_internal_hidden_line_highlights_on_hover() {
         .previous
         .as_ref()
         .unwrap()[usize::from(row)];
-    assert!(painted.contains(&bg(PanelPalette::current().hover_bg)));
+    assert!(painted.contains(&hover_default_fg()));
+    assert!(!painted.contains("\x1b[48;"));
     assert!(strip_ansi(painted).contains("hidden"));
 }
 

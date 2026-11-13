@@ -47,7 +47,6 @@ fn fixture() -> ContextOverview {
             total_tokens: 33_219,
         }),
         usage_is_turn: true,
-        external_engine: None,
     }
 }
 

@@ -2,7 +2,7 @@ use super::assembler::EventAssembler;
 use crate::agent::AgentEvent;
 use crate::runner::RunnerEvent;
 
-/// ACP 工具标题可能在结果阶段缺失，provider 调用标识仍要合并同一张卡。
+/// 工具标题可能在结果阶段缺失，provider 调用标识仍要合并同一张卡。
 ///
 /// 参数:
 /// - 无

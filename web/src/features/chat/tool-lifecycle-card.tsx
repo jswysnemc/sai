@@ -5,8 +5,6 @@ import { api } from "../../api/client";
 import { usePersistedExpand } from "./message/tool-expand-state";
 import type { ToolLifecycle } from "./run-event-reducer";
 import { toolCardSummary } from "./tool-renderers/tool-card-summary";
-import { parseCodexSubagentActivity } from "./tool-renderers/codex-subagent-data";
-import { CodexSubagentToolView } from "./tool-renderers/codex-subagent-tool-view";
 import { parseJsonRecord, stringField, toolFilePath } from "./tool-renderers/tool-data";
 import { streamedDiffCounts } from "./tool-renderers/write-progress";
 import { ToolCardActions } from "./tool-renderers/tool-card-actions";
@@ -67,20 +65,8 @@ export const ToolLifecycleCard = memo(function ToolLifecycleCard({
     ? stringField(parsedArguments, "action")
     : "";
   const backgroundManagement = Boolean(backgroundAction) && backgroundAction !== "start";
-  const subagentActivity = parseCodexSubagentActivity(argumentsText);
   if (tool.name === "compress_context") {
     return <ContextCompressionTool tool={tool} expanded={expanded} onToggle={() => setExpanded((value) => !value)} />;
-  }
-  // Codex 原生子智能体事件使用语义视图，不把协议参数作为唯一内容
-  if (subagentActivity) {
-    return (
-      <CodexSubagentToolView
-        tool={tool}
-        activity={subagentActivity}
-        expanded={expanded}
-        onToggle={() => setExpanded((value) => !value)}
-      />
-    );
   }
   const headerPath = toolFilePath(tool.name, argumentsText);
   // 操作对象：命令类展示完整命令占满剩余宽度，放不下才截断；

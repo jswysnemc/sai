@@ -76,6 +76,18 @@ fn invocation(view: &ToolView, cell: &HistoryCell, width: usize, title_width: us
             path,
             &visible_title,
         )
+    } else if view.name == "read_file" {
+        // 1. 【终端】【读取视图统一】未识别的旧结果和等待状态也不回退到参数表
+        let body = view
+            .outcome
+            .as_ref()
+            .map(|outcome| format_payload(&outcome.output))
+            .unwrap_or_default();
+        let path = arguments
+            .get("path")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        with_missing_path(body, path, &visible_title)
     } else {
         let args = (view.name == "codemode")
             .then(|| tool_view::render_codemode_arguments(&view.arguments))

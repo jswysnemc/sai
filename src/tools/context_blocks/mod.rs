@@ -29,7 +29,6 @@ pub(crate) fn register(registry: &mut ToolRegistry, state: &StateStore, config: 
     }
     if !config.context.experimental_context_blocks
         || !config.tools.enabled
-        || config.agent.engine.is_external()
         || !config.active_model_tools_enabled().unwrap_or(false)
     {
         return;

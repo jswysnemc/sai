@@ -3,11 +3,6 @@ import type { SettingsSearchEntry } from "./settings-search-types";
 
 /** 固定运行时字段：配置路径、中英文名称与所属子页。 */
 const RUNTIME_FIELDS = [
-  ["agent.engine", "Conversation engine", "对话内核", "execution"],
-  ["agent.acp.auth_method", "ACP authentication method", "ACP 认证方式", "execution"],
-  ["agent.acp.additional_directories", "Additional directories", "附加目录", "execution"],
-  ["agent.acp.command", "Launch command", "启动命令", "execution"],
-  ["agent.acp.args", "Startup arguments", "启动参数", "execution"],
   ["session.new_session_model", "New session model", "新会话模型", "execution"],
   ["session.new_session_thinking_level", "New session reasoning effort", "新会话思考等级", "execution"],
   ["session.auto_title_enabled", "Auto title on first turn", "首轮自动标题", "execution"],

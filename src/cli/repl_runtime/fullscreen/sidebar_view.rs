@@ -128,6 +128,7 @@ pub(super) fn panel_rows(
     let height = usize::from(layout.rows);
     let palette = SidebarPalette::current();
     let header = super::pane_header::render("", width, height);
+    let metrics = sidebar.metrics.rows(width, height);
     let panels = regions(&sidebar.document, height);
     let focused_action = sidebar
         .focused_row
@@ -140,6 +141,11 @@ pub(super) fn panel_rows(
                 .find_map(|panel| panel.index_at(screen_row, &sidebar.scrolls));
             let entry = index.and_then(|index| sidebar.document.rows.get(index));
             let text = if let Some(line) = header.get(screen_row) {
+                line.clone()
+            } else if let Some(line) = screen_row
+                .checked_sub(header.len())
+                .and_then(|row| metrics.get(row))
+            {
                 line.clone()
             } else if screen_row + 1 == height {
                 sidebar_style::footer(sidebar, width)

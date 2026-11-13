@@ -1,6 +1,6 @@
 import { useI18n } from "../../i18n/use-i18n";
 import { SettingsPanel } from "../kit";
-import { AgentEngineSettings } from "./agent-engine-settings";
+import { NewSessionDefaultSettings } from "./new-session-default-settings";
 import { RetrySettings } from "./retry-settings";
 import { SessionTitleSettings } from "./session-title-settings";
 import type { RuntimeSettingsProps } from "./runtime-settings-types";
@@ -14,8 +14,8 @@ export function RuntimeExecutionSettings(props: RuntimeSettingsProps) {
   const { t } = useI18n();
   return (
     <>
-      <SettingsPanel title={t("Engine and new sessions", "内核与新会话")} description={t("Choose how new conversations run.", "配置新会话使用的内核与默认参数。")}>
-        <AgentEngineSettings {...props} />
+      <SettingsPanel title={t("New sessions", "新会话")} description={t("Choose how new conversations run.", "配置新会话使用的默认参数。")}>
+        <NewSessionDefaultSettings {...props} />
       </SettingsPanel>
       <SessionTitleSettings {...props} />
       <SettingsPanel title={t("Failure retry", "失败重试")} description={t("Retry transient transport failures before output starts; business errors and active streams are not retried.", "仅在输出开始前重试瞬时传输故障；业务错误与已开始输出的请求不会重试。")}>

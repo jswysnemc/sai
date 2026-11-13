@@ -1,5 +1,5 @@
 use super::{Agent, AgentEvent};
-use crate::llm::{ChatMessage, ToolCall};
+use crate::llm::ChatMessage;
 use crate::tools::{codemode, ToolPermission};
 use anyhow::{bail, Result};
 use sai_codemode::protocol::WorkerEvent;
@@ -15,7 +15,11 @@ impl Agent {
         questions: &mut usize,
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<Value> {
-        let (_, call) = self.prepare_codemode_call(&event)?;
+        let (_, raw_call) = self.prepare_codemode_call(&event)?;
+        let prepared = self
+            .authorize_tool_call(&raw_call, messages, on_event)
+            .await?;
+        let call = prepared.call.clone();
         let name = call.function.name.clone();
         let arguments = call.function.arguments.clone();
         let interactive = matches!(
@@ -36,9 +40,6 @@ impl Agent {
             if *questions > super::tool_invocation::MAX_QUESTION_ROUNDS_PER_TURN {
                 bail!("{}", super::tool_invocation::question_limit_notice());
             }
-        }
-        if !interactive {
-            self.authorize_tool_call(&call, messages, on_event).await?;
         }
         on_event(AgentEvent::ToolProgress {
             name: codemode::NAME.into(),
@@ -82,7 +83,7 @@ impl Agent {
                 })
                 .and_then(|result| result)
         } else {
-            self.execute_codemode_regular(&call, on_event).await
+            self.execute_codemode_regular(&prepared, on_event).await
         };
         crate::hooks::dispatch(
             &self.config.hooks,
@@ -90,7 +91,11 @@ impl Agent {
             &hook,
         )
         .await;
-        let result = result?;
+        let result = if interactive {
+            self.tools.finish_hooked_output(&prepared, result).await?
+        } else {
+            result?
+        };
         if result.content.starts_with("tool error:") {
             bail!("{}", result.content);
         }
@@ -106,18 +111,12 @@ impl Agent {
     /// 【CodeMode】【注册表代理】执行 call 并转发进度，on_event 接收摘要；返回未经上下文裁剪的结果。
     async fn execute_codemode_regular(
         &self,
-        call: &ToolCall,
+        prepared: &crate::tools::PreparedToolCall,
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<crate::tools::ToolOutput> {
+        let call = &prepared.call;
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let requested_name = if call.kind == super::deepseek_anchor::BASH_EXECUTION_KIND {
-            crate::tools::DSH_BASH_EXECUTION_ALIAS
-        } else {
-            &call.function.name
-        };
-        let future =
-            self.tools
-                .call_with_progress(requested_name, &call.function.arguments, sender);
+        let future = self.tools.execute_prepared(prepared, sender);
         tokio::pin!(future);
         loop {
             tokio::select! {

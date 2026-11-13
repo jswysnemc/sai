@@ -1,4 +1,3 @@
-use super::deepseek_anchor;
 use super::{tool_history::extract_persistable_tool_report, Agent, AgentEvent};
 use crate::llm::ToolCall;
 use crate::perf_trace::PerfTrace;
@@ -33,7 +32,7 @@ impl Agent {
     pub(super) async fn execute_real_tool<F>(
         &mut self,
         turn_id: &str,
-        call: &ToolCall,
+        prepared: &crate::tools::PreparedToolCall,
         messages: &[crate::llm::ChatMessage],
         on_event: &mut F,
         perf: &mut PerfTrace,
@@ -41,24 +40,19 @@ impl Agent {
     where
         F: FnMut(AgentEvent) -> Result<()>,
     {
+        let call = &prepared.call;
         if call.function.name == crate::tools::codemode::NAME {
-            let execution = self
+            let result = self
                 .execute_codemode(turn_id, call, messages, on_event)
-                .await?;
+                .await;
+            let execution = self.finish_special_hook(prepared, result).await;
             return self.finish_real_tool_execution(turn_id, call, execution, on_event, perf);
         }
         if let Some(execution) = self.streamed_tools.take(call).await {
             return self.finish_real_tool_execution(turn_id, call, execution, on_event, perf);
         }
         let (progress_tx, mut progress_rx) = mpsc::channel(128);
-        let requested_name = if call.kind == deepseek_anchor::BASH_EXECUTION_KIND {
-            crate::tools::DSH_BASH_EXECUTION_ALIAS
-        } else {
-            &call.function.name
-        };
-        let tool_future =
-            self.tools
-                .call_with_progress(requested_name, &call.function.arguments, progress_tx);
+        let tool_future = self.tools.execute_prepared(prepared, progress_tx);
         tokio::pin!(tool_future);
 
         loop {
@@ -110,14 +104,11 @@ impl Agent {
             return execution;
         }
         let (sender, mut receiver) = mpsc::channel(128);
-        let requested_name = if call.kind == deepseek_anchor::BASH_EXECUTION_KIND {
-            crate::tools::DSH_BASH_EXECUTION_ALIAS
-        } else {
-            &call.function.name
+        let prepared = match self.tools.prepare_hooked_call(call).await {
+            Ok(prepared) => prepared,
+            Err(error) => return tool_result(Err(error)),
         };
-        let future =
-            self.tools
-                .call_with_progress(requested_name, &call.function.arguments, sender);
+        let future = self.tools.execute_prepared(&prepared, sender);
         tokio::pin!(future);
         loop {
             tokio::select! {

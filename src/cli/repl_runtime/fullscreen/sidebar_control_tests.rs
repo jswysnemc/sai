@@ -135,7 +135,7 @@ fn close_button_hides_sidebar_without_losing_draft() {
             let row = &session.state.previous.as_ref().unwrap()[1];
             assert!(!strip_ansi(row).contains("[x]"));
             assert!(strip_ansi(row).contains("sai"));
-            assert!(strip_ansi(&session.state.previous.as_ref().unwrap()[3]).ends_with("0 "));
+            assert!(strip_ansi(&session.state.previous.as_ref().unwrap()[6]).ends_with("0 "));
             assert!(session.state.previous.as_ref().unwrap()[0].contains("\x1b[48;5;235m"));
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 157, 0))

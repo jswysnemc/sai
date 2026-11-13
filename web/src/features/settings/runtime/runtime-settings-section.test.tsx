@@ -8,7 +8,7 @@ import { RUNTIME_SEARCH_ENTRIES } from "../search/entries-runtime";
 import { fieldAnchorId } from "../search/field-anchor";
 
 const config = {
-  active_provider: "", providers: [], gateways: {}, agent: { engine: "custom", acp: { command: "adapter", args: ["--stdio"] } },
+  active_provider: "", providers: [], gateways: {},
   tools: { enabled: true, background_commands_enabled: true, background_command_timeout_seconds: 0, background_command_log_max_bytes: 1024, background_command_stop_grace_seconds: 5 },
   display: { reasoning: "full", tool_calls: "summary", readable_tool_names: true, wait_show_model: true, wait_show_thinking_level: true, repl_transcript_row_cap: 5000 }
 } as unknown as AppConfig;
@@ -48,11 +48,11 @@ describe("runtime settings routing", () => {
     }
   });
 
-  it("groups new session and title defaults with engine and retry settings", () => {
+  it("groups new session and title defaults with retry settings", () => {
     const html = renderSubview("execution");
     for (const label of ["新会话模型", "新会话思考等级", "首轮自动标题", "最大尝试次数"]) expect(html).toContain(label);
-    expect(html).toContain('value="adapter"');
-    expect(html).toContain("--stdio</textarea>");
+    expect(html).not.toContain('value="adapter"');
+    expect(html).not.toContain("--stdio</textarea>");
   });
 
   it("renders every indexed field on its registered subview", () => {

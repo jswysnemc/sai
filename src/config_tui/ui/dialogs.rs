@@ -133,7 +133,9 @@ pub(crate) fn message(stdout: &mut io::Stdout, text: &str) -> Result<()> {
                     frame.x.saturating_add(2),
                     frame.y.saturating_add(2).saturating_add(row as u16)
                 ),
-                Print(line.clone())
+                Print(crate::render::readable_terminal_text(
+                    &(line.clone()).to_string()
+                ))
             )?;
         }
         let status = if max_offset == 0 {

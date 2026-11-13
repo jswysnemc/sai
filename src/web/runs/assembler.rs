@@ -409,10 +409,6 @@ impl EventAssembler {
                     json!({ "applied": applied, "summary": summary, "error": error }),
                 )]
             }
-            AgentEvent::EngineReady { engine, version } => vec![self.event(
-                "engine.ready",
-                json!({ "engine": engine, "version": version }),
-            )],
             AgentEvent::JevPreselect { phase, detail } => {
                 vec![self.event("jev.preselect", json!({ "phase": phase, "detail": detail }))]
             }

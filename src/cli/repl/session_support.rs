@@ -206,11 +206,6 @@ pub(super) fn apply_ready_tool_registry(
 /// 返回:
 /// - 当前模型名称，未配置时返回占位符
 pub(super) fn repl_welcome_model(config: &AppConfig) -> String {
-    // 外部内核用它自己的模型，sai 的 provider 配置对本轮完全不生效。
-    // 这里显示内核名而不是 sai 的模型名，避免让人以为对话仍走这个模型。
-    if config.agent.engine.is_external() {
-        return config.agent.engine.display_label().to_string();
-    }
     config
         .provider(None)
         .ok()

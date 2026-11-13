@@ -6,7 +6,6 @@ import { PermissionRequestCard } from "../../permission/permission-request-card"
 import { QuestionRequestCard } from "../../question/question-request-card";
 import { SshSecretCard } from "../../ssh/ssh-secret-card";
 import { AutomaticInputPart } from "./automatic-input-part";
-import { EngineReadyPart } from "./engine-ready-part";
 import { ActivityPreamble } from "./activity-preamble";
 import { JevExposureCard } from "./jev-exposure-card";
 import { groupActivityParts } from "./group-activity-parts";
@@ -59,6 +58,5 @@ function renderStandalonePart(part: LiveMessagePart, live?: boolean) {
   if (part.type === "ssh_secret") return <SshSecretCard key={part.id} request={part.request} resolved={part.resolved} active={Boolean(live)} />;
   if (part.type === "compaction") return <ContextCompactionPart key={part.id} part={part} />;
   if (part.type === "automatic_input") return <AutomaticInputPart key={part.id} content={part.source} />;
-  if (part.type === "engine_ready") return <EngineReadyPart key={part.id} engine={part.engine} version={part.version} />;
   return <MarkdownRenderer key={part.id} source={part.source} streaming={Boolean(live)} />;
 }

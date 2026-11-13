@@ -233,7 +233,6 @@ export type AppConfig = {
   /** 审核与计划模式的命令沙箱 */
   sandbox?: SandboxConfig;
   /** 执行对话轮次的内核 */
-  agent?: AgentEngineConfig;
   session?: SessionConfig;
   notification?: NotificationConfig;
   gateways: GatewayConfig;
@@ -291,7 +290,6 @@ export type AgentProfileConfig = {
 
 /** 系统提示词内置分段的开关。 */
 export type PromptSectionToggles = {
-  builtin_persona?: boolean;
   user_identity?: boolean;
   skills_catalog?: boolean;
   state_contract?: boolean;
@@ -424,6 +422,10 @@ export type HookHttpRequest = {
 };
 
 export type HookItem = {
+  shell?: string;
+  files?: string[];
+  output_tokens?: number;
+  status_message?: string;
   name: string;
   enabled?: boolean;
   event: string;
@@ -431,6 +433,11 @@ export type HookItem = {
   script?: string;
   timeout_ms?: number | null;
   requests?: HookHttpRequest[];
+  matcher?: string;
+  async?: boolean;
+  command_windows?: string;
+  mcp_tool?: string;
+  mcp_arguments?: unknown;
 };
 
 export type HooksConfig = {
@@ -461,70 +468,4 @@ export type McpConfigResponse = {
   config: McpConfig;
   path: string;
   secret_sentinel: string;
-};
-
-/** 执行对话轮次的内核标识 */
-export type AgentEngineKind = "native" | "claude_code" | "codex" | "custom";
-
-/** 外部 ACP 内核的启动配置 */
-export type AcpEngineConfig = {
-  command?: string;
-  args?: string[];
-  env?: Record<string, string>;
-  startup_timeout_seconds?: number;
-  additional_directories?: string[];
-  auth_method?: string;
-  model?: string;
-  permission_mode?: string;
-  thought_level?: string;
-  config_options?: Record<string, string | boolean>;
-};
-
-/** 对话内核配置 */
-export type AgentEngineConfig = {
-  engine?: AgentEngineKind;
-  acp?: AcpEngineConfig;
-};
-
-/** 当前对话内核状态 */
-export type EngineStatusResponse = {
-  engine: AgentEngineKind;
-  label: string;
-  external: boolean;
-  unavailable_features: string[];
-  acp_capabilities?: {
-    load_session: boolean;
-    list_sessions: boolean;
-    delete_session: boolean;
-    resume_session: boolean;
-    close_session: boolean;
-    additional_directories: boolean;
-    mcp_http: boolean;
-    mcp_sse: boolean;
-    prompt_image: boolean;
-    prompt_audio: boolean;
-    embedded_context: boolean;
-    logout: boolean;
-    sai_context_compaction: boolean;
-    sai_memory: boolean;
-    sai_goal_continuation: boolean;
-    sai_subagents: boolean;
-  } | null;
-  acp_runtime?: {
-    connected: boolean;
-    agent_name: string;
-    agent_version: string;
-    capabilities: EngineStatusResponse["acp_capabilities"];
-    auth_methods: unknown;
-    config_options: unknown;
-    modes: unknown;
-    available_commands: unknown;
-    native_equivalents: unknown;
-  } | null;
-};
-
-/** 主动握手外部内核后返回的 agent 身份 */
-export type EngineConnectResponse = {
-  agent: string;
-  version: string;
 };

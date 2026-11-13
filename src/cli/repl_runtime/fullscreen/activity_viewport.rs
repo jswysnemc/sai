@@ -41,6 +41,27 @@ pub(super) struct ActivityViewports {
 }
 
 impl ActivityViewports {
+    /// 【终端】【拖动定位】按轨道比例定位输出；参数为段落键和比例，返回是否改变位置
+    pub(super) fn seek(&mut self, key: ParagraphKey, fraction: f64) -> bool {
+        let Some(region) = self
+            .source
+            .activities
+            .iter()
+            .find(|region| region.key == key)
+        else {
+            return false;
+        };
+        let height = self.height(region);
+        let window = ActivityWindow::at(&self.source, region, usize::MAX, height);
+        let next = window.min
+            + ((window.max - window.min) as f64 * fraction.clamp(0.0, 1.0)).round() as usize;
+        let position = self.positions.entry(key).or_default();
+        let changed = position.offset != next;
+        position.offset = next;
+        position.follow = next == window.max;
+        self.selected = Some(key);
+        changed
+    }
     /// 【终端】【跟随状态】参数为执行链键；返回是否已跟随末尾，用于区分状态和按钮。
     pub(super) fn is_following(&self, key: ParagraphKey) -> bool {
         self.positions
@@ -221,6 +242,7 @@ impl ActivityViewports {
                     position.show_footer = false;
                 }
                 projection.copy(region.start..region.end);
+                scrollbars.push((visible.start.saturating_add(1)..projection.len(), 0, 0));
             } else {
                 projection.copy(region.start..region.start + 1);
                 let height = self.height(region);
@@ -245,13 +267,11 @@ impl ActivityViewports {
                 }
                 let output_start = projection.len();
                 projection.copy(window.rows.clone());
-                if window.max > window.min {
-                    scrollbars.push((
-                        output_start..projection.len(),
-                        window.offset - window.min,
-                        window.max - window.min,
-                    ));
-                }
+                scrollbars.push((
+                    output_start..projection.len(),
+                    window.offset - window.min,
+                    window.max - window.min,
+                ));
                 let pinned = usize::from(window.pinned_control.is_some());
                 let rendered = window.rows.len() + usize::from(window.context.is_some()) + pinned;
                 for _ in rendered..height {

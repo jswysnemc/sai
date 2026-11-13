@@ -222,8 +222,8 @@ fn repl_only_help_lines() -> Vec<String> {
         format!(
             "  /code-model [on|off|only] {}",
             t(
-                "select hybrid, native or script-only tools without changing permissions",
-                "选择混合、普通或脚本独占调用，保留当前权限模式"
+                "select and save default hybrid, native or script-only tools; keep permissions",
+                "选择并保存默认工具方式（混合、普通或脚本独占），保留权限模式"
             )
         ),
         format!(

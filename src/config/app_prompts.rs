@@ -1,7 +1,6 @@
 use super::model::AppConfig;
 use super::paths::config_relative_path;
 use crate::paths::SaiPaths;
-use crate::prompts::default_system_prompt;
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 
@@ -45,16 +44,11 @@ impl AppConfig {
         {
             return Ok(prompt.to_string());
         }
-        // 2. 关闭内置人设后不再回退：空就是空，这是"0 提示词"能成立的前提
-        if !self.prompt_sections.builtin_persona {
-            return Ok(String::new());
-        }
-        // 3. 兼容旧 system-prompt.md 文件，否则使用内置默认人设提示
         let legacy = self.custom_system_prompt(paths)?;
         if !legacy.trim().is_empty() {
             return Ok(legacy);
         }
-        Ok(default_system_prompt())
+        Ok(String::new())
     }
 
     /// 读取配置指定的自定义系统提示词。

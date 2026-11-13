@@ -33,8 +33,7 @@ pub(in crate::cli) fn read_repl_input(
     let mut last_ctrl_c = None::<Instant>;
     // 输入框由 composer 绝对定位绘制；这里禁止直接向终端写换行，
     // 否则屏幕底部会触发受管模型感知不到的滚动，吞掉上方内容
-    let mut terminal_guard =
-        crate::cli::terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
+    let mut terminal_guard = runtime.acquire_input_guard(&mut stdout, true)?;
     // 1. 【终端布局】【固定输入区】全屏使用已知布局坐标，避免光标查询占用终端事件读取器
     let mut input_row = if runtime.fullscreen_active() {
         0

@@ -120,7 +120,6 @@ Run `sai config` to open the hierarchical configurator covering providers, model
 - **Source Control**: System Git integration supporting single-file and per-line diff staging, discard, commit, branch switching, and merge conflict resolution.
 - **Prompt templates**: Drawer management via the composer button; empty and centered sessions display quick template buttons (e.g. Explore project, Review changes, Plan tests); supports `/keyword` autocompletion.
 - **Turn Tree**: Branch conversations from any historical message with a pan-and-zoom visual overview.
-- **External ACP engines**: Connect Claude Code or Codex ACP kernels directly from the composer, sharing timeline and workspace state.
 
 ### Terminal interaction & fullscreen view
 
@@ -397,7 +396,7 @@ Linux: `~/.config/sai` | macOS: `~/Library/Application Support/sai` | Windows: `
 - `mcp.jsonc`: External MCP server connection settings
 - `input-templates/`: User custom prompt templates (`chat/` and `image/` subdirectories)
 - `skills/`: Installed global and custom Skills
-- `persona/`: Agent personas, system prompts, and identities
+- `persona/`: User-defined system prompts, identities, and memory; no bundled personas
 
 ### State directory
 

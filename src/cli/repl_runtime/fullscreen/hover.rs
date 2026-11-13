@@ -1,13 +1,13 @@
 //! 全屏正文的悬停高亮：鼠标停在可展开段落上时，把前景提亮一档。
 
-use super::hover_color::{lifted_256, lifted_truecolor, HOVER_DEFAULT_FG};
+use super::hover_color::{hover_default_fg, lifted_256, lifted_truecolor};
 
 const RESET: &str = "\x1b[0m";
 
 /// 【全屏视图】【悬停高亮】给一行正文提亮前景，行内样式复位后重新补上。
 ///
-/// 不铺底、不加粗。已有 256 色或真彩前景会向白色混合一档；
-/// 暗淡属性取消，没有前景的片段使用纯白。
+/// 不铺底、不加粗。已有 256 色或真彩前景按实际背景提高对比度；
+/// 暗淡属性取消，没有前景的片段沿用终端默认前景。
 ///
 /// 参数:
 /// - `line`: 已适配正文宽度的 ANSI 行
@@ -16,7 +16,7 @@ const RESET: &str = "\x1b[0m";
 /// - 带悬停提亮的行
 pub(in crate::cli::repl_runtime) fn tint_line(line: &str) -> String {
     let mut output = String::with_capacity(line.len() + 64);
-    output.push_str(HOVER_DEFAULT_FG);
+    output.push_str(&hover_default_fg());
     let mut index = 0usize;
     while index < line.len() {
         if line.as_bytes()[index] == 0x1b {
@@ -52,7 +52,7 @@ fn rewrite_sequence(sequence: &str) -> String {
         return sequence.to_string();
     };
     if params.is_empty() || params == "0" {
-        return format!("{RESET}{HOVER_DEFAULT_FG}");
+        return format!("{RESET}{}", hover_default_fg());
     }
     let parts: Vec<&str> = params.split(';').collect();
     let mut rewritten = Vec::new();
@@ -124,14 +124,14 @@ fn rewrite_sequence(sequence: &str) -> String {
     }
     let mut output = format!("\x1b[{}m", rewritten.join(";"));
     if !lifted_fg && resets_to_default_fg(&rewritten) {
-        output.push_str(HOVER_DEFAULT_FG);
+        output.push_str(&hover_default_fg());
     }
     output
 }
 
 /// 默认悬停前景的 SGR 参数。
 fn hover_default_sgr() -> String {
-    HOVER_DEFAULT_FG
+    hover_default_fg()
         .strip_prefix("\x1b[")
         .and_then(|rest| rest.strip_suffix('m'))
         .unwrap_or("22;38;2;255;255;255")
@@ -168,9 +168,9 @@ mod tests {
     #[test]
     fn tint_survives_resets_and_keeps_text() {
         let output = tint_line("a\x1b[31mb\x1b[0mc");
-        assert!(output.starts_with(HOVER_DEFAULT_FG));
+        assert!(output.starts_with(&hover_default_fg()));
         assert!(
-            output.contains(&format!("{RESET}{HOVER_DEFAULT_FG}c")),
+            output.contains(&format!("{RESET}{}c", hover_default_fg())),
             "{output:?}"
         );
         assert!(output.ends_with(RESET));
@@ -200,5 +200,23 @@ mod tests {
         );
         assert!(!output.contains("\x1b[2m"), "{output:?}");
         assert_eq!(plain(&output), "dim");
+    }
+
+    /// 【正文悬停】【样式保留】提亮保留差异背景、下划线颜色及图片协议，不增加背景或粗体。
+    /// 参数: 无；返回: 无。
+    #[test]
+    fn brightening_preserves_existing_backgrounds_and_graphics() {
+        let background = "\x1b[48;2;20;46;30m";
+        let underline = "\x1b[58;2;0;49;48m";
+        let graphics = "\x1b_Ga=p,i=4,p=2\x1b\\";
+        let line = format!("{background}{underline}\x1b[2mtext\x1b[0m tail{graphics}");
+        let output = tint_line(&line);
+        assert_eq!(output.matches("\x1b[48;").count(), 1);
+        assert!(output.contains(background));
+        assert!(output.contains(underline));
+        assert!(output.contains(graphics));
+        assert!(!output.contains("\x1b[2m"));
+        assert!(!output.contains("\x1b[1m"));
+        assert!(output.contains(&format!("{RESET}{} tail", hover_default_fg())));
     }
 }

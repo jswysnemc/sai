@@ -32,7 +32,8 @@ class ActivityResumeRenderingTests(unittest.TestCase):
                 rows = terminal.text().splitlines()
                 for marker in markers:
                     first = next(index for index, line in enumerate(rows)
-                                 if line.lstrip().startswith("120 ") and marker * 4 in line)
+                                 if line.lstrip(" │┃").startswith("120 ") and marker * 4 in line)
+                    self.assertIn("│", rows[first])
                     column = rows[first].index(marker * 4)
                     self.assertEqual(rows[first + 1].index(marker * 4), column, terminal.text())
                 if tool == "read_file":

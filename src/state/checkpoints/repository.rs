@@ -146,6 +146,8 @@ pub(in crate::state) fn apply_checkpoint_compaction(
     summary: &str,
     source_turn_count: usize,
     reason: CheckpointReason,
+    session_id: &str,
+    memory_boundary: &crate::state::session_memory::extraction_interval::TokenBoundary,
 ) -> Result<CompactionCheckpoint> {
     // 只压缩运行中轮次时没有已完成轮次范围，seq 沿用上一个 checkpoint 的边界
     let (from_seq, to_seq) = match request.seq_range() {
@@ -201,6 +203,11 @@ pub(in crate::state) fn apply_checkpoint_compaction(
             params![turn_id],
         )?;
     }
+    crate::state::session_memory::extraction_interval::reset_boundary(
+        &tx,
+        session_id,
+        memory_boundary,
+    )?;
     tx.commit()?;
     Ok(checkpoint)
 }

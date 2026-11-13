@@ -333,9 +333,8 @@ fn draw(
     queue!(
         stdout,
         MoveTo(inner_x, body_y),
-        Print(format!(
-            "{MUTED}{}{RESET}",
-            truncate(&subtitle, inner_w as usize)
+        Print(crate::render::readable_terminal_text(
+            &(format!("{MUTED}{}{RESET}", truncate(&subtitle, inner_w as usize))).to_string()
         ))
     )?;
     body_y = body_y.saturating_add(2);
@@ -351,7 +350,12 @@ fn draw(
         let row_y = body_y.saturating_add(row as u16);
         queue!(stdout, MoveTo(inner_x, row_y))?;
         if index >= rows.len() {
-            queue!(stdout, Print(" ".repeat(left_w as usize)))?;
+            queue!(
+                stdout,
+                Print(crate::render::readable_terminal_text(
+                    &(" ".repeat(left_w as usize)).to_string()
+                ))
+            )?;
             continue;
         }
         draw_row(
@@ -425,9 +429,12 @@ fn draw_row(
             let tail = width.saturating_sub(used);
             queue!(
                 stdout,
-                Print(format!(
-                    "{DIM}── {RESET}{BRAND}{BOLD}{name}{RESET} {DIM}{}{RESET}",
-                    "─".repeat(tail)
+                Print(crate::render::readable_terminal_text(
+                    &(format!(
+                        "{DIM}── {RESET}{BRAND}{BOLD}{name}{RESET} {DIM}{}{RESET}",
+                        "─".repeat(tail)
+                    ))
+                    .to_string()
                 ))
             )?;
         }
@@ -444,17 +451,23 @@ fn draw_row(
                 let line = format!("{mark} {label}");
                 queue!(
                     stdout,
-                    Print(format!(
-                        "{bar}{style} {}{RESET}",
-                        pad(&line, width.saturating_sub(2))
+                    Print(crate::render::readable_terminal_text(
+                        &(format!(
+                            "{bar}{style} {}{RESET}",
+                            pad(&line, width.saturating_sub(2))
+                        ))
+                        .to_string()
                     ))
                 )?;
             } else {
                 queue!(
                     stdout,
-                    Print(format!(
-                        "{bar} {mark_color}{mark}{RESET} {MUTED}{}{RESET}",
-                        pad(&label, width.saturating_sub(4))
+                    Print(crate::render::readable_terminal_text(
+                        &(format!(
+                            "{bar} {mark_color}{mark}{RESET} {MUTED}{}{RESET}",
+                            pad(&label, width.saturating_sub(4))
+                        ))
+                        .to_string()
                     ))
                 )?;
             }
@@ -470,9 +483,12 @@ fn draw_row(
                 let line = format!("{mark} {label}");
                 queue!(
                     stdout,
-                    Print(format!(
-                        "{bar}{style} {}{RESET}",
-                        pad(&line, width.saturating_sub(2))
+                    Print(crate::render::readable_terminal_text(
+                        &(format!(
+                            "{bar}{style} {}{RESET}",
+                            pad(&line, width.saturating_sub(2))
+                        ))
+                        .to_string()
                     ))
                 )?;
             } else {
@@ -480,9 +496,12 @@ fn draw_row(
                 let name_style = if entry.state == 0 { DIM } else { RESET };
                 queue!(
                     stdout,
-                    Print(format!(
-                        "{bar} {mark_color}{mark}{RESET} {name_style}{}{RESET}",
-                        pad(&label, width.saturating_sub(4))
+                    Print(crate::render::readable_terminal_text(
+                        &(format!(
+                            "{bar} {mark_color}{mark}{RESET} {name_style}{}{RESET}",
+                            pad(&label, width.saturating_sub(4))
+                        ))
+                        .to_string()
                     ))
                 )?;
             }

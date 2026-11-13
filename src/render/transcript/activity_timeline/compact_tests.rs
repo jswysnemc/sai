@@ -18,10 +18,10 @@ fn text(document: &FullscreenDocument) -> String {
     )
 }
 
-/// 【终端】【工具去重测试】历史命令展开后只出现一次命令，正文不含连接线。
+/// 【终端】【工具去重测试】历史命令展开后只出现一次命令，正文统一使用竖向引导线。
 /// 参数: 无；返回: 无。
 #[test]
-fn expanded_command_has_one_title_and_no_guides() {
+fn expanded_command_has_one_title_and_consistent_guides() {
     tui_mode::set_override(Some(TuiMode::Fullscreen));
     let mut store = TranscriptStore::new(200);
     store.push_tool_call(
@@ -40,8 +40,8 @@ fn expanded_command_has_one_title_and_no_guides() {
     assert!(plain.contains("unique-output"));
     assert!(!plain.contains("\"command\""));
     assert!(!plain.contains("timeout"));
-    assert!(!plain.contains('│'));
-    assert!(plain.contains('└'));
+    assert!(plain.contains('│'));
+    assert!(!plain.contains('└'));
     tui_mode::set_override(None);
 }
 
@@ -64,7 +64,7 @@ fn clipped_summary_keeps_complete_command_in_details() {
         store.render_fullscreen(30, &options(), &HashSet::from([ParagraphKey::whole(0)]));
     let unfolded = text(&document)
         .lines()
-        .map(str::trim_start)
+        .map(|line| line.trim_start_matches([' ', '│', '┃']))
         .collect::<String>();
     assert!(unfolded.contains("printf very-long-command-that-does-not-fit"));
     tui_mode::set_override(None);

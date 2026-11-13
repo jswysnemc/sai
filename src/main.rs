@@ -1,6 +1,4 @@
-mod acp;
 mod agent;
-mod agent_engine;
 mod assistants;
 mod browser;
 mod cli;

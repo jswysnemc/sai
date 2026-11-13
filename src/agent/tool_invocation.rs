@@ -121,6 +121,9 @@ fn is_concurrent_read_only_call(
     visibility: &ToolVisibility,
     call: &ToolCall,
 ) -> bool {
+    if registry.has_control_pre_hooks() {
+        return false;
+    }
     if matches!(
         call.function.name.as_str(),
         "ask_question" | "enter_plan_mode" | "exit_plan_mode" | "codemode"

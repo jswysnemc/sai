@@ -24,6 +24,19 @@ pub(crate) fn command_invocation(script: &str) -> ShellInvocation {
     ShellInvocation { program, args }
 }
 
+/// 【Hooks】【Shell 选择】参数为可选可执行程序和脚本，返回与平台 Shell 一致的执行参数
+pub(crate) fn configured_command_invocation(
+    configured: Option<&str>,
+    script: &str,
+) -> ShellInvocation {
+    let program = configured
+        .filter(|shell| !shell.trim().is_empty())
+        .map(OsString::from)
+        .unwrap_or_else(preferred_shell_program);
+    let args = command_args(&program, script);
+    ShellInvocation { program, args }
+}
+
 /// 返回网页终端应使用的 Shell 调用。
 ///
 /// 参数:

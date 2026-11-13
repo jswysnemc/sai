@@ -67,6 +67,7 @@ impl Agent {
             &refreshed,
             self.context_char_budget,
             &self.config.prompt.templates.compaction,
+            self.config.memory_config().enabled,
         )?;
         let runtime = self.config.compaction_runtime_config()?;
         let mut hash = Sha256::new();
@@ -139,6 +140,17 @@ impl Agent {
                     let mut projection =
                         project_provider_turn_from_messages(messages, 0, self.context_char_budget);
                     projection.context_blocks = self.context_blocks_enabled();
+                    let hook_context = self.tools.hook_context().with("trigger", "auto");
+                    let hook = crate::hooks::dispatch_with_tools(
+                        &self.config.hooks,
+                        crate::hooks::HookEvent::PreCompact,
+                        &hook_context,
+                        Some(&self.tools),
+                    )
+                    .await;
+                    if hook.stop {
+                        anyhow::bail!("PreCompact hook stopped compaction");
+                    }
                     on_event(AgentEvent::CompactionStarted {
                         turn_count: pending.request.turn_count(),
                         model: self.compaction_model_label.clone(),
@@ -159,6 +171,29 @@ impl Agent {
                         summary: applied.then_some(summary),
                         error: None,
                     })?;
+                    if applied {
+                        let hook = crate::hooks::dispatch_with_tools(
+                            &self.config.hooks,
+                            crate::hooks::HookEvent::PostCompact,
+                            &hook_context,
+                            Some(&self.tools),
+                        )
+                        .await;
+                        if hook.stop {
+                            anyhow::bail!("PostCompact hook stopped continuation");
+                        }
+                        let hook = crate::hooks::dispatch_with_tools(
+                            &self.config.hooks,
+                            crate::hooks::HookEvent::SessionStart,
+                            &hook_context.with("source", "compact"),
+                            Some(&self.tools),
+                        )
+                        .await;
+                        if hook.stop {
+                            anyhow::bail!("SessionStart hook stopped continuation");
+                        }
+                        self.pending_hook_context.extend(hook.context);
+                    }
                     return Ok(applied);
                 }
                 Ok(Err(error)) => {
@@ -189,10 +224,21 @@ impl Agent {
             let paths = self.paths.clone();
             let cancel = self.cancel_requested.clone();
             let limit = crate::state::summary_char_limit(self.context_char_budget);
+            let hooks = self.config.hooks.clone();
+            let hook_context = self
+                .tools
+                .hook_context()
+                .with("model", client.model())
+                .with("operation", "background_compaction");
+            let tools = self.tools.clone();
             let handle = tokio::spawn(async move {
                 let started = std::time::Instant::now();
-                let request =
-                    client.chat_stream_events_retry(messages, Vec::new(), &retry, |_| Ok(()));
+                let request = crate::hooks::model_scope(
+                    hooks,
+                    hook_context,
+                    tools,
+                    client.chat_stream_events_retry(messages, Vec::new(), &retry, |_| Ok(())),
+                );
                 tokio::pin!(request);
                 let mut tick = tokio::time::interval(std::time::Duration::from_millis(100));
                 let result = loop {

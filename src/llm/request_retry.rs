@@ -20,6 +20,7 @@ impl OpenAiCompatibleClient {
     {
         let max_attempts = retry.clamped_max_attempts();
         for attempt in 1..=max_attempts {
+            let mut hook = crate::hooks::ModelAttempt::begin(attempt as usize).await;
             let mut content_chars = 0usize;
             let mut reasoning_chars = 0usize;
             let mut callback_failed = false;
@@ -38,6 +39,7 @@ impl OpenAiCompatibleClient {
                     outcome
                 })
                 .await;
+            hook.finish(&result).await;
             match result {
                 Ok(result) => return Ok(result),
                 Err(error)

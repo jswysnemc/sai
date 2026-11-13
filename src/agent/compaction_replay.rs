@@ -45,8 +45,28 @@ impl Agent {
         if projection.messages.is_empty() {
             return None;
         }
+        let memory = if self.config.memory_config().enabled {
+            self.state
+                .compaction_memory(
+                    projection.estimate.context_limit_chars,
+                    projection.estimate.message_chars
+                        + REPLAY_INSTRUCTION.len()
+                        + REPLAY_OUTPUT_RESERVE_CHARS,
+                )
+                .ok()?
+        } else {
+            String::new()
+        };
+        let mut messages = replay_messages(projection.messages.clone());
+        if !memory.is_empty() {
+            messages.pop();
+            messages.push(ChatMessage::plain(
+                "user",
+                format!("{}\n{}", REPLAY_INSTRUCTION.as_str(), memory),
+            ));
+        }
         Some(ReplaySummaryRequest {
-            messages: replay_messages(projection.messages.clone()),
+            messages,
             // 工具定义必须与会话请求一致：少一个 schema 前缀就不同了，
             // 缓存从工具定义处就断开。指令里已禁止调用工具
             definitions: if self.tools_enabled {

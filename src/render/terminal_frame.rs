@@ -18,6 +18,7 @@ const END_SYNC: &[u8] = b"\x1b[?2026l";
 pub(crate) struct TerminalFrame {
     buffer: Vec<u8>,
     payload: Vec<u8>,
+    readable: Vec<u8>,
 }
 
 impl TerminalFrame {
@@ -32,6 +33,7 @@ impl TerminalFrame {
         Self {
             buffer: Vec::with_capacity(8192),
             payload: Vec::with_capacity(8192),
+            readable: Vec::with_capacity(8192),
         }
     }
 
@@ -61,7 +63,22 @@ impl TerminalFrame {
         let missing = std::str::from_utf8(&self.buffer)
             .map(crate::render::terminal_image::kitty_missing_transmissions)
             .unwrap_or_default();
-        prepare_payload(&self.buffer, missing.as_bytes(), &mut self.payload);
+        // 1. 【终端】【文字可读性】提交前统一校正，绘制缓存和复制来源不受样式变换影响
+        let palette = crate::render::terminal_palette::terminal_palette();
+        self.readable.clear();
+        if let Ok(text) = std::str::from_utf8(&self.buffer) {
+            self.readable.extend_from_slice(
+                crate::render::terminal_text_style::correct_ansi_text(
+                    text,
+                    crate::render::terminal_palette::terminal_default_colors(),
+                    palette.true_color,
+                )
+                .as_bytes(),
+            );
+        } else {
+            self.readable.extend_from_slice(&self.buffer);
+        }
+        prepare_payload(&self.readable, missing.as_bytes(), &mut self.payload);
         let _paint = paint_lock();
         let mut stdout = io::stdout().lock();
         stdout.write_all(&self.payload)?;

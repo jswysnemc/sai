@@ -35,6 +35,7 @@ impl SubagentRunner {
         let started = tokio::time::Instant::now();
         let mut deadline_reminded = false;
         let mut round = 0;
+        let mut stop_hook_active = false;
         loop {
             round += 1;
             if let Some(goal) = self
@@ -75,6 +76,26 @@ impl SubagentRunner {
             // 否则长任务期间数字要等到任务结束才出现
             self.progress.stats(stats.public());
             if result.tool_calls.is_empty() {
+                let stopped = crate::hooks::dispatch_with_tools(
+                    &self.tools.hooks,
+                    crate::hooks::HookEvent::SubagentStop,
+                    &self
+                        .tools
+                        .hook_context()
+                        .with("agent_type", &self.hook_agent_type)
+                        .with("stop_hook_active", stop_hook_active)
+                        .with("last_assistant_message", &result.content),
+                    Some(&self.tools),
+                )
+                .await;
+                if !stopped.stop && !stop_hook_active {
+                    if let Some(reason) = stopped.deny {
+                        messages.push(result.assistant_message());
+                        messages.push(ChatMessage::plain("user", reason));
+                        stop_hook_active = true;
+                        continue;
+                    }
+                }
                 return Ok(result);
             }
             messages.push(result.assistant_message());
@@ -264,6 +285,17 @@ impl SubagentRunner {
         if let ToolGate::Reject(output) = evaluate_tool_gate(&self.tools, tool_visibility, call) {
             return (ToolOutput::text(output), false, true);
         }
+        let prepared = match self.tools.prepare_hooked_call(call).await {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                return (
+                    ToolOutput::text(format!("tool error: {error}")),
+                    false,
+                    true,
+                )
+            }
+        };
+        let call = &prepared.call;
         if tool_visibility.is_loader_call(&call.function.name) {
             let Some((config, paths)) = self.progressive_context.as_ref() else {
                 return (
@@ -272,15 +304,13 @@ impl SubagentRunner {
                     true,
                 );
             };
-            return match tool_visibility.load_from_arguments(
-                &self.tools,
-                &call.function.arguments,
-                config,
-                paths,
-            ) {
-                Ok(output) => (ToolOutput::text(output), true, false),
+            let result = tool_visibility
+                .load_from_arguments(&self.tools, &call.function.arguments, config, paths)
+                .map(ToolOutput::text);
+            return match self.tools.finish_hooked_output(&prepared, result).await {
+                Ok(output) => (output, true, false),
                 Err(error) => (
-                    ToolOutput::text(format!("tool error: {error:#}")),
+                    ToolOutput::text(format!("tool error: {error}")),
                     false,
                     true,
                 ),
@@ -288,7 +318,7 @@ impl SubagentRunner {
         }
         match tokio::time::timeout(
             Duration::from_secs(self.timeout_seconds.max(5)),
-            self.call_tool_with_progress(call),
+            self.call_tool_with_progress(&prepared),
         )
         .await
         {
@@ -315,11 +345,12 @@ impl SubagentRunner {
 
     /// 【子任务】【工具进度】执行期间转发进度并保留全部模型附件
     /// 参数：`call` 为已授权调用；返回：文本与图片输出或执行错误
-    async fn call_tool_with_progress(&self, call: &crate::llm::ToolCall) -> Result<ToolOutput> {
+    async fn call_tool_with_progress(
+        &self,
+        prepared: &crate::tools::PreparedToolCall,
+    ) -> Result<ToolOutput> {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let future =
-            self.tools
-                .call_with_progress(&call.function.name, &call.function.arguments, sender);
+        let future = self.tools.execute_prepared(prepared, sender);
         tokio::pin!(future);
         loop {
             tokio::select! {

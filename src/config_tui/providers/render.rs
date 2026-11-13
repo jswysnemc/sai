@@ -192,9 +192,9 @@ impl ProviderBrowser<'_> {
                 inner_x,
                 frame.y.saturating_add(frame.height.saturating_sub(2))
             ),
-            Print(format!(
-                "{MUTED}{}{RESET}",
-                truncate(&self.status, inner_w as usize)
+            Print(crate::render::readable_terminal_text(
+                &(format!("{MUTED}{}{RESET}", truncate(&self.status, inner_w as usize)))
+                    .to_string()
             ))
         )?;
         crate::config_tui::ui::draw_status_bar(stdout, &frame, &help)?;
@@ -249,7 +249,9 @@ impl ProviderBrowser<'_> {
             queue!(
                 stdout,
                 MoveTo(x, y),
-                Print(format!("{SELECT_BG}{ACCENT}{BOLD} {line}{RESET}"))
+                Print(crate::render::readable_terminal_text(
+                    &(format!("{SELECT_BG}{ACCENT}{BOLD} {line}{RESET}")).to_string()
+                ))
             )?;
             let cursor_x = x
                 + 1
@@ -265,7 +267,9 @@ impl ProviderBrowser<'_> {
             queue!(
                 stdout,
                 MoveTo(x, y),
-                Print(format!("{MUTED} {line}{RESET}"))
+                Print(crate::render::readable_terminal_text(
+                    &(format!("{MUTED} {line}{RESET}")).to_string()
+                ))
             )?;
             Ok(None)
         }

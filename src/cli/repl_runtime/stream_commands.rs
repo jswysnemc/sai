@@ -62,7 +62,7 @@ impl StreamCommandContext {
 ///
 /// 共同点是不触碰 `&mut Agent`、不弹交互选择器、不 await，因此可以在
 /// 流式 tick 的同步路径上跑完。副作用限于写 transcript、写子智能体
-/// 消息队列（`/msg`）、改会话压缩策略（`/context` 带参数）与切权限模式。
+/// 消息队列（`/msg`）、改会话压缩策略（`/context` 带参数）、切权限模式与保存工具方式默认值。
 ///
 /// 参数:
 /// - `runtime`: 当前 REPL 运行期
@@ -136,6 +136,17 @@ pub(in crate::cli) fn run_immediate_stream_command(
             // 权限模式切换等价于 Shift+Tab 热切换：只改运行期草稿模式，
             // 由共享的 live 句柄通知 Agent，不需要 &mut Agent
             Some(mode) => {
+                let saved = match crate::cli::codemode_preferences::save_default_for_command(
+                    &ctx.paths, input, mode,
+                ) {
+                    Ok(saved) => saved,
+                    Err(error) => {
+                        return runtime.record_meta(format!(
+                            "{}: {error}",
+                            crate::i18n::text("Failed to save tool mode", "工具方式保存失败")
+                        ));
+                    }
+                };
                 let previous = runtime.stream_mode(ctx.turn_mode);
                 if mode.permission() == crate::agent::PermissionMode::Plan
                     && previous.permission() != crate::agent::PermissionMode::Plan
@@ -144,7 +155,14 @@ pub(in crate::cli) fn run_immediate_stream_command(
                 }
                 runtime.stream_draft_mut().mode = Some(mode);
                 let _ = runtime.apply_stream_mode_live(ctx.turn_mode);
-                runtime.record_meta(mode_notice(mode))
+                runtime.record_meta(mode_notice(mode))?;
+                if saved {
+                    runtime.record_meta(
+                        crate::i18n::text("Default tool mode saved", "默认工具方式已保存")
+                            .to_string(),
+                    )?;
+                }
+                Ok(())
             }
             None => Ok(()),
         },
@@ -169,6 +187,21 @@ fn mode_notice(mode: AgentMode) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::LiveAgentMode;
+    use crate::config::{AppConfig, CodeMode};
+    use crate::render::transcript::TranscriptRenderOptions;
+
+    /// 【工具方式】【测试界面】创建采用摘要展示的终端运行期。
+    /// 参数: 无；返回: 独立测试界面。
+    fn runtime() -> ReplRuntime {
+        ReplRuntime::new(
+            5000,
+            TranscriptRenderOptions {
+                reasoning_mode: crate::render::ReasoningDisplayMode::Summary,
+                tool_call_mode: crate::render::ToolCallDisplayMode::Summary,
+            },
+        )
+    }
 
     /// 模式提示带上模式名，用户能确认切到了哪个。
     #[test]
@@ -178,5 +211,64 @@ mod tests {
             notice.contains(AgentMode::Plan.label()),
             "notice should name the mode: {notice}"
         );
+    }
+
+    /// 【工具方式】【运行中保存】热切换立即更新共享模式，同时保存默认值并保留权限。
+    /// 参数: 无；返回: 无。
+    #[test]
+    fn stream_command_saves_default_and_updates_live_mode() {
+        let root = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(root.path());
+        let initial = AgentMode::Audited;
+        let ctx = StreamCommandContext::capture(&paths, root.path().display().to_string(), initial);
+        let mut runtime = runtime();
+        let live = LiveAgentMode::new(initial, None);
+        runtime.bind_live_mode(live.clone(), "codemode-test");
+        for (command, expected) in [
+            ("/code-model only", CodeMode::Only),
+            ("/code-model off", CodeMode::Off),
+            ("/code-model on", CodeMode::On),
+        ] {
+            run_immediate_stream_command(&mut runtime, &ctx, command).unwrap();
+            assert_eq!(live.get(), initial.with_code_mode(expected));
+            assert_eq!(AppConfig::load(&paths).unwrap().codemode.mode, expected);
+        }
+    }
+
+    /// 【工具方式】【运行中失败】配置不可写时保留共享模式，命令返回成功以继续当前任务。
+    /// 参数: 无；返回: 无。
+    #[test]
+    fn stream_command_keeps_live_mode_when_saving_fails() {
+        let root = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(root.path());
+        paths.create_dirs().unwrap();
+        std::fs::create_dir(&paths.config_file).unwrap();
+        let initial = AgentMode::Audited;
+        let ctx = StreamCommandContext::capture(&paths, root.path().display().to_string(), initial);
+        let mut runtime = runtime();
+        let live = LiveAgentMode::new(initial, None);
+        runtime.bind_live_mode(live.clone(), "codemode-test");
+        run_immediate_stream_command(&mut runtime, &ctx, "/code-model only").unwrap();
+        assert_eq!(live.get(), initial);
+        assert_eq!(runtime.stream_mode(initial), initial);
+    }
+
+    /// 【工具方式】【运行中权限】权限热切换保留工具方式，且不创建全局工具配置。
+    /// 参数: 无；返回: 无。
+    #[test]
+    fn stream_permission_switch_does_not_save_tool_mode() {
+        let root = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(root.path());
+        let initial = AgentMode::Audited.with_code_mode(CodeMode::Only);
+        let ctx = StreamCommandContext::capture(&paths, root.path().display().to_string(), initial);
+        let mut runtime = runtime();
+        let live = LiveAgentMode::new(initial, None);
+        runtime.bind_live_mode(live.clone(), "codemode-test");
+        run_immediate_stream_command(&mut runtime, &ctx, "/auto").unwrap();
+        assert_eq!(
+            live.get(),
+            AgentMode::AutoAudit.with_code_mode(CodeMode::Only)
+        );
+        assert!(!paths.config_file.exists());
     }
 }

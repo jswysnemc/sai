@@ -83,7 +83,7 @@ impl ConversationDb {
     /// 返回:
     /// - 切换是否成功；目标轮次不存在时报错
     pub fn switch_active_leaf(&self, turn_id: &str) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let mut conn = self.conn.lock().unwrap();
         // 会话根是恒存在的合法目标，无需轮次存在性校验
         if turn_id != SESSION_ROOT_TURN_ID {
             let exists: i64 = conn.query_row(
@@ -95,7 +95,17 @@ impl ConversationDb {
                 bail!("turn not found: {turn_id}");
             }
         }
-        set_active_leaf_locked(&conn, turn_id)
+        if active_leaf_locked(&conn)?.as_deref() == Some(turn_id) {
+            return Ok(());
+        }
+        let tx = conn.transaction()?;
+        set_active_leaf_locked(&tx, turn_id)?;
+        // 1. 【会话记忆】【分支隔离】导航与租约失效原子完成，旧分支的后台结果不能回写
+        tx.execute_batch(
+            "DELETE FROM session_memory; DELETE FROM session_memory_extraction_interval;",
+        )?;
+        tx.commit()?;
+        Ok(())
     }
 
     /// 把活动叶子退回到指定轮次的父轮次。
@@ -119,8 +129,7 @@ impl ConversationDb {
         };
         // 迁移前的旧行可能仍是 NULL，一律视为挂在会话根下
         let parent = parent.unwrap_or_else(|| SESSION_ROOT_TURN_ID.to_string());
-        let conn = self.conn.lock().unwrap();
-        set_active_leaf_locked(&conn, &parent)?;
+        self.switch_active_leaf(&parent)?;
         // 对外沿用「已在根部返回 None」的语义，根哨兵不外泄
         Ok(Some(parent).filter(|value| value != SESSION_ROOT_TURN_ID))
     }

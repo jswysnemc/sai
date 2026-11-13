@@ -61,6 +61,7 @@ pub(crate) use progressive::{
     register_loader as register_progressive_loader, DEFERRED_ALL_EXCEPT_ANCHOR_BOOTSTRAP,
     INVOKE_NAME, LOAD_NAME,
 };
+pub(crate) use registry::PreparedToolCall;
 pub use registry::{empty_parameters, ToolPermission, ToolProgress, ToolRegistry, ToolSpec};
 pub(crate) use registry::{
     PluginReplyContexts, PluginToolPolicyStates, PreparedPluginReplies, ToolModelAttachment,
@@ -226,6 +227,7 @@ pub(crate) fn builtin_registry_with_cached_mcp(
 /// - 内置工具与 MCP 管理工具组成的注册表
 pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     let mut registry = ToolRegistry::new();
+    registry.hooks = config.hooks.clone();
     crate::gateways::channel_tools::register_unbound_channel_message_tool(
         &mut registry,
         paths,

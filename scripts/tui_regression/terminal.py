@@ -20,9 +20,10 @@ from binary_build import resolve_test_binary
 class TerminalSession:
     """提供按键输入、尺寸变化和完整屏幕断言所需的伪终端。"""
 
-    def __init__(self, config=None, columns=80, rows=24, prepare=None, arguments=None, workspace=None, ready=None, kitty_keyboard=False, kitty_graphics=False):
+    def __init__(self, config=None, columns=80, rows=24, prepare=None, arguments=None, workspace=None, ready=None, kitty_keyboard=False, kitty_graphics=False, terminal_colors=None):
         """config 为配置，columns/rows 为尺寸；prepare 初始化数据，arguments/workspace 指定启动参数与目录，ready 指定就绪条件；kitty_keyboard 应答键盘协议，kitty_graphics 启用图片协议并保留原始载荷。"""
         self.kitty_keyboard = kitty_keyboard
+        self.terminal_colors = terminal_colors or ("dddddd", "000000")
         self.kitty_graphics = kitty_graphics
         self.graphics_pending = ""
         self.directory = tempfile.TemporaryDirectory(prefix="sai-terminal-test-")
@@ -69,7 +70,7 @@ class TerminalSession:
     def __enter__(self):
         """等待输入提示就绪；返回会话本身。"""
         try:
-            self.wait_for(lambda: self.ready(self) if self.ready else "auto" in self.text().lower(), timeout=15)
+            self.wait_for(lambda: self.ready(self) if self.ready else "→" in self.text() and ("Shift+Tab" in self.text() or "Shift+Enter" in self.text()), timeout=15)
         except Exception as error:
             self.__exit__(type(error), error, error.__traceback__)
             raise
@@ -118,12 +119,17 @@ class TerminalSession:
             if b"\x1b[6n" in data:
                 self.send(f"\x1b[{self.screen.cursor.y + 1};{self.screen.cursor.x + 1}R".encode())
             if b"\x1b]10;?" in data:
-                self.send(b"\x1b]10;rgb:dddd/dddd/dddd\x1b\\")
+                self.send(self.color_response(10, self.terminal_colors[0]))
             if b"\x1b]11;?" in data:
-                self.send(b"\x1b]11;rgb:0000/0000/0000\x1b\\")
+                self.send(self.color_response(11, self.terminal_colors[1]))
             if self.kitty_keyboard and b"\x1b[?u" in data:
                 # 应答键盘增强协议查询与主设备属性，让 sai 真正启用协议
                 self.send(b"\x1b[?0u\x1b[?62;22c")
+
+    def color_response(self, index, color):
+        """index 为 OSC 色彩编号，color 为六位 RGB；返回终端颜色应答字节。"""
+        channels = [color[offset:offset + 2] * 2 for offset in (0, 2, 4)]
+        return f"\x1b]{index};rgb:{'/'.join(channels)}\x1b\\".encode()
 
     def filter_graphics(self, text):
         """【终端】【协议过滤】参数 text 为解码输出；保留原始协议证据，仅从 pyte 文本输入中移除跨块 APC。"""

@@ -330,18 +330,6 @@ describe("runEventReducer", () => {
     expect(toolPart?.type === "tool" ? toolPart.tool.permission : "missing").toBeUndefined();
   });
 
-  /// 外部内核连上后要留下可见证据，否则用户无法分辨本轮由谁执行。
-  it("records which engine took over the turn", () => {
-    const state = runEventReducer(initialRunState, {
-      type: "event",
-      event: event("engine.ready", { engine: "Codex", version: "1.1.7" })
-    });
-
-    expect(state.parts).toEqual([
-      expect.objectContaining({ type: "engine_ready", engine: "Codex", version: "1.1.7" })
-    ]);
-  });
-
   it("keeps partial assistant content when a run is interrupted", () => {
     const content = runEventReducer(initialRunState, {
       type: "event",

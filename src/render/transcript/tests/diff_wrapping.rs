@@ -46,7 +46,11 @@ fn diff_long_lines_wrap_with_body_column_indent() {
     assert!(!continuations.is_empty(), "应存在续行: {plain:?}");
     for line in continuations {
         // 按字符数而非字节数统计，宽字符下两者不等
-        let indent = line.chars().take_while(|ch| *ch == ' ').count();
+        assert!(line.starts_with('│'), "续行应保留左侧引导线: {line:?}");
+        let indent = line
+            .chars()
+            .take_while(|ch| matches!(*ch, ' ' | '│' | '┃'))
+            .count();
         assert!(
             indent >= 7,
             "续行应缩进到 diff 正文列，实际缩进 {indent}: {line:?}"

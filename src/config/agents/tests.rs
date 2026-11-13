@@ -46,32 +46,17 @@ fn applies_surface_specific_default_agents() {
     assert_eq!(tui.system_prompt.as_deref(), Some("tui prompt"));
 }
 
-/// 验证终端入口强制使用内置内核，Web 仍保留外部内核。
+/// 内置功能档案不注入人格提示词，工具范围保持原义。
 #[test]
-fn terminal_surfaces_force_native_engine_without_changing_web() {
-    let mut config = crate::config::AppConfig::default();
-    config.agent.engine = crate::config::AgentEngineKind::ClaudeCode;
-
-    let cli = apply_agent_override(config.clone(), None, AgentSurface::Cli).unwrap();
-    let tui = apply_agent_override(config.clone(), None, AgentSurface::Tui).unwrap();
-    let web = apply_agent_override(config, None, AgentSurface::Web).unwrap();
-
-    assert_eq!(cli.agent.engine, crate::config::AgentEngineKind::Native);
-    assert_eq!(tui.agent.engine, crate::config::AgentEngineKind::Native);
-    assert_eq!(web.agent.engine, crate::config::AgentEngineKind::ClaudeCode);
-}
-
-/// 内置代码 Agent 带有工程规范提示词；探索 Agent 为只读。
-#[test]
-fn builtin_agents_include_default_prompts() {
+fn builtin_agents_have_no_persona_prompts() {
     let [cli, general, explore, plan, _gateway] = builtin_agent_profiles();
-    assert!(cli.system_prompt.contains("Sai"));
+    assert!(cli.system_prompt.is_empty());
     assert!(cli.enabled_tools.is_empty());
-    assert!(general.system_prompt.contains("核心铁律"));
+    assert!(general.system_prompt.is_empty());
     assert!(!general.enabled_tools.is_empty());
-    assert!(explore.system_prompt.contains("只读"));
+    assert!(explore.system_prompt.is_empty());
     assert!(!explore.enabled_tools.is_empty());
-    assert!(plan.system_prompt.contains("Plan"));
+    assert!(plan.system_prompt.is_empty());
     assert!(!plan.enabled_tools.is_empty());
 }
 
@@ -92,7 +77,7 @@ fn default_surfaces_use_cli_and_code_agents() {
         vec![crate::config::DEFERRED_ALL_NON_BASE.to_string()],
         "CLI 非基础工具应按需 load"
     );
-    assert!(cli.system_prompt.as_deref().unwrap_or("").contains("Sai"));
+    assert!(cli.system_prompt.as_deref().unwrap_or("").is_empty());
     assert!(cli.load_instruction_files);
     let tui = apply_agent_override(config.clone(), None, AgentSurface::Tui).unwrap();
     let runtime = tui.agent_runtime.expect("code agent whitelist");
@@ -111,11 +96,7 @@ fn default_surfaces_use_cli_and_code_agents() {
     assert!(!runtime.enabled_tools.iter().any(|t| t == "show_meme"));
     assert!(!runtime.enabled_tools.iter().any(|t| t == "calculate"));
     assert!(!runtime.enabled_tools.iter().any(|t| t == "man_page_search"));
-    assert!(tui
-        .system_prompt
-        .as_deref()
-        .unwrap_or("")
-        .contains("核心铁律"));
+    assert!(tui.system_prompt.as_deref().unwrap_or("").is_empty());
     let gateway = apply_agent_override(config, None, AgentSurface::Gateway).unwrap();
     assert!(!gateway.load_instruction_files);
     let gateway_tools = gateway
@@ -185,7 +166,7 @@ fn explore_and_plan_are_readonly_scoped() {
     assert!(!tools.iter().any(|t| t == "online_man_search"));
     assert!(!tools.iter().any(|t| t == "run_command"));
     assert!(!tools.iter().any(|t| t == "fetch_url"));
-    assert!(plan.system_prompt.as_deref().unwrap_or("").contains("Plan"));
+    assert!(plan.system_prompt.as_deref().unwrap_or("").is_empty());
 }
 
 /// 白名单原样生效，不再对旧工具名做任何映射。

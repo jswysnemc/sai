@@ -1,3 +1,5 @@
+pub(crate) mod compaction_context;
+pub(crate) mod extraction_interval;
 pub(crate) mod extractor;
 pub(crate) mod model;
 pub(crate) mod model_extractor;

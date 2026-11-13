@@ -14,6 +14,7 @@ impl ToolRegistry {
         session_id: &str,
         state_dir: &Path,
     ) {
+        self.hooks = config.hooks.clone();
         if self.session_key.is_empty()
             || (self.session_id == session_id
                 && Path::new(&self.session_key) == state_dir

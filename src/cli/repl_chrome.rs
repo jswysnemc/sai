@@ -74,7 +74,14 @@ impl ReplChrome {
             thinking,
             directory,
             branch,
-            cache_hit_ratio: None,
+            cache_hit_ratio: snapshot
+                .as_ref()
+                .and_then(|snapshot| snapshot.usage.last_conversation_usage.as_ref())
+                .filter(|usage| usage.prompt_tokens > 0)
+                .map(|usage| {
+                    usage.cache_read_tokens.min(usage.prompt_tokens) as f32
+                        / usage.prompt_tokens as f32
+                }),
             status_plugin: Some(crate::plugins::TuiStatusRenderer::start(
                 config.clone(),
                 paths.clone(),

@@ -33,7 +33,9 @@ fn restored_read_aligns_wrapped_code_including_source_indent() {
     let lines = visible_lines(&mut store, 40);
     let first = lines
         .iter()
-        .position(|line| line.trim_start().starts_with("120 ") && line.contains('x'))
+        .position(|line| {
+            line.trim_start_matches([' ', '│', '┃']).starts_with("120 ") && line.contains('x')
+        })
         .unwrap();
     let column = lines[first].find('x').unwrap();
     assert_eq!(lines[first + 1].find('x'), Some(column), "{lines:#?}");

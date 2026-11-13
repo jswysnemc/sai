@@ -176,12 +176,6 @@ impl<'agent> TurnRunner<'agent> {
             result.ttft_ms,
             result.usage.as_ref(),
         );
-        // 3. 【目标】【运行收尾】内置模型逐请求核算，外部内核在完整轮次结束时核算
-        if self.agent.uses_external_engine() {
-            if let Some(accounting) = &self.agent.goal_accounting {
-                accounting.record(result.usage.as_ref())?;
-            }
-        }
         if let Some(guard) = &mut goal_guard {
             guard.finish(
                 input.automatic_input.is_some(),

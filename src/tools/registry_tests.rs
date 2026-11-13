@@ -19,7 +19,7 @@ async fn approved_network_command_reaches_handler_without_sandbox_marker() {
         ToolSpec::new(
             "run_command",
             "test",
-            empty_parameters(),
+            json!({"type":"object","properties":{"command":{"type":"string"}},"required":["command"],"additionalProperties":false}),
             move |arguments| {
                 let handler_received = Arc::clone(&handler_received);
                 async move {
@@ -63,7 +63,7 @@ async fn model_supplied_internal_arguments_are_dropped() {
     registry.register(ToolSpec::new(
         "run_command",
         "test",
-        empty_parameters(),
+        json!({"type":"object","properties":{"command":{"type":"string"}},"required":["command"],"additionalProperties":false}),
         move |arguments| {
             let handler_received = Arc::clone(&handler_received);
             async move {
@@ -94,7 +94,7 @@ fn resolves_accepts_registered_tools() {
     registry.register(ToolSpec::new(
         "str_replace",
         "test",
-        empty_parameters(),
+        json!({"type":"object","properties":{"command":{"type":"string"}},"required":["command"],"additionalProperties":false}),
         |_arguments| async move { Ok(String::new()) },
     ));
 
@@ -158,14 +158,14 @@ fn definitions_preserve_registration_order() {
         registry.register(ToolSpec::new(
             name,
             "test",
-            empty_parameters(),
+            json!({"type":"object","properties":{"command":{"type":"string"}},"required":["command"],"additionalProperties":false}),
             |_arguments| async move { Ok(String::new()) },
         ));
     }
     registry.register(ToolSpec::new(
         "beta",
         "updated",
-        empty_parameters(),
+        json!({"type":"object","properties":{"command":{"type":"string"}},"required":["command"],"additionalProperties":false}),
         |_arguments| async move { Ok(String::new()) },
     ));
 
@@ -185,7 +185,7 @@ fn clone_filtered_preserves_source_order() {
         registry.register(ToolSpec::new(
             name,
             "test",
-            empty_parameters(),
+            json!({"type":"object","properties":{"command":{"type":"string"}},"required":["command"],"additionalProperties":false}),
             |_arguments| async move { Ok(String::new()) },
         ));
     }
@@ -210,7 +210,7 @@ fn clone_filtered_preserves_session_ownership_and_cross_session() {
         registry.register(ToolSpec::new(
             name,
             "test",
-            empty_parameters(),
+            json!({"type":"object","properties":{"command":{"type":"string"}},"required":["command"],"additionalProperties":false}),
             |_arguments| async move { Ok(String::new()) },
         ));
     }

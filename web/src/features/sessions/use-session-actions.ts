@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
-import type { EngineStatusResponse, WorkspaceSessions } from "../../api/contracts";
+import type { WorkspaceSessions } from "../../api/contracts";
 import type { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { switchWithTerminalConfirm } from "../workspaces/workspace-switcher";
 import { invalidateWorkspaceContext } from "../workspaces/invalidate-workspace-context";
@@ -104,14 +104,9 @@ export function useSessionActions({ confirm, t, tree, onNavigate, onSessionSelec
       queryKey: ["config"],
       queryFn: api.config.load
     });
-    const engine = response.config.agent?.engine ?? "native";
-    // 1. 【会话】【新会话默认值】外部内核复用已有能力快照；首次握手前保留用户配置，不阻塞创建
-    const status = engine === "native"
-      ? undefined
-      : queryClient.getQueryData<EngineStatusResponse>(["engine-status"]);
     // 2. 【会话】【新会话默认值】服务端创建成功后立即建立会话专属偏好
     const session = await api.sessions.create(undefined, workspaceId);
-    initializeNewSessionPreferences(session.id, response.config, status);
+    initializeNewSessionPreferences(session.id, response.config);
     return session;
   };
 

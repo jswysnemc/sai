@@ -40,5 +40,6 @@ class StartupRenderingTests(unittest.TestCase):
     def test_empty_history_does_not_repaint_welcome(self):
         """无参数；首次启动的空历史不清屏重绘欢迎页，保留一次正文绘制和输入框绘制。"""
         with TerminalSession(arguments=["--lang", "en-US"]) as terminal:
-            welcome = re.findall(rb"sai\x1b\[0m \x1b\[2m\d+\.\d+", terminal.raw)
+            plain = re.sub(rb"\x1b\[[0-9;:]*m", b"", bytes(terminal.raw))
+            welcome = re.findall(rb"sai \d+\.\d+", plain)
             self.assertEqual(len(welcome), 1)

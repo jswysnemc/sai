@@ -100,9 +100,9 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
                     && !matches!(&preview, Some((preview_row, _)) if *preview_row == row) =>
             {
                 if document_row == span.control && state.pointer_row == Some(row) {
-                    super::block_hover::tint(&super::guide_button::render(&body, span.expanded))
+                    super::hover::tint_line(&super::guide_button::render(&body, span.expanded))
                 } else {
-                    super::block_hover::tint(&body)
+                    super::hover::tint_line(&body)
                 }
             }
             _ => body,

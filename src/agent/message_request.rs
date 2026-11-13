@@ -29,8 +29,14 @@ impl Agent {
         F: FnMut(AgentEvent) -> Result<()>,
     {
         let events = self.tools.plugin_events();
-        events
-            .model_round(
+        crate::hooks::model_scope(
+            self.config.hooks.clone(),
+            self.tools.hook_context().with("turn_id", turn_id).with(
+                "model",
+                super::model_context::current_model_id(&self.config),
+            ),
+            self.tools.clone(),
+            events.model_round(
                 serde_json::json!({"turn_id": turn_id, "round": round}),
                 self.request_model_round_inner(
                     turn_id,
@@ -40,8 +46,9 @@ impl Agent {
                     on_event,
                     perf,
                 ),
-            )
-            .await
+            ),
+        )
+        .await
     }
 
     /// 【Agent】【模型传输】执行模型请求及有限重试，生命周期由外层统一配对。

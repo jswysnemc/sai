@@ -326,12 +326,10 @@ fn shell_commands(
 
 /// 构造按需沙箱化的 shell 命令候选列表。
 ///
-/// 对外开放同一套构造逻辑，供 ACP 客户端的终端能力复用：
-/// 外部内核执行命令时走的沙箱与 sai 自带的 run_command 必须完全一致，
-/// 各写一份迟早会分叉出治理缺口。
+/// 统一使用实际 Shell 设置、沙箱策略与可信启动器。
 ///
 /// Windows 在构造时按 pwsh、powershell、cmd 查找实际存在的 Shell，
-/// 再返回可信启动器；它在用户脚本执行前绑定 Job，ACP 与内置命令使用相同边界。
+/// 再返回可信启动器；它在用户脚本执行前绑定 Job，所有命令使用相同边界。
 ///
 /// 参数:
 /// - `command`: 待执行命令
@@ -350,75 +348,6 @@ pub(crate) fn build_shell_commands(
         bail!("no shell command candidate was produced")
     }
     Ok(candidates)
-}
-
-/// 按 ACP 的命令名和参数数组构造 Shell 候选。
-///
-/// 参数:
-/// - `command`: ACP 的命令名
-/// - `args`: ACP 的独立参数
-/// - `configured_shell`: 配置指定的 Shell
-/// - `sandbox`: 可选沙箱策略
-///
-/// 返回:
-/// - 按优先级排列的 `(程序名, 命令)` 列表
-///
-/// Windows 的 PowerShell 与 cmd 对引号转义规则不同，先选定候选风格再组装
-/// 命令行，避免把 PowerShell 的单引号参数错误地交给 cmd，或反过来。
-pub(crate) fn build_shell_commands_for_args(
-    command: &str,
-    args: &[String],
-    configured_shell: &str,
-    sandbox: Option<&SandboxPolicy>,
-) -> Result<Vec<(String, Command)>> {
-    #[cfg(windows)]
-    {
-        let shell = crate::sandbox::windows::resolve_shell(configured_shell)?;
-        let flavor = crate::platform::shell_selection::shell_flavor(shell.as_os_str());
-        let line = command_line_for_flavor(command, args, flavor);
-        return build_shell_commands(&line, &shell.to_string_lossy(), sandbox);
-    }
-    #[cfg(not(windows))]
-    {
-        // 沙箱策略必须随参数形式一起传下去；此前这里丢弃了它，外部内核的命令绕过了沙箱
-        let line = command_line_for_flavor(command, args);
-        build_shell_commands(&line, configured_shell, sandbox)
-    }
-}
-
-#[cfg(windows)]
-fn shell_flavor_for_program(program: &str) -> crate::platform::shell_selection::ShellFlavor {
-    crate::platform::shell_selection::shell_flavor(std::ffi::OsStr::new(program))
-}
-
-#[cfg(windows)]
-fn command_line_for_flavor(
-    command: &str,
-    args: &[String],
-    flavor: crate::platform::shell_selection::ShellFlavor,
-) -> String {
-    let mut line = command.to_string();
-    for arg in args {
-        line.push(' ');
-        line.push_str(&match flavor {
-            crate::platform::shell_selection::ShellFlavor::PowerShell
-            | crate::platform::shell_selection::ShellFlavor::Unknown => {
-                format!("'{}'", arg.replace('\'', "''"))
-            }
-            _ => format!("\"{}\"", arg.replace('"', "\\\"")),
-        });
-    }
-    line
-}
-
-#[cfg(not(windows))]
-fn command_line_for_flavor(command: &str, args: &[String]) -> String {
-    let mut line = command.to_string();
-    for arg in args {
-        line.push(' ');
-        line.push_str(&format!("'{}'", arg.replace('\'', "'\\''")));
-    }
-    line
 }
 
 /// 构造 Unix 平台的 shell 命令候选。

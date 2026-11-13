@@ -1,5 +1,6 @@
 """【会话模式】【终端回归】验证真实按键和命令在空闲及生成期间切换脚本模式。"""
 
+import json
 import unittest
 
 from mock_model import MockModel
@@ -31,6 +32,8 @@ class CodeModelTests(unittest.TestCase):
             terminal.wait_for(model.ready.is_set)
             terminal.send(b"/code-model\r")
             terminal.wait_for(lambda: "CODE-MODEL" in terminal.text())
+            saved = json.loads((terminal.root / "config/sai/config.jsonc").read_text())
+            self.assertEqual(saved["codemode"]["mode"], "on")
             model.release.set()
             terminal.wait_for(lambda: "AFTER-TABLE" in terminal.text())
 
@@ -46,3 +49,16 @@ class CodeModelTests(unittest.TestCase):
                 terminal.pump(.2)
                 terminal.send(b"\r")
                 terminal.wait_for(lambda: status() == expected)
+
+    def test_code_model_selection_persists_for_the_next_startup(self):
+        """【工具方式】【重启继承】保存独占方式后以磁盘配置重新启动，权限仍按入口配置选择；返回无。"""
+        with TerminalSession(arguments=["--yolo", "--no-code-model", "--lang", "en-US"]) as terminal:
+            terminal.send(b"/code-model only")
+            terminal.pump(.2)
+            terminal.send(b"\r")
+            terminal.wait_for(lambda: "Default tool mode saved" in terminal.text())
+            saved = json.loads((terminal.root / "config/sai/config.jsonc").read_text())
+            self.assertEqual(saved["codemode"]["mode"], "only")
+        with TerminalSession(saved, arguments=["--audited", "--lang", "en-US"]) as terminal:
+            terminal.wait_for(lambda: any(line.strip().split()[0] == "audited+code-model-only"
+                              for line in terminal.text().splitlines() if "%/" in line))

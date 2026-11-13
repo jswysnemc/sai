@@ -25,7 +25,6 @@ export function useSettingsConfig(): SettingsConfigController {
     rebase: rebaseProviderSources,
     onSaved: async (_, queryClient) => {
       // 内核查询在设置页通常未挂载；直接移除旧值，避免返回聊天页时闪现旧模型
-      queryClient.removeQueries({ queryKey: ["engine-status"] });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["gateways"] }),
         queryClient.invalidateQueries({ queryKey: ["system-usage"] })

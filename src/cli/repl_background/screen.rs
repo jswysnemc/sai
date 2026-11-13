@@ -51,11 +51,15 @@ impl TaskScreen {
             execute!(self.stdout, Clear(ClearType::All))?;
             self.previous.clear();
         }
+        let readable: Vec<_> = lines
+            .iter()
+            .map(|line| crate::render::readable_terminal_text(line))
+            .collect();
         crate::render::terminal_rows::paint_changed_rows(
             &mut self.stdout,
             0,
             usize::from(size.0),
-            lines,
+            &readable,
             Some(&self.previous),
         )?;
         crate::config_tui::ui::end_synced_frame(&mut self.stdout)?;

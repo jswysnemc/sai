@@ -257,6 +257,14 @@ impl PermissionProfile {
     ///
     /// 返回:
     /// - 存在匹配批准状态时返回 `true`
+    /// 【权限】【批准匹配】参数为工具与最终参数，返回一次性批准是否存在，不提前消耗批准
+    pub(crate) fn has_matching_approval(&self, tool: &str, arguments: &Value) -> bool {
+        self.approved
+            .lock()
+            .map(|approved| approved.contains(&approval_key(tool, arguments)))
+            .unwrap_or(false)
+    }
+
     fn consume_approval(&self, tool: &str, arguments: &Value) -> bool {
         self.approved
             .lock()

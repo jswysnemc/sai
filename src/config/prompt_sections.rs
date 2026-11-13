@@ -18,9 +18,6 @@ fn default_true() -> bool {
 /// 全部默认开启，旧配置行为不变。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PromptSectionToggles {
-    /// 内置默认人设；关闭后 Agent 自己的 system_prompt 为空即真的空白
-    #[serde(default = "default_true")]
-    pub builtin_persona: bool,
     /// 当前用户身份档案
     #[serde(default = "default_true")]
     pub user_identity: bool,
@@ -48,7 +45,6 @@ impl Default for PromptSectionToggles {
     /// - 全开的分段开关
     fn default() -> Self {
         Self {
-            builtin_persona: true,
             user_identity: true,
             skills_catalog: true,
             state_contract: true,
@@ -71,7 +67,6 @@ impl PromptSectionToggles {
     #[cfg(test)]
     pub fn all_disabled() -> Self {
         Self {
-            builtin_persona: false,
             user_identity: false,
             skills_catalog: false,
             state_contract: false,
@@ -97,13 +92,6 @@ pub struct PromptSectionInfo {
 
 /// 全部内置分段的清单，顺序即它们在提示词中出现的顺序。
 pub const PROMPT_SECTIONS: &[PromptSectionInfo] = &[
-    PromptSectionInfo {
-        id: "builtin_persona",
-        label_en: "Built-in persona",
-        label_zh: "内置人设",
-        hint_en: "Fallback persona used when the agent's own system prompt is empty. Turn off for a truly blank prompt.",
-        hint_zh: "Agent 自身提示词为空时使用的兜底人设。要配出真正空白的提示词就关掉它。",
-    },
     PromptSectionInfo {
         id: "user_identity",
         label_en: "User identity",
@@ -152,7 +140,6 @@ mod tests {
     fn every_section_defaults_to_enabled() {
         let toggles = PromptSectionToggles::default();
 
-        assert!(toggles.builtin_persona);
         assert!(toggles.user_identity);
         assert!(toggles.skills_catalog);
         assert!(toggles.state_contract);
@@ -204,6 +191,5 @@ mod tests {
             serde_json::from_str(r#"{"state_contract": false}"#).unwrap();
 
         assert!(!toggles.state_contract);
-        assert!(toggles.builtin_persona);
     }
 }

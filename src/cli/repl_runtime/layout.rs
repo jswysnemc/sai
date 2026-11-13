@@ -345,7 +345,7 @@ mod tests {
                 continue;
             }
             assert!(
-                line.as_str().starts_with("   ") && !line.as_str().starts_with("    "),
+                plain.starts_with("│  ") && !plain.starts_with("│   "),
                 "diff 正文未保持三列内收: {:?}",
                 line.as_str()
             );
@@ -390,7 +390,7 @@ mod tests {
                 assert!(!plain.starts_with(' '), "diff 摘要应顶格: {plain:?}");
             } else {
                 assert!(
-                    line.as_str().starts_with("   "),
+                    plain.starts_with("│  "),
                     "diff 续行进入视觉引导区: {plain:?}"
                 );
             }

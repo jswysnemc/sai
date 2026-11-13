@@ -94,6 +94,7 @@ impl ReplRuntime {
             || self.sidebar_control.scrollbar.hovered.is_some();
         let effect = match self
             .image_viewer_event(event)
+            .or_else(|| self.block_scrollbar_event(event))
             .or_else(|| self.sidebar_scrollbar_event(event))
             .or_else(|| self.header_control_event(event))
             .or_else(|| self.sidebar_control_event(event))

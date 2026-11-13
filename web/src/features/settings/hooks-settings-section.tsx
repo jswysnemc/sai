@@ -6,6 +6,7 @@ import { useI18n } from "../i18n/use-i18n";
 import { ChoicePills, DetailHeader, EmptyGuide, FieldGrid, InlineSwitch, MasterDetail, ObjectList, SettingsField, SettingsPanel, SkNumberInput, SkSelect, SkTextInput, SwitchField } from "./kit";
 import { useSettingsItem } from "./shell/use-settings-item";
 import { HookActionFields } from "./hooks/hook-action-fields";
+import { HooksRuntimePanel } from "./hooks/hooks-runtime-panel";
 import { createHook, HOOK_EVENTS, HOOK_TEMPLATES, hookItemKey } from "./hooks/hook-templates";
 
 type Props = { config: AppConfig; onConfigChange: (config: AppConfig) => void };
@@ -43,9 +44,10 @@ export function HooksSettingsSection({ config, onConfigChange }: Props) {
     setHooks({ items: next });
     select(next.length ? hookItemKey(next[0], 0) : "");
   };
-  const master = <SwitchField label={t("Enable hooks", "启用 Hooks")} anchor="hooks.enabled" checked={hooks.enabled !== false} onChange={(enabled) => setHooks({ enabled })} hint={t("Hook failures are logged and do not block the main run.", "钩子失败只记录日志，不阻断主流程。")} />;
+  const master = <SwitchField label={t("Enable hooks", "启用 Hooks")} anchor="hooks.enabled" checked={hooks.enabled !== false} onChange={(enabled) => setHooks({ enabled })} hint={t("Execution errors are logged. Synchronous hooks can deny tools, govern approval or request continued work.", "执行错误只记录日志。同步钩子可以拒绝工具、参与审批或要求继续执行。")} />;
   if (!hook) return <div className="grid gap-4">
     {master}
+    <HooksRuntimePanel />
     <EmptyGuide title={t("No hooks configured", "尚未配置 Hook")} description={t("Start from a diagnostic template or add your own command or HTTP action.", "可从诊断模板开始，或添加自定义命令与 HTTP 动作。")} action={<Button variant="secondary" onClick={() => add()}>{t("Add hook", "添加 Hook")}</Button>} templates={HOOK_TEMPLATES.map((template) => ({ id: template.id, label: t(template.en, template.zh), description: t(template.descriptionEn, template.descriptionZh), onSelect: () => add(template.patch) }))} />
   </div>;
   return <MasterDetail list={<ObjectList title="Hooks" items={items.map((item, i) => ({ id: hookItemKey(item, i), name: item.name, meta: item.event, icon: item.kind === "http" ? <Webhook size={14} /> : <Terminal size={14} />, marked: item.enabled !== false }))} selectedId={selectedId} onSelect={select} onAdd={() => add()} searchPlaceholder={t("Search hooks", "搜索 Hook")} headerSlot={master} />}>
@@ -54,10 +56,13 @@ export function HooksSettingsSection({ config, onConfigChange }: Props) {
       <FieldGrid>
         <SettingsField label={t("Name", "名称")} anchor="hooks.name"><SkTextInput value={hook.name} onChange={(name) => update({ name })} /></SettingsField>
         <SettingsField label={t("Event", "事件")} anchor="hooks.event"><SkSelect value={hook.event} options={HOOK_EVENTS.map(([value, en, zh]) => ({ value, label: t(en, zh) }))} onChange={(event) => update({ event })} /></SettingsField>
-        <SettingsField label={t("Action type", "动作类型")} anchor="hooks.kind"><ChoicePills value={hook.kind ?? "command"} options={[{ value: "command", label: "Shell" }, { value: "http", label: "HTTP" }]} onChange={(kind) => update({ kind })} /></SettingsField>
-        <SettingsField label={t("Timeout", "超时")} anchor="hooks.timeout_ms" size="sm"><SkNumberInput value={hook.timeout_ms ?? 30_000} min={100} max={120000} unit="ms" onChange={(timeout_ms) => update({ timeout_ms })} /></SettingsField>
+        <SettingsField label={t("Action type", "动作类型")} anchor="hooks.kind"><ChoicePills value={hook.kind ?? "command"} options={[{ value: "command", label: "Shell" }, { value: "http", label: "HTTP" }, { value: "mcp_tool", label: "MCP" }]} onChange={(kind) => update({ kind, async: kind === "command" ? hook.async : false })} /></SettingsField>
+        <SettingsField label={t("Timeout", "超时")} anchor="hooks.timeout_ms" size="sm"><SkNumberInput value={hook.timeout_ms ?? 30_000} min={100} max={600000} unit="ms" onChange={(timeout_ms) => update({ timeout_ms })} /></SettingsField>
+        <SettingsField label={t("Matcher", "匹配器")} hint={t("Tool name, source, trigger or regular expression; empty matches all.", "工具名、来源、压缩类型或正则表达式；留空匹配全部。")}><SkTextInput value={hook.matcher ?? ""} onChange={(matcher) => update({ matcher })} /></SettingsField>
+        {hook.kind !== "http" && hook.kind !== "mcp_tool" && <SwitchField label={t("Run asynchronously", "后台执行")} checked={hook.async === true} onChange={(async) => update({ async })} hint={t("Async hooks never block the triggering action.", "异步钩子不会阻止触发动作。")}/>}
       </FieldGrid>
     </SettingsPanel>
     <HookActionFields key={selectedId} hook={hook} onChange={update} />
+    <HooksRuntimePanel />
   </MasterDetail>;
 }

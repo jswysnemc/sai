@@ -25,7 +25,14 @@ pub(in crate::state) fn create_session_memory_tables(conn: &Connection) -> Resul
             updated_at TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_session_memory_checkpoint
-        ON session_memory(checkpoint_id);",
+        ON session_memory(checkpoint_id);
+        CREATE TABLE IF NOT EXISTS session_memory_extraction_interval (
+            session_id TEXT PRIMARY KEY,
+            baseline_seq INTEGER NOT NULL DEFAULT 0,
+            baseline_turn_tokens INTEGER NOT NULL DEFAULT 0,
+            pending_id TEXT,
+            pending_until INTEGER
+        );",
     )?;
     Ok(())
 }

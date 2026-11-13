@@ -1,4 +1,3 @@
-mod agent_engine;
 mod agent_presets;
 mod agent_tool_modes;
 mod agents;
@@ -15,6 +14,7 @@ pub mod defaults;
 mod display;
 mod gateway_defaults;
 mod git;
+mod hook_options;
 mod jev;
 mod jev_legacy;
 mod mcp_file;
@@ -56,7 +56,6 @@ pub use web_search::WebSearchConfig;
 mod tests;
 
 #[allow(unused_imports)]
-pub use agent_engine::{AcpEngineConfig, AgentEngineConfig, AgentEngineKind};
 #[allow(unused_imports)]
 pub use agent_presets::{ensure_surface_agent_defaults, seed_default_agent_profiles};
 #[allow(unused_imports)]

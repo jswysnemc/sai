@@ -62,17 +62,20 @@ fn draw_cli_tool_menu(stdout: &mut io::Stdout, config: &AppConfig, selected: usi
     queue!(
         stdout,
         MoveTo(x + 4, y + 1),
-        Print(format!(
-            "{MUTED}{BOLD}{}{RESET}",
-            pad(
-                &cli_tool_row(
-                    t("State", "状态"),
-                    t("Tool", "工具"),
-                    t("Description", "说明"),
+        Print(crate::render::readable_terminal_text(
+            &(format!(
+                "{MUTED}{BOLD}{}{RESET}",
+                pad(
+                    &cli_tool_row(
+                        t("State", "状态"),
+                        t("Tool", "工具"),
+                        t("Description", "说明"),
+                        width.saturating_sub(6) as usize,
+                    ),
                     width.saturating_sub(6) as usize,
-                ),
-                width.saturating_sub(6) as usize,
-            )
+                )
+            ))
+            .to_string()
         ))
     )?;
     let tools = cli_tool_names();
@@ -98,7 +101,9 @@ fn draw_cli_tool_menu(stdout: &mut io::Stdout, config: &AppConfig, selected: usi
             let line = cli_tool_row(state, name, description, row_width);
             queue!(
                 stdout,
-                Print(format!("{bar}{style} {}{RESET}", pad(&line, row_width)))
+                Print(crate::render::readable_terminal_text(
+                    &(format!("{bar}{style} {}{RESET}", pad(&line, row_width))).to_string()
+                ))
             )?;
         } else {
             // 常规行：状态点分色，名称常规，说明弱化
@@ -115,9 +120,12 @@ fn draw_cli_tool_menu(stdout: &mut io::Stdout, config: &AppConfig, selected: usi
                 .max(10);
             queue!(
                 stdout,
-                Print(format!(
-                    "{bar} {dot_style}{state_cell}{RESET}{name_cell}{MUTED}{}{RESET}",
-                    truncate(description, remaining)
+                Print(crate::render::readable_terminal_text(
+                    &(format!(
+                        "{bar} {dot_style}{state_cell}{RESET}{name_cell}{MUTED}{}{RESET}",
+                        truncate(description, remaining)
+                    ))
+                    .to_string()
                 ))
             )?;
         }

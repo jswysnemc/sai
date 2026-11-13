@@ -1,10 +1,12 @@
 """【终端】【Windows 路径着色】从真实模型参数流验证路径、行末字符和逻辑换行。"""
 
 import json
+import re
 import unittest
 
 from mock_tool_model import MockToolModel
 from terminal import TerminalSession
+from test_light_theme import luminance
 
 
 COMMANDS = [
@@ -51,7 +53,7 @@ class WindowsPathColoringTests(unittest.TestCase):
         rows = terminal.screen.display
         start = next(index for index, row in enumerate(rows) if "Running $ " in row)
         end = next(index for index in range(start + 1, len(rows)) if "Waiting to run" in rows[index])
-        body = rows[start].split("Running $ ", 1)[1] + "".join(rows[start + 1:end])
+        body = rows[start].split("Running $ ", 1)[1] + "".join(re.sub(r"^\s*[│┃]\s?", "", line) for line in rows[start + 1:end])
         self.assertEqual("".join(body.split()), "".join(command.split()))
         if command in COMMANDS:
             row = rows[start]
@@ -65,7 +67,9 @@ class WindowsPathColoringTests(unittest.TestCase):
         else:
             comment = next(index for index, row in enumerate(rows) if "# 排除" in row)
             last = next(index for index, row in enumerate(rows) if "$rel =" in row)
-            self.assertEqual(terminal.screen.buffer[comment][rows[comment].index("#")].fg, "6e6a86")
+            comment_color = terminal.screen.buffer[comment][rows[comment].index("#")].fg
+            self.assertGreaterEqual((luminance(comment_color) + .05) / .05, 4.5)
+            self.assertNotEqual(comment_color, terminal.screen.buffer[last][rows[last].index("$rel")].fg)
             self.assertEqual(terminal.screen.buffer[last][rows[last].index("rel")].fg, "d7d7ff")
             self.assertEqual(terminal.screen.buffer[last][rows[last].index("1)")].fg, "f6c177")
 

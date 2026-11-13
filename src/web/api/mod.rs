@@ -6,12 +6,13 @@ mod browser;
 mod computer_use;
 mod config;
 mod cron_jobs;
-mod engine_connection;
 mod gateway_weixin_login;
 mod gateways;
 mod generated_images;
 mod goals;
 mod health;
+mod highlight;
+mod hooks;
 mod html_preview;
 mod image_generation;
 mod input_history;
@@ -46,7 +47,6 @@ mod workspace;
 mod workspace_git;
 mod workspace_git_events;
 mod workspaces;
-mod highlight;
 use super::app_state::WebAppState;
 use super::auth;
 use axum::middleware;
@@ -64,10 +64,10 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
     let protected = Router::new()
         .merge(workspaces::routes())
         .merge(config::routes())
+        .merge(hooks::routes())
         .merge(computer_use::routes())
         .merge(onboarding::routes())
         .merge(notifications::routes())
-        .merge(engine_connection::routes())
         .merge(input_history::routes())
         .merge(mcp_config::routes())
         .merge(agent_options::routes())

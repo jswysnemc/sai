@@ -110,10 +110,9 @@ describe("normalizeAgentProfile 对新增开关的保留", () => {
     const normalized = normalizeAgentProfile({
       id: "blank",
       name: "空白",
-      prompt_sections: { builtin_persona: false, state_contract: false }
+      prompt_sections: { state_contract: false }
     });
 
-    expect(normalized.prompt_sections?.builtin_persona).toBe(false);
     expect(normalized.prompt_sections?.state_contract).toBe(false);
   });
 

@@ -41,23 +41,6 @@ struct RtkStatusResponse {
     proxy_commands: Vec<String>,
 }
 
-/// 当前对话内核状态。
-#[derive(Serialize)]
-struct EngineStatusResponse {
-    /// 内核标识
-    engine: String,
-    /// 展示名称
-    label: String,
-    /// 是否为外部 ACP 内核
-    external: bool,
-    /// 该内核下不可用的 sai 功能
-    unavailable_features: Vec<String>,
-    /// 最近一次 ACP 握手能力；尚未启动外部内核时为空
-    acp_capabilities: Option<crate::acp::AcpCapabilities>,
-    /// 最近一次 ACP 握手及会话配置快照
-    acp_runtime: Option<crate::acp::AcpRuntimeState>,
-}
-
 /// 返回配置管理路由。
 pub(super) fn routes() -> Router<WebAppState> {
     Router::new()
@@ -69,7 +52,6 @@ pub(super) fn routes() -> Router<WebAppState> {
         )
         .route("/api/config/rtk-status", get(rtk_status))
         .route("/api/config/sandbox-status", get(sandbox_status))
-        .route("/api/config/engine-status", get(engine_status))
 }
 
 /// 按需读取供应商真实 API Key。
@@ -124,31 +106,6 @@ async fn model_endpoint_secret(
         .headers_mut()
         .insert(PRAGMA, HeaderValue::from_static("no-cache"));
     Ok(response)
-}
-
-/// 返回当前对话内核状态。
-///
-/// 前端据此标注模型与上下文这些在外部内核下不生效的信息，
-/// 避免用户以为自己选的模型还在起作用。
-async fn engine_status(State(state): State<WebAppState>) -> WebResult<Json<EngineStatusResponse>> {
-    let config = config_service::load_redacted(&state.paths).map_err(WebError::from)?;
-    let engine = serde_json::from_value::<crate::config::AgentEngineConfig>(
-        config.get("agent").cloned().unwrap_or(Value::Null),
-    )
-    .unwrap_or_default()
-    .engine;
-    Ok(Json(EngineStatusResponse {
-        engine: engine.as_str().to_string(),
-        label: engine.display_label().to_string(),
-        external: engine.is_external(),
-        unavailable_features: engine
-            .unavailable_features()
-            .into_iter()
-            .map(str::to_string)
-            .collect(),
-        acp_capabilities: crate::acp::current_capabilities(engine.as_str()),
-        acp_runtime: crate::acp::current_runtime_state(engine.as_str()),
-    }))
 }
 
 /// 返回 rtk 可用状态与可代理命令集合，供设置页展示。

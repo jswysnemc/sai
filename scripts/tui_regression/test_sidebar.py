@@ -93,7 +93,8 @@ class SidebarTests(unittest.TestCase):
                 # 3. 【终端侧栏】【消息面板】顶部列表只覆盖正文列，右侧概览仍可见
                 click(terminal, 3, 0)
                 terminal.wait_for(lambda: "User messages (1)" in terminal.text())
-                self.assertIn("Subagents", lines(terminal)[3])
+                self.assertTrue(any("Subagents" in line[120:] for line in lines(terminal)))
+                self.assertTrue(any("tok/s" in line[120:] for line in lines(terminal)))
                 self.assertIn("Changes", terminal.text())
                 terminal.send(b"\x1b")
                 terminal.wait_for(lambda: "User messages" not in terminal.text())

@@ -15,9 +15,17 @@ fn lifecycle_view_replaces_call_with_result() {
     assert!(output.contains("README.md"));
     assert!(output.contains("reading file"));
     assert!(output.contains("contents"));
-    // 统一 gutter：`  └ ` 首行 + 四空格续行，不再使用 `└─`/`├─`
-    assert!(output.contains("  └ "));
+    // 【终端】【进度引导回归】源渲染器不叠加旧竖线，公共引导列只占用首列缩进
+    assert!(output.contains("\n    reading file"));
     assert!(!output.contains("└─") && !output.contains("├─"));
+    let lines = crate::render::transcript::AnsiLine::wrap_block(&output, 80);
+    let progress = lines
+        .iter()
+        .find(|line| line.as_str().contains("reading file"))
+        .unwrap();
+    let guided = crate::render::transcript::tool_guides::output_line(progress, 0);
+    assert!(guided.as_str().contains("│   reading file"));
+    assert!(!guided.as_str().contains("│ │ reading file"));
 }
 
 #[test]

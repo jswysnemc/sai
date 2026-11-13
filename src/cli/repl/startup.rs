@@ -23,7 +23,9 @@ pub(super) fn initialize_runtime(
         tool_call_mode: render::ToolCallDisplayMode::from_config(&config.display.tool_calls),
     };
     let mut runtime = ReplRuntime::new(config.display.repl_transcript_row_cap, options);
-    // 2. 【终端图片】【输入保留】探测期间的按键交回正式输入循环，保持原有事件顺序
+    // 2. 【终端】【输入就绪】先启用输入模式和键盘协议，再显示可操作界面
+    runtime.enable_startup_input()?;
+    // 3. 【终端图片】【输入保留】探测期间的按键交回正式输入循环，保持原有事件顺序
     for event in pending_input {
         runtime.queue_input_event(event);
     }
@@ -33,7 +35,7 @@ pub(super) fn initialize_runtime(
         runtime.toggle_fullscreen()?;
     }
     runtime.set_paste_image_key(config.input.paste_image_key);
-    // 3. 【终端】【启动展示】欢迎信息与历史保存源数据，样式切换时重新渲染
+    // 4. 【终端】【启动展示】欢迎信息与历史保存源数据，样式切换时重新渲染
     runtime.record_welcome(
         env!("CARGO_PKG_VERSION").to_string(),
         repl_welcome_model(config),
@@ -42,11 +44,8 @@ pub(super) fn initialize_runtime(
             .unwrap_or_else(|_| "~".to_string()),
         sandbox_commands::welcome_mode_label(mode),
     )?;
-    if let Some(notice) = render::engine_notice(&config.agent) {
-        runtime.record_meta(notice)?;
-    }
     record_repl_history(&mut runtime, state)?;
-    // 4. 【终端】【启动展示】重量级初始化前先呈现输入框
+    // 5. 【终端】【启动展示】重量级初始化前先呈现输入框
     let chrome = ReplChrome::from_runtime(config, paths, state, mode);
     runtime.update_composer(&chrome, "", 0, false, Vec::new(), 0)?;
     runtime.draw_composer()?;

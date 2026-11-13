@@ -221,28 +221,44 @@ impl Agent {
         if !self.config.memory_config().enabled {
             return;
         }
+        // 2. 【会话记忆】【间隔检查】没有超过 40k 新增 token 时不创建客户端或后台任务
+        let input = match self
+            .state
+            .prepare_session_memory_model_extraction(self.context_char_budget)
+        {
+            Ok(Some(input)) => input,
+            Ok(None) => return,
+            Err(error) => {
+                eprintln!("【会话记忆】【间隔检查】准备提取失败: {error:#}");
+                return;
+            }
+        };
         let state = self.state.clone();
         let paths = self.paths.clone();
-        let context_char_budget = self.context_char_budget;
         // 记忆提取可配置独立模型；未配置时沿用当前会话 client
         let client = match self.config.session_memory_runtime_config() {
             Ok(runtime_config) => {
                 match crate::llm::OpenAiCompatibleClient::from_config(&runtime_config, &paths) {
                     Ok(client) => client,
                     Err(err) => {
-                        eprintln!("[sai] session memory extraction client fallback: {err:#}");
+                        eprintln!("【会话记忆】【模型选择】创建客户端失败，沿用当前模型: {err:#}");
                         self.client.clone()
                     }
                 }
             }
             Err(err) => {
-                eprintln!("[sai] session memory extraction config fallback: {err:#}");
+                eprintln!("【会话记忆】【模型选择】配置失败，沿用当前模型: {err:#}");
                 self.client.clone()
             }
         };
         tokio::spawn(async move {
-            let _ =
-                extract_session_memory_with_model(state, client, paths, context_char_budget).await;
+            if let Err(error) =
+                extract_session_memory_with_model(&state, client, paths, &input).await
+            {
+                let _ = state
+                    .record_session_memory_model_extraction_failure(&input, &format!("{error:#}"));
+                eprintln!("【会话记忆】【后台提取】提取失败: {error:#}");
+            }
         });
     }
 
@@ -269,22 +285,19 @@ impl Agent {
 /// 参数:
 /// - `state`: 状态仓储
 /// - `client`: 模型客户端
-/// - `context_char_budget`: 当前主模型上下文窗口字符预算
+/// - `paths`: 用量记录路径
+/// - `input`: 已通过间隔判定并取得租约的提取输入
 ///
 /// 返回:
 /// - 提取是否成功
 async fn extract_session_memory_with_model(
-    state: StateStore,
+    state: &StateStore,
     client: OpenAiCompatibleClient,
     paths: crate::paths::SaiPaths,
-    context_char_budget: usize,
+    input: &crate::state::session_memory::model_extractor::ModelExtractionInput,
 ) -> Result<bool> {
     let mut perf = PerfTrace::new("session-memory");
     perf.mark("start");
-    let Some(input) = state.prepare_session_memory_model_extraction(context_char_budget)? else {
-        perf.mark("skip");
-        return Ok(false);
-    };
     perf.mark("prepared");
     let messages = vec![
         ChatMessage::system(
@@ -299,7 +312,7 @@ async fn extract_session_memory_with_model(
     {
         Ok(result) => result,
         Err(err) => {
-            state.record_session_memory_model_extraction_failure(&input, &format!("{err:#}"))?;
+            state.record_session_memory_model_extraction_failure(input, &format!("{err:#}"))?;
             perf.mark("failed");
             return Ok(false);
         }
@@ -325,9 +338,9 @@ async fn extract_session_memory_with_model(
             },
         );
     }
-    state.apply_session_memory_model_extraction(&input, &result.content)?;
+    let applied = state.apply_session_memory_model_extraction(input, &result.content)?;
     perf.mark("applied");
-    Ok(true)
+    Ok(applied)
 }
 
 /// 识别压缩失败类型。

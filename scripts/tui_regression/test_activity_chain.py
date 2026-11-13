@@ -1,6 +1,7 @@
 """【终端】【执行链回归】验证线性分组、自动折叠、嵌套展开与实时详情。"""
 
 import shlex
+import re
 import unittest
 
 from mock_activity_model import ActivityModel
@@ -31,13 +32,13 @@ class ActivityChainTests(unittest.TestCase):
             self.assertNotIn("Execution details", terminal.text())
             model.advance.set()
             terminal.wait_for(lambda: "1 tool · \uf0eb 1 thought" in terminal.text(), timeout=15)
-            terminal.wait_for(lambda: any(line.strip() == "└ CURRENT-STDOUT" for line in content_lines(terminal)))
+            terminal.wait_for(lambda: any(re.fullmatch(r"[│┃]\s+CURRENT-STDOUT", line.strip()) for line in content_lines(terminal)))
             self.assertIn("THINK-CURRENT", terminal.text())
             self.assertIn("Thought", terminal.text())
             gate.touch()
             terminal.wait_for(lambda: "ANSWER-END" in terminal.text(), timeout=15)
             terminal.pump(.4)
-            self.assertTrue(any(line.strip() == "└ CURRENT-STDOUT" for line in content_lines(terminal)))
+            self.assertTrue(any(re.fullmatch(r"[│┃]\s+CURRENT-STDOUT", line.strip()) for line in content_lines(terminal)))
             self.assertIn("FINAL-STDOUT", terminal.text())
             click(terminal, 5, self.row_of(terminal, "Thought"))
             terminal.wait_for(lambda: "THINK-CURRENT" not in terminal.text())

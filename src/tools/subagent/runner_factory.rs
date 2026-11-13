@@ -11,6 +11,7 @@ pub(super) fn refresh_model_settings(context: &mut SubagentContext) -> Result<()
     let saved = AppConfig::load(&context.paths)?;
     let main = context.config.provider(None)?.clone();
     // 1. 【子任务】【模型刷新】档案是类型专用设置缺省时的模型来源，必须一并刷新
+    context.config.hooks = saved.hooks;
     context.config.agents = saved.agents;
     context.config.subagent = saved.subagent;
     context.config.providers = saved.providers;
@@ -87,6 +88,7 @@ pub(super) fn build_subagent_runner(
         crate::tools::INVOKE_NAME,
         crate::tools::REQUEST_CAPABILITY_NAME,
     ]);
+    tools.hooks = context.config.hooks.clone();
     crate::tools::computer_use::exclude_from_subagent(&mut tools);
     // 【插件】【子任务隔离】独立 VM 保留父任务权限配置，但不继承父任务 Lua 全局状态
     tools.start_plugin_session(&format!("{}/subagent/{subagent_id}", context.session_id))?;
@@ -126,6 +128,7 @@ pub(super) fn build_subagent_runner(
         })
         .transpose()?;
     Ok(SubagentRunner::new(client, &system_prompt, tools, progress)
+        .with_hook_agent_type(subagent_type)
         .with_goal_accounting(goal_accounting)
         .with_checkpoint(subagent_id)
         .progressive_loading(

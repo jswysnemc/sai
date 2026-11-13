@@ -167,27 +167,6 @@ fn new_session_defaults_require_configured_native_model() {
         .contains("new-session model is not configured"));
 }
 
-/// 【会话】【配置校验】验证外部内核使用 ACP 虚拟供应商保存新会话模型。
-///
-/// 参数:
-/// - 无
-///
-/// 返回:
-/// - 无
-#[test]
-fn new_session_defaults_accept_acp_model_for_external_engine() {
-    let mut config = AppConfig::default();
-    config.agent.engine = AgentEngineKind::Codex;
-    config.session.new_session_provider_id = "__acp__".to_string();
-    config.session.new_session_model = "gpt-5.2-codex".to_string();
-
-    assert!(config.validate().is_ok());
-
-    config.session.new_session_provider_id = config.providers[0].id.clone();
-    let error = config.validate().unwrap_err();
-    assert!(error.to_string().contains("must be __acp__"));
-}
-
 /// 【会话】【配置校验】验证新会话思考等级拒绝未知值。
 ///
 /// 参数:

@@ -2,6 +2,9 @@ pub use super::tool_spec::{
     ToolInfo, ToolModelAttachment, ToolOutput, ToolPermission, ToolProgress, ToolSpec,
 };
 
+#[path = "registry_hooks.rs"]
+mod hooks;
+pub(crate) use hooks::PreparedToolCall;
 #[path = "registry_execution.rs"]
 mod execution;
 #[path = "registry_origin.rs"]
@@ -33,6 +36,7 @@ pub(crate) const DSH_BASH_EXECUTION_ALIAS: &str = "__sai_dsh_bash";
 
 #[derive(Default, Clone)]
 pub struct ToolRegistry {
+    pub(crate) hooks: crate::config::HooksConfig,
     tools: HashMap<String, ToolSpec>,
     /// 工具注册顺序；请求里的 tools 数组按它输出，保证前缀稳定以命中供应商缓存
     order: Vec<String>,
@@ -126,8 +130,7 @@ impl ToolRegistry {
 
     /// 返回当前权限配置的副本。
     ///
-    /// 外部对话内核需要用同一份配置校验它自己发起的文件写入与命令执行，
-    /// 否则治理只覆盖 sai 自带工具，换内核后就出现缺口。
+    /// 测试夹具复用注册表绑定的权限策略。
     ///
     /// 返回:
     /// - 权限配置；YOLO 等未绑定审计的场景为 None
@@ -289,6 +292,7 @@ impl ToolRegistry {
         registry.session_key = self.session_key.clone();
         registry.session_id = self.session_id.clone();
         registry.mesh_cross_session = self.mesh_cross_session;
+        registry.hooks = self.hooks.clone();
         registry.permission_profile = self.permission_profile.clone();
         registry.plugins = self.plugins.clone();
         registry.plugin_session_id = self.plugin_session_id.clone();
@@ -309,6 +313,7 @@ impl ToolRegistry {
     pub(crate) fn clone_excluding(&self, excluded: &[&str]) -> ToolRegistry {
         let excluded = excluded.iter().copied().collect::<BTreeSet<_>>();
         let mut registry = ToolRegistry::new();
+        registry.hooks = self.hooks.clone();
         registry.permission_profile = self.permission_profile.clone();
         registry.session_key = self.session_key.clone();
         registry.session_id = self.session_id.clone();

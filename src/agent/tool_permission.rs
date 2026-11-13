@@ -30,11 +30,65 @@ impl Agent {
         call: &ToolCall,
         messages: &[ChatMessage],
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
-    ) -> Result<()> {
+    ) -> Result<crate::tools::PreparedToolCall> {
+        let prepared = self.tools.prepare_hooked_call(call).await?;
+        let call = &prepared.call;
+        if matches!(
+            call.function.name.as_str(),
+            "ask_question" | "enter_plan_mode" | "exit_plan_mode"
+        ) {
+            return Ok(prepared);
+        }
+        if self.mode().permission() == crate::agent::PermissionMode::Plan
+            && self
+                .tools
+                .permission_for_call(&call.function.name, &call.function.arguments)?
+                != crate::tools::ToolPermission::ReadOnly
+        {
+            bail!(
+                "Plan mode blocked non-read-only tool: {}",
+                call.function.name
+            );
+        }
+        if matches!(
+            call.function.name.as_str(),
+            "write_file" | "str_replace" | "apply_patch"
+        ) {
+            super::edit_guard::ensure_edit_target_was_read(self, call)?;
+        }
         let name = &call.function.name;
         let arguments = &call.function.arguments;
         if !self.tools.requires_permission(name, arguments)? {
-            return Ok(());
+            return Ok(prepared);
+        }
+        let mut context = self
+            .tools
+            .hook_context()
+            .with(
+                "tool_input",
+                serde_json::from_str::<serde_json::Value>(arguments)?,
+            )
+            .with("tool_use_id", &call.id);
+        context.tool_name = Some(name.clone());
+        let hook = crate::hooks::dispatch_with_tools(
+            &self.config.hooks,
+            crate::hooks::HookEvent::PermissionRequest,
+            &context,
+            Some(&self.tools),
+        )
+        .await;
+        if let Some(reason) = hook.deny {
+            self.tools
+                .record_permission_denied(name, arguments, Some(&reason))?;
+            bail!("PermissionRequest: {reason}");
+        }
+        if hook.permission_allow {
+            self.tools.record_permission_approved(
+                name,
+                arguments,
+                Some("PermissionRequest hook"),
+            )?;
+            return Ok(prepared);
         }
         self.tools.record_permission_requested(name, arguments)?;
         // 1. 【权限】【自动审核】沿用当前供应商与会话上下文，失败时保留人工审批
@@ -88,7 +142,7 @@ impl Agent {
             PermissionDecision::Allow { ref reason, .. } => {
                 self.tools
                     .record_permission_approved(name, arguments, reason.as_deref())?;
-                Ok(())
+                Ok(prepared)
             }
             PermissionDecision::Deny { reply } => {
                 self.tools

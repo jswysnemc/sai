@@ -68,7 +68,6 @@ impl WorkStatus {
             AgentEvent::CompactionDelta { .. }
             | AgentEvent::CompactionFinished { .. }
             | AgentEvent::ContextUpdated(_)
-            | AgentEvent::EngineReady { .. }
             | AgentEvent::FlushContent
             | AgentEvent::ResponseReset { .. }
             | AgentEvent::ExternalOutput

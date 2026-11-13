@@ -39,7 +39,6 @@ export type LiveMessagePart =
   | { id: string; type: "tool"; tool: ToolLifecycle }
   | { id: string; type: "jev"; phase: JevPreselectPhase; exposure: JevCapabilityExposure; detail: string }
   | { id: string; type: "permission"; request: PermissionRequest; decision?: PermissionDecision }
-  | { id: string; type: "engine_ready"; engine: string; version: string }
   | { id: string; type: "question"; pending: PendingQuestion; response?: QuestionResponse }
   | { id: string; type: "ssh_secret"; request: SshSecretRequest; resolved?: boolean }
   | { id: string; type: "compaction"; status: "running" | "completed"; turnCount: number; model?: string; applied?: boolean; summary?: string; error?: RunErrorDetail };
@@ -256,18 +255,6 @@ function reduceRunEvent(state: LiveRunState, event: WebEvent, locale: Locale): L
       });
     case "jev.preselect":
       return applyJevPreselect(state, payload);
-    case "engine.ready":
-      // 外部内核连上后的运行时证据：名称与版本来自 ACP 握手响应，
-      // 只有真正拉起子进程才拿得到，用来分辨本轮由谁执行
-      return {
-        ...state,
-        parts: [...state.parts, {
-          id: `engine-${event.sequence}`,
-          type: "engine_ready",
-          engine: String(payload.engine ?? "ACP agent"),
-          version: String(payload.version ?? "")
-        }]
-      };
     case "permission.requested":
       return upsertPermissionPart({
         ...closeActiveReasoning(state, event.timestamp),

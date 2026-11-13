@@ -89,7 +89,7 @@ impl SidebarScrolls {
 /// 【终端侧栏】【区域分配】标题固定，短分组归还空间，待办优先完整展示且为文件保留预览。
 /// 参数: document 为分组文档，height 为侧栏高度；返回: 分组布局。
 pub(super) fn regions(document: &SidebarDocument, height: usize) -> Vec<SidebarRegion> {
-    let header = super::pane_header::height(height);
+    let header = super::pane_header::height(height) + super::sidebar_metrics::height(height);
     let available = height.saturating_sub(header + 1 + document.panels.len());
     let len = |section| {
         document

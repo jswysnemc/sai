@@ -1,5 +1,5 @@
+use super::hover_color::hover_default_fg;
 use super::runtime_tests::{mouse, runtime};
-use crate::render::panel_palette::{bg, PanelPalette};
 use crossterm::event::Event;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEventKind};
 
@@ -18,7 +18,7 @@ fn painted_row(runtime: &crate::cli::repl_runtime::ReplRuntime, row: u16) -> Str
     .clone()
 }
 
-/// 【正文悬停】【区块回归】控制行触发整块背景，区块外保持原样，移开后恢复。
+/// 【正文悬停】【区块回归】控制行触发整块前景提亮，区块外保持原样，移开后恢复。
 /// 参数: 无；返回: 无。
 #[test]
 fn hovering_an_expandable_paragraph_highlights_it() {
@@ -35,14 +35,14 @@ fn hovering_an_expandable_paragraph_highlights_it() {
     let layout = session.state.layout.unwrap();
     let scroll = session.state.scroll;
     let hint_row = layout.body_top + (span.control - scroll) as u16;
-    let background = bg(PanelPalette::current().hover_bg);
-    // 1. 【正文悬停】【范围验证】指向控制行后整个可见区块统一铺底
+    // 1. 【正文悬停】【范围验证】指向控制行后整个可见区块提亮，不添加背景
     runtime
         .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 4, hint_row))
         .unwrap();
-    assert!(painted_row(&runtime, hint_row).contains(&background));
+    assert!(painted_row(&runtime, hint_row).contains(&hover_default_fg()));
+    assert!(!painted_row(&runtime, hint_row).contains("\x1b[48;"));
     let lit = (0..layout.body_height)
-        .filter(|row| painted_row(&runtime, layout.body_top + row).contains(&background))
+        .filter(|row| painted_row(&runtime, layout.body_top + row).contains(&hover_default_fg()))
         .count();
     let visible = (span.start..span.end)
         .filter(|row| (scroll..scroll + usize::from(layout.body_height)).contains(row))
@@ -72,7 +72,7 @@ fn hovering_an_expandable_paragraph_highlights_it() {
     runtime
         .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 4, outside))
         .unwrap();
-    assert!(!painted_row(&runtime, hint_row).contains(&background));
+    assert!(!painted_row(&runtime, hint_row).contains(&hover_default_fg()));
 }
 
 /// 【终端】【悬停事件测试】从展开标题移动到正文时触发重绘，恢复原工具图标。

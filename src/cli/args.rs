@@ -105,6 +105,8 @@ pub enum Command {
     Init,
     Paths,
     Config(ConfigArgs),
+    /// 预览 hooks 来源、审查授权与执行记录，不执行钩子
+    Hooks(super::hooks_commands::HooksArgs),
     /// 交互式选择模型与思考等级
     #[command(alias = "model")]
     Models,

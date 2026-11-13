@@ -50,7 +50,7 @@ fn a_blank_agent_produces_an_empty_base_prompt() {
 
 /// 验证自己写了提示词时不受内置人设开关影响。
 #[test]
-fn an_explicit_prompt_survives_with_the_builtin_persona_off() {
+fn an_explicit_prompt_survives_with_optional_sections_disabled() {
     let dir = tempfile::tempdir().unwrap();
     let paths = crate::paths::SaiPaths::for_tests(dir.path());
     let mut custom = profile("custom");

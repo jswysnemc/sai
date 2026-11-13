@@ -1,31 +1,27 @@
-use super::model::{NewSessionMemory, SessionMemory};
-use super::repository::{load_memory, record_failure as record_memory_failure, upsert_memory};
+#[cfg(test)]
+use super::model::NewSessionMemory;
+use super::model::SessionMemory;
+use super::repository::record_failure as record_memory_failure;
+#[cfg(test)]
+use super::repository::{load_memory, upsert_memory};
 use crate::state::failure_recovery::{self, FailureKind, NewRecoveryRecord, RecoveryStatus};
-use crate::state::turns::{ConversationDb, Turn, TurnStatus};
+#[cfg(test)]
+use crate::state::turns::TurnStatus;
+use crate::state::turns::{ConversationDb, Turn};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 
 /// Session Memory 提取配置。
 #[derive(Debug, Clone)]
+#[cfg(test)]
 pub(crate) struct ExtractionConfig {
     pub min_new_turns: usize,
     pub failure_threshold: usize,
     pub disable_seconds: i64,
 }
 
+#[cfg(test)]
 impl ExtractionConfig {
-    /// 返回默认提取配置。
-    ///
-    /// 返回:
-    /// - 提取配置
-    pub(crate) fn default_after_turn() -> Self {
-        Self {
-            min_new_turns: 1,
-            failure_threshold: 3,
-            disable_seconds: 3_600,
-        }
-    }
-
     /// 返回每次完成轮次都尝试提取的配置。
     ///
     /// 返回:
@@ -42,6 +38,7 @@ impl ExtractionConfig {
 
 /// Session Memory 提取结果。
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(test)]
 pub(crate) struct ExtractionOutcome {
     pub extracted: bool,
     pub skipped_reason: Option<String>,
@@ -57,6 +54,7 @@ pub(crate) struct ExtractionOutcome {
 ///
 /// 返回:
 /// - 提取结果
+#[cfg(test)]
 pub(crate) fn extract_after_turn<F>(
     db: &ConversationDb,
     session_id: &str,
@@ -176,26 +174,6 @@ pub(super) fn record_extraction_failure(
     Ok(())
 }
 
-/// 使用默认摘要器提取 Session Memory。
-///
-/// 参数:
-/// - `db`: 对话数据库
-/// - `session_id`: 会话标识
-///
-/// 返回:
-/// - 提取结果
-pub(crate) fn extract_after_turn_with_default_summary(
-    db: &ConversationDb,
-    session_id: &str,
-) -> Result<ExtractionOutcome> {
-    extract_after_turn(
-        db,
-        session_id,
-        ExtractionConfig::default_after_turn(),
-        |turns, previous| Ok(default_summary(turns, previous)),
-    )
-}
-
 /// 判断提取是否处于熔断期。
 ///
 /// 参数:
@@ -219,6 +197,7 @@ pub(super) fn is_disabled(memory: Option<&SessionMemory>) -> bool {
 ///
 /// 返回:
 /// - token 估算值
+#[cfg(test)]
 fn estimate_turn_tokens(turns: &[Turn]) -> usize {
     let mut combined = String::new();
     for turn in turns {
@@ -240,36 +219,6 @@ pub(super) fn estimate_turn_chars(turns: &[Turn]) -> usize {
         .iter()
         .map(|turn| turn.user_content.chars().count() + turn.assistant_content.chars().count())
         .sum::<usize>()
-}
-
-/// 构造默认 Session Memory 摘要。
-///
-/// 参数:
-/// - `turns`: 新增来源轮次
-/// - `previous`: 既有会话工作记忆
-///
-/// 返回:
-/// - 会话工作记忆摘要
-fn default_summary(turns: &[Turn], previous: Option<&SessionMemory>) -> String {
-    let mut lines = Vec::new();
-    lines.push("当前会话工作记忆：".to_string());
-    if let Some(memory) = previous.filter(|memory| !memory.summary.trim().is_empty()) {
-        lines.push("既有摘要：".to_string());
-        lines.push(clip_text(&memory.summary, 2_000));
-    }
-    lines.push("新增轮次：".to_string());
-    for turn in turns.iter().rev().take(8).rev() {
-        lines.push(format!(
-            "- seq {} user: {}",
-            turn.seq,
-            clip_text(&turn.user_content, 400)
-        ));
-        lines.push(format!(
-            "  assistant: {}",
-            clip_text(&turn.assistant_content, 600)
-        ));
-    }
-    clip_text(&lines.join("\n"), 6_000)
 }
 
 /// 按字符数裁剪文本。

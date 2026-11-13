@@ -3,8 +3,6 @@ use super::AppConfig;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 
-const ACP_PROVIDER_ID: &str = "__acp__";
-
 /// 【会话】【配置结构】会话创建默认值与自动命名配置。
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SessionConfig {
@@ -59,11 +57,6 @@ impl AppConfig {
         // 1. 【会话】【新会话默认值】供应商与模型必须同时留空或同时配置
         match (provider_id.is_empty(), model.is_empty()) {
             (true, true) => {}
-            (false, false) if self.agent.engine.is_external() => {
-                if provider_id != ACP_PROVIDER_ID {
-                    bail!("session.new_session_provider_id must be __acp__ for external engines");
-                }
-            }
             (false, false) => {
                 let configured = self.provider_model_choices().iter().any(|choice| {
                     choice.provider_id == provider_id && choice.model == model

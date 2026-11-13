@@ -1,7 +1,9 @@
 """【首次配置】【终端回归】覆盖初始化引导、取消、保存与旧配置升级。"""
 
 import json
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
+import threading
 import unittest
 
 from terminal import TerminalSession
@@ -32,6 +34,8 @@ class ProviderOnboardingTests(unittest.TestCase):
             terminal.send(b"\r")
             terminal.wait_for(lambda: "SAVE TO START" in terminal.text())
             terminal.send(b"s")
+            terminal.wait_for(lambda: "SELECT MODEL" in terminal.text(), timeout=15)
+            terminal.send(b"\r")
             terminal.wait_for(lambda: configuration(terminal)["provider_setup_complete"])
             terminal.wait_for(lambda: "PROVIDER SETUP" not in terminal.text() and "auto" in terminal.text().lower())
             saved = configuration(terminal)
@@ -61,7 +65,11 @@ class ProviderOnboardingTests(unittest.TestCase):
             terminal.send(b"\r")
             terminal.wait_for(lambda: "SAVE TO START" in terminal.text())
             self.assertNotIn("onboarding-secret", terminal.text())
-            terminal.send(b"\x1b[B" * 4 + b"\rsetup-model\rs")
+            terminal.send(b"s")
+            terminal.wait_for(lambda: "SELECT MODEL" in terminal.text())
+            terminal.send(b"\r")
+            terminal.wait_for(lambda: "CUSTOM MODEL" in terminal.text())
+            terminal.send(b"\rsetup-model\rs")
             terminal.wait_for(lambda: configuration(terminal)["provider_setup_complete"])
             self.assertEqual(configuration(terminal)["session"]["new_session_model"], "setup-model")
 
@@ -70,3 +78,47 @@ class ProviderOnboardingTests(unittest.TestCase):
         with TerminalSession(arguments=["--lang", "en-US"]) as terminal:
             self.assertNotIn("FIRST USE", terminal.text())
             self.assertIn("auto", terminal.text().lower())
+
+    def test_discovers_models_and_saves_user_selection_without_inference(self):
+        """无参数；返回无值，配置阶段查询模型列表，选择结果持久化且不调用推理接口。"""
+        requests = []
+
+        class Handler(BaseHTTPRequestHandler):
+            """【首次配置】【目录夹具】记录本地请求并返回两个模型。"""
+
+            def log_message(self, *_args):
+                """参数为访问日志；返回无值，避免输出认证字段。"""
+
+            def do_GET(self):
+                """无参数；返回兼容 models 列表并记录路径。"""
+                requests.append(("GET", self.path))
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"data":[{"id":"model-a"},{"id":"model-b"}]}')
+
+            def do_POST(self):
+                """无参数；记录不应出现的推理请求并拒绝。"""
+                requests.append(("POST", self.path))
+                self.send_response(400)
+                self.end_headers()
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        config = {"provider_setup_complete": False, "active_provider":"fixture", "providers":[{
+            "id":"fixture", "display_name":"Catalog fixture", "base_url":f"http://127.0.0.1:{server.server_port}/v1/chat/completions", "api_key":"fixture", "models":[], "default_model":""}]}
+        try:
+            with TerminalSession(config=config, ready=setup_visible, arguments=["--lang", "en-US"]) as terminal:
+                terminal.send(b"\r")
+                terminal.wait_for(lambda: "SAVE TO START" in terminal.text())
+                terminal.send(b"s")
+                terminal.wait_for(lambda: "SELECT MODEL" in terminal.text() and "model-a" in terminal.text())
+                terminal.send(b"\x1b[B\r")
+                terminal.wait_for(lambda: configuration(terminal)["provider_setup_complete"])
+                saved = configuration(terminal)
+                self.assertEqual(saved["session"]["new_session_model"], "model-b")
+                self.assertIn(("GET", "/v1/models"), requests)
+                self.assertFalse(any(method == "POST" for method, _ in requests))
+        finally:
+            server.shutdown()
+            server.server_close()

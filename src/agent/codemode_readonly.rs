@@ -11,6 +11,9 @@ pub(super) type ReadCompletion = (u64, ToolCall, Result<ToolOutput>);
 impl Agent {
     /// 【CodeMode】【并发资格】校验 event，返回可并发只读调用；交互、授权和写调用保持串行。
     pub(super) fn codemode_readonly_call(&self, event: &WorkerEvent) -> Option<(u64, ToolCall)> {
+        if self.tools.has_control_pre_hooks() {
+            return None;
+        }
         let (id, call) = self.prepare_codemode_call(event).ok()?;
         let name = &call.function.name;
         if matches!(
@@ -50,7 +53,7 @@ impl Agent {
         jobs.spawn(crate::runtime_cwd::scope(workdir, async move {
             crate::hooks::dispatch(&hooks, crate::hooks::HookEvent::ToolExecutionStart, &context).await;
             let (sender, mut receiver) = mpsc::unbounded_channel();
-            let future = registry.call_with_progress(&call.function.name, &call.function.arguments, sender);
+            let future = async { let prepared = registry.prepare_hooked_call(&call).await?; registry.execute_prepared(&prepared,sender).await };
             tokio::pin!(future);
             let result = loop {
                 tokio::select! {

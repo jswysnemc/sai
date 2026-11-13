@@ -54,9 +54,7 @@ where
     )?;
     sink.on_runner_event(RunnerEvent::Started)?;
     let control_result = execute_control(&mut agent, control, sink).await;
-    let shutdown_result = agent.shutdown_external_engine().await;
     control_result?;
-    shutdown_result?;
     let result = empty_result();
     sink.on_runner_event(RunnerEvent::Completed(result.clone()))?;
     if submission.show_final_summary {

@@ -67,7 +67,12 @@ pub(super) fn draw_form(
         let row_y = list_top.saturating_add(row as u16);
         queue!(stdout, MoveTo(inner_x, row_y))?;
         if index >= fields.len() {
-            queue!(stdout, Print(" ".repeat(left_w as usize)))?;
+            queue!(
+                stdout,
+                Print(crate::render::readable_terminal_text(
+                    &(" ".repeat(left_w as usize)).to_string()
+                ))
+            )?;
             continue;
         }
         let field = &fields[index];
@@ -78,9 +83,12 @@ pub(super) fn draw_form(
             let tail = (left_w as usize).saturating_sub(used);
             queue!(
                 stdout,
-                Print(format!(
-                    "{DIM}── {RESET}{BRAND}{BOLD}{name}{RESET} {DIM}{}{RESET}",
-                    "─".repeat(tail)
+                Print(crate::render::readable_terminal_text(
+                    &(format!(
+                        "{DIM}── {RESET}{BRAND}{BOLD}{name}{RESET} {DIM}{}{RESET}",
+                        "─".repeat(tail)
+                    ))
+                    .to_string()
                 ))
             )?;
             continue;
@@ -99,9 +107,12 @@ pub(super) fn draw_form(
             );
             queue!(
                 stdout,
-                Print(format!(
-                    "{bar}{row_style} {}{RESET}",
-                    pad(&line, left_w.saturating_sub(2) as usize)
+                Print(crate::render::readable_terminal_text(
+                    &(format!(
+                        "{bar}{row_style} {}{RESET}",
+                        pad(&line, left_w.saturating_sub(2) as usize)
+                    ))
+                    .to_string()
                 ))
             )?;
         } else {
@@ -113,14 +124,19 @@ pub(super) fn draw_form(
             };
             queue!(
                 stdout,
-                Print(format!(
-                    "{editing_marker} {MUTED}{label_text}{RESET}  {value}"
+                Print(crate::render::readable_terminal_text(
+                    &(format!("{editing_marker} {MUTED}{label_text}{RESET}  {value}")).to_string()
                 ))
             )?;
             let used = 2 + label_col + 2 + display_width(&strip_field_ansi(&value));
             let remaining = (left_w as usize).saturating_sub(used);
             if remaining > 0 {
-                queue!(stdout, Print(" ".repeat(remaining)))?;
+                queue!(
+                    stdout,
+                    Print(crate::render::readable_terminal_text(
+                        &(" ".repeat(remaining)).to_string()
+                    ))
+                )?;
             }
         }
         if is_editing_row {
@@ -243,9 +259,12 @@ fn draw_form_detail(
     queue!(
         stdout,
         MoveTo(x, y),
-        Print(format!(
-            "{BRAND}{BOLD}◈ {}{RESET}",
-            truncate(t("Field", "字段"), width.saturating_sub(2) as usize)
+        Print(crate::render::readable_terminal_text(
+            &(format!(
+                "{BRAND}{BOLD}◈ {}{RESET}",
+                truncate(t("Field", "字段"), width.saturating_sub(2) as usize)
+            ))
+            .to_string()
         ))
     )?;
     let mut lines = Vec::new();
@@ -277,7 +296,9 @@ fn draw_form_detail(
         queue!(
             stdout,
             MoveTo(x, y.saturating_add(row as u16).saturating_add(2)),
-            Print(format!("{MUTED}{}{RESET}", pad(&line, width as usize)))
+            Print(crate::render::readable_terminal_text(
+                &(format!("{MUTED}{}{RESET}", pad(&line, width as usize))).to_string()
+            ))
         )?;
     }
     Ok(())
@@ -452,12 +473,24 @@ fn draw_form_button(
     if selected && primary {
         queue!(
             stdout,
-            Print(format!("{BUTTON_BG}{BUTTON_FG}{BOLD}{text}{RESET}"))
+            Print(crate::render::readable_terminal_text(
+                &(format!("{BUTTON_BG}{BUTTON_FG}{BOLD}{text}{RESET}")).to_string()
+            ))
         )?;
     } else if selected {
-        queue!(stdout, Print(format!("{SELECT_BG}{ACCENT}{text}{RESET}")))?;
+        queue!(
+            stdout,
+            Print(crate::render::readable_terminal_text(
+                &(format!("{SELECT_BG}{ACCENT}{text}{RESET}")).to_string()
+            ))
+        )?;
     } else {
-        queue!(stdout, Print(format!("{MUTED}{text}{RESET}")))?;
+        queue!(
+            stdout,
+            Print(crate::render::readable_terminal_text(
+                &(format!("{MUTED}{text}{RESET}")).to_string()
+            ))
+        )?;
     }
     Ok(display_width(&text) as u16)
 }

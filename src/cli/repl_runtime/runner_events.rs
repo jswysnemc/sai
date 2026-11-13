@@ -16,6 +16,7 @@ impl ReplRuntime {
     pub(in crate::cli) fn record_runner_event(&mut self, event: &RunnerEvent) -> Result<()> {
         let agent_event = match event {
             RunnerEvent::Started => {
+                self.live_usage = Default::default();
                 self.transcript.set_work_status(WorkStatus::WaitingResponse);
                 self.arm_live_ticker();
                 return self.sync_transcript(true);
@@ -47,7 +48,7 @@ impl ReplRuntime {
             RunnerEvent::Interrupted | RunnerEvent::Completed(_) | RunnerEvent::Failed(_) => {
                 self.next_live_refresh = None;
                 self.live_sync_pending = false;
-                self.live_usage = Default::default();
+                self.live_usage.finish();
                 // 换一条占位提示：按轮推进而不是定时轮换，空输入框才不会闪
                 super::placeholder_tips::advance_tip();
                 self.transcript.finalize_live_tail();
@@ -80,11 +81,13 @@ impl ReplRuntime {
                 reasoning_chars,
                 ..
             } => {
+                self.live_usage.reset_response();
                 self.transcript
                     .rewind_response(*content_chars, *reasoning_chars);
                 self.sync_transcript(true)
             }
             AgentEvent::Chunk(chunk) => {
+                self.live_usage.chunk(&chunk.text);
                 self.transcript.push_chunk(chunk);
                 // 流式文本按固定节拍冲刷，避免长回复每个分片全量重排 markdown
                 self.throttled_live_sync()
@@ -270,13 +273,6 @@ impl ReplRuntime {
                         .map(|value| value.trim().to_string())
                         .filter(|value| !value.is_empty()),
                 );
-                self.sync_transcript(true)
-            }
-            AgentEvent::EngineReady { engine, version } => {
-                self.transcript.push_meta(format!(
-                    "{} {engine} {version}",
-                    crate::render::terminal_text("connected to", "已连接")
-                ));
                 self.sync_transcript(true)
             }
             AgentEvent::JevPreselect { phase, detail } => {

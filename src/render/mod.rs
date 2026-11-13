@@ -29,7 +29,10 @@ mod command_output;
 mod command_result_block;
 pub(crate) mod content_indent;
 mod edit_diff;
-mod engine_notice;
+mod readable_terminal_text;
+pub(crate) mod terminal_contrast;
+pub(crate) mod terminal_text_style;
+pub(crate) use readable_terminal_text::readable_terminal_text;
 mod error;
 pub(crate) mod expandable;
 pub(crate) mod fold_text;
@@ -87,13 +90,12 @@ mod wait_spinner;
 pub(crate) mod work_status;
 
 pub(crate) use command_result_block::command_result_streams;
-pub(crate) use engine_notice::engine_notice;
 pub(crate) use error::write_chat_error;
 pub(crate) use expandable::render_expandable_body;
 pub(crate) use jev_preselect::format_jev_preselect;
 pub(crate) use permission::{
-    PermissionChoice, PermissionView, render_auto_audit_status, render_permission_controls,
-    render_permission_decision, render_permission_decision_for, render_permission_title,
+    render_auto_audit_status, render_permission_controls, render_permission_decision,
+    render_permission_decision_for, render_permission_title, PermissionChoice, PermissionView,
 };
 pub(crate) use sandbox_notice::{render_sandbox_denial, render_sandbox_scope};
 pub use session_summary::print_session_summary;
@@ -101,7 +103,7 @@ pub use stream::StreamRenderer;
 pub use stream_config::{ReasoningDisplayMode, StreamRenderOptions, ToolCallDisplayMode};
 pub use stream_output::print_assistant_response;
 pub(crate) use streaming_replace::{rendered_visual_rows, terminal_width};
-pub(crate) use tool_view::{ConversationNoticeKind, is_external_notice};
+pub(crate) use tool_view::{is_external_notice, ConversationNoticeKind};
 
 /// 终端聊天与执行流渲染统一使用英文文案。
 ///

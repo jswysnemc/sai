@@ -76,6 +76,26 @@ impl AppConfig {
     pub fn save(&self, paths: &SaiPaths) -> Result<()> {
         paths.create_dirs()?;
         let mut config = self.clone();
+        if let Some(enabled) = config.hooks.items.iter().find_map(|item| {
+            item.options
+                .runtime
+                .as_ref()
+                .map(|source| source.user_enabled)
+        }) {
+            config.hooks.enabled = enabled;
+        }
+        for item in &mut config.hooks.items {
+            if let Some(source) = &item.options.runtime {
+                item.enabled = source.item_enabled;
+            }
+        }
+        // 1. 【Hooks】【来源隔离】运行期合并的外部定义不得复制到用户主配置
+        config.hooks.items.retain(|item| {
+            item.options
+                .runtime
+                .as_ref()
+                .is_none_or(|source| source.path.is_none())
+        });
         if let Some(prompt) = config.system_prompt.take() {
             let prompt_file = config.system_prompt_path(paths);
             if let Some(parent) = prompt_file.parent() {
@@ -162,6 +182,7 @@ impl AppConfig {
     }
 
     pub fn validate(&self) -> Result<()> {
+        crate::hooks::validate(&self.hooks)?;
         self.codemode.validate()?;
         self.computer_use.validate()?;
         self.plugins.web.validate()?;

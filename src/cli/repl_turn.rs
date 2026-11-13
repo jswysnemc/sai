@@ -177,8 +177,7 @@ pub(super) async fn execute_repl_turn(
     resize_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     // 流式阶段同样保持 bracketed paste 与键盘增强：否则粘贴多行会被
     // 拆成逐字符按键，其中的回车逐条入队自动发送；光标由渲染器管理
-    let mut stream_terminal_guard =
-        super::terminal_restore::TerminalInputGuard::enable(&mut io::stdout(), false)?;
+    let mut stream_terminal_guard = runtime.acquire_input_guard(&mut io::stdout(), false)?;
     let result: Result<()> = async {
         loop {
             tokio::select! {

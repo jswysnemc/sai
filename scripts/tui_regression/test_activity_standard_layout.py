@@ -1,6 +1,7 @@
 """【终端】【执行链布局回归】检查列表续行和命令准备、执行、完成阶段的布局。"""
 
 import json
+import re
 import shlex
 import unittest
 
@@ -58,7 +59,7 @@ class ActivityStandardLayoutTests(unittest.TestCase):
                 group, composer = self.row_of(terminal, "1 tool · "), self.row_of(terminal, "→")
                 self.assertNotIn('"command":', terminal.text())
                 model.resume_preparation.set()
-                terminal.wait_for(lambda: any(line.strip() == "└ RUNNING-OUT" for line in content_lines(terminal)))
+                terminal.wait_for(lambda: any(re.fullmatch(r"[│┃]\s+RUNNING-OUT", line.strip()) for line in content_lines(terminal)))
                 self.assertEqual(self.row_of(terminal, "1 tool · "), group)
                 self.assertEqual(self.row_of(terminal, "→"), composer)
                 self.assertNotIn('"command":', terminal.text())
@@ -67,16 +68,16 @@ class ActivityStandardLayoutTests(unittest.TestCase):
                 self.assertEqual(self.row_of(terminal, "1 tool · "), group)
                 self.assertLess(self.row_of(terminal, "1 tool · "), self.row_of(terminal, "Ran"))
                 last_output = next(index for index, line in enumerate(content_lines(terminal))
-                                   if line.strip() == "FINAL-OUT")
+                                   if re.fullmatch(r"[│┃]\s+FINAL-OUT", line.strip()))
                 self.assertLessEqual(self.row_of(terminal, "ANSWER-END") - last_output, 2)
                 self.assertNotIn("Following latest", terminal.text())
                 self.assertEqual(self.row_of(terminal, "→"), composer)
-                self.assertTrue(any(line.strip() == "└ RUNNING-OUT" for line in content_lines(terminal)))
+                self.assertTrue(any(re.fullmatch(r"[│┃]\s+RUNNING-OUT", line.strip()) for line in content_lines(terminal)))
                 self.assertIn("FINAL-OUT", terminal.text())
                 click(terminal, 6, self.row_of(terminal, "Ran"))
                 terminal.wait_for(lambda: "FINAL-OUT" not in terminal.text())
                 click(terminal, 6, self.row_of(terminal, "Ran"))
-                terminal.wait_for(lambda: any(line.strip() == "└ RUNNING-OUT" for line in content_lines(terminal)))
+                terminal.wait_for(lambda: any(re.fullmatch(r"[│┃]\s+RUNNING-OUT", line.strip()) for line in content_lines(terminal)))
                 self.assertIn("FINAL-OUT", terminal.text())
                 self.assertNotIn('"command":', terminal.text())
                 self.assertEqual(self.row_of(terminal, "→"), composer)

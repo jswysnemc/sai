@@ -110,18 +110,20 @@ class FullscreenPartsTests(unittest.TestCase):
             terminal.wait_for(lambda: row_of(terminal, "STEP-11") is not None)
             title = row_of(terminal, "Ran $ echo STEP-0")
             self.assertIsNotNone(title, terminal.text())
-            # 1. 【全屏视图】【悬停】语义图标临时替换为展开状态图标，并通过背景突出整块内容
+            # 1. 【全屏视图】【悬停】语义图标临时替换为展开状态图标，只提亮前景而不改变背景
             background = terminal.screen.buffer[title][4].bg
+            foreground = terminal.screen.buffer[title][4].fg
             terminal.send(f"\x1b[<35;5;{title + 1}M".encode())
             terminal.wait_for(lambda: lines(terminal)[title].lstrip().startswith("▾ Ran"), timeout=5)
-            self.assertNotEqual(terminal.screen.buffer[title][4].bg, background)
+            self.assertEqual(terminal.screen.buffer[title][4].bg, background)
+            self.assertNotEqual(terminal.screen.buffer[title][4].fg, foreground)
             # 2. 点击标题：命令续行和输出一起收起，标题保留
             mouse(terminal, 4, title)
             terminal.wait_for(lambda: row_of(terminal, "STEP-6") is None, timeout=5)
             self.assertEqual(row_of(terminal, "Ran $ echo STEP-0"), title)
             # 3. 再次点击标题：命令和输出一起恢复
             mouse(terminal, 4, title)
-            terminal.wait_for(lambda: row_of(terminal, "└ STEP-0") is not None
+            terminal.wait_for(lambda: any(re.fullmatch(r"[│┃]\s+STEP-0", line.strip()) for line in lines(terminal))
                               and row_of(terminal, "echo STEP-6") is not None, timeout=5)
             terminal.send(b"\x0f")
 

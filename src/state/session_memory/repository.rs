@@ -13,11 +13,21 @@ use crate::state::turns::ConversationDb;
 ///
 /// 返回:
 /// - 写入后的会话工作记忆
+#[cfg(test)]
 pub(in crate::state) fn upsert_memory(
     db: &ConversationDb,
     memory: NewSessionMemory,
 ) -> Result<SessionMemory> {
     let conn = db.conn.lock().unwrap();
+    upsert_memory_on_conn(&conn, memory)
+}
+
+/// 【会话记忆】【原子提交】在调用方事务中更新记忆，和 token 间隔一起提交。
+/// 参数：连接或事务、待写入记忆；返回：写入后的记忆。
+pub(super) fn upsert_memory_on_conn(
+    conn: &Connection,
+    memory: NewSessionMemory,
+) -> Result<SessionMemory> {
     let now = Utc::now().to_rfc3339();
     conn.execute(
         "INSERT INTO session_memory (
@@ -47,7 +57,7 @@ pub(in crate::state) fn upsert_memory(
             now,
         ],
     )?;
-    load_memory_locked(&conn, &memory.session_id)?.ok_or_else(|| {
+    load_memory_locked(conn, &memory.session_id)?.ok_or_else(|| {
         anyhow::anyhow!(
             "session memory was not found after upsert: {}",
             memory.session_id

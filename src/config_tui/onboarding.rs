@@ -35,7 +35,7 @@ pub(super) fn run(stdout: &mut io::Stdout, paths: &SaiPaths, config: &AppConfig)
         if provider.is_opencode_zen() {
             t("Built-in free provider; no API key required. Confirm its model to start chatting.", "内置免费供应商，无需密钥。确认默认模型后开始聊天。").to_string()
         } else {
-            format!("{}\n{}", provider.base_url, t("Enter an API key and default model. After saving, you can import the catalog in Settings.", "填写密钥和默认模型。保存后可在设置中导入模型目录。"))
+            format!("{}\n{}", provider.base_url, t("Enter your connection details, then discover and choose a model.", "填写接入信息后，自动获取模型列表并选择模型。"))
         }
     }).collect();
     options.push(t("Custom provider", "自定义供应商").to_string());
@@ -108,10 +108,6 @@ fn configure(
             provider.api_key.clone().unwrap_or_default(),
         )
         .secret(),
-        Field::new(
-            t("Default model", "默认模型"),
-            provider.default_model.clone(),
-        ),
     ];
     loop {
         if !run_form(
@@ -124,16 +120,52 @@ fn configure(
         )? {
             return Ok(false);
         }
+        let mut draft = provider.clone();
+        draft.display_name = fields[0].value.trim().to_string();
+        draft.base_url = fields[1].value.trim().trim_end_matches('/').to_string();
+        if let Some(base) = draft
+            .base_url
+            .strip_suffix("/chat/completions")
+            .or_else(|| draft.base_url.strip_suffix("/responses"))
+            .or_else(|| draft.base_url.strip_suffix("/messages"))
+        {
+            draft.base_url = base.into();
+        }
+        draft.protocol = fields[2].value.clone();
+        if !fields[3].value.trim().is_empty() {
+            draft.api_key = Some(fields[3].value.clone());
+            draft.api_keys.clear();
+            draft.api_key_selected = None;
+        }
+        let Some(model) = super::onboarding_models::select(stdout, paths, &mut draft)? else {
+            continue;
+        };
         let input = ProviderSetupInput {
             provider_id: existing.then(|| provider.id.clone()),
             display_name: fields[0].value.clone(),
             base_url: fields[1].value.clone(),
             protocol: fields[2].value.clone(),
             api_key: Some(fields[3].value.clone()),
-            model: fields[4].value.clone(),
+            model,
         };
         match complete_provider_setup(paths, input) {
-            Ok(_) => return Ok(true),
+            Ok(mut saved) => {
+                let active = saved.active_provider.clone();
+                if let Some(provider) = saved
+                    .providers
+                    .iter_mut()
+                    .find(|provider| provider.id == active)
+                {
+                    for model in draft.models {
+                        if !provider.models.contains(&model) {
+                            provider.models.push(model);
+                        }
+                    }
+                    provider.model_metadata.extend(draft.model_metadata);
+                }
+                saved.save(paths)?;
+                return Ok(true);
+            }
             Err(error) => message(
                 stdout,
                 &format!(

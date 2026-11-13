@@ -19,6 +19,27 @@ pub(super) struct ReasoningViewports {
 }
 
 impl ReasoningViewports {
+    /// 【终端】【思考定位】按轨道比例定位；参数为段落键和比例，返回是否改变位置
+    pub(super) fn seek(&mut self, key: ParagraphKey, fraction: f64) -> bool {
+        let Some(region) = self
+            .source
+            .reasonings
+            .iter()
+            .find(|region| region.key.cell == key.cell)
+        else {
+            return false;
+        };
+        let max = region.end.saturating_sub(region.start + 1 + BODY_ROWS);
+        let Some(position) = self.positions.get_mut(&key.cell) else {
+            return false;
+        };
+        let next = (max as f64 * fraction.clamp(0.0, 1.0)).round() as usize;
+        let changed = position.offset != next;
+        position.offset = next;
+        position.follow = region.live && next == max;
+        position.manually_scrolled = true;
+        changed
+    }
     /// 【终端】【思考边界】判断段落是否需要独立滚动，全文可见时交由主会话滚动。
     /// 参数: `key` 为思考段落键；返回: 正文是否超过五行窗口。
     pub(super) fn is_scrollable(&self, key: ParagraphKey) -> bool {

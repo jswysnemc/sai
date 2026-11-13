@@ -19,7 +19,7 @@ pub(super) fn append(
         let line = document.lines[row].as_str();
         if line.contains(&marker)
             && crate::render::ansi_clip::strip_ansi(line)
-                .trim_start()
+                .trim_start_matches([' ', '│', '┃'])
                 .starts_with(crate::render::omitted_line::FOLD_MARKER)
         {
             document.paragraphs.push(ParagraphSpan {
@@ -52,6 +52,20 @@ mod tests {
         ));
         let end = document.lines.len();
         append(&mut document, ParagraphKey::whole(0), 0, end);
+        assert_eq!(document.paragraphs.len(), 1);
+        assert_eq!(document.paragraphs[0].control, 1);
+    }
+
+    /// 【终端】【引导提示回归】统一引导列不能遮蔽正文隐藏提示的点击范围；无参数，无返回值
+    #[test]
+    fn guided_hint_keeps_its_expand_control() {
+        let hint = crate::render::omitted_line::render_omitted_line(30, true);
+        let mut document = FullscreenDocument {
+            lines: vec![AnsiLine::new("title".into()), AnsiLine::new(hint)],
+            ..Default::default()
+        };
+        super::super::super::tool_guides::decorate_node(&mut document.lines);
+        append(&mut document, ParagraphKey::whole(0), 0, 2);
         assert_eq!(document.paragraphs.len(), 1);
         assert_eq!(document.paragraphs[0].control, 1);
     }

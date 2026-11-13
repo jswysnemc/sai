@@ -49,6 +49,7 @@ impl TerminalSession {
     /// 返回:
     /// - 初始化完成的终端会话；进入备用屏失败时回滚 raw mode 后返回错误
     fn start() -> Result<Self> {
+        crate::render::terminal_palette::initialize_terminal_palette();
         // 1. 先开启 raw mode
         terminal::enable_raw_mode()?;
         let mut stdout = io::stdout();
@@ -84,7 +85,12 @@ impl Drop for TerminalSession {
     fn drop(&mut self) {
         let _ = execute!(self.stdout, Show);
         let _ = crate::cli::alternate_screen::leave_alternate_screen(&mut self.stdout);
-        let _ = execute!(self.stdout, crossterm::style::Print("\u{1b}[?2026l"));
+        let _ = execute!(
+            self.stdout,
+            crossterm::style::Print(crate::render::readable_terminal_text(
+                &("\u{1b}[?2026l").to_string()
+            ))
+        );
         let _ = terminal::disable_raw_mode();
     }
 }

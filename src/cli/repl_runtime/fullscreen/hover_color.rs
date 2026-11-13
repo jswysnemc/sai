@@ -1,4 +1,4 @@
-//! 悬停时把前景色向白色混合一档，避免加粗或铺底。
+//! 悬停时提高前景对比度，浅色加深、深色提亮，不铺底。
 
 /// 灰阶前景向白色混合的比例。
 const LIFT: u16 = 45;
@@ -6,8 +6,15 @@ const LIFT: u16 = 45;
 const CHROMA_LIFT: u16 = 12;
 /// 通道最大差超过该值视为有色相。
 const CHROMA_THRESHOLD: u8 = 24;
-/// 无显式前景时使用的悬停色：取消暗淡并提到纯白。
-pub(super) const HOVER_DEFAULT_FG: &str = "\x1b[22;38;2;255;255;255m";
+/// 【终端】【默认悬停色】已知主题按背景强调，未知时沿用终端默认前景。
+/// 参数：无；返回：不加粗、不铺底的前景 SGR。
+pub(super) fn hover_default_fg() -> String {
+    let Some((foreground, background)) = crate::render::terminal_palette::terminal_default_colors()
+    else {
+        return "\x1b[22;39m".into();
+    };
+    format!("\x1b[22;{}m", lifted_for_background(foreground, background))
+}
 
 const ANSI16: [(u8, u8, u8); 16] = [
     (0, 0, 0),
@@ -35,6 +42,7 @@ const ANSI16: [(u8, u8, u8); 16] = [
 ///
 /// 返回:
 /// - 提亮后的通道
+#[cfg(test)]
 pub(super) fn lift_channel(value: u8) -> u8 {
     let mixed = u16::from(value) + (255 - u16::from(value)) * LIFT / 100;
     mixed.max(u16::from(value).saturating_add(20)).min(255) as u8
@@ -47,11 +55,6 @@ pub(super) fn lift_channel(value: u8) -> u8 {
 ///
 /// 返回:
 /// - 提亮后的通道
-fn lift_chroma_channel(value: u8) -> u8 {
-    let mixed = u16::from(value) + (255 - u16::from(value)) * CHROMA_LIFT / 100;
-    mixed.min(255) as u8
-}
-
 /// 把 256 色下标转成 RGB。
 ///
 /// 参数:
@@ -86,14 +89,28 @@ pub(super) fn color_256_rgb(index: u8) -> (u8, u8, u8) {
 /// 返回:
 /// - `38;2;R;G;B` SGR
 pub(super) fn lifted_truecolor(red: u8, green: u8, blue: u8) -> String {
+    match crate::render::terminal_palette::terminal_default_colors() {
+        Some((_, background)) => lifted_for_background((red, green, blue), background),
+        None => format!("38;2;{red};{green};{blue}"),
+    }
+}
+
+/// 【终端】【主题悬停色】色相轻强调，灰阶强强调，并保证正文对比度。
+/// 参数：原始前景和实际背景；返回：真彩前景 SGR 参数。
+fn lifted_for_background((red, green, blue): (u8, u8, u8), background: (u8, u8, u8)) -> String {
     let chroma = red.max(green).max(blue) - red.min(green).min(blue);
     // 1. 语法高亮等有色相的前景只轻抬一档，避免整块代码被洗成白色
-    let lift: fn(u8) -> u8 = if chroma > CHROMA_THRESHOLD {
-        lift_chroma_channel
+    let amount = if chroma > CHROMA_THRESHOLD {
+        CHROMA_LIFT
     } else {
-        lift_channel
+        LIFT
     };
-    format!("38;2;{};{};{}", lift(red), lift(green), lift(blue))
+    let (red, green, blue) = crate::render::terminal_contrast::emphasize(
+        (red, green, blue),
+        background,
+        f64::from(amount) / 100.0,
+    );
+    format!("38;2;{red};{green};{blue}")
 }
 
 /// 生成提亮后的 256 色前景序列。
@@ -104,6 +121,14 @@ pub(super) fn lifted_truecolor(red: u8, green: u8, blue: u8) -> String {
 /// 返回:
 /// - 真彩前景 SGR
 pub(super) fn lifted_256(index: u8) -> String {
+    if index < 16 {
+        let code = if index < 8 {
+            30 + index
+        } else {
+            90 + index - 8
+        };
+        return format!("22;{code}");
+    }
     let (red, green, blue) = color_256_rgb(index);
     lifted_truecolor(red, green, blue)
 }
@@ -111,6 +136,22 @@ pub(super) fn lifted_256(index: u8) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 【终端】【浅色悬停回归】截图背景下的悬停前景必须保持可读对比度。
+    #[test]
+    fn light_background_hover_keeps_readable_contrast() {
+        let output = lifted_for_background((137, 141, 145), (194, 213, 231));
+        let values = output
+            .trim_start_matches("38;2;")
+            .split(';')
+            .map(|part| part.parse::<u8>().unwrap())
+            .collect::<Vec<_>>();
+        let color = (values[0], values[1], values[2]);
+        assert!(
+            crate::render::terminal_contrast::contrast(color, (194, 213, 231)) >= 4.5,
+            "{color:?}"
+        );
+    }
 
     /// 提亮后一定不比原值暗，已接近白色时顶到纯白。
     #[test]
@@ -125,7 +166,7 @@ mod tests {
     #[test]
     fn chromatic_colors_keep_their_hue() {
         // 关键字紫色 (196,167,231)
-        let lifted = lifted_truecolor(196, 167, 231);
+        let lifted = lifted_for_background((196, 167, 231), (24, 24, 24));
         let parts: Vec<u8> = lifted
             .trim_start_matches("38;2;")
             .split(';')

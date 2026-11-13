@@ -1,8 +1,7 @@
 use serde_json::Value;
-use std::path::Path;
-mod json_string;
 #[path = "command_summary.rs"]
 mod command_summary;
+mod json_string;
 use command_summary::command_summary;
 
 /// 对外提供命令摘要，供补充工具复用同一套截断规则。
@@ -480,9 +479,10 @@ pub(super) fn find_json_string_end(value: &str) -> Option<usize> {
 /// 返回:
 /// - 文件名或原始路径文本
 pub(super) fn file_basename(value: String) -> String {
-    Path::new(&value)
-        .file_name()
-        .and_then(|name| name.to_str())
+    value
+        .trim_end_matches(['/', '\\'])
+        .rsplit(['/', '\\'])
+        .next()
         .filter(|name| !name.trim().is_empty())
         .map(ToString::to_string)
         .unwrap_or(value)

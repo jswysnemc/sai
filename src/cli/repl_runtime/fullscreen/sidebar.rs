@@ -5,7 +5,7 @@ use super::input::Effect;
 use super::layout::FullscreenLayout;
 use super::sidebar_action::{SidebarAction, SidebarSections};
 use super::sidebar_git::GitWatcher;
-use super::sidebar_regions::{SidebarScrolls, regions};
+use super::sidebar_regions::{regions, SidebarScrolls};
 use super::sidebar_view::{SidebarDocument, SidebarRow};
 use crate::cli::repl_runtime::ReplRuntime;
 use crossterm::event::{
@@ -14,6 +14,7 @@ use crossterm::event::{
 
 #[derive(Default)]
 pub(super) struct Sidebar {
+    pub(super) metrics: super::sidebar_metrics::SidebarMetrics,
     pub(super) git: GitWatcher,
     pub(super) document: SidebarDocument,
     pub(super) scrolls: SidebarScrolls,

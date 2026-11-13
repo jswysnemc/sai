@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AppConfig, EngineStatusResponse } from "../../api/contracts";
+import type { AppConfig } from "../../api/contracts";
 import {
   readStoredChatModelSelection,
   readStoredThinkingLevel,
@@ -11,7 +11,6 @@ import {
   buildNewSessionThinkingLevels,
   initializeNewSessionPreferences,
   renameNewSessionProviderReference,
-  resetNewSessionEnginePreferences,
   disabledNewSessionProviderName,
   resolveConfiguredNewSessionPreferences,
   resolveEffectiveNewSessionPreferences
@@ -28,42 +27,8 @@ const nativeConfig = {
       default_model: "model-a"
     }
   ],
-  agent: { engine: "native" },
   session: {}
 } as unknown as AppConfig;
-
-const connectedCodexStatus = {
-  engine: "codex",
-  label: "Codex",
-  external: true,
-  unavailable_features: [],
-  acp_runtime: {
-    connected: true,
-    agent_name: "Codex",
-    agent_version: "1.0.0",
-    capabilities: null,
-    auth_methods: [],
-    modes: null,
-    available_commands: [],
-    native_equivalents: {},
-    config_options: [
-      {
-        id: "model",
-        category: "model",
-        type: "select",
-        currentValue: "runtime-model",
-        options: [{ value: "runtime-model", name: "Runtime model" }]
-      },
-      {
-        id: "thought",
-        category: "thought_level",
-        type: "select",
-        currentValue: "high",
-        options: [{ value: "high", name: "High" }]
-      }
-    ]
-  }
-} as EngineStatusResponse;
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -96,100 +61,6 @@ describe("new session preferences", () => {
     } as unknown as AppConfig;
     expect(disabledNewSessionProviderName(config)).toBe("Provider A");
     expect(buildNewSessionModelChoices(config).map((choice) => choice.model)).toEqual([]);
-  });
-
-  it("uses only models currently advertised by a connected ACP runtime", () => {
-    const config = {
-      ...nativeConfig,
-      agent: { engine: "codex", acp: {} },
-      session: {
-        new_session_provider_id: "__acp__",
-        new_session_model: "saved-model"
-      }
-    } as unknown as AppConfig;
-
-    expect(buildNewSessionModelChoices(config, connectedCodexStatus).map((choice) => choice.model))
-      .toEqual(["runtime-model"]);
-  });
-
-  it("retains configured ACP defaults before the first runtime handshake", () => {
-    const config = {
-      ...nativeConfig,
-      agent: { engine: "codex", acp: {} },
-      session: {
-        new_session_provider_id: "__acp__",
-        new_session_model: "saved-model",
-        new_session_thinking_level: "xhigh"
-      }
-    } as unknown as AppConfig;
-    const statusBeforeHandshake = { ...connectedCodexStatus, acp_runtime: null };
-
-    expect(buildNewSessionModelChoices(
-      config,
-      statusBeforeHandshake
-    ).map((choice) => choice.model)).toEqual(["saved-model"]);
-    expect(buildNewSessionThinkingLevels(config, statusBeforeHandshake))
-      .toEqual(["auto", "none", "low", "medium", "high", "xhigh", "max"]);
-    expect(resolveEffectiveNewSessionPreferences(config, statusBeforeHandshake)).toEqual({
-      model: { providerId: "__acp__", model: "saved-model" },
-      thinkingLevel: "xhigh"
-    });
-  });
-
-  it("falls back from ACP values that the connected runtime does not support", () => {
-    const config = {
-      ...nativeConfig,
-      agent: { engine: "codex", acp: {} },
-      session: {
-        new_session_provider_id: "__acp__",
-        new_session_model: "saved-model",
-        new_session_thinking_level: "xhigh"
-      }
-    } as unknown as AppConfig;
-
-    expect(resolveEffectiveNewSessionPreferences(config, connectedCodexStatus)).toEqual({
-      model: null,
-      thinkingLevel: "auto"
-    });
-  });
-
-  it("offers only auto when ACP does not advertise thought-level support", () => {
-    const config = {
-      ...nativeConfig,
-      agent: { engine: "codex", acp: {} }
-    } as unknown as AppConfig;
-    const statusWithoutThinking = {
-      ...connectedCodexStatus,
-      acp_runtime: {
-        ...connectedCodexStatus.acp_runtime,
-        config_options: [{
-          id: "model",
-          category: "model",
-          type: "select",
-          currentValue: "runtime-model",
-          options: [{ value: "runtime-model", name: "Runtime model" }]
-        }]
-      }
-    } as EngineStatusResponse;
-
-    expect(buildNewSessionThinkingLevels(config, statusWithoutThinking)).toEqual(["auto"]);
-  });
-
-  it("applies ACP values that the connected runtime explicitly supports", () => {
-    const config = {
-      ...nativeConfig,
-      agent: { engine: "codex", acp: {} },
-      session: {
-        new_session_provider_id: "__acp__",
-        new_session_model: "runtime-model",
-        new_session_thinking_level: "high"
-      }
-    } as unknown as AppConfig;
-
-    expect(resolveEffectiveNewSessionPreferences(config, connectedCodexStatus)).toEqual({
-      model: { providerId: "__acp__", model: "runtime-model" },
-      thinkingLevel: "high"
-    });
   });
 
   it("writes only the new session keys and blocks an old global model fallback", () => {
@@ -231,23 +102,7 @@ describe("new session preferences", () => {
     expect(readStoredThinkingLevel("fixed-session")).toBe("xhigh");
   });
 
-  it("resets engine-specific values and keeps provider references synchronized", () => {
-    const session = {
-      new_session_provider_id: "provider-a",
-      new_session_model: "model-b",
-      new_session_thinking_level: "high" as const,
-      auto_title_enabled: false
-    };
 
-    expect(resetNewSessionEnginePreferences(session)).toEqual({
-      new_session_provider_id: undefined,
-      new_session_model: undefined,
-      new_session_thinking_level: "auto",
-      auto_title_enabled: false
-    });
-    expect(renameNewSessionProviderReference(session, "provider-a", "provider-b"))
-      .toEqual({ ...session, new_session_provider_id: "provider-b" });
-  });
 });
 
 /**

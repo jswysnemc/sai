@@ -79,6 +79,14 @@ async fn events(
     let stream = session_events_stream(bus, replay_after(query.after, &headers))
         .await
         .ok_or_else(|| WebError::conflict("session event stream is unavailable"))?;
+    let guard = crate::hooks::lifecycle::client(&id);
+    let stream = futures_util::stream::unfold(
+        (Box::pin(stream), guard),
+        |(mut stream, guard)| async move {
+            use futures_util::StreamExt;
+            stream.next().await.map(|event| (event, (stream, guard)))
+        },
+    );
     Ok(Sse::new(stream).keep_alive(sse_keep_alive()))
 }
 
@@ -351,6 +359,7 @@ async fn remove(
     let deleted = crate::state::delete_session(&state.paths, &id)
         .map_err(|error| WebError::bad_request(error.to_string()))?;
     if deleted {
+        crate::hooks::lifecycle::finish(&id).await;
         super::session_runtime::clear_session_runtime_records(&owner_key, &id);
         state
             .runs
@@ -385,6 +394,7 @@ async fn remove_many(
     let deleted_ids = crate::state::delete_sessions(&state.paths, &request.ids)
         .map_err(|error| WebError::bad_request(error.to_string()))?;
     for id in &deleted_ids {
+        crate::hooks::lifecycle::finish(id).await;
         if let Some((workspace_id, owner_key)) = session_scopes.get(id) {
             super::session_runtime::clear_session_runtime_records(owner_key, id);
             state

@@ -83,9 +83,6 @@ impl Agent {
         &mut self,
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<CompactionRunOutcome> {
-        if self.uses_external_engine() {
-            return self.compact_external_conversation(on_event).await;
-        }
         let base = self.chat_base_context_projection(None)?;
         let projection =
             project_provider_turn_from_messages(&base.messages, 0, self.context_char_budget);
@@ -136,6 +133,20 @@ impl Agent {
         manual: bool,
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<bool> {
+        let hook_context = self
+            .tools
+            .hook_context()
+            .with("trigger", if manual { "manual" } else { "auto" });
+        let hook = crate::hooks::dispatch_with_tools(
+            &self.config.hooks,
+            crate::hooks::HookEvent::PreCompact,
+            &hook_context,
+            Some(&self.tools),
+        )
+        .await;
+        if hook.stop {
+            anyhow::bail!("PreCompact hook stopped compaction");
+        }
         self.background_compaction = None;
         on_event(AgentEvent::CompactionStarted {
             turn_count: request.turn_count(),
@@ -185,6 +196,27 @@ impl Agent {
                     summary: Some(summary),
                     error: None,
                 })?;
+                let hook = crate::hooks::dispatch_with_tools(
+                    &self.config.hooks,
+                    crate::hooks::HookEvent::PostCompact,
+                    &hook_context,
+                    Some(&self.tools),
+                )
+                .await;
+                if hook.stop {
+                    anyhow::bail!("PostCompact hook stopped continuation");
+                }
+                let started = crate::hooks::dispatch_with_tools(
+                    &self.config.hooks,
+                    crate::hooks::HookEvent::SessionStart,
+                    &hook_context.with("source", "compact"),
+                    Some(&self.tools),
+                )
+                .await;
+                if started.stop {
+                    anyhow::bail!("SessionStart hook stopped continuation");
+                }
+                self.pending_hook_context.extend(started.context);
                 Ok(true)
             }
             CompactionApplyOutcome::RejectedOverBudget => {
@@ -336,6 +368,7 @@ impl Agent {
             request,
             self.context_char_budget,
             &self.config.prompt.templates.compaction,
+            self.config.memory_config().enabled,
         )?;
         let messages = vec![
             ChatMessage::system(prompt.system),
@@ -391,35 +424,44 @@ impl Agent {
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<String> {
         let _http_debug_session = crate::llm::HttpDebugSessionGuard::new(self.state.session_id());
-        let result =
-            self.compaction_client
-                .chat_stream_events_retry(messages, definitions, &self.config.retry, |event| {
-                    match event {
-                        ChatStreamEvent::Chunk(chunk)
-                            if chunk.kind == ChatStreamKind::Content && !chunk.text.is_empty() =>
-                        {
-                            on_event(AgentEvent::CompactionDelta { text: chunk.text })
-                        }
-                        ChatStreamEvent::Reset { content_chars, .. } => {
-                            on_event(AgentEvent::ResponseReset {
-                                content_chars,
-                                reasoning_chars: 0,
-                                compaction: true,
-                            })
-                        }
-                        ChatStreamEvent::Reconnecting {
-                            attempt,
-                            max_attempts,
-                        } => on_event(AgentEvent::Reconnecting {
-                            attempt,
-                            max_attempts,
-                        }),
-                        ChatStreamEvent::Chunk(_)
-                        | ChatStreamEvent::ToolCallProgress(_)
-                        | ChatStreamEvent::ToolCallReady { .. } => Ok(()),
+        let result = crate::hooks::model_scope(
+            self.config.hooks.clone(),
+            self.tools
+                .hook_context()
+                .with("model", self.compaction_client.model())
+                .with("operation", "compaction"),
+            self.tools.clone(),
+            self.compaction_client.chat_stream_events_retry(
+                messages,
+                definitions,
+                &self.config.retry,
+                |event| match event {
+                    ChatStreamEvent::Chunk(chunk)
+                        if chunk.kind == ChatStreamKind::Content && !chunk.text.is_empty() =>
+                    {
+                        on_event(AgentEvent::CompactionDelta { text: chunk.text })
                     }
-                })
-                .await?;
+                    ChatStreamEvent::Reset { content_chars, .. } => {
+                        on_event(AgentEvent::ResponseReset {
+                            content_chars,
+                            reasoning_chars: 0,
+                            compaction: true,
+                        })
+                    }
+                    ChatStreamEvent::Reconnecting {
+                        attempt,
+                        max_attempts,
+                    } => on_event(AgentEvent::Reconnecting {
+                        attempt,
+                        max_attempts,
+                    }),
+                    ChatStreamEvent::Chunk(_)
+                    | ChatStreamEvent::ToolCallProgress(_)
+                    | ChatStreamEvent::ToolCallReady { .. } => Ok(()),
+                },
+            ),
+        )
+        .await?;
         if let Some(usage) = &result.usage {
             if let Some(accounting) = &self.goal_accounting {
                 accounting.record(Some(usage))?;

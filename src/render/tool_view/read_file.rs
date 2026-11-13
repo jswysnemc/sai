@@ -16,6 +16,8 @@ pub(crate) struct ReadPageView {
     pub next: Option<usize>,
     /// 已带 `N: ` 前缀的内容行
     pub content: Vec<String>,
+    /// 工具输出附带的分页或截断提醒
+    pub notices: Vec<String>,
 }
 
 /// 行号列前景色：与 diff 行号一致的 244 号中性灰。
@@ -72,6 +74,7 @@ fn parse_legacy_text_page(output: &str) -> Option<ReadPageView> {
             .and_then(Value::as_u64)
             .map(|item| item as usize),
         content,
+        notices: Vec::new(),
     })
 }
 
@@ -83,21 +86,28 @@ fn parse_legacy_text_page(output: &str) -> Option<ReadPageView> {
 /// 返回:
 /// - 行号连续文本；存在非行号行时返回空，交给通用视图展示提醒或目录列表
 fn parse_numbered_text(output: &str) -> Option<ReadPageView> {
-    let content = output
-        .lines()
-        .filter(|line| !line.is_empty())
-        .map(ToString::to_string)
-        .collect::<Vec<_>>();
-    if content.is_empty() {
-        return None;
-    }
+    let mut content = Vec::new();
+    let mut notices = Vec::new();
     let mut offset = None;
-    for line in &content {
-        let (number, _) = split_numbered_line(line)?;
+    for line in output.lines().filter(|line| !line.is_empty()) {
+        let Some((number, _)) = split_numbered_line(line) else {
+            if content.is_empty() {
+                return None;
+            }
+            notices.push(line.to_string());
+            continue;
+        };
+        if !notices.is_empty() {
+            return None;
+        }
         let number = number.parse::<usize>().ok()?;
         if offset.is_none() {
             offset = Some(number);
         }
+        content.push(line.to_string());
+    }
+    if content.is_empty() {
+        return None;
     }
     Some(ReadPageView {
         path: String::new(),
@@ -105,6 +115,7 @@ fn parse_numbered_text(output: &str) -> Option<ReadPageView> {
         truncated: false,
         next: None,
         content,
+        notices,
     })
 }
 
@@ -124,36 +135,48 @@ pub(crate) fn render(view: &super::model::ToolView, mode: ToolCallDisplayMode) -
         return Some(String::new());
     }
     let outcome = view.outcome.as_ref()?;
-    let page = parse_read_page(&outcome.output)?;
+    let page = parse_read_page(&outcome.output);
     let mut arguments = serde_json::from_str::<Value>(&view.arguments).unwrap_or_default();
     if let Some(fields) = arguments.as_object_mut() {
         fields.remove("offset");
         fields.remove("limit");
     }
-    if !page.path.is_empty() {
+    if let Some(page) = page.as_ref().filter(|page| !page.path.is_empty()) {
         arguments = serde_json::json!({"path": page.path});
     }
-    let label = tool_event_label_tense(
+    let mut label = tool_event_label_tense(
         "read_file",
         Some(&arguments.to_string()),
         ToolVerbTense::Perfect,
     );
-    let badge = read_page_badge(&page);
+    if !outcome.ok {
+        label.push_str(crate::render::terminal_text(" failed", " 失败"));
+    }
+    let mut badge = page.as_ref().map(read_page_badge).unwrap_or_default();
+    if !outcome.ok {
+        badge.push_str(crate::render::terminal_text(" failed", " 失败"));
+    }
     let health = if outcome.ok {
         ToolHealth::Ok
     } else {
         ToolHealth::Err
     };
     let mut output = tool_status_line(&label, &badge, health);
-    if !outcome.ok {
-        return Some(output);
-    }
     // Summary 只保留状态行；正文进入 Ctrl+O 阅读面板
     if mode == ToolCallDisplayMode::Summary {
         return Some(output);
     }
+    if let Some(progress) = &view.progress {
+        // 【终端】【读取引导】布局前缀只保留缩进，避免与公共工具引导列叠加
+        output.push_str(&format!("\n    {}", progress));
+    }
     output.push('\n');
-    output.push_str(&render_body(&page, &arguments));
+    output.push_str(
+        &page
+            .as_ref()
+            .map(|page| render_body(page, &arguments))
+            .unwrap_or_else(|| super::structured_payload::format(&outcome.output)),
+    );
     Some(output)
 }
 
@@ -191,6 +214,9 @@ pub(crate) fn render_body(page: &ReadPageView, arguments: &Value) -> String {
                 crate::i18n::text("More content from line", "后续内容起始行：")
             ));
         }
+    }
+    for notice in &page.notices {
+        output.push_str(&format!("\n\x1b[2m{notice}\x1b[0m"));
     }
     output
 }
@@ -255,6 +281,26 @@ fn render_content_line(line: &str, number_width: usize, language: &str) -> Strin
 mod tests {
     use super::*;
     use crate::render::activity_animation::strip_ansi_for_test;
+
+    /// 【终端】【旧读取回归】带尾部提醒的文本仍使用新版读取视图，不展示参数表。
+    #[test]
+    fn legacy_read_output_with_notice_uses_the_current_view() {
+        let mut view = super::super::model::ToolView::running(
+            "read_file".into(),
+            r#"{"path":"D:\\code\\project\\file.java","offset":98,"limit":40}"#.into(),
+        );
+        view.finish(
+            true,
+            "98\tfirst line\n99\tsecond line\n[More content remains]".into(),
+        );
+        let rendered = render(&view, ToolCallDisplayMode::Full).expect("current read view");
+        let plain = strip_ansi_for_test(&rendered);
+        assert!(plain.contains("first line"));
+        assert!(plain.contains("More content remains"));
+        for label in ["Limit:", "Offset:", "Output:", "Path:"] {
+            assert!(!plain.contains(label), "{plain}");
+        }
+    }
 
     /// 【终端】【行号对齐测试】跨越行号位数边界时行号左侧和正文起始列均不移动。
     /// 参数: 无；返回: 无。
@@ -329,6 +375,7 @@ mod tests {
             truncated: true,
             next: Some(20),
             content: vec!["10: a".to_string(), "11: b".to_string()],
+            notices: Vec::new(),
         };
         let plain = strip_ansi_for_test(&read_page_badge(&page));
         assert!(plain.contains("10–11"), "{plain}");

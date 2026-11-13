@@ -576,6 +576,8 @@ pub struct HookItem {
     pub timeout_ms: Option<u64>,
     #[serde(default)]
     pub requests: Vec<HookHttpRequest>,
+    #[serde(flatten)]
+    pub options: super::hook_options::HookOptions,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
