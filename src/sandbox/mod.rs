@@ -16,6 +16,8 @@ mod protected_paths;
 mod settings;
 mod status;
 mod temp_dir;
+#[cfg(test)]
+mod test_worker_executable;
 #[cfg(windows)]
 pub(crate) mod windows;
 

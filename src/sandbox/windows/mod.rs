@@ -165,22 +165,13 @@ pub(crate) fn unrestricted_command(shell: &str, script: &str) -> Result<Command>
     Ok(command)
 }
 
-/// 【Windows命令】【启动器定位】测试进程使用同目录构建的正式二进制，其余使用当前程序。
+/// 【Windows命令】【启动器定位】测试进程使用同一构建配置目录中的正式程序，其余使用当前程序。
 /// 参数：无；返回可信启动器路径。
 fn worker_executable() -> Result<PathBuf> {
     let current = std::env::current_exe()?;
     #[cfg(test)]
     {
-        let executable = current
-            .parent()
-            .and_then(|dir| dir.parent())
-            .context("test executable directory")?
-            .join("sai.exe");
-        anyhow::ensure!(
-            executable.is_file(),
-            "build sai.exe before running Windows command tests"
-        );
-        return Ok(executable);
+        return super::test_worker_executable::resolve(&current);
     }
     #[cfg(not(test))]
     Ok(current)
