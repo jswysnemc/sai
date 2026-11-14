@@ -7,6 +7,7 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 mod cache_policy;
+mod current_pointer;
 pub(super) mod distribution;
 mod installation;
 

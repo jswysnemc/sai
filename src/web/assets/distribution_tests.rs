@@ -40,6 +40,55 @@ fn bundle(version: &str, html: &str) -> (Vec<u8>, String) {
     (bytes, digest)
 }
 
+/// 【Web 分发】【并发安装回归】并发读取及切换指针，避免 Windows 拒绝替换
+/// 参数: 无；返回: 无
+#[test]
+fn concurrent_installations_keep_a_valid_current_pointer() {
+    let root = tempfile::tempdir().unwrap();
+    let (bytes, digest) = bundle("1.2.3", "<html>concurrent</html>");
+    installation::install(root.path(), "1.2.3", &bytes, &digest).unwrap();
+    let barrier = std::sync::Barrier::new(8);
+    std::thread::scope(|scope| {
+        let (finished, completion) = std::sync::mpsc::channel::<()>();
+        let cache = root.path();
+        let reader = scope.spawn(move || {
+            while matches!(
+                completion.try_recv(),
+                Err(std::sync::mpsc::TryRecvError::Empty)
+            ) {
+                assert!(installation::current(cache, "1.2.3").is_some());
+                std::thread::yield_now();
+            }
+        });
+        let workers = (0..8)
+            .map(|_| {
+                scope.spawn(|| {
+                    barrier.wait();
+                    (0..8)
+                        .map(|_| {
+                            installation::install(root.path(), "1.2.3", &bytes, &digest).unwrap()
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect::<Vec<_>>();
+        let installations = workers
+            .into_iter()
+            .flat_map(|worker| worker.join().unwrap())
+            .collect::<Vec<_>>();
+        drop(finished);
+        reader.join().unwrap();
+        let current = installation::current(root.path(), "1.2.3").unwrap();
+        assert!(installations.contains(&current));
+        for directory in installations {
+            assert_eq!(
+                std::fs::read_to_string(directory.join("index.html")).unwrap(),
+                "<html>concurrent</html>"
+            );
+        }
+    });
+}
+
 /// 【Web 分发】【下载安装回归】实际 HTTP 下载后离线复用，同版本刷新切换目录且保留旧文件
 /// 参数: 无；返回: 无
 #[tokio::test]
@@ -133,7 +182,7 @@ fn invalid_archives_preserve_the_current_bundle() {
             Some(current.clone())
         );
     }
-    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 2);
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 3);
 }
 
 /// 【Web 分发】【CLI 回归】update 作为子命令解析，不与服务启动参数混淆

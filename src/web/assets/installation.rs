@@ -2,7 +2,7 @@ use anyhow::{ensure, Context, Result};
 use flate2::read::GzDecoder;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use std::io::{Read, Write};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 const MAX_UNPACKED_BYTES: u64 = 256 * 1024 * 1024;
@@ -26,7 +26,7 @@ pub(super) fn validate_digest(digest: &str) -> Result<()> {
 /// 【Web 分发】【缓存定位】读取原子更新的当前指针并校验版本和入口
 /// 参数: root 为版本缓存，version 为目标版本；返回: 完整缓存路径或空
 pub(super) fn current(root: &Path, version: &str) -> Option<PathBuf> {
-    let installation = std::fs::read_to_string(root.join("current")).ok()?;
+    let installation = super::current_pointer::read(root).ok()?;
     let (digest, identifier) = installation.split_once('-')?;
     validate_digest(digest).ok()?;
     uuid::Uuid::parse_str(identifier).ok()?;
@@ -75,10 +75,7 @@ pub(super) fn install(root: &Path, version: &str, bytes: &[u8], digest: &str) ->
     // 1. 【Web 分发】【独立目录】每次更新使用完整的新目录，修复损坏缓存且不覆盖运行中的文件
     std::fs::rename(stage.path(), &directory).context("install Web asset directory")?;
     // 2. 【Web 分发】【原子指针】持久化完整目录后替换指针，任何下载或验证失败均保留原版本
-    let mut pointer = tempfile::NamedTempFile::new_in(root)?;
-    pointer.write_all(installation.as_bytes())?;
-    pointer.as_file().sync_all()?;
-    pointer.persist(root.join("current"))?;
+    super::current_pointer::replace(root, &installation)?;
     Ok(directory)
 }
 

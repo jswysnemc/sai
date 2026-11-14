@@ -619,7 +619,15 @@ mod output_capture_tests {
             .flat_map(|chunk| chunk.bytes)
             .collect::<Vec<_>>();
 
-        assert!(error.to_string().contains("timed out"));
-        assert!(String::from_utf8_lossy(&output).contains("before-timeout"));
+        assert!(
+            error.to_string().contains("timed out"),
+            "expected timeout, received: {error:#}; output: {}",
+            String::from_utf8_lossy(&output)
+        );
+        assert!(
+            String::from_utf8_lossy(&output).contains("before-timeout"),
+            "timeout did not flush progress output: {}",
+            String::from_utf8_lossy(&output)
+        );
     }
 }
