@@ -65,7 +65,8 @@ async fn xuanxue_timeout_releases_the_vm_for_the_next_call() {
         "",
     );
     package.manifest.limits.instructions = 20_000_000;
-    package.manifest.limits.timeout_ms = 100;
+    // 1. 【玄学迁移测试】【调度预算】无限循环仍触发真实超时，正常恢复调用留足并行测试调度时间
+    package.manifest.limits.timeout_ms = 1_000;
     let plugin = load(package);
     let error = plugin
         .call_tool(
@@ -77,11 +78,7 @@ async fn xuanxue_timeout_releases_the_vm_for_the_next_call() {
         .unwrap_err();
     assert!(format!("{error:#}").contains("timed out"), "{error:#}");
     assert!(!plugin
-        .call_tool(
-            "draw_zhouyi_hexagram",
-            json!({}),
-            InvocationContext::default()
-        )
+        .call_tool("roll_dice", json!({}), InvocationContext::default())
         .await
         .unwrap()
         .is_empty());

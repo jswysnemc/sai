@@ -79,7 +79,7 @@ impl PluginHost for TransactionHost {
             }
             if self
                 .conflicts
-                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |value| {
+                .try_update(Ordering::SeqCst, Ordering::SeqCst, |value| {
                     value.checked_sub(1)
                 })
                 .is_ok()

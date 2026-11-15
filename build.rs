@@ -8,9 +8,17 @@ use base64::{engine::general_purpose, Engine as _};
 /// 【构建】【词表生成】生成嵌入式分词词表，无参数和返回值
 fn main() {
     println!("cargo:rerun-if-changed=assets/o200k_base.tiktoken");
+    // 1. 【构建】【调试展开表】大型 macOS 调试二进制使用 DWARF 展开，避免紧凑表的十六兆字节限制
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos")
+        && env::var("PROFILE").as_deref() == Ok("debug")
+    {
+        println!("cargo:rustc-link-arg=-Wl,-no_compact_unwind");
+    }
+    // 2. 【构建】【词表生成】发布与调试构建复用同一嵌入式分词词表
     build_o200k_vocab();
 }
 
+/// 【构建】【词表编码】将资源词表转换为按排名排列的紧凑二进制，无参数和返回值
 fn build_o200k_vocab() {
     let source =
         fs::read_to_string("assets/o200k_base.tiktoken").expect("read o200k_base vocabulary");

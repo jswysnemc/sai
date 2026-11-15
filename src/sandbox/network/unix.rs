@@ -1,9 +1,13 @@
 use super::{policy, proxy, Launch};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::{os::unix::fs::PermissionsExt, path::PathBuf, sync::Arc};
+#[cfg(target_os = "linux")]
+use std::os::unix::fs::PermissionsExt;
+use std::{path::PathBuf, sync::Arc};
+#[cfg(target_os = "linux")]
+use tokio::net::UnixListener;
 use tokio::{
-    net::{TcpListener, UnixListener, UnixStream},
+    net::{TcpListener, UnixStream},
     process::Command,
     task::JoinSet,
 };
