@@ -154,8 +154,8 @@ class FooterActionTests(unittest.TestCase):
             self.assertEqual(config["providers"][0]["default_model"], "model-14")
             self.assertEqual(config["providers"][0]["thinking_level"], "high")
 
-    def test_streaming_model_click_does_not_block_or_replace_draft(self):
-        """参数无；执行期间模型入口沿用禁用提示，不打开阻塞面板或丢失草稿，返回无。"""
+    def test_streaming_model_click_opens_picker_and_preserves_draft(self):
+        """参数无；执行期间模型入口立即打开，取消后保留草稿与中间光标，返回无。"""
         from mock_fragmented_model import FragmentedModel
         with FragmentedModel("MOUSE-STREAM") as model, TerminalSession(
             model.config(), columns=100, rows=32, arguments=["--view", "fullscreen", "--lang", "en-US"]
@@ -166,12 +166,17 @@ class FooterActionTests(unittest.TestCase):
             terminal.wait_for(lambda: "MOUSE-STREAM" in terminal.text())
             terminal.send(b"KEEP-QUEUED")
             terminal.pump(.2)
+            terminal.send(b"\x1b[D\x1b[D")
+            terminal.pump(.2)
             rows = terminal.text().splitlines()
             row = next(index for index, line in enumerate(rows) if "yolo+code-model" in line and "auto" in line)
             column = rows[row].index("auto") - 3
             click(terminal, column, row)
-            terminal.wait_for(lambda: "/model is available after this turn" in terminal.text())
-            self.assertNotIn("Model selection", terminal.text())
-            self.assertIn("KEEP-QUEUED", terminal.text())
+            terminal.wait_for(lambda: "Model selection" in terminal.text())
+            click_text(terminal, "Cancel")
+            terminal.wait_for(lambda: "KEEP-QUEUED" in terminal.text()
+                and "Model selection" not in terminal.text())
+            terminal.send(b"X")
+            terminal.wait_for(lambda: "KEEP-QUEUXED" in terminal.text())
             model.release.set()
             terminal.wait_for(lambda: "STREAM-DONE" in terminal.text())

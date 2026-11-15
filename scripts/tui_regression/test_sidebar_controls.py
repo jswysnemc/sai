@@ -52,7 +52,7 @@ class SidebarControlTests(unittest.TestCase):
             terminal.wait_for(lambda: "Changes" in terminal.text())
 
     def test_drag_close_hover_and_draft_cursor_retention(self):
-        """无参数；拖动、关闭和终端缩放保留草稿光标，关闭按钮使用反色，返回无。"""
+        """无参数；拖动、关闭和缩放保留草稿光标，关闭按钮只改变前景，返回无。"""
         config = default_config({"fullscreen": True})
         with TerminalSession(config, columns=160, rows=32,
                              arguments=["--lang", "en-US"]) as terminal:
@@ -67,9 +67,13 @@ class SidebarControlTests(unittest.TestCase):
             terminal.resize(180, 32)
             terminal.wait_for(lambda: divider_column(terminal) == 116)
             self.assertEqual(terminal.screen.cursor.x, cursor)
-            # 1. 【终端侧栏】【控件悬停】关闭按钮反色，不给标题增加下划线
+            # 1. 【终端侧栏】【控件悬停】关闭按钮使用主题前景，背景和文字效果保持原样
+            foreground = terminal.screen.buffer[0][177].fg
+            background = terminal.screen.buffer[0][177].bg
             terminal.send(b"\x1b[<35;178;1M")
-            terminal.wait_for(lambda: terminal.screen.buffer[0][177].reverse)
+            terminal.wait_for(lambda: terminal.screen.buffer[0][177].fg != foreground)
+            self.assertEqual(terminal.screen.buffer[0][177].bg, background)
+            self.assertFalse(terminal.screen.buffer[0][177].reverse)
             self.assertFalse(terminal.screen.buffer[0][177].underscore)
             click(terminal, 177, 0)
             terminal.wait_for(lambda: "Changes" not in terminal.text())
@@ -100,7 +104,7 @@ class SidebarControlTests(unittest.TestCase):
                 self.assertEqual(divider_column(terminal), 80)
                 drag_divider(terminal, 70, row=31)
                 self.assertEqual(terminal.screen.cursor.x, cursor)
-                self.assertIn("Review", lines(terminal)[1][70:])
+                self.assertIn("Review", lines(terminal)[0][70:])
                 self.assertIn("KEPT-DRAFT", terminal.text())
                 terminal.resize(100, 32)
                 terminal.wait_for(lambda: divider_column(terminal) == 40)
@@ -112,7 +116,7 @@ class SidebarControlTests(unittest.TestCase):
                 terminal.send(b"\x1b[<35;11;6M")
                 terminal.wait_for(lambda: not terminal.screen.buffer[31][70].reverse)
                 terminal.send(b"\x1b")
-                terminal.wait_for(lambda: "Review" not in lines(terminal)[1])
+                terminal.wait_for(lambda: "Review" not in lines(terminal)[0])
                 self.assertEqual(divider_column(terminal), 96)
                 self.assertIn("KEPT-DRAFT", terminal.text())
                 self.assertEqual(terminal.screen.cursor.x, cursor)

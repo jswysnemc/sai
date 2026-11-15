@@ -61,7 +61,7 @@ class QueueManagerTests(unittest.TestCase):
                 self.assertTrue(any("QUEUE-11-EDIT" in line and "After task" in line for line in manager_rows(terminal)))
 
     def test_mouse_list_scroll_controls_and_input_focus(self):
-        """无参数；鼠标仅滚动队列、按钮独立反色，点击输入退出管理但保留队列，返回无。"""
+        """无参数；鼠标仅滚动队列，悬停只改变前景，点击输入退出管理但保留队列，返回无。"""
         with ActivityModel() as model:
             with TerminalSession(model.config(), columns=100, rows=32,
                                  arguments=["--lang", "en-US"]) as terminal:
@@ -75,8 +75,12 @@ class QueueManagerTests(unittest.TestCase):
                 terminal.send(b"\x1b[H")
                 terminal.wait_for(lambda: "MOUSE-00" in "\n".join(manager_rows(terminal)))
                 column, row = locate(terminal, "MOUSE-02")
+                foreground = terminal.screen.buffer[row][column].fg
+                background = terminal.screen.buffer[row][column].bg
                 terminal.send(f"\x1b[<35;{column + 1};{row + 1}M".encode())
-                terminal.wait_for(lambda: terminal.screen.buffer[row][column].reverse)
+                terminal.wait_for(lambda: terminal.screen.buffer[row][column].fg != foreground)
+                self.assertEqual(terminal.screen.buffer[row][column].bg, background)
+                self.assertFalse(terminal.screen.buffer[row][column].reverse)
                 click(terminal, column, row)
                 terminal.wait_for(lambda: any("› #3" in line for line in manager_rows(terminal)))
                 column, row = locate(terminal, "T Top")

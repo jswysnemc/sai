@@ -88,13 +88,13 @@ class GitPreviewTests(unittest.TestCase):
                 click(terminal, 156, row)
                 terminal.wait_for(lambda: "working-line" in terminal.text())
                 # 1. 【终端审查】【固定左右】左侧背景保持原样，右侧红绿背景只出现在增删代码行
-                self.assertIn("Review", lines(terminal)[1][80:])
+                self.assertIn("Review", lines(terminal)[0][80:])
                 self.assertTrue(any("ANSWER-BRAVO" in line[:80] for line in lines(terminal)))
                 self.assertFalse(any("CODE-ROW" in line[:80] for line in lines(terminal)))
-                self.assertTrue(all(terminal.screen.buffer[row][column].bg == "default"
-                                    for row in range(9) for column in range(80, 160)))
                 added_row = next(index for index, line in enumerate(lines(terminal)) if "working-line" in line[80:])
                 removed_row = next(index for index, line in enumerate(lines(terminal)) if "original-line" in line[80:])
+                self.assertTrue(all(terminal.screen.buffer[row][column].bg == "default"
+                                    for row in range(removed_row) for column in range(80, 160)))
                 self.assertEqual(terminal.screen.buffer[added_row][90].bg, "142e1e")
                 self.assertEqual(terminal.screen.buffer[removed_row][90].bg, "3f191e")
                 self.assertTrue(all(terminal.screen.buffer[added_row][column].bg == "142e1e"
@@ -105,39 +105,44 @@ class GitPreviewTests(unittest.TestCase):
                 self.assertNotEqual(terminal.screen.buffer[0][5].bg, "default")
                 draft_row = next(index for index, line in enumerate(lines(terminal)) if "KEPT-DRAFT" in line[:80])
                 self.assertEqual(terminal.screen.buffer[draft_row][5].bg, terminal.screen.buffer[0][5].bg)
-                self.assertIn("+", lines(terminal)[4][80:])
-                self.assertIn("-", lines(terminal)[4][80:])
-                header = lines(terminal)[4]
-                self.assertNotEqual(terminal.screen.buffer[4][header.index("+", 80)].fg,
-                                    terminal.screen.buffer[4][header.index("-", 80)].fg)
-                # 2. 【终端审查】【比较控件】模式只在悬停时显示主题浅底，切换读取不同内容
-                column = lines(terminal)[3].index("[ Staged ]") + 2
-                terminal.send(f"\x1b[<35;{column + 1};4M".encode())
-                terminal.wait_for(lambda: terminal.screen.buffer[3][column].bg != "default")
-                self.assertFalse(terminal.screen.buffer[3][column].reverse)
-                self.assertFalse(terminal.screen.buffer[3][column].underscore)
+                metrics_row = next(index for index, line in enumerate(lines(terminal)) if "files changed" in line[80:])
+                header = lines(terminal)[metrics_row]
+                self.assertIn("+", header[80:])
+                self.assertIn("-", header[80:])
+                self.assertNotEqual(terminal.screen.buffer[metrics_row][header.index("+", 80)].fg,
+                                    terminal.screen.buffer[metrics_row][header.index("-", 80)].fg)
+                # 2. 【终端审查】【比较控件】悬停只改变主题前景，背景与文字效果保持原值
+                mode_row = next(index for index, line in enumerate(lines(terminal)) if "[ Staged ]" in line[80:])
+                files_top = metrics_row + 1
+                column = lines(terminal)[mode_row].index("[ Staged ]") + 2
+                foreground = terminal.screen.buffer[mode_row][column].fg
+                terminal.send(f"\x1b[<35;{column + 1};{mode_row + 1}M".encode())
+                terminal.wait_for(lambda: terminal.screen.buffer[mode_row][column].fg != foreground)
+                self.assertEqual(terminal.screen.buffer[mode_row][column].bg, "default")
+                self.assertFalse(terminal.screen.buffer[mode_row][column].reverse)
+                self.assertFalse(terminal.screen.buffer[mode_row][column].underscore)
                 terminal.send(b"\x1b[<35;6;6M")
-                terminal.wait_for(lambda: terminal.screen.buffer[3][column].bg == "default")
-                click(terminal, column, 3)
+                terminal.wait_for(lambda: terminal.screen.buffer[mode_row][column].fg == foreground)
+                click(terminal, column, mode_row)
                 terminal.wait_for(lambda: "staged-line" in terminal.text() and "working-line" not in terminal.text())
-                column = lines(terminal)[3].index("[ Unstaged ]") + 2
-                click(terminal, column, 3)
+                column = lines(terminal)[mode_row].index("[ Unstaged ]") + 2
+                click(terminal, column, mode_row)
                 terminal.wait_for(lambda: "staged-line" in terminal.text() and "working-line" in terminal.text())
                 diff_row = next(index for index, line in enumerate(lines(terminal)) if line[80:].lstrip("│ ").startswith("tracked.txt"))
                 sticky_header = lines(terminal)[diff_row][80:]
                 chat_before = [line[:80] for line in lines(terminal)]
                 diff_before = [line[80:] for line in lines(terminal)[diff_row:]]
-                files_before = [line[80:] for line in lines(terminal)[5:diff_row - 1]]
+                files_before = [line[80:] for line in lines(terminal)[files_top:diff_row - 1]]
                 # 3. 【终端审查】【文件局部滚动】只改变文件清单，不改变聊天、差异或标题
-                click(terminal, 110, 5, kind=65)
-                terminal.wait_for(lambda: [line[80:] for line in lines(terminal)[5:diff_row - 1]] != files_before)
+                click(terminal, 110, files_top, kind=65)
+                terminal.wait_for(lambda: [line[80:] for line in lines(terminal)[files_top:diff_row - 1]] != files_before)
                 self.assertEqual([line[:80] for line in lines(terminal)], chat_before)
                 self.assertEqual([line[80:] for line in lines(terminal)[diff_row:]], diff_before)
-                files_before = [line[80:] for line in lines(terminal)[5:diff_row - 1]]
+                files_before = [line[80:] for line in lines(terminal)[files_top:diff_row - 1]]
                 click(terminal, 110, diff_row + 2, kind=65)
                 terminal.wait_for(lambda: [line[80:] for line in lines(terminal)[diff_row:]] != diff_before)
                 self.assertEqual([line[:80] for line in lines(terminal)], chat_before)
-                self.assertEqual([line[80:] for line in lines(terminal)[5:diff_row - 1]], files_before)
+                self.assertEqual([line[80:] for line in lines(terminal)[files_top:diff_row - 1]], files_before)
                 self.assertEqual(lines(terminal)[diff_row][80:], sticky_header)
                 terminal.send(b"\x1b[6~")
                 terminal.wait_for(lambda: "CODE-ROW-20" in terminal.text())
@@ -156,16 +161,16 @@ class GitPreviewTests(unittest.TestCase):
                 terminal.wait_for(lambda: "F6 chat" in terminal.text())
                 terminal.send(b"NEXT")
                 terminal.wait_for(lambda: "KEPT-DRAFTNEXT" in terminal.text())
-                self.assertIn("Review", lines(terminal)[1][80:])
+                self.assertIn("Review", lines(terminal)[0][80:])
                 # 6. 【终端审查】【缩放保持分栏】窄屏仍然左右分栏，不回退成浮动窗口
                 terminal.resize(100, 26)
-                terminal.wait_for(lambda: "Review" in lines(terminal)[1][50:])
+                terminal.wait_for(lambda: "Review" in lines(terminal)[0][50:])
                 self.assertFalse(any("CODE-ROW" in line[:50] for line in lines(terminal)))
                 self.assertIn("KEPT-DRAFTNEXT", terminal.text())
                 terminal.send(b"\x1b[17~")
                 terminal.wait_for(lambda: "F6 files" in terminal.text())
                 terminal.send(b"\x1b")
-                terminal.wait_for(lambda: "Review" not in lines(terminal)[1])
+                terminal.wait_for(lambda: "Review" not in lines(terminal)[0])
                 self.assertEqual(subprocess.check_output(["git", "status", "--porcelain"], cwd=terminal.root), before)
 
     def test_keyboard_focus_opens_new_file_and_returns_to_composer(self):
@@ -178,14 +183,21 @@ class GitPreviewTests(unittest.TestCase):
                 terminal.wait_for(lambda: "new.txt" in terminal.text())
                 terminal.send(b"DRAFT\x1b[17~")
                 terminal.wait_for(lambda: "Click to collapse" in terminal.text())
-                for _ in range(4):
+                # 1. 【终端审查】【键盘定位】按实际文件焦点导航，不依赖侧栏分组数量
+                for _ in range(20):
+                    row = next(index for index, line in enumerate(lines(terminal)) if "new.txt" in line[120:])
+                    column = lines(terminal)[row].index("new.txt")
+                    if terminal.screen.buffer[row][column].bg != "default":
+                        break
                     terminal.send(b"\x1b[B")
+                    terminal.pump(.1)
+                self.assertNotEqual(terminal.screen.buffer[row][column].bg, "default")
                 terminal.send(b"\r")
                 terminal.wait_for(lambda: "new-file-content" in terminal.text())
                 terminal.send(b"\x1b")
                 terminal.wait_for(lambda: "[ Working tree ]" not in terminal.text())
                 terminal.send(b"\x1b")
-                terminal.wait_for(lambda: "F6 focus" in terminal.text())
+                terminal.wait_for(lambda: "Review" not in lines(terminal)[0] and "DRAFT" in terminal.text())
                 terminal.send(b"-KEPT")
                 terminal.wait_for(lambda: "DRAFT-KEPT" in terminal.text())
 
@@ -236,8 +248,9 @@ class GitPreviewTests(unittest.TestCase):
                 self.assertTrue(all(terminal.screen.buffer[row][column].bg == "142e1e" for column in range(82, 159)))
                 self.assertEqual(lines(terminal)[header_row][80:], sticky)
                 terminal.resize(80, 24)
-                terminal.wait_for(lambda: "Review" in lines(terminal)[1][40:])
-                self.assertIn("[ Working ] [ Staged ] [ Unstaged ]", lines(terminal)[3][40:])
+                terminal.wait_for(lambda: "Review" in lines(terminal)[0][40:])
+                self.assertTrue(any("[ Working ] [ Staged ] [ Unstaged ]" in line[40:]
+                    for line in lines(terminal)))
                 self.assertTrue(any("syntax.rs" in line[40:] for line in lines(terminal)))
                 self.assertFalse(any("row_" in line[:40] for line in lines(terminal)))
                 terminal.send(b"\x1b")

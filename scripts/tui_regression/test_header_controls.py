@@ -22,8 +22,12 @@ class HeaderControlTests(unittest.TestCase):
             terminal.send(b"KEPT-DRAFT\x1b[D\x1b[D\x1b[D")
             terminal.wait_for(lambda: "KEPT-DRAFT" in terminal.text())
             column = 157
+            foreground = terminal.screen.buffer[0][column].fg
+            background = terminal.screen.buffer[0][column].bg
             terminal.send(f"\x1b[<35;{column + 1};1M".encode())
-            terminal.wait_for(lambda: terminal.screen.buffer[0][column].reverse)
+            terminal.wait_for(lambda: terminal.screen.buffer[0][column].fg != foreground)
+            self.assertEqual(terminal.screen.buffer[0][column].bg, background)
+            self.assertFalse(terminal.screen.buffer[0][column].reverse)
             self.assertFalse(terminal.screen.buffer[0][column].underscore)
             click(terminal, column, 0)
             terminal.wait_for(lambda: "Changes" in terminal.text() and SIDEBAR_ICON in lines(terminal)[0])

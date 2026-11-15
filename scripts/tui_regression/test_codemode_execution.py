@@ -116,7 +116,9 @@ class CodeModeExecutionTests(unittest.TestCase):
         with ActivityModel("codemode", {"code": code}) as model:
             with self.terminal(self.configuration(model), "--yolo") as terminal:
                 self.submit(terminal)
-                terminal.wait_for(lambda: "const result" in terminal.text())
+                # 1. 【CodeMode】【阶段就绪】参数预览尚未执行，语法断言等待实际代码正文
+                terminal.wait_for(lambda: "const result" in terminal.text()
+                    and "Preparing tool call" not in terminal.text())
                 self.assert_code_colors(terminal)
                 terminal.wait_for(lambda: "ANSWER-END" in terminal.text())
                 self.assert_code_colors(terminal)

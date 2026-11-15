@@ -49,4 +49,6 @@ class FullscreenCopyTests(unittest.TestCase):
             payload = re.search(pattern, bytes(terminal.raw[mark:])).group(1)
             self.assertEqual(base64.b64decode(payload).decode(), selected)
             terminal.send(b"BRAVO\r")
+            # 1. 【终端】【阅读跟随】拖选暂停跟随，查看后续回复前主动返回最新位置
+            terminal.send(b"\x1b[1;5F")
             terminal.wait_for(lambda: "ANSWER-BRAVO-7" in terminal.text())
