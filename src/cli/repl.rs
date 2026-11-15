@@ -21,6 +21,7 @@ mod jev_commands;
 mod mode_commands;
 mod model_selection;
 mod navigation;
+mod pending_settings;
 mod plugin_commands;
 pub(super) mod sandbox_commands;
 mod session_commands;
@@ -135,6 +136,15 @@ pub(super) async fn run_repl(
                 Some(false) => {}
             }
         }
+        pending_settings::apply(
+            paths,
+            &mut config,
+            &mut client,
+            &mut agent,
+            &mut runtime,
+            mode,
+            &mut thinking_override,
+        )?;
         // 【终端】【会话在线】切换后仅更新探测记录，输入始终在本终端执行
         runtime.bind_background_session(paths, state.session_id());
         runtime.configure_background_tasks(paths, &config, state.session_id());
@@ -161,6 +171,7 @@ pub(super) async fn run_repl(
         };
         render::configure_display_rendering(&config.display);
         runtime.configure_sidebar(config.display.sidebar);
+        runtime.configure_input_style(config.display.input_style);
         runtime.update_options(config.display.repl_transcript_row_cap, transcript_options);
         // 【终端】【布局恢复】仅恢复独占命令暂时退出的视图，不覆盖用户通过 Ctrl+O 选择的内联模式
         if std::mem::take(&mut restore_fullscreen_after_command) {
@@ -409,42 +420,16 @@ pub(super) async fn run_repl(
                         runtime.record_meta(message)?;
                     }
                     crate::control_commands::ControlCommand::Model { selection } => {
-                        // 无序号时复用 `sai models` 双列选择器（模型 + 思考）
-                        if selection.is_none() {
-                            model_selection::run_picker(
-                                paths,
-                                &mut config,
-                                &mut client,
-                                &mut agent,
-                                &mut runtime,
-                                mode,
-                                &mut thinking_override,
-                            )?;
-                            continue;
-                        }
-                        match crate::control_commands::run_model_command(
-                            paths,
+                        model_selection::run_command(
                             selection,
-                            crate::control_commands::ControlSurface::Repl,
-                        ) {
-                            Ok(result) => {
-                                runtime.record_meta(result.message)?;
-                                if result.changed {
-                                    reload_repl_agent(
-                                        paths,
-                                        &mut config,
-                                        &mut client,
-                                        &mut agent,
-                                        mode,
-                                        thinking_override.as_deref(),
-                                    )?;
-                                    runtime.record_meta(
-                                        t("configuration reloaded", "配置已重新加载").to_string(),
-                                    )?;
-                                }
-                            }
-                            Err(err) => runtime.record_meta(err.to_string())?,
-                        }
+                            paths,
+                            &mut config,
+                            &mut client,
+                            &mut agent,
+                            &mut runtime,
+                            mode,
+                            &mut thinking_override,
+                        )?;
                     }
                     crate::control_commands::ControlCommand::Tree { turn_id } => {
                         navigation::select_turn(&agent, &mut runtime, turn_id)?;

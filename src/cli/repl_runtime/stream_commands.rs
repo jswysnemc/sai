@@ -1,8 +1,6 @@
 //! 模型运行期间可立即执行的斜杠命令。
 //!
-//! 轮次进行中 `&mut Agent` 被 `execute_repl_turn` 独占，交互选择器也会
-//! 占住事件循环，所以只有不触碰这两者的命令能在这里同步执行；其余命令
-//! 要么在斜杠面板里置灰，要么等本轮结束后由主循环分发。
+//! 后台任务独占 Agent；设置选择器只操作配置，通过共享句柄在请求边界同步。
 
 use super::ReplRuntime;
 use crate::agent::AgentMode;
@@ -62,9 +60,7 @@ impl StreamCommandContext {
 
 /// 执行一条运行期间可立即执行的命令。
 ///
-/// 共同点是不触碰 `&mut Agent`、不弹交互选择器、不 await，因此可以在
-/// 流式 tick 的同步路径上跑完。副作用限于写 transcript、写子智能体
-/// 消息队列（`/msg`）、改会话压缩策略（`/context` 带参数）、切权限模式与保存工具方式默认值。
+/// 命令不直接借用 Agent；交互选择完成后恢复画面，后台请求继续独立执行。
 ///
 /// 参数:
 /// - `runtime`: 当前 REPL 运行期
@@ -79,6 +75,9 @@ pub(in crate::cli) fn run_immediate_stream_command(
     text: &str,
 ) -> Result<()> {
     let input = text.trim();
+    if runtime.run_stream_settings(&ctx.paths, input)? {
+        return Ok(());
+    }
     if runtime.handle_tui_command(input)? {
         return Ok(());
     }

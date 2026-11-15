@@ -92,7 +92,7 @@ fn header_toggle_opens_and_closes_without_touching_draft() {
 /// 【标题测试】【悬停反馈】顶部开关只反色实际范围，离开时清除，保持背景和列宽。
 /// 参数: 无；返回: 无，悬停残留或绘制串扰时断言失败。
 #[test]
-fn hover_reverses_only_toggle_and_clears_on_departure() {
+fn hover_colors_only_toggle_and_clears_on_departure() {
     TerminalSize::with_size(
         TerminalSize {
             cols: 160,
@@ -116,7 +116,13 @@ fn hover_reverses_only_toggle_and_clears_on_departure() {
                 .previous
                 .as_ref()
                 .unwrap()[0];
-            assert!(header.contains(&format!("\x1b[7m {SIDEBAR_ICON} \x1b[27m")));
+            assert!(header.contains(&format!(
+                "{} {SIDEBAR_ICON} ",
+                super::sidebar_palette::fg(
+                    super::sidebar_palette::SidebarPalette::current().accent
+                )
+            )));
+            assert!(!header.contains("\x1b[7m"));
             assert!(!session_has_duplicate_button(&runtime));
             assert!(!header.contains("\x1b[4m"));
             runtime
@@ -131,7 +137,10 @@ fn hover_reverses_only_toggle_and_clears_on_departure() {
                 .previous
                 .as_ref()
                 .unwrap()[0];
-            assert!(!header.contains(&format!("\x1b[7m {SIDEBAR_ICON}")));
+            assert!(header.contains(&format!(
+                "{} {SIDEBAR_ICON} ",
+                super::sidebar_palette::fg(super::sidebar_palette::SidebarPalette::current().text)
+            )));
         },
     );
 }

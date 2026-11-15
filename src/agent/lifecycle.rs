@@ -131,6 +131,7 @@ impl Agent {
             memory,
             mode,
             live_mode,
+            live_model_settings: Default::default(),
             cancel_requested: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             config,
             paths: paths.clone(),

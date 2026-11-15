@@ -72,17 +72,6 @@ impl PendingTurnGuard {
         Ok(())
     }
 
-    /// 将当前轮次标记为失败，保留真实错误原因。
-    ///
-    /// 参数:
-    /// - `error`: 失败原因
-    ///
-    /// 返回:
-    /// - 写入是否成功
-    pub fn fail(mut self, error: &str) -> Result<()> {
-        self.fail_in_place(error)
-    }
-
     /// 保留守卫所有权地写入失败终态。
     ///
     /// 一轮里有多个可能提前返回的准备步骤，每一步都消耗守卫就无法继续往下走；

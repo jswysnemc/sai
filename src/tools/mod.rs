@@ -65,7 +65,7 @@ pub(crate) use registry::PreparedToolCall;
 pub use registry::{empty_parameters, ToolPermission, ToolProgress, ToolRegistry, ToolSpec};
 pub(crate) use registry::{
     PluginReplyContexts, PluginToolPolicyStates, PreparedPluginReplies, ToolModelAttachment,
-    ToolOutput, DSH_BASH_EXECUTION_ALIAS,
+    ToolOutput,
 };
 pub(crate) use skill_management::{
     create_managed_skill, list_managed_skills, read_managed_skill, set_managed_skill_enabled,

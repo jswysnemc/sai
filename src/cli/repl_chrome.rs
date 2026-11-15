@@ -27,6 +27,24 @@ pub(super) struct ReplChrome {
 }
 
 impl ReplChrome {
+    /// 【终端设置】【显示同步】参数：model 为完整模型名，thinking 为思考等级，window 为上下文窗口；返回：无
+    pub(in crate::cli) fn set_model_settings(
+        &mut self,
+        model: &str,
+        thinking: &str,
+        window: usize,
+    ) {
+        let used = self.context_ratio * self.context_window_tokens as f32;
+        self.model = short_model_name(model);
+        self.thinking = if thinking.trim().is_empty() {
+            "auto".into()
+        } else {
+            thinking.trim().into()
+        };
+        self.context_window_tokens = window;
+        self.context_ratio = used / window.max(1) as f32;
+    }
+
     /// 从当前配置与会话状态构造 chrome。
     ///
     /// 参数:
@@ -185,14 +203,19 @@ fn compress_with_home(path: &str, home: &str) -> String {
     }
 }
 
-/// 给模型名称使用稳定的重点颜色。
+/// 【终端交互】【模型文字】参数：value 为模型名；返回：默认正文色，悬停由控件统一处理
 fn color_model(value: &str) -> String {
-    format!("\x1b[38;5;110m{value}\x1b[0m")
+    format!(
+        "{}{value}\x1b[0m",
+        crate::render::panel_palette::fg(
+            crate::render::panel_palette::PanelPalette::current().text
+        )
+    )
 }
 
-/// 给思考等级使用独立颜色。
+/// 【终端交互】【思考文字】参数：value 为思考等级；返回：默认正文色
 fn color_thinking(value: &str) -> String {
-    format!("\x1b[38;5;109m{value}\x1b[0m")
+    color_model(value)
 }
 
 /// 给右侧当前目录使用弱化但可辨识的颜色。
@@ -419,7 +442,7 @@ impl ChromeInputPrefix {
     /// 返回带样式的前缀文本（宽度恒为 `CHROME_INPUT_PREFIX_COLS`）。
     ///
     /// 用 `\x1b[39m` 只重置前景，保持整行背景连续。
-    fn render(self) -> &'static str {
+    pub(in crate::cli) fn render(self) -> &'static str {
         match self {
             Self::Message => " \x1b[38;5;245m→\x1b[39m ",
             Self::Shell => " \x1b[38;5;208m$\x1b[39m ",

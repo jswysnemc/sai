@@ -362,6 +362,11 @@ fn edit_display_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Res
             t("Fold tail lines", "折叠保留结尾行数"),
             config.display.fold_tail_lines.to_string(),
         ),
+        Field::new(
+            t("Input style", "输入框样式"),
+            config.display.input_style.as_str().to_string(),
+        )
+        .choices(&["panel", "separator"]),
     ];
     loop {
         if !run_form(stdout, t(" DISPLAY ", " 显示偏好 "), &mut fields)? {
@@ -389,9 +394,12 @@ fn apply_display_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()> 
     let mermaid_images = parse_bool_field(&fields[8].value)?;
     let fold_head = parse_number_field::<usize>(fields[10].label, &fields[10].value)?;
     let fold_tail = parse_number_field::<usize>(fields[11].label, &fields[11].value)?;
+    let input_style = crate::config::InputStyle::parse(&fields[12].value)
+        .ok_or_else(|| anyhow::anyhow!(t("invalid input style", "输入框样式无效")))?;
     config.display.reasoning = fields[0].value.trim().to_string();
     config.display.tool_calls = fields[1].value.trim().to_string();
     config.display.fullscreen = fullscreen;
+    config.display.input_style = input_style;
     config.display.math_images = math_images;
     config.display.mermaid_images = mermaid_images;
     config.display.readable_tool_names = readable_names;

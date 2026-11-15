@@ -19,12 +19,9 @@ fn light_backgrounds_keep_secondary_and_accent_text_readable() {
     }
 }
 
-/// 【终端】【主题回归】浅色悬停加深、深色悬停提亮，已可读颜色不被无故改写。
+/// 【终端】【对比度回归】已可读颜色保持原值，黑白对比度满足标准；无参数或返回值。
 #[test]
-fn emphasis_follows_background_and_readable_colors_stay_unchanged() {
-    let gray = (137, 141, 145);
-    assert!(emphasize(gray, (194, 213, 231), 0.45).0 < gray.0);
-    assert!(emphasize(gray, (28, 30, 34), 0.45).0 > gray.0);
+fn readable_colors_stay_unchanged_and_black_white_contrast_is_maximal() {
     assert_eq!(
         readable_color_on((38, 40, 42), (255, 255, 255), MIN_TEXT_CONTRAST),
         (38, 40, 42)

@@ -44,6 +44,7 @@ impl StateStore {
     ///
     /// 返回:
     /// - 写入是否成功
+    #[cfg(test)]
     pub(crate) fn record_tool_call_started(
         &self,
         turn_id: &str,
@@ -251,6 +252,7 @@ impl StateStore {
 ///
 /// 返回:
 /// - 写入是否成功
+#[cfg(test)]
 pub(in crate::state) fn insert_tool_call(
     db: &ConversationDb,
     record: NewToolCallRecord,

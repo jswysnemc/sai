@@ -1,5 +1,7 @@
 use super::model::{Turn, TurnStatus, SESSION_ROOT_TURN_ID};
-use super::rows::{load_turns_with_sql, map_turn};
+use super::rows::load_turns_with_sql;
+#[cfg(test)]
+use super::rows::map_turn;
 use super::schema::open_connection;
 use anyhow::{bail, Result};
 use chrono::Utc;
@@ -354,6 +356,7 @@ impl ConversationDb {
     ///
     /// 返回:
     /// - tail turns
+    #[cfg(test)]
     pub(in crate::state) fn load_turns_after_seq(
         &self,
         after_seq: i64,

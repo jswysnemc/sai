@@ -56,7 +56,7 @@ pub(super) fn position(state: &FullscreenState, layout: &FullscreenLayout) -> St
     format!("{color}{track} {percent:>3}%")
 }
 
-/// 【终端标题】【开关绘制】只替换顶行最右端，悬停反色，不改变正文或侧栏背景。
+/// 【终端标题】【开关绘制】只替换顶行最右端，默认正文色，悬停使用主题色。
 /// 参数: control 为开关状态，layout 为布局，rows 为整屏行；返回: 无。
 pub(super) fn overlay(control: &SidebarControl, layout: &FullscreenLayout, rows: &mut [String]) {
     let (Some(range), Some(row)) = (target(layout), rows.first_mut()) else {
@@ -64,17 +64,13 @@ pub(super) fn overlay(control: &SidebarControl, layout: &FullscreenLayout, rows:
     };
     let active = layout.sidebar.is_some();
     let background = if active { "\x1b[49m" } else { "\x1b[48;5;235m" };
-    let color = if active {
-        "\x1b[38;2;94;196;168m"
+    let palette = super::sidebar_palette::SidebarPalette::current();
+    let color = super::sidebar_palette::fg(if control.header_hovered {
+        palette.accent
     } else {
-        "\x1b[38;5;244m"
-    };
+        palette.text
+    });
     let text = format!(" {SIDEBAR_ICON} ");
-    let text = if control.header_hovered {
-        format!("\x1b[7m{text}\x1b[27m")
-    } else {
-        text
-    };
     let left = crate::render::ansi_clip::clip_ansi_to_width(row, range.start, "");
     let pad = range
         .start

@@ -8,6 +8,7 @@ pub(in crate::cli) struct ReplTurnTask {
     pub events: mpsc::Receiver<crate::runner::RunnerEvent>,
     pub handle: tokio::task::JoinHandle<(Agent, Result<()>, bool)>,
     pub live_mode: Arc<LiveAgentMode>,
+    pub live_model_settings: Arc<crate::agent::LiveModelSettings>,
     pub cancel_flag: Arc<AtomicBool>,
     pub session_id: String,
     stop: Option<oneshot::Sender<()>>,
@@ -28,6 +29,7 @@ impl ReplTurnTask {
         let paths = paths.clone();
         let config = config.clone();
         let live_mode = agent.live_mode_handle();
+        let live_model_settings = agent.live_model_settings();
         let cancel_flag = agent.cancel_handle();
         let session_id = agent.session_id().to_owned();
         let (sender, events) = mpsc::channel();
@@ -75,6 +77,7 @@ impl ReplTurnTask {
             events,
             handle,
             live_mode,
+            live_model_settings,
             cancel_flag,
             session_id,
             stop: Some(stop),

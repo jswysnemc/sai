@@ -17,6 +17,7 @@ pub const REPL_COMMANDS: &[&str] = &[
     "/subagents",
     "/msg",
     "/thinking",
+    "/think",
     "/view",
     "/tui",
     "/audit",

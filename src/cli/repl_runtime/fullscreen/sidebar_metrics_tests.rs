@@ -1,12 +1,25 @@
 use super::sidebar_metrics::*;
+
+/// 【终端指标测试】【标题避让】参数：无；返回：无，验证工作区和分支不占用右上角开关范围
+#[test]
+fn heading_reserves_columns_for_sidebar_toggle() {
+    let mut chrome = super::runtime_tests::chrome();
+    chrome.directory = "~/workspace/sai".into();
+    chrome.branch = Some("main".into());
+    let metrics = SidebarMetrics::new(Some(&chrome), &Default::default());
+    let header = metrics.heading(37, 30);
+    assert!(crate::render::ansi_clip::strip_ansi(&header[0]).ends_with("main"));
+    assert!(crate::cli::repl_text::visible_width(&header[0]) <= 33);
+}
+
 /// 【终端】【指标降级】未知数据不伪造零值，短屏不占用操作入口
 #[test]
 fn unknown_metrics_and_short_screens_are_supported() {
     let metrics = SidebarMetrics::default();
     assert!(metrics.rows(30, 15).is_empty());
     let rows = metrics.rows(30, 30);
-    assert_eq!(rows.len(), 3);
-    assert!(crate::render::ansi_clip::strip_ansi(&rows[2]).contains("Cache --"));
+    assert_eq!(rows.len(), 2);
+    assert!(crate::render::ansi_clip::strip_ansi(&rows[1]).contains("Cache --"));
     for width in [1, 10, 25] {
         for line in metrics.rows(width, 30) {
             assert!(crate::render::ansi_clip::ansi_visible_width(&line) <= width);

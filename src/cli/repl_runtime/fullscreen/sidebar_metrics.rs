@@ -11,12 +11,14 @@ pub(super) struct SidebarMetrics {
     cache: Option<f32>,
     output: Option<usize>,
     prompt: Option<usize>,
+    directory: String,
+    branch: Option<String>,
 }
 
 /// 【终端】【指标空间】参数为侧栏高度，返回指标行数，极矮屏保留主要操作入口
 pub(super) fn height(rows: usize) -> usize {
     if rows >= 16 {
-        3
+        2
     } else {
         0
     }
@@ -40,7 +42,26 @@ impl SidebarMetrics {
             cache: live
                 .cache_hit_ratio()
                 .or_else(|| chrome.and_then(|chrome| chrome.cache_hit_ratio)),
+            directory: chrome.map_or_else(String::new, |chrome| chrome.directory.clone()),
+            branch: chrome.and_then(|chrome| chrome.branch.clone()),
         }
+    }
+
+    /// 【终端指标】【工作区标题】参数：width 为净宽，rows 为高度；返回：品牌、工作区与分支的单行标题
+    pub(super) fn heading(&self, width: usize, rows: usize) -> Vec<String> {
+        // 【终端指标】【控件避让】为终端右上角开关保留四列，避免覆盖分支文字
+        let width = width.saturating_sub(4);
+        let title = super::sidebar_widgets::safe_text(&self.directory);
+        let branch = self.branch.as_deref().unwrap_or_default();
+        let mut header = super::pane_header::render(&title, width, rows);
+        if let Some(line) = header.first_mut() {
+            *line = super::sidebar_widgets::columns(
+                line.trim_end(),
+                &super::sidebar_widgets::safe_text(branch),
+                width,
+            );
+        }
+        header
     }
 
     /// 【终端】【指标排版】参数为净宽和侧栏高度，返回上下文数值、分段条和缓存生成摘要
@@ -64,10 +85,18 @@ impl SidebarMetrics {
         let output = self
             .output
             .map_or_else(|| "--".into(), super::sidebar_metrics_view::tokens);
+        // 1. 【终端指标】【紧凑读数】数值与短比例条共用一行，剩余宽度不足时只保留读数
+        let (numbers, percent) = context.split_once(" · ").unwrap_or((&context, ""));
+        let spare = width.saturating_sub(
+            crate::cli::repl_text::visible_width(numbers)
+                + crate::cli::repl_text::visible_width(percent)
+                + 2,
+        );
+        let gauge = super::sidebar_metrics_view::bar(self.context, spare.min(10));
+        let first = super::sidebar_widgets::columns(&format!("{numbers} {gauge}"), percent, width);
         [
-            context,
-            super::sidebar_metrics_view::bar(self.context, width),
-            format!("Cache {cache} · out {output} · ~{rate} tok/s"),
+            first,
+            format!("Cache {cache} · {rate} tok/s · out {output}"),
         ]
         .into_iter()
         .take(height(rows))

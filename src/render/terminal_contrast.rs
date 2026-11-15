@@ -66,19 +66,6 @@ pub(crate) fn readable_color_on(color: Rgb, background: Rgb, minimum: f64) -> Rg
     blend(color, target, high)
 }
 
-/// 【终端】【主题强调】向对比度更高的端点强调，浅色加深、深色提亮。
-/// 参数：原色、背景及强调比例；返回：至少达到正文对比度的前景。
-pub(crate) fn emphasize(color: Rgb, background: Rgb, amount: f64) -> Rgb {
-    let black = (0, 0, 0);
-    let white = (255, 255, 255);
-    let target = if contrast(black, background) >= contrast(white, background) {
-        black
-    } else {
-        white
-    };
-    readable_color_on(blend(color, target, amount), background, MIN_TEXT_CONTRAST)
-}
-
 #[cfg(test)]
 #[path = "terminal_contrast_tests.rs"]
 mod tests;

@@ -29,6 +29,8 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: false,
     manifest: true,
+    // 【前端性能】【分包预算】延迟加载的编辑器允许四兆字节，首屏与实际分包大小由构建后检查严格限制
+    chunkSizeWarningLimit: 4_000,
     rollupOptions: {
       output: {
         onlyExplicitManualChunks: true,

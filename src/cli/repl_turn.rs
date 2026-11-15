@@ -183,6 +183,7 @@ pub(super) async fn resume_repl_turn(
         .ok_or_else(|| anyhow::anyhow!("no running turn"))?;
     let final_mode_handle = task.live_mode.clone();
     runtime.bind_live_mode(final_mode_handle.clone(), &task.session_id);
+    runtime.bind_live_model_settings(task.live_model_settings.clone());
     let stream_ctx =
         StreamCommandContext::capture(paths, owner_key.to_owned(), final_mode_handle.get());
     let mut interrupted = false;

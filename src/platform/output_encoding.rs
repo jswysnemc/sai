@@ -25,11 +25,13 @@ pub(crate) fn decode_output(bytes: &[u8]) -> String {
 }
 
 /// 跨读取块保持编码边界的命令输出解码器。
+#[cfg(test)]
 #[derive(Default)]
 pub(crate) struct OutputDecoder {
     pending: Vec<u8>,
 }
 
+#[cfg(test)]
 impl OutputDecoder {
     /// 解码一个输出块，保留尚未完整到达的 UTF-8 尾部。
     ///

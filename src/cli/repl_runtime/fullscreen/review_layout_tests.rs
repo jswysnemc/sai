@@ -134,7 +134,7 @@ fn chat_files_and_diff_scroll_independently_without_hiding_chat() {
             assert_eq!(session.sidebar.preview.file_scroll, 3);
             assert_eq!(session.sidebar.preview.scroll, 3);
             assert!(
-                strip_ansi_for_test(&session.state.previous.as_ref().unwrap()[0]).contains("╭──╴")
+                strip_ansi_for_test(&session.state.previous.as_ref().unwrap()[0]).contains("◆ sai")
             );
         },
     );

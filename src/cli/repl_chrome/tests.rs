@@ -127,8 +127,11 @@ fn footer_puts_mode_before_context() {
     assert!(plain.contains("xhigh"));
     assert!(plain.contains("/workspace"));
     assert!(!plain.contains("main"));
-    assert!(line.contains("\x1b[38;5;110m"));
-    assert!(line.contains("\x1b[38;5;109m"));
+    let text_color = crate::render::panel_palette::fg(
+        crate::render::panel_palette::PanelPalette::current().text,
+    );
+    assert!(line.contains(&format!("{text_color}gpt")));
+    assert!(line.contains(&format!("{text_color}xhigh")));
     assert_eq!(visible_width(&line), 80);
 }
 

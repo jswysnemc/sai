@@ -14,6 +14,7 @@ impl ReplRuntime {
     /// 【会话模式】【界面解绑】无参数；轮次结束时清除共享状态，返回无。
     pub(in crate::cli) fn clear_live_mode(&mut self) {
         self.live_mode_handle = None;
+        self.live_model_settings = None;
         self.live_session_id = None;
     }
 

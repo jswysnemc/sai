@@ -15,6 +15,7 @@ mod history;
 mod history_insert;
 mod history_replay;
 mod history_restore;
+mod input_style;
 mod key_notice;
 mod layout;
 mod live_mode;
@@ -47,6 +48,7 @@ mod ssh_card;
 mod startup_input;
 mod stream;
 mod stream_commands;
+mod stream_settings;
 mod viewport;
 
 pub(in crate::cli) use fullscreen::FullscreenEvent;
@@ -95,6 +97,7 @@ pub(super) struct ReplRuntime {
     reflow: ReflowState,
     stream: StreamState,
     composer: Option<ComposerFrame>,
+    input_style: input_style::InputStyleState,
     composer_selection: composer_selection::ComposerSelection,
     footer_mouse: footer_mouse::FooterMouse,
     next_live_refresh: Option<Instant>,
@@ -117,6 +120,8 @@ pub(super) struct ReplRuntime {
     control_queue: VecDeque<String>,
     /// 运行中权限模式热切换句柄（与 Agent 共享）
     live_mode_handle: Option<std::sync::Arc<crate::agent::LiveAgentMode>>,
+    live_model_settings: Option<Arc<crate::agent::LiveModelSettings>>,
+    pending_settings: stream_settings::PendingSettings,
     live_session_id: Option<String>,
     permission_prompts: VecDeque<permission_prompt::PendingPermissionPrompt>,
     /// 最近一次 composer chrome，供流式阶段重建输入框
@@ -243,6 +248,7 @@ impl ReplRuntime {
             reflow,
             stream: StreamState::default(),
             composer: None,
+            input_style: Default::default(),
             composer_selection: composer_selection::ComposerSelection::default(),
             footer_mouse: footer_mouse::FooterMouse::default(),
             next_live_refresh: None,
@@ -260,6 +266,8 @@ impl ReplRuntime {
             session_browser: Default::default(),
             session_workspace: Default::default(),
             live_mode_handle: None,
+            live_model_settings: None,
+            pending_settings: Default::default(),
             live_session_id: None,
             permission_prompts: VecDeque::new(),
             last_chrome: None,

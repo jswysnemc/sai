@@ -6,6 +6,7 @@ const outputDirectory = process.argv[2]
   ? resolve(process.argv[2])
   : fileURLToPath(new URL("../dist", import.meta.url));
 const heavyChunk = /\/(?:monaco|mermaid(?:\.core)?|pele|codemirror|terminal)-[^/]+\.js$/u;
+const maxScriptBytes = 4_000_000;
 const checks = [
   { entry: "index.html", name: "index", label: "登录页", maxBytes: 500_000 },
   { entry: "src/features/workspace/coding-page.tsx", name: "coding-page", label: "工作台", maxBytes: 2_000_000 }
@@ -39,6 +40,13 @@ async function checkInitialBundles() {
   // 1. 【前端性能】【首屏检查】读取实际构建清单，避免仅检查源码导入形式
   const manifest = JSON.parse(await readFile(resolve(outputDirectory, ".vite/manifest.json"), "utf8"));
   const failures = [];
+  // 2. 【前端性能】【分包检查】延迟依赖也必须满足单文件上限，不能通过延迟加载绕过体积预算
+  const scripts = [...new Set(Object.values(manifest).map((chunk) => chunk.file))]
+    .filter((file) => file.endsWith(".js"));
+  for (const file of scripts) {
+    const { size } = await stat(resolve(outputDirectory, file));
+    if (size > maxScriptBytes) failures.push(`${file} 脚本 ${size} 字节，超过 ${maxScriptBytes} 字节预算`);
+  }
   for (const { entry, name, label, maxBytes } of checks) {
     const resolvedEntry = manifest[entry] ? entry
       : Object.keys(manifest).find((key) => manifest[key].isDynamicEntry && manifest[key].name === name);
@@ -51,7 +59,7 @@ async function checkInitialBundles() {
     const bytes = sizes.reduce((total, info) => total + info.size, 0);
     const eagerLibraries = files.filter((file) => heavyChunk.test(file));
     console.info(`【前端性能】【首屏检查】${label}：${bytes} 字节，${files.length} 个脚本`);
-    // 2. 【前端性能】【首屏检查】重型功能必须保持延迟加载，同时限制公共分包体积
+    // 3. 【前端性能】【首屏检查】重型功能必须保持延迟加载，同时限制公共分包体积
     if (eagerLibraries.length > 0) failures.push(`${label}提前加载重型依赖：${eagerLibraries.join(", ")}`);
     if (bytes > maxBytes) failures.push(`${label}脚本 ${bytes} 字节，超过 ${maxBytes} 字节预算`);
   }

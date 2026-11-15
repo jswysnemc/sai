@@ -63,7 +63,9 @@ impl ReplRuntime {
                             layout.in_body(mouse.row) && mouse.column < layout.content_width
                         })
                         .map(|layout| {
-                            session.state.scroll + usize::from(mouse.row - layout.body_top)
+                            session
+                                .state
+                                .body_document_row(usize::from(mouse.row - layout.body_top))
                         });
                     session.state.retain_wheel_target_at(row);
                 }
@@ -93,7 +95,8 @@ impl ReplRuntime {
             || self.sidebar_control.header_hovered
             || self.sidebar_control.scrollbar.hovered.is_some();
         let effect = match self
-            .image_viewer_event(event)
+            .captured_main_scrollbar_event(event)
+            .or_else(|| self.image_viewer_event(event))
             .or_else(|| self.block_scrollbar_event(event))
             .or_else(|| self.sidebar_scrollbar_event(event))
             .or_else(|| self.header_control_event(event))
@@ -169,6 +172,29 @@ impl ReplRuntime {
                 }
                 Ok(FullscreenEvent::Pass)
             }
+        }
+    }
+
+    /// 【终端】【滚动捕获】将已开始的正文滚动条拖动优先交回原控件，允许指针跨越面板
+    /// 参数：event 为终端事件；返回：捕获事件的处理效果，其他事件继续分流
+    fn captured_main_scrollbar_event(&mut self, event: &Event) -> Option<Effect> {
+        if !self.fullscreen.as_ref()?.state.dragging {
+            return None;
+        }
+        match event {
+            Event::Mouse(mouse)
+                if matches!(
+                    mouse.kind,
+                    MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Up(MouseButton::Left)
+                ) =>
+            {
+                Some(self.fullscreen_mouse(*mouse))
+            }
+            Event::Resize(..) | Event::FocusLost => {
+                self.fullscreen.as_mut()?.state.dragging = false;
+                Some(Effect::Repaint)
+            }
+            _ => None,
         }
     }
 
@@ -319,7 +345,7 @@ impl ReplRuntime {
                     WHEEL_STEP as isize
                 };
                 let row = (layout.in_body(mouse.row) && mouse.column < layout.content_width)
-                    .then_some(state.scroll + body_row);
+                    .then_some(state.body_document_row(body_row));
                 state.wheel_at(row, delta, height)
             }
             // 1. 悬停：只在指向的概览标记或可展开段落变化时重绘
@@ -387,7 +413,7 @@ impl ReplRuntime {
                     let row = usize::from(mouse.row.saturating_sub(layout.body_top))
                         .min(height.saturating_sub(1));
                     let head = selection::TextPoint {
-                        row: state.scroll + row,
+                        row: state.body_document_row(row),
                         col: usize::from(mouse.column).min(usize::from(layout.content_width)),
                     };
                     let next = Some(selection::Selection { anchor, head });
@@ -440,7 +466,7 @@ impl ReplRuntime {
                         // 2. 【全屏视图】【单击判定】释放位置离开原文字时不触发段落收起
                         if !layout.in_body(mouse.row)
                             || mouse.column >= layout.content_width
-                            || press.row != state.scroll + body_row
+                            || press.row != state.body_document_row(body_row)
                             || press.col != usize::from(mouse.column)
                         {
                             return Effect::Nothing;
@@ -505,9 +531,10 @@ impl ReplRuntime {
                         }
                     } else if mouse.column < layout.content_width {
                         // 5. 正文：先记下按下位置，松开时再区分点击与拖选
-                        state.focus_activity_at(state.scroll + body_row);
+                        let document_row = state.body_document_row(body_row);
+                        state.focus_activity_at(document_row);
                         state.press = Some(selection::TextPoint {
-                            row: state.scroll + body_row,
+                            row: document_row,
                             col: usize::from(mouse.column),
                         });
                         false

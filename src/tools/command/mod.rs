@@ -40,7 +40,6 @@ use background_tasks::BackgroundRuntimeOwner;
 pub(crate) use process::build_shell_commands;
 #[cfg(all(test, target_os = "linux"))]
 pub(crate) use process::run_shell_command;
-pub(crate) use rtk_filter::rewrite_command;
 pub(crate) use rtk_probe::{rtk_available, rtk_proxy_commands};
 
 pub(crate) use background::{

@@ -68,6 +68,10 @@ pub(super) async fn drain_submission_queue(
 ) -> Result<bool> {
     // 1. 【终端队列】【逐条执行】尚未开始的消息始终留在运行期，错误返回不会销毁局部批次
     while !runtime.has_session_switch_request() {
+        // 【终端设置】【队列边界】先交回主循环同步配置，再使用新设置执行后续排队请求
+        if runtime.has_pending_settings() {
+            return Ok(false);
+        }
         let Some((position, item)) =
             runtime.take_next_turn_submission(agent.state().goal()?.map(|goal| goal.status))
         else {

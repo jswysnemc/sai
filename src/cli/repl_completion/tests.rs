@@ -1,5 +1,31 @@
 use super::*;
 
+/// 【终端】【输入样式补全】验证普通与运行状态均提供输入样式候选；无参数或返回值。
+#[test]
+fn tui_completion_includes_input_styles_and_sidebar_modes() {
+    for streaming in [false, true] {
+        let suggestions = visible_repl_command_suggestions("/tui ", streaming);
+        assert_eq!(
+            suggestions
+                .iter()
+                .map(|item| item.command)
+                .collect::<Vec<_>>(),
+            [
+                "/tui input panel",
+                "/tui input separator",
+                "/tui sidebar on",
+                "/tui sidebar off",
+                "/tui sidebar auto",
+            ]
+        );
+        assert!(suggestions.iter().all(|item| !item.disabled));
+        assert_eq!(
+            accept("/tui input s", 12, 0, streaming, false).as_deref(),
+            Some("/tui input separator")
+        );
+    }
+}
+
 /// 【终端】【命令补全】Tab 补全参数，完整命令回车直接执行；参数与返回值均无。
 #[test]
 fn command_argument_acceptance_is_separate_from_submission() {

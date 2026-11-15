@@ -1,4 +1,4 @@
-use super::hover_color::hover_default_fg;
+use super::hover::hover_default_fg;
 use super::runtime_tests::mouse;
 use super::state::ActivityNavigation;
 use crate::cli::repl_runtime::ReplRuntime;

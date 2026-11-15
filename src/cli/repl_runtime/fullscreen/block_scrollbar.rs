@@ -1,4 +1,4 @@
-//! 输出窗口左侧的双色引导线：灰色轨道表示全文，青色滑块表示可见范围。
+//! 输出窗口左侧的常驻引导线与固定长度滑块，悬停时只加宽滑块。
 
 use super::sidebar_palette::{fg, Rgb, SidebarPalette};
 use super::state::FullscreenState;
@@ -9,7 +9,9 @@ use crate::render::transcript::tool_guides::output_line as output_gutter;
 use crate::render::transcript::AnsiLine;
 use std::ops::Range;
 
-/// 【终端】【块滚动条】按可见正文占比和阅读位置设置已有引导线颜色。
+const THUMB_ROWS: usize = 3;
+
+/// 【终端】【块滚动条】按阅读位置设置已有引导线颜色，滑块保持固定长度。
 /// 参数: `lines` 为窗口正文，`offset` 为全文内的首行偏移，`total` 为本段正文总行数。
 /// 返回: 无，直接更新窗口行的引导线样式。
 pub(super) fn decorate(lines: &mut [AnsiLine], offset: usize, total: usize) {
@@ -45,7 +47,7 @@ pub(super) fn decorate_output(
     }
 }
 
-/// 【终端】【详情滚动条显隐】仅悬停引导列或捕获拖动时显示，文档命中与复制信息不变。
+/// 【终端】【详情滚动条宽度】引导线常驻，仅悬停引导列或捕获拖动时加宽滑块。
 /// 参数：state 为交互状态，row 为文档行，line 为原始显示行；返回：等宽显示文本。
 pub(super) fn paint_line(state: &FullscreenState, row: usize, line: &str) -> String {
     let target_at = |row: usize| {
@@ -71,7 +73,7 @@ pub(super) fn paint_line(state: &FullscreenState, row: usize, line: &str) -> Str
         .pointer_row
         .zip(state.pointer_col)
         .is_some_and(|(pointer, column)| {
-            let pointer = state.scroll + pointer;
+            let pointer = state.body_document_row(pointer);
             target_at(pointer) == Some(target)
                 && state.document.lines.get(pointer).is_some_and(|line| {
                     let plain = crate::render::ansi_clip::strip_ansi(line.as_str());
@@ -94,27 +96,37 @@ pub(super) fn paint_line(state: &FullscreenState, row: usize, line: &str) -> Str
     replace_gutter(
         &AnsiLine::new(line.to_string()),
         if thumb { palette.accent } else { palette.muted },
-        if !active {
-            ' '
-        } else if thumb {
-            '█'
-        } else {
-            '│'
-        },
+        if active && thumb { '█' } else { '│' },
     )
     .as_str()
     .to_string()
 }
 
-/// 【终端】【输出占比】将正文可见比例映射为滑块长度，滚动位置映射为滑块起点。
+/// 【终端】【引导线保色】参数：line 为悬停后的行，source 为源行；返回：正文高亮与轨道状态分别着色的行
+pub(super) fn preserve_gutter_color(line: &str, source: &str) -> String {
+    let palette = SidebarPalette::current();
+    let color = [palette.accent, palette.muted]
+        .into_iter()
+        .find(|color| source.contains(&format!("\x1b[22m{}│", fg(*color))));
+    let Some(color) = color else {
+        return line.to_string();
+    };
+    let plain = crate::render::ansi_clip::strip_ansi(line);
+    let glyph = plain.trim_start().chars().next().unwrap_or('│');
+    replace_gutter(&AnsiLine::new(line.to_string()), color, glyph)
+        .as_str()
+        .to_string()
+}
+
+/// 【终端】【输出位置】固定滑块长度，将滚动位置映射为滑块起点。
 /// 参数: `visible` 为窗口行数，`offset` 为正文偏移，`total` 为正文总行数。
-/// 返回: 滑块行范围；可滚动时至少占一行，全文可见时填满引导线。
+/// 返回: 最多三行的滑块范围，短轨道使用实际可用行数。
 fn thumb_range(visible: usize, offset: usize, total: usize) -> Range<usize> {
-    if visible == 0 || total <= visible {
-        return 0..visible;
+    let size = visible.min(THUMB_ROWS);
+    if total <= visible {
+        return 0..size;
     }
-    // 1. 【终端】【输出占比】以窗口高度压缩全文，保留至少一行可见滑块
-    let size = (visible.saturating_mul(visible) / total).max(1);
+    // 1. 【终端】【固定长度】内容增长不改变滑块长度，轨道不足三行时缩短
     let travel = visible - size;
     let max = total - visible;
     // 2. 【终端】【输出位置】按有效滚动距离映射，首尾阅读位置贴合轨道边界
@@ -150,7 +162,7 @@ fn replace_gutter(line: &AnsiLine, color: Rgb, glyph: char) -> AnsiLine {
             index += ch.len_utf8();
             continue;
         }
-        if ch != '│' {
+        if !matches!(ch, '│' | '█') {
             break;
         }
         // 2. 【终端】【引导线着色】取消竖线暗淡效果，随后恢复正文已有样式

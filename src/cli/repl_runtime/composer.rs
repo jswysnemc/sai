@@ -41,6 +41,7 @@ impl ReplRuntime {
             clipboard_blocks,
             slash_selection,
         );
+        frame.set_input_style(self.input_style.current());
         frame.set_images(image_sources, self.composer.as_mut());
         frame.set_mention_candidates(self.mention_candidates(input, cursor));
         frame.set_panel_lines(self.bottom_panel_lines(usize::from(size.cols)));

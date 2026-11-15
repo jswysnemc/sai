@@ -139,7 +139,7 @@ impl ComposerFrame {
                     })
             {
                 let line = &mut signature.lines[usize::from(row - top)];
-                *line = super::super::fullscreen::selection::highlight_cols(
+                *line = super::super::fullscreen::control_hover::tint_cols(
                     line,
                     columns.start,
                     columns.end,
@@ -183,7 +183,7 @@ impl ComposerFrame {
                 .iter()
                 .find(|hit| hit.row == source && hit.columns.contains(&usize::from(column)))
             {
-                signature.lines[offset] = super::super::fullscreen::selection::highlight_cols(
+                signature.lines[offset] = super::super::fullscreen::control_hover::tint_cols(
                     &signature.lines[offset],
                     hit.columns.start,
                     hit.columns.end,
@@ -256,13 +256,13 @@ impl ComposerFrame {
     fn visual_lines(&self, layout: &ComposerLayout, cols: usize) -> Vec<String> {
         let mut lines = self.top_lines(cols);
         lines.extend((0..CHROME_INPUT_PAD_ROWS).map(|_| String::new()));
-        lines.extend((0..CHROME_INPUT_INNER_PAD_ROWS).map(|_| chrome_input_pad_row(cols)));
+        lines.extend((0..CHROME_INPUT_INNER_PAD_ROWS).map(|_| self.input_padding(cols, true)));
         lines.extend(
             layout
                 .image_strip
                 .lines()
                 .iter()
-                .map(|line| chrome_input_row(ChromeInputPrefix::Continuation, line, cols)),
+                .map(|line| self.input_row(ChromeInputPrefix::Continuation, line, cols)),
         );
         let first_prefix = if self.input.starts_with('!') {
             ChromeInputPrefix::Shell
@@ -276,10 +276,10 @@ impl ComposerFrame {
             } else {
                 ChromeInputPrefix::Continuation
             };
-            lines.push(chrome_input_row(prefix, segment, cols));
+            lines.push(self.input_row(prefix, segment, cols));
             first = false;
         }
-        lines.extend((0..CHROME_INPUT_INNER_PAD_ROWS).map(|_| chrome_input_pad_row(cols)));
+        lines.extend((0..CHROME_INPUT_INNER_PAD_ROWS).map(|_| self.input_padding(cols, false)));
         let panel_open = if layout.mention_panel.is_visible() {
             lines.extend(layout.mention_panel.rendered_lines(cols));
             true

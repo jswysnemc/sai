@@ -8,6 +8,27 @@ use crate::cli::repl_runtime::viewport::TerminalSize;
 use crate::render::ansi_clip::strip_ansi;
 use crossterm::event::{Event, MouseButton, MouseEventKind};
 
+/// 【侧栏测试】【完整高度】参数：runtime 为界面；返回：包含输入框右侧内容的侧栏绘制行
+fn full_rows(runtime: &crate::cli::repl_runtime::ReplRuntime) -> Vec<String> {
+    let session = runtime.fullscreen.as_ref().unwrap();
+    let layout = session.state.layout.unwrap();
+    let mut rows = vec![" ".repeat(usize::from(layout.main_width)); usize::from(layout.rows)];
+    super::sidebar_view::overlay(
+        &session.sidebar,
+        &layout,
+        &runtime.sidebar_control,
+        &mut rows,
+    );
+    super::sidebar_scrollbar::decorate(
+        &scrollbars(&session.sidebar, &layout),
+        &runtime.sidebar_control.scrollbar,
+        &mut rows,
+        usize::from(layout.cols - 1),
+        0,
+    );
+    rows
+}
+
 /// 【侧栏测试】【滑块拖动】概览仅滚动文件分组，轨道到达首尾，标题、聊天和草稿保持原位
 /// 参数：无；返回：无，任一偏移或隔离断言失败时测试失败
 #[test]
@@ -64,14 +85,7 @@ fn sidebar_scrollbar_hover_and_drag_preserve_other_regions() {
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Drag(MouseButton::Left), 120, 29))
                 .unwrap();
-            let dragging = runtime
-                .fullscreen
-                .as_ref()
-                .unwrap()
-                .state
-                .previous
-                .as_ref()
-                .unwrap();
+            let dragging = full_rows(&runtime);
             assert!(strip_ansi(&dragging[bar.top + bar.visible - 1]).ends_with('█'));
             assert_eq!(
                 crate::cli::repl_text::visible_width(&dragging[bar.top]),
@@ -320,6 +334,9 @@ fn short_scrollbars_and_theme_feedback_have_stable_boundaries() {
         &format!("{}+12\x1b[0m -3", super::sidebar_palette::fg(light.added)),
         false,
     );
-    assert!(line.contains(&super::sidebar_palette::fg(light.added)));
+    assert!(line.contains(&super::sidebar_palette::fg(
+        super::sidebar_palette::SidebarPalette::current().accent
+    )));
+    assert!(!line.contains("\x1b[48;"));
     assert!(!line.contains("\x1b[7m"));
 }

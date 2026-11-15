@@ -79,6 +79,7 @@ impl Default for DisplayConfig {
         Self {
             fullscreen: true,
             sidebar: super::SidebarDefault::Auto,
+            input_style: super::InputStyle::default(),
             math_images: true,
             mermaid_images: true,
             reasoning: default_reasoning_display(),

@@ -1,13 +1,23 @@
-//! 全屏正文的悬停高亮：鼠标停在可展开段落上时，把前景提亮一档。
+//! 全屏可点击内容的悬停高亮，只把文字前景改为主题色。
 
-use super::hover_color::{hover_default_fg, lifted_256, lifted_truecolor};
+use super::sidebar_palette::{fg, SidebarPalette};
 
 const RESET: &str = "\x1b[0m";
 
+/// 【终端交互】【悬停颜色】参数：无；返回：主题前景并取消暗淡属性
+pub(super) fn hover_default_fg() -> String {
+    format!("\x1b[22m{}", fg(SidebarPalette::current().accent))
+}
+
+/// 【终端交互】【主题参数】参数：无；返回：主题色的 SGR 参数
+fn theme_sgr() -> String {
+    let (red, green, blue) = SidebarPalette::current().accent;
+    format!("38;2;{red};{green};{blue}")
+}
+
 /// 【全屏视图】【悬停高亮】给一行正文提亮前景，行内样式复位后重新补上。
 ///
-/// 不铺底、不加粗。已有 256 色或真彩前景按实际背景提高对比度；
-/// 暗淡属性取消，没有前景的片段沿用终端默认前景。
+/// 不铺底、不加粗。已有前景统一使用主题色，保留语义以外的文字效果与图片协议。
 ///
 /// 参数:
 /// - `line`: 已适配正文宽度的 ANSI 行
@@ -68,16 +78,12 @@ fn rewrite_sequence(sequence: &str) -> String {
             }
             "38" => match parts.get(index + 1) {
                 Some(&"5") if parts.get(index + 2).is_some() => {
-                    let code = parts[index + 2].parse::<u8>().unwrap_or(7);
-                    rewritten.push(lifted_256(code));
+                    rewritten.push(theme_sgr());
                     lifted_fg = true;
                     index += 3;
                 }
                 Some(&"2") if parts.len() >= index + 5 => {
-                    let red = parts[index + 2].parse::<u8>().unwrap_or(0);
-                    let green = parts[index + 3].parse::<u8>().unwrap_or(0);
-                    let blue = parts[index + 4].parse::<u8>().unwrap_or(0);
-                    rewritten.push(lifted_truecolor(red, green, blue));
+                    rewritten.push(theme_sgr());
                     lifted_fg = true;
                     index += 5;
                 }
@@ -109,7 +115,7 @@ fn rewrite_sequence(sequence: &str) -> String {
                 index += skip;
             }
             other if ansi16_foreground(other).is_some() => {
-                rewritten.push(lifted_256(ansi16_foreground(other).unwrap()));
+                rewritten.push(theme_sgr());
                 lifted_fg = true;
                 index += 1;
             }

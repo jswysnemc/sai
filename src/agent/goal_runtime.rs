@@ -38,6 +38,7 @@ impl Agent {
     where
         F: FnMut(AgentEvent) -> Result<()>,
     {
+        self.apply_pending_model_settings()?;
         messages.push(ChatMessage::plain("user", crate::goal::stop_prompt(goal)));
         let mut result = self
             .request_model_round(

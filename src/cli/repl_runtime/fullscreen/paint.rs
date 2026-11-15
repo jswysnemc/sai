@@ -78,19 +78,26 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
         ))
     });
     // 3. 跨行公式图片按窗口边界裁剪，滚动时不会整张消失
-    let window = super::image_window::window_lines(
+    let mut window = super::image_window::window_lines(
         &state.document.lines,
         state.scroll,
         body_height,
         crate::render::terminal_image::kitty_cell_pixel_height(),
     );
+    // 【终端】【固定标题】正文滚过标题后复用顶部一行，其他内容继续滚动
+    if body_height > 1 {
+        if let Some(span) = state.sticky_paragraph() {
+            window[0] = state.document.lines[span.control].as_str().to_string();
+        }
+    }
     let mut bottom_button = None;
-    // 4. 【终端】【区域悬停】提亮指针所在提示或展开正文行，回到底部按钮优先响应
+    // 4. 【终端】【标题悬停】只提亮命中段落的控制行，正文保留原有语法颜色
     let hovered_span = state
         .hovered_paragraph()
         .filter(|_| !super::bottom_button::is_hovered(state, content_width, body_height));
     for (row, line) in window.iter().enumerate() {
-        let painted_line = super::block_scrollbar::paint_line(state, state.scroll + row, line);
+        let document_row = state.body_document_row(row);
+        let painted_line = super::block_scrollbar::paint_line(state, document_row, line);
         let line = painted_line.as_str();
         let body = match &preview {
             Some((preview_row, text)) if *preview_row == row => {
@@ -98,10 +105,9 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
             }
             _ => fit(line, content_width),
         };
-        let document_row = state.scroll + row;
         let body = match hovered_span {
             Some(span)
-                if (span.start..span.end).contains(&document_row)
+                if document_row == span.control
                     && !matches!(&preview, Some((preview_row, _)) if *preview_row == row) =>
             {
                 if document_row == span.control && state.pointer_row == Some(row) {
@@ -117,10 +123,11 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
         } else {
             body
         };
+        let body = super::block_scrollbar::preserve_gutter_color(&body, window[row].as_str());
         // 5. 拖动选区以反色标出
         let body = match state
             .selection
-            .and_then(|selection| selection.cols_on_row(state.scroll + row, content_width))
+            .and_then(|selection| selection.cols_on_row(document_row, content_width))
         {
             Some((from, to)) => super::selection::highlight_cols(&body, from, to),
             None => body,

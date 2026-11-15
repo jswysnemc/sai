@@ -1,28 +1,29 @@
 use super::*;
 use crate::render::ansi_clip::strip_ansi;
 
-/// 【终端】【占比回归】覆盖不同正文长度以及首、中、末阅读位置。
+/// 【终端】【固定长度回归】覆盖不同正文长度以及首、中、末阅读位置。
 /// 参数: 无；返回: 无。
 #[test]
-fn thumb_tracks_visible_fraction_and_scroll_position() {
-    assert_eq!(thumb_range(5, 0, 10), 0..2);
-    assert_eq!(thumb_range(5, 3, 10), 1..3);
-    assert_eq!(thumb_range(5, 5, 10), 3..5);
-    assert_eq!(thumb_range(5, 0, 20), 0..1);
-    assert_eq!(thumb_range(5, 8, 20), 2..3);
-    assert_eq!(thumb_range(5, 15, 20), 4..5);
-    assert_eq!(thumb_range(5, usize::MAX, 20), 4..5);
-    assert_eq!(thumb_range(5, 995, 1000), 4..5);
+fn thumb_keeps_fixed_length_and_tracks_scroll_position() {
+    assert_eq!(thumb_range(5, 0, 10), 0..3);
+    assert_eq!(thumb_range(5, 3, 10), 1..4);
+    assert_eq!(thumb_range(5, 5, 10), 2..5);
+    assert_eq!(thumb_range(5, 0, 20), 0..3);
+    assert_eq!(thumb_range(5, 8, 20), 1..4);
+    assert_eq!(thumb_range(5, 15, 20), 2..5);
+    assert_eq!(thumb_range(5, usize::MAX, 20), 2..5);
+    assert_eq!(thumb_range(5, 995, 1000), 2..5);
 }
 
-/// 【终端】【短输出回归】全文可见时滑块覆盖整个轨道，空正文没有滑块。
+/// 【终端】【短输出回归】短轨道按可用行数裁剪滑块，空正文没有滑块。
 /// 参数: 无；返回: 无。
 #[test]
-fn fully_visible_body_fills_the_track() {
+fn short_body_clamps_the_fixed_thumb() {
     assert_eq!(thumb_range(0, 0, 0), 0..0);
     assert_eq!(thumb_range(0, 0, 20), 0..0);
     assert_eq!(thumb_range(1, 0, 1), 0..1);
-    assert_eq!(thumb_range(5, 0, 5), 0..5);
+    assert_eq!(thumb_range(2, 0, 5), 0..2);
+    assert_eq!(thumb_range(5, 0, 5), 0..3);
 }
 
 /// 【终端】【正文样式回归】轨道仅修改行首竖线，嵌套缩进与语法色完整保留。

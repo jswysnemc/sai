@@ -130,6 +130,9 @@ impl ReplRuntime {
             .split_whitespace()
             .map(str::to_ascii_lowercase)
             .collect::<Vec<_>>();
+        if self.handle_input_style_command(&args)? {
+            return Ok(true);
+        }
         let visibility = match args
             .iter()
             .map(String::as_str)

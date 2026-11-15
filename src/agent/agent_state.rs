@@ -33,6 +33,7 @@ pub struct Agent {
     pub(super) mode: AgentMode,
     /// 运行中可热更新的模式，供终端快捷键立即切换
     pub(super) live_mode: std::sync::Arc<super::LiveAgentMode>,
+    pub(super) live_model_settings: std::sync::Arc<super::LiveModelSettings>,
     /// 用户已请求停止本轮；置位后提前结束按中断而非失败记录
     pub(super) cancel_requested: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub(super) config: AppConfig,

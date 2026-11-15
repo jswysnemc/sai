@@ -219,17 +219,6 @@ impl PermissionProfile {
         self.mode.clone()
     }
 
-    /// 判断当前是否为自动审核模式。
-    ///
-    /// 外部内核走的是另一条审核路径，需要据此决定是否并行发起 LLM 审核，
-    /// 否则用户配了自动审核却只在自带内核下生效，行为不一致。
-    ///
-    /// 返回:
-    /// - 处于 AutoAudit 模式时为 true
-    pub(crate) fn is_auto_audit(&self) -> bool {
-        self.current_mode() == PermissionProfileMode::AutoAudit
-    }
-
     /// 读取当前权限模式。
     fn current_mode(&self) -> PermissionProfileMode {
         PermissionProfileMode::from_u8(self.mode.load(Ordering::SeqCst))
@@ -284,6 +273,7 @@ impl PermissionProfile {
     ///
     /// 返回:
     /// - 是否需要启用 Shell 沙盒
+    #[cfg(test)]
     pub(crate) fn authorize(
         &self,
         tool: &str,

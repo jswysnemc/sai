@@ -24,11 +24,10 @@ pub(super) fn is_repl_exit_command(input: &str) -> bool {
 
 /// 模型运行期间斜杠命令的执行策略。
 ///
-/// 运行期间 `&mut Agent` 被轮次独占，交互选择器也会占住事件循环，
-/// 因此按是否触碰这两者把命令分为立即执行、置灰与立即退出三档。
+/// 后台轮次独占 Agent，配置选择器通过共享句柄提交设置，当前传输不受影响。
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::cli) enum StreamCommandPolicy {
-    /// 不触碰 Agent 状态、不弹交互选择器，可在本轮流式期间同步执行
+    /// 不直接借用 Agent，查询、设置选择器与模式命令立即响应
     Immediate,
     /// 需要 `&mut Agent`、交互选择器或 `.await`，只能等本轮结束后执行
     Disabled,
@@ -53,6 +52,7 @@ const EXTRA_REPL_COMMANDS: &[&str] = &[
     "/config",
     "/undo",
     "/thinking",
+    "/think",
     "/ps",
     "/plugins",
     "/plugin",
@@ -62,7 +62,7 @@ const EXTRA_REPL_COMMANDS: &[&str] = &[
     "/tui",
 ];
 
-/// 其中只切换权限模式的命令：等价于 Shift+Tab 热切换，可立即生效。
+/// 其中的权限模式与配置选择命令立即响应，模型设置在下一次请求生效。
 const STREAM_IMMEDIATE_EXTRA_COMMANDS: &[&str] = &[
     "/plan",
     "/audit",
@@ -71,6 +71,9 @@ const STREAM_IMMEDIATE_EXTRA_COMMANDS: &[&str] = &[
     "/auto-audit",
     "/code-model",
     "/tui",
+    "/providers",
+    "/thinking",
+    "/think",
 ];
 
 /// 判断输入在模型运行期间的执行策略。
@@ -110,6 +113,7 @@ pub(in crate::cli) fn stream_command_policy(input: &str) -> StreamCommandPolicy 
             | crate::control_commands::ControlCommand::Rename { .. }
             | crate::control_commands::ControlCommand::Subagents
             | crate::control_commands::ControlCommand::Goal(_)
+            | crate::control_commands::ControlCommand::Model { .. }
             | crate::control_commands::ControlCommand::SubagentMessage { .. },
         )) => StreamCommandPolicy::Immediate,
         Ok(Some(_)) => StreamCommandPolicy::Disabled,
@@ -307,14 +311,14 @@ fn command_description(command: &str) -> &'static str {
         "/ps" => t("manage background tasks", "管理后台任务"),
         "/subagents" => t("list session subagents", "列出会话子智能体"),
         "/msg" => t("leave a message on a subagent", "给子智能体留言"),
-        "/thinking" => t("set reasoning effort", "设置思考等级"),
+        "/thinking" | "/think" => t("set reasoning effort", "设置思考等级"),
         "/view" => t(
             "switch terminal view (inline / fullscreen)",
             "切换终端视图（inline / fullscreen）",
         ),
         "/tui" => t(
-            "show or hide sidebar (on / off / auto)",
-            "开启或关闭侧栏（on / off / auto）",
+            "sidebar on/off/auto; input panel/separator",
+            "侧栏 on/off/auto；输入框 panel/separator",
         ),
         "/plan" => t("switch to read-only planning mode", "切换到只读计划模式"),
         "/audit" => t(
@@ -515,12 +519,9 @@ mod tests {
             "/compact",
             "/clear",
             "/clear memory",
-            "/model",
             "/agent",
-            "/providers",
             "/config",
             "/tree",
-            "/thinking",
             "/ps",
             "/undo",
             "/jev test",
@@ -530,6 +531,25 @@ mod tests {
                 stream_command_policy(command),
                 StreamCommandPolicy::Disabled,
                 "{command} should be disabled while streaming"
+            );
+        }
+    }
+
+    /// 【终端设置】【运行期策略】参数：无；返回：无，模型和思考命令立即响应并与聊天分流
+    #[test]
+    fn model_and_thinking_commands_are_immediate_while_streaming() {
+        for command in [
+            "/model",
+            "/model 2",
+            "/providers",
+            "/thinking",
+            "/think high",
+            "/goal",
+        ] {
+            assert_eq!(
+                stream_command_policy(command),
+                StreamCommandPolicy::Immediate,
+                "{command}"
             );
         }
     }

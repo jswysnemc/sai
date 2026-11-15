@@ -27,7 +27,9 @@ impl ReplRuntime {
             {
                 return None;
             }
-            let row = session.state.scroll + usize::from(mouse.row - layout.body_top);
+            let row = session
+                .state
+                .body_document_row(usize::from(mouse.row - layout.body_top));
             let press = session.state.press?;
             if press.row != row || press.col != usize::from(mouse.column) {
                 return None;

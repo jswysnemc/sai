@@ -60,6 +60,8 @@ impl Agent {
         )
         .await;
         loop {
+            // 【模型设置】【请求边界】交互保存的新设置在上下文压缩和工具定义准备之前生效
+            self.apply_pending_model_settings()?;
             self.sync_codemode_session();
             let current_goal = self.state.goal()?;
             let current_revision = current_goal

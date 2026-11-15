@@ -22,6 +22,7 @@ mod block_scrollbar_input;
 mod block_scrollbar_input_tests;
 mod bottom_button;
 mod composer_image_input;
+pub(in crate::cli::repl_runtime) mod control_hover;
 mod git_preview;
 mod git_preview_code;
 #[cfg(test)]
@@ -39,7 +40,6 @@ mod header_controls;
 #[cfg(test)]
 mod header_controls_tests;
 pub(super) mod hover;
-mod hover_color;
 mod image_viewer;
 mod image_viewer_input;
 mod image_viewer_layout;
@@ -108,6 +108,9 @@ mod sidebar_todo_view;
 mod sidebar_view;
 mod sidebar_widgets;
 mod state;
+mod sticky_header;
+#[cfg(test)]
+mod sticky_header_tests;
 #[cfg(test)]
 mod subagent_view_tests;
 mod wheel_boundary;

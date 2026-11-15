@@ -359,10 +359,11 @@ fn review_controls_tint_on_hover_and_clear_without_intercepting_chat() {
                     &layout,
                 );
                 assert!(
-                    panel[usize::from(row)].contains(&super::sidebar_palette::bg(
-                        SidebarPalette::current().hover_bg
+                    panel[usize::from(row)].contains(&super::sidebar_palette::fg(
+                        SidebarPalette::current().accent
                     ))
                 );
+                assert!(!panel[usize::from(row)].contains("\x1b[48;"));
                 assert!(!panel[usize::from(row)].contains("\x1b[4m"));
                 runtime
                     .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 5, 5))

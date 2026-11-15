@@ -27,6 +27,7 @@ session_fields! {
     submission_queue_paused: Arc<AtomicBool> = Arc::new(AtomicBool::new(false)),
     control_queue: VecDeque<String> = VecDeque::new(),
     live_mode_handle: Option<Arc<crate::agent::LiveAgentMode>> = None,
+    live_model_settings: Option<Arc<crate::agent::LiveModelSettings>> = None,
     live_session_id: Option<String> = None,
     permission_prompts: VecDeque<permission_prompt::PendingPermissionPrompt> = VecDeque::new(),
     last_chrome: Option<ReplChrome> = None,

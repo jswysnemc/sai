@@ -1,6 +1,7 @@
 mod image_strip;
 mod input_geometry;
 mod input_hint;
+mod input_style;
 mod input_viewport;
 mod key_hints;
 mod layout;
@@ -122,6 +123,7 @@ pub(super) struct ComposerFrame {
     selection: super::composer_selection::ComposerSelection,
     chrome: ReplChrome,
     input: String,
+    input_style: crate::config::InputStyle,
     cursor: usize,
     clipboard_blocks: Vec<ReplClipboardBlockSpan>,
     slash_selection: usize,
@@ -151,6 +153,11 @@ pub(super) struct ComposerFrame {
 }
 
 impl ComposerFrame {
+    /// 【终端设置】【显示快照】参数：chrome 为最新底栏状态；返回：无，重绘时使用新设置
+    pub(super) fn set_chrome(&mut self, chrome: ReplChrome) {
+        self.chrome = chrome;
+    }
+
     /// 【用户队列】【交互快照】保存与当前绘制宽度匹配的操作范围。
     /// 参数: hits 为队列点击区域；返回: 无。
     pub(super) fn set_queue_hits(&mut self, hits: Vec<super::queue_panel_view::QueueHit>) {
@@ -202,6 +209,7 @@ impl ComposerFrame {
             selection: Default::default(),
             chrome,
             input,
+            input_style: Default::default(),
             cursor,
             clipboard_blocks,
             slash_selection,

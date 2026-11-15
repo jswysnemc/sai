@@ -1,4 +1,4 @@
-//! 定宽分组标题、条目与变更统计，只有悬停控件显示浅底反馈
+//! 定宽分组标题、条目与变更统计，悬停控件只改变前景
 
 use super::sidebar_palette::{bg, fg, Rgb, SidebarPalette};
 use super::sidebar_style::clip;
@@ -26,16 +26,7 @@ pub(super) fn heading(title: &str, count: &str, collapsed: bool, width: usize) -
     let palette = SidebarPalette::current();
     let left = format!("{}\x1b[1m{marker} {title}\x1b[22m", fg(palette.text));
     let count = format!("{}{count}\x1b[39m", fg(palette.muted));
-    let gap = width.saturating_sub(visible_width(&left) + visible_width(&count));
-    if gap < 4 {
-        return format!("{}\x1b[0m", columns(&left, &count, width));
-    }
-    format!(
-        "{left} {}{} {}{count}\x1b[0m",
-        fg(palette.border),
-        "─".repeat(gap - 2),
-        fg(palette.muted)
-    )
+    format!("{}\x1b[0m", columns(&left, &count, width))
 }
 
 /// 【终端侧栏】【内容条目】按列宽裁剪内容，次要文本使用前景弱化。
@@ -50,13 +41,13 @@ pub(super) fn item(text: &str, width: usize, muted: bool) -> String {
     )
 }
 
-/// 【终端侧栏】【交互反馈】选中加粗，悬停使用主题浅底，保留增删行各自前景色
+/// 【终端侧栏】【交互反馈】选中加粗，悬停使用主题前景，不增加背景
 /// 参数: text 为 ANSI 行，selected 为选中状态；返回: 状态样式行。
 pub(super) fn highlight(text: &str, selected: bool) -> String {
     if selected {
         restyle(text, "\x1b[1m")
     } else {
-        tint(text, SidebarPalette::current().hover_bg)
+        super::hover::tint_line(text)
     }
 }
 

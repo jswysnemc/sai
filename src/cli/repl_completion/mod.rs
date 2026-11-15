@@ -14,6 +14,11 @@ pub(super) fn arguments(input: &str, streaming: bool) -> Vec<ReplCommandSuggesti
     };
     let values: &[(&str, &str)] = match command.to_ascii_lowercase().as_str() {
         "/tui" => &[
+            ("/tui input panel", t("use input panel", "使用面板输入框")),
+            (
+                "/tui input separator",
+                t("use a simple input separator", "使用简约分割线输入框"),
+            ),
             ("/tui sidebar on", t("show sidebar", "开启侧栏")),
             ("/tui sidebar off", t("hide sidebar", "关闭侧栏")),
             (

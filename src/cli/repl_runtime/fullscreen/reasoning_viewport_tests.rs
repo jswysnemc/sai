@@ -130,27 +130,30 @@ fn scrollbar_moves_with_the_reasoning_window() {
     let key = raw.reasonings[0].key;
     let mut viewport = ReasoningViewports::default();
     let first = viewport.update(raw.clone(), 80);
-    assert_eq!(thumb_rows(&first), vec![0]);
+    assert_eq!(thumb_rows(&first), vec![0, 1, 2]);
     assert!(viewport.scroll(key, 8));
-    assert_eq!(thumb_rows(&viewport.project()), vec![2]);
+    assert_eq!(thumb_rows(&viewport.project()), vec![1, 2, 3]);
     assert!(viewport.scroll(key, isize::MAX));
-    assert_eq!(thumb_rows(&viewport.project()), vec![4]);
+    assert_eq!(thumb_rows(&viewport.project()), vec![2, 3, 4]);
     assert_eq!(viewport.source.lines, raw.lines);
 }
 
 /// 【终端】【实时占比回归】流式正文增长时滑块缩短并跟随末尾，结算后回到开头。
 /// 参数: 无；返回: 无。
 #[test]
-fn scrollbar_resizes_as_live_reasoning_grows() {
+fn scrollbar_keeps_fixed_length_as_live_reasoning_grows() {
     let mut viewport = ReasoningViewports::default();
     assert_eq!(
         thumb_rows(&viewport.update(source_with_dimensions(true, 10, 80), 80)),
-        vec![3, 4]
+        vec![2, 3, 4]
     );
     let longer = viewport.update(source(true), 80);
-    assert_eq!(thumb_rows(&longer), vec![4]);
+    assert_eq!(thumb_rows(&longer), vec![2, 3, 4]);
     assert!(longer.lines[5].as_str().contains("thought-19"));
-    assert_eq!(thumb_rows(&viewport.update(source(false), 80)), vec![0]);
+    assert_eq!(
+        thumb_rows(&viewport.update(source(false), 80)),
+        vec![0, 1, 2]
+    );
 }
 
 /// 【终端】【短段占比回归】整段正文可见时引导线全部使用滑块颜色，不添加滚动提示。
@@ -170,7 +173,7 @@ fn short_reasoning_uses_a_full_length_thumb() {
 fn narrow_reasoning_keeps_the_scrollbar_without_a_title_hint() {
     let mut viewport = ReasoningViewports::default();
     let document = viewport.update(source_with_dimensions(false, 20, 18), 18);
-    assert_eq!(thumb_rows(&document), vec![0]);
+    assert_eq!(thumb_rows(&document), vec![0, 1, 2]);
     assert!(!document.lines[0].as_str().contains('↕'));
     assert!(document
         .lines

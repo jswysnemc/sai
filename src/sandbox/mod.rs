@@ -29,9 +29,7 @@ pub(crate) use denial::{denial_report, detect_denial};
 pub(crate) use policy::{FileAccess, SandboxPolicy};
 #[cfg(test)]
 pub(crate) use settings::SandboxSettings;
-pub(crate) use settings::{
-    current as current_settings, install, network_allowed, sandbox_requested,
-};
+pub(crate) use settings::{install, network_allowed, sandbox_requested};
 pub(crate) use status::{sandbox_status, SandboxStatus};
 
 use anyhow::{bail, Result};

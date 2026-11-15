@@ -34,6 +34,7 @@ mod jev_prompt_turn_tests;
 mod jev_routing;
 mod lifecycle;
 mod live_mode;
+mod live_model_settings;
 mod load_request;
 mod message_context;
 mod message_gap;
@@ -110,6 +111,7 @@ pub(crate) use inter_message::{
     InterMessage, InterMessageEvent, InterMessageKind, InterMessageSource,
 };
 pub use live_mode::LiveAgentMode;
+pub use live_model_settings::LiveModelSettings;
 pub use mode::{AgentMode, PermissionMode, ToolMode};
 pub(crate) use model_json::first_json_object;
 pub(crate) use system_prompt::{build_base_system_prompt, build_base_system_prompt_for_phase};

@@ -5,8 +5,19 @@ use super::*;
 #[test]
 fn tui_mode_form_validates_before_updating_configuration() {
     let values = [
-        "summary", "full", "true", "true", "true", "1000", "false", "false", "false", "head", "4",
+        "summary",
+        "full",
+        "true",
+        "true",
+        "true",
+        "1000",
+        "false",
+        "false",
+        "false",
+        "head",
+        "4",
         "2",
+        "separator",
     ];
     let mut fields = values
         .iter()
@@ -15,9 +26,17 @@ fn tui_mode_form_validates_before_updating_configuration() {
     let mut config = AppConfig::default();
     apply_display_fields(&mut config, &fields).unwrap();
     assert!(!config.display.fullscreen);
+    assert_eq!(
+        config.display.input_style,
+        crate::config::InputStyle::Separator
+    );
     let saved = serde_json::to_value(&config).unwrap();
     fields[6].value = "unknown".to_string();
     fields[0].value = "hidden".to_string();
+    assert!(apply_display_fields(&mut config, &fields).is_err());
+    assert_eq!(serde_json::to_value(&config).unwrap(), saved);
+    fields[6].value = "false".to_string();
+    fields[12].value = "invalid".to_string();
     assert!(apply_display_fields(&mut config, &fields).is_err());
     assert_eq!(serde_json::to_value(&config).unwrap(), saved);
 }

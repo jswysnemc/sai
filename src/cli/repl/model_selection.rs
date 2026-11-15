@@ -1,5 +1,46 @@
 use super::*;
 
+/// 【终端】【模型命令】参数为模型序号、配置依赖、界面与思考覆盖；返回命令执行和重载结果
+#[allow(clippy::too_many_arguments)]
+pub(super) fn run_command(
+    selection: Option<usize>,
+    paths: &SaiPaths,
+    config: &mut AppConfig,
+    client: &mut OpenAiCompatibleClient,
+    agent: &mut Agent,
+    runtime: &mut ReplRuntime,
+    mode: AgentMode,
+    thinking_override: &mut Option<String>,
+) -> Result<()> {
+    if selection.is_none() {
+        return run_picker(
+            paths,
+            config,
+            client,
+            agent,
+            runtime,
+            mode,
+            thinking_override,
+        );
+    }
+    match crate::control_commands::run_model_command(
+        paths,
+        selection,
+        crate::control_commands::ControlSurface::Repl,
+    ) {
+        Ok(result) => {
+            runtime.record_meta(result.message)?;
+            if result.changed {
+                *thinking_override = None;
+                reload_repl_agent(paths, config, client, agent, mode, None)?;
+                runtime.record_meta(t("configuration reloaded", "配置已重新加载").into())?;
+            }
+        }
+        Err(error) => runtime.record_meta(error.to_string())?,
+    }
+    Ok(())
+}
+
 /// 【终端】【模型选择】保存后同步运行时，同时保留仅修改子任务时的主对话思考选择。
 ///
 /// 参数: `paths` 为存储路径，其余为当前配置、客户端、Agent、界面、模式和命令行思考覆盖

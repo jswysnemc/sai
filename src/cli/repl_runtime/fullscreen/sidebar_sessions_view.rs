@@ -31,13 +31,37 @@ pub(super) fn rows(sessions: &SidebarSessions, collapsed: bool, width: usize) ->
         rows.push(session_row(current, sessions.viewed_id(), true, width));
     }
     if !collapsed {
-        for entry in sessions.entries.iter().filter(|entry| {
-            !sessions
-                .current
-                .as_ref()
-                .is_some_and(|current| current.state_dir == entry.state_dir)
-        }) {
-            rows.push(session_row(entry, sessions.viewed_id(), false, width));
+        // 1. 【终端侧栏】【状态分类】当前会话固定在顶部，其他会话按运行中、就绪、最近顺序展示
+        for (status, label) in [
+            (SessionStatus::Running, t("Running", "运行中")),
+            (SessionStatus::Idle, t("Ready", "就绪")),
+            (SessionStatus::Recent, t("Recent", "最近")),
+        ] {
+            let entries = sessions
+                .entries
+                .iter()
+                .filter(|entry| {
+                    entry.status == status
+                        && !sessions
+                            .current
+                            .as_ref()
+                            .is_some_and(|current| current.state_dir == entry.state_dir)
+                })
+                .collect::<Vec<_>>();
+            if entries.is_empty() {
+                continue;
+            }
+            rows.push(row(
+                item(
+                    &columns(label, &entries.len().to_string(), width),
+                    width,
+                    true,
+                ),
+                None,
+            ));
+            for entry in entries {
+                rows.push(session_row(entry, sessions.viewed_id(), false, width));
+            }
         }
     }
     rows
@@ -53,8 +77,8 @@ fn session_row(
     let palette = SidebarPalette::current();
     let (status, color) = match entry.status {
         SessionStatus::Running => (t("running", "运行中"), palette.accent),
-        SessionStatus::Idle => (t("idle", "空闲"), palette.added),
-        SessionStatus::Recent => (t("recent", "近期"), palette.muted),
+        SessionStatus::Idle => (t("ready", "就绪"), palette.added),
+        SessionStatus::Recent => (t("recent", "最近"), palette.muted),
     };
     let title = format!(
         "{}{}",
@@ -71,4 +95,50 @@ fn session_row(
     );
     result.selected = viewed == Some(entry.id.as_str());
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 【会话分类测试】【条目夹具】参数：id 为标识，status 为真实状态；返回：独立会话条目
+    fn entry(id: &str, status: SessionStatus) -> SessionEntry {
+        SessionEntry {
+            id: id.into(),
+            title: id.into(),
+            state_dir: std::path::PathBuf::from(id),
+            updated_at: String::new(),
+            status,
+        }
+    }
+
+    /// 【会话分类测试】【展示顺序】参数：无；返回：无，验证当前固定、运行中优先和就绪与最近分别展示
+    #[test]
+    fn sessions_group_current_running_ready_and_recent_without_duplicates() {
+        let current = entry("CURRENT", SessionStatus::Idle);
+        let mut sessions = SidebarSessions::default();
+        sessions.current = Some(current.clone());
+        sessions.entries = vec![
+            entry("RECENT", SessionStatus::Recent),
+            entry("READY", SessionStatus::Idle),
+            current,
+            entry("RUNNING", SessionStatus::Running),
+        ];
+        let rows = rows(&sessions, false, 40);
+        let position = |title: &str| {
+            rows.iter()
+                .position(|row| row.action.is_some() && row.text.contains(title))
+                .unwrap()
+        };
+        assert!(position("CURRENT") < position("RUNNING"));
+        assert!(position("RUNNING") < position("READY"));
+        assert!(position("READY") < position("RECENT"));
+        assert_eq!(
+            rows.iter()
+                .filter(|row| row.text.contains("CURRENT"))
+                .count(),
+            1
+        );
+        assert_eq!(super::rows(&sessions, true, 40).len(), 2);
+    }
 }

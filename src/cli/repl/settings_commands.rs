@@ -34,7 +34,9 @@ pub(super) fn handle(
         runtime.record_meta(t("configuration reloaded", "配置已重新加载").to_string())?;
         return Ok(true);
     }
-    let Some(rest) = repl_command_rest(input, "/thinking") else {
+    let Some(rest) =
+        repl_command_rest(input, "/thinking").or_else(|| repl_command_rest(input, "/think"))
+    else {
         return Ok(false);
     };
     let level = rest

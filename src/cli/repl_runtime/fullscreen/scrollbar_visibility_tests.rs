@@ -3,6 +3,52 @@ use super::super::runtime_tests::{mouse, runtime};
 use super::*;
 use crossterm::event::{MouseButton, MouseEventKind};
 
+/// 【终端】【跨栏拖动】参数：无；返回：无，验证正文滚动条拖入侧栏后仍跟随并正确释放
+#[test]
+fn main_scrollbar_keeps_capture_when_pointer_enters_sidebar() {
+    use crate::cli::repl_runtime::viewport::TerminalSize;
+    TerminalSize::with_size(
+        TerminalSize {
+            cols: 160,
+            rows: 30,
+        },
+        || {
+            let mut runtime = runtime(20);
+            runtime.enter_fullscreen().unwrap();
+            let layout = runtime.fullscreen.as_ref().unwrap().state.layout.unwrap();
+            let sidebar = layout.sidebar.unwrap();
+            runtime
+                .handle_fullscreen_event(&mouse(
+                    MouseEventKind::Down(MouseButton::Left),
+                    layout.scrollbar_col,
+                    layout.body_top,
+                ))
+                .unwrap();
+            assert!(runtime.fullscreen.as_ref().unwrap().state.dragging);
+            runtime
+                .handle_fullscreen_event(&mouse(
+                    MouseEventKind::Drag(MouseButton::Left),
+                    sidebar.left + 4,
+                    layout.body_top + 10,
+                ))
+                .unwrap();
+            let state = &runtime.fullscreen.as_ref().unwrap().state;
+            assert_eq!(
+                state.scroll,
+                scroll_for_track_row(state, 10, usize::from(layout.body_height))
+            );
+            runtime
+                .handle_fullscreen_event(&mouse(
+                    MouseEventKind::Up(MouseButton::Left),
+                    sidebar.left + 4,
+                    layout.body_top + 10,
+                ))
+                .unwrap();
+            assert!(!runtime.fullscreen.as_ref().unwrap().state.dragging);
+        },
+    );
+}
+
 /// 【终端】【正文显隐】悬停显示实心滑块，移出隐藏，捕获拖出仍显示，释放后隐藏。
 #[test]
 fn main_scrollbar_hover_drag_and_width() {
@@ -60,9 +106,9 @@ fn main_scrollbar_hover_drag_and_width() {
     );
 }
 
-/// 【终端】【详情显隐】轨道悬停显示比例滑块，普通正文不显示；等宽且不改源文档。
+/// 【终端】【详情引导线】引导线常驻，轨道悬停只加宽固定长度滑块；等宽且不改源文档。
 #[test]
-fn detail_scrollbar_is_hidden_until_gutter_hover() {
+fn detail_guide_stays_visible_and_hover_only_widens_thumb() {
     use crate::render::transcript::{ActivityRegion, AnsiLine, FullscreenDocument, ParagraphKey};
     let mut state = FullscreenState::new();
     let mut lines = (0..6)
@@ -101,11 +147,11 @@ fn detail_scrollbar_is_hidden_until_gutter_hover() {
             })
             .collect::<String>()
     };
-    assert_eq!(render(&state), "     ");
+    assert_eq!(render(&state), "│││││");
     state.pointer_row = Some(1);
     state.pointer_col = Some(2);
-    assert_eq!(render(&state), "█││││");
+    assert_eq!(render(&state), "███││");
     state.pointer_col = Some(5);
-    assert_eq!(render(&state), "     ");
+    assert_eq!(render(&state), "│││││");
     assert_eq!(state.document.lines, raw);
 }

@@ -1,44 +1,29 @@
 //! 右侧面板共用的独立品牌标识区，与分组标题和滚动内容分开。
 
+use super::sidebar_palette::{fg, SidebarPalette};
 use super::sidebar_widgets::columns;
-use crate::render::brand_logo::{logo_lines, MARK_STYLE};
 
 /// 【终端侧栏】【标识高度】正常尺寸显示完整标志，矮屏退回单行品牌名称，把行数留给分组列表。
 /// 参数: rows 为面板高度；返回: 标识区行数。
-pub(super) fn height(rows: usize) -> usize {
-    if rows >= 24 {
-        3
-    } else {
-        1
-    }
+pub(super) fn height(_rows: usize) -> usize {
+    1
 }
 
 /// 【终端侧栏】【品牌标识】复用终端原生 logo，标识区不重复绘制关闭控件。
 /// 参数: title 为可选面板名称，width 为净宽，rows 为高度；返回: 标识区各行。
 pub(super) fn render(title: &str, width: usize, rows: usize) -> Vec<String> {
-    let count = height(rows);
-    let center = count / 2;
-    let mark = logo_lines(MARK_STYLE);
-    (0..count)
-        .map(|index| {
-            let logo = if count == 3 { mark[index].as_str() } else { "" };
-            let name = if index == center {
-                // 1. 【终端侧栏】【单行品牌】无标志时名称从首列开始，不保留标志后的间隔
-                let gap = if logo.is_empty() { "" } else { " " };
-                format!(
-                    "{logo}{gap}\x1b[1msai\x1b[22m{}",
-                    if title.is_empty() {
-                        String::new()
-                    } else {
-                        format!("  {title}")
-                    }
-                )
-            } else {
-                logo.to_string()
-            };
-            columns(&name, "", width)
-        })
-        .collect()
+    let palette = SidebarPalette::current();
+    let name = format!(
+        "{}◆ {}\x1b[1msai\x1b[22m{}\x1b[0m",
+        fg(palette.accent),
+        fg(palette.text),
+        if title.is_empty() {
+            String::new()
+        } else {
+            format!("  {title}")
+        }
+    );
+    vec![columns(&name, "", width); height(rows)]
 }
 
 #[cfg(test)]
@@ -51,14 +36,12 @@ mod tests {
     #[test]
     fn logo_header_has_no_duplicate_close_button() {
         let rows = render("", 37, 32);
-        assert_eq!(rows.len(), 3);
-        assert!(strip_ansi(&rows[0]).starts_with("╭──╴"));
-        assert!(strip_ansi(&rows[1]).contains("sai"));
-        assert!(strip_ansi(&rows[2]).starts_with("╶──╯"));
+        assert_eq!(rows.len(), 1);
+        assert!(strip_ansi(&rows[0]).starts_with("◆ sai"));
         assert!(rows.iter().all(|row| !row.contains("[x]")));
         assert!(rows.iter().all(|row| !row.contains("\x1b[48;")));
         assert_eq!(render("Review", 20, 8).len(), 1);
         assert_eq!(render("", 37, 23).len(), 1);
-        assert!(strip_ansi(&render("", 37, 16)[0]).starts_with("sai"));
+        assert!(strip_ansi(&render("", 37, 16)[0]).starts_with("◆ sai"));
     }
 }

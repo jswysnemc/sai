@@ -163,7 +163,7 @@ impl FullscreenState {
             return None;
         }
         let row = self.pointer_row?;
-        let row = self.scroll + row;
+        let row = self.body_document_row(row);
         self.document
             .paragraph_at(row)
             .filter(|span| span.expanded || span.control == row)
@@ -175,7 +175,7 @@ impl FullscreenState {
         if self.press.is_some() || self.selection.is_some() || self.dragging {
             return None;
         }
-        let row = self.scroll + self.pointer_row?;
+        let row = self.body_document_row(self.pointer_row?);
         self.document
             .activities
             .iter()

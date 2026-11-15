@@ -165,10 +165,11 @@ fn heading_hover_explains_action_and_clears_on_exit() {
             );
             let painted = session.state.previous.as_ref().unwrap();
             assert!(
-                painted[usize::from(row)].contains(&super::sidebar_palette::bg(
-                    super::sidebar_palette::SidebarPalette::current().hover_bg
+                painted[usize::from(row)].contains(&super::sidebar_palette::fg(
+                    super::sidebar_palette::SidebarPalette::current().accent
                 ))
             );
+            assert!(!panel(&runtime)[usize::from(row)].contains("\x1b[48;"));
             assert!(!painted[usize::from(row)].contains("\x1b[7m"));
             assert!(!painted[usize::from(row)].contains("\x1b[4m"));
             assert!(panel(&runtime)
@@ -214,8 +215,9 @@ fn separator_details_and_footer_are_not_clickable() {
             let layout = session.state.layout.unwrap();
             let sidebar = &session.sidebar;
             let left = layout.sidebar.unwrap().left;
-            assert_eq!(sidebar.target_at(&layout, left + 1, 6), Some(0));
-            assert_eq!(sidebar.target_at(&layout, 154, 6), Some(0));
+            let agents = heading(&runtime, "Subagents");
+            assert_eq!(sidebar.target_at(&layout, left + 1, agents), Some(0));
+            assert_eq!(sidebar.target_at(&layout, 154, agents), Some(0));
             assert_eq!(sidebar.target_at(&layout, 156, 0), None);
             assert_eq!(sidebar.target_at(&layout, left, 0), None);
             assert_eq!(sidebar.target_at(&layout, 159, 0), None);
@@ -246,8 +248,13 @@ fn subagents_can_fold_without_hiding_main_navigation() {
                 r#"{"subagent":{"id":"sidebar-fold","status":"completed"}}"#.into(),
             );
             runtime.enter_fullscreen().unwrap();
+            let agents = heading(&runtime, "Subagents");
             runtime
-                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 154, 6))
+                .handle_fullscreen_event(&mouse(
+                    MouseEventKind::Down(MouseButton::Left),
+                    154,
+                    agents,
+                ))
                 .unwrap();
             let sidebar = &runtime.fullscreen.as_ref().unwrap().sidebar;
             assert!(sidebar.sections.agents_collapsed);
@@ -258,7 +265,11 @@ fn subagents_can_fold_without_hiding_main_navigation() {
                 .any(|row| row.text.contains("CHILD-TASK")));
             assert!(sidebar.document.rows[1].text.contains("Main conversation"));
             runtime
-                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 154, 6))
+                .handle_fullscreen_event(&mouse(
+                    MouseEventKind::Down(MouseButton::Left),
+                    154,
+                    agents,
+                ))
                 .unwrap();
             assert!(runtime
                 .fullscreen
@@ -293,11 +304,16 @@ fn scrolled_heading_uses_document_offset_and_retains_fold_on_resize() {
                 ..Default::default()
             };
             runtime.paint_fullscreen().unwrap();
+            let before_heading = heading(&runtime, "Changes");
             runtime
-                .handle_fullscreen_event(&mouse(MouseEventKind::ScrollDown, 156, 7))
+                .handle_fullscreen_event(&mouse(
+                    MouseEventKind::ScrollDown,
+                    156,
+                    before_heading + 1,
+                ))
                 .unwrap();
             let row = heading(&runtime, "Changes");
-            assert_eq!(row, 8);
+            assert_eq!(row, before_heading);
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 156, row))
                 .unwrap();

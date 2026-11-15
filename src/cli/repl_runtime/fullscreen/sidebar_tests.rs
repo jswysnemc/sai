@@ -22,6 +22,22 @@ fn screen(runtime: &crate::cli::repl_runtime::ReplRuntime) -> Vec<String> {
         .collect()
 }
 
+/// 【侧栏测试】【条目定位】参数：runtime 为界面，label 为条目文字；返回：实际绘制的屏幕行
+fn row_for(runtime: &crate::cli::repl_runtime::ReplRuntime, label: &str) -> u16 {
+    let session = runtime.fullscreen.as_ref().unwrap();
+    let index = session
+        .sidebar
+        .document
+        .rows
+        .iter()
+        .position(|row| row.text.contains(label))
+        .unwrap();
+    session
+        .sidebar
+        .screen_row(&session.state.layout.unwrap(), index)
+        .unwrap()
+}
+
 /// 【侧栏测试】【宽窄断点】宽屏保留正文净宽，窄屏和矮屏回退为原布局。
 /// 参数: 无；返回: 无。
 #[test]
@@ -105,11 +121,13 @@ fn wide_sidebar_moves_overviews_and_restores_bottom_at_narrow_width() {
             for line in screen(&runtime) {
                 assert!(unicode_width::UnicodeWidthStr::width(line.as_str()) <= 160);
             }
-            assert!(screen(&runtime)[6]
-                .chars()
-                .skip(usize::from(side.left))
-                .collect::<String>()
-                .contains("Subagents"));
+            assert!(
+                screen(&runtime)[usize::from(row_for(&runtime, "Subagents"))]
+                    .chars()
+                    .skip(usize::from(side.left))
+                    .collect::<String>()
+                    .contains("Subagents")
+            );
         },
     );
     runtime.paint_fullscreen().unwrap();
@@ -164,15 +182,25 @@ fn sidebar_scroll_and_click_do_not_move_or_select_conversation() {
                 .left
                 + 4;
             let before = runtime.fullscreen.as_ref().unwrap().state.scroll;
+            let child = row_for(&runtime, "CHILD-TASK");
             runtime
-                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), column, 8))
+                .handle_fullscreen_event(&mouse(
+                    MouseEventKind::Down(MouseButton::Left),
+                    column,
+                    child,
+                ))
                 .unwrap();
             assert_eq!(
                 runtime.transcript.viewing_subagent_id(),
                 Some("sidebar-click")
             );
+            let main = row_for(&runtime, "Main conversation");
             runtime
-                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), column, 7))
+                .handle_fullscreen_event(&mouse(
+                    MouseEventKind::Down(MouseButton::Left),
+                    column,
+                    main,
+                ))
                 .unwrap();
             assert!(runtime.transcript.viewing_subagent_id().is_none());
             let session = runtime.fullscreen.as_mut().unwrap();
@@ -192,8 +220,9 @@ fn sidebar_scroll_and_click_do_not_move_or_select_conversation() {
                 .state
                 .scroll
                 .max(before);
+            let files = row_for(&runtime, "Changes") + 1;
             runtime
-                .handle_fullscreen_event(&mouse(MouseEventKind::ScrollDown, column, 9))
+                .handle_fullscreen_event(&mouse(MouseEventKind::ScrollDown, column, files))
                 .unwrap();
             let session = runtime.fullscreen.as_ref().unwrap();
             assert_eq!(session.sidebar.scrolls.git, 3);

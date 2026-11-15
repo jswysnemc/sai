@@ -29,7 +29,7 @@ impl ReplRuntime {
             {
                 return None;
             }
-            let row = state.scroll + usize::from(mouse.row - layout.body_top);
+            let row = state.body_document_row(usize::from(mouse.row - layout.body_top));
             let target = state
                 .document
                 .reasonings

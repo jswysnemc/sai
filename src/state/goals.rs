@@ -38,17 +38,6 @@ impl StateStore {
         GoalStore::new(self.goal_file()).replace(objective, token_budget, replace_unfinished)
     }
 
-    /// 修改当前会话目标文本。
-    ///
-    /// 参数:
-    /// - `objective`: 新目标文本
-    ///
-    /// 返回:
-    /// - 更新后的目标
-    pub(crate) fn edit_goal(&self, objective: &str) -> Result<Goal> {
-        GoalStore::new(self.goal_file()).edit(objective)
-    }
-
     /// 原位更新当前会话目标并保留累计用量。
     ///
     /// 参数:
@@ -76,24 +65,6 @@ impl StateStore {
     /// - 更新后的目标
     pub(crate) fn set_goal_status(&self, status: GoalStatus) -> Result<Goal> {
         GoalStore::new(self.goal_file()).set_status(status)
-    }
-
-    /// 累加当前目标的一轮使用量。
-    ///
-    /// 参数:
-    /// - `expected_id`: 本轮开始时的目标 ID
-    /// - `tokens`: 本轮 Token 使用量
-    /// - `elapsed_seconds`: 本轮耗时秒数
-    ///
-    /// 返回:
-    /// - ID 匹配时返回更新后的目标
-    pub(crate) fn account_goal_progress(
-        &self,
-        expected_id: &str,
-        tokens: u64,
-        elapsed_seconds: u64,
-    ) -> Result<Option<Goal>> {
-        GoalStore::new(self.goal_file()).account(expected_id, tokens, elapsed_seconds)
     }
 
     /// 清除当前会话目标。

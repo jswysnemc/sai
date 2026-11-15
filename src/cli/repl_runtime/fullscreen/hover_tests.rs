@@ -1,4 +1,4 @@
-use super::hover_color::hover_default_fg;
+use super::hover::hover_default_fg;
 use super::runtime_tests::{mouse, runtime};
 use crossterm::event::Event;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEventKind};
@@ -18,7 +18,7 @@ fn painted_row(runtime: &crate::cli::repl_runtime::ReplRuntime, row: u16) -> Str
     .clone()
 }
 
-/// 【正文悬停】【区块回归】控制行触发整块前景提亮，区块外保持原样，移开后恢复。
+/// 【正文悬停】【区块回归】控制行只提亮标题，正文保持原样，移开后恢复。
 /// 参数: 无；返回: 无。
 #[test]
 fn hovering_an_expandable_paragraph_highlights_it() {
@@ -35,19 +35,20 @@ fn hovering_an_expandable_paragraph_highlights_it() {
     let layout = session.state.layout.unwrap();
     let scroll = session.state.scroll;
     let hint_row = layout.body_top + (span.control - scroll) as u16;
-    // 1. 【正文悬停】【范围验证】指向控制行后整个可见区块提亮，不添加背景
+    let original = session.state.previous.as_ref().unwrap().clone();
+    // 1. 【正文悬停】【范围验证】指向控制行后只提亮标题，不添加背景
     runtime
         .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 4, hint_row))
         .unwrap();
     assert!(painted_row(&runtime, hint_row).contains(&hover_default_fg()));
     assert!(!painted_row(&runtime, hint_row).contains("\x1b[48;"));
     let lit = (0..layout.body_height)
-        .filter(|row| painted_row(&runtime, layout.body_top + row).contains(&hover_default_fg()))
+        .filter(|row| {
+            let screen_row = layout.body_top + row;
+            painted_row(&runtime, screen_row) != original[usize::from(screen_row)]
+        })
         .count();
-    let visible = (span.start..span.end)
-        .filter(|row| (scroll..scroll + usize::from(layout.body_height)).contains(row))
-        .count();
-    assert_eq!(lit, visible, "高亮整个可见区块");
+    assert_eq!(lit, 1, "只高亮标题行");
     // 2. 在控制行内移动不重绘
     let before = runtime.fullscreen.as_ref().unwrap().state.previous.clone();
     runtime

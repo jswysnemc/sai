@@ -24,6 +24,33 @@ fn frame() -> ComposerFrame {
     frame
 }
 
+/// 【输入样式测试】【光标几何】参数：无；返回：无，验证分割线样式保持折行、光标和鼠标命中
+#[test]
+fn separator_style_keeps_input_geometry_without_panel_background() {
+    for cols in [20, 40, 80] {
+        let mut frame = frame();
+        frame.input = "第一行输入\nsecond line".into();
+        frame.cursor = frame.input.chars().count();
+        let viewport = InlineViewport::fixed(TerminalSize { cols, rows: 24 }, 12, 12);
+        let (_, panel) = frame.draw_lines(&mut Vec::new(), &viewport, None).unwrap();
+        frame.set_input_style(crate::config::InputStyle::Separator);
+        let (_, separator) = frame.draw_lines(&mut Vec::new(), &viewport, None).unwrap();
+        assert_eq!(panel.input_geometry, separator.input_geometry);
+        assert_eq!(
+            (panel.cursor_col, panel.cursor_row),
+            (separator.cursor_col, separator.cursor_row)
+        );
+        let top = frame.top_lines(usize::from(cols)).len();
+        assert_eq!(
+            crate::render::ansi_clip::strip_ansi(&separator.lines[top]),
+            "─".repeat(usize::from(cols))
+        );
+        assert!(!separator.lines[top..top + 4]
+            .iter()
+            .any(|line| line.contains("\x1b[48;")));
+    }
+}
+
 /// 【终端】【技能补全】候选超出可用高度时，仍显示当前选中的技能
 /// 参数: 无；返回: 无，后续技能无法进入可见区域时断言失败
 #[test]

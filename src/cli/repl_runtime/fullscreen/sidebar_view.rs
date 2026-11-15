@@ -44,19 +44,7 @@ pub(super) fn document(
 ) -> SidebarDocument {
     let mut rows = Vec::new();
     let mut panels = Vec::new();
-    // 1. 【终端侧栏】【独立区域】记录各分组来源，不把整块侧栏作为一个滚动文档
-    if let Some(sessions) = view.sessions {
-        rows.extend(super::sidebar_sessions_view::rows(
-            sessions,
-            view.sections.sessions_collapsed,
-            view.width,
-        ));
-        panels.push(SidebarPanel {
-            section: super::sidebar_action::SidebarSection::Sessions,
-            header: 0,
-            content: 1..rows.len(),
-        });
-    }
+    // 1. 【终端侧栏】【独立区域】当前执行、待办与变更优先，会话导航位于变更之后
     for (section, panel) in [
         (
             super::sidebar_action::SidebarSection::Agents,
@@ -69,12 +57,22 @@ pub(super) fn document(
             ),
         ),
         (
+            super::sidebar_action::SidebarSection::Todo,
+            super::sidebar_todo_view::rows(todos, view.compact, view.width, view.frame),
+        ),
+        (
             super::sidebar_action::SidebarSection::Git,
             super::sidebar_git_view::rows(git, view.sections.git_collapsed, view.width),
         ),
         (
-            super::sidebar_action::SidebarSection::Todo,
-            super::sidebar_todo_view::rows(todos, view.compact, view.width, view.frame),
+            super::sidebar_action::SidebarSection::Sessions,
+            view.sessions.map_or_else(Vec::new, |sessions| {
+                super::sidebar_sessions_view::rows(
+                    sessions,
+                    view.sections.sessions_collapsed,
+                    view.width,
+                )
+            }),
         ),
         (
             super::sidebar_action::SidebarSection::Background,
@@ -85,6 +83,9 @@ pub(super) fn document(
             ),
         ),
     ] {
+        if panel.is_empty() {
+            continue;
+        }
         let header = rows.len();
         rows.extend(panel);
         panels.push(SidebarPanel {
@@ -141,7 +142,7 @@ pub(super) fn panel_rows(
     let width = usize::from(geometry.width.saturating_sub(3));
     let height = usize::from(layout.rows);
     let palette = SidebarPalette::current();
-    let header = super::pane_header::render("", width, height);
+    let header = sidebar.metrics.heading(width, height);
     let metrics = sidebar.metrics.rows(width, height);
     let panels = regions(&sidebar.document, height);
     let focused_action = sidebar
@@ -175,7 +176,7 @@ pub(super) fn panel_rows(
                 };
                 let focused =
                     sidebar.focused && entry.action.is_some() && entry.action == focused_action;
-                // 1. 【终端侧栏】【状态叠加】当前项加粗，键盘焦点使用较深底色，鼠标悬停使用浅底
+                // 1. 【终端侧栏】【状态叠加】当前项加粗，键盘焦点使用底色，鼠标悬停只改变前景
                 let text = if entry.selected || previewed || focused {
                     sidebar_widgets::highlight(&entry.text, true)
                 } else {

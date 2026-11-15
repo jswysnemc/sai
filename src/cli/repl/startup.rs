@@ -31,6 +31,7 @@ pub(super) fn initialize_runtime(
         runtime.queue_input_event(event);
     }
     runtime.configure_sidebar(config.display.sidebar);
+    runtime.configure_input_style(config.display.input_style);
     render::configure_display_rendering(&config.display);
     if render::tui_mode::prefers_fullscreen() {
         runtime.toggle_fullscreen()?;

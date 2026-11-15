@@ -44,14 +44,6 @@ impl GoalStatus {
         matches!(self, Self::Active | Self::Blocked)
     }
 
-    /// 判断状态是否已经结束当前目标。
-    ///
-    /// 返回:
-    /// - 是否为完成或预算终止状态
-    pub(crate) fn is_terminal(self) -> bool {
-        matches!(self, Self::BudgetLimited | Self::Complete)
-    }
-
     /// 从 API 或工具参数解析状态。
     ///
     /// 参数:
