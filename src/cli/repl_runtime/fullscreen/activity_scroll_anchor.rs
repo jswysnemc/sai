@@ -1,5 +1,7 @@
 use super::activity_window::node_spans;
-use crate::render::transcript::{ActivityRegion, AnsiLine, FullscreenDocument, ParagraphKey};
+use crate::render::transcript::{
+    ActivityRegion, AnsiLine, FullscreenDocument, ParagraphKey, ParagraphPart,
+};
 
 /// 以节点正文中的字符位置定位，忽略换行新增的引导线和空白，不依赖视觉行号。
 pub(super) struct ActivityScrollAnchor {
@@ -38,7 +40,16 @@ impl ActivityScrollAnchor {
         region: &ActivityRegion,
     ) -> Option<usize> {
         let nodes = node_spans(source, region);
-        let span = nodes.iter().find(|span| span.key == self.key)?;
+        // 【终端】【完成锚点】运行节点结算后 Active 转为 Whole，同一单元仍是同一工具。
+        let span = nodes.iter().find(|span| {
+            span.key == self.key
+                || (span.key.cell == self.key.cell
+                    && matches!(
+                        (span.key.part, self.key.part),
+                        (ParagraphPart::Active, ParagraphPart::Whole)
+                            | (ParagraphPart::Whole, ParagraphPart::Active)
+                    ))
+        })?;
         let row = match self.content_offset {
             None => span.start,
             Some(target) => {

@@ -333,6 +333,9 @@ impl ReplRuntime {
                 } else {
                     None
                 };
+                let before_track =
+                    state.pointer_col == Some(layout.scrollbar_col) && state.pointer_row.is_some();
+                let before_pointer = (state.pointer_row, state.pointer_col);
                 let before = state.hovered_paragraph().map(|span| span.key);
                 let before_row = state.pointer_row;
                 let before_button = session.bottom_button.is_some_and(|(start, end)| {
@@ -341,7 +344,9 @@ impl ReplRuntime {
                             .pointer_col
                             .is_some_and(|col| col >= start && col < end)
                 });
-                let in_body = layout.in_body(mouse.row) && mouse.column < layout.content_width;
+                let in_body = layout.in_body(mouse.row)
+                    && (mouse.column < layout.content_width
+                        || mouse.column == layout.scrollbar_col);
                 state.pointer_row = in_body.then_some(body_row);
                 state.pointer_col = in_body.then_some(mouse.column);
                 let after = state.hovered_paragraph().map(|span| span.key);
@@ -352,7 +357,11 @@ impl ReplRuntime {
                             .pointer_col
                             .is_some_and(|col| col >= start && col < end)
                 });
-                let changed = hover != state.hover
+                let after_track =
+                    state.pointer_col == Some(layout.scrollbar_col) && state.pointer_row.is_some();
+                let changed = before_track != after_track
+                    || before_pointer != (state.pointer_row, state.pointer_col)
+                    || hover != state.hover
                     || before != after
                     || (before.is_some() && before_row != state.pointer_row)
                     || before_button != after_button
@@ -384,15 +393,27 @@ impl ReplRuntime {
                     let next = Some(selection::Selection { anchor, head });
                     let changed = next != state.selection;
                     state.selection = next;
+                    // 【终端】【拖选阅读】边缘滚动即使触底也不能让新回答抢走选区。
+                    state.follow = false;
                     changed || scrolled
                 }
                 None => false,
             },
             // 3. 松开：有选区则复制，否则按点击展开或收起段落
             MouseEventKind::Up(MouseButton::Left) => {
-                state.dragging = false;
+                let was_dragging = std::mem::take(&mut state.dragging);
+                if was_dragging {
+                    let in_track =
+                        layout.in_body(mouse.row) && mouse.column == layout.scrollbar_col;
+                    state.pointer_row = in_track.then_some(body_row);
+                    state.pointer_col = in_track.then_some(mouse.column);
+                }
                 let Some(press) = state.press.take() else {
-                    return Effect::Nothing;
+                    return if was_dragging {
+                        Effect::Repaint
+                    } else {
+                        Effect::Nothing
+                    };
                 };
                 match state.selection {
                     Some(selection) if selection.is_empty() => {
@@ -473,7 +494,8 @@ impl ReplRuntime {
                         // 3. 滚动条：按点击位置定位并开始拖动
                         state.dragging = true;
                         let target = scroll_for_track_row(state, body_row, height);
-                        state.scroll_to(target, height)
+                        state.scroll_to(target, height);
+                        true
                     } else if layout.in_rail(mouse.column) {
                         // 4. 概览标记：跳到对应用户消息
                         let marks = rail_marks(state.document.anchors.len(), height);
@@ -483,6 +505,7 @@ impl ReplRuntime {
                         }
                     } else if mouse.column < layout.content_width {
                         // 5. 正文：先记下按下位置，松开时再区分点击与拖选
+                        state.focus_activity_at(state.scroll + body_row);
                         state.press = Some(selection::TextPoint {
                             row: state.scroll + body_row,
                             col: usize::from(mouse.column),

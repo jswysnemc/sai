@@ -107,10 +107,7 @@ impl FullscreenState {
                 self.unseen = true;
             }
             self.scroll = self.scroll.min(max);
-            if self.scroll == max && max == 0 {
-                self.follow = true;
-                self.unseen = false;
-            }
+            // 【终端】【跟随保护】内容短暂收缩到一屏也不能取消用户的阅读暂停。
         }
     }
 
@@ -157,6 +154,12 @@ impl FullscreenState {
     /// - 被悬停的段落
     pub(super) fn hovered_paragraph(&self) -> Option<&ParagraphSpan> {
         if self.press.is_some() || self.selection.is_some() || self.dragging {
+            return None;
+        }
+        if self.layout.is_some_and(|layout| {
+            self.pointer_col
+                .is_some_and(|col| col >= layout.content_width)
+        }) {
             return None;
         }
         let row = self.pointer_row?;

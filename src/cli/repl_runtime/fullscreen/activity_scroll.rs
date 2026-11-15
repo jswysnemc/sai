@@ -42,6 +42,15 @@ impl FullscreenState {
             .iter()
             .find(|region| region.scrollable && row >= region.start && row < region.end)
             .map(|region| region.key);
+        if next.is_some()
+            || self
+                .document
+                .reasonings
+                .iter()
+                .any(|region| row >= region.start && row < region.end)
+        {
+            self.follow = false;
+        }
         if next == self.activity.selected {
             return false;
         }
@@ -86,6 +95,8 @@ impl FullscreenState {
     /// 【终端】【内部滚动】将位移交给已定位的内部视口，不传递剩余位移。
     /// 参数: `target` 为内部目标，`delta` 为行偏移；返回: 内部位置是否改变。
     fn scroll_wheel_target(&mut self, target: WheelTarget, delta: isize) -> bool {
+        // 【终端】【主动阅读】内部滚轮即使停在边界，也不能被新回答带走。
+        self.follow = false;
         match target {
             WheelTarget::Activity(key) => self.scroll_activity(key, delta),
             WheelTarget::Reasoning(key) => self.scroll_reasoning(key, delta),
@@ -147,9 +158,9 @@ impl FullscreenState {
         };
         let selected = self.activity.selected;
         let changed = self.scroll_activity(key, delta);
-        Some(
-            self.reveal_activity(key, body_height) || changed || selected != self.activity.selected,
-        )
+        let revealed = self.reveal_activity(key, body_height);
+        self.follow = false;
+        Some(revealed || changed || selected != self.activity.selected)
     }
 
     /// 【终端】【链内跟随】提示行单击恢复跟随，必要时显示被外层裁切的执行链。
@@ -163,14 +174,16 @@ impl FullscreenState {
             .key;
         let selected = self.activity.selected;
         let changed = self.scroll_activity(key, isize::MAX);
-        Some(
-            self.reveal_activity(key, body_height) || changed || selected != self.activity.selected,
-        )
+        let revealed = self.reveal_activity(key, body_height);
+        self.follow = false;
+        Some(revealed || changed || selected != self.activity.selected)
     }
 
     /// 【终端】【链内状态】应用独立滚动并清理已失效选区。
     /// 参数: `key` 为链键，`delta` 为偏移；返回: 位置是否改变。
     fn scroll_activity(&mut self, key: ParagraphKey, delta: isize) -> bool {
+        // 【终端】【阅读归属】链内键盘与跟随按钮只控制内部，不恢复主会话跟随。
+        self.follow = false;
         let selected = self.activity.selected;
         let changed = self.activity.scroll(key, delta);
         if changed || selected != self.activity.selected {

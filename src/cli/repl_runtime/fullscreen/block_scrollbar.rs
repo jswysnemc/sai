@@ -1,6 +1,8 @@
 //! 输出窗口左侧的双色引导线：灰色轨道表示全文，青色滑块表示可见范围。
 
 use super::sidebar_palette::{fg, Rgb, SidebarPalette};
+use super::state::FullscreenState;
+use super::wheel_boundary::WheelTarget;
 use crate::render::ansi_style::update_active_sgr;
 use crate::render::terminal_image::escape_sequence_end;
 use crate::render::transcript::tool_guides::output_line as output_gutter;
@@ -43,6 +45,67 @@ pub(super) fn decorate_output(
     }
 }
 
+/// 【终端】【详情滚动条显隐】仅悬停引导列或捕获拖动时显示，文档命中与复制信息不变。
+/// 参数：state 为交互状态，row 为文档行，line 为原始显示行；返回：等宽显示文本。
+pub(super) fn paint_line(state: &FullscreenState, row: usize, line: &str) -> String {
+    let target_at = |row: usize| {
+        state
+            .document
+            .reasonings
+            .iter()
+            .find(|region| row > region.start && row < region.end)
+            .map(|region| WheelTarget::Reasoning(region.key))
+            .or_else(|| {
+                state
+                    .document
+                    .activities
+                    .iter()
+                    .find(|region| row > region.start && row < region.footer.unwrap_or(region.end))
+                    .map(|region| WheelTarget::Activity(region.key))
+            })
+    };
+    let Some(target) = target_at(row) else {
+        return line.to_string();
+    };
+    let hovered = state
+        .pointer_row
+        .zip(state.pointer_col)
+        .is_some_and(|(pointer, column)| {
+            let pointer = state.scroll + pointer;
+            target_at(pointer) == Some(target)
+                && state.document.lines.get(pointer).is_some_and(|line| {
+                    let plain = crate::render::ansi_clip::strip_ansi(line.as_str());
+                    let gutter = plain.chars().take_while(|ch| *ch == ' ').count();
+                    gutter == usize::from(column) && plain.chars().nth(gutter) == Some('│')
+                })
+        });
+    let active = hovered
+        || state
+            .block_drag
+            .as_ref()
+            .is_some_and(|drag| drag.target == target);
+    let palette = SidebarPalette::current();
+    // 【终端】【标记识别】只读取引导列专用序列，正文恰好同色不能改变滑块比例。
+    let thumb = line.contains(&format!("\x1b[22m{}│", fg(palette.accent)));
+    let marked = thumb || line.contains(&format!("\x1b[22m{}│", fg(palette.muted)));
+    if !marked {
+        return line.to_string();
+    }
+    replace_gutter(
+        &AnsiLine::new(line.to_string()),
+        if thumb { palette.accent } else { palette.muted },
+        if !active {
+            ' '
+        } else if thumb {
+            '█'
+        } else {
+            '│'
+        },
+    )
+    .as_str()
+    .to_string()
+}
+
 /// 【终端】【输出占比】将正文可见比例映射为滑块长度，滚动位置映射为滑块起点。
 /// 参数: `visible` 为窗口行数，`offset` 为正文偏移，`total` 为正文总行数。
 /// 返回: 滑块行范围；可滚动时至少占一行，全文可见时填满引导线。
@@ -63,6 +126,11 @@ fn thumb_range(visible: usize, offset: usize, total: usize) -> Range<usize> {
 /// 参数: `line` 为原始 ANSI 正文行，`color` 为引导线前景色。
 /// 返回: 保留宽度、正文颜色和图片元数据的终端行。
 fn tint_gutter(line: &AnsiLine, color: Rgb) -> AnsiLine {
+    replace_gutter(line, color, '│')
+}
+
+/// 【终端】【等宽替换】只替换已定位的引导字符，保留正文样式与图片元数据。
+fn replace_gutter(line: &AnsiLine, color: Rgb, glyph: char) -> AnsiLine {
     let text = line.as_str();
     let mut index = 0;
     let mut active_sgr = String::new();
@@ -87,7 +155,7 @@ fn tint_gutter(line: &AnsiLine, color: Rgb) -> AnsiLine {
         }
         // 2. 【终端】【引导线着色】取消竖线暗淡效果，随后恢复正文已有样式
         let text = format!(
-            "{}\x1b[22m{}│\x1b[0m{active_sgr}{}",
+            "{}\x1b[22m{}{glyph}\x1b[0m{active_sgr}{}",
             &text[..index],
             fg(color),
             &text[index + ch.len_utf8()..],

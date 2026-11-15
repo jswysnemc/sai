@@ -118,7 +118,7 @@ pub(super) fn scrollbars(sidebar: &Sidebar, layout: &FullscreenLayout) -> Vec<Sc
         .collect()
 }
 
-/// 【终端侧栏】【滚动条绘制】使用右侧预留空白列显示细轨道和滑块，悬停与拖动时提亮
+/// 【终端侧栏】【滚动条绘制】仅悬停或拖动时使用右侧预留列显示轨道与实心滑块
 /// 参数：bars 为轨道，interaction 为交互，rows 为绘制行，column 为预留列，row_offset 为首行位置
 /// 返回：无，原地修改指定列，保留正文与末行位置
 pub(super) fn decorate(
@@ -142,10 +142,11 @@ pub(super) fn decorate(
             || interaction
                 .dragging
                 .is_some_and(|drag| drag.target == bar.target);
-        let color = if thumb && active {
+        if !active {
+            continue;
+        }
+        let color = if thumb {
             palette.accent
-        } else if thumb {
-            palette.muted
         } else {
             palette.border
         };
@@ -155,7 +156,7 @@ pub(super) fn decorate(
             "{prefix}{}\x1b[0m{}{}\x1b[0m",
             " ".repeat(padding),
             fg(color),
-            if thumb { "┃" } else { "│" }
+            if thumb { "█" } else { "│" }
         );
     }
 }

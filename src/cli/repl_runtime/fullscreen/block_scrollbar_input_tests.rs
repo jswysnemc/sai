@@ -43,6 +43,18 @@ fn tool_scrollbar_drag_captures_and_releases_outside_body() {
                         .then_some((layout.body_top + (row - state.scroll) as u16, col as u16))
                 })
                 .unwrap();
+            let visible_blocks = |runtime: &ReplRuntime| {
+                let state = &runtime.fullscreen.as_ref().unwrap().state;
+                super::paint::compose(state, &layout)
+                    .rows
+                    .iter()
+                    .any(|line| crate::render::ansi_clip::strip_ansi(line).contains('█'))
+            };
+            assert!(!visible_blocks(&runtime));
+            runtime
+                .handle_fullscreen_event(&mouse(MouseEventKind::Moved, col, row))
+                .unwrap();
+            assert!(visible_blocks(&runtime));
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), col, row))
                 .unwrap();
@@ -56,11 +68,14 @@ fn tool_scrollbar_drag_captures_and_releases_outside_body() {
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Drag(MouseButton::Left), 99, 29))
                 .unwrap();
+            assert!(visible_blocks(&runtime), "拖出轨道期间保持显示");
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Up(MouseButton::Left), 99, 29))
                 .unwrap();
+            assert!(!visible_blocks(&runtime), "轨道外释放后恢复隐藏");
             let state = &runtime.fullscreen.as_ref().unwrap().state;
             assert!(state.block_drag.is_none());
+            assert!(!state.follow, "内部拖动不能恢复外层跟随");
             assert!(state.selection.is_none());
             assert!(state.press.is_none());
             assert!(state

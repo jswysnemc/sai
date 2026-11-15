@@ -1,4 +1,5 @@
-use crate::agent::{Agent, AgentMode};
+use super::agent_slot::ReplAgentSlot;
+use crate::agent::AgentMode;
 use crate::cli::repl_runtime::{QueuedSubmission, ReplRuntime, StreamComposerDraft};
 use crate::cli::repl_turn::{execute_repl_turn, ReplTurnOutcome};
 use crate::cli::repl_turn_context::ReplTurnContext;
@@ -58,7 +59,7 @@ pub(super) fn take_stream_draft_prefill(
 /// - 队列执行结果，以及是否收到退出请求
 pub(super) async fn drain_submission_queue(
     context: ReplTurnContext<'_>,
-    agent: &mut Agent,
+    agent: &mut ReplAgentSlot,
     runtime: &mut ReplRuntime,
     mode: &mut AgentMode,
     input_history: &mut Vec<crate::state::input_history::InputHistoryEntry>,
@@ -66,9 +67,12 @@ pub(super) async fn drain_submission_queue(
     tool_call_mode: render::ToolCallDisplayMode,
 ) -> Result<bool> {
     // 1. 【终端队列】【逐条执行】尚未开始的消息始终留在运行期，错误返回不会销毁局部批次
-    while let Some((position, item)) =
-        runtime.take_next_turn_submission(agent.state().goal()?.map(|goal| goal.status))
-    {
+    while !runtime.has_session_switch_request() {
+        let Some((position, item)) =
+            runtime.take_next_turn_submission(agent.state().goal()?.map(|goal| goal.status))
+        else {
+            break;
+        };
         *mode = item.mode;
         if is_queued_control_command(item.text.trim()) {
             restore_control_submission(runtime, position, item)?;
@@ -98,6 +102,9 @@ pub(super) async fn drain_submission_queue(
                 return Ok(false);
             }
         };
+        if outcome.detached {
+            return Ok(false);
+        }
         apply_stream_mode(runtime, mode);
         restore_leftover_draft(runtime, outcome.leftover_draft);
         if outcome.exit_requested {
@@ -133,7 +140,7 @@ pub(super) async fn drain_submission_queue(
 /// 返回: 单轮结果；空消息返回空值，启动失败返回错误供调用方恢复条目
 async fn execute_queued_turn(
     context: &ReplTurnContext<'_>,
-    agent: &mut Agent,
+    agent: &mut ReplAgentSlot,
     runtime: &mut ReplRuntime,
     item: &QueuedSubmission,
     input_history: &mut Vec<crate::state::input_history::InputHistoryEntry>,

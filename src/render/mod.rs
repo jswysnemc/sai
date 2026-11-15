@@ -1,4 +1,5 @@
 pub(crate) mod activity_animation;
+pub(crate) mod activity_indicator;
 pub(crate) mod ansi_clip;
 pub(crate) mod ansi_overlay;
 pub(crate) mod ansi_style;

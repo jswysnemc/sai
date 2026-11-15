@@ -68,6 +68,7 @@ impl ReplInputSubmission {
 
 /// 输入框产生的下一项工作。
 pub(in crate::cli) enum ReplInputEvent {
+    SwitchSession,
     User(ReplInputSubmission),
     Automatic {
         mode: AgentMode,

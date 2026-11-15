@@ -168,7 +168,10 @@ impl ReplRuntime {
         let background = self.background_panel.wait(self.sidebar_visible(usize::from(
             super::super::viewport::TerminalSize::current().cols,
         )));
-        [preview, git, background].into_iter().flatten().min()
+        [preview, git, background, self.session_browser.wait()]
+            .into_iter()
+            .flatten()
+            .min()
     }
 
     /// 【终端侧栏】【鼠标隔离】侧栏滚轮和点击不传给会话滚动、选择或输入框。
@@ -240,6 +243,7 @@ impl ReplRuntime {
     /// 参数: action 为命中的动作；返回: 无。
     pub(super) fn apply_sidebar_action(&mut self, action: SidebarAction) {
         match action {
+            SidebarAction::Session(key) => self.browse_session(key),
             SidebarAction::Background(index) => {
                 // 1. 【后台任务】【悬停交接】面板接管鼠标后侧栏收不到移出事件，打开前清除悬停高亮
                 if let Some(session) = self.fullscreen.as_mut() {

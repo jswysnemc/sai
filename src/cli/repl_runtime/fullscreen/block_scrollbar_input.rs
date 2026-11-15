@@ -6,7 +6,7 @@ use crate::cli::repl_runtime::ReplRuntime;
 use crossterm::event::{Event, MouseButton, MouseEventKind};
 
 pub(super) struct BlockDrag {
-    target: WheelTarget,
+    pub(super) target: WheelTarget,
     top: i64,
     bottom: i64,
 }
@@ -83,6 +83,8 @@ impl ReplRuntime {
                 top: i64::from(layout.body_top) + top as i64 - state.scroll as i64,
                 bottom: i64::from(layout.body_top) + bottom as i64 - state.scroll as i64,
             });
+            // 【终端】【主动阅读】拖动内部轨道时冻结主会话，后续回答不能抢走视口。
+            state.follow = false;
             state.press = None;
             state.selection = None;
         }
@@ -111,6 +113,10 @@ impl ReplRuntime {
             usize::from(layout.content_width),
             usize::from(layout.rows),
         );
+        let in_body = layout.in_body(mouse.row) && mouse.column < layout.content_width;
+        state.pointer_row =
+            in_body.then_some(usize::from(mouse.row.saturating_sub(layout.body_top)));
+        state.pointer_col = in_body.then_some(mouse.column);
         if mouse.kind == MouseEventKind::Up(MouseButton::Left) {
             state.block_drag = None;
         }

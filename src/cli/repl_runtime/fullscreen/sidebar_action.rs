@@ -4,6 +4,7 @@ use crate::cli::repl_runtime::panel_mouse::PanelAction;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum SidebarSection {
+    Sessions,
     Agents,
     Git,
     Todo,
@@ -12,6 +13,7 @@ pub(super) enum SidebarSection {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum SidebarAction {
+    Session(u64),
     Toggle(SidebarSection),
     Panel(PanelAction),
     GitFile(usize),
@@ -20,6 +22,7 @@ pub(super) enum SidebarAction {
 
 #[derive(Default)]
 pub(super) struct SidebarSections {
+    pub(super) sessions_collapsed: bool,
     pub(super) agents_collapsed: bool,
     pub(super) git_collapsed: bool,
     pub(super) todo_collapsed: bool,
@@ -31,6 +34,7 @@ impl SidebarSections {
     /// 参数: section 为目标分组；返回: 无。
     pub(super) fn toggle(&mut self, section: SidebarSection) {
         let collapsed = match section {
+            SidebarSection::Sessions => &mut self.sessions_collapsed,
             SidebarSection::Agents => &mut self.agents_collapsed,
             SidebarSection::Git => &mut self.git_collapsed,
             SidebarSection::Todo => &mut self.todo_collapsed,

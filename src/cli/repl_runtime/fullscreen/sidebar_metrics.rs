@@ -4,11 +4,13 @@ use crate::cli::repl_chrome::ReplChrome;
 use crate::cli::repl_runtime::live_usage::LiveTurnUsage;
 use crate::render::panel_palette::{fg, PanelPalette};
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(super) struct SidebarMetrics {
     rate: Option<f64>,
     context: Option<(usize, usize)>,
     cache: Option<f32>,
+    output: Option<usize>,
+    prompt: Option<usize>,
 }
 
 /// 【终端】【指标空间】参数为侧栏高度，返回指标行数，极矮屏保留主要操作入口
@@ -25,6 +27,8 @@ impl SidebarMetrics {
     pub(super) fn new(chrome: Option<&ReplChrome>, live: &LiveTurnUsage) -> Self {
         Self {
             rate: live.rate(),
+            output: live.output_tokens(),
+            prompt: live.context_prompt_tokens(),
             context: chrome.map(|chrome| {
                 (
                     live.context_prompt_tokens().unwrap_or(
@@ -39,7 +43,7 @@ impl SidebarMetrics {
         }
     }
 
-    /// 【终端】【指标排版】参数为净宽和侧栏高度，返回紧凑等宽的三行指标
+    /// 【终端】【指标排版】参数为净宽和侧栏高度，返回上下文数值、分段条和缓存生成摘要
     pub(super) fn rows(&self, width: usize, rows: usize) -> Vec<String> {
         let palette = PanelPalette::current();
         let rate = self
@@ -49,20 +53,21 @@ impl SidebarMetrics {
             || "--".into(),
             |cache| format!("{:.0}%", cache.clamp(0.0, 1.0) * 100.0),
         );
-        let context = self.context.map_or_else(
-            || "--".into(),
-            |(used, window)| {
-                format!(
-                    "{:.1}k/{:.0}k",
-                    used as f64 / 1000.0,
-                    window as f64 / 1000.0
-                )
-            },
-        );
+        let context = if self.context.is_none() {
+            self.prompt.map_or_else(
+                || super::sidebar_metrics_view::context(None),
+                |prompt| format!("{} / -- · --%", super::sidebar_metrics_view::tokens(prompt)),
+            )
+        } else {
+            super::sidebar_metrics_view::context(self.context)
+        };
+        let output = self
+            .output
+            .map_or_else(|| "--".into(), super::sidebar_metrics_view::tokens);
         [
-            format!("~{rate} tok/s  cache {cache}"),
-            format!("context {context}"),
-            String::new(),
+            context,
+            super::sidebar_metrics_view::bar(self.context, width),
+            format!("Cache {cache} · out {output} · ~{rate} tok/s"),
         ]
         .into_iter()
         .take(height(rows))

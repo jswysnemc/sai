@@ -228,6 +228,7 @@ fn sidebar_sanitizes_user_text_and_keeps_full_todo_list() {
         &git,
         &Default::default(),
         sidebar_view::SidebarView {
+            sessions: None,
             viewing: None,
             compact: false,
             sections: &Default::default(),

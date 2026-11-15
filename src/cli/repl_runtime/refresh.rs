@@ -60,6 +60,7 @@ impl ReplRuntime {
     /// 返回:
     /// - 是否执行了任何刷新
     pub(in crate::cli) fn process_idle_tick(&mut self) -> Result<bool> {
+        let events = self.tick_session_events()?;
         let reflowed = self.maybe_reflow_due(false)?;
         let subagents = self.tick_subagents()?;
         let sidebar = self.tick_sidebar();
@@ -76,6 +77,6 @@ impl ReplRuntime {
             self.next_live_refresh = Some(Instant::now());
         }
         let animated = self.tick_live()?;
-        Ok(reflowed || subagents || animated || sidebar)
+        Ok(events || reflowed || subagents || animated || sidebar)
     }
 }

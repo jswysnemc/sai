@@ -80,6 +80,7 @@ impl ReplRuntime {
 /// 返回:
 /// - 处理是否成功
 pub(crate) fn process_stream_tick(runtime: &mut ReplRuntime) -> Result<()> {
+    runtime.tick_session_events()?;
     runtime.refresh_permission_prompt()?;
     runtime.poll_mention_completion()?;
     runtime.observe_terminal_size(true)?;
@@ -113,6 +114,9 @@ pub(crate) fn process_stream_input(
 ) -> Result<StreamInputAction> {
     let started = std::time::Instant::now();
     while started.elapsed() < Duration::from_millis(8) {
+        if runtime.has_session_switch_request() {
+            return Ok(StreamInputAction::SwitchSession);
+        }
         let Some(input) = next_ready_event(runtime)? else {
             break;
         };
@@ -143,6 +147,9 @@ pub(crate) fn process_stream_input(
         }
         // 全屏视图先处理鼠标与浏览键，其余按键仍交给输入框
         if runtime.handle_fullscreen_event(&input)? == super::FullscreenEvent::Consumed {
+            if runtime.has_session_switch_request() {
+                return Ok(StreamInputAction::SwitchSession);
+            }
             if runtime.apply_stream_mouse_cursor() {
                 runtime.redraw_stream_composer()?;
             }

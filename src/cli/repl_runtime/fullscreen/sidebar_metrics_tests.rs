@@ -6,10 +6,47 @@ fn unknown_metrics_and_short_screens_are_supported() {
     assert!(metrics.rows(30, 15).is_empty());
     let rows = metrics.rows(30, 30);
     assert_eq!(rows.len(), 3);
-    assert!(crate::render::ansi_clip::strip_ansi(&rows[0]).contains("cache --"));
+    assert!(crate::render::ansi_clip::strip_ansi(&rows[2]).contains("Cache --"));
     for width in [1, 10, 25] {
         for line in metrics.rows(width, 30) {
             assert!(crate::render::ansi_clip::ansi_visible_width(&line) <= width);
+        }
+    }
+}
+
+/// 【终端指标】【参考排版】无参数；返回无，确保百万窗口和小比例保持一位精度
+#[test]
+fn context_readout_matches_compact_reference() {
+    assert_eq!(
+        super::sidebar_metrics_view::context(Some((12_500, 1_000_000))),
+        "12.5k / 1M · 1.3%"
+    );
+    assert_eq!(super::sidebar_metrics_view::tokens(100_000), "100k");
+    assert!(super::sidebar_metrics_view::context(Some((12, 0))).contains("--"));
+}
+
+/// 【终端指标】【分段边界】无参数；返回无，已用量非零保留标记，过量时不超出轨道
+#[test]
+fn segmented_bar_handles_empty_full_and_overflow() {
+    use crate::render::ansi_clip::{ansi_visible_width, strip_ansi};
+    for width in [0, 1, 10, 28, 40] {
+        for context in [
+            None,
+            Some((0, 100)),
+            Some((1, 100)),
+            Some((100, 100)),
+            Some((200, 100)),
+            Some((2, 0)),
+        ] {
+            let bar = super::sidebar_metrics_view::bar(context, width);
+            assert!(ansi_visible_width(&bar) <= width);
+            let text = strip_ansi(&bar);
+            if width > 0 && context == Some((1, 100)) {
+                assert!(text.contains('▰'));
+            }
+            if context == None || context == Some((2, 0)) {
+                assert!(!text.contains('▰'));
+            }
         }
     }
 }

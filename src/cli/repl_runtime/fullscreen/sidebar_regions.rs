@@ -20,6 +20,7 @@ pub(super) struct SidebarRegion {
 
 #[derive(Default)]
 pub(super) struct SidebarScrolls {
+    pub(super) sessions: usize,
     pub(super) agents: usize,
     pub(super) git: usize,
     pub(super) todo: usize,
@@ -31,6 +32,7 @@ impl SidebarScrolls {
     /// 参数：section 为分组，offset 为有效偏移；返回：无
     pub(super) fn set(&mut self, section: SidebarSection, offset: usize) {
         match section {
+            SidebarSection::Sessions => self.sessions = offset,
             SidebarSection::Agents => self.agents = offset,
             SidebarSection::Git => self.git = offset,
             SidebarSection::Todo => self.todo = offset,
@@ -42,6 +44,7 @@ impl SidebarScrolls {
     /// 参数: section 为分组；返回: 该分组偏移。
     pub(super) fn get(&self, section: SidebarSection) -> usize {
         match section {
+            SidebarSection::Sessions => self.sessions,
             SidebarSection::Agents => self.agents,
             SidebarSection::Git => self.git,
             SidebarSection::Todo => self.todo,
@@ -52,6 +55,7 @@ impl SidebarScrolls {
     /// 参数: region 为目标区域，delta 为滚动量；返回: 是否变化。
     pub(super) fn scroll(&mut self, region: &SidebarRegion, delta: isize) -> bool {
         let offset = match region.section {
+            SidebarSection::Sessions => &mut self.sessions,
             SidebarSection::Agents => &mut self.agents,
             SidebarSection::Git => &mut self.git,
             SidebarSection::Todo => &mut self.todo,
@@ -70,6 +74,7 @@ impl SidebarScrolls {
             return;
         }
         let offset = match region.section {
+            SidebarSection::Sessions => &mut self.sessions,
             SidebarSection::Agents => &mut self.agents,
             SidebarSection::Git => &mut self.git,
             SidebarSection::Todo => &mut self.todo,
@@ -104,6 +109,10 @@ pub(super) fn regions(document: &SidebarDocument, height: usize) -> Vec<SidebarR
         .min((available / 3).max(1))
         .min(available);
     let available = available.saturating_sub(background);
+    let sessions = len(SidebarSection::Sessions)
+        .min(6)
+        .min(available / 3 + usize::from(available > 0));
+    let available = available.saturating_sub(sessions);
     let agents = len(SidebarSection::Agents)
         .min(5)
         .min(available / 3 + usize::from(available > 0));
@@ -117,6 +126,7 @@ pub(super) fn regions(document: &SidebarDocument, height: usize) -> Vec<SidebarR
         .iter()
         .map(|panel| {
             let visible = match panel.section {
+                SidebarSection::Sessions => sessions,
                 SidebarSection::Agents => agents,
                 SidebarSection::Git => git,
                 SidebarSection::Todo => todo,

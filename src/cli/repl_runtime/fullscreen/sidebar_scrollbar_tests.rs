@@ -41,7 +41,7 @@ fn sidebar_scrollbar_hover_and_drag_preserve_other_regions() {
             let header = strip_ansi(&session.state.previous.as_ref().unwrap()[bar.top - 1]);
             let y = (bar.top + bar.thumb().start) as u16;
             let idle = session.state.previous.as_ref().unwrap()[usize::from(y)].clone();
-            assert!(strip_ansi(&idle).ends_with('┃'));
+            assert!(!strip_ansi(&idle).ends_with(['┃', '│', '█']));
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 159, y))
                 .unwrap();
@@ -64,6 +64,19 @@ fn sidebar_scrollbar_hover_and_drag_preserve_other_regions() {
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Drag(MouseButton::Left), 120, 29))
                 .unwrap();
+            let dragging = runtime
+                .fullscreen
+                .as_ref()
+                .unwrap()
+                .state
+                .previous
+                .as_ref()
+                .unwrap();
+            assert!(strip_ansi(&dragging[bar.top + bar.visible - 1]).ends_with('█'));
+            assert_eq!(
+                crate::cli::repl_text::visible_width(&dragging[bar.top]),
+                160
+            );
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Up(MouseButton::Left), 120, 29))
                 .unwrap();
@@ -253,7 +266,9 @@ fn review_scrollbars_keep_file_and_diff_positions_independent() {
                 159,
                 0,
             );
-            assert!(strip_ansi(&full_rows[diff.top + diff.visible - 1]).ends_with('┃'));
+            assert!(strip_ansi(&full_rows[diff.top + diff.visible - 1])
+                .trim()
+                .is_empty());
             assert!(strip_ansi(&full_rows[29]).trim().is_empty());
         },
     );

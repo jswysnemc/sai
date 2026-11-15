@@ -9,12 +9,13 @@ use crate::cli::repl_runtime::panel_mouse::PanelAction;
 use crate::render::transcript::SubagentOverviewEntry;
 
 /// 【终端侧栏】【会话分组】每个会话只占一行，列表单独滚动且标题固定。
-/// 参数: agents 为子任务，viewing 为当前任务，collapsed 为折叠状态，width 为宽度；返回: 分组文档。
+/// 参数: agents 为子任务，viewing 为当前任务，collapsed 为折叠状态，width 为宽度，frame 为动效帧号；返回: 分组文档。
 pub(super) fn rows(
     agents: &[SubagentOverviewEntry],
     viewing: Option<&str>,
     collapsed: bool,
     width: usize,
+    frame: usize,
 ) -> Vec<SidebarRow> {
     let palette = SidebarPalette::current();
     let mut rows = vec![row(
@@ -45,9 +46,18 @@ pub(super) fn rows(
                 .progress
                 .map(|(step, max)| format!("{label} {step}/{max}"))
                 .unwrap_or_else(|| label.into());
+            let status = if entry.running {
+                format!(
+                    "{} {}",
+                    crate::render::activity_indicator::render_activity_indicator(frame),
+                    badge(&status, color)
+                )
+            } else {
+                badge(&status, color)
+            };
             let mut title = row(
                 item(
-                    &columns(&safe_text(&entry.label), &badge(&status, color), width),
+                    &columns(&safe_text(&entry.label), &status, width),
                     width,
                     false,
                 ),

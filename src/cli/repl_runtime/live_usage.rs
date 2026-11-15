@@ -47,6 +47,14 @@ impl LiveTurnUsage {
             .saturating_add(usage.cache_read_tokens.min(usage.prompt_tokens));
     }
 
+    /// 【终端指标】【生成用量】无参数；返回本轮已结算与当前流估算输出数，尚无读数时为空
+    pub(super) fn output_tokens(&self) -> Option<usize> {
+        let tokens = self.completed_tokens
+            + self.stream_tokens
+            + crate::token_estimate::estimate_tokens(&self.stream_text);
+        (tokens > 0).then_some(tokens)
+    }
+
     /// 返回当前上下文占用 token 数。
     ///
     /// 返回:

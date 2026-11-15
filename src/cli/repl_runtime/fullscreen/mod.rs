@@ -67,6 +67,8 @@ mod reasoning_viewport;
 #[cfg(test)]
 mod review_layout_tests;
 pub(super) mod selection;
+mod session_switch;
+pub(super) use session_switch::SessionViewState;
 mod sidebar;
 mod sidebar_action;
 mod sidebar_agents_view;
@@ -85,6 +87,7 @@ mod sidebar_interaction_tests;
 mod sidebar_metrics;
 #[cfg(test)]
 mod sidebar_metrics_tests;
+mod sidebar_metrics_view;
 mod sidebar_palette;
 mod sidebar_regions;
 #[cfg(test)]
@@ -94,6 +97,10 @@ mod sidebar_scrollbar;
 mod sidebar_scrollbar_input;
 #[cfg(test)]
 mod sidebar_scrollbar_tests;
+pub(super) mod sidebar_sessions;
+#[cfg(test)]
+mod sidebar_sessions_tests;
+mod sidebar_sessions_view;
 mod sidebar_style;
 #[cfg(test)]
 mod sidebar_tests;
@@ -319,8 +326,8 @@ impl ReplRuntime {
             .map(|frame| frame.chrome())
             .or(self.last_chrome.as_ref());
         session.sidebar.metrics = sidebar_metrics::SidebarMetrics::new(chrome, &self.live_usage);
-        // 2. 【全屏视图】【会话切换】段落键只在各自会话内有效，切换时清除旧命中与滚动状态
-        let viewing_subagent = self.transcript.viewing_subagent_id().map(str::to_string);
+        let transcript = &mut self.transcript;
+        let viewing_subagent = transcript.viewing_subagent_id().map(str::to_string);
         let view_changed = session.viewing_subagent != viewing_subagent;
         if view_changed {
             session.state = FullscreenState::new();
@@ -338,12 +345,12 @@ impl ReplRuntime {
         }
         let body_height = usize::from(layout.body_height);
         if refresh_document || view_changed || layout_changed || session.pending_toggle.is_some() {
-            let document = self.transcript.render_fullscreen(
+            let document = transcript.render_fullscreen(
                 usize::from(layout.content_width),
                 &self.options,
                 &session.state.expanded,
             );
-            self.transcript.clear_dirty();
+            transcript.clear_dirty();
             let document = session
                 .state
                 .reasoning
@@ -390,6 +397,11 @@ impl ReplRuntime {
                 &session.sidebar.git.summary,
                 &self.background_panel,
                 sidebar_view::SidebarView {
+                    sessions: self
+                        .session_browser
+                        .current
+                        .as_ref()
+                        .map(|_| &self.session_browser),
                     viewing: self.transcript.viewing_subagent_id(),
                     compact: session.sidebar.sections.todo_collapsed,
                     sections: &session.sidebar.sections,

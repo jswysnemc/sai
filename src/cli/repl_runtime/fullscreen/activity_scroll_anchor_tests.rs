@@ -108,3 +108,29 @@ fn activity_scroll_anchor_ignores_color_and_layout_whitespace() {
     );
     assert_eq!(content_chars(&AnsiLine::new("  │   \t".into())), 0);
 }
+
+/// 【终端】【完成兼容】只有同单元的运行与完成键等价，不误匹配分组或其他工具。
+#[test]
+fn activity_scroll_anchor_matches_active_and_whole_in_both_directions() {
+    for (from, to) in [
+        (ParagraphPart::Active, ParagraphPart::Whole),
+        (ParagraphPart::Whole, ParagraphPart::Active),
+    ] {
+        let (mut old, region) = source(94);
+        old.paragraphs[0].key.part = from;
+        let row = old
+            .lines
+            .iter()
+            .position(|line| line.as_str().contains("READ-14"))
+            .unwrap();
+        let anchor = ActivityScrollAnchor::capture(&old, &region, row - 1).unwrap();
+        let (mut new, region) = source(94);
+        new.paragraphs[0].key.part = to;
+        assert_eq!(anchor.locate(&new, &region), Some(row - 1));
+        new.paragraphs[0].key.part = ParagraphPart::ActivityGroup;
+        assert_eq!(anchor.locate(&new, &region), None);
+        new.paragraphs[0].key.part = to;
+        new.paragraphs[0].key.cell += 1;
+        assert_eq!(anchor.locate(&new, &region), None);
+    }
+}

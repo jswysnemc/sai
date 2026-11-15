@@ -1,6 +1,6 @@
 use crate::cli::repl_text::visible_width;
 use crate::i18n::text as t;
-use crate::render::activity_animation::render_activity_guide_with_color;
+use crate::render::activity_indicator::render_activity_indicator;
 use crate::render::session_summary::format_k;
 use crate::render::transcript::SubagentOverviewEntry;
 
@@ -8,8 +8,6 @@ use crate::render::transcript::SubagentOverviewEntry;
 const STATUS_COL_MIN: usize = 6;
 /// 动效栏与标题栏之间的固定间隔
 const COL_GAP: &str = "  ";
-/// 运行中引导点色相
-const RUNNING_GUIDE: (u8, u8, u8) = (204, 167, 0);
 /// 待命引导点色相
 const IDLE_GUIDE: (u8, u8, u8) = (97, 175, 239);
 
@@ -165,7 +163,7 @@ pub(super) fn idle_line(entries: &[SubagentOverviewEntry], frame: usize) -> Stri
     )
 }
 
-/// 沉底引导点：运行中走流光，有待命条目用待命色，其余为静态暗点。
+/// 沉底引导点：运行中显示单色细圆环，有待命条目用待命色，其余为静态暗点。
 ///
 /// 参数:
 /// - `entries`: 当前子 agent 概览
@@ -175,7 +173,7 @@ pub(super) fn idle_line(entries: &[SubagentOverviewEntry], frame: usize) -> Stri
 /// - 引导点 ANSI 文本，宽度恒为一列
 pub(super) fn guide_dot(entries: &[SubagentOverviewEntry], frame: usize) -> String {
     if entries.iter().any(|entry| entry.running) {
-        render_activity_guide_with_color(frame, Some(RUNNING_GUIDE))
+        render_activity_indicator(frame)
     } else if entries.iter().any(|entry| entry.status == "err") {
         "\x1b[31m●\x1b[0m".to_string()
     } else if entries.iter().any(|entry| entry.status == "idle") {
@@ -223,7 +221,7 @@ pub(super) fn render_entry_left(
 ) -> String {
     let text = entry_left_plain(entry);
     let marker = if entry.running {
-        render_activity_guide_with_color(frame, Some(RUNNING_GUIDE))
+        render_activity_indicator(frame)
     } else {
         match entry.status {
             "err" => "\x1b[31m●\x1b[0m",

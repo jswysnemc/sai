@@ -64,7 +64,11 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
         .hover
         .filter(|_| layout.rail_col.is_some())
         .and_then(|anchor| mark_for_anchor(&marks, anchor));
-    let thumb = scroll_thumb(state, body_height);
+    // 【终端】【轨道显隐】保留预留列与命中区域，只在悬停或拖动时绘制。
+    let thumb = (state.dragging
+        || (state.pointer_col == Some(layout.scrollbar_col) && state.pointer_row.is_some()))
+    .then(|| scroll_thumb(state, body_height))
+    .flatten();
     // 2. 悬停预览卡片停在被悬停标记的同一行
     let preview = hovered.and_then(|index| {
         let anchor = state.document.anchors.get(marks[index].anchor)?;
@@ -86,7 +90,8 @@ pub(super) fn compose(state: &FullscreenState, layout: &FullscreenLayout) -> Pai
         .hovered_paragraph()
         .filter(|_| !super::bottom_button::is_hovered(state, content_width, body_height));
     for (row, line) in window.iter().enumerate() {
-        let line = line.as_str();
+        let painted_line = super::block_scrollbar::paint_line(state, state.scroll + row, line);
+        let line = painted_line.as_str();
         let body = match &preview {
             Some((preview_row, text)) if *preview_row == row => {
                 overlay_preview(line, text, content_width)
@@ -335,7 +340,7 @@ fn scroll_thumb(state: &FullscreenState, body_height: usize) -> Option<(usize, u
 /// - 单列滚动条文本
 fn scrollbar_glyph(row: usize, thumb: Option<(usize, usize)>) -> String {
     match thumb {
-        Some((top, bottom)) if row >= top && row < bottom => format!("{THUMB}┃{RESET}"),
+        Some((top, bottom)) if row >= top && row < bottom => format!("{THUMB}█{RESET}"),
         Some(_) => format!("{TRACK}│{RESET}"),
         None => " ".to_string(),
     }
@@ -361,3 +366,7 @@ pub(super) fn scroll_for_track_row(
     }
     row.min(body_height - 1) * max / (body_height - 1)
 }
+
+#[cfg(test)]
+#[path = "scrollbar_visibility_tests.rs"]
+mod visibility_tests;

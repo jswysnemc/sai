@@ -2,7 +2,7 @@
 
 use super::sidebar::Sidebar;
 use super::sidebar_action::{SidebarAction, SidebarSection};
-use super::sidebar_palette::{SidebarPalette, fg};
+use super::sidebar_palette::{fg, SidebarPalette};
 use crate::cli::repl_runtime::panel_mouse::PanelAction;
 use crate::cli::repl_text::visible_width;
 use crate::render::ansi_clip::clip_ansi_to_width;
@@ -61,8 +61,10 @@ fn action_hint(sidebar: &Sidebar) -> Option<&'static str> {
         .and_then(|index| sidebar.document.rows.get(index))
         .and_then(|row| row.action)?;
     Some(match action {
+        SidebarAction::Session(_) => "Switch session · background agents continue",
         SidebarAction::Toggle(section) => {
             let collapsed = match section {
+                SidebarSection::Sessions => sidebar.sections.sessions_collapsed,
                 SidebarSection::Agents => sidebar.sections.agents_collapsed,
                 SidebarSection::Git => sidebar.sections.git_collapsed,
                 SidebarSection::Todo => sidebar.sections.todo_collapsed,

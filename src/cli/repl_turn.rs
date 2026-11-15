@@ -1,6 +1,7 @@
 use super::terminal_restore::restore_stream_terminal_modes;
 use super::*;
-use crate::agent::{Agent, AgentEvent, ExternalEventBatch, ExternalEventWake};
+use crate::agent::{AgentEvent, ExternalEventBatch, ExternalEventWake};
+use crate::cli::repl::agent_slot::ReplAgentSlot;
 use crate::cli::repl_runtime::{StreamCommandContext, StreamInputAction};
 use crate::cli::repl_turn_context::ReplTurnContext;
 
@@ -13,6 +14,8 @@ pub(super) struct AutomaticReplSubmission {
 /// TUI 单轮执行结果。
 pub(super) struct ReplTurnOutcome {
     pub(super) interrupted: bool,
+    /// 切换前台后任务仍运行，调用方不得访问 Agent 或执行旧会话收尾。
+    pub(super) detached: bool,
     pub(super) result: Result<()>,
     /// 运行期间未入队的草稿，交回空闲输入框
     pub(super) leftover_draft: Option<String>,
@@ -76,7 +79,7 @@ pub(super) fn automatic_repl_submission(
 /// - 自动轮次执行结果
 pub(super) async fn execute_automatic_repl_turn(
     context: ReplTurnContext<'_>,
-    agent: &mut Agent,
+    agent: &mut ReplAgentSlot,
     runtime: &mut ReplRuntime,
     mode: AgentMode,
     reasoning_mode: render::ReasoningDisplayMode,
@@ -114,6 +117,12 @@ pub(super) async fn execute_automatic_repl_turn(
     // 若此时不确认，下一次等待会立刻重投同一批，而 take_ready 又排在读键之前，
     // 用户既抢不回输入、也退不出去，形成中断→重投→再中断的活锁。
     // 请求成功时由统一消息间隙确认；这里只处理用户主动中断，失败保留待重试
+    if outcome.detached {
+        if let Some(task) = agent.task.as_mut() {
+            task.interrupted_batch = batch;
+        }
+        return Ok(outcome);
+    }
     if outcome.interrupted {
         if let Some(batch) = batch.as_ref() {
             let _ = agent.acknowledge_external_events(batch);
@@ -137,41 +146,49 @@ pub(super) async fn execute_automatic_repl_turn(
 pub(super) async fn execute_repl_turn(
     paths: &SaiPaths,
     config: &AppConfig,
-    agent: &mut Agent,
+    agent: &mut ReplAgentSlot,
     runtime: &mut ReplRuntime,
     owner_key: &str,
     submission: crate::runner::RunnerSubmission,
 ) -> Result<ReplTurnOutcome> {
     // 1. 【终端队列】【主动继续】普通提交恢复队列，自动续轮和后台回执不解除失败暂停
     runtime.resume_queue_for_submission(&submission);
-    let runner = crate::runner::SessionRunner::new(paths)
-        .with_config(config.clone())
-        .with_inter_message_source(runtime.inter_message_source());
-    // 事件通道：sink 只负责入队，交互弹窗与 transcript 写入都由消费循环完成。
-    // 用无界 std::sync::mpsc 而非有界通道——sink 是在异步轮次里被同步调用的，
-    // 一旦通道满而阻塞就会卡住整个 tokio worker 线程；无界通道下由消费侧
-    // 每 25ms 的排空节奏承担背压
-    let (event_tx, event_rx) = std::sync::mpsc::channel::<crate::runner::RunnerEvent>();
-    let mut sink = |event: crate::runner::RunnerEvent| {
-        event_tx
-            .send(event)
-            .map_err(|_| anyhow::anyhow!("runner event channel is closed"))
-    };
     let stream_mode = submission.mode;
-    // 命令上下文必须在建 chat future 之前抓取：之后 Agent 被独占借用，
-    // 立即执行的命令就拿不到 paths 与子智能体作用域键了
-    let stream_ctx = StreamCommandContext::capture(paths, owner_key.to_string(), stream_mode);
-    // 1. 本轮开始时保留可编辑输入框，供 Tab 入队
     runtime.begin_stream_composer(stream_mode)?;
-    // 2. 绑定热切换句柄：Shift+Tab 立即改权限模式
-    let final_mode_handle = agent.live_mode_handle();
-    runtime.bind_live_mode(final_mode_handle.clone(), agent.session_id());
-    // 停止标志在丢弃 chat future 前置位，轮次守卫据此把本轮记为用户中断
-    let cancel_flag = agent.cancel_handle();
-    let chat = runner.run_submission_with_agent(submission, agent, &mut sink);
-    tokio::pin!(chat);
+    let owned = agent
+        .agent
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("session already running"))?;
+    agent.task = Some(super::repl_turn_task::ReplTurnTask::start(
+        paths,
+        config,
+        owned,
+        submission,
+        runtime.inter_message_source(),
+        runtime.session_event_sender(),
+    )?);
+    resume_repl_turn(paths, agent, runtime, owner_key).await
+}
+
+/// 接管原轮次的事件流与可编辑输入；参数为路径、Agent槽、UI与会话键；返回完成或脱离结果。
+pub(super) async fn resume_repl_turn(
+    paths: &SaiPaths,
+    agent: &mut ReplAgentSlot,
+    runtime: &mut ReplRuntime,
+    owner_key: &str,
+) -> Result<ReplTurnOutcome> {
+    let task = agent
+        .task
+        .as_mut()
+        .ok_or_else(|| anyhow::anyhow!("no running turn"))?;
+    let final_mode_handle = task.live_mode.clone();
+    runtime.bind_live_mode(final_mode_handle.clone(), &task.session_id);
+    let stream_ctx =
+        StreamCommandContext::capture(paths, owner_key.to_owned(), final_mode_handle.get());
     let mut interrupted = false;
     let mut exit_requested = false;
+    let mut detached = false;
+    let mut returned_agent = None;
     let mut pager: Option<crate::cli::repl_pager::PagerScreen> = None;
     let mut resize_tick = tokio::time::interval(Duration::from_millis(25));
     resize_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -181,17 +198,29 @@ pub(super) async fn execute_repl_turn(
     let result: Result<()> = async {
         loop {
             tokio::select! {
-                result = &mut chat => {
-                    let outcome = result.map(|_| ());
+                result = &mut task.handle => {
+                    let outcome = match result {
+                        Ok((owned, result, stopped)) => {
+                            returned_agent = Some(owned);
+                            interrupted |= stopped;
+                            result
+                        }
+                        Err(error) => Err(anyhow::anyhow!("session runner task failed: {error}")),
+                    };
                     // 轮次结束后排空剩余事件：Completed / Failed / FinalSummary
                     // 是 sink 最后发出的，不排空就会丢掉收尾渲染。
                     // 先排空再关副屏，这样离开时的整屏重放已经包含收尾内容
-                    drain_runner_events(&event_rx, runtime, &mut pager)?;
+                    drain_runner_events(&task.events, runtime, &mut pager)?;
                     close_pager(&mut pager, runtime)?;
                     break outcome;
                 }
                 _ = resize_tick.tick() => {
-                    drain_runner_events(&event_rx, runtime, &mut pager)?;
+                    if runtime.has_session_switch_request() {
+                        close_pager(&mut pager, runtime)?;
+                        detached = true;
+                        break Ok(());
+                    }
+                    drain_runner_events(&task.events, runtime, &mut pager)?;
                     if pager.is_some() {
                         let closed = match pager.as_mut() {
                             Some(screen) => screen.poll(Some(Duration::from_millis(0)), |focus, width| {
@@ -207,6 +236,11 @@ pub(super) async fn execute_repl_turn(
                     }
                     process_stream_tick(runtime)?;
                     let action = process_stream_input(runtime, &stream_ctx)?;
+                    if action == StreamInputAction::SwitchSession || runtime.has_session_switch_request() {
+                        close_pager(&mut pager, runtime)?;
+                        detached = true;
+                        break Ok(());
+                    }
                     if action == StreamInputAction::ToggleFullscreen {
                         // Ctrl+O：切换全屏会话视图，不中断当前轮次
                         runtime.toggle_fullscreen()?;
@@ -217,19 +251,54 @@ pub(super) async fn execute_repl_turn(
                         // 守卫在析构时读取此标志才能把本轮记成中断而非失败。
                         // 退出同样走中断路径，由主循环收尾后 break；
                         // 直接 std::process::exit 会跳过终端模式恢复
-                        cancel_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                        task.interrupt();
                         interrupted = true;
                         exit_requested = action == StreamInputAction::Exit;
                         // 中断前也排空：已经产出但还没渲染的输出应当保留
-                        drain_runner_events(&event_rx, runtime, &mut pager)?;
+                        drain_runner_events(&task.events, runtime, &mut pager)?;
                         close_pager(&mut pager, runtime)?;
-                        break Ok(());
+                        // 取消分支只丢弃本轮 future，任务仍将原 Agent 交回。
+                        match (&mut task.handle).await {
+                            Ok((owned, result, _)) => {
+                                returned_agent = Some(owned);
+                                break result;
+                            }
+                            Err(error) => break Err(anyhow::anyhow!("session runner task failed: {error}")),
+                        }
                     }
                 }
             }
         }
     }
     .await;
+    if detached {
+        stream_terminal_guard.finish(&mut io::stdout())?;
+        return Ok(ReplTurnOutcome {
+            interrupted: false,
+            detached: true,
+            result: Ok(()),
+            leftover_draft: None,
+            exit_requested: false,
+        });
+    }
+    if returned_agent.is_none() && !task.handle.is_finished() {
+        task.interrupt();
+        if let Ok((owned, _, _)) = (&mut task.handle).await {
+            returned_agent = Some(owned);
+        }
+    }
+    if interrupted {
+        if let (Some(owned), Some(batch)) =
+            (returned_agent.as_mut(), task.interrupted_batch.as_ref())
+        {
+            let _ = owned.acknowledge_external_events(batch);
+        }
+    }
+    agent.task = None;
+    agent.agent = returned_agent;
+    if agent.agent.is_none() {
+        anyhow::bail!("session runner terminated without returning its Agent");
+    }
     // 2. 【终端队列】【失败暂停】先暂停投递再恢复终端，避免空闲循环立即开始剩余消息
     if interrupted || result.is_err() {
         runtime.pause_submission_queue();
@@ -250,16 +319,8 @@ pub(super) async fn execute_repl_turn(
         (!draft.is_empty()).then_some(draft)
     };
     guard_result?;
-    // 3. 【答复通知】【终态交付】宿主只交付确定的结束状态，文案与开关由 Lua 策略处理
-    let status = if interrupted {
-        sai_plugin_runtime::ReplyStatus::Interrupted
-    } else if result.is_err() {
-        sai_plugin_runtime::ReplyStatus::Failed
-    } else {
-        sai_plugin_runtime::ReplyStatus::Completed
-    };
-    crate::notifications::reply_ended(paths, config, status).await;
     Ok(ReplTurnOutcome {
+        detached: false,
         interrupted,
         result,
         leftover_draft,
@@ -280,6 +341,7 @@ fn drain_runner_events(
     runtime: &mut ReplRuntime,
     pager: &mut Option<crate::cli::repl_pager::PagerScreen>,
 ) -> Result<()> {
+    runtime.tick_session_events()?;
     while let Ok(event) = rx.try_recv() {
         if turn_event_needs_foreground(&event) {
             close_pager(pager, runtime)?;
@@ -290,7 +352,7 @@ fn drain_runner_events(
 }
 
 /// 权限、提问和 SSH 口令必须画在主屏上，否则会盖在副屏里且用户看不到。
-fn turn_event_needs_foreground(event: &crate::runner::RunnerEvent) -> bool {
+pub(super) fn turn_event_needs_foreground(event: &crate::runner::RunnerEvent) -> bool {
     match event {
         crate::runner::RunnerEvent::Agent(AgentEvent::PermissionRequested(_))
         | crate::runner::RunnerEvent::Agent(AgentEvent::QuestionRequested(_)) => true,

@@ -13,6 +13,8 @@ use anyhow::Result;
 /// 流式按键处理的结果。
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::cli) enum StreamInputAction {
+    /// 切换前台会话，原轮次继续运行
+    SwitchSession,
     /// 继续当前轮次
     Continue,
     /// 中断当前轮次（Ctrl+C）

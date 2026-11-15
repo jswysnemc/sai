@@ -85,6 +85,7 @@ mod repl_transcript_pager;
 mod repl_turn;
 mod repl_turn_context;
 mod repl_turn_failure;
+mod repl_turn_task;
 mod repl_windows_paste;
 mod reset;
 mod session_picker;

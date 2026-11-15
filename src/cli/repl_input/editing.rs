@@ -75,3 +75,30 @@ pub(in crate::cli) fn repl_should_browse_history(
 pub(super) fn cycle_repl_mode(mode: AgentMode) -> AgentMode {
     mode.next()
 }
+
+/// 【终端输入】【原子删除】参数 clipboard/input/cursor 为编辑状态，backward 为向前删除；返回内容是否变化
+pub(super) fn delete_input_atom(
+    clipboard: &mut ReplClipboardState,
+    input: &mut String,
+    cursor: &mut usize,
+    backward: bool,
+) -> bool {
+    if backward {
+        if clipboard.remove_block_before_cursor(input, cursor) {
+            return true;
+        }
+        if *cursor == 0 {
+            return false;
+        }
+        remove_char_before_cursor(input, cursor);
+    } else {
+        if clipboard.remove_block_at_cursor(input, *cursor) {
+            return true;
+        }
+        if *cursor >= input.chars().count() {
+            return false;
+        }
+        remove_char_at_cursor(input, *cursor);
+    }
+    true
+}

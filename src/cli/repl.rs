@@ -9,9 +9,12 @@ use super::*;
 use crate::agent::Agent;
 
 mod agent_selection;
+pub(in crate::cli) mod agent_slot;
+mod automatic_turn;
 mod compact;
 mod exit_confirmation;
 mod exit_hint;
+mod session_switch;
 use exit_confirmation::confirm_repl_exit;
 mod input_restore;
 mod jev_commands;
@@ -77,14 +80,15 @@ pub(super) async fn run_repl(
         state.session_id().to_string(),
         state.state_dir().to_path_buf(),
     );
-    let mut agent = Agent::new(
+    let mut agent = agent_slot::ReplAgentSlot::new(Agent::new(
         config.clone(),
         paths,
         state.clone(),
         client.clone(),
         initial_registry,
         mode,
-    )?;
+    )?);
+    let mut parked_sessions = std::collections::HashMap::new();
     let mut external_events = ReplExternalEvents::new();
     let mut restore_fullscreen_after_command = false;
     plugin_commands::show_diagnostics(&agent, &mut runtime)?;
@@ -93,9 +97,48 @@ pub(super) async fn run_repl(
     let mut pending_undo = false;
     let mut exit_armed = false;
     loop {
+        if let Some(target) = runtime.take_session_switch_request() {
+            external_events.cancel();
+            if let Err(error) = session_switch::switch(
+                paths,
+                &config,
+                &client,
+                &target,
+                &mut state,
+                &mut agent,
+                &mut tool_warmup,
+                &mut mode,
+                &mut runtime,
+                &mut parked_sessions,
+                &mut prefill,
+                &mut prefill_clipboard,
+            ) {
+                runtime.record_failure(turn_failure_text(&error))?;
+            }
+        }
+        if agent.is_running() {
+            match session_switch::resume_running(
+                paths,
+                &config,
+                &state,
+                &mut agent,
+                &mut runtime,
+                &mut mode,
+                &mut prefill,
+                &mut prefill_clipboard,
+                &mut exit_armed,
+            )
+            .await?
+            {
+                None => continue,
+                Some(true) => break,
+                Some(false) => {}
+            }
+        }
         // 【终端】【会话在线】切换后仅更新探测记录，输入始终在本终端执行
         runtime.bind_background_session(paths, state.session_id());
         runtime.configure_background_tasks(paths, &config, state.session_id());
+        runtime.bind_session_browser(paths, &state);
         if presence
             .as_ref()
             .is_none_or(|record| !record.matches(state.state_dir()))
@@ -168,6 +211,7 @@ pub(super) async fn run_repl(
                 &mut runtime,
                 &mut external_events,
             )? {
+                Some(ReplInputEvent::SwitchSession) => continue,
                 Some(ReplInputEvent::User(submission)) => {
                     mode = submission.mode;
                     submission
@@ -181,70 +225,24 @@ pub(super) async fn run_repl(
                     mode = automatic_mode;
                     prefill = (!draft.text.trim().is_empty()).then_some(draft.text);
                     prefill_clipboard = prefill.as_ref().map(|_| draft.clipboard_state);
-                    apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
-                    let owner_key = state.state_dir().display().to_string();
-                    let outcome = execute_automatic_repl_turn(
-                        ReplTurnContext {
-                            paths,
-                            config: &config,
-                            owner_key: &owner_key,
-                        },
+                    if automatic_turn::run(
+                        paths,
+                        &config,
+                        &state,
                         &mut agent,
                         &mut runtime,
-                        mode,
-                        transcript_options.reasoning_mode,
-                        transcript_options.tool_call_mode,
-                        wake,
-                    )
-                    .await?;
-                    // 运行中输入 exit 同样要确认后台工作；取消时按普通中断收尾，保留草稿与队列
-                    if outcome.exit_requested
-                        && confirm_repl_exit(paths, &config, &state, &mut runtime, &mut exit_armed)
-                            .await?
-                    {
-                        break;
-                    }
-                    if outcome.interrupted {
-                        if let Some(error) = outcome.result.err() {
-                            runtime.record_failure(interrupted_failure_text(&error))?;
-                        }
-                    } else if let Err(error) = outcome.result {
-                        external_events.pause(agent.state().state_dir());
-                        runtime.record_failure(turn_failure_text(&error))?;
-                    }
-                    if let Some(draft) = outcome.leftover_draft {
-                        prefill = Some(draft);
-                    }
-                    if runtime
-                        .has_ready_turn_submission(agent.state().goal()?.map(|goal| goal.status))
-                    {
-                        external_events.resume();
-                    }
-                    let exit = drain_submission_queue(
-                        ReplTurnContext {
-                            paths,
-                            config: &config,
-                            owner_key: &owner_key,
-                        },
-                        &mut agent,
-                        &mut runtime,
+                        &mut tool_warmup,
+                        &mut external_events,
                         &mut mode,
                         &mut input_history,
-                        transcript_options.reasoning_mode,
-                        transcript_options.tool_call_mode,
+                        transcript_options,
+                        wake,
+                        &mut prefill,
+                        &mut prefill_clipboard,
+                        &mut exit_armed,
                     )
-                    .await?;
-                    if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {
-                        prefill = Some(draft);
-                        prefill_clipboard = Some(clipboard);
-                    }
-                    if exit
-                        && !confirm_repl_exit(paths, &config, &state, &mut runtime, &mut exit_armed)
-                            .await?
+                    .await?
                     {
-                        continue;
-                    }
-                    if exit {
                         break;
                     }
                     continue;
@@ -333,14 +331,20 @@ pub(super) async fn run_repl(
                         continue;
                     }
                     crate::control_commands::ControlCommand::New { title } => {
-                        let message = crate::control_commands::create_new_session(paths, &title)?;
-                        state = StateStore::new(paths)?;
-                        state.init_files()?;
-                        agent.replace_state(state.clone())?;
-                        agent.notify_hook_source("resume").await?;
-                        prefill = None;
-                        runtime.clear()?;
-                        runtime.record_meta(message)?;
+                        session_switch::new_session(
+                            paths,
+                            &config,
+                            &client,
+                            &title,
+                            &mut state,
+                            &mut agent,
+                            &mut tool_warmup,
+                            &mut mode,
+                            &mut runtime,
+                            &mut parked_sessions,
+                            &mut prefill,
+                            &mut prefill_clipboard,
+                        )?;
                     }
                     crate::control_commands::ControlCommand::Rename { title } => {
                         match crate::control_commands::rename_current_session(paths, &title) {
@@ -358,24 +362,27 @@ pub(super) async fn run_repl(
                                 picked
                             }
                         };
-                        match target.and_then(|target| {
-                            let next =
-                                session_resume::prepare(paths, &config, &client, mode, &target)?;
-                            Ok((target, next))
-                        }) {
-                            Ok((target, next)) => {
+                        match target {
+                            Ok(target) => {
                                 external_events.cancel();
-                                state = next.state;
-                                agent = next.agent;
-                                tool_warmup = next.warmup;
-                                prefill = None;
-                                prefill_clipboard = None;
-                                runtime.clear()?;
-                                runtime
-                                    .record_meta(crate::cli::session_resume::message(&target))?;
-                                record_repl_history(&mut runtime, &state)?;
+                                if let Err(error) = session_switch::resume(
+                                    paths,
+                                    &config,
+                                    &client,
+                                    &target,
+                                    &mut state,
+                                    &mut agent,
+                                    &mut tool_warmup,
+                                    &mut mode,
+                                    &mut runtime,
+                                    &mut parked_sessions,
+                                    &mut prefill,
+                                    &mut prefill_clipboard,
+                                ) {
+                                    runtime.record_failure(turn_failure_text(&error))?;
+                                }
                             }
-                            Err(err) => runtime.record_meta(err.to_string())?,
+                            Err(error) => runtime.record_meta(error.to_string())?,
                         }
                     }
                     crate::control_commands::ControlCommand::Compact => {
@@ -623,6 +630,9 @@ pub(super) async fn run_repl(
             runner_submission,
         )
         .await?;
+        if outcome.detached {
+            continue;
+        }
         apply_stream_mode(&runtime, &mut mode);
         // 退出请求在中断处理之前：/exit 走的就是中断路径，确认通过后直接落到循环外的收尾；
         // 用户取消退出时按普通中断处理，恢复草稿并保留尚未执行的队列
@@ -656,6 +666,9 @@ pub(super) async fn run_repl(
                 transcript_options.tool_call_mode,
             )
             .await?;
+            if runtime.has_session_switch_request() {
+                continue;
+            }
             if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {
                 prefill = Some(draft);
                 prefill_clipboard = Some(clipboard);
@@ -704,6 +717,9 @@ pub(super) async fn run_repl(
             transcript_options.tool_call_mode,
         )
         .await?;
+        if runtime.has_session_switch_request() {
+            continue;
+        }
         if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {
             prefill = Some(draft);
             prefill_clipboard = Some(clipboard);
@@ -719,7 +735,7 @@ pub(super) async fn run_repl(
     // 在全屏视图里退出时先回到主屏：恢复提示要打在主屏上，
     // 键盘增强层也要在主屏上弹掉，否则 shell 里 Ctrl+C / Ctrl+L 失效
     runtime.leave_fullscreen()?;
-    agent.finish_hooks().await;
+    session_switch::finish_agents(agent, parked_sessions).await;
     let _ = crate::cli::alternate_screen::pop_all_enhancement(&mut std::io::stdout());
     // 退出后给出恢复命令，便于下次接续同一会话（对齐 Claude `--resume`）
     print_repl_resume_hint(state.session_id());

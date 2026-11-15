@@ -68,6 +68,19 @@ pub(in crate::cli) fn read_repl_input(
     }
     redraw_input!()?;
     loop {
+        if runtime.has_session_switch_request() {
+            runtime.save_session_input_draft(crate::cli::repl_runtime::StreamComposerDraft {
+                text: input,
+                cursor,
+                clipboard: clipboard_state,
+                slash_selection,
+                is_pasted,
+                windows_paste,
+                mode: Some(mode),
+            });
+            terminal_guard.finish(&mut stdout)?;
+            return Ok(Some(ReplInputEvent::SwitchSession));
+        }
         for diagnostic in chrome.status_diagnostics() {
             runtime.record_meta(diagnostic)?;
         }
@@ -678,17 +691,8 @@ pub(in crate::cli) fn read_repl_input(
                         redraw_input!()?;
                     }
                     KeyCode::Backspace => {
-                        let changed = if clipboard_state
-                            .remove_block_before_cursor(&mut input, &mut cursor)
-                        {
-                            // 已删除完整剪贴板占位块
-                            true
-                        } else if cursor > 0 {
-                            remove_char_before_cursor(&mut input, &mut cursor);
-                            true
-                        } else {
-                            false
-                        };
+                        let changed =
+                            delete_input_atom(&mut clipboard_state, &mut input, &mut cursor, true);
                         slash_selection = 0;
                         if changed {
                             history_clean_index = None;
@@ -697,15 +701,8 @@ pub(in crate::cli) fn read_repl_input(
                         redraw_input!()?;
                     }
                     KeyCode::Delete => {
-                        let changed = if clipboard_state.remove_block_at_cursor(&mut input, cursor)
-                        {
-                            true
-                        } else if cursor < input.chars().count() {
-                            remove_char_at_cursor(&mut input, cursor);
-                            true
-                        } else {
-                            false
-                        };
+                        let changed =
+                            delete_input_atom(&mut clipboard_state, &mut input, &mut cursor, false);
                         slash_selection = 0;
                         if changed {
                             history_clean_index = None;

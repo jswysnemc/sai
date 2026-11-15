@@ -87,30 +87,28 @@ impl ActivityViewports {
             self.focus = None;
             return source;
         }
-        // 1. 【终端】【尺寸变化】仅按真实列宽重定位正文，点击坐标不参与高度预算
-        if self.width != width {
-            for region in &source.activities {
-                let Some(position) = self
-                    .positions
-                    .get_mut(&region.key)
-                    .filter(|position| !position.follow)
-                else {
-                    continue;
-                };
-                let Some(previous) = self
-                    .source
-                    .activities
-                    .iter()
-                    .find(|previous| previous.key == region.key)
-                else {
-                    continue;
-                };
-                if let Some(offset) =
-                    ActivityScrollAnchor::capture(&self.source, previous, position.offset)
-                        .and_then(|anchor| anchor.locate(&source, region))
-                {
-                    position.offset = offset;
-                }
+        // 1. 【终端】【阅读恢复】同宽刷新也可能收缩前置节点，始终恢复暂停阅读的内容锚点
+        for region in &source.activities {
+            let Some(position) = self
+                .positions
+                .get_mut(&region.key)
+                .filter(|position| !position.follow)
+            else {
+                continue;
+            };
+            let Some(previous) = self
+                .source
+                .activities
+                .iter()
+                .find(|previous| previous.key == region.key)
+            else {
+                continue;
+            };
+            if let Some(offset) =
+                ActivityScrollAnchor::capture(&self.source, previous, position.offset)
+                    .and_then(|anchor| anchor.locate(&source, region))
+            {
+                position.offset = offset;
             }
         }
         self.body_rows = body_height_budget(height, terminal_height);
@@ -258,7 +256,7 @@ impl ActivityViewports {
                     height,
                 );
                 position.offset = window.offset;
-                position.follow = window.offset == window.max;
+                // 【终端】【跟随保护】刷新裁切只能夹紧位置，恢复跟随必须由用户操作触发
                 if let Some(control) = window.pinned_control {
                     projection.copy(control..control + 1);
                 }

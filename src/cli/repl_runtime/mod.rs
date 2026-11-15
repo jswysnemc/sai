@@ -40,6 +40,7 @@ mod reflow_state;
 mod refresh;
 mod resize_preview;
 mod runner_events;
+mod session_workspace;
 mod shell_hint_panel;
 mod slash_panel;
 mod ssh_card;
@@ -162,6 +163,8 @@ pub(super) struct ReplRuntime {
     /// Ctrl+O 全屏会话视图；存在时所有绘制改走整屏布局
     fullscreen: Option<fullscreen::FullscreenSession>,
     sidebar_control: fullscreen::sidebar_control::SidebarControl,
+    session_browser: fullscreen::sidebar_sessions::SidebarSessions,
+    session_workspace: session_workspace::SessionWorkspace,
     /// 提问覆盖层临时占用的底部槽高度；存在时全屏正文让出该行数
     question_overlay_height: Option<u16>,
     /// 二次按键确认提示及其截止时间
@@ -254,6 +257,8 @@ impl ReplRuntime {
             submission_queue: Arc::new(Mutex::new(VecDeque::new())),
             submission_queue_paused: Arc::new(AtomicBool::new(false)),
             control_queue: VecDeque::new(),
+            session_browser: Default::default(),
+            session_workspace: Default::default(),
             live_mode_handle: None,
             live_session_id: None,
             permission_prompts: VecDeque::new(),
@@ -401,6 +406,10 @@ impl ReplRuntime {
             completion_wait,
             exit_hint_wait,
             self.sidebar_wait(),
+            self.session_workspace
+                .sender
+                .as_ref()
+                .map(|_| Duration::from_millis(25)),
         ]
         .into_iter()
         .flatten()
@@ -538,6 +547,9 @@ impl ReplRuntime {
     /// 稳定前缀不触碰；变化行按行修补；新增行走真实滚动进入原生
     /// scrollback；行数收缩时清理尾部。resize 未收敛期间冻结增量。
     fn sync_transcript(&mut self, streaming: bool) -> Result<()> {
+        if self.session_workspace.rendering_suspended {
+            return Ok(());
+        }
         // 全屏视图自管整屏布局，不走主屏增量协调
         if self.fullscreen.is_some() {
             return self.paint_fullscreen();

@@ -25,6 +25,7 @@ pub(super) struct SidebarRow {
 }
 
 pub(super) struct SidebarView<'a> {
+    pub(super) sessions: Option<&'a super::sidebar_sessions::SidebarSessions>,
     pub(super) viewing: Option<&'a str>,
     pub(super) compact: bool,
     pub(super) sections: &'a SidebarSections,
@@ -44,6 +45,18 @@ pub(super) fn document(
     let mut rows = Vec::new();
     let mut panels = Vec::new();
     // 1. 【终端侧栏】【独立区域】记录各分组来源，不把整块侧栏作为一个滚动文档
+    if let Some(sessions) = view.sessions {
+        rows.extend(super::sidebar_sessions_view::rows(
+            sessions,
+            view.sections.sessions_collapsed,
+            view.width,
+        ));
+        panels.push(SidebarPanel {
+            section: super::sidebar_action::SidebarSection::Sessions,
+            header: 0,
+            content: 1..rows.len(),
+        });
+    }
     for (section, panel) in [
         (
             super::sidebar_action::SidebarSection::Agents,
@@ -52,6 +65,7 @@ pub(super) fn document(
                 view.viewing,
                 view.sections.agents_collapsed,
                 view.width,
+                view.frame,
             ),
         ),
         (

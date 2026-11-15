@@ -5,6 +5,9 @@ use crate::render::transcript::{ActivityRegion, ParagraphPart, ParagraphSpan, Us
 #[path = "activity_position_tests.rs"]
 mod position_tests;
 
+#[path = "activity_refresh_tests.rs"]
+mod refresh_tests;
+
 const GROUP: ParagraphKey = ParagraphKey {
     cell: 1,
     part: ParagraphPart::ActivityGroup,
