@@ -22,6 +22,9 @@ on:
 permissions:
   contents: write
 
+env:
+  RUSTFLAGS: "-D warnings"
+
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false

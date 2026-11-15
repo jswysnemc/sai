@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  RUSTFLAGS: "-D warnings"
+
 concurrency:
   group: windows-${{ github.ref }}
   cancel-in-progress: true
@@ -50,6 +53,9 @@ jobs:
 
       - name: Run Rust tests
         run: cargo test --locked
+
+      - name: Check native desktop launcher
+        run: cargo check --locked --all-targets --manifest-path desktop/native/browser-launcher/Cargo.toml
 
       - name: Run native terminal graphics regressions
         run: cargo test --locked --manifest-path scripts/windows_graphics_regression/Cargo.toml -- --nocapture

@@ -1,4 +1,7 @@
-use anyhow::{Context, Result};
+#[cfg(any(unix, test))]
+use anyhow::Context;
+use anyhow::Result;
+#[cfg(any(unix, test))]
 use std::net::{IpAddr, SocketAddr};
 
 /// 【网络授权】【目标校验】只接受精确主机名或显式子域通配符，禁止 URL、凭据和端口混入规则。
@@ -25,6 +28,7 @@ pub(super) fn rules(domains: &[String]) -> Result<Vec<String>> {
 }
 
 /// 【网络授权】【域名匹配】只匹配完整域名边界；参数为主机名和规则，返回是否授权。
+#[cfg(any(unix, test))]
 pub(super) fn allowed(host: &str, rules: &[String]) -> bool {
     let host = host.to_ascii_lowercase();
     rules.iter().any(|rule| {
@@ -38,6 +42,7 @@ pub(super) fn allowed(host: &str, rules: &[String]) -> bool {
 
 /// 【网络授权】【公网地址】拒绝回环、私网、链路本地、多播和保留地址，避免 DNS 重绑定访问主机服务。
 /// 参数：解析地址；返回是否可作为公网出口。
+#[cfg(any(unix, test))]
 pub(super) fn public(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(ip) => {
@@ -66,6 +71,7 @@ pub(super) fn public(ip: IpAddr) -> bool {
 
 /// 【网络授权】【固定解析】校验域名和标准端口后解析一次，只返回已验证地址供实际连接。
 /// 参数：主机、端口和规则；返回固定公网地址列表，拒绝不重新交给系统解析。
+#[cfg(any(unix, test))]
 pub(super) async fn resolve(host: &str, port: u16, domains: &[String]) -> Result<Vec<SocketAddr>> {
     anyhow::ensure!(matches!(port, 80 | 443), "network port is not allowed");
     anyhow::ensure!(

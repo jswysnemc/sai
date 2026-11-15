@@ -56,10 +56,18 @@ pub(super) fn managed_file(file: &Path) -> Result<()> {
                 "managed hooks require administrator-owned, non-writable files and directories"
             );
         }
+        Ok(())
     }
     #[cfg(windows)]
-    anyhow::bail!(
-        "managed hooks require a verified administrator policy; this platform is not configured"
-    );
-    Ok(())
+    {
+        let _ = file;
+        anyhow::bail!(
+            "managed hooks require a verified administrator policy; this platform is not configured"
+        )
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = file;
+        Ok(())
+    }
 }

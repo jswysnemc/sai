@@ -2,6 +2,7 @@ use anyhow::Result;
 
 /// 【命令】【执行收尾】前台执行的进程树和输出读取任务共用生命周期
 pub(super) struct CommandTreeGuard {
+    #[cfg(unix)]
     pid: u32,
     readers: Vec<tokio::task::AbortHandle>,
     #[cfg(windows)]
@@ -14,6 +15,7 @@ impl CommandTreeGuard {
     /// 参数：`pid` 为刚创建的进程；返回生命周期守卫
     pub(super) fn new(pid: u32) -> Result<Self> {
         Ok(Self {
+            #[cfg(unix)]
             pid,
             readers: Vec::new(),
             killed: false,

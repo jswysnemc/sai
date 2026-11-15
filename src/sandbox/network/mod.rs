@@ -1,6 +1,7 @@
 #[cfg(target_os = "linux")]
 mod linux_socket_filter;
 mod policy;
+#[cfg(any(unix, test))]
 mod proxy;
 #[cfg(unix)]
 mod unix;
@@ -59,6 +60,7 @@ pub(crate) async fn serve(kind: &str, payload: &str) -> Result<i32> {
 }
 
 /// 【网络授权】【代理环境】覆盖所有常见代理与绕过变量；参数为命令和本次端口，返回无。
+#[cfg(unix)]
 fn proxy_env(command: &mut Command, port: u16) {
     let address = format!("http://127.0.0.1:{port}");
     for name in [

@@ -1,6 +1,6 @@
 [package]
 name = "sai"
-version = "0.2.19"
+version = "0.2.20"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/jswysnemc/sai"
@@ -99,3 +99,10 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Securit
 
 [build-dependencies]
 base64 = "0.22"
+
+# 【构建】【调试展开表】仅对主程序启用轻量优化，控制 macOS 展开表体积并保留默认 panic 展开机制
+[profile.dev.package.sai]
+opt-level = 1
+
+[profile.test.package.sai]
+opt-level = 1
