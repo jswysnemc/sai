@@ -12,7 +12,7 @@ pub(crate) mod background_timeout;
 mod background_wait;
 #[cfg(test)]
 mod background_wait_tests;
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod cancellation_tests;
 mod exit_status;
 mod goal_completions;
