@@ -1,87 +1,194 @@
-//! 列表模式正文：按面板高度在任务视口与尾部输出之间分配行数，确认时保留任务列表。
+//! 后台任务列表模式正文排版：在宽屏下采用左右双栏、在窄屏下采用上下堆叠，确认时固定任务列表。
 
 use super::{
+    inspector_view::{confirm_rows, detail_rows},
     model::TaskManager,
     pager_view::tail_rows,
-    view::stream_name,
-    view_list::{confirm_rows, detail_rows, filters, heading, task_row, DETAIL_ROWS},
+    split_layout::SplitLayout,
+    theme::{fit, section_header, stream_name},
+    view_list::{filter_ribbon, task_row, RibbonItem},
 };
 use crate::i18n::text as t;
+use crate::render::ansi_clip::ansi_visible_width;
 use crate::render::panel_palette::{fg, PanelPalette};
 
-/// 筛选行、分隔线、详情标题与详情字段占用的固定行数
-const FIXED_ROWS: usize = 3 + DETAIL_ROWS;
-/// 输出区至少需要标题加一行日志，不足时整块省略
-const MIN_OUTPUT_ROWS: usize = 2;
-
-/// 列表模式的行数分配，任务视口在前、尾部输出在后
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct ListLayout {
-    pub tasks: usize,
-    pub output: usize,
+/// 【后台任务】【列表正文渲染结果】返回正文视觉行、任务视口容量以及筛选栏按钮热区。
+pub(super) struct ListBodyRender {
+    pub lines: Vec<String>,
+    pub task_viewport_rows: usize,
+    pub ribbon_hits: Vec<RibbonItem>,
 }
 
-impl ListLayout {
-    /// 【后台任务】【高度分配】任务视口按任务总数取高，至多占可变行的三分之二，其余留给尾部输出。
-    /// 参数: rows 为正文行数，total 为任务总数（与筛选无关，切换范围时布局不跳动）；返回: 行数分配。
-    pub fn compute(rows: usize, total: usize) -> Self {
-        let flexible = rows.saturating_sub(FIXED_ROWS);
-        let cap = (flexible * 2 / 3).max(flexible.min(3)).max(1);
-        let tasks = total.clamp(1, cap);
-        let output = flexible.saturating_sub(tasks);
-        if output < MIN_OUTPUT_ROWS {
-            Self {
-                tasks: flexible.max(1),
-                output: 0,
-            }
-        } else {
-            Self { tasks, output }
-        }
-    }
-}
-
-/// 【后台任务】【列表正文】筛选、任务视口、详情和尾部输出依次排列，补齐到正文高度。
-/// 参数: manager 为状态，inner 为内容宽度，rows 为正文行数，top 为正文首行的终端行号，targets 收集点击区域，palette 为主题；返回: 正文行与任务视口行数。
-pub(super) fn rows(
+/// 【后台任务】【列表正文】组装筛选栏、任务队列、选中详情与尾部输出，宽屏双栏对齐、窄屏紧凑堆叠。
+///
+/// 参数:
+/// - `manager`: 任务管理状态
+/// - `inner`: 面板正文净宽
+/// - `rows`: 面板正文总行数
+/// - `top`: 正文首行对应的终端行号
+/// - `targets`: 收集每个任务行对应的终端行号与任务标识
+/// - `palette`: 当前面板色板
+///
+/// 返回:
+/// - 列表正文渲染结果
+pub(super) fn render(
     manager: &TaskManager,
     inner: usize,
     rows: usize,
     top: u16,
     targets: &mut Vec<(u16, String)>,
     palette: &PanelPalette,
-) -> (Vec<String>, usize) {
-    let layout = ListLayout::compute(rows, manager.tasks.len());
+) -> ListBodyRender {
     let running = manager
         .tasks
         .iter()
         .filter(|task| task.status == "running")
         .count();
-    let mut body = vec![
-        filters(manager, running, palette),
-        format!("{}{}\x1b[0m", fg(palette.border), "─".repeat(inner)),
-    ];
-    // 1. 【后台任务】【任务视口】选中行始终可见，视口高度固定，点击区域按终端行号记录
+    let (ribbon, ribbon_hits) = filter_ribbon(manager, running, inner, palette);
+    let divider = format!("{}{}\x1b[0m", fg(palette.border), "─".repeat(inner));
+    let layout = SplitLayout::compute(inner, rows, manager.tasks.len(), manager.confirm.is_some());
+
+    match layout {
+        SplitLayout::Split {
+            left_w,
+            right_w,
+            task_rows,
+            detail_rows: detail_cap,
+            tail_rows: tail_cap,
+        } => {
+            // 1. 【后台任务】【左栏队列】左侧列展示带状态条和悬停态的独立任务列表
+            let left = build_task_lines(
+                manager,
+                left_w,
+                task_rows,
+                top.saturating_add(2),
+                targets,
+                palette,
+            );
+            // 2. 【后台任务】【右栏检视】确认期间切为目标确认卡，常规状态显示元数据与尾部日志
+            let mut right = if let Some(request) = &manager.confirm {
+                targets.clear();
+                confirm_rows(request, manager, right_w, task_rows, palette)
+            } else {
+                let mut panel = detail_rows(manager, right_w, detail_cap, palette);
+                if tail_cap > 0 && manager.selected().is_some() {
+                    let logs = manager.log_lines();
+                    panel.push(section_header(
+                        &output_label(manager, logs.len(), palette),
+                        "",
+                        right_w,
+                        palette,
+                    ));
+                    panel.extend(tail_rows(manager, &logs, right_w, tail_cap, palette));
+                }
+                panel
+            };
+            right.resize(task_rows, String::new());
+            let mut body = vec![ribbon, divider];
+            let sep = format!(" {}│\x1b[0m ", fg(palette.border));
+            for index in 0..task_rows {
+                let l = fit(left.get(index).map(String::as_str).unwrap_or(""), left_w);
+                let l_pad = " ".repeat(left_w.saturating_sub(ansi_visible_width(&l)));
+                let r = fit(right.get(index).map(String::as_str).unwrap_or(""), right_w);
+                body.push(format!("{l}{l_pad}{sep}{r}"));
+            }
+            body.resize(rows, String::new());
+            ListBodyRender {
+                lines: body,
+                task_viewport_rows: task_rows,
+                ribbon_hits,
+            }
+        }
+        SplitLayout::Stacked {
+            task_rows,
+            tail_rows: tail_cap,
+        } => {
+            // 3. 【后台任务】【窄屏堆叠】窄终端保持纵向分区，不挤占任务标题和路径空间
+            let mut body = vec![ribbon, divider];
+            let list = build_task_lines(
+                manager,
+                inner,
+                task_rows,
+                top.saturating_add(2),
+                targets,
+                palette,
+            );
+            body.extend(list);
+            if let Some(request) = &manager.confirm {
+                targets.clear();
+                body.extend(confirm_rows(request, manager, inner, 4, palette));
+            } else {
+                body.extend(detail_rows(manager, inner, 4, palette));
+                if tail_cap > 0 && manager.selected().is_some() {
+                    let logs = manager.log_lines();
+                    body.push(section_header(
+                        &output_label(manager, logs.len(), palette),
+                        "",
+                        inner,
+                        palette,
+                    ));
+                    body.extend(tail_rows(
+                        manager,
+                        &logs,
+                        inner,
+                        tail_cap.saturating_sub(1),
+                        palette,
+                    ));
+                }
+            }
+            body.resize(rows, String::new());
+            ListBodyRender {
+                lines: body,
+                task_viewport_rows: task_rows,
+                ribbon_hits,
+            }
+        }
+    }
+}
+
+/// 【后台任务】【队列构建】按固定窗口高度裁剪可见任务并登记鼠标点击行号。
+///
+/// 参数:
+/// - `manager`: 任务管理状态
+/// - `width`: 队列列宽
+/// - `capacity`: 任务区可见行数
+/// - `start_row`: 队列首行在终端中的行号
+/// - `targets`: 输出命中表
+/// - `palette`: 当前面板色板
+///
+/// 返回:
+/// - 填充至 `capacity` 行的任务队列视觉行
+fn build_task_lines(
+    manager: &TaskManager,
+    width: usize,
+    capacity: usize,
+    start_row: u16,
+    targets: &mut Vec<(u16, String)>,
+    palette: &PanelPalette,
+) -> Vec<String> {
+    let capacity = capacity.max(1);
     let visible = manager.visible();
     let selected = visible
         .iter()
         .position(|index| Some(&manager.tasks[*index].id) == manager.selected_id.as_ref())
         .unwrap_or(0);
     let start = selected
-        .saturating_sub(layout.tasks - 1)
-        .min(visible.len().saturating_sub(layout.tasks));
-    for index in visible.iter().skip(start).take(layout.tasks) {
+        .saturating_sub(capacity - 1)
+        .min(visible.len().saturating_sub(capacity));
+    let mut lines = Vec::with_capacity(capacity);
+    for (offset, index) in visible.iter().skip(start).take(capacity).enumerate() {
         let task = &manager.tasks[*index];
-        targets.push((top + body.len() as u16, task.id.clone()));
-        body.push(task_row(
+        targets.push((start_row.saturating_add(offset as u16), task.id.clone()));
+        lines.push(task_row(
             task,
             Some(&task.id) == manager.selected_id.as_ref(),
             manager.confirm.is_none() && Some(&task.id) == manager.hovered.as_ref(),
-            inner,
+            width,
             palette,
         ));
     }
     if visible.is_empty() {
-        body.push(format!(
+        lines.push(format!(
             " {}{}\x1b[0m",
             fg(palette.muted),
             if manager.loading {
@@ -91,31 +198,19 @@ pub(super) fn rows(
             }
         ));
     }
-    body.resize(layout.tasks + 2, String::new());
-    // 2. 【后台任务】【下半区】确认时换成目标信息且列表不响应点击，否则显示详情与尾部输出
-    if let Some(request) = &manager.confirm {
-        targets.clear();
-        body.extend(confirm_rows(request, manager, inner, palette));
-    } else {
-        let label = format!("\x1b[1m{}{}", fg(palette.muted), t("Details", "选中详情"));
-        body.push(heading(&label, inner, palette));
-        body.extend(detail_rows(manager, palette));
-        if layout.output > 0 && manager.selected().is_some() {
-            let logs = manager.log_lines();
-            body.push(heading(
-                &output_label(manager, logs.len(), palette),
-                inner,
-                palette,
-            ));
-            body.extend(tail_rows(manager, &logs, inner, layout.output - 1, palette));
-        }
-    }
-    body.resize(rows, String::new());
-    (body, layout.tasks)
+    lines.resize(capacity, String::new());
+    lines
 }
 
-/// 【后台任务】【输出标题】标题加粗减淡，附当前通道和已读取的行数。
-/// 参数: manager 为状态，lines 为当前通道行数，palette 为主题；返回: 已着色标题。
+/// 【后台任务】【输出标题】展示当前通道名与缓冲区行数。
+///
+/// 参数:
+/// - `manager`: 任务管理状态
+/// - `lines`: 已读取日志总行数
+/// - `palette`: 当前面板色板
+///
+/// 返回:
+/// - 着色后的小节标题文字
 fn output_label(manager: &TaskManager, lines: usize, palette: &PanelPalette) -> String {
     let loaded = manager.output_id == manager.selected_id && manager.output_error.is_none();
     let count = if loaded {

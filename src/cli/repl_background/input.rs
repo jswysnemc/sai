@@ -15,7 +15,14 @@ pub(super) enum Effect {
 }
 
 /// 【后台任务】【按键处理】按视图状态分发操作，危险操作固定目标后再确认。
-/// 参数: manager 为状态，key 为按键，rows 为日志可见行数；返回: 外部操作。
+///
+/// 参数:
+/// - `manager`: 任务管理状态
+/// - `key`: 键盘输入事件
+/// - `rows`: 日志或任务可见行数
+///
+/// 返回:
+/// - 外部异步或退出动作
 pub(super) fn handle(manager: &mut TaskManager, key: KeyEvent, rows: usize) -> Effect {
     if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c' | 'd'))
     {
@@ -58,7 +65,7 @@ pub(super) fn handle(manager: &mut TaskManager, key: KeyEvent, rows: usize) -> E
                 manager.offset = manager.pager_offset(rows);
                 manager.follow = !manager.follow;
             }
-            KeyCode::Tab | KeyCode::BackTab => manager.cycle_stream(),
+            KeyCode::Tab | KeyCode::BackTab | KeyCode::Char('v') => manager.cycle_stream(),
             KeyCode::Char('r') => return Effect::Request(Request::Refresh),
             _ => {}
         }
@@ -84,6 +91,7 @@ pub(super) fn handle(manager: &mut TaskManager, key: KeyEvent, rows: usize) -> E
         KeyCode::Char('1') => manager.set_filter(Filter::All),
         KeyCode::Char('2') => manager.set_filter(Filter::Running),
         KeyCode::Char('3') => manager.set_filter(Filter::Finished),
+        KeyCode::Char('v') => manager.cycle_stream(),
         KeyCode::Char('r') => {
             manager.notice = None;
             return Effect::Request(Request::Refresh);
@@ -106,8 +114,15 @@ pub(super) fn handle(manager: &mut TaskManager, key: KeyEvent, rows: usize) -> E
     Effect::None
 }
 
-/// 【后台任务】【鼠标操作】指针移动更新悬停行，列表点击选择，日志滚轮从当前视口移动，确认期间不切换目标。
-/// 参数: manager 为状态，mouse 为输入，frame 为可见行几何；返回: 外部操作。
+/// 【后台任务】【鼠标操作】支持筛选栏、通道胶囊、任务行、确认按钮点击及区域内滚轮。
+///
+/// 参数:
+/// - `manager`: 任务管理状态
+/// - `mouse`: 鼠标输入事件
+/// - `frame`: 已渲染帧几何
+///
+/// 返回:
+/// - 外部异步或退出动作
 pub(super) fn mouse(manager: &mut TaskManager, mouse: MouseEvent, frame: &TaskFrame) -> Effect {
     let inside = frame.rect.contains(mouse.column, mouse.row);
     if inside && mouse.kind == MouseEventKind::Down(MouseButton::Left) {
@@ -146,8 +161,15 @@ pub(super) fn mouse(manager: &mut TaskManager, mouse: MouseEvent, frame: &TaskFr
         }
         MouseEventKind::Down(MouseButton::Left) if !manager.pager => {
             if let Some((_, id)) = frame.targets.iter().find(|(row, _)| *row == mouse.row) {
-                manager.selected_id = Some(id.clone());
-                manager.follow = true;
+                if manager.selected_id.as_deref() == Some(id.as_str()) {
+                    // 2. 【后台任务】【快捷打开】再次单击已选中条目时直接进入全屏日志视图
+                    manager.pager = true;
+                    manager.follow = true;
+                } else {
+                    manager.selected_id = Some(id.clone());
+                    manager.offset = 0;
+                    manager.follow = true;
+                }
             }
         }
         _ => {}

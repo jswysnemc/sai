@@ -4,6 +4,7 @@ mod controls;
 #[cfg(test)]
 mod controls_tests;
 mod input;
+mod inspector_view;
 mod list_body;
 mod model;
 #[cfg(test)]
@@ -13,7 +14,9 @@ mod panel;
 mod panel_rect;
 mod screen;
 mod service;
+mod split_layout;
 mod task_style;
+mod theme;
 mod view;
 mod view_hints;
 mod view_list;

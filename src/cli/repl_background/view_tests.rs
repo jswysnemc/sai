@@ -1,10 +1,10 @@
 use super::{
     input,
-    list_body::ListLayout,
     model::{Filter, Output, TaskManager},
     model_tests::task,
     panel_rect::PanelRect,
     service::{Request, Update},
+    split_layout::SplitLayout,
     view,
 };
 use crate::i18n::{with_locale, Locale};
@@ -219,20 +219,48 @@ fn pointer_motion_tracks_hovered_task_row() {
     assert_eq!(manager.hovered, None);
 }
 
-/// 【后台任务测试】【高度分配】任务少时视口贴合任务数，任务多时至多占可变行三分之二，矮面板省略输出区。
+/// 【后台任务测试】【响应式布局】宽面板自动使用左右双栏，窄或矮面板切换为上下堆叠且保证视口边界。
 /// 参数: 无；返回: 无。
 #[test]
-fn list_layout_gives_spare_rows_to_output_tail() {
-    let layout = |rows, total| {
-        let layout = ListLayout::compute(rows, total);
-        (layout.tasks, layout.output)
-    };
-    assert_eq!(layout(29, 5), (5, 18));
-    assert_eq!(layout(29, 50), (15, 8));
-    assert_eq!(layout(29, 0), (1, 22));
-    assert_eq!(layout(13, 5), (4, 3));
-    assert_eq!(layout(10, 5), (4, 0));
-    assert_eq!(layout(3, 5), (1, 0));
+fn list_layout_adapts_split_on_wide_and_stacked_on_narrow() {
+    assert!(matches!(
+        SplitLayout::compute(96, 24, 5, false),
+        SplitLayout::Split {
+            left_w: 40,
+            right_w: 53,
+            task_rows: 22,
+            detail_rows: 4,
+            tail_rows: 17,
+        }
+    ));
+    assert_eq!(
+        SplitLayout::compute(70, 29, 5, false),
+        SplitLayout::Stacked {
+            task_rows: 5,
+            tail_rows: 18,
+        }
+    );
+    assert_eq!(
+        SplitLayout::compute(70, 29, 50, false),
+        SplitLayout::Stacked {
+            task_rows: 15,
+            tail_rows: 8,
+        }
+    );
+    assert_eq!(
+        SplitLayout::compute(70, 10, 5, false),
+        SplitLayout::Stacked {
+            task_rows: 4,
+            tail_rows: 0,
+        }
+    );
+    assert_eq!(
+        SplitLayout::compute(70, 3, 5, false),
+        SplitLayout::Stacked {
+            task_rows: 1,
+            tail_rows: 0,
+        }
+    );
 }
 
 /// 【后台任务测试】【尾部输出】列表模式显示选中任务最后几行日志及行号，高度随面板增长。
