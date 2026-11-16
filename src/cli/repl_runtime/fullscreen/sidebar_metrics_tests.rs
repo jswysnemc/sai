@@ -63,3 +63,22 @@ fn segmented_bar_handles_empty_full_and_overflow() {
         }
     }
 }
+
+/// 【终端指标】【阈值与扩展】验证 72%/90% 警告色阶区分，以及宽侧栏下进度条自动填满中段空隙
+#[test]
+fn wide_sidebar_expands_gauge_and_uses_warning_thresholds() {
+    let mut chrome = super::runtime_tests::chrome();
+    chrome.context_window_tokens = 400_000;
+    chrome.context_ratio = 0.78;
+    let metrics = SidebarMetrics::new(Some(&chrome), &Default::default());
+    let rows = metrics.rows(40, 34);
+    let plain = crate::render::ansi_clip::strip_ansi(&rows[0]);
+    let gauge_cells = plain.chars().filter(|ch| matches!(ch, '▰' | '▱')).count();
+    assert!(gauge_cells > 10, "expected expanded bar: {plain}");
+
+    let palette = crate::render::panel_palette::PanelPalette::current();
+    let warn_bar = super::sidebar_metrics_view::bar(Some((78, 100)), 20);
+    assert!(warn_bar.contains(&crate::render::panel_palette::fg(palette.warning)));
+    let danger_bar = super::sidebar_metrics_view::bar(Some((92, 100)), 20);
+    assert!(danger_bar.contains(&crate::render::panel_palette::fg(palette.removed)));
+}

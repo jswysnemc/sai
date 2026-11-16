@@ -4,10 +4,10 @@ use super::sidebar::row;
 use super::sidebar_action::{SidebarAction, SidebarSection};
 use super::sidebar_palette::{fg, SidebarPalette};
 use super::sidebar_view::SidebarRow;
-use super::sidebar_widgets::{heading, item, safe_text};
+use super::sidebar_widgets::{heading_with_tone, item, safe_text};
 use crate::render::transcript::TodoSnapshotItem;
 
-/// 【终端侧栏】【待办面板】以完成计数和状态条目呈现任务，紧凑模式只保留当前项。
+/// 【终端侧栏】【待办面板】标题内嵌微缩进度条，无任务时单行静默展示，有任务时按 2 列缩进呈现。
 /// 参数: todos 为任务，compact 为紧凑模式，width 为宽度，frame 为动画帧；返回: 面板行。
 pub(super) fn rows(
     todos: &[TodoSnapshotItem],
@@ -20,12 +20,27 @@ pub(super) fn rows(
         .iter()
         .filter(|todo| todo.status == "completed")
         .count();
+    let quiet = todos.is_empty();
+    let summary = if quiet {
+        "0/0".to_string()
+    } else {
+        let slots = todos.len().min(5);
+        let filled = done.saturating_mul(slots) / todos.len().max(1);
+        format!(
+            "{}{}{}{}\x1b[39m {done}/{}",
+            fg(palette.added),
+            "▪".repeat(filled),
+            fg(palette.subtle),
+            "▫".repeat(slots.saturating_sub(filled)),
+            todos.len()
+        )
+    };
     let mut rows = vec![row(
-        heading("Todo", &format!("{done}/{}", todos.len()), compact, width),
+        heading_with_tone("Todo", &summary, compact || quiet, quiet, width),
         Some(SidebarAction::Toggle(SidebarSection::Todo)),
     )];
-    if todos.is_empty() {
-        rows.push(row(item("No active tasks", width, true), None));
+    // 1. 【终端侧栏】【空态收敛】无待办任务时不再追加冗余提示行，把高度让渡给活跃区块
+    if quiet {
         return rows;
     }
     let statuses = todos
@@ -38,7 +53,7 @@ pub(super) fn rows(
     {
         let todo = &todos[index];
         let status = todo.status.as_str();
-        // 1. 【终端侧栏】【状态字形】与工具卡共用状态符，字形与正文分别着色
+        // 2. 【终端侧栏】【状态字形】与工具卡共用状态符，统一缩进两列保持层级对齐
         let (marker, text) = match status {
             "completed" => (palette.added, String::new()),
             "cancelled" => (palette.muted, "\x1b[9m".into()),
@@ -46,11 +61,10 @@ pub(super) fn rows(
             _ => (palette.muted, String::new()),
         };
         let glyph = crate::render::todo_style::status_glyph(status);
-        // 2. 【终端侧栏】【层级弱化】已完成与已取消正文减淡，进行中使用强调色，待办保持正文色
         rows.push(row(
             item(
                 &format!(
-                    "{}{glyph}\x1b[39m {text}{}",
+                    "  {}{glyph}\x1b[39m {text}{}",
                     fg(marker),
                     safe_text(&todo.text)
                 ),

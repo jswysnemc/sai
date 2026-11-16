@@ -5,23 +5,29 @@ use super::sidebar_action::{SidebarAction, SidebarSection};
 use super::sidebar_git::GitSummary;
 use super::sidebar_palette::{fg, SidebarPalette};
 use super::sidebar_view::SidebarRow;
-use super::sidebar_widgets::{changes, columns, heading, item, safe_text};
+use super::sidebar_widgets::{changes, columns, heading_with_tone, item, safe_text};
 
-/// 【终端侧栏】【Changes 分组】标题显示累计增删，文件只占一行且统计右对齐。
+/// 【终端侧栏】【Changes 分组】非仓库与净空状态单行降噪，避免假性零值增删与冗余提示行。
 /// 参数: git 为快照，collapsed 为折叠状态，width 为宽度；返回: 分组内容。
 pub(super) fn rows(git: &GitSummary, collapsed: bool, width: usize) -> Vec<SidebarRow> {
-    let count = format!("{} {}", git.files.len(), totals(git));
+    let palette = SidebarPalette::current();
+    let quiet =
+        matches!(git.state.as_str(), "not_repo") || (git.state == "ready" && git.files.is_empty());
+    let count = match git.state.as_str() {
+        "not_repo" => format!("{}no repo\x1b[39m", fg(palette.subtle)),
+        "ready" if git.files.is_empty() => format!("{}clean\x1b[39m", fg(palette.subtle)),
+        "ready" => format!("{} {}", git.files.len(), totals(git)),
+        "error" => format!("{}error\x1b[39m", fg(palette.removed)),
+        _ => format!("{}…\x1b[39m", fg(palette.subtle)),
+    };
     let mut rows = vec![row(
-        heading("Changes", &count, collapsed, width),
+        heading_with_tone("Changes", &count, collapsed || quiet, quiet, width),
         Some(SidebarAction::Toggle(SidebarSection::Git)),
     )];
-    if collapsed {
+    if collapsed || quiet {
         return rows;
     }
     match git.state.as_str() {
-        "ready" if git.files.is_empty() => {
-            rows.push(row(item("Working tree clean", width, true), None))
-        }
         "ready" => {
             for (index, (status, path)) in git.files.iter().enumerate() {
                 rows.push(row(
@@ -30,14 +36,13 @@ pub(super) fn rows(git: &GitSummary, collapsed: bool, width: usize) -> Vec<Sideb
                 ));
             }
         }
-        "not_repo" => rows.push(row(item("Not a Git repository", width, true), None)),
-        "error" => rows.push(row(item("Git status unavailable", width, true), None)),
-        _ => rows.push(row(item("Checking working tree...", width, true), None)),
+        "error" => rows.push(row(item("  Git status unavailable", width, true), None)),
+        _ => rows.push(row(item("  Checking working tree...", width, true), None)),
     }
     rows
 }
 
-/// 【终端审查】【文件行】文件名称与增删统计分离排版，不显示多行目录详情。
+/// 【终端审查】【文件行】两列缩进排版，状态字母单独着色并与右侧增删统计分离。
 /// 参数: git 为快照，status 为文件状态，path 为路径，width 为宽度；返回: 文件行。
 pub(super) fn file(git: &GitSummary, status: &str, path: &str, width: usize) -> String {
     let palette = SidebarPalette::current();
@@ -45,7 +50,7 @@ pub(super) fn file(git: &GitSummary, status: &str, path: &str, width: usize) -> 
     let name = trimmed.rsplit('/').next().unwrap_or(trimmed);
     // 1. 【终端审查】【目录标识】未跟踪目录保留结尾斜杠，与同名文件区分
     let suffix = if trimmed.len() < path.len() { "/" } else { "" };
-    // 2. 【终端审查】【状态着色】只有新增、删除、重命名和冲突使用状态色，常规修改保持弱化
+    // 2. 【终端审查】【状态着色】新增、删除、重命名和冲突使用状态色，常规修改保持弱化
     let (marker, color) = if status == "UU" {
         ("!", palette.removed)
     } else if status.contains('D') {
@@ -57,8 +62,12 @@ pub(super) fn file(git: &GitSummary, status: &str, path: &str, width: usize) -> 
     } else {
         ("M", palette.muted)
     };
-    // 3. 【终端审查】【颜色复位】状态字母单独着色，文件名回到条目正文色
-    let label = format!("{}{marker}\x1b[39m {}{suffix}", fg(color), safe_text(name));
+    // 3. 【终端审查】【颜色复位】两列缩进后状态字母单独着色，文件名回到条目正文色
+    let label = format!(
+        "  {}{marker}\x1b[39m {}{suffix}",
+        fg(color),
+        safe_text(name)
+    );
     item(
         &columns(&label, &changes(git.changes.get(path)), width),
         width,

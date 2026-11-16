@@ -7,11 +7,13 @@ pub(crate) type Rgb = (u8, u8, u8);
 #[derive(Clone, Copy)]
 pub(crate) struct PanelPalette {
     pub(crate) border: Rgb,
+    pub(crate) subtle: Rgb,
     pub(crate) text: Rgb,
     pub(crate) muted: Rgb,
     pub(crate) accent: Rgb,
     pub(crate) added: Rgb,
     pub(crate) removed: Rgb,
+    pub(crate) warning: Rgb,
     pub(crate) added_bg: Rgb,
     pub(crate) removed_bg: Rgb,
     pub(crate) hover_bg: Rgb,
@@ -33,11 +35,13 @@ impl PanelPalette {
         let mut palette = if light {
             Self {
                 border: (210, 210, 210),
+                subtle: (146, 152, 160),
                 text: (38, 40, 42),
                 muted: (100, 104, 108),
                 accent: (23, 109, 123),
                 added: (45, 122, 74),
                 removed: (169, 62, 73),
+                warning: (176, 112, 28),
                 added_bg: (226, 243, 231),
                 removed_bg: (253, 229, 230),
                 hover_bg: background,
@@ -46,11 +50,13 @@ impl PanelPalette {
         } else {
             Self {
                 border: (55, 55, 55),
+                subtle: (102, 116, 130),
                 text: (222, 224, 226),
                 muted: (137, 141, 145),
                 accent: (103, 193, 207),
                 added: (118, 185, 133),
                 removed: (216, 125, 125),
+                warning: (229, 178, 102),
                 added_bg: (20, 46, 30),
                 removed_bg: (63, 25, 30),
                 hover_bg: background,
@@ -59,6 +65,7 @@ impl PanelPalette {
         };
         // 1. 【终端面板】【主题融合】分隔线、悬停与键盘焦点底色从终端实际背景派生，保留原主题色温
         palette.border = blend(background, palette.text, 18);
+        palette.subtle = blend(background, palette.text, 34);
         palette.hover_bg = blend(background, palette.text, 8);
         // 2. 【终端面板】【焦点层级】键盘焦点比鼠标悬停深一级，仍浅于分隔线
         palette.focus_bg = blend(background, palette.text, 13);
@@ -69,6 +76,7 @@ impl PanelPalette {
             &mut palette.accent,
             &mut palette.added,
             &mut palette.removed,
+            &mut palette.warning,
         ] {
             *color = crate::render::terminal_contrast::readable_color_on(
                 *color,

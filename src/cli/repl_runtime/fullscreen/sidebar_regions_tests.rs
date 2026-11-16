@@ -1,7 +1,7 @@
 //! 待办列表可用高度与独立滚动的回归测试。
 
 use super::sidebar_action::SidebarSection;
-use super::sidebar_regions::{SidebarPanel, SidebarScrolls, regions};
+use super::sidebar_regions::{regions, SidebarPanel, SidebarScrolls};
 use super::sidebar_view::SidebarDocument;
 
 /// 【侧栏测试】【高度夹具】生成只包含区域范围的布局文档。
@@ -91,4 +91,53 @@ fn background_commands_scroll_independently_with_a_bounded_preview() {
             Some(header + 4)
         );
     }
+}
+
+/// 【侧栏测试】【余量让渡】其余分组简短时，会话列表突破 6 行上限接管底部空白；手风琴聚焦可单区占满。
+/// 参数: 无；返回: 无。
+#[test]
+fn surplus_height_expands_sessions_and_accordion_focus_isolates_section() {
+    use super::sidebar_regions::regions_with_focus;
+    let panels = [
+        (SidebarSection::Agents, 0usize),
+        (SidebarSection::Todo, 0usize),
+        (SidebarSection::Git, 0usize),
+        (SidebarSection::Sessions, 24usize),
+        (SidebarSection::Background, 1usize),
+    ];
+    let mut offset = 0;
+    let built = panels
+        .into_iter()
+        .map(|(section, count)| {
+            let panel = SidebarPanel {
+                section,
+                header: offset,
+                content: offset + 1..offset + 1 + count,
+            };
+            offset += count + 1;
+            panel
+        })
+        .collect();
+    let doc = SidebarDocument {
+        panels: built,
+        ..Default::default()
+    };
+
+    let balanced = regions(&doc, 40);
+    let sessions = balanced
+        .iter()
+        .find(|region| region.section == SidebarSection::Sessions)
+        .unwrap();
+    assert_eq!(sessions.visible, 24);
+
+    let focused = regions_with_focus(&doc, 40, Some(SidebarSection::Sessions));
+    assert!(focused
+        .iter()
+        .filter(|r| r.section != SidebarSection::Sessions)
+        .all(|r| r.visible == 0));
+    let focused_sessions = focused
+        .iter()
+        .find(|r| r.section == SidebarSection::Sessions)
+        .unwrap();
+    assert_eq!(focused_sessions.visible, 24);
 }

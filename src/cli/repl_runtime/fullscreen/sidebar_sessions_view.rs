@@ -1,8 +1,8 @@
-//! 会话导航只负责列表展示，执行状态与当前浏览状态分别标记。
+//! 会话导航只负责列表展示，以左侧竖条标记当前会话并以相对时间取代重复标签。
 
 use super::sidebar::row;
 use super::sidebar_action::{SidebarAction, SidebarSection};
-use super::sidebar_palette::SidebarPalette;
+use super::sidebar_palette::{fg, SidebarPalette};
 use super::sidebar_sessions::{SessionEntry, SessionStatus, SidebarSessions};
 use super::sidebar_view::SidebarRow;
 use super::sidebar_widgets::{badge, columns, heading, item, safe_text};
@@ -18,6 +18,7 @@ pub(super) fn key(entry: &SessionEntry) -> u64 {
 
 /// 【终端侧栏】【会话列表】参数为快照、折叠状态与净宽；返回当前和近期会话，优先展示执行会话
 pub(super) fn rows(sessions: &SidebarSessions, collapsed: bool, width: usize) -> Vec<SidebarRow> {
+    let palette = SidebarPalette::current();
     let mut rows = vec![row(
         heading(
             t("Sessions", "会话"),
@@ -53,7 +54,11 @@ pub(super) fn rows(sessions: &SidebarSessions, collapsed: bool, width: usize) ->
             }
             rows.push(row(
                 item(
-                    &columns(label, &entries.len().to_string(), width),
+                    &columns(
+                        &format!("  {}{label}\x1b[39m", fg(palette.subtle)),
+                        &format!("{}{}\x1b[39m", fg(palette.subtle), entries.len()),
+                        width,
+                    ),
                     width,
                     true,
                 ),
@@ -67,7 +72,35 @@ pub(super) fn rows(sessions: &SidebarSessions, collapsed: bool, width: usize) ->
     rows
 }
 
-/// 【终端侧栏】【会话条目】参数 entry/viewed/current/width 为条目、浏览标识、执行归属与宽度；返回可点击单行
+/// 【终端侧栏】【相对时间】将 RFC3339 或 Unix 秒时间戳转换为紧凑相对时长，解析失败回退默认词。
+/// 参数: updated_at 为原始更新时间文本；返回: 紧凑时长标签。
+fn compact_relative_time(updated_at: &str) -> String {
+    let trimmed = updated_at.trim();
+    if trimmed.is_empty() {
+        return t("recent", "最近").into();
+    }
+    let timestamp = chrono::DateTime::parse_from_rfc3339(trimmed)
+        .map(|dt| dt.timestamp())
+        .or_else(|_| trimmed.parse::<i64>());
+    let Ok(ts) = timestamp else {
+        return t("recent", "最近").into();
+    };
+    let elapsed = chrono::Utc::now().timestamp().saturating_sub(ts);
+    if elapsed < 60 {
+        "now".into()
+    } else if elapsed < 3_600 {
+        format!("{}m", elapsed / 60)
+    } else if elapsed < 86_400 {
+        format!("{}h", elapsed / 3_600)
+    } else if elapsed < 604_800 {
+        format!("{}d", elapsed / 86_400)
+    } else {
+        format!("{}w", elapsed / 604_800)
+    }
+}
+
+/// 【终端侧栏】【会话条目】以左竖条与圆点替代占宽文字前缀，释放更多标题宽度。
+/// 参数 entry/viewed/current/width 为条目、浏览标识、执行归属与宽度；返回可点击单行。
 fn session_row(
     entry: &SessionEntry,
     viewed: Option<&str>,
@@ -75,22 +108,24 @@ fn session_row(
     width: usize,
 ) -> SidebarRow {
     let palette = SidebarPalette::current();
-    let (status, color) = match entry.status {
-        SessionStatus::Running => (t("running", "运行中"), palette.accent),
-        SessionStatus::Idle => (t("ready", "就绪"), palette.added),
-        SessionStatus::Recent => (t("recent", "最近"), palette.muted),
+    let (status_label, color) = match entry.status {
+        SessionStatus::Running => (t("running", "运行中").to_string(), palette.accent),
+        SessionStatus::Idle => (t("ready", "就绪").to_string(), palette.added),
+        SessionStatus::Recent => (compact_relative_time(&entry.updated_at), palette.subtle),
     };
-    let title = format!(
-        "{}{}",
-        if current {
-            t("Current · ", "当前 · ")
-        } else {
-            ""
-        },
-        safe_text(&entry.title)
-    );
+    let clean_title = safe_text(&entry.title);
+    let prefix = if current {
+        format!("{}▎ {}●\x1b[39m ", fg(palette.accent), fg(palette.added))
+    } else {
+        format!("  {}○\x1b[39m ", fg(palette.subtle))
+    };
+    let title = format!("{prefix}{clean_title}");
     let mut result = row(
-        item(&columns(&title, &badge(status, color), width), width, false),
+        item(
+            &columns(&title, &badge(&status_label, color), width),
+            width,
+            false,
+        ),
         Some(SidebarAction::Session(key(entry))),
     );
     result.selected = viewed == Some(entry.id.as_str());
@@ -140,5 +175,13 @@ mod tests {
             1
         );
         assert_eq!(super::rows(&sessions, true, 40).len(), 2);
+    }
+
+    /// 【会话分类测试】【相对时间】验证空串回退及分钟/小时/天紧凑格式，无参数和返回值
+    #[test]
+    fn compact_relative_time_formats_recent_durations() {
+        assert!(!compact_relative_time("").is_empty());
+        let two_hours_ago = (chrono::Utc::now() - chrono::Duration::hours(2)).to_rfc3339();
+        assert_eq!(compact_relative_time(&two_hours_ago), "2h");
     }
 }

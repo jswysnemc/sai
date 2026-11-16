@@ -85,28 +85,62 @@ impl SidebarMetrics {
         let output = self
             .output
             .map_or_else(|| "--".into(), super::sidebar_metrics_view::tokens);
-        // 1. 【终端指标】【紧凑读数】数值与短比例条共用一行，剩余宽度不足时只保留读数
+        // 1. 【终端指标】【紧凑读数】数值与自适应比例条共用一行，填充中段空隙并区分标签与数值对比度
         let (numbers, percent) = context.split_once(" · ").unwrap_or((&context, ""));
         let spare = width.saturating_sub(
             crate::cli::repl_text::visible_width(numbers)
                 + crate::cli::repl_text::visible_width(percent)
-                + 2,
+                + 3,
         );
-        let gauge = super::sidebar_metrics_view::bar(self.context, spare.min(10));
-        let first = super::sidebar_widgets::columns(&format!("{numbers} {gauge}"), percent, width);
-        [
-            first,
-            format!("Cache {cache} · {rate} tok/s · out {output}"),
-        ]
-        .into_iter()
-        .take(height(rows))
-        .map(|line| {
+        let gauge = super::sidebar_metrics_view::bar(self.context, spare.min(24));
+        let styled_numbers = if let Some((used, window)) = numbers.split_once(" / ") {
             format!(
-                "{}{}\x1b[0m",
+                "{}{used}{} / {}{window}\x1b[39m",
+                fg(palette.text),
                 fg(palette.muted),
-                crate::render::ansi_clip::clip_ansi_to_width(&line, width, "")
+                fg(palette.muted)
             )
-        })
-        .collect()
+        } else {
+            format!("{}{numbers}\x1b[39m", fg(palette.text))
+        };
+        let ratio = self
+            .context
+            .filter(|(_, window)| *window > 0)
+            .map(|(used, window)| used as f64 / window as f64);
+        let percent_color = if ratio.is_some_and(|ratio| ratio >= 0.9) {
+            palette.removed
+        } else if ratio.is_some_and(|ratio| ratio >= 0.72) {
+            palette.warning
+        } else {
+            palette.text
+        };
+        let styled_percent = format!("{}\x1b[1m{percent}\x1b[22m\x1b[39m", fg(percent_color));
+        let left_part = if spare == 0 {
+            styled_numbers
+        } else {
+            format!("{styled_numbers} {gauge}")
+        };
+        let first = super::sidebar_widgets::columns(&left_part, &styled_percent, width);
+        let sep = format!(" {}· ", fg(palette.subtle));
+        let second = format!(
+            "{}Cache {}{cache}{sep}{}{rate} {}tok/s{sep}{}out {}{output}\x1b[0m",
+            fg(palette.muted),
+            fg(palette.text),
+            fg(palette.text),
+            fg(palette.muted),
+            fg(palette.muted),
+            fg(palette.text)
+        );
+        [first, second]
+            .into_iter()
+            .take(height(rows))
+            .map(|line| {
+                format!(
+                    "{}{}\x1b[0m",
+                    fg(palette.muted),
+                    crate::render::ansi_clip::clip_ansi_to_width(&line, width, "")
+                )
+            })
+            .collect()
     }
 }

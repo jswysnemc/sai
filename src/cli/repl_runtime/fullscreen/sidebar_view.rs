@@ -2,11 +2,11 @@
 
 use super::layout::FullscreenLayout;
 use super::sidebar::Sidebar;
-use super::sidebar_action::{SidebarAction, SidebarSections};
+use super::sidebar_action::{SidebarAction, SidebarSection, SidebarSections};
 use super::sidebar_control::SidebarControl;
 use super::sidebar_git::GitSummary;
 use super::sidebar_palette::{fg, SidebarPalette};
-use super::sidebar_regions::{regions, SidebarPanel};
+use super::sidebar_regions::{has_hairlines, regions_with_focus, SidebarPanel};
 use super::sidebar_style;
 use super::sidebar_widgets;
 use crate::render::transcript::{SubagentOverviewEntry, TodoSnapshotItem};
@@ -33,7 +33,7 @@ pub(super) struct SidebarView<'a> {
     pub(super) frame: usize,
 }
 
-/// 【终端侧栏】【面板组合】组合独立领域面板，布局与动作使用同一份条目模型。
+/// 【终端侧栏】【面板组合】组合独立领域面板，支持手风琴聚焦状态传递。
 /// 参数: agents 为子任务，todos 为待办，git 为快照，background 为后台任务，view 为排版配置；返回: 侧栏文档。
 pub(super) fn document(
     agents: &[SubagentOverviewEntry],
@@ -44,41 +44,49 @@ pub(super) fn document(
 ) -> SidebarDocument {
     let mut rows = Vec::new();
     let mut panels = Vec::new();
-    // 1. 【终端侧栏】【独立区域】当前执行、待办与变更优先，会话导航位于变更之后
+    let todo_compact = view
+        .sections
+        .focused_section
+        .map_or(view.compact, |focused| focused != SidebarSection::Todo);
+    // 1. 【终端侧栏】【独立区域】当前执行、待办与变更优先，会话导航与后台管理紧随其后
     for (section, panel) in [
         (
-            super::sidebar_action::SidebarSection::Agents,
+            SidebarSection::Agents,
             super::sidebar_agents_view::rows(
                 agents,
                 view.viewing,
-                view.sections.agents_collapsed,
+                view.sections.is_collapsed(SidebarSection::Agents),
                 view.width,
                 view.frame,
             ),
         ),
         (
-            super::sidebar_action::SidebarSection::Todo,
-            super::sidebar_todo_view::rows(todos, view.compact, view.width, view.frame),
+            SidebarSection::Todo,
+            super::sidebar_todo_view::rows(todos, todo_compact, view.width, view.frame),
         ),
         (
-            super::sidebar_action::SidebarSection::Git,
-            super::sidebar_git_view::rows(git, view.sections.git_collapsed, view.width),
+            SidebarSection::Git,
+            super::sidebar_git_view::rows(
+                git,
+                view.sections.is_collapsed(SidebarSection::Git),
+                view.width,
+            ),
         ),
         (
-            super::sidebar_action::SidebarSection::Sessions,
+            SidebarSection::Sessions,
             view.sessions.map_or_else(Vec::new, |sessions| {
                 super::sidebar_sessions_view::rows(
                     sessions,
-                    view.sections.sessions_collapsed,
+                    view.sections.is_collapsed(SidebarSection::Sessions),
                     view.width,
                 )
             }),
         ),
         (
-            super::sidebar_action::SidebarSection::Background,
+            SidebarSection::Background,
             super::sidebar_background_view::rows(
                 background,
-                view.sections.background_collapsed,
+                view.sections.is_collapsed(SidebarSection::Background),
                 view.width,
             ),
         ),
@@ -97,7 +105,7 @@ pub(super) fn document(
     SidebarDocument {
         rows,
         panels,
-        todo_compact: view.compact,
+        todo_compact,
     }
 }
 
@@ -129,7 +137,7 @@ pub(super) fn overlay(
     }
 }
 
-/// 【终端侧栏】【完整面板】品牌区、独立列表和页脚覆盖右栏全高度，供正文与输入右侧共用。
+/// 【终端侧栏】【完整面板】品牌区、极细分隔线、独立列表和页脚覆盖右栏全高度，供正文与输入右侧共用。
 /// 参数: sidebar 为文档与焦点，layout 为布局，control 为控件状态；返回: 不含分界线的面板行。
 pub(super) fn panel_rows(
     sidebar: &Sidebar,
@@ -144,7 +152,10 @@ pub(super) fn panel_rows(
     let palette = SidebarPalette::current();
     let header = sidebar.metrics.heading(width, height);
     let metrics = sidebar.metrics.rows(width, height);
-    let panels = regions(&sidebar.document, height);
+    let hairlines = has_hairlines(height);
+    let top_hairline_row = hairlines.then_some(header.len() + metrics.len());
+    let bottom_hairline_row = hairlines.then(|| height.saturating_sub(2));
+    let panels = regions_with_focus(&sidebar.document, height, sidebar.sections.focused_section);
     let focused_action = sidebar
         .focused_row
         .and_then(|index| sidebar.document.rows.get(index))
@@ -162,6 +173,10 @@ pub(super) fn panel_rows(
                 .and_then(|row| metrics.get(row))
             {
                 line.clone()
+            } else if Some(screen_row) == top_hairline_row
+                || Some(screen_row) == bottom_hairline_row
+            {
+                sidebar_widgets::hairline(width)
             } else if screen_row + 1 == height {
                 sidebar_style::footer(sidebar, width)
             } else if let Some(entry) = entry {

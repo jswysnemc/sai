@@ -52,6 +52,8 @@ pub(super) fn bar(context: Option<(usize, usize)>, width: usize) -> String {
     });
     let color = if ratio.is_some_and(|ratio| ratio >= 0.9) {
         palette.removed
+    } else if ratio.is_some_and(|ratio| ratio >= 0.72) {
+        palette.warning
     } else {
         palette.accent
     };
@@ -62,7 +64,7 @@ pub(super) fn bar(context: Option<(usize, usize)>, width: usize) -> String {
                 fg(if index < filled {
                     color
                 } else {
-                    palette.border
+                    palette.subtle
                 }),
                 if index < filled { "▰" } else { "▱" }
             )

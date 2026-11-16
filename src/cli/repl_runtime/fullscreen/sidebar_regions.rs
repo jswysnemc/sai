@@ -51,6 +51,7 @@ impl SidebarScrolls {
             SidebarSection::Background => self.background,
         }
     }
+
     /// 【终端侧栏】【局部滚动】仅修改目标区域的滚动位置，不移动标题或其他分组。
     /// 参数: region 为目标区域，delta 为滚动量；返回: 是否变化。
     pub(super) fn scroll(&mut self, region: &SidebarRegion, delta: isize) -> bool {
@@ -67,6 +68,7 @@ impl SidebarScrolls {
             .min(region.content.len().saturating_sub(region.visible));
         before != *offset
     }
+
     /// 【终端侧栏】【焦点可见】只调整目标条目所属分组，保持其他区域偏移。
     /// 参数: region 为所属区域，index 为文档行；返回: 无。
     pub(super) fn reveal(&mut self, region: &SidebarRegion, index: usize) {
@@ -91,11 +93,31 @@ impl SidebarScrolls {
     }
 }
 
-/// 【终端侧栏】【区域分配】标题固定，短分组归还空间，待办优先完整展示且为文件保留预览。
+/// 【终端侧栏】【极细线判定】高屏预留顶栏与底栏呼吸分割线，矮屏保留所有行给列表正文。
+/// 参数: height 为侧栏高度；返回: 是否绘制分割线。
+pub(super) fn has_hairlines(height: usize) -> bool {
+    height >= 22
+}
+
+/// 【终端侧栏】【区域分配】默认走双阶段弹性分配消除底部留白；供测试调用。
 /// 参数: document 为分组文档，height 为侧栏高度；返回: 分组布局。
+#[cfg(test)]
 pub(super) fn regions(document: &SidebarDocument, height: usize) -> Vec<SidebarRegion> {
-    let header = super::pane_header::height(height) + super::sidebar_metrics::height(height);
-    let available = height.saturating_sub(header + 1 + document.panels.len());
+    regions_with_focus(document, height, None)
+}
+
+/// 【终端侧栏】【聚焦分配】支持手风琴单区聚焦（独占可用行）或均衡模式余量重分配。
+/// 参数: document 为分组文档，height 为侧栏高度，focused_section 为可选手风琴焦点；返回: 分组布局。
+pub(super) fn regions_with_focus(
+    document: &SidebarDocument,
+    height: usize,
+    focused_section: Option<SidebarSection>,
+) -> Vec<SidebarRegion> {
+    let hairlines = usize::from(has_hairlines(height));
+    let header =
+        super::pane_header::height(height) + super::sidebar_metrics::height(height) + hairlines;
+    let footer = 1 + hairlines;
+    let available = height.saturating_sub(header + footer + document.panels.len());
     let len = |section| {
         document
             .panels
@@ -103,23 +125,60 @@ pub(super) fn regions(document: &SidebarDocument, height: usize) -> Vec<SidebarR
             .find(|panel| panel.section == section)
             .map_or(0, |panel| panel.content.len())
     };
-    // 1. 【终端侧栏】【入口保留】后台任务最多占四行，矮屏仍为管理入口保留一行
-    let background = len(SidebarSection::Background)
-        .min(4)
-        .min((available / 3).max(1))
-        .min(available);
-    let available = available.saturating_sub(background);
-    let sessions = len(SidebarSection::Sessions)
-        .min(6)
-        .min(available / 3 + usize::from(available > 0));
-    let available = available.saturating_sub(sessions);
-    let agents = len(SidebarSection::Agents)
-        .min(5)
-        .min(available / 3 + usize::from(available > 0));
-    let remaining = available.saturating_sub(agents);
-    let git_reserve = len(SidebarSection::Git).min(6).min(remaining / 2);
-    let todo = len(SidebarSection::Todo).min(remaining.saturating_sub(git_reserve));
-    let git = len(SidebarSection::Git).min(available.saturating_sub(agents + todo));
+
+    // 1. 【终端侧栏】【手风琴模式】单区聚焦时，将其余非焦点区域收敛至 0 行，释放全屏高度
+    let (mut agents, mut todo, mut git, mut sessions, background) = if let Some(target) =
+        focused_section
+    {
+        (
+            usize::from(target == SidebarSection::Agents)
+                * len(SidebarSection::Agents).min(available),
+            usize::from(target == SidebarSection::Todo) * len(SidebarSection::Todo).min(available),
+            usize::from(target == SidebarSection::Git) * len(SidebarSection::Git).min(available),
+            usize::from(target == SidebarSection::Sessions)
+                * len(SidebarSection::Sessions).min(available),
+            usize::from(target == SidebarSection::Background)
+                * len(SidebarSection::Background).min(available),
+        )
+    } else {
+        // 2. 【终端侧栏】【阶段一：保底分配】后台入口与短分组优先保底，长文件与待办均衡共享
+        let background = len(SidebarSection::Background)
+            .min(4)
+            .min((available / 3).max(1))
+            .min(available);
+        let rem = available.saturating_sub(background);
+        let sessions = len(SidebarSection::Sessions)
+            .min(6)
+            .min(rem / 3 + usize::from(rem > 0));
+        let rem = rem.saturating_sub(sessions);
+        let agents = len(SidebarSection::Agents)
+            .min(5)
+            .min(rem / 3 + usize::from(rem > 0));
+        let rem_todo_git = rem.saturating_sub(agents);
+        let git_reserve = len(SidebarSection::Git).min(6).min(rem_todo_git / 2);
+        let todo = len(SidebarSection::Todo).min(rem_todo_git.saturating_sub(git_reserve));
+        let git = len(SidebarSection::Git).min(rem_todo_git.saturating_sub(todo));
+        (agents, todo, git, sessions, background)
+    };
+
+    // 3. 【终端侧栏】【阶段二：余量回收】将空分组留出的多余行依次让渡给未展示完的活跃分组，避免底部留白
+    if focused_section.is_none() {
+        let used = agents + todo + git + sessions + background;
+        let mut leftover = available.saturating_sub(used);
+        if leftover > 0 {
+            for (slot, max_len) in [
+                (&mut sessions, len(SidebarSection::Sessions)),
+                (&mut git, len(SidebarSection::Git)),
+                (&mut agents, len(SidebarSection::Agents)),
+                (&mut todo, len(SidebarSection::Todo)),
+            ] {
+                let extra = max_len.saturating_sub(*slot).min(leftover);
+                *slot += extra;
+                leftover -= extra;
+            }
+        }
+    }
+
     let mut top = header;
     document
         .panels
@@ -158,6 +217,7 @@ impl SidebarRegion {
         let index = self.content.start + scrolls.get(self.section) + row - self.top - 1;
         self.content.contains(&index).then_some(index)
     }
+
     /// 【终端侧栏】【屏幕定位】查找当前可见文档行的屏幕位置。
     /// 参数: index 为文档行，scrolls 为独立偏移；返回: 屏幕行。
     #[cfg(test)]

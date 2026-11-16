@@ -315,3 +315,142 @@ async fn git_directory_follows_viewed_subagent_worktree() {
     .await;
     state::clear_subagents_for_owner(&owner);
 }
+
+/// 【侧栏测试】【降噪与手风琴】空载模块自动收敛、无仓库隐藏假统计、当前会话用竖条标出且支持 F6+f 聚焦。
+/// 参数: 无；返回: 无。
+#[test]
+fn redesigned_sidebar_compacts_empty_sections_and_supports_accordion_focus() {
+    use super::sidebar_action::SidebarSection;
+    use super::sidebar_sessions::{SessionEntry, SessionStatus, SidebarSessions};
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+
+    let mut sessions = SidebarSessions::default();
+    let current = SessionEntry {
+        id: "cur".into(),
+        title: "snow-shot 自启动配置".into(),
+        state_dir: std::path::PathBuf::from("cur"),
+        updated_at: String::new(),
+        status: SessionStatus::Idle,
+    };
+    let old = SessionEntry {
+        id: "old".into(),
+        title: "历史对话".into(),
+        state_dir: std::path::PathBuf::from("old"),
+        updated_at: (chrono::Utc::now() - chrono::Duration::hours(2)).to_rfc3339(),
+        status: SessionStatus::Recent,
+    };
+    sessions.current = Some(current.clone());
+    sessions.entries = vec![current, old];
+
+    let git = GitSummary {
+        state: "not_repo".into(),
+        ..Default::default()
+    };
+    let doc = sidebar_view::document(
+        &[],
+        &[],
+        &git,
+        &Default::default(),
+        sidebar_view::SidebarView {
+            sessions: Some(&sessions),
+            viewing: None,
+            compact: false,
+            sections: &Default::default(),
+            width: 40,
+            frame: 0,
+        },
+    );
+    let plain_doc = doc
+        .rows
+        .iter()
+        .map(|row| strip_ansi_for_test(&row.text))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(!plain_doc.contains("No active tasks"));
+    assert!(!plain_doc.contains("Not a Git repository"));
+    assert!(!plain_doc.contains("+0 -0"));
+    assert!(plain_doc.contains("no repo"));
+    assert!(!plain_doc.contains("No background commands"));
+    assert!(!plain_doc.contains("Current · "));
+    assert!(plain_doc.contains("▎ ● snow-shot 自启动配置"));
+    assert!(plain_doc.contains("2h"));
+
+    TerminalSize::with_size(
+        TerminalSize {
+            cols: 160,
+            rows: 32,
+        },
+        || {
+            let mut runtime = runtime(1);
+            runtime.enter_fullscreen().unwrap();
+            let panel = super::sidebar_view::panel_rows(
+                &runtime.fullscreen.as_ref().unwrap().sidebar,
+                &runtime.fullscreen.as_ref().unwrap().state.layout.unwrap(),
+                &runtime.sidebar_control,
+            );
+            assert!(panel.iter().filter(|line| line.contains("───")).count() >= 2);
+
+            runtime
+                .handle_fullscreen_event(&Event::Key(KeyEvent::new(
+                    KeyCode::F(6),
+                    KeyModifiers::NONE,
+                )))
+                .unwrap();
+            assert!(runtime.fullscreen.as_ref().unwrap().sidebar.focused);
+            runtime
+                .handle_fullscreen_event(&Event::Key(KeyEvent::new(
+                    KeyCode::Char('f'),
+                    KeyModifiers::NONE,
+                )))
+                .unwrap();
+            assert_eq!(
+                runtime
+                    .fullscreen
+                    .as_ref()
+                    .unwrap()
+                    .sidebar
+                    .sections
+                    .focused_section,
+                Some(SidebarSection::Agents)
+            );
+            runtime
+                .handle_fullscreen_event(&Event::Key(KeyEvent::new(
+                    KeyCode::Char('3'),
+                    KeyModifiers::NONE,
+                )))
+                .unwrap();
+            assert_eq!(
+                runtime
+                    .fullscreen
+                    .as_ref()
+                    .unwrap()
+                    .sidebar
+                    .sections
+                    .focused_section,
+                Some(SidebarSection::Git)
+            );
+            runtime
+                .handle_fullscreen_event(&Event::Key(KeyEvent::new(
+                    KeyCode::Esc,
+                    KeyModifiers::NONE,
+                )))
+                .unwrap();
+            assert!(runtime
+                .fullscreen
+                .as_ref()
+                .unwrap()
+                .sidebar
+                .sections
+                .focused_section
+                .is_none());
+            assert!(runtime.fullscreen.as_ref().unwrap().sidebar.focused);
+            runtime
+                .handle_fullscreen_event(&Event::Key(KeyEvent::new(
+                    KeyCode::Esc,
+                    KeyModifiers::NONE,
+                )))
+                .unwrap();
+            assert!(!runtime.fullscreen.as_ref().unwrap().sidebar.focused);
+        },
+    );
+}

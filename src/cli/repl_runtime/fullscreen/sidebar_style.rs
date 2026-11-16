@@ -27,7 +27,16 @@ pub(super) fn footer(sidebar: &Sidebar, width: usize) -> String {
         return format!("{}{}\x1b[0m", fg(palette.muted), clip(text, width));
     }
     let keys: &[(&str, &str)] = if sidebar.focused {
-        &[("Up/Down", "select"), ("Enter", "open"), ("Esc", "return")]
+        if sidebar.sections.focused_section.is_some() {
+            &[("Up/Down", "select"), ("f", "all"), ("Esc", "return")]
+        } else {
+            &[
+                ("Up/Down", "select"),
+                ("f", "focus"),
+                ("Enter", "open"),
+                ("Esc", "return"),
+            ]
+        }
     } else {
         &[("F6", "focus"), ("Enter", "open"), ("Esc", "return")]
     };

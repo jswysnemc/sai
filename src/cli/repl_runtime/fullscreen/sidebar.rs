@@ -5,7 +5,7 @@ use super::input::Effect;
 use super::layout::FullscreenLayout;
 use super::sidebar_action::{SidebarAction, SidebarSections};
 use super::sidebar_git::GitWatcher;
-use super::sidebar_regions::{regions, SidebarScrolls};
+use super::sidebar_regions::{regions_with_focus, SidebarScrolls};
 use super::sidebar_view::{SidebarDocument, SidebarRow};
 use crate::cli::repl_runtime::ReplRuntime;
 use crossterm::event::{
@@ -34,13 +34,27 @@ impl Sidebar {
             self.document.rows.get(*index).and_then(|row| row.action)
                 == document.rows.get(*index).and_then(|row| row.action)
         });
+        let focused_action = self
+            .focused_row
+            .and_then(|index| self.document.rows.get(index))
+            .and_then(|row| row.action);
         self.document = document;
-        self.focused_row = self.focused_row.filter(|index| {
-            self.document
-                .rows
-                .get(*index)
-                .is_some_and(|row| row.action.is_some())
-        });
+        // 2. 【终端侧栏】【焦点跟随】文档因折叠或手风琴重排后，按语义动作重新定位焦点行
+        self.focused_row = focused_action
+            .and_then(|action| {
+                self.document
+                    .rows
+                    .iter()
+                    .position(|row| row.action == Some(action))
+            })
+            .or_else(|| {
+                self.focused_row.filter(|index| {
+                    self.document
+                        .rows
+                        .get(*index)
+                        .is_some_and(|row| row.action.is_some())
+                })
+            });
         if self.focused && self.focused_row.is_none() {
             self.focused_row = self
                 .document
@@ -48,7 +62,7 @@ impl Sidebar {
                 .iter()
                 .position(|row| row.action.is_some());
         }
-        for region in regions(&self.document, height) {
+        for region in regions_with_focus(&self.document, height, self.sections.focused_section) {
             if self.scrolls.scroll(&region, 0) {
                 self.hovered = None;
             }
@@ -74,9 +88,13 @@ impl Sidebar {
         {
             return None;
         }
-        let index = regions(&self.document, usize::from(layout.rows))
-            .iter()
-            .find_map(|region| region.index_at(usize::from(row), &self.scrolls))?;
+        let index = regions_with_focus(
+            &self.document,
+            usize::from(layout.rows),
+            self.sections.focused_section,
+        )
+        .iter()
+        .find_map(|region| region.index_at(usize::from(row), &self.scrolls))?;
         let entry = self.document.rows.get(index)?;
         entry.action.map(|_| index)
     }
@@ -84,10 +102,14 @@ impl Sidebar {
     /// 参数: layout 为布局，index 为文档行；返回: 屏幕行。
     #[cfg(test)]
     pub(super) fn screen_row(&self, layout: &FullscreenLayout, index: usize) -> Option<u16> {
-        regions(&self.document, usize::from(layout.rows))
-            .iter()
-            .find_map(|region| region.row_for(index, &self.scrolls))
-            .map(|row| row as u16)
+        regions_with_focus(
+            &self.document,
+            usize::from(layout.rows),
+            self.sections.focused_section,
+        )
+        .iter()
+        .find_map(|region| region.row_for(index, &self.scrolls))
+        .map(|row| row as u16)
     }
 }
 
@@ -197,12 +219,16 @@ impl ReplRuntime {
         let mut action = None;
         let changed = match mouse.kind {
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
-                let region = regions(&sidebar.document, usize::from(layout.rows))
-                    .into_iter()
-                    .find(|region| {
-                        usize::from(mouse.row) >= region.top
-                            && usize::from(mouse.row) <= region.top + region.visible
-                    });
+                let region = regions_with_focus(
+                    &sidebar.document,
+                    usize::from(layout.rows),
+                    sidebar.sections.focused_section,
+                )
+                .into_iter()
+                .find(|region| {
+                    usize::from(mouse.row) >= region.top
+                        && usize::from(mouse.row) <= region.top + region.visible
+                });
                 let delta = if mouse.kind == MouseEventKind::ScrollUp {
                     -3
                 } else {
@@ -324,7 +350,55 @@ impl ReplRuntime {
         }
         let mut action = None;
         match key.code {
-            KeyCode::Esc => sidebar.focused = false,
+            KeyCode::Esc => {
+                if sidebar.sections.focused_section.take().is_some() {
+                    return Some(Effect::Refresh);
+                }
+                sidebar.focused = false;
+            }
+            KeyCode::Char('f' | 'F') => {
+                let target = sidebar
+                    .focused_row
+                    .and_then(|index| {
+                        sidebar
+                            .document
+                            .panels
+                            .iter()
+                            .find(|panel| panel.header == index || panel.content.contains(&index))
+                            .map(|panel| panel.section)
+                    })
+                    .or_else(|| sidebar.document.panels.first().map(|panel| panel.section));
+                if let Some(section) = target {
+                    sidebar.sections.toggle_focus(section);
+                    return Some(Effect::Refresh);
+                }
+            }
+            KeyCode::Char(digit @ '1'..='5') => {
+                let section = match digit {
+                    '1' => super::sidebar_action::SidebarSection::Agents,
+                    '2' => super::sidebar_action::SidebarSection::Todo,
+                    '3' => super::sidebar_action::SidebarSection::Git,
+                    '4' => super::sidebar_action::SidebarSection::Sessions,
+                    _ => super::sidebar_action::SidebarSection::Background,
+                };
+                if let Some(panel) = sidebar
+                    .document
+                    .panels
+                    .iter()
+                    .find(|panel| panel.section == section)
+                {
+                    let already_on_header = sidebar.focused_row == Some(panel.header);
+                    sidebar.focused_row = Some(panel.header);
+                    if sidebar.sections.focused_section.is_some() {
+                        sidebar.sections.focused_section = Some(section);
+                        return Some(Effect::Refresh);
+                    } else if already_on_header {
+                        sidebar.sections.toggle(section);
+                        return Some(Effect::Refresh);
+                    }
+                    return Some(Effect::Repaint);
+                }
+            }
             KeyCode::Up | KeyCode::Down | KeyCode::Home | KeyCode::End => {
                 let mut previous = None;
                 let targets = sidebar
@@ -359,9 +433,13 @@ impl ReplRuntime {
                 };
                 sidebar.focused_row = targets.get(next).copied();
                 if let Some(index) = sidebar.focused_row {
-                    if let Some(region) = regions(&sidebar.document, usize::from(layout.rows))
-                        .iter()
-                        .find(|region| region.header == index || region.content.contains(&index))
+                    if let Some(region) = regions_with_focus(
+                        &sidebar.document,
+                        usize::from(layout.rows),
+                        sidebar.sections.focused_section,
+                    )
+                    .iter()
+                    .find(|region| region.header == index || region.content.contains(&index))
                     {
                         sidebar.scrolls.reveal(region, index);
                     }
