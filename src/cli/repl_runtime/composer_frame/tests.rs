@@ -383,3 +383,48 @@ fn bottom_pinned_composer_keeps_footer_row() {
     assert!(!output.contains("\x1b[J"), "贴底时不能清除 footer 行");
     assert!(output.contains("gpt"));
 }
+
+/// 【斜杠面板测试】【鼠标命中】验证斜杠候选行记录精确屏幕坐标，且悬停提亮不引入实心背景条。
+#[test]
+fn slash_panel_records_completion_hits_and_hover_keeps_translucent_style() {
+    let chrome = ReplChrome {
+        mode: AgentMode::Yolo,
+        context_ratio: 0.0,
+        context_window_tokens: 120_000,
+        model: "gpt".to_string(),
+        thinking: "auto".to_string(),
+        directory: "/workspace".to_string(),
+        branch: None,
+        cache_hit_ratio: None,
+        status_plugin: None,
+    };
+    let mut frame = ComposerFrame::new(chrome, "/".to_string(), 1, false, Vec::new(), 0);
+    let mut viewport = InlineViewport::new();
+    viewport.update(TerminalSize { cols: 80, rows: 24 }, frame.height(80), 4);
+    let mut output = Vec::new();
+
+    let (_, sig) = frame.draw_lines(&mut output, &viewport, None).unwrap();
+    assert!(sig.completion_area.is_some());
+    assert!(
+        sig.completion_hits.len() >= 2,
+        "expected clickable slash candidates"
+    );
+    let second = sig.completion_hits[1];
+    assert_eq!(
+        sig.completion_hit_at(5, second.row),
+        Some(second),
+        "second visible candidate row should resolve cleanly"
+    );
+    let (area_start, area_end) = sig.completion_area.unwrap();
+    assert!(sig.in_completion_area(5, area_start));
+    assert!(!sig.in_completion_area(5, area_end));
+
+    // 悬停到第二条候选命令时使用保色相提亮，不增加任何 48;2; 背景条
+    frame.set_completion_pointer(Some((5, second.row)));
+    let mut hovered_out = Vec::new();
+    let (_, hovered_sig) = frame
+        .draw_lines(&mut hovered_out, &viewport, Some(&sig))
+        .unwrap();
+    let line_offset = usize::from(second.row - viewport.composer_top());
+    assert!(!hovered_sig.lines[line_offset].contains("48;2;"));
+}

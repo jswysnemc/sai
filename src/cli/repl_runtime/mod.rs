@@ -51,6 +51,9 @@ mod stream_commands;
 mod stream_settings;
 mod viewport;
 
+pub(in crate::cli) use composer_frame::CompletionPanelKind;
+pub(in crate::cli) use composer_mouse::CompletionMouseEffect;
+pub(in crate::cli) use fullscreen::control_hover::tint_cols as control_tint_cols;
 pub(in crate::cli) use fullscreen::FullscreenEvent;
 pub(in crate::cli) use queue_panel_dispatch::QueuePanelIdleResult;
 
@@ -129,6 +132,8 @@ pub(super) struct ReplRuntime {
     /// 底部主/子 agent 切换面板状态
     agent_panel: agent_panel::AgentPanelState,
     panel_pointer: Option<(u16, u16)>,
+    completion_pointer: Option<(u16, u16)>,
+    completion_clicks: crate::cli::mouse_menu::ClickTracker<composer_frame::CompletionHit>,
     /// 当前子代理输入错误，绑定目标 ID，切换视图后不显示旧目标错误
     subagent_input_error: Option<(String, String)>,
     /// 用户消息队列管理面板状态
@@ -273,6 +278,8 @@ impl ReplRuntime {
             last_chrome: None,
             agent_panel: agent_panel::AgentPanelState::default(),
             panel_pointer: None,
+            completion_pointer: None,
+            completion_clicks: Default::default(),
             subagent_input_error: None,
             queue_panel: queue_panel::QueuePanelState::default(),
             queue_draft_timing: QueueInsertAt::default(),

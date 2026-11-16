@@ -59,12 +59,17 @@ impl ReplRuntime {
             return Ok(false);
         };
         let hovered = if mouse.kind == MouseEventKind::Moved {
-            let before = self
+            let before_footer = self
                 .panel_pointer
                 .and_then(|(column, row)| self.footer_target_at(column, row));
-            let target = self.footer_target_at(mouse.column, mouse.row);
-            self.panel_pointer = target.map(|_| (mouse.column, mouse.row));
-            before != target
+            let before_panel = self
+                .panel_pointer
+                .and_then(|(column, row)| self.panel_target_at(column, row));
+            let footer_hit = self.footer_target_at(mouse.column, mouse.row);
+            let panel_hit = self.panel_target_at(mouse.column, mouse.row);
+            self.panel_pointer =
+                (footer_hit.is_some() || panel_hit.is_some()).then_some((mouse.column, mouse.row));
+            before_footer != footer_hit || before_panel != panel_hit
         } else {
             false
         };

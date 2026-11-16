@@ -58,20 +58,41 @@ impl MentionPanel {
     ///
     /// 返回:
     /// - 面板每行文本
+    #[allow(dead_code)]
     pub(super) fn rendered_lines(&self, cols: usize) -> Vec<String> {
+        self.rendered_rows_with_meta(cols).0
+    }
+
+    /// 【终端】【引用面板】渲染候选行并返回每行对应的候选下标，供鼠标点击与滚轮交互使用。
+    ///
+    /// 参数:
+    /// - `cols`: 终端列数
+    ///
+    /// 返回:
+    /// - `(面板文本行, 每行对应的候选信息(下标, 是否禁用))`
+    pub(super) fn rendered_rows_with_meta(
+        &self,
+        cols: usize,
+    ) -> (Vec<String>, Vec<Option<(usize, bool)>>) {
         // 1. 【终端】【引用面板】显示窗口跟随选中项移动，首尾不越过候选范围
         let visible_rows = usize::from(self.height());
         let start = self
             .selected
             .saturating_sub(visible_rows / 2)
             .min(self.suggestions.len().saturating_sub(visible_rows));
-        self.suggestions
+        let mut lines = Vec::with_capacity(visible_rows);
+        let mut meta = Vec::with_capacity(visible_rows);
+        for (index, suggestion) in self
+            .suggestions
             .iter()
             .enumerate()
             .skip(start)
             .take(visible_rows)
-            .map(|(index, suggestion)| format_suggestion(suggestion, cols, index == self.selected))
-            .collect()
+        {
+            lines.push(format_suggestion(suggestion, cols, index == self.selected));
+            meta.push(Some((index, false)));
+        }
+        (lines, meta)
     }
 }
 

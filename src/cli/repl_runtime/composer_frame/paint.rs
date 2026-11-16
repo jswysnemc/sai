@@ -52,7 +52,7 @@ impl ComposerFrame {
         layout.first_visual_row += usize::from(layout.cursor_row_offset.saturating_sub(cursor));
         layout.styled_display_lines = visible;
         layout.cursor_row_offset = cursor;
-        let mut lines = self.visual_lines(&layout, cols);
+        let (mut lines, row_meta) = self.visual_lines_with_meta(&layout, cols);
         let footer_rows = usize::from(KEY_HINT_ROWS)
             + usize::from(
                 !layout.mention_panel.is_visible()
@@ -69,6 +69,30 @@ impl ComposerFrame {
             .saturating_sub(usize::from(height))
             .min(cursor_offset);
         lines.drain(..hidden_rows);
+        let mut completion_hits = Vec::new();
+        let mut completion_start: Option<u16> = None;
+        let mut completion_end: u16 = 0;
+        for (offset, entry) in row_meta
+            .into_iter()
+            .skip(hidden_rows)
+            .take(usize::from(height))
+            .enumerate()
+        {
+            if let Some((kind, item_meta)) = entry {
+                let row = top.saturating_add(offset as u16);
+                completion_start.get_or_insert(row);
+                completion_end = row.saturating_add(1);
+                if let Some((index, disabled)) = item_meta {
+                    completion_hits.push(CompletionHit {
+                        row,
+                        kind,
+                        index,
+                        disabled,
+                    });
+                }
+            }
+        }
+        let completion_area = completion_start.map(|start| (start, completion_end));
         let footer_end = lines.len().min(usize::from(height));
         let footer_start = footer_start.saturating_sub(hidden_rows).min(footer_end);
         lines.resize(usize::from(height), String::new());
@@ -106,6 +130,8 @@ impl ComposerFrame {
                 cols,
                 top.saturating_add(footer_start as u16),
             )),
+            completion_hits,
+            completion_area,
             input_geometry: Some({
                 let hidden_input = hidden_rows
                     .saturating_sub(cursor_offset - usize::from(layout.cursor_row_offset));
@@ -220,6 +246,17 @@ impl ComposerFrame {
             };
             *line = super::super::fullscreen::hover::tint_line(&text);
         }
+        if let Some((column, row)) = self.completion_pointer {
+            if let Some(hit) = signature
+                .completion_hit_at(column, row)
+                .filter(|hit| !hit.disabled)
+            {
+                let offset = usize::from(hit.row.saturating_sub(top));
+                if let Some(line) = signature.lines.get_mut(offset) {
+                    *line = super::super::fullscreen::hover::tint_line(line);
+                }
+            }
+        }
         let same_geometry =
             previous.filter(|old| old.top == top && old.height == height && old.cols == cols);
         let previous_lines = same_geometry.map(|old| old.lines.as_slice());
@@ -262,6 +299,19 @@ impl ComposerFrame {
     /// 参数: `layout` 为正文和补全面板布局，`cols` 为终端列数
     /// 返回: 按显示顺序排列的面板、输入和底栏
     fn visual_lines(&self, layout: &ComposerLayout, cols: usize) -> Vec<String> {
+        self.visual_lines_with_meta(layout, cols).0
+    }
+
+    /// 【终端】【输入绘制】同时生成视觉行与补全面板行号元数据，保证点击与渲染零偏移。
+    #[allow(clippy::type_complexity)]
+    fn visual_lines_with_meta(
+        &self,
+        layout: &ComposerLayout,
+        cols: usize,
+    ) -> (
+        Vec<String>,
+        Vec<Option<(CompletionPanelKind, Option<(usize, bool)>)>>,
+    ) {
         let mut lines = self.top_lines(cols);
         lines.extend((0..CHROME_INPUT_PAD_ROWS).map(|_| String::new()));
         lines.extend((0..CHROME_INPUT_INNER_PAD_ROWS).map(|_| self.input_padding(cols, true)));
@@ -288,17 +338,32 @@ impl ComposerFrame {
             first = false;
         }
         lines.extend((0..CHROME_INPUT_INNER_PAD_ROWS).map(|_| self.input_padding(cols, false)));
+        let mut meta = vec![None; lines.len()];
         let panel_open = if layout.mention_panel.is_visible() {
-            lines.extend(layout.mention_panel.rendered_lines(cols));
+            let (panel_lines, panel_meta) = layout.mention_panel.rendered_rows_with_meta(cols);
+            lines.extend(panel_lines);
+            meta.extend(
+                panel_meta
+                    .into_iter()
+                    .map(|item| Some((CompletionPanelKind::Mention, item))),
+            );
             true
         } else if layout.slash_panel.is_visible() {
-            lines.extend(layout.slash_panel.rendered_lines(cols));
+            let (panel_lines, panel_meta) = layout.slash_panel.rendered_rows_with_meta(cols);
+            lines.extend(panel_lines);
+            meta.extend(
+                panel_meta
+                    .into_iter()
+                    .map(|item| Some((CompletionPanelKind::Slash, item))),
+            );
             true
         } else if layout.shell_hint.is_visible() {
             lines.extend(layout.shell_hint.rendered_lines(cols));
+            meta.resize(lines.len(), None);
             true
         } else {
             lines.push(self.chrome.footer_line(cols));
+            meta.push(None);
             false
         };
         // 最后一行固定为按键提示；面板打开时留空行，输入框高度保持不变
@@ -308,7 +373,8 @@ impl ComposerFrame {
             panel_open,
             cols,
         ));
-        lines
+        meta.push(None);
+        (lines, meta)
     }
 }
 

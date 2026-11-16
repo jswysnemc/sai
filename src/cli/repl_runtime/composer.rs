@@ -299,6 +299,7 @@ impl ReplRuntime {
         if let Some(composer) = self.composer.as_mut() {
             composer.set_selection(self.composer_selection.clone());
             composer.set_panel_pointer(self.panel_pointer, actions, expanded_rows);
+            composer.set_completion_pointer(self.completion_pointer);
             composer.set_queue_hits(queue_hits);
         }
         let Some(composer) = &self.composer else {
@@ -583,6 +584,8 @@ impl ReplRuntime {
     pub(in crate::cli) fn end_composer(&mut self) -> Result<()> {
         self.invalidate_composer_paint()?;
         self.composer = None;
+        self.completion_pointer = None;
+        self.completion_clicks.clear();
         // composer 已撤下，下次出现时必须实绘
         self.last_composer_signature = None;
         // 全屏视图：正文区扩展到输入框原位置

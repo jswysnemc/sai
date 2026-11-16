@@ -135,12 +135,14 @@ pub(super) fn mouse(manager: &mut TaskManager, mouse: MouseEvent, frame: &TaskFr
         }
     }
     if matches!(mouse.kind, MouseEventKind::Moved) {
-        // 1. 【后台任务】【悬停反馈】只记录指针下的任务行，离开面板或经过非任务行时清除
+        // 1. 【后台任务】【悬停反馈】同步记录任务行与可点击按钮悬停状态，离开后清除
         manager.hovered = frame
             .targets
             .iter()
             .find(|(row, _)| inside && *row == mouse.row)
             .map(|(_, id)| id.clone());
+        manager.hovered_button =
+            super::controls::hit(manager, mouse, frame).map(|_| (mouse.column, mouse.row));
         return Effect::None;
     }
     if manager.confirm.is_some() || !inside {
@@ -155,6 +157,12 @@ pub(super) fn mouse(manager: &mut TaskManager, mouse: MouseEvent, frame: &TaskFr
             };
             if manager.pager {
                 manager.scroll(delta, frame.page_rows);
+            } else if frame
+                .tail_rect
+                .is_some_and(|rect| rect.contains(mouse.column, mouse.row))
+                && frame.tail_rows > 0
+            {
+                manager.scroll_tail(delta, frame.tail_rows);
             } else {
                 manager.move_selection(delta);
             }

@@ -1,5 +1,132 @@
 use super::*;
 use crate::cli::repl_mentions::find_mention_trigger;
+use crate::cli::repl_runtime::CompletionPanelKind;
+
+/// 闲置输入循环中处理补全鼠标事件后的流程跳转结果。
+pub(super) enum IdleCompletionStep {
+    Ignored,
+    Consumed,
+    Redraw,
+    Submit,
+}
+
+/// 【终端】【Tab 补全】依次尝试引用补全或斜杠命令补全，更新输入与光标。
+pub(super) fn apply_tab_completion(
+    runtime: &ReplRuntime,
+    input: &mut String,
+    cursor: &mut usize,
+    slash_selection: &mut usize,
+    clipboard: &mut ReplClipboardState,
+    history_clean_index: &mut Option<usize>,
+) {
+    if let Some((next, next_cursor)) =
+        complete_active_mention(input, *cursor, *slash_selection, runtime, clipboard)
+    {
+        *input = next;
+        *cursor = next_cursor;
+        *slash_selection = 0;
+        *history_clean_index = None;
+    } else if input.starts_with('/') {
+        if let Some(completed) =
+            crate::cli::repl_completion::accept(input, *cursor, *slash_selection, false, false)
+        {
+            *input = completed.to_string();
+            *cursor = input.chars().count();
+            *history_clean_index = None;
+        }
+        *slash_selection = 0;
+    }
+}
+
+/// 【终端】【闲置补全鼠标】处理悬停、滚轮和左键点选，避免闲置输入主循环膨胀。
+#[allow(clippy::too_many_arguments)]
+pub(super) fn process_idle_completion_mouse(
+    runtime: &mut ReplRuntime,
+    event: &Event,
+    input: &mut String,
+    cursor: &mut usize,
+    slash_selection: &mut usize,
+    clipboard: &mut ReplClipboardState,
+    history_clean_index: &mut Option<usize>,
+    is_pasted: &mut bool,
+) -> IdleCompletionStep {
+    match runtime.handle_completion_mouse(event, input, *cursor, *slash_selection) {
+        crate::cli::repl_runtime::CompletionMouseEffect::Ignored => IdleCompletionStep::Ignored,
+        crate::cli::repl_runtime::CompletionMouseEffect::Consumed => IdleCompletionStep::Consumed,
+        crate::cli::repl_runtime::CompletionMouseEffect::Redraw => IdleCompletionStep::Redraw,
+        crate::cli::repl_runtime::CompletionMouseEffect::Select(next) => {
+            *slash_selection = next;
+            IdleCompletionStep::Redraw
+        }
+        crate::cli::repl_runtime::CompletionMouseEffect::Accept(kind, index, disabled) => {
+            if !disabled
+                && apply_completion_click(
+                    runtime,
+                    input,
+                    cursor,
+                    slash_selection,
+                    clipboard,
+                    kind,
+                    index,
+                )
+            {
+                return IdleCompletionStep::Submit;
+            }
+            *history_clean_index = None;
+            *is_pasted = false;
+            IdleCompletionStep::Redraw
+        }
+    }
+}
+
+/// 【终端】【补全点选】将鼠标点击的候选命令或引用写入草稿；完整命令已就绪时返回 true 以便直接提交。
+///
+/// 参数:
+/// - `runtime`: REPL 运行期
+/// - `input`: 输入草稿文本
+/// - `cursor`: 光标字符偏移
+/// - `slash_selection`: 当前高亮候选序号
+/// - `clipboard`: 剪贴板附件状态
+/// - `kind`: 命中的补全面板类型
+/// - `index`: 命中的候选下标
+///
+/// 返回:
+/// - 已完成补全等待继续编辑返回 false；已是一条就绪命令返回 true
+pub(super) fn apply_completion_click(
+    runtime: &ReplRuntime,
+    input: &mut String,
+    cursor: &mut usize,
+    slash_selection: &mut usize,
+    clipboard: &mut ReplClipboardState,
+    kind: CompletionPanelKind,
+    index: usize,
+) -> bool {
+    *slash_selection = index;
+    match kind {
+        CompletionPanelKind::Mention => {
+            if let Some((next, next_cursor)) =
+                complete_active_mention(input, *cursor, index, runtime, clipboard)
+            {
+                *input = next;
+                *cursor = next_cursor;
+                *slash_selection = 0;
+            }
+            false
+        }
+        CompletionPanelKind::Slash => {
+            if let Some(completed) =
+                crate::cli::repl_completion::accept(input, *cursor, index, false, true)
+            {
+                *input = completed;
+                *cursor = input.chars().count();
+                *slash_selection = 0;
+                false
+            } else {
+                true
+            }
+        }
+    }
+}
 
 /// 确认当前引用建议，替换触发片段。
 ///

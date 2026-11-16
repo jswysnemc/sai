@@ -4,6 +4,7 @@ use super::{
     inspector_view::{confirm_rows, detail_rows},
     model::TaskManager,
     pager_view::tail_rows,
+    panel_rect::PanelRect,
     split_layout::SplitLayout,
     theme::{fit, section_header, stream_name},
     view_list::{filter_ribbon, task_row, RibbonItem},
@@ -12,11 +13,13 @@ use crate::i18n::text as t;
 use crate::render::ansi_clip::ansi_visible_width;
 use crate::render::panel_palette::{fg, PanelPalette};
 
-/// 【后台任务】【列表正文渲染结果】返回正文视觉行、任务视口容量以及筛选栏按钮热区。
+/// 【后台任务】【列表正文渲染结果】返回正文视觉行、任务视口容量、筛选栏热区与尾部输出区。
 pub(super) struct ListBodyRender {
     pub lines: Vec<String>,
     pub task_viewport_rows: usize,
     pub ribbon_hits: Vec<RibbonItem>,
+    pub tail_rect: Option<PanelRect>,
+    pub tail_rows: usize,
 }
 
 /// 【后台任务】【列表正文】组装筛选栏、任务队列、选中详情与尾部输出，宽屏双栏对齐、窄屏紧凑堆叠。
@@ -25,6 +28,7 @@ pub(super) struct ListBodyRender {
 /// - `manager`: 任务管理状态
 /// - `inner`: 面板正文净宽
 /// - `rows`: 面板正文总行数
+/// - `content_x`: 正文左侧终端起始列
 /// - `top`: 正文首行对应的终端行号
 /// - `targets`: 收集每个任务行对应的终端行号与任务标识
 /// - `palette`: 当前面板色板
@@ -35,6 +39,7 @@ pub(super) fn render(
     manager: &TaskManager,
     inner: usize,
     rows: usize,
+    content_x: u16,
     top: u16,
     targets: &mut Vec<(u16, String)>,
     palette: &PanelPalette,
@@ -93,10 +98,20 @@ pub(super) fn render(
                 body.push(format!("{l}{l_pad}{sep}{r}"));
             }
             body.resize(rows, String::new());
+            let tail_rect =
+                (manager.confirm.is_none() && tail_cap > 0 && manager.selected().is_some())
+                    .then_some(PanelRect {
+                        x: content_x.saturating_add(left_w as u16).saturating_add(3),
+                        y: top.saturating_add(2),
+                        width: right_w as u16,
+                        height: task_rows as u16,
+                    });
             ListBodyRender {
                 lines: body,
                 task_viewport_rows: task_rows,
                 ribbon_hits,
+                tail_rect,
+                tail_rows: tail_cap,
             }
         }
         SplitLayout::Stacked {
@@ -114,6 +129,8 @@ pub(super) fn render(
                 palette,
             );
             body.extend(list);
+            let tail_start_row = body.len();
+            let tail_visible = tail_cap.saturating_sub(1);
             if let Some(request) = &manager.confirm {
                 targets.clear();
                 body.extend(confirm_rows(request, manager, inner, 4, palette));
@@ -127,20 +144,25 @@ pub(super) fn render(
                         inner,
                         palette,
                     ));
-                    body.extend(tail_rows(
-                        manager,
-                        &logs,
-                        inner,
-                        tail_cap.saturating_sub(1),
-                        palette,
-                    ));
+                    body.extend(tail_rows(manager, &logs, inner, tail_visible, palette));
                 }
             }
+            let tail_len = body.len().saturating_sub(tail_start_row);
             body.resize(rows, String::new());
+            let tail_rect =
+                (manager.confirm.is_none() && tail_visible > 0 && manager.selected().is_some())
+                    .then_some(PanelRect {
+                        x: content_x,
+                        y: top.saturating_add(tail_start_row as u16),
+                        width: inner as u16,
+                        height: tail_len as u16,
+                    });
             ListBodyRender {
                 lines: body,
                 task_viewport_rows: task_rows,
                 ribbon_hits,
+                tail_rect,
+                tail_rows: tail_visible,
             }
         }
     }
@@ -218,8 +240,13 @@ fn output_label(manager: &TaskManager, lines: usize, palette: &PanelPalette) -> 
     } else {
         String::new()
     };
+    let scroll_mark = if manager.tail_offset > 0 {
+        format!(" · ↑{}", manager.tail_offset)
+    } else {
+        String::new()
+    };
     format!(
-        "\x1b[1m{}{}\x1b[22m · {}{count}",
+        "\x1b[1m{}{}\x1b[22m · {}{count}{scroll_mark}",
         fg(palette.muted),
         t("Output", "输出"),
         stream_name(manager.stream),

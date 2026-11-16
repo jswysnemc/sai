@@ -140,6 +140,31 @@ pub(crate) fn process_stream_input(
             runtime.redraw_stream_composer()?;
             continue;
         }
+        let (draft_text, draft_cursor, draft_sel) = {
+            let draft = runtime.stream_draft();
+            (draft.text.clone(), draft.cursor, draft.slash_selection)
+        };
+        match runtime.handle_completion_mouse(&input, &draft_text, draft_cursor, draft_sel) {
+            super::CompletionMouseEffect::Ignored => {}
+            super::CompletionMouseEffect::Consumed => continue,
+            super::CompletionMouseEffect::Redraw => {
+                runtime.redraw_stream_composer()?;
+                continue;
+            }
+            super::CompletionMouseEffect::Select(next) => {
+                runtime.stream_draft_mut().slash_selection = next;
+                runtime.redraw_stream_composer()?;
+                continue;
+            }
+            super::CompletionMouseEffect::Accept(kind, index, disabled) => {
+                let action =
+                    keys::handle_stream_completion_click(runtime, ctx, kind, index, disabled)?;
+                if action != StreamInputAction::Continue {
+                    return Ok(action);
+                }
+                continue;
+            }
+        }
         if runtime.handle_inline_composer_mouse(&input)? {
             runtime.apply_stream_mouse_cursor();
             runtime.redraw_stream_composer()?;

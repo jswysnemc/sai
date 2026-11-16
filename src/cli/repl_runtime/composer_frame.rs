@@ -34,6 +34,22 @@ use crossterm::terminal::{Clear, ClearType};
 pub(super) use input_geometry::InputGeometry;
 use std::io::Write;
 
+/// 补全面板类型：斜杠命令面板或引用候选面板。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::cli) enum CompletionPanelKind {
+    Slash,
+    Mention,
+}
+
+/// 已绘制补全面板中的单行鼠标命中信息。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::cli::repl_runtime) struct CompletionHit {
+    pub(in crate::cli::repl_runtime) row: u16,
+    pub(in crate::cli::repl_runtime) kind: CompletionPanelKind,
+    pub(in crate::cli::repl_runtime) index: usize,
+    pub(in crate::cli::repl_runtime) disabled: bool,
+}
+
 /// composer 一次绘制的完整内容签名。
 ///
 /// 覆盖屏幕上会出现的每一处：位置、各区域文本与光标落点。
@@ -47,6 +63,8 @@ pub(super) struct ComposerSignature {
     )>,
     pub(super) input_geometry: Option<InputGeometry>,
     pub(super) footer_geometry: Option<InputGeometry>,
+    pub(in crate::cli::repl_runtime) completion_hits: Vec<CompletionHit>,
+    pub(in crate::cli::repl_runtime) completion_area: Option<(u16, u16)>,
     top: u16,
     height: u16,
     cols: usize,
@@ -62,6 +80,43 @@ pub(super) struct ComposerSignature {
 }
 
 impl ComposerSignature {
+    /// 【终端】【补全命中】查询终端坐标是否落在补全候选行上。
+    ///
+    /// 参数:
+    /// - `column`: 终端列坐标
+    /// - `row`: 终端行坐标
+    ///
+    /// 返回:
+    /// - 命中的候选条目；超出面板宽度或不在条目行时返回空
+    pub(in crate::cli::repl_runtime) fn completion_hit_at(
+        &self,
+        column: u16,
+        row: u16,
+    ) -> Option<CompletionHit> {
+        if usize::from(column) >= self.cols {
+            return None;
+        }
+        self.completion_hits
+            .iter()
+            .copied()
+            .find(|hit| hit.row == row)
+    }
+
+    /// 【终端】【补全区域】判断终端坐标是否位于可见补全面板内部（含顶栏以支持滚轮滚动）。
+    ///
+    /// 参数:
+    /// - `column`: 终端列坐标
+    /// - `row`: 终端行坐标
+    ///
+    /// 返回:
+    /// - 处于可见补全面板区域内时返回 true
+    pub(in crate::cli::repl_runtime) fn in_completion_area(&self, column: u16, row: u16) -> bool {
+        if usize::from(column) >= self.cols {
+            return false;
+        }
+        self.completion_area
+            .is_some_and(|(start, end)| row >= start && row < end)
+    }
     /// 【终端】【操作快照】按最后一帧的可见行查询操作，不在鼠标移动时重新扫描会话。
     /// 参数: `column` 与 `row` 为屏幕坐标；返回: 与显示内容对应的操作。
     pub(super) fn panel_action_at(&self, column: u16, row: u16) -> Option<PanelAction> {
@@ -132,6 +187,7 @@ pub(super) struct ComposerFrame {
     /// 输入框上方的沉底面板行（todo 快照 / 排队消息 / agent 提示）
     panel_lines: Vec<String>,
     panel_pointer: Option<(u16, u16)>,
+    completion_pointer: Option<(u16, u16)>,
     panel_actions: Vec<(usize, PanelAction)>,
     panel_expanded_rows: Vec<usize>,
     queue_hits: Vec<super::queue_panel_view::QueueHit>,
@@ -171,6 +227,17 @@ impl ComposerFrame {
     ) {
         self.selection = selection;
     }
+    /// 【终端】【补全悬停】保存补全面板指针位置以便高亮悬停命令行。
+    ///
+    /// 参数:
+    /// - `pointer`: 当前指针屏幕坐标
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn set_completion_pointer(&mut self, pointer: Option<(u16, u16)>) {
+        self.completion_pointer = pointer;
+    }
+
     /// 【终端】【面板反馈】保存指针和可操作行，绘制时使用实际几何计算悬停。
     /// 参数: `pointer` 为屏幕坐标，`actions` 为可点击面板行，`expanded_rows` 为已展开标题行；返回: 无。
     pub(super) fn set_panel_pointer(
@@ -216,6 +283,7 @@ impl ComposerFrame {
             mention_candidates: Vec::new(),
             panel_lines: Vec::new(),
             panel_pointer: None,
+            completion_pointer: None,
             panel_actions: Vec::new(),
             panel_expanded_rows: Vec::new(),
             queue_hits: Vec::new(),

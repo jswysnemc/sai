@@ -4,12 +4,15 @@ use super::{
     model::{safe_text, Stream, TaskManager},
     theme::{fit, pill, stream_name, RESET},
     view::thumb,
+    view_list::RibbonItem,
 };
 use crate::i18n::text as t;
+use crate::render::ansi_clip::ansi_visible_width;
 use crate::render::panel_palette::{fg, PanelPalette};
+use crossterm::event::KeyCode;
 use std::ops::Range;
 
-/// 【后台任务】【日志视口】渲染当前日志页，行号表示缓冲区序号，并在溢出时给出滑块行范围。
+/// 【后台任务】【日志视口】渲染当前日志页，行号表示缓冲区序号，并返回滑块与顶栏胶囊热区。
 ///
 /// 参数:
 /// - `manager`: 任务管理状态
@@ -17,46 +20,57 @@ use std::ops::Range;
 /// - `height`: 可见日志行数
 ///
 /// 返回:
-/// - `(分页视觉行, 滑块相对正文的行范围)`
+/// - `(分页视觉行, 滑块相对正文的行范围, 顶栏可点胶囊列表)`
 pub(super) fn rows(
     manager: &mut TaskManager,
     width: usize,
     height: usize,
-) -> (Vec<String>, Range<usize>) {
+) -> (Vec<String>, Range<usize>, Vec<RibbonItem>) {
     let palette = PanelPalette::current();
     let logs = manager.log_lines();
     let offset = manager.pager_offset(height);
     manager.offset = offset;
     let truncated = manager.output.stdout_truncated || manager.output.stderr_truncated;
 
-    // 1. 【后台任务】【日志顶栏】突出当前通道胶囊、缓冲区行范围与截断说明
+    // 1. 【后台任务】【日志顶栏】突出当前通道胶囊、跟随状态胶囊及可点击热区
     let stream_color = match manager.stream {
         Stream::Stdout => palette.accent,
         Stream::Stderr => palette.removed,
         Stream::All => palette.text,
     };
-    let stream_pill = pill(
-        &format!(" {} ", stream_name(manager.stream)),
-        stream_color,
-        Some(palette.focus_bg),
-        true,
-    );
-    let follow_pill = if manager.follow {
-        pill(
-            &format!(" ● {} ", t("Follow", "跟随")),
-            palette.added,
-            Some(palette.hover_bg),
-            false,
-        )
+    let stream_text = format!(" {} ", stream_name(manager.stream));
+    let stream_w = ansi_visible_width(&stream_text);
+    let stream_pill = pill(&stream_text, stream_color, Some(palette.focus_bg), true);
+    let follow_text = if manager.follow {
+        format!(" ● {} ", t("Follow", "跟随"))
     } else {
-        pill(
-            &format!(" ○ {} ", t("Paused", "暂停")),
-            palette.muted,
-            Some(palette.hover_bg),
-            false,
-        )
+        format!(" ○ {} ", t("Paused", "暂停"))
     };
-    let hint = status(manager).map_or_else(
+    let follow_w = ansi_visible_width(&follow_text);
+    let follow_pill = if manager.follow {
+        pill(&follow_text, palette.added, Some(palette.hover_bg), false)
+    } else {
+        pill(&follow_text, palette.muted, Some(palette.hover_bg), false)
+    };
+    let mut header_hits = Vec::new();
+    let usable = width.saturating_sub(1);
+    if !manager.busy && 1 + stream_w <= width {
+        header_hits.push(RibbonItem {
+            start: 1,
+            end: (1 + stream_w).min(width),
+            key: KeyCode::Tab,
+        });
+    }
+    let has_status = status(manager);
+    if has_status.is_none() && !manager.busy && 1 + stream_w + 1 + follow_w <= 1 + usable {
+        let start = 1 + stream_w + 1;
+        header_hits.push(RibbonItem {
+            start,
+            end: start + follow_w,
+            key: KeyCode::Char('f'),
+        });
+    }
+    let hint = has_status.map_or_else(
         || {
             format!(
                 "{stream_pill} {follow_pill} {} {} {}-{}/{} · {}{}",
@@ -82,7 +96,7 @@ pub(super) fn rows(
         },
         |(text, _)| format!("{stream_pill} {}{text}{RESET}", fg(palette.muted)),
     );
-    let mut result = vec![format!(" {}", fit(&hint, width.saturating_sub(1)))];
+    let mut result = vec![format!(" {}", fit(&hint, usable))];
     for (index, line) in logs.iter().enumerate().skip(offset).take(height) {
         result.push(log_row(index, line, width, &palette));
     }
@@ -92,7 +106,7 @@ pub(super) fn rows(
     result.resize(height + 1, String::new());
     // 2. 【后台任务】【滑块定位】顶栏占用第 0 行，滑块按日志实际行数整体下移一行
     let bar = thumb(offset, height, logs.len());
-    (result, bar.start + 1..bar.end + 1)
+    (result, bar.start + 1..bar.end + 1, header_hits)
 }
 
 /// 【后台任务】【尾部输出】在列表模式下渲染选中任务最后若干行日志。
@@ -128,10 +142,13 @@ pub(super) fn tail_rows(
     if logs.is_empty() {
         return vec![empty(palette)];
     }
-    let start = logs.len().saturating_sub(height);
+    let max_offset = logs.len().saturating_sub(height);
+    let clamped = manager.tail_offset.min(max_offset);
+    let start = max_offset.saturating_sub(clamped);
     logs.iter()
         .enumerate()
         .skip(start)
+        .take(height)
         .map(|(index, line)| log_row(index, line, width, palette))
         .collect()
 }

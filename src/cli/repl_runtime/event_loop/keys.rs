@@ -1,5 +1,63 @@
 use super::*;
 
+/// 【终端】【流式点选】处理流式期间斜杠或引用候选面板的鼠标点选。
+///
+/// 参数:
+/// - `runtime`: REPL 运行期
+/// - `ctx`: 当前轮次命令上下文
+/// - `kind`: 补全面板类型
+/// - `index`: 点击命中的候选序号
+/// - `disabled`: 该命令是否在运行期受限
+///
+/// 返回:
+/// - 流式输入循环动作
+pub(super) fn handle_stream_completion_click(
+    runtime: &mut ReplRuntime,
+    ctx: &StreamCommandContext,
+    kind: super::super::CompletionPanelKind,
+    index: usize,
+    disabled: bool,
+) -> Result<StreamInputAction> {
+    if disabled {
+        runtime.record_meta(if crate::i18n::is_zh() {
+            "该命令需等本轮结束后再执行；当前草稿已保留".to_string()
+        } else {
+            "Command is available after this turn finishes; draft preserved".to_string()
+        })?;
+        runtime.redraw_stream_composer()?;
+        return Ok(StreamInputAction::Continue);
+    }
+    runtime.stream_draft_mut().slash_selection = index;
+    match kind {
+        super::super::CompletionPanelKind::Mention => {
+            if complete_stream_mention(runtime)? {
+                return Ok(StreamInputAction::Continue);
+            }
+            runtime.redraw_stream_composer()?;
+            Ok(StreamInputAction::Continue)
+        }
+        super::super::CompletionPanelKind::Slash => {
+            let draft = runtime.stream_draft();
+            if let Some(completed) = crate::cli::repl_completion::accept(
+                &draft.text,
+                draft.cursor,
+                draft.slash_selection,
+                true,
+                true,
+            ) {
+                let draft = runtime.stream_draft_mut();
+                draft.text = completed;
+                draft.cursor = draft.text.chars().count();
+                draft.slash_selection = 0;
+                runtime.redraw_stream_composer()?;
+                Ok(StreamInputAction::Continue)
+            } else {
+                dispatch_stream_command(runtime, ctx)
+            }
+        }
+    }
+}
+
 /// 将单个按键应用到运行中 composer 草稿。
 ///
 /// 参数:

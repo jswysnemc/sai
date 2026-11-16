@@ -124,7 +124,7 @@ pub(in crate::cli) fn read_repl_input(
                 }
             }
         }
-        let event = queued_event.map(Ok).unwrap_or_else(event::read)?;
+        let mut event = queued_event.map(Ok).unwrap_or_else(event::read)?;
         if let Some(action) = runtime.footer_action(&event) {
             if let Some(command) = action.command() {
                 runtime.save_footer_draft(crate::cli::repl_runtime::StreamComposerDraft {
@@ -152,6 +152,26 @@ pub(in crate::cli) fn read_repl_input(
             chrome.set_mode(mode);
             redraw_input!()?;
             continue;
+        }
+        match editing::process_idle_completion_mouse(
+            runtime,
+            &event,
+            &mut input,
+            &mut cursor,
+            &mut slash_selection,
+            &mut clipboard_state,
+            &mut history_clean_index,
+            &mut is_pasted,
+        ) {
+            editing::IdleCompletionStep::Ignored => {}
+            editing::IdleCompletionStep::Consumed => continue,
+            editing::IdleCompletionStep::Redraw => {
+                redraw_input!()?;
+                continue;
+            }
+            editing::IdleCompletionStep::Submit => {
+                event = Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+            }
         }
         if runtime.handle_inline_composer_mouse(&event)? {
             if let Some(position) = runtime.take_composer_mouse_cursor(&input, &clipboard_state) {
@@ -336,32 +356,14 @@ pub(in crate::cli) fn read_repl_input(
                         redraw_input!()?;
                     }
                     KeyCode::Tab => {
-                        // Tab：引用补全或斜杠命令补全
-                        if let Some((next, next_cursor)) = complete_active_mention(
-                            &input,
-                            cursor,
-                            slash_selection,
+                        editing::apply_tab_completion(
                             runtime,
+                            &mut input,
+                            &mut cursor,
+                            &mut slash_selection,
                             &mut clipboard_state,
-                        ) {
-                            input = next;
-                            cursor = next_cursor;
-                            slash_selection = 0;
-                            history_clean_index = None;
-                        } else if input.starts_with('/') {
-                            if let Some(completed) = crate::cli::repl_completion::accept(
-                                &input,
-                                cursor,
-                                slash_selection,
-                                false,
-                                false,
-                            ) {
-                                input = completed.to_string();
-                                cursor = input.chars().count();
-                                history_clean_index = None;
-                            }
-                            slash_selection = 0;
-                        }
+                            &mut history_clean_index,
+                        );
                         is_pasted = false;
                         redraw_input!()?;
                     }

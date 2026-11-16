@@ -66,7 +66,7 @@ impl ReplRuntime {
     }
 
     /// 统计可见候选，input/cursor 为草稿；返回引用优先的候选数
-    fn completion_count(&self, input: &str, cursor: usize) -> usize {
+    pub(in crate::cli) fn completion_count(&self, input: &str, cursor: usize) -> usize {
         let mentions = self.mention_candidates(input, cursor).len();
         if self.mention_completion_pending() {
             return 1;

@@ -3,7 +3,7 @@
 use super::sidebar_palette::{fg, SidebarPalette};
 
 /// 【终端交互】【局部高亮】参数：line 为 ANSI 行，from/to 为显示列范围；返回：仅目标文字使用主题色的行
-pub(in crate::cli::repl_runtime) fn tint_cols(line: &str, from: usize, to: usize) -> String {
+pub(in crate::cli) fn tint_cols(line: &str, from: usize, to: usize) -> String {
     let style = format!("\x1b[22m{}", fg(SidebarPalette::current().accent));
     let mut original_style = String::new();
     let mut output = String::new();

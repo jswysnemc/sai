@@ -166,6 +166,8 @@ impl ReplRuntime {
         self.last_composer_signature = None;
         self.last_cursor_row = None;
         self.panel_pointer = None;
+        self.completion_pointer = None;
+        self.completion_clicks.clear();
         self.key_notice = None;
         self.force_reanchor = true;
         Ok(cached)

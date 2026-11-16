@@ -60,13 +60,13 @@ impl SlashPanel {
         self.max_rows = self.max_rows.min(rows.max(1));
     }
 
-    /// 计算是否显示紧凑顶栏及可见命令条目数。
+    /// 计算是否显示紧凑顶栏、窗口起始下标及可见命令条目数。
     ///
     /// 返回:
-    /// - `(是否包含顶栏, 可见建议行数)`
-    fn window_geometry(&self) -> (bool, usize) {
+    /// - `(是否包含顶栏, 窗口首项下标, 可见建议行数)`
+    fn visible_window(&self) -> (bool, usize, usize) {
         if self.suggestions.is_empty() {
-            return (false, 0);
+            return (false, 0, 0);
         }
         let show_header = self.max_rows >= 2 && self.suggestions.len() > 1;
         let item_budget = if show_header {
@@ -77,7 +77,11 @@ impl SlashPanel {
         .min(MAX_REPL_COMMAND_SUGGESTIONS)
         .min(self.suggestions.len())
         .max(1);
-        (show_header, item_budget)
+        let start = self
+            .selected
+            .saturating_sub(item_budget / 2)
+            .min(self.suggestions.len().saturating_sub(item_budget));
+        (show_header, start, item_budget)
     }
 
     /// 返回面板占用的终端行数。
@@ -85,7 +89,7 @@ impl SlashPanel {
     /// 返回:
     /// - 包含顶栏与可见命令行的总高度
     pub(super) fn height(&self) -> u16 {
-        let (show_header, items) = self.window_geometry();
+        let (show_header, _, items) = self.visible_window();
         (items + usize::from(show_header)).min(u16::MAX as usize) as u16
     }
 
@@ -96,16 +100,26 @@ impl SlashPanel {
     ///
     /// 返回:
     /// - 面板每行的完整文本
+    #[allow(dead_code)]
     pub(super) fn rendered_lines(&self, cols: usize) -> Vec<String> {
-        let (show_header, visible_items) = self.window_geometry();
+        self.rendered_rows_with_meta(cols).0
+    }
+
+    /// 【终端】【命令面板】渲染面板行并附带每行对应的候选下标与禁用标志，供鼠标悬停与点击定位。
+    ///
+    /// 参数:
+    /// - `cols`: 终端列数
+    ///
+    /// 返回:
+    /// - `(渲染文本行, 每行对应的候选信息(下标, 是否禁用))`
+    pub(super) fn rendered_rows_with_meta(
+        &self,
+        cols: usize,
+    ) -> (Vec<String>, Vec<Option<(usize, bool)>>) {
+        let (show_header, start, visible_items) = self.visible_window();
         if visible_items == 0 {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         }
-        // 1. 【终端】【滚动窗口】保持当前选中命令处于窗口视野中央
-        let start = self
-            .selected
-            .saturating_sub(visible_items / 2)
-            .min(self.suggestions.len().saturating_sub(visible_items));
         let cmd_width = self.suggestions[start..start + visible_items]
             .iter()
             .map(|item| visible_width(item.command))
@@ -113,6 +127,7 @@ impl SlashPanel {
             .unwrap_or(14)
             .saturating_add(2);
         let mut lines = Vec::with_capacity(visible_items + usize::from(show_header));
+        let mut meta = Vec::with_capacity(visible_items + usize::from(show_header));
         if show_header {
             lines.push(render::header_line(
                 start,
@@ -120,6 +135,7 @@ impl SlashPanel {
                 self.suggestions.len(),
                 cols,
             ));
+            meta.push(None);
         }
         for (offset, suggestion) in self
             .suggestions
@@ -135,8 +151,9 @@ impl SlashPanel {
                 cols,
                 index == self.selected,
             ));
+            meta.push(Some((index, suggestion.disabled)));
         }
-        lines
+        (lines, meta)
     }
 }
 

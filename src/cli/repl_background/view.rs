@@ -29,6 +29,9 @@ pub(super) struct TaskFrame {
     pub targets: Vec<(u16, String)>,
     /// 已渲染控件的精确可点击热区（筛选标签、通道胶囊、页脚按钮）
     pub buttons: Vec<ControlHit>,
+    /// 尾部输出区的终端屏幕范围与可见行数（用于独立滚轮滚动）
+    pub tail_rect: Option<PanelRect>,
+    pub tail_rows: usize,
     pub page_rows: usize,
     pub rect: PanelRect,
 }
@@ -63,18 +66,41 @@ pub(super) fn render(manager: &mut TaskManager, rect: PanelRect) -> TaskFrame {
     let mut targets = Vec::new();
     let mut buttons = Vec::new();
     let mut thumb = 0..0;
+    let mut tail_rect = None;
+    let mut tail_rows = 0usize;
+    let content_left = usize::from(rect.x) + 2;
     let (title, body, page_rows) = if manager.pager {
         // 1. 【后台任务】【日志模式】首行为状态顶栏，其余正文行全部用于日志输出
         let page_rows = body_rows.saturating_sub(1).max(1);
-        let (body, rows) = super::pager_view::rows(manager, inner, page_rows);
+        let (body, rows, header_hits) = super::pager_view::rows(manager, inner, page_rows);
         thumb = rows;
+        if body_rows > 0 && rect.width >= 4 {
+            let row = rect.y.saturating_add(1);
+            for item in header_hits {
+                buttons.push(ControlHit {
+                    row,
+                    start_col: (content_left + item.start) as u16,
+                    end_col: (content_left + item.end) as u16,
+                    key: item.key,
+                });
+            }
+        }
         (pager_title(manager, &palette), body, page_rows)
     } else {
         let top = rect.y.saturating_add(1);
-        let rendered = list_body::render(manager, inner, body_rows, top, &mut targets, &palette);
+        let rendered = list_body::render(
+            manager,
+            inner,
+            body_rows,
+            content_left as u16,
+            top,
+            &mut targets,
+            &palette,
+        );
+        tail_rect = rendered.tail_rect;
+        tail_rows = rendered.tail_rows;
         if body_rows > 0 && rect.width >= 4 {
             let row = top;
-            let content_left = usize::from(rect.x) + 2;
             for item in rendered.ribbon_hits {
                 buttons.push(ControlHit {
                     row,
@@ -93,7 +119,6 @@ pub(super) fn render(manager: &mut TaskManager, rect: PanelRect) -> TaskFrame {
     let (footer_text, footer_hits) = footer_with_hits(manager, inner);
     if rect.height >= 2 && rect.width >= 4 {
         let bottom_row = rect.y.saturating_add(rect.height.saturating_sub(1));
-        let content_left = usize::from(rect.x) + 2;
         for item in footer_hits {
             buttons.push(ControlHit {
                 row: bottom_row,
@@ -119,10 +144,26 @@ pub(super) fn render(manager: &mut TaskManager, rect: PanelRect) -> TaskFrame {
     let bottom = rect.y.saturating_add(rect.height.saturating_sub(1));
     targets.retain(|(row, _)| *row < bottom);
     buttons.retain(|hit| hit.row <= bottom);
+    // 4. 【后台任务】【按钮悬停】使用保色相悬停高亮突出指针所在的可点击胶囊与页脚按键
+    if let Some((column, row)) = manager.hovered_button {
+        if let Some(button) = buttons
+            .iter()
+            .find(|hit| hit.row == row && column >= hit.start_col && column < hit.end_col)
+        {
+            let index = usize::from(button.row.saturating_sub(rect.y));
+            if let Some(line) = lines.get_mut(index) {
+                let from = usize::from(button.start_col.saturating_sub(rect.x));
+                let to = usize::from(button.end_col.saturating_sub(rect.x));
+                *line = crate::cli::repl_runtime::control_tint_cols(line, from, to);
+            }
+        }
+    }
     TaskFrame {
         lines,
         targets,
         buttons,
+        tail_rect,
+        tail_rows,
         page_rows,
         rect,
     }

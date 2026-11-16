@@ -22,7 +22,7 @@ mod block_scrollbar_input;
 mod block_scrollbar_input_tests;
 mod bottom_button;
 mod composer_image_input;
-pub(in crate::cli::repl_runtime) mod control_hover;
+pub(in crate::cli) mod control_hover;
 mod git_preview;
 mod git_preview_code;
 #[cfg(test)]

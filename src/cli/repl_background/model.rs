@@ -47,10 +47,12 @@ pub(super) struct TaskManager {
     pub tasks: Vec<Task>,
     pub selected_id: Option<String>,
     pub hovered: Option<String>,
+    pub hovered_button: Option<(u16, u16)>,
     pub filter: Filter,
     pub pager: bool,
     pub stream: Stream,
     pub offset: usize,
+    pub tail_offset: usize,
     pub follow: bool,
     pub output: Output,
     pub output_id: Option<String>,
@@ -70,10 +72,12 @@ impl Default for TaskManager {
             tasks: Vec::new(),
             selected_id: None,
             hovered: None,
+            hovered_button: None,
             filter: Filter::All,
             pager: false,
             stream: Stream::Stdout,
             offset: 0,
+            tail_offset: 0,
             follow: true,
             output: Output::default(),
             output_id: None,
@@ -120,6 +124,7 @@ impl TaskManager {
         {
             self.selected_id = visible.first().map(|index| self.tasks[*index].id.clone());
             self.offset = 0;
+            self.tail_offset = 0;
             self.follow = true;
         }
         if self.selected_id.is_none() {
@@ -140,6 +145,7 @@ impl TaskManager {
             .min(visible.len().saturating_sub(1));
         self.selected_id = visible.get(next).map(|index| self.tasks[*index].id.clone());
         self.offset = 0;
+        self.tail_offset = 0;
         self.follow = true;
     }
 
@@ -242,7 +248,29 @@ impl TaskManager {
             Stream::All => Stream::Stdout,
         };
         self.offset = 0;
+        self.tail_offset = 0;
         self.follow = true;
+    }
+
+    /// 【后台任务】【尾部滚轮】在双栏或堆叠列表右侧输出区独立向上或向下滚动尾部输出。
+    ///
+    /// 参数:
+    /// - `delta`: 滚轮位移（负值向上翻看历史，正值回落到底部）
+    /// - `rows`: 尾部输出可见行数
+    ///
+    /// 返回:
+    /// - 无
+    pub fn scroll_tail(&mut self, delta: isize, rows: usize) {
+        let max = self.log_lines().len().saturating_sub(rows);
+        if delta < 0 {
+            self.tail_offset = self
+                .tail_offset
+                .min(max)
+                .saturating_add(delta.unsigned_abs())
+                .min(max);
+        } else {
+            self.tail_offset = self.tail_offset.min(max).saturating_sub(delta as usize);
+        }
     }
 
     /// 【后台任务】【结果提示】保存操作反馈，错误持续保留直到下一次操作。
