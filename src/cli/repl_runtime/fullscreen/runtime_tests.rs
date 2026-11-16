@@ -479,3 +479,210 @@ fn bottom_button_returns_to_latest_output() {
     assert!(session.bottom_button.is_none());
     assert!(session.state.selection.is_none());
 }
+
+/// 【终端】【悬停保护回归】悬停工具详情期间新增工具与输出不抢焦点、不自动收起，仅点击回到底部或滚到底部后恢复。
+#[test]
+fn hovering_tool_detail_prevents_focus_steal_and_auto_collapse_until_bottom_resumed() {
+    use crate::render::activity_animation::strip_ansi_for_test as plain;
+    use crossterm::event::MouseButton;
+    crate::render::tui_mode::set_override(Some(crate::config::TuiMode::Fullscreen));
+    let mut runtime = ReplRuntime::new(
+        200,
+        TranscriptRenderOptions {
+            reasoning_mode: ReasoningDisplayMode::Full,
+            tool_call_mode: ToolCallDisplayMode::Full,
+        },
+    );
+    runtime
+        .transcript
+        .push_tool_call("bash".into(), r#"{"command":"echo step-first"}"#.into());
+    runtime
+        .transcript
+        .push_tool_result("bash".into(), true, "INSPECT-FIRST-OUTPUT".into());
+    runtime.enter_fullscreen().unwrap();
+
+    // 1. 【终端】【悬停锁定】在底部悬停首个工具详情行
+    let session = runtime.fullscreen.as_ref().unwrap();
+    let layout = session.state.layout.unwrap();
+    let inspect_doc_row = session
+        .state
+        .document
+        .lines
+        .iter()
+        .position(|line| plain(line.as_str()).contains("INSPECT-FIRST-OUTPUT"))
+        .expect("首条工具输出应默认展开");
+    let hover_screen_row = layout.body_top + (inspect_doc_row - session.state.scroll) as u16;
+    runtime
+        .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 6, hover_screen_row))
+        .unwrap();
+    let hover_doc_row_before = inspect_doc_row;
+    let hover_visual_offset_before =
+        hover_doc_row_before - runtime.fullscreen.as_ref().unwrap().state.scroll;
+
+    // 2. 【终端】【新增输出】连续刷新多个新工具及后续回复，视口不跳走且原详情保持展开可见
+    for idx in 0..5 {
+        runtime
+            .transcript
+            .push_tool_call("bash".into(), format!(r#"{{"command":"echo new-{idx}"}}"#));
+        runtime.transcript.push_tool_result(
+            "bash".into(),
+            true,
+            (0..8)
+                .map(|line| format!("NEW-TOOL-{idx}-LINE-{line}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
+    }
+    runtime.transcript.push_chunk(&ChatStreamChunk {
+        kind: ChatStreamKind::Content,
+        text: (0..12)
+            .map(|line| format!("FINAL-REPLY-{line}\n"))
+            .collect(),
+    });
+    runtime.paint_fullscreen().unwrap();
+
+    let session = runtime.fullscreen.as_ref().unwrap();
+    assert!(!session.state.follow, "悬停查看新输出出现后应冻结自动跟随");
+    assert!(
+        !session.state.activity.all_following(),
+        "内部执行链同样应暂停自动跟随"
+    );
+    assert!(session.state.unseen, "应显示有新输出按钮提示");
+    let inspect_doc_row_after = session
+        .state
+        .document
+        .lines
+        .iter()
+        .position(|line| plain(line.as_str()).contains("INSPECT-FIRST-OUTPUT"))
+        .expect("悬停查看的工具详情在新增输出后不得自动收起或被折叠入口吞掉");
+    assert_eq!(
+        inspect_doc_row_after - session.state.scroll,
+        hover_visual_offset_before,
+        "悬停行相对屏幕的位置应保持稳定（即使上方出现了分组标题）"
+    );
+    let (start, end) = session.bottom_button.expect("应显示回到底部/有新输出按钮");
+
+    // 3. 【终端】【点击恢复】点击回到底部按钮后恢复自动跟随与底部显示
+    let last_row = layout.body_top + layout.body_height - 1;
+    click(&mut runtime, (start + end) / 2, last_row);
+    let session = runtime.fullscreen.as_ref().unwrap();
+    assert!(session.state.follow);
+    assert!(session.state.activity.all_following());
+    assert!(!session.state.unseen);
+    assert_eq!(
+        session.state.scroll,
+        session.state.max_scroll(usize::from(layout.body_height))
+    );
+
+    // 4. 【终端】【手动滚到底部恢复】鼠标左键按下或滚轮上滚离开后，主动滚到底部同样恢复跟随
+    runtime
+        .handle_fullscreen_event(&mouse(MouseEventKind::ScrollUp, 6, hover_screen_row))
+        .unwrap();
+    assert!(!runtime.fullscreen.as_ref().unwrap().state.follow);
+    runtime
+        .handle_fullscreen_event(&mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            6,
+            hover_screen_row,
+        ))
+        .ok();
+    for _ in 0..40 {
+        runtime
+            .handle_fullscreen_event(&mouse(MouseEventKind::ScrollDown, 6, hover_screen_row))
+            .unwrap();
+    }
+    assert!(runtime.fullscreen.as_ref().unwrap().state.follow);
+    crate::render::tui_mode::set_override(None);
+}
+
+/// 【终端】【展开保护回归】展开查看工具步骤后追加大量新步骤，已展开步骤不自动折叠且不被历史入口隐藏。
+#[test]
+fn expanded_tool_detail_survives_many_new_tools_until_returning_to_bottom() {
+    use crate::render::activity_animation::strip_ansi_for_test as plain;
+    crate::render::tui_mode::set_override(Some(crate::config::TuiMode::Fullscreen));
+    let mut runtime = ReplRuntime::new(
+        200,
+        TranscriptRenderOptions {
+            reasoning_mode: ReasoningDisplayMode::Full,
+            tool_call_mode: ToolCallDisplayMode::Full,
+        },
+    );
+    for idx in 0..3 {
+        runtime
+            .transcript
+            .push_tool_call("bash".into(), format!(r#"{{"command":"echo task-{idx}"}}"#));
+        runtime.transcript.push_tool_result(
+            "bash".into(),
+            true,
+            format!("TARGET-{idx}-BODY\nEXTRA-{idx}"),
+        );
+    }
+    runtime.enter_fullscreen().unwrap();
+
+    // 1. 【终端】【手动折叠再展开】收起首条再点击重新展开，验证写入了持久展开固定键
+    let session = runtime.fullscreen.as_ref().unwrap();
+    let layout = session.state.layout.unwrap();
+    let target_row = session
+        .state
+        .document
+        .lines
+        .iter()
+        .position(|line| plain(line.as_str()).contains("TARGET-0-BODY"))
+        .unwrap();
+    let screen_row = layout.body_top + (target_row - session.state.scroll) as u16;
+    click(&mut runtime, 6, screen_row);
+    let collapsed_row = runtime
+        .fullscreen
+        .as_ref()
+        .unwrap()
+        .state
+        .document
+        .paragraphs
+        .iter()
+        .find(|span| {
+            span.key.cell == 0
+                && !matches!(
+                    span.key.part,
+                    crate::render::transcript::ParagraphPart::ActivityGroup
+                        | crate::render::transcript::ParagraphPart::OlderActivity
+                )
+        })
+        .unwrap()
+        .control;
+    let expand_screen_row = layout.body_top
+        + (collapsed_row - runtime.fullscreen.as_ref().unwrap().state.scroll) as u16;
+    click(&mut runtime, 6, expand_screen_row);
+
+    // 2. 【终端】【大量新增】追加 14 个新工具与回复后，原本手动展开的工具仍可见且未被折叠
+    for idx in 3..17 {
+        runtime
+            .transcript
+            .push_tool_call("bash".into(), format!(r#"{{"command":"echo task-{idx}"}}"#));
+        runtime
+            .transcript
+            .push_tool_result("bash".into(), true, format!("LATER-{idx}"));
+    }
+    runtime.transcript.push_chunk(&ChatStreamChunk {
+        kind: ChatStreamKind::Content,
+        text: "AFTER-TOOLS-REPLY\n".repeat(8),
+    });
+    runtime.paint_fullscreen().unwrap();
+    let session = runtime.fullscreen.as_ref().unwrap();
+    let rendered = session
+        .state
+        .document
+        .lines
+        .iter()
+        .map(|line| plain(line.as_str()))
+        .collect::<Vec<_>>();
+    assert!(!session.state.follow);
+    assert!(session.state.unseen);
+    assert!(
+        rendered.iter().any(|line| line.contains("TARGET-0-BODY")),
+        "expanded={:?} pinned={:?} lines={:?}",
+        session.state.expanded,
+        session.state.pinned_cells,
+        rendered
+    );
+    crate::render::tui_mode::set_override(None);
+}

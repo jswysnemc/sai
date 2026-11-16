@@ -40,6 +40,34 @@ impl ReasoningViewports {
         position.manually_scrolled = true;
         changed
     }
+    /// 【终端】【思考暂停】判断是否存在已暂停跟随的实时思考块。
+    /// 参数: 无；返回: 存在暂停项时为 true。
+    pub(super) fn any_paused(&self) -> bool {
+        self.positions
+            .values()
+            .any(|position| position.live && !position.follow)
+    }
+
+    /// 【终端】【思考固定】悬停查看实时思考时暂停该思考块的尾随滚动。
+    /// 参数: `cell` 为思考单元下标；返回: 无。
+    pub(super) fn pause_if_hovered(&mut self, cell: usize) {
+        if let Some(position) = self.positions.get_mut(&cell) {
+            if position.live {
+                position.follow = false;
+            }
+        }
+    }
+
+    /// 【终端】【思考恢复】回到底部时恢复所有实时思考块的跟随状态。
+    /// 参数: 无；返回: 无。
+    pub(super) fn resume_live_follow(&mut self) {
+        for position in self.positions.values_mut() {
+            if position.live {
+                position.follow = true;
+            }
+        }
+    }
+
     /// 【终端】【思考边界】判断段落是否需要独立滚动，全文可见时交由主会话滚动。
     /// 参数: `key` 为思考段落键；返回: 正文是否超过五行窗口。
     pub(super) fn is_scrollable(&self, key: ParagraphKey) -> bool {

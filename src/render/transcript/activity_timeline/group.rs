@@ -115,7 +115,12 @@ pub(super) fn render(
             ParagraphKey::activity(thought_index, false),
             ParagraphKey::whole(thought_index),
         ]);
-        if group_open && older.visible(indices.len()) {
+        if group_open
+            && older.visible_with_pin(
+                indices.len(),
+                super::recent_details::is_cell_pinned(thought_index),
+            )
+        {
             nodes.push((key, node, true));
         }
     }
@@ -159,7 +164,9 @@ pub(super) fn render(
             ParagraphKey::activity(index, false),
             ParagraphKey::whole(index),
         ]);
-        if group_open && older.visible(position) {
+        if group_open
+            && older.visible_with_pin(position, super::recent_details::is_cell_pinned(index))
+        {
             nodes.push((key, rendered, !awaiting));
         }
     }
@@ -186,7 +193,18 @@ pub(super) fn render(
             control: 0,
         });
     }
-    older.append_control(&mut document, node_width, open, inset);
+    let cutoff = older.hidden_cutoff();
+    let hidden_count = indices
+        .iter()
+        .take(cutoff)
+        .filter(|index| !super::recent_details::is_cell_pinned(**index))
+        .count()
+        + usize::from(
+            live_thought
+                && indices.len() < cutoff
+                && !super::recent_details::is_cell_pinned(thought_index),
+        );
+    older.append_control(&mut document, node_width, open, inset, hidden_count);
     let details_open = nodes.iter().any(|(_, node, _)| node.open);
     for (key, node, interactive) in nodes {
         let start = document.lines.len();

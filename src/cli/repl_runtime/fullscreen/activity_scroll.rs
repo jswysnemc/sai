@@ -175,8 +175,28 @@ impl FullscreenState {
         let selected = self.activity.selected;
         let changed = self.scroll_activity(key, isize::MAX);
         let revealed = self.reveal_activity(key, body_height);
+        if let Some(region) = self
+            .document
+            .activities
+            .iter()
+            .find(|region| region.key == key)
+        {
+            let range = region.start..region.end;
+            let cleared_cells: Vec<usize> = self
+                .document
+                .paragraphs
+                .iter()
+                .filter(|span| span.start >= range.start && span.start < range.end)
+                .map(|span| span.key.cell)
+                .collect();
+            for cell in cleared_cells {
+                if self.pinned_cells.remove(&cell) {
+                    self.pending_refresh = true;
+                }
+            }
+        }
         self.follow = false;
-        Some(revealed || changed || selected != self.activity.selected)
+        Some(revealed || changed || selected != self.activity.selected || self.pending_refresh)
     }
 
     /// 【终端】【链内状态】应用独立滚动并清理已失效选区。

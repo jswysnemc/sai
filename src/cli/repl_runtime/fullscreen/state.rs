@@ -31,6 +31,12 @@ pub(super) struct FullscreenState {
     pub(super) unseen: bool,
     /// 用户展开的段落键
     pub(super) expanded: HashSet<ParagraphKey>,
+    /// 查看保护期间固定不折叠的步骤单元下标
+    pub(super) pinned_cells: HashSet<usize>,
+    /// 恢复底部分支后触发一次正文重绘
+    pub(super) pending_refresh: bool,
+    /// 本帧由“回到底部”或手动滚到底部触发恢复，跳过本次光标行重新锁定
+    pub(super) resuming_bottom: bool,
     /// 最近一次渲染的正文
     pub(super) document: FullscreenDocument,
     /// 最近一次绘制的屏幕分区
@@ -78,7 +84,7 @@ impl FullscreenState {
         self.document.lines.len().saturating_sub(body_height)
     }
 
-    /// 换入新渲染的正文，并按跟随状态修正滚动位置。
+    /// 换入新渲染的正文，并按跟随状态或查看锚点修正滚动位置。
     ///
     /// 参数:
     /// - `document`: 新正文
@@ -86,8 +92,37 @@ impl FullscreenState {
     ///
     /// 返回:
     /// - 无
+    #[cfg(test)]
     pub(super) fn apply_document(&mut self, document: FullscreenDocument, body_height: usize) {
+        let anchor = self.hovered_inspect_anchor();
+        self.apply_document_with_anchor(document, body_height, anchor, true);
+    }
+
+    /// 【终端】【防抢焦点】在保持悬停查看位置的前提下换入新文档；回到底部或未查看时正常跟随。
+    ///
+    /// 参数:
+    /// - `document`: 新正文
+    /// - `body_height`: 正文区行数
+    /// - `hover_anchor`: 刷新前捕获的悬停锚点
+    /// - `respect_hover`: 是否根据悬停状态冻结跟随
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn apply_document_with_anchor(
+        &mut self,
+        document: FullscreenDocument,
+        body_height: usize,
+        hover_anchor: Option<super::inspection_lock::InspectAnchor>,
+        respect_hover: bool,
+    ) {
+        let anchor = if respect_hover {
+            hover_anchor.or_else(|| self.hovered_inspect_anchor())
+        } else {
+            None
+        };
         let grew = document.lines.len() > self.document.lines.len();
+        let changed = document.lines != self.document.lines;
+        let previous_max = self.max_scroll(body_height);
         // 1. 清掉已不存在的展开键（/clear 或会话切换后）
         let mut live_keys = document
             .paragraphs
@@ -95,16 +130,33 @@ impl FullscreenState {
             .map(|span| span.key)
             .collect::<HashSet<_>>();
         live_keys.extend(document.retained_keys.iter().copied());
+        let live_cells = live_keys.iter().map(|key| key.cell).collect::<HashSet<_>>();
         self.expanded.retain(|key| live_keys.contains(key));
+        self.pinned_cells.retain(|cell| live_cells.contains(cell));
         self.document = document;
-        // 2. 跟随时贴底；否则保持位置，只在内容增长时提示有新输出
         let max = self.max_scroll(body_height);
+        // 2. 【终端】【悬停保护】悬停查看工具详情期间若出现新输出或滚动窗口扩展，冻结跟随并锁定当前行
+        if self.follow && anchor.is_some() && changed && (max > previous_max || max > self.scroll) {
+            self.follow = false;
+            if grew || max > self.scroll {
+                self.unseen = true;
+            }
+        }
+        // 3. 跟随时贴底；否则保持视觉位置，仅在内容增长或滞后时提示有新输出
         if self.follow {
             self.scroll = max;
             self.unseen = false;
         } else {
             if grew {
                 self.unseen = true;
+            }
+            if let Some(anchor) = anchor {
+                if let Some(new_row) = Self::locate_inspect_anchor(&self.document, anchor) {
+                    let delta = new_row as isize - anchor.row as isize;
+                    let anchored = (self.scroll as isize + delta).max(0) as usize;
+                    self.scroll = anchored.min(max);
+                    return;
+                }
             }
             self.scroll = self.scroll.min(max);
             // 【终端】【跟随保护】内容短暂收缩到一屏也不能取消用户的阅读暂停。
@@ -128,24 +180,33 @@ impl FullscreenState {
         self.scroll_to(target, body_height)
     }
 
-    /// 滚动到指定首行，滚到底部时恢复跟随。
+    /// 滚动到指定首行，滚到底部时恢复跟随与自动折叠。
     ///
     /// 参数:
     /// - `target`: 目标首行
     /// - `body_height`: 正文区行数
     ///
     /// 返回:
-    /// - 位置是否变化
+    /// - 位置是否变化或恢复了暂停的跟随状态
     pub(super) fn scroll_to(&mut self, target: usize, body_height: usize) -> bool {
+        let was_following = self.follow;
+        let previous_scroll = self.scroll;
         let max = self.max_scroll(body_height);
         let next = target.min(max);
-        let changed = next != self.scroll;
+        let position_changed = next != self.scroll;
         self.scroll = next;
         self.follow = next == max;
         if self.follow {
             self.unseen = false;
+            // 1. 【终端】【主动触底恢复】仅当主动跳到底部或从上方滚抵底部时解除查看锁定
+            if target == usize::MAX || previous_scroll < max {
+                self.resuming_bottom = true;
+                if self.release_inspection_locks() {
+                    self.pending_refresh = true;
+                }
+            }
         }
-        changed
+        position_changed || (!was_following && self.follow)
     }
 
     /// 鼠标当前悬停的折叠提示或展开区域，拖选过程中不显示悬停。

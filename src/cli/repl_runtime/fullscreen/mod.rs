@@ -50,6 +50,7 @@ mod image_viewer_tests;
 mod image_viewer_view;
 mod image_window;
 mod input;
+mod inspection_lock;
 mod layout;
 mod message_picker;
 mod message_picker_input;
@@ -347,24 +348,78 @@ impl ReplRuntime {
             session.state.previous = None;
         }
         let body_height = usize::from(layout.body_height);
-        if refresh_document || view_changed || layout_changed || session.pending_toggle.is_some() {
-            let document = transcript.render_fullscreen(
-                usize::from(layout.content_width),
-                &self.options,
-                &session.state.expanded,
+        if refresh_document
+            || session.state.pending_refresh
+            || view_changed
+            || layout_changed
+            || session.pending_toggle.is_some()
+        {
+            session.state.pending_refresh = false;
+            let resuming_bottom = std::mem::take(&mut session.state.resuming_bottom);
+            let hover_anchor = if resuming_bottom {
+                None
+            } else {
+                session.state.prepare_inspection_refresh()
+            };
+            let (freeze_fold, pinned_cells) = if resuming_bottom {
+                (false, std::collections::HashSet::new())
+            } else {
+                session.state.inspection_protection()
+            };
+            let document = crate::render::transcript::with_inspection_protection(
+                freeze_fold,
+                &pinned_cells,
+                || {
+                    transcript.render_fullscreen(
+                        usize::from(layout.content_width),
+                        &self.options,
+                        &session.state.expanded,
+                    )
+                },
             );
             transcript.clear_dirty();
+            if let Some(anchor) = hover_anchor {
+                if let inspection_lock::InspectTarget::Reasoning(cell)
+                | inspection_lock::InspectTarget::Step(cell) = anchor.target
+                {
+                    session.state.reasoning.pause_if_hovered(cell);
+                }
+            }
             let document = session
                 .state
                 .reasoning
                 .update(document, usize::from(layout.content_width));
+            if let Some(anchor) = hover_anchor {
+                let region_key = match anchor.target {
+                    inspection_lock::InspectTarget::Activity(key) => Some(key),
+                    inspection_lock::InspectTarget::Step(_) => session
+                        .state
+                        .document
+                        .activities
+                        .iter()
+                        .find(|region| anchor.row >= region.start && anchor.row < region.end)
+                        .map(|region| region.key),
+                    inspection_lock::InspectTarget::Reasoning(_) => None,
+                };
+                if let Some(region_key) = region_key {
+                    session
+                        .state
+                        .activity
+                        .pause_if_hovered_and_growing(region_key, &document);
+                }
+            }
             let document = session.state.activity.update(
                 document,
                 body_height,
                 usize::from(layout.content_width),
                 usize::from(size.rows),
             );
-            session.state.apply_document(document, body_height);
+            session.state.apply_document_with_anchor(
+                document,
+                body_height,
+                hover_anchor,
+                !resuming_bottom,
+            );
         }
         if let Some((key, offset)) = session.pending_toggle.take() {
             session

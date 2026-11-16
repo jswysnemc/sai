@@ -17,10 +17,14 @@ impl FullscreenState {
         if !region.scrollable || region.end.saturating_sub(region.start) > body_height {
             return false;
         }
-        // 2. 【终端】【最小位移】已完整可见时保持原位，否则只移动被裁掉的行数
+        // 2. 【终端】【最小位移】已完整可见时保持原位，否则仅平移外层偏移，不解除链内锁定
+        let max = self.max_scroll(body_height);
         let target = self
             .scroll
-            .clamp(region.end.saturating_sub(body_height), region.start);
-        self.scroll_to(target, body_height)
+            .clamp(region.end.saturating_sub(body_height), region.start)
+            .min(max);
+        let changed = target != self.scroll;
+        self.scroll = target;
+        changed
     }
 }

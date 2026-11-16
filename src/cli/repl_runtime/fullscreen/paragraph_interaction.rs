@@ -38,7 +38,7 @@ impl FullscreenState {
         Some((span.key, screen_offset))
     }
 
-    /// 【终端】【展开状态】协调近期节点和全文键，收起时同时退出完整输出模式。
+    /// 【终端】【展开状态】协调近期节点和全文键，展开后持久固定直到主动收起或回到底部。
     /// 参数: `span` 为命中的段落，`in_activity` 为是否属于执行链；返回: 无。
     fn toggle_expansion(&mut self, span: &ParagraphSpan, in_activity: bool) {
         if in_activity && matches!(span.key.part, ParagraphPart::Whole | ParagraphPart::Active) {
@@ -50,15 +50,20 @@ impl FullscreenState {
             if span.expanded {
                 self.expanded.remove(&full);
                 self.expanded.insert(active);
-            } else if span.key.part == ParagraphPart::Whole || span.control > span.start {
+                self.pinned_cells.remove(&span.key.cell);
+            } else {
+                // 1. 【终端】【展开保护】从折叠切到展开时写入全文键并固定步骤，后续新工具不能自动收起
                 self.expanded.remove(&active);
                 self.expanded.insert(full);
-            } else {
-                self.expanded.remove(&active);
-                self.expanded.remove(&full);
+                self.pinned_cells.insert(span.key.cell);
             }
         } else if !self.expanded.remove(&span.key) {
             self.expanded.insert(span.key);
+            if span.key.part == ParagraphPart::Whole {
+                self.pinned_cells.insert(span.key.cell);
+            }
+        } else {
+            self.pinned_cells.remove(&span.key.cell);
         }
     }
 
@@ -79,12 +84,17 @@ impl FullscreenState {
         screen_offset: isize,
         body_height: usize,
     ) {
-        let Some(span) = self.document.paragraphs.iter().find(|span| span.key == key) else {
+        let Some(span) = self.document.paragraphs.iter().find(|span| {
+            span.key == key
+                || (span.key.cell == key.cell
+                    && matches!(span.key.part, ParagraphPart::Whole | ParagraphPart::Active)
+                    && matches!(key.part, ParagraphPart::Whole | ParagraphPart::Active))
+        }) else {
             return;
         };
         let target = (span.start as isize - screen_offset.max(0)).max(0) as usize;
         let max = self.max_scroll(body_height);
         self.scroll = target.min(max);
-        self.follow = self.scroll == max && !span.expanded;
+        self.follow = self.scroll == max && !span.expanded && self.pinned_cells.is_empty();
     }
 }

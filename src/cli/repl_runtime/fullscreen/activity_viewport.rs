@@ -62,6 +62,57 @@ impl ActivityViewports {
         self.selected = Some(key);
         changed
     }
+    /// 【终端】【跟随状态】判断是否所有执行链当前都处于跟随最新状态。
+    /// 参数: 无；返回: 全部执行链跟随时返回 true。
+    pub(super) fn all_following(&self) -> bool {
+        !self.source.activities.iter().any(|region| {
+            self.positions
+                .get(&region.key)
+                .is_some_and(|position| !position.follow)
+        })
+    }
+
+    /// 【终端】【恢复跟随】回到底部时恢复全部执行链的实时尾随。
+    /// 参数: 无；返回: 无。
+    pub(super) fn resume_tail_follow(&mut self) {
+        for position in self.positions.values_mut() {
+            position.follow = true;
+        }
+    }
+
+    /// 【终端】【悬停停顿】若指针停在仍在增长的执行链内，提前暂停其自动尾随并锚定当前窗口偏移。
+    /// 参数: `key` 为命中的执行链键，`next` 为最新源文档；返回: 无。
+    pub(super) fn pause_if_hovered_and_growing(
+        &mut self,
+        key: ParagraphKey,
+        next: &FullscreenDocument,
+    ) {
+        let Some(prev_region) = self
+            .source
+            .activities
+            .iter()
+            .find(|region| region.key == key)
+        else {
+            return;
+        };
+        let Some(next_region) = next.activities.iter().find(|region| region.key == key) else {
+            return;
+        };
+        if next.lines == self.source.lines
+            && next_region.end.saturating_sub(next_region.start)
+                == prev_region.end.saturating_sub(prev_region.start)
+        {
+            return;
+        }
+        let height = self.height(prev_region);
+        let position = self.positions.entry(key).or_default();
+        if position.follow {
+            let window = ActivityWindow::at(&self.source, prev_region, usize::MAX, height);
+            position.offset = window.offset;
+            position.follow = false;
+        }
+    }
+
     /// 【终端】【跟随状态】参数为执行链键；返回是否已跟随末尾，用于区分状态和按钮。
     pub(super) fn is_following(&self, key: ParagraphKey) -> bool {
         self.positions

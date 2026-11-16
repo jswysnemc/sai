@@ -60,6 +60,7 @@ mod tests;
 mod work_status_tests;
 
 pub(crate) use activity_region::ActivityRegion;
+pub(crate) use activity_timeline::recent_details::with_inspection_protection;
 pub(crate) use cell::TranscriptMode;
 pub(crate) use command_output::{ExpandableBlock, ExpandableBlockKind};
 pub(crate) use fullscreen_parts::ParagraphKey;
