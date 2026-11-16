@@ -240,6 +240,7 @@ pub(super) fn unknown_slash_command_hint(input: &str) -> Option<String> {
 ///
 /// 返回:
 /// - 不超过面板容量的补全建议
+#[cfg(test)]
 pub(super) fn visible_repl_command_suggestions(
     input: &str,
     streaming: bool,
@@ -268,6 +269,33 @@ pub(super) fn complete_repl_command(input: &str, streaming: bool) -> Option<&'st
         suggestions.first().map(|suggestion| suggestion.command)
     } else {
         None
+    }
+}
+
+/// 返回 slash 命令所属的短分类标签，供斜杠命令面板分色展示。
+///
+/// 参数:
+/// - `command`: slash 命令或其带参数候选文本
+///
+/// 返回:
+/// - 本地化短分类名
+pub(super) fn command_category(command: &str) -> &'static str {
+    let head = command.split_whitespace().next().unwrap_or(command);
+    if command.contains(char::is_whitespace) {
+        return t("arg", "参数");
+    }
+    match head {
+        "/new" | "/resume" | "/rename" | "/compact" | "/clear" | "/tree" | "/undo" => {
+            t("session", "会话")
+        }
+        "/model" | "/agent" | "/providers" | "/thinking" | "/think" | "/code-model" => {
+            t("model", "模型")
+        }
+        "/plan" | "/audit" | "/yolo" | "/auto" | "/auto-audit" => t("mode", "模式"),
+        "/ps" | "/plugins" | "/plugin" | "/subagents" | "/msg" | "/goal" => t("agent", "任务"),
+        "/view" | "/tui" | "/context" | "/content" => t("view", "视图"),
+        "/config" | "/jev" | "/sandbox" | "/help" | "/exit" => t("system", "系统"),
+        _ => "",
     }
 }
 

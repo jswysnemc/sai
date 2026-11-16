@@ -1,6 +1,4 @@
-use super::repl_commands::{
-    visible_repl_command_suggestions, ReplCommandSuggestion, StreamCommandPolicy,
-};
+use super::repl_commands::{repl_command_suggestions, ReplCommandSuggestion, StreamCommandPolicy};
 use crate::i18n::text as t;
 
 #[cfg(test)]
@@ -111,7 +109,7 @@ pub(super) fn accept(
     {
         return None;
     }
-    let suggestions = visible_repl_command_suggestions(input, streaming);
+    let suggestions = repl_command_suggestions(input, streaming);
     let item = suggestions.get(selected.min(suggestions.len().saturating_sub(1)))?;
     if item.disabled || (enter && input.trim().eq_ignore_ascii_case(item.command)) {
         return None;

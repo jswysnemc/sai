@@ -1,4 +1,4 @@
-use super::repl_commands::visible_repl_command_suggestions;
+use super::repl_commands::repl_command_suggestions;
 use super::repl_runtime::ReplRuntime;
 use crossterm::event::{KeyCode, KeyModifiers};
 
@@ -74,7 +74,7 @@ impl ReplRuntime {
         if mentions > 0 {
             mentions
         } else if cursor == input.chars().count() {
-            visible_repl_command_suggestions(input, false).len()
+            repl_command_suggestions(input, false).len()
         } else {
             0
         }

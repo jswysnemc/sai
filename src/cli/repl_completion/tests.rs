@@ -1,3 +1,4 @@
+use super::super::repl_commands::visible_repl_command_suggestions;
 use super::*;
 
 /// 【终端】【输入样式补全】验证普通与运行状态均提供输入样式候选；无参数或返回值。

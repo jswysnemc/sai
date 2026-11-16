@@ -20,7 +20,7 @@ impl ComposerFrame {
         if self.visual_lines(&layout, cols).len() > usize::from(height) {
             layout.image_strip = Default::default();
         }
-        // 1. 【终端】【引用面板】先按实际视口收缩候选窗口，避免末尾选中项遭到裁剪
+        // 1. 【终端】【候选面板】按实际视口收缩引用或斜杠面板窗口，避免末尾选中项遭到裁剪
         if layout.mention_panel.is_visible() {
             let other_rows = self
                 .visual_lines(&layout, cols)
@@ -28,6 +28,14 @@ impl ComposerFrame {
                 .saturating_sub(usize::from(layout.mention_panel.height()));
             layout
                 .mention_panel
+                .limit_height(usize::from(height).saturating_sub(other_rows));
+        } else if layout.slash_panel.is_visible() {
+            let other_rows = self
+                .visual_lines(&layout, cols)
+                .len()
+                .saturating_sub(usize::from(layout.slash_panel.height()));
+            layout
+                .slash_panel
                 .limit_height(usize::from(height).saturating_sub(other_rows));
         }
         // 2. 【终端】【输入视口】小窗口优先保留光标周围正文，再裁剪辅助区域
