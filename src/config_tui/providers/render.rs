@@ -174,8 +174,9 @@ impl ProviderBrowser<'_> {
                 ("/", t("search", "搜索")),
                 ("j/k", t("move", "移动")),
                 ("h/l", t("columns", "切栏")),
-                ("Enter", t("settings", "模型设置")),
-                ("Tab", t("activate", "激活模型")),
+                ("Space/u", t("use", "设为当前")),
+                ("Tab", t("activate", "激活")),
+                ("Enter", t("edit", "设置")),
                 ("r", t("refresh", "刷新")),
                 ("a", t("add", "添加")),
             ]);

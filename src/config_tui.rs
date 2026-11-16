@@ -2,6 +2,7 @@ mod agents;
 mod background;
 pub(crate) mod compaction;
 mod context_settings;
+mod dashboard;
 pub(crate) mod form;
 mod gateways;
 mod ime;

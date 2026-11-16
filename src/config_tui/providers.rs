@@ -104,6 +104,7 @@ impl<'a> ProviderBrowser<'a> {
                     KeyCode::Char('d') if self.active_col == 2 => self.delete_model(stdout)?,
                     KeyCode::Char('d') => self.delete_provider(stdout)?,
                     KeyCode::Tab if self.active_col == 2 => self.toggle_model_activation(),
+                    KeyCode::Char(' ' | 'u') if self.active_col == 2 => self.set_current_model(),
                     KeyCode::Enter | KeyCode::Char('i') => self.select_or_edit(stdout)?,
                     _ => {}
                 },
@@ -387,6 +388,40 @@ impl<'a> ProviderBrowser<'a> {
                 provider.default_model = model.full.clone();
             }
             self.status = format!("{}: {}", t("Activated model", "已激活模型"), model.full);
+        }
+    }
+
+    /// 【供应商配置】【一键设为当前】在模型栏按 Space 或 u 直接将该模型设为默认并激活供应商，免进二级表单。
+    ///
+    /// 参数: 无
+    ///
+    /// 返回: 无
+    fn set_current_model(&mut self) {
+        if self.active_col != 2 {
+            return;
+        }
+        let Some(model) = self.models.get(self.model_idx).cloned() else {
+            return;
+        };
+        let Some(provider_id) = self
+            .config
+            .providers
+            .get(self.provider_idx)
+            .map(|provider| provider.id.clone())
+        else {
+            return;
+        };
+        if self
+            .config
+            .set_active_provider_model(&provider_id, &model.full)
+            .is_ok()
+        {
+            self.status = format!(
+                "{}: {provider_id} / {}",
+                t("Set active model", "已设为当前模型"),
+                model.full
+            );
+            self.rebuild_models();
         }
     }
 

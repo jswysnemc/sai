@@ -155,7 +155,10 @@ fn on_off(value: bool) -> &'static str {
 }
 
 /// 编辑 TUI 与 CLI 默认权限模式。
-fn edit_permission_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
+pub(super) fn edit_permission_settings(
+    stdout: &mut io::Stdout,
+    config: &mut AppConfig,
+) -> Result<()> {
     let mut fields = vec![
         Field::new(
             t("TUI default permission mode", "TUI 默认权限模式"),
@@ -178,6 +181,125 @@ fn edit_permission_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
     // 兼容旧字段，与 TUI 保持一致
     config.permission.default_mode = tui;
     Ok(())
+}
+
+/// 【配置界面】【权限与沙箱】直达入口菜单，快速切换权限模式或进入系统沙箱设置。
+///
+/// 参数:
+/// - `stdout`: 终端标准输出
+/// - `config`: 待更新应用配置
+///
+/// 返回:
+/// - 菜单操作结果
+pub(super) fn edit_permissions_and_sandbox_menu(
+    stdout: &mut io::Stdout,
+    config: &mut AppConfig,
+) -> Result<()> {
+    let mut selected = 0usize;
+    loop {
+        let options = vec![
+            t("Permissions", "权限模式").to_string(),
+            t("Sandbox isolation", "系统沙箱隔离").to_string(),
+        ];
+        let details = vec![
+            format!(
+                "TUI: {} · CLI: {}",
+                config.permission.tui_mode().as_str(),
+                config.permission.cli_mode().as_str()
+            ),
+            super::sandbox_settings::sandbox_details(config),
+        ];
+        draw_menu_with_details(
+            stdout,
+            t(" PERMISSIONS & SANDBOX ", " 权限与沙箱 "),
+            &options,
+            &details,
+            selected,
+            &super::theme::help_line(&[
+                ("↑↓", t("move", "移动")),
+                ("Enter", t("edit", "编辑")),
+                ("q", t("back", "返回")),
+            ]),
+            "",
+        )?;
+        match read_key()? {
+            KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
+            KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
+            KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
+            KeyCode::Enter => match selected {
+                0 => edit_permission_settings(stdout, config)?,
+                _ => super::sandbox_settings::edit_sandbox_settings(stdout, config)?,
+            },
+            _ => {}
+        }
+    }
+}
+
+/// 【配置界面】【显示与上下文】主菜单直达二级视图，聚合显示、上下文与自动压缩策略。
+///
+/// 参数:
+/// - `stdout`: 终端标准输出
+/// - `config`: 待更新应用配置
+///
+/// 返回:
+/// - 菜单操作结果
+pub(super) fn edit_display_and_context_menu(
+    stdout: &mut io::Stdout,
+    config: &mut AppConfig,
+) -> Result<()> {
+    let mut selected = 0usize;
+    loop {
+        let options = vec![
+            t("Display preferences", "显示偏好").to_string(),
+            t("Terminal & context", "终端与上下文").to_string(),
+            t("Auto-compaction", "自动压缩").to_string(),
+        ];
+        let details = vec![
+            format!(
+                "{}: {} · {}: {}",
+                t("Reasoning", "思考过程"),
+                config.display.reasoning,
+                t("Tool calls", "工具调用"),
+                config.display.tool_calls
+            ),
+            format!(
+                "{}: {} · {}: {}",
+                t("Context chars", "上下文字符"),
+                config.context.default_max_chars,
+                t("Compact", "压缩"),
+                compaction_label(config)
+            ),
+            t(
+                "Adjust percentage and reserved tokens with a live trigger preview.",
+                "调整百分比与预留数量，实时预览生效条件与触发量。",
+            )
+            .to_string(),
+        ];
+        draw_menu_with_details(
+            stdout,
+            t(" DISPLAY & CONTEXT ", " 显示与上下文 "),
+            &options,
+            &details,
+            selected,
+            &super::theme::help_line(&[
+                ("↑↓", t("move", "移动")),
+                ("Enter", t("edit", "编辑")),
+                ("q", t("back", "返回")),
+            ]),
+            "",
+        )?;
+        match read_key()? {
+            KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
+            KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
+            KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
+            KeyCode::Enter => match selected {
+                0 => edit_display_settings(stdout, config)?,
+                1 => edit_context_settings(stdout, config)?,
+                _ => super::compaction::edit_defaults(stdout, config)?,
+            },
+            _ => {}
+        }
+    }
 }
 
 /// 编辑工具行为与后台命令限制。

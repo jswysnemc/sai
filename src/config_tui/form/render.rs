@@ -310,8 +310,8 @@ fn field_detail_text(field: &Field) -> String {
     if field.boolean {
         parts.push(
             t(
-                "Toggle: Enter flips true/false.",
-                "开关：Enter 在 true/false 间切换。",
+                "Toggle: Space, ←/→ or Enter flips on/off.",
+                "开关：Space、←/→ 或 Enter 直接切换开关。",
             )
             .to_string(),
         );
@@ -324,13 +324,27 @@ fn field_detail_text(field: &Field) -> String {
             .to_string(),
         );
     } else if !field.choices.is_empty() {
-        parts.push(format!(
-            "{} ({})",
+        let hint = if field.choices.len() <= 5 {
             t(
-                "Choice list: Enter opens a picker.",
-                "选项列表：Enter 打开选择器。"
-            ),
-            field.choices.len()
+                "Choice: Space, ←/→ or Enter cycles inline.",
+                "选项：Space、←/→ 或 Enter 直接行内切换。",
+            )
+        } else {
+            t(
+                "Choice list: Space/←/→ cycles or Enter opens picker.",
+                "选项列表：Space/←/→ 快速切换，Enter 打开选择器。",
+            )
+        };
+        let options_preview = field
+            .choices
+            .iter()
+            .take(6)
+            .map(|item| choice_label(item, field.empty_choice_label))
+            .collect::<Vec<_>>()
+            .join(" · ");
+        parts.push(format!(
+            "{hint}\n\n{}: {options_preview}",
+            t("Options", "可选")
         ));
     } else if field.secret {
         parts.push(
@@ -343,8 +357,8 @@ fn field_detail_text(field: &Field) -> String {
     } else {
         parts.push(
             t(
-                "Text: Enter to edit, type freely, Enter/Esc to finish.",
-                "文本：Enter 编辑，输入后 Enter/Esc 结束。",
+                "Text: Enter to edit, type freely, Ctrl+S saves immediately.",
+                "文本：Enter 编辑，输入后 Enter 完成，Ctrl+S 直接保存。",
             )
             .to_string(),
         );
@@ -378,19 +392,23 @@ fn field_display_value(field: &Field, revealed_secret: bool, max_value_width: us
             "{VDIM}{}{RESET}",
             t("(Enter opens $EDITOR)", "(Enter 打开 $EDITOR)")
         )
-    } else if !field.choices.is_empty() && field.value.is_empty() {
-        format!(
-            "{VALUE}{}{RESET} {VDIM}▾{RESET}",
-            truncate(field.empty_choice_label, max_value_width.saturating_sub(2))
-        )
     } else if !field.choices.is_empty() {
-        format!(
-            "{VALUE}{}{RESET} {VDIM}▾{RESET}",
-            truncate(
-                &choice_label(&field.value, field.empty_choice_label),
-                max_value_width.saturating_sub(2),
+        let label = if field.value.is_empty() {
+            field.empty_choice_label.to_string()
+        } else {
+            choice_label(&field.value, field.empty_choice_label)
+        };
+        if field.choices.len() <= 5 {
+            format!(
+                "{VDIM}‹ {RESET}{VALUE}{}{RESET}{VDIM} ›{RESET}",
+                truncate(&label, max_value_width.saturating_sub(4)),
             )
-        )
+        } else {
+            format!(
+                "{VALUE}{}{RESET} {VDIM}▾{RESET}",
+                truncate(&label, max_value_width.saturating_sub(2)),
+            )
+        }
     } else if field.value.is_empty() {
         format!("{VDIM}{}{RESET}", t("(empty)", "（空）"))
     } else {

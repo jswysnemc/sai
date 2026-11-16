@@ -1,4 +1,5 @@
 use super::*;
+use crate::config_tui::input::read_key;
 use crate::config_tui::ui::draw_menu_with_details;
 use crossterm::event::KeyCode;
 
@@ -39,14 +40,34 @@ pub(crate) fn edit_provider_form(
             &options,
             &details,
             selected,
-            "1-5 · Enter · q/Esc",
+            &crate::config_tui::theme::help_line(&[
+                ("1-5", t("jump", "跳转")),
+                ("t", t("test", "测试")),
+                ("s", t("save", "保存")),
+                ("q", t("cancel", "取消")),
+            ]),
             "",
         )?;
         match read_key()? {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(None),
-            KeyCode::Up => selected = selected.saturating_sub(1),
-            KeyCode::Down => selected = (selected + 1).min(4),
+            KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
+            KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(4),
             KeyCode::Char(digit @ '1'..='5') => selected = digit as usize - '1' as usize,
+            KeyCode::Char('t') => {
+                if model_import::refresh(stdout, &mut provider, true)? == Some(true) {
+                    imported_connection = Some(model_import::connection_key(&provider));
+                }
+            }
+            KeyCode::Char('s') => {
+                let key = model_import::connection_key(&provider);
+                if provider.enabled
+                    && imported_connection.as_ref() != Some(&key)
+                    && model_import::refresh(stdout, &mut provider, false)?.is_none()
+                {
+                    continue;
+                }
+                return Ok(Some(provider));
+            }
             KeyCode::Enter => match selected {
                 0 => connection::edit(stdout, &mut provider, new_provider)?,
                 1 => {

@@ -42,14 +42,16 @@ pub(crate) fn confirm_delete(
             &[],
             selected,
             &help_line(&[
+                ("y", t("confirm delete", "确认删除")),
+                ("n/Esc", t("cancel", "取消")),
                 ("↑↓", t("move", "移动")),
-                ("Enter", t("confirm", "确认")),
-                ("Esc", t("cancel", "取消")),
+                ("Enter", t("select", "确定")),
             ]),
             warning,
         )?;
         match read_key()? {
-            KeyCode::Esc | KeyCode::Char('q') => return Ok(false),
+            KeyCode::Esc | KeyCode::Char('q' | 'n' | 'N') => return Ok(false),
+            KeyCode::Char('y' | 'Y') => return Ok(true),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
             KeyCode::Enter => return Ok(selected == 0),
@@ -58,7 +60,7 @@ pub(crate) fn confirm_delete(
     }
 }
 
-/// 用配置界面的菜单询问如何处理未保存更改。
+/// 用配置界面的菜单询问如何处理未保存更改，支持单键直达减少确认步数。
 ///
 /// 参数:
 /// - `stdout`: 终端输出
@@ -69,9 +71,9 @@ pub(crate) fn confirm_unsaved_exit(stdout: &mut io::Stdout) -> Result<UnsavedExi
     let mut selected = 0usize;
     loop {
         let options = [
-            t("Save and exit", "保存并退出"),
-            t("Discard changes", "放弃更改"),
-            t("Cancel", "取消"),
+            t("Save and exit  [y/s]", "保存并退出  [y/s]"),
+            t("Discard changes  [d/n]", "放弃更改  [d/n]"),
+            t("Cancel  [Esc]", "取消  [Esc]"),
         ]
         .into_iter()
         .map(str::to_string)
@@ -82,13 +84,15 @@ pub(crate) fn confirm_unsaved_exit(stdout: &mut io::Stdout) -> Result<UnsavedExi
             &options,
             selected,
             &help_line(&[
-                ("↑↓", t("move", "移动")),
-                ("Enter", t("confirm", "确认")),
-                ("Esc", t("back", "返回")),
+                ("y/s/Enter", t("save", "保存")),
+                ("d/n", t("discard", "放弃")),
+                ("Esc", t("stay", "返回")),
             ]),
         )?;
         match read_key()? {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(UnsavedExitChoice::Cancel),
+            KeyCode::Char('y' | 'Y' | 's' | 'S') => return Ok(UnsavedExitChoice::Save),
+            KeyCode::Char('d' | 'D' | 'n' | 'N') => return Ok(UnsavedExitChoice::Discard),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
             KeyCode::Enter => {

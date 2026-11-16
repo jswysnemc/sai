@@ -95,12 +95,15 @@ pub(crate) fn draw_menu_with_details(
     let inner_w = frame.width.saturating_sub(4);
     let mut body_y = frame.y.saturating_add(1);
     if !subtitle.is_empty() {
+        let rendered_subtitle = if subtitle.contains('\x1b') {
+            truncate_ansi(subtitle, inner_w as usize)
+        } else {
+            format!("{MUTED}{}{RESET}", truncate(subtitle, inner_w as usize))
+        };
         queue!(
             stdout,
             MoveTo(inner_x, body_y),
-            Print(crate::render::readable_terminal_text(
-                &(format!("{MUTED}{}{RESET}", truncate(subtitle, inner_w as usize))).to_string()
-            ))
+            Print(crate::render::readable_terminal_text(&rendered_subtitle))
         )?;
         body_y = body_y.saturating_add(1);
         // 副标题与内容间画一条弱化分隔线，标题区从此有边界
@@ -141,15 +144,28 @@ pub(crate) fn draw_menu_with_details(
             ))
         )?;
     }
-    draw_scroll_indicator(
-        stdout,
-        inner_x.saturating_add(left_w),
-        body_y,
-        body_h,
-        options.len(),
-        start,
-        visible_rows,
-    )?;
+    if right_w > 0 && options.len() <= visible_rows {
+        // 1. 【配置界面】【栏分隔线】列表未溢出时在左右栏之间绘制柔和竖线，区分主从结构
+        for row in 0..body_h {
+            queue!(
+                stdout,
+                MoveTo(inner_x.saturating_add(left_w), body_y.saturating_add(row)),
+                Print(crate::render::readable_terminal_text(&format!(
+                    "{DIM}{LINE_VERTICAL}{RESET}"
+                )))
+            )?;
+        }
+    } else {
+        draw_scroll_indicator(
+            stdout,
+            inner_x.saturating_add(left_w),
+            body_y,
+            body_h,
+            options.len(),
+            start,
+            visible_rows,
+        )?;
+    }
 
     if right_w > 0 {
         let detail_x = inner_x.saturating_add(left_w).saturating_add(2);

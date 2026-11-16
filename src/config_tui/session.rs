@@ -9,14 +9,18 @@ use crossterm::terminal;
 use std::io;
 
 use super::agents::edit_agents;
+use super::dashboard::{self, MainAction};
 use super::gateways::edit_gateways;
-use super::input::{read_key, Interrupted};
+use super::input::{read_key, read_key_event, Interrupted};
 use super::knowledge::edit_knowledge_base;
 use super::plugins::edit_cli_tools;
 use super::providers::{select_active_provider, ProviderBrowser};
-use super::settings::edit_settings;
+use super::settings::{
+    edit_display_and_context_menu, edit_permissions_and_sandbox_menu, edit_settings,
+};
 use super::skills::edit_skills;
 use super::ui::{confirm_unsaved_exit, draw_menu_with_details, message, UnsavedExitChoice};
+use crossterm::event::KeyModifiers;
 
 pub fn run(paths: &SaiPaths) -> Result<()> {
     AppConfig::init_files(paths)?;
@@ -101,93 +105,27 @@ fn run_main_menu(
     config: &mut AppConfig,
 ) -> Result<bool> {
     let mut selected = 0usize;
-    // 进入时的快照：用来标已修改状态，退出前提示保存或放弃
-    let baseline = serde_json::to_string(&*config).ok();
+    // 1. 【配置】【基线快照】进入时的序列化快照；直接保存后同步刷新基线
+    let mut baseline = serde_json::to_string(&*config).ok();
+    let mut notice: Option<String> = None;
     loop {
-        let active = active_label(config);
         let dirty = has_unsaved_changes(config, baseline.as_deref());
-        // 高频操作前置，低频配置收进「高级设置」；编号既是视觉锚点也是直达键
-        let labels = [
-            t("Active configuration", "激活配置"),
-            t("Providers and models", "供应商和模型"),
-            t("Agent configuration", "Agent 配置"),
-            t("Tools", "工具"),
-            "Skills",
-            t("Advanced settings", "高级设置"),
-            t("Jev and image models", "Jev 与生图模型"),
-            if dirty {
-                t("Save and exit", "保存并退出")
-            } else {
-                t("Exit", "退出")
-            },
-        ];
-        let options = labels
+        let items = dashboard::menu_items(config, dirty);
+        let options = items
             .iter()
-            .enumerate()
-            .map(|(index, label)| format!("{}  {label}", index + 1))
+            .map(|item| item.label.clone())
             .collect::<Vec<_>>();
-        let details = [
-            format!(
-                "{}\n\n{}: {active}",
-                t(
-                    "Pick which provider/model is active for new chats.",
-                    "选择新对话默认使用的供应商与模型。",
-                ),
-                t("Current", "当前")
-            ),
-            t(
-                "Browse providers, organizations and models. Activate, add, delete or refresh the catalog.",
-                "浏览供应商、组织与模型；可激活、添加、删除或刷新目录。",
-            )
-            .to_string(),
-            t(
-                "Create and edit agent profiles: model, prompt, tool capabilities and skills.",
-                "创建与编辑 Agent 档案：模型、提示词、工具能力与 Skills。",
-            )
-            .to_string(),
-            t(
-                "Toggle and configure assistant tools, including web search.",
-                "启用与配置助手工具，含 Web 搜索。",
-            )
-            .to_string(),
-            t(
-                "Enable or disable installed skills and global skill switches.",
-                "启停已安装的 Skill 与全局 Skill 开关。",
-            )
-            .to_string(),
-            t(
-                "Less frequent settings: knowledge base, gateway channels, global parameters and Jev.",
-                "低频配置：知识库、渠道接入、全局参数与 Jev。",
-            )
-            .to_string(),
-            t("Manage Jev and image generation endpoints, credentials and default models.", "管理 Jev 与生图接入、密钥和默认模型。").to_string(),
-            if dirty {
-                t(
-                    "Configuration has unsaved edits. Confirm whether to write them before leaving.",
-                    "配置有未保存的修改。退出前确认是否写入磁盘。",
-                )
-                .to_string()
-            } else {
-                t(
-                    "No pending edits. Leave the configuration UI.",
-                    "没有未保存的修改。离开配置界面。",
-                )
-                .to_string()
-            },
-        ];
-        let subtitle = if dirty {
-            format!(
-                "{}: {active}  ·  {}",
-                t("Active", "当前激活"),
-                t("Unsaved changes", "已修改")
-            )
-        } else {
-            format!("{}: {active}", t("Active", "当前激活"))
-        };
+        let details = items
+            .iter()
+            .map(|item| item.detail.clone())
+            .collect::<Vec<_>>();
+        selected = selected.min(items.len().saturating_sub(1));
+        let subtitle = dashboard::header_subtitle(config, dirty, notice.as_deref());
         let status = super::theme::help_line(&[
             ("↑↓", t("move", "移动")),
-            ("1-8", t("jump", "跳转")),
+            ("Space", t("cycle", "快切")),
             ("Enter", t("open", "打开")),
+            ("s", t("save", "保存")),
             ("q", t("quit", "退出")),
         ]);
         draw_menu_with_details(
@@ -200,40 +138,128 @@ fn run_main_menu(
             &subtitle,
         )?;
 
-        match read_key()? {
+        let event = read_key_event()?;
+        if event.code == KeyCode::Char('s') && event.modifiers.contains(KeyModifiers::CONTROL) {
+            if save_now(stdout, paths, config)? {
+                baseline = serde_json::to_string(&*config).ok();
+                notice = Some(t("Saved", "已保存").to_string());
+            }
+            continue;
+        }
+        match event.code {
             KeyCode::Char('q') | KeyCode::Esc => {
                 if let Some(saved) = confirm_and_leave(stdout, paths, config, dirty)? {
                     return Ok(saved);
                 }
+                notice = None;
             }
-            KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
-            KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
+            KeyCode::Up | KeyCode::Char('k') => {
+                selected = selected.saturating_sub(1);
+                notice = None;
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                selected = (selected + 1).min(options.len() - 1);
+                notice = None;
+            }
             KeyCode::Char(digit @ '1'..='9') => {
                 let target = digit as usize - '1' as usize;
                 if target < options.len() {
                     selected = target;
+                    notice = None;
                 }
             }
-            KeyCode::Enter => match selected {
-                0 => select_active_provider(stdout, config)?,
-                1 => ProviderBrowser::new(config).run(stdout)?,
-                2 => edit_agents(stdout, paths, config)?,
-                3 => edit_cli_tools(stdout, config)?,
-                4 => edit_skills(stdout, paths, config)?,
-                5 => run_advanced_menu(stdout, paths, config)?,
-                6 => super::model_endpoints::menu(stdout, config)?,
-                7 => {
-                    if dirty {
-                        if let Some(saved) = confirm_and_leave(stdout, paths, config, true)? {
-                            return Ok(saved);
+            KeyCode::Char('0') => {
+                selected = options.len().saturating_sub(1);
+                notice = None;
+            }
+            // 2. 【配置】【单键保存】主界面按 s / w 直接写盘并驻留，不打断继续调参
+            KeyCode::Char('s' | 'w') => {
+                if !dirty {
+                    notice = Some(t("No changes", "无新改动").to_string());
+                } else if save_now(stdout, paths, config)? {
+                    baseline = serde_json::to_string(&*config).ok();
+                    notice = Some(t("Saved", "已保存").to_string());
+                }
+            }
+            // 3. 【配置】【单键快切】对高频项直接在主菜单按 Space / 左右键切换生效
+            KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => {
+                if let Some(feedback) = dashboard::quick_cycle(config, items[selected].action, true)
+                {
+                    notice = Some(feedback);
+                }
+            }
+            KeyCode::Left | KeyCode::Char('h') => {
+                if let Some(feedback) =
+                    dashboard::quick_cycle(config, items[selected].action, false)
+                {
+                    notice = Some(feedback);
+                }
+            }
+            KeyCode::Enter => {
+                notice = None;
+                match items[selected].action {
+                    MainAction::ActiveModel => select_active_provider(stdout, config)?,
+                    MainAction::Providers => ProviderBrowser::new(config).run(stdout)?,
+                    MainAction::Agents => edit_agents(stdout, paths, config)?,
+                    MainAction::PermissionsAndSandbox => {
+                        edit_permissions_and_sandbox_menu(stdout, config)?
+                    }
+                    MainAction::DisplayAndContext => edit_display_and_context_menu(stdout, config)?,
+                    MainAction::Tools => edit_cli_tools(stdout, config)?,
+                    MainAction::Skills => edit_skills(stdout, paths, config)?,
+                    MainAction::ModelEndpoints => super::model_endpoints::menu(stdout, config)?,
+                    MainAction::Advanced => run_advanced_menu(stdout, paths, config)?,
+                    MainAction::ExitOrSave => {
+                        // 4. 【配置】【零二次确认】明确选择「保存并退出」时直接落盘退出
+                        if dirty {
+                            if save_now(stdout, paths, config)? {
+                                return Ok(true);
+                            }
+                        } else {
+                            return Ok(false);
                         }
-                    } else {
-                        return Ok(false);
                     }
                 }
-                _ => {}
-            },
+            }
             _ => {}
+        }
+    }
+}
+
+/// 校验并立即把当前配置写入磁盘。
+///
+/// 参数:
+/// - `stdout`: 终端输出
+/// - `paths`: Sai 路径
+/// - `config`: 当前内存配置
+///
+/// 返回:
+/// - 校验与写盘均成功时返回 true
+fn save_now(stdout: &mut io::Stdout, paths: &SaiPaths, config: &AppConfig) -> Result<bool> {
+    if let Err(error) = config.validate() {
+        message(
+            stdout,
+            &format!(
+                "{}\n\n{error}",
+                t(
+                    "Configuration is invalid, not saved. Fix it before leaving.",
+                    "配置校验未通过，未保存。请先修正后再保存。",
+                )
+            ),
+        )?;
+        return Ok(false);
+    }
+    match config.save(paths) {
+        Ok(()) => Ok(true),
+        Err(error) => {
+            message(
+                stdout,
+                &format!(
+                    "{}: {error}",
+                    t("Failed to save configuration", "保存配置失败")
+                ),
+            )?;
+            Ok(false)
         }
     }
 }
@@ -258,36 +284,7 @@ fn confirm_and_leave(
         return Ok(Some(false));
     }
     match confirm_unsaved_exit(stdout)? {
-        UnsavedExitChoice::Save => {
-            // 必须在落盘前校验：validate 只在加载时跑，写出非法配置会让下一次
-            // sai（包括 sai config 本身）启动即失败，用户被锁在唯一能修复它的界面外
-            if let Err(error) = config.validate() {
-                message(
-                    stdout,
-                    &format!(
-                        "{}\n\n{error}",
-                        t(
-                            "Configuration is invalid, not saved. Fix it before leaving.",
-                            "配置校验未通过，未保存。请先修正后再退出。"
-                        )
-                    ),
-                )?;
-                return Ok(None);
-            }
-            match config.save(paths) {
-                Ok(()) => Ok(Some(true)),
-                Err(error) => {
-                    message(
-                        stdout,
-                        &format!(
-                            "{}: {error}",
-                            t("Failed to save configuration", "保存配置失败")
-                        ),
-                    )?;
-                    Ok(None)
-                }
-            }
-        }
+        UnsavedExitChoice::Save => Ok(save_now(stdout, paths, config)?.then_some(true)),
         UnsavedExitChoice::Discard => Ok(Some(false)),
         UnsavedExitChoice::Cancel => Ok(None),
     }
@@ -389,13 +386,6 @@ fn run_advanced_menu(
             _ => {}
         }
     }
-}
-
-fn active_label(config: &AppConfig) -> String {
-    config
-        .provider(None)
-        .map(|provider| format!("{} / {}", provider.display_name, provider.default_model))
-        .unwrap_or_else(|_| t("not configured", "未配置").to_string())
 }
 
 #[cfg(test)]

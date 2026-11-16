@@ -16,8 +16,12 @@ pub(crate) const DIM: &str = "\x1b[38;2;118;138;146m";
 pub(crate) const VALUE: &str = "\x1b[38;2;152;216;200m";
 /// 开启 / 成功状态
 pub(crate) const OK: &str = "\x1b[38;2;140;206;116m";
+/// 提醒 / 待保存状态
+pub(crate) const WARN: &str = "\x1b[38;2;236;194;110m";
 /// 关闭 / 中性状态沿用 MUTED；危险状态色
 pub(crate) const DANGER: &str = "\x1b[38;2;236;128;132m";
+/// 状态胶囊浅底色（青绿微底，适合开关与当前项标识）
+pub(crate) const PILL_BG: &str = "\x1b[48;2;32;54;60m";
 /// 选中行整行底色（深青灰，与任意背景都能拉开层次）
 pub(crate) const SELECT_BG: &str = "\x1b[48;2;36;62;70m";
 /// 主按钮实心底（品牌绿松）
@@ -90,6 +94,34 @@ pub(crate) fn help_line(pairs: &[(&str, &str)]) -> String {
         .map(|(key, description)| format!("{ACCENT}{key}{RESET} {MUTED}{description}{RESET}"))
         .collect::<Vec<_>>()
         .join(&help_separator())
+}
+
+/// 【配置界面】【状态胶囊】渲染带微底色的紧凑状态标签，适合顶栏摘要与保存指示。
+///
+/// 参数:
+/// - `label`: 胶囊文字
+/// - `fg_style`: 前景颜色转义串
+/// - `bg_style`: 背景颜色转义串
+///
+/// 返回:
+/// - 带样式复位序列的胶囊字符串
+pub(crate) fn pill(label: &str, fg_style: &str, bg_style: &str) -> String {
+    format!("{bg_style}{fg_style} {label} {RESET}")
+}
+
+/// 【配置界面】【保存标识】根据配置是否已修改生成统一状态的顶栏指示标签。
+///
+/// 参数:
+/// - `dirty`: 是否存在未落盘修改
+///
+/// 返回:
+/// - 已样式化的保存状态胶囊
+pub(crate) fn save_state_pill(dirty: bool) -> String {
+    if dirty {
+        pill(crate::i18n::text("unsaved", "待保存"), WARN, PILL_BG)
+    } else {
+        pill(crate::i18n::text("saved", "已保存"), OK, PILL_BG)
+    }
 }
 
 #[cfg(test)]

@@ -41,6 +41,9 @@ impl Drop for FcitxState {
     }
 }
 
+/// 表单行内快捷循环切换的最大候选数；超出时提供可检索完整列表。
+const INLINE_CHOICE_LIMIT: usize = 5;
+
 pub(crate) fn run_form(stdout: &mut io::Stdout, title: &str, fields: &mut [Field]) -> Result<bool> {
     let mut selected = first_selectable(fields);
     let mut editing = false;
@@ -62,6 +65,10 @@ pub(crate) fn run_form(stdout: &mut io::Stdout, title: &str, fields: &mut [Field
         )?;
         let key = read_key_event()?;
         match key.code {
+            KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                fcitx.leave_editing();
+                return Ok(true);
+            }
             KeyCode::Esc if editing => {
                 fcitx.leave_editing();
                 editing = false;
@@ -73,27 +80,53 @@ pub(crate) fn run_form(stdout: &mut io::Stdout, title: &str, fields: &mut [Field
             }
             KeyCode::Enter if !editing && selected == fields.len() => return Ok(true),
             KeyCode::Enter if !editing && selected == fields.len() + 1 => return Ok(false),
-            KeyCode::Enter if !editing && fields[selected].boolean => {
+            // 1. 【配置表单】【单键切换】开关字段直接用空格、Enter 或左右方向键切换，无需进子层
+            KeyCode::Enter
+            | KeyCode::Char(' ')
+            | KeyCode::Left
+            | KeyCode::Right
+            | KeyCode::Char('h' | 'l')
+                if !editing && selected < fields.len() && fields[selected].boolean =>
+            {
                 let value = parse_bool_field(&fields[selected].value)?;
                 fields[selected].value = (!value).to_string();
                 cursors[selected] = fields[selected].value.chars().count();
             }
-            KeyCode::Enter if !editing && !fields[selected].choices.is_empty() => {
-                fields[selected].value = select_choice(
-                    stdout,
-                    fields[selected].label,
-                    &fields[selected].value,
-                    &fields[selected].choices,
-                    fields[selected].empty_choice_label,
-                )?;
+            // 2. 【配置表单】【行内轮换】少量候选直接行内左右切换，大量候选或按 Enter 时按规模选择
+            KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l')
+                if !editing && selected < fields.len() && !fields[selected].choices.is_empty() =>
+            {
+                cycle_choice(&mut fields[selected], true);
                 cursors[selected] = fields[selected].value.chars().count();
             }
-            KeyCode::Enter if !editing && fields[selected].textarea => {
+            KeyCode::Left | KeyCode::Char('h')
+                if !editing && selected < fields.len() && !fields[selected].choices.is_empty() =>
+            {
+                cycle_choice(&mut fields[selected], false);
+                cursors[selected] = fields[selected].value.chars().count();
+            }
+            KeyCode::Enter
+                if !editing && selected < fields.len() && !fields[selected].choices.is_empty() =>
+            {
+                if fields[selected].choices.len() <= INLINE_CHOICE_LIMIT {
+                    cycle_choice(&mut fields[selected], true);
+                } else {
+                    fields[selected].value = select_choice(
+                        stdout,
+                        fields[selected].label,
+                        &fields[selected].value,
+                        &fields[selected].choices,
+                        fields[selected].empty_choice_label,
+                    )?;
+                }
+                cursors[selected] = fields[selected].value.chars().count();
+            }
+            KeyCode::Enter if !editing && selected < fields.len() && fields[selected].textarea => {
                 // 外部编辑器返回后回到表单继续编辑，由用户显式选择保存或取消
                 edit_textarea(stdout, &mut fields[selected].value)?;
                 cursors[selected] = fields[selected].value.chars().count();
             }
-            KeyCode::Enter if !editing => {
+            KeyCode::Enter if !editing && selected < fields.len() => {
                 if !fields[selected].boolean {
                     fcitx.enter_editing();
                     editing = true;
@@ -140,6 +173,32 @@ pub(crate) fn run_form(stdout: &mut io::Stdout, title: &str, fields: &mut [Field
             _ => {}
         }
     }
+}
+
+/// 【配置表单】【行内轮换】在枚举选项间前后切换，跳过额外的全屏选择弹窗。
+///
+/// 参数:
+/// - `field`: 带候选项的字段
+/// - `forward`: true 向后切换，false 向前切换
+///
+/// 返回:
+/// - 无
+fn cycle_choice(field: &mut Field, forward: bool) {
+    if field.choices.is_empty() {
+        return;
+    }
+    let current = field
+        .choices
+        .iter()
+        .position(|item| item == &field.value)
+        .unwrap_or(0);
+    let len = field.choices.len();
+    let next = if forward {
+        (current + 1) % len
+    } else {
+        (current + len - 1) % len
+    };
+    field.value = field.choices[next].clone();
 }
 
 /// 返回第一个可选中（非分组标题）的字段下标。
@@ -425,5 +484,18 @@ mod tests {
         assert_eq!(previous_selectable(&fields, 1), 1);
         // 末字段向下进入按钮区
         assert_eq!(next_selectable(&fields, 3), 4);
+    }
+
+    /// 【配置表单】【行内切换测试】验证少量选项可在表单行内正反轮换，不弹出独立选择屏。
+    #[test]
+    fn choice_field_cycles_forward_and_backward_inline() {
+        let mut field =
+            Field::new("Mode", "audited".into()).choices(&["yolo", "audited", "auto_audit"]);
+        cycle_choice(&mut field, true);
+        assert_eq!(field.value, "auto_audit");
+        cycle_choice(&mut field, true);
+        assert_eq!(field.value, "yolo");
+        cycle_choice(&mut field, false);
+        assert_eq!(field.value, "auto_audit");
     }
 }
