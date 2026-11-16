@@ -8,8 +8,8 @@ use std::io;
 use std::path::PathBuf;
 
 use super::form::{run_form, Field};
-use super::input::read_key;
-use super::ui::draw_menu;
+use super::mouse::{ListMouseState, MenuInput};
+use super::ui::draw_menu_interactive;
 
 /// 在配置界面中管理本地知识库文件。
 ///
@@ -26,6 +26,7 @@ pub(crate) fn edit_knowledge_base(
     config: &AppConfig,
 ) -> Result<()> {
     let mut selected = 0usize;
+    let mut mouse = ListMouseState::default();
     let mut status = String::new();
     let mut search = super::search::ListSearch::default();
     // 1. 【知识库界面】【按需刷新】仅在进入或修改时查询插件，光标移动不重新加载数据
@@ -95,9 +96,22 @@ pub(crate) fn edit_knowledge_base(
             }
         });
         let title = format!("{} · {}", t(" KNOWLEDGE BASE ", " 知识库管理 "), summary);
-        draw_menu(stdout, &title, &options, selected, &help)?;
+        let hitbox =
+            draw_menu_interactive(stdout, &title, &options, &[], selected, &mouse, &help, "")?;
 
-        let key = read_key()?;
+        let key = match hitbox.read(&mut mouse, selected, false)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(index) | MenuInput::RightClick(index) => {
+                selected = index;
+                continue;
+            }
+            MenuInput::Activate(index) => {
+                selected = index;
+                KeyCode::Enter
+            }
+            MenuInput::Action(code) => code,
+            MenuInput::Key(key) => key.code,
+        };
         match search.handle(key) {
             super::search::SearchEffect::Updated => {
                 selected = 0;

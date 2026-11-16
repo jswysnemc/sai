@@ -5,8 +5,8 @@ mod probe;
 mod tests;
 
 use super::{
-    input::read_key,
-    ui::{confirm_delete, draw_menu_with_details, message},
+    mouse::{ListMouseState, MenuInput},
+    ui::{confirm_delete, draw_menu_interactive, message},
 };
 use crate::config::{AppConfig, ModelEndpointConfig, ModelEndpointKind};
 use crate::i18n::text as t;
@@ -22,6 +22,7 @@ pub(super) fn run(
     kind: ModelEndpointKind,
 ) -> Result<()> {
     let mut selected = 0usize;
+    let mut mouse = ListMouseState::default();
     loop {
         let endpoints = config
             .model_endpoints
@@ -56,7 +57,7 @@ pub(super) fn run(
             })
             .collect::<Vec<_>>();
         details.push(t("Configure an independent endpoint, model and credentials. * marks the current default.", "配置独立请求地址、模型与密钥。* 表示当前默认接入。").into());
-        draw_menu_with_details(
+        let hitbox = draw_menu_interactive(
             stdout,
             if kind == ModelEndpointKind::Jev {
                 " JEV "
@@ -66,6 +67,7 @@ pub(super) fn run(
             &options,
             &details,
             selected,
+            &mouse,
             &super::theme::help_line(&[
                 ("Enter", t("edit", "编辑")),
                 ("a", t("add", "新增")),
@@ -75,7 +77,24 @@ pub(super) fn run(
             ]),
             "",
         )?;
-        match read_key()? {
+        let code = match hitbox.read(&mut mouse, selected, false)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(index) => {
+                selected = index;
+                continue;
+            }
+            MenuInput::RightClick(index) => {
+                selected = index;
+                KeyCode::Char(' ')
+            }
+            MenuInput::Activate(index) => {
+                selected = index;
+                KeyCode::Enter
+            }
+            MenuInput::Action(code) => code,
+            MenuInput::Key(key) => key.code,
+        };
+        match code {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
             KeyCode::Up => selected = selected.saturating_sub(1),
             KeyCode::Down => selected = (selected + 1).min(endpoints.len()),
@@ -120,19 +139,41 @@ pub(super) fn run(
 /// 参数: stdout 为终端，config 为草稿；返回: 菜单结果
 pub(super) fn menu(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
     let mut selected = 0usize;
+    let mut mouse = ListMouseState::default();
     loop {
-        super::ui::draw_menu(
+        let options = [
+            "1  Jev".into(),
+            t("2  Image models", "2  生图模型").into(),
+            t("3  Jev routing and audit", "3  Jev 路由与审核").into(),
+        ];
+        let hitbox = draw_menu_interactive(
             stdout,
             t(" MODEL CONNECTIONS ", " 模型接入 "),
-            &[
-                "1  Jev".into(),
-                t("2  Image models", "2  生图模型").into(),
-                t("3  Jev routing and audit", "3  Jev 路由与审核").into(),
-            ],
+            &options,
+            &[],
             selected,
-            "1-3 · Enter · q/Esc",
+            &mouse,
+            &super::theme::help_line(&[
+                ("1-3", t("jump", "跳转")),
+                ("Enter", t("open", "打开")),
+                ("q", t("back", "返回")),
+            ]),
+            "",
         )?;
-        match read_key()? {
+        let code = match hitbox.read(&mut mouse, selected, false)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(index) | MenuInput::RightClick(index) => {
+                selected = index;
+                continue;
+            }
+            MenuInput::Activate(index) => {
+                selected = index;
+                KeyCode::Enter
+            }
+            MenuInput::Action(code) => code,
+            MenuInput::Key(key) => key.code,
+        };
+        match code {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
             KeyCode::Up => selected = selected.saturating_sub(1),
             KeyCode::Down => selected = (selected + 1).min(2),

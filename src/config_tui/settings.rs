@@ -10,8 +10,8 @@ use crossterm::event::KeyCode;
 use std::io;
 
 use super::form::{parse_bool_field, parse_number_field, run_form, Field};
-use super::input::read_key;
-use super::ui::{draw_menu_with_details, message};
+use super::mouse::{ListMouseState, MenuInput};
+use super::ui::{draw_menu_interactive, message};
 
 /// 全局参数小节菜单。
 ///
@@ -23,6 +23,7 @@ use super::ui::{draw_menu_with_details, message};
 /// - 菜单退出结果
 pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
     let mut selected = 0usize;
+    let mut mouse = ListMouseState::default();
     loop {
         let options = vec![
             t("Permissions", "权限").to_string(),
@@ -97,12 +98,13 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
                 "调整百分比与预留数量，实时预览生效条件与触发量。",
             ).to_string(),
         ];
-        draw_menu_with_details(
+        let hitbox = draw_menu_interactive(
             stdout,
             t(" GLOBAL PARAMETERS ", " 全局参数 "),
             &options,
             &details,
             selected,
+            &mouse,
             &super::theme::help_line(&[
                 ("↑↓", t("move", "移动")),
                 ("Enter", t("open", "打开")),
@@ -110,7 +112,20 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
             ]),
             "",
         )?;
-        match read_key()? {
+        let code = match hitbox.read(&mut mouse, selected, false)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(index) | MenuInput::RightClick(index) => {
+                selected = index;
+                continue;
+            }
+            MenuInput::Activate(index) => {
+                selected = index;
+                KeyCode::Enter
+            }
+            MenuInput::Action(code) => code,
+            MenuInput::Key(key) => key.code,
+        };
+        match code {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
@@ -196,6 +211,7 @@ pub(super) fn edit_permissions_and_sandbox_menu(
     config: &mut AppConfig,
 ) -> Result<()> {
     let mut selected = 0usize;
+    let mut mouse = ListMouseState::default();
     loop {
         let options = vec![
             t("Permissions", "权限模式").to_string(),
@@ -209,12 +225,13 @@ pub(super) fn edit_permissions_and_sandbox_menu(
             ),
             super::sandbox_settings::sandbox_details(config),
         ];
-        draw_menu_with_details(
+        let hitbox = draw_menu_interactive(
             stdout,
             t(" PERMISSIONS & SANDBOX ", " 权限与沙箱 "),
             &options,
             &details,
             selected,
+            &mouse,
             &super::theme::help_line(&[
                 ("↑↓", t("move", "移动")),
                 ("Enter", t("edit", "编辑")),
@@ -222,7 +239,20 @@ pub(super) fn edit_permissions_and_sandbox_menu(
             ]),
             "",
         )?;
-        match read_key()? {
+        let code = match hitbox.read(&mut mouse, selected, false)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(index) | MenuInput::RightClick(index) => {
+                selected = index;
+                continue;
+            }
+            MenuInput::Activate(index) => {
+                selected = index;
+                KeyCode::Enter
+            }
+            MenuInput::Action(code) => code,
+            MenuInput::Key(key) => key.code,
+        };
+        match code {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
@@ -248,6 +278,7 @@ pub(super) fn edit_display_and_context_menu(
     config: &mut AppConfig,
 ) -> Result<()> {
     let mut selected = 0usize;
+    let mut mouse = ListMouseState::default();
     loop {
         let options = vec![
             t("Display preferences", "显示偏好").to_string(),
@@ -275,12 +306,13 @@ pub(super) fn edit_display_and_context_menu(
             )
             .to_string(),
         ];
-        draw_menu_with_details(
+        let hitbox = draw_menu_interactive(
             stdout,
             t(" DISPLAY & CONTEXT ", " 显示与上下文 "),
             &options,
             &details,
             selected,
+            &mouse,
             &super::theme::help_line(&[
                 ("↑↓", t("move", "移动")),
                 ("Enter", t("edit", "编辑")),
@@ -288,7 +320,20 @@ pub(super) fn edit_display_and_context_menu(
             ]),
             "",
         )?;
-        match read_key()? {
+        let code = match hitbox.read(&mut mouse, selected, false)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(index) | MenuInput::RightClick(index) => {
+                selected = index;
+                continue;
+            }
+            MenuInput::Activate(index) => {
+                selected = index;
+                KeyCode::Enter
+            }
+            MenuInput::Action(code) => code,
+            MenuInput::Key(key) => key.code,
+        };
+        match code {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),

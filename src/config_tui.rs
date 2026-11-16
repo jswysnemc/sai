@@ -13,6 +13,7 @@ mod knowledge;
 pub(crate) mod layout;
 mod model_endpoints;
 mod model_metadata_form;
+pub(crate) mod mouse;
 mod multi_select;
 mod onboarding;
 mod onboarding_models;

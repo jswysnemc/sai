@@ -1,4 +1,8 @@
-use super::{input::read_key_with_timeout, ui::draw_menu};
+use super::{
+    input::{read_event_with_timeout, ConfigEvent},
+    mouse::ClickTracker,
+    ui::draw_menu_interactive,
+};
 use crate::i18n::text as t;
 use anyhow::Result;
 use crossterm::event::KeyCode;
@@ -16,16 +20,21 @@ pub(super) fn run<T: Send + 'static>(
         let _ = sender.send(work().map_err(|error| error.to_string()));
     });
     let mut size = None;
+    let mut hitbox = None;
+    let mut clicks = ClickTracker::default();
     loop {
         let current = crossterm::terminal::size().ok();
         if current != size || size.is_none() {
-            draw_menu(
+            hitbox = Some(draw_menu_interactive(
                 stdout,
                 title,
                 &[t("Connecting…", "正在连接…").into()],
+                &[],
                 0,
-                "Esc / q",
-            )?;
+                &super::mouse::ListMouseState::default(),
+                &super::theme::help_line(&[("Esc", t("cancel", "取消"))]),
+                "",
+            )?);
             size = current;
         }
         match receiver.try_recv() {
@@ -35,11 +44,23 @@ pub(super) fn run<T: Send + 'static>(
             }
             Err(mpsc::TryRecvError::Empty) => {}
         }
-        if matches!(
-            read_key_with_timeout(Some(Duration::from_millis(50)))?,
-            Some(KeyCode::Esc | KeyCode::Char('q'))
-        ) {
-            return Ok(None);
+        match read_event_with_timeout(Some(Duration::from_millis(50)))? {
+            None => {}
+            Some(ConfigEvent::Resize) => size = None,
+            Some(ConfigEvent::Key(key))
+                if matches!(key.code, KeyCode::Esc | KeyCode::Char('q')) =>
+            {
+                return Ok(None);
+            }
+            Some(ConfigEvent::Mouse(mouse)) => {
+                let target = hitbox
+                    .as_ref()
+                    .and_then(|hb| hb.footer.hit(mouse.column, mouse.row));
+                if clicks.update(mouse, target).is_some() {
+                    return Ok(None);
+                }
+            }
+            Some(ConfigEvent::Key(_)) => {}
         }
     }
 }

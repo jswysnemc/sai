@@ -9,11 +9,16 @@ use crossterm::terminal::{self, Clear, ClearType};
 use std::io;
 
 use super::form::run_form;
-use super::input::read_key;
+use super::input::read_event;
 use super::layout::full_frame;
+use super::mouse::{HitRect, ListHitbox, ListMouseOutcome, ListMouseState};
 use super::plugin_fields::{apply_plugin_fields, plugin_fields};
-use super::theme::{selection_marks, BOLD, MUTED, RESET};
-use super::ui::{display_width, draw_box, message, pad, truncate};
+use super::theme::{row_marks, BOLD, MUTED, RESET};
+use super::ui::{
+    display_width, draw_box, draw_status_bar_interactive, message, pad, status_bar_hits, truncate,
+    MenuHitbox,
+};
+use crate::config_tui::input::ConfigEvent;
 
 /// 编辑助手工具。
 ///
@@ -25,10 +30,56 @@ use super::ui::{display_width, draw_box, message, pad, truncate};
 /// - 退出工具菜单或保存工具配置的结果
 pub(crate) fn edit_cli_tools(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
     let mut selected = 0usize;
+    let mut mouse = ListMouseState::default();
     loop {
         let count = cli_tool_names().len();
-        draw_cli_tool_menu(stdout, config, selected)?;
-        match read_key()? {
+        let hitbox = draw_cli_tool_menu(stdout, config, selected, &mouse)?;
+        let code = match read_event()? {
+            ConfigEvent::Resize => continue,
+            ConfigEvent::Key(key) => key.code,
+            ConfigEvent::Mouse(event) => {
+                let mut footer_redraw = false;
+                if matches!(event.kind, crossterm::event::MouseEventKind::Moved) {
+                    let next_footer = hitbox.footer.rect_at(event.column, event.row);
+                    if next_footer != mouse.footer_hover {
+                        mouse.footer_hover = next_footer;
+                        footer_redraw = true;
+                    }
+                }
+                if let Some(footer_code) = mouse.track_buttons(event, &hitbox.footer) {
+                    mouse.footer_hover = None;
+                    footer_code
+                } else {
+                    match mouse.handle(event, &hitbox.list, selected, false) {
+                        ListMouseOutcome::None if footer_redraw => continue,
+                        ListMouseOutcome::None => continue,
+                        ListMouseOutcome::Redraw => continue,
+                        ListMouseOutcome::RightClick(idx) => {
+                            selected = idx;
+                            KeyCode::Char(' ')
+                        }
+                        ListMouseOutcome::Select(idx) => {
+                            selected = idx;
+                            // 点击最左侧状态列时直接切换开关
+                            if event.column < hitbox.list.list.x.saturating_add(12) {
+                                KeyCode::Char(' ')
+                            } else {
+                                continue;
+                            }
+                        }
+                        ListMouseOutcome::Activate(idx) => {
+                            selected = idx;
+                            if event.column < hitbox.list.list.x.saturating_add(12) {
+                                KeyCode::Char(' ')
+                            } else {
+                                KeyCode::Enter
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        match code {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(count - 1),
@@ -39,16 +90,22 @@ pub(crate) fn edit_cli_tools(stdout: &mut io::Stdout, config: &mut AppConfig) ->
     }
 }
 
-/// 绘制 CLI 助手工具列表。
+/// 绘制 CLI 助手工具列表并返回鼠标命中区。
 ///
 /// 参数:
 /// - `stdout`: 终端标准输出
 /// - `config`: 当前应用配置
 /// - `selected`: 当前选中工具索引
+/// - `hovered`: 当前鼠标悬停工具索引
 ///
 /// 返回:
-/// - 绘制与刷新结果
-fn draw_cli_tool_menu(stdout: &mut io::Stdout, config: &AppConfig, selected: usize) -> Result<()> {
+/// - 列表与底栏快捷键命中几何
+fn draw_cli_tool_menu(
+    stdout: &mut io::Stdout,
+    config: &AppConfig,
+    selected: usize,
+    mouse: &ListMouseState,
+) -> Result<MenuHitbox> {
     let (cols, rows) = terminal::size()?;
     let frame = full_frame(cols, rows);
     let width = frame.width;
@@ -90,7 +147,7 @@ fn draw_cli_tool_menu(stdout: &mut io::Stdout, config: &AppConfig, selected: usi
         let enabled = plugin_enabled(config, id);
         let row_width = width.saturating_sub(6) as usize;
         queue!(stdout, MoveTo(x + 2, y + row as u16 + 2))?;
-        let (bar, style) = selection_marks(index == selected);
+        let (bar, style) = row_marks(index == selected, mouse.hovered == Some(index));
         if index == selected {
             // 选中行：整行深底统一样式
             let state = if enabled {
@@ -118,11 +175,16 @@ fn draw_cli_tool_menu(stdout: &mut io::Stdout, config: &AppConfig, selected: usi
             let remaining = row_width
                 .saturating_sub(display_width(&state_cell) + display_width(&name_cell))
                 .max(10);
+            let label_style = if mouse.hovered == Some(index) {
+                style
+            } else {
+                RESET
+            };
             queue!(
                 stdout,
                 Print(crate::render::readable_terminal_text(
                     &(format!(
-                        "{bar} {dot_style}{state_cell}{RESET}{name_cell}{MUTED}{}{RESET}",
+                        "{bar} {dot_style}{state_cell}{RESET}{label_style}{name_cell}{MUTED}{}{RESET}",
                         truncate(description, remaining)
                     ))
                     .to_string()
@@ -130,18 +192,30 @@ fn draw_cli_tool_menu(stdout: &mut io::Stdout, config: &AppConfig, selected: usi
             )?;
         }
     }
-    super::ui::draw_status_bar(
-        stdout,
-        &frame,
-        &super::theme::help_line(&[
-            ("Space", t("toggle", "开关")),
-            ("Enter", t("configure", "配置")),
-            ("↑↓", t("move", "移动")),
-            ("q", t("back", "返回")),
-        ]),
-    )?;
+    let help = super::theme::help_line(&[
+        ("Space", t("toggle", "开关")),
+        ("Enter", t("configure", "配置")),
+        ("↑↓", t("move", "移动")),
+        ("q", t("back", "返回")),
+    ]);
+    draw_status_bar_interactive(stdout, &frame, &help, mouse.footer_hover)?;
+    let footer = status_bar_hits(&frame, &help);
     super::ui::end_synced_frame(stdout)?;
-    Ok(())
+    Ok(MenuHitbox {
+        list: ListHitbox {
+            frame: HitRect::from(frame),
+            list: HitRect {
+                x: x.saturating_add(2),
+                y: y.saturating_add(2),
+                width: width.saturating_sub(4),
+                height: visible_rows as u16,
+            },
+            start,
+            total: tools.len(),
+            visible_rows,
+        },
+        footer,
+    })
 }
 
 /// 组装 CLI 助手工具列表行。

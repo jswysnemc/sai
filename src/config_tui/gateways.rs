@@ -10,8 +10,8 @@ use std::future::Future;
 use std::io;
 
 use super::form::{parse_bool_field, run_form, Field};
-use super::input::read_key;
-use super::ui::{draw_menu_with_details, message};
+use super::mouse::{ListMouseState, MenuInput};
+use super::ui::{draw_menu_interactive, message};
 
 /// 编辑渠道接入配置。
 ///
@@ -27,6 +27,7 @@ pub(crate) fn edit_gateways(
     config: &mut AppConfig,
 ) -> Result<()> {
     let mut selected = 0usize;
+    let mut mouse = ListMouseState::default();
     let mut status_line = String::new();
     loop {
         let statuses = load_gateway_statuses(paths, config)?;
@@ -61,24 +62,40 @@ pub(crate) fn edit_gateways(
             t("Return to the main configuration menu.", "返回配置主菜单。").to_string(),
         ];
         let help = if status_line.trim().is_empty() {
-            t(
-                "Enter toggles selected gateway, s start, x stop, r refresh",
-                "Enter 切换选中网关，s 启动，x 停止，r 刷新",
-            )
-            .to_string()
+            super::theme::help_line(&[
+                ("Enter", t("toggle/edit", "切换/编辑")),
+                ("s", t("start", "启动")),
+                ("x", t("stop", "停止")),
+                ("r", t("refresh", "刷新")),
+                ("q", t("back", "返回")),
+            ])
         } else {
             status_line.clone()
         };
-        draw_menu_with_details(
+        let hitbox = draw_menu_interactive(
             stdout,
             t(" GATEWAYS ", " 渠道接入 "),
             &options,
             &details,
             selected,
+            &mouse,
             &help,
             "",
         )?;
-        match read_key()? {
+        let code = match hitbox.read(&mut mouse, selected, false)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(index) | MenuInput::RightClick(index) => {
+                selected = index;
+                continue;
+            }
+            MenuInput::Activate(index) => {
+                selected = index;
+                KeyCode::Enter
+            }
+            MenuInput::Action(code) => code,
+            MenuInput::Key(key) => key.code,
+        };
+        match code {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),

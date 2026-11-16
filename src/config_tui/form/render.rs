@@ -1,12 +1,23 @@
+use super::super::mouse::{HitButtons, HitRect, ListHitbox};
+use super::super::theme::{row_marks, ACCENT, BOLD, BRAND, DIM, MUTED, PILL_BG, RESET};
+use super::super::ui::{display_width, draw_box, pad, truncate};
 use super::{choice_label, parse_bool_field, take_chars, Field};
 use crate::config_tui::layout::{
     content_frame, form_column_widths, form_label_width, scroll_start, MAX_FRAME_WIDTH,
 };
 
+/// 表单界面交互命中区：包含列表字段、`Save`/`Cancel` 按钮及底栏操作提示。
+#[derive(Clone, Debug, Default)]
+pub(super) struct FormHitbox {
+    pub frame: HitRect,
+    pub list: ListHitbox,
+    pub save: HitRect,
+    pub cancel: HitRect,
+    pub footer: HitButtons<crossterm::event::KeyCode>,
+}
+
 /// 表单字段区最少保留的行数，右侧字段说明需要足够的折行空间。
 const MIN_FORM_BODY_ROWS: usize = 6;
-use crate::config_tui::theme::{selection_marks, ACCENT, BOLD, BRAND, DIM, MUTED, RESET};
-use crate::config_tui::ui::{display_width, draw_box, pad, truncate};
 use crate::i18n::text as t;
 use anyhow::Result;
 use crossterm::cursor::{Hide, MoveTo, Show};
@@ -15,18 +26,32 @@ use crossterm::style::Print;
 use crossterm::terminal::{self, Clear, ClearType};
 use std::io;
 
-/// 【配置表单】【终端绘制】按窗口尺寸和当前编辑状态显示字段及操作按钮
-/// @param stdout 终端输出；title 为标题；fields 为字段；selected 为选中位置；editing 为编辑状态；cursors 为光标；revealed_secrets 为显示偏好
-/// @returns 终端绘制结果
-pub(super) fn draw_form(
+/// 【配置表单】【交互绘制】绘制表单并返回字段列表、保存/取消按钮和底栏命中几何。
+///
+/// 参数:
+/// - `stdout`: 终端输出
+/// - `title`: 表单标题
+/// - `fields`: 表单字段定义
+/// - `selected`: 当前焦点下标
+/// - `hovered`: 鼠标悬停条目下标（含字段与底部按钮）
+/// - `editing`: 是否处于行内文本编辑态
+/// - `cursors`: 各字段字符光标位置
+/// - `revealed_secrets`: 密钥明文展示开关
+///
+/// 返回:
+/// - 本帧表单的鼠标命中区域集合
+#[allow(clippy::too_many_arguments)]
+pub(super) fn draw_form_interactive(
     stdout: &mut io::Stdout,
     title: &str,
     fields: &[Field],
     selected: usize,
+    hovered: Option<usize>,
+    footer_hover: Option<HitRect>,
     editing: bool,
     cursors: &[usize],
     revealed_secrets: &[bool],
-) -> Result<()> {
+) -> Result<FormHitbox> {
     let (cols, rows) = terminal::size()?;
     // 内容行 = 顶部留白 + 字段 + 按钮前留白 + 按钮行；字段少时面板随内容收缩
     let content_rows = fields.len().saturating_add(3).max(MIN_FORM_BODY_ROWS + 3);
@@ -95,7 +120,8 @@ pub(super) fn draw_form(
         }
         let is_selected = index == selected && !editing;
         let is_editing_row = index == selected && editing;
-        let (bar, row_style) = selection_marks(is_selected);
+        let is_hovered = hovered == Some(index);
+        let (bar, row_style) = row_marks(is_selected, is_hovered);
         let label_text = pad(field.label, label_col);
         let value_budget = (left_w as usize).saturating_sub(2 + label_col + 2).max(8);
         let value = field_display_value(field, revealed_secrets[index], value_budget);
@@ -173,20 +199,25 @@ pub(super) fn draw_form(
         draw_form_detail(stdout, detail_x, list_top, right_w, body_h, &detail)?;
     }
     let button_y = y.saturating_add(height.saturating_sub(2));
+    let save_hovered = hovered == Some(fields.len());
+    let cancel_hovered = hovered == Some(fields.len() + 1);
     let save_width = draw_form_button(
         stdout,
         inner_x,
         button_y,
         t("Save", "保存"),
         selected == fields.len() && !editing,
+        save_hovered,
         true,
     )?;
-    draw_form_button(
+    let cancel_x = inner_x.saturating_add(save_width).saturating_add(2);
+    let cancel_width = draw_form_button(
         stdout,
-        inner_x.saturating_add(save_width).saturating_add(2),
+        cancel_x,
         button_y,
         t("Cancel", "取消"),
         selected == fields.len() + 1 && !editing,
+        cancel_hovered,
         false,
     )?;
 
@@ -217,7 +248,8 @@ pub(super) fn draw_form(
             ("q", t("cancel", "取消")),
         ])
     };
-    super::super::ui::draw_status_bar(stdout, &frame, &help)?;
+    super::super::ui::draw_status_bar_interactive(stdout, &frame, &help, footer_hover)?;
+    let footer = super::super::ui::status_bar_hits(&frame, &help);
     // 光标显隐放在同步帧内，避免先闪出空屏再出现光标
     if let Some((cx, cy)) = cursor {
         queue!(stdout, Show, MoveTo(cx, cy))?;
@@ -225,7 +257,35 @@ pub(super) fn draw_form(
         queue!(stdout, Hide)?;
     }
     super::super::ui::end_synced_frame(stdout)?;
-    Ok(())
+    let hit_frame = HitRect::from(frame);
+    Ok(FormHitbox {
+        frame: hit_frame,
+        list: ListHitbox {
+            frame: hit_frame,
+            list: HitRect {
+                x: inner_x,
+                y: list_top,
+                width: left_w,
+                height: visible_rows as u16,
+            },
+            start,
+            total: fields.len(),
+            visible_rows,
+        },
+        save: HitRect {
+            x: inner_x,
+            y: button_y,
+            width: save_width,
+            height: 1,
+        },
+        cancel: HitRect {
+            x: cancel_x,
+            y: button_y,
+            width: cancel_width,
+            height: 1,
+        },
+        footer,
+    })
 }
 
 /// 去除字段值渲染中的 ANSI 序列（选中行统一样式时使用）。
@@ -483,6 +543,7 @@ fn draw_form_button(
     y: u16,
     label: &str,
     selected: bool,
+    hovered: bool,
     primary: bool,
 ) -> Result<u16> {
     use super::super::theme::{BUTTON_BG, BUTTON_FG, SELECT_BG};
@@ -500,6 +561,13 @@ fn draw_form_button(
             stdout,
             Print(crate::render::readable_terminal_text(
                 &(format!("{SELECT_BG}{ACCENT}{text}{RESET}")).to_string()
+            ))
+        )?;
+    } else if hovered {
+        queue!(
+            stdout,
+            Print(crate::render::readable_terminal_text(
+                &(format!("{PILL_BG}{ACCENT}{text}{RESET}")).to_string()
             ))
         )?;
     } else {

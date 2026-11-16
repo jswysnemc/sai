@@ -11,15 +11,16 @@ use std::io;
 use super::agents::edit_agents;
 use super::dashboard::{self, MainAction};
 use super::gateways::edit_gateways;
-use super::input::{read_key, read_key_event, Interrupted};
+use super::input::Interrupted;
 use super::knowledge::edit_knowledge_base;
+use super::mouse::{ListMouseState, MenuInput};
 use super::plugins::edit_cli_tools;
 use super::providers::{select_active_provider, ProviderBrowser};
 use super::settings::{
     edit_display_and_context_menu, edit_permissions_and_sandbox_menu, edit_settings,
 };
 use super::skills::edit_skills;
-use super::ui::{confirm_unsaved_exit, draw_menu_with_details, message, UnsavedExitChoice};
+use super::ui::{confirm_unsaved_exit, draw_menu_interactive, message, UnsavedExitChoice};
 use crossterm::event::KeyModifiers;
 
 pub fn run(paths: &SaiPaths) -> Result<()> {
@@ -41,6 +42,7 @@ pub(super) fn run_provider_setup(paths: &SaiPaths, config: &AppConfig) -> Result
 
 struct TerminalSession {
     stdout: io::Stdout,
+    _mouse: Option<crate::cli::mouse_capture::MouseCapture>,
     _ime: super::ime::ImeGuard,
 }
 
@@ -51,7 +53,7 @@ impl TerminalSession {
     /// - 无
     ///
     /// 返回:
-    /// - 初始化完成的终端会话；进入备用屏失败时回滚 raw mode 后返回错误
+    /// - 初始化完成的终端会话；进入备用屏或鼠标捕获失败时回滚终端状态后返回错误
     fn start() -> Result<Self> {
         crate::render::terminal_palette::initialize_terminal_palette();
         // 1. 先开启 raw mode
@@ -64,15 +66,27 @@ impl TerminalSession {
             let _ = terminal::disable_raw_mode();
             return Err(err.into());
         }
+        // 3. 开启鼠标捕获；失败时同步恢复光标、备用屏和 raw mode
+        let mouse = match crate::cli::mouse_capture::MouseCapture::acquire() {
+            Ok(mouse) => mouse,
+            Err(err) => {
+                let _ = execute!(stdout, Show);
+                let _ = crate::cli::alternate_screen::leave_alternate_screen(&mut stdout);
+                let _ = terminal::disable_raw_mode();
+                return Err(err.into());
+            }
+        };
         // 输入法开着时 `/` 和方向键到不了界面。导航期间关掉，文本框里再打开。
         Ok(Self {
             stdout,
+            _mouse: Some(mouse),
             _ime: super::ime::ImeGuard::suspend(),
         })
     }
 
     fn run(mut self, paths: &SaiPaths, mut config: AppConfig) -> Result<()> {
         let result = run_main_menu(&mut self.stdout, paths, &mut config);
+        self._mouse.take();
         execute!(self.stdout, Show)?;
         crate::cli::alternate_screen::leave_alternate_screen(&mut self.stdout)?;
         terminal::disable_raw_mode()?;
@@ -87,6 +101,7 @@ impl TerminalSession {
 
 impl Drop for TerminalSession {
     fn drop(&mut self) {
+        self._mouse.take();
         let _ = execute!(self.stdout, Show);
         let _ = crate::cli::alternate_screen::leave_alternate_screen(&mut self.stdout);
         let _ = execute!(
@@ -105,6 +120,7 @@ fn run_main_menu(
     config: &mut AppConfig,
 ) -> Result<bool> {
     let mut selected = 0usize;
+    let mut mouse = ListMouseState::default();
     // 1. 【配置】【基线快照】进入时的序列化快照；直接保存后同步刷新基线
     let mut baseline = serde_json::to_string(&*config).ok();
     let mut notice: Option<String> = None;
@@ -128,25 +144,47 @@ fn run_main_menu(
             ("s", t("save", "保存")),
             ("q", t("quit", "退出")),
         ]);
-        draw_menu_with_details(
+        let hitbox = draw_menu_interactive(
             stdout,
             if dirty { "SAI CONFIG *" } else { "SAI CONFIG" },
             &options,
             &details,
             selected,
+            &mouse,
             &status,
             &subtitle,
         )?;
 
-        let event = read_key_event()?;
-        if event.code == KeyCode::Char('s') && event.modifiers.contains(KeyModifiers::CONTROL) {
-            if save_now(stdout, paths, config)? {
-                baseline = serde_json::to_string(&*config).ok();
-                notice = Some(t("Saved", "已保存").to_string());
+        let code = match hitbox.read(&mut mouse, selected, false)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(target) => {
+                selected = target;
+                notice = None;
+                continue;
             }
-            continue;
-        }
-        match event.code {
+            MenuInput::Activate(target) => {
+                selected = target;
+                KeyCode::Enter
+            }
+            MenuInput::RightClick(target) => {
+                selected = target;
+                KeyCode::Char(' ')
+            }
+            MenuInput::Action(code) => code,
+            MenuInput::Key(event) => {
+                if event.code == KeyCode::Char('s')
+                    && event.modifiers.contains(KeyModifiers::CONTROL)
+                {
+                    if save_now(stdout, paths, config)? {
+                        baseline = serde_json::to_string(&*config).ok();
+                        notice = Some(t("Saved", "已保存").to_string());
+                    }
+                    continue;
+                }
+                event.code
+            }
+        };
+        match code {
             KeyCode::Char('q') | KeyCode::Esc => {
                 if let Some(saved) = confirm_and_leave(stdout, paths, config, dirty)? {
                     return Ok(saved);
@@ -322,6 +360,7 @@ fn run_advanced_menu(
     config: &mut AppConfig,
 ) -> Result<()> {
     let mut selected = 0usize;
+    let mut mouse = ListMouseState::default();
     loop {
         let labels = [
             t("Knowledge base", "知识库管理"),
@@ -356,12 +395,13 @@ fn run_advanced_menu(
             )
             .to_string(),
         ];
-        draw_menu_with_details(
+        let hitbox = draw_menu_interactive(
             stdout,
             t(" ADVANCED ", " 高级设置 "),
             &options,
             &details,
             selected,
+            &mouse,
             &super::theme::help_line(&[
                 ("↑↓", t("move", "移动")),
                 ("Enter", t("open", "打开")),
@@ -369,7 +409,20 @@ fn run_advanced_menu(
             ]),
             "",
         )?;
-        match read_key()? {
+        let code = match hitbox.read(&mut mouse, selected, false)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(index) | MenuInput::RightClick(index) => {
+                selected = index;
+                continue;
+            }
+            MenuInput::Activate(index) => {
+                selected = index;
+                KeyCode::Enter
+            }
+            MenuInput::Key(key) => key.code,
+            MenuInput::Action(code) => code,
+        };
+        match code {
             KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),

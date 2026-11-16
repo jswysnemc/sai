@@ -6,11 +6,11 @@ use std::sync::Mutex;
 
 static USERS: Mutex<usize> = Mutex::new(0);
 
-pub(super) struct MouseCapture;
+pub(crate) struct MouseCapture;
 
 impl MouseCapture {
     /// 【终端】【鼠标捕获】进入一层交互界面；无参数，返回守卫或终端错误。
-    pub(super) fn acquire() -> io::Result<Self> {
+    pub(crate) fn acquire() -> io::Result<Self> {
         let mut users = USERS.lock().unwrap_or_else(|error| error.into_inner());
         if *users == 0 && !cfg!(test) {
             crossterm::execute!(io::stdout(), EnableMouseCapture)?;

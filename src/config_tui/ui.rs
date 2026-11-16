@@ -1,21 +1,21 @@
 mod dialogs;
+mod menu;
 pub(crate) use dialogs::{confirm_delete, confirm_unsaved_exit, message, UnsavedExitChoice};
+pub(crate) use menu::{draw_menu_interactive, status_bar_hits, strip_ansi_plain, MenuHitbox};
 
 use crate::i18n::text as t;
 use anyhow::Result;
 use crossterm::cursor::MoveTo;
-use crossterm::event::KeyCode;
 use crossterm::queue;
 use crossterm::style::Print;
-use crossterm::terminal::{self, Clear, ClearType};
 use std::io::{self, Write};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use super::input::read_key;
-use super::layout::{content_frame, master_detail_widths, scroll_start, FrameRect};
+use super::layout::{scroll_start, FrameRect};
+use super::mouse::HitRect;
 use super::theme::{
-    help_line, selection_marks, ACCENT, BOLD, BRAND, CORNER_BOTTOM_LEFT, CORNER_BOTTOM_RIGHT,
-    CORNER_TOP_LEFT, CORNER_TOP_RIGHT, DIM, LINE_HORIZONTAL, LINE_VERTICAL, MUTED, RESET,
+    help_separator, row_marks, ACCENT, BOLD, BRAND, CORNER_BOTTOM_LEFT, CORNER_BOTTOM_RIGHT,
+    CORNER_TOP_LEFT, CORNER_TOP_RIGHT, DIM, LINE_HORIZONTAL, LINE_VERTICAL, MUTED, PILL_BG, RESET,
 };
 
 /// 开始一帧同步更新。支持的终端会等整帧画完再提交，清屏不再闪一下。
@@ -41,204 +41,6 @@ pub(crate) fn end_synced_frame(stdout: &mut impl Write) -> Result<()> {
     Ok(())
 }
 
-/// 绘制近全屏菜单（可选右侧说明栏）。
-///
-/// 参数:
-/// - `stdout`: 终端输出
-/// - `title`: 顶栏标题
-/// - `options`: 左侧选项
-/// - `selected`: 选中下标
-/// - `status`: 底栏自定义状态；空则用默认快捷键说明
-///
-/// 返回:
-/// - 绘制是否成功
-pub(crate) fn draw_menu(
-    stdout: &mut io::Stdout,
-    title: &str,
-    options: &[String],
-    selected: usize,
-    status: &str,
-) -> Result<()> {
-    draw_menu_with_details(stdout, title, options, &[], selected, status, "")
-}
-
-/// 绘制近全屏主从菜单：左侧选项、右侧说明。
-///
-/// 参数:
-/// - `stdout`: 终端输出
-/// - `title`: 顶栏标题
-/// - `options`: 左侧选项
-/// - `details`: 与选项对齐的说明；空切片则单栏铺满
-/// - `selected`: 选中下标
-/// - `status`: 底栏状态
-/// - `subtitle`: 标题下的摘要行（如当前激活配置）
-///
-/// 返回:
-/// - 绘制是否成功
-pub(crate) fn draw_menu_with_details(
-    stdout: &mut io::Stdout,
-    title: &str,
-    options: &[String],
-    details: &[String],
-    selected: usize,
-    status: &str,
-    subtitle: &str,
-) -> Result<()> {
-    let (cols, rows) = terminal::size()?;
-    let frame = menu_frame(cols, rows, options, details, !subtitle.is_empty());
-
-    begin_synced_frame(stdout)?;
-    queue!(stdout, Clear(ClearType::All))?;
-    draw_box(stdout, frame.x, frame.y, frame.width, frame.height, title)?;
-
-    let inner_x = frame.x.saturating_add(2);
-    let inner_w = frame.width.saturating_sub(4);
-    let mut body_y = frame.y.saturating_add(1);
-    if !subtitle.is_empty() {
-        let rendered_subtitle = if subtitle.contains('\x1b') {
-            truncate_ansi(subtitle, inner_w as usize)
-        } else {
-            format!("{MUTED}{}{RESET}", truncate(subtitle, inner_w as usize))
-        };
-        queue!(
-            stdout,
-            MoveTo(inner_x, body_y),
-            Print(crate::render::readable_terminal_text(&rendered_subtitle))
-        )?;
-        body_y = body_y.saturating_add(1);
-        // 副标题与内容间画一条弱化分隔线，标题区从此有边界
-        draw_inner_divider(stdout, frame.x, body_y, frame.width)?;
-        body_y = body_y.saturating_add(1);
-    }
-
-    // 内容区：底部留一行给帮助条
-    let body_bottom = frame.y.saturating_add(frame.height.saturating_sub(2));
-    let body_h = body_bottom.saturating_sub(body_y).max(1);
-    let (left_w, right_w) = if details.is_empty() {
-        (inner_w, 0)
-    } else {
-        master_detail_widths(inner_w)
-    };
-
-    let visible_rows = body_h.max(1) as usize;
-    let start = scroll_start(selected, visible_rows);
-    for row in 0..visible_rows {
-        let index = start + row;
-        let row_y = body_y.saturating_add(row as u16);
-        queue!(stdout, MoveTo(inner_x, row_y))?;
-        if index >= options.len() {
-            queue!(
-                stdout,
-                Print(crate::render::readable_terminal_text(
-                    &(" ".repeat(left_w as usize)).to_string()
-                ))
-            )?;
-            continue;
-        }
-        let (bar, style) = selection_marks(index == selected);
-        let label = pad(&options[index], left_w.saturating_sub(2) as usize);
-        queue!(
-            stdout,
-            Print(crate::render::readable_terminal_text(
-                &(format!("{bar}{style} {label}{RESET}")).to_string()
-            ))
-        )?;
-    }
-    if right_w > 0 && options.len() <= visible_rows {
-        // 1. 【配置界面】【栏分隔线】列表未溢出时在左右栏之间绘制柔和竖线，区分主从结构
-        for row in 0..body_h {
-            queue!(
-                stdout,
-                MoveTo(inner_x.saturating_add(left_w), body_y.saturating_add(row)),
-                Print(crate::render::readable_terminal_text(&format!(
-                    "{DIM}{LINE_VERTICAL}{RESET}"
-                )))
-            )?;
-        }
-    } else {
-        draw_scroll_indicator(
-            stdout,
-            inner_x.saturating_add(left_w),
-            body_y,
-            body_h,
-            options.len(),
-            start,
-            visible_rows,
-        )?;
-    }
-
-    if right_w > 0 {
-        let detail_x = inner_x.saturating_add(left_w).saturating_add(2);
-        let detail = details.get(selected).map(String::as_str).unwrap_or("");
-        draw_wrapped_detail(stdout, detail_x, body_y, right_w, body_h, detail)?;
-    }
-
-    draw_status_bar(stdout, &frame, &menu_help(status))?;
-    end_synced_frame(stdout)
-}
-
-/// 菜单面板最大宽度：选项与说明两栏在此宽度内已足够舒展。
-const MENU_MAX_WIDTH: u16 = 100;
-/// 说明栏最少保留的行数，切换选项时面板高度不随说明长短跳动。
-const MENU_MIN_DETAIL_ROWS: usize = 4;
-
-/// 按选项数量与最长说明计算菜单外框，条目少时面板随内容收缩。
-///
-/// 参数:
-/// - `cols`: 终端列数
-/// - `rows`: 终端行数
-/// - `options`: 左侧选项
-/// - `details`: 与选项对齐的说明
-/// - `has_subtitle`: 是否有副标题行
-///
-/// 返回:
-/// - 菜单外框矩形
-fn menu_frame(
-    cols: u16,
-    rows: u16,
-    options: &[String],
-    details: &[String],
-    has_subtitle: bool,
-) -> FrameRect {
-    // 1. 先按最大宽度确定两栏宽度，说明折行行数依赖右栏宽度
-    let probe = content_frame(cols, rows, 1, MENU_MAX_WIDTH);
-    let inner_w = probe.width.saturating_sub(4);
-    let right_w = if details.is_empty() {
-        0
-    } else {
-        master_detail_widths(inner_w).1
-    };
-    // 2. 说明栏高度取所有选项中最长者，保证切换选项时外框稳定
-    let detail_rows = if right_w == 0 {
-        0
-    } else {
-        details
-            .iter()
-            .map(|detail| wrap_text(detail, right_w as usize).len() + 2)
-            .max()
-            .unwrap_or(0)
-            .max(MENU_MIN_DETAIL_ROWS)
-    };
-    // 3. 内容行 = 副标题与分隔线 + 列表/说明较高者 + 底部留白
-    let header_rows = if has_subtitle { 2 } else { 0 };
-    let body_rows = options.len().max(detail_rows).max(1);
-    let content_rows = (header_rows + body_rows + 1).min(usize::from(u16::MAX)) as u16;
-    content_frame(cols, rows, content_rows, MENU_MAX_WIDTH)
-}
-
-/// 组装菜单底部帮助条。
-fn menu_help(status: &str) -> String {
-    if status.is_empty() {
-        help_line(&[
-            ("↑↓", t("move", "移动")),
-            ("Enter", t("open", "打开")),
-            ("q", t("back", "返回")),
-        ])
-    } else {
-        status.to_string()
-    }
-}
-
 /// 在底部边框上内嵌绘制帮助 / 状态条。
 ///
 /// 参数:
@@ -248,11 +50,38 @@ fn menu_help(status: &str) -> String {
 ///
 /// 返回:
 /// - 绘制是否成功
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn draw_status_bar(
     stdout: &mut io::Stdout,
     frame: &super::layout::FrameRect,
     content: &str,
 ) -> Result<()> {
+    draw_status_bar_interactive(stdout, frame, content, None)
+}
+
+/// 【配置界面】【底栏交互绘制】绘制底栏帮助条并高亮指针悬停的快捷键段。
+///
+/// 参数:
+/// - `stdout`: 终端输出
+/// - `frame`: 面板外框矩形
+/// - `content`: 已带样式的状态文本
+/// - `hovered`: 当前鼠标悬停的可点分段矩形
+///
+/// 返回:
+/// - 绘制结果
+pub(crate) fn draw_status_bar_interactive(
+    stdout: &mut io::Stdout,
+    frame: &super::layout::FrameRect,
+    content: &str,
+    hovered: Option<HitRect>,
+) -> Result<()> {
+    let fitted = fit_status_bar(content, frame.width.saturating_sub(6) as usize);
+    let highlighted = match hovered {
+        Some(rect) if rect.y == frame.y.saturating_add(frame.height.saturating_sub(1)) => {
+            highlight_status_segment(frame, &fitted, rect)
+        }
+        _ => fitted,
+    };
     queue!(
         stdout,
         MoveTo(
@@ -260,14 +89,34 @@ pub(crate) fn draw_status_bar(
             frame.y.saturating_add(frame.height.saturating_sub(1))
         ),
         Print(crate::render::readable_terminal_text(
-            &(format!(
-                " {} ",
-                fit_status_bar(content, frame.width.saturating_sub(6) as usize)
-            ))
-            .to_string()
+            &(format!(" {highlighted} ")).to_string()
         ))
     )?;
     Ok(())
+}
+
+/// 【配置界面】【底栏高亮】仅对命中悬停矩形的帮助分段套用胶囊强调色，保留邻近段样式。
+fn highlight_status_segment(frame: &FrameRect, fitted: &str, target: HitRect) -> String {
+    let separator = help_separator();
+    let sep_w = ansi_width(&separator);
+    let mut col = usize::from(frame.x.saturating_add(3));
+    let mut out = String::with_capacity(fitted.len() + 32);
+    for (idx, seg) in fitted.split(&separator).enumerate() {
+        if idx > 0 {
+            out.push_str(&separator);
+        }
+        let seg_w = ansi_width(seg);
+        if col == usize::from(target.x) && seg_w == usize::from(target.width) {
+            out.push_str(&format!(
+                "{PILL_BG}{ACCENT}{BOLD}{}{RESET}",
+                strip_ansi_plain(seg)
+            ));
+        } else {
+            out.push_str(seg);
+        }
+        col = col.saturating_add(seg_w).saturating_add(sep_w);
+    }
+    out
 }
 
 /// 计算带 ANSI 样式文本的显示宽度。
@@ -280,7 +129,7 @@ pub(crate) fn draw_status_bar(
 ///
 /// 返回:
 /// - 终端实际占用的列数
-fn ansi_width(value: &str) -> usize {
+pub(super) fn ansi_width(value: &str) -> usize {
     let mut width = 0usize;
     let mut index = 0usize;
     while index < value.len() {
@@ -307,7 +156,7 @@ fn ansi_width(value: &str) -> usize {
 ///
 /// 返回:
 /// - 压缩后的状态文本
-fn fit_status_bar(content: &str, max: usize) -> String {
+pub(super) fn fit_status_bar(content: &str, max: usize) -> String {
     // 必须用 ANSI 感知的宽度：display_width 走 UnicodeWidthStr，
     // 会把样式序列本身计入列数，与 truncate_ansi 的度量口径不一致
     let measured = ansi_width(content);
@@ -341,7 +190,12 @@ fn fit_status_bar(content: &str, max: usize) -> String {
 }
 
 /// 在框内绘制一条弱化横向分隔线（两端与边框相接）。
-fn draw_inner_divider(stdout: &mut io::Stdout, x: u16, y: u16, width: u16) -> Result<()> {
+pub(super) fn draw_inner_divider(
+    stdout: &mut io::Stdout,
+    x: u16,
+    y: u16,
+    width: u16,
+) -> Result<()> {
     let inner = width.saturating_sub(2) as usize;
     queue!(
         stdout,
@@ -444,7 +298,7 @@ pub(super) fn draw_wrapped_detail(
 }
 
 /// 按显示宽度将文本折成多行。
-fn wrap_text(text: &str, width: usize) -> Vec<String> {
+pub(super) fn wrap_text(text: &str, width: usize) -> Vec<String> {
     if width == 0 || text.is_empty() {
         return Vec::new();
     }
@@ -523,12 +377,39 @@ pub(crate) fn draw_box(
 /// 绘制供应商浏览器等场景的列：聚焦列亮标题，选中项用箭头而非反色。
 /// @param stdout 终端输出；area 列的矩形区域；title 标题；items 条目；selected 选中索引；active 是否聚焦
 /// @returns 绘制结果
+#[allow(dead_code)]
 pub(crate) fn draw_column(
     stdout: &mut io::Stdout,
     area: FrameRect,
     title: &str,
     items: &[String],
     selected: usize,
+    active: bool,
+) -> Result<()> {
+    draw_column_interactive(stdout, area, title, items, selected, None, false, active)
+}
+
+/// 【配置界面】【交互分栏】绘制单栏列表并高亮鼠标悬停行。
+///
+/// 参数:
+/// - `stdout`: 终端输出
+/// - `area`: 栏矩形区域
+/// - `title`: 栏标题
+/// - `items`: 条目文本列表
+/// - `selected`: 当前选中下标
+/// - `hovered`: 鼠标悬停下标
+/// - `active`: 该栏是否处于焦点
+///
+/// 返回:
+/// - 绘制结果
+pub(crate) fn draw_column_interactive(
+    stdout: &mut io::Stdout,
+    area: FrameRect,
+    title: &str,
+    items: &[String],
+    selected: usize,
+    hovered: Option<usize>,
+    header_hovered: bool,
     active: bool,
 ) -> Result<()> {
     let FrameRect {
@@ -540,6 +421,8 @@ pub(crate) fn draw_column(
     queue!(stdout, MoveTo(x, y))?;
     let title_style = if active {
         format!("{ACCENT}{BOLD}")
+    } else if header_hovered {
+        format!("{PILL_BG}{ACCENT}{BOLD}")
     } else {
         MUTED.to_string()
     };
@@ -571,19 +454,22 @@ pub(crate) fn draw_column(
             )?;
             continue;
         }
-        let (bar, style) = selection_marks(index == selected && active);
+        let is_selected = index == selected && active;
+        let is_hovered = hovered == Some(index);
+        let (bar, style) = if index == selected && !active {
+            // 非聚焦列的选中项保留次级点状锚点，若叠加悬停则轻度提亮
+            (
+                format!("{ACCENT}·{RESET}"),
+                if is_hovered {
+                    row_marks(false, true).1
+                } else {
+                    super::theme::ACCENT
+                },
+            )
+        } else {
+            row_marks(is_selected, is_hovered)
+        };
         let line = truncate(&items[index], width.saturating_sub(2) as usize);
-        let style = if index == selected && !active {
-            // 非聚焦列的选中项用次级高亮，避免与聚焦列抢视线
-            super::theme::ACCENT
-        } else {
-            style
-        };
-        let bar = if index == selected && !active {
-            format!("{ACCENT}·{RESET}")
-        } else {
-            bar
-        };
         queue!(
             stdout,
             Print(crate::render::readable_terminal_text(
@@ -619,7 +505,7 @@ pub(crate) fn truncate(value: &str, max: usize) -> String {
 }
 
 /// 按可见宽度截断带 ANSI 样式的文本（不足时原样返回）。
-fn truncate_ansi(value: &str, max: usize) -> String {
+pub(super) fn truncate_ansi(value: &str, max: usize) -> String {
     let mut width = 0usize;
     let mut output = String::new();
     let mut chars = value.char_indices().peekable();

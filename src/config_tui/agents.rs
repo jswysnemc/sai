@@ -18,10 +18,10 @@ use super::form::{
     edit_textarea, parse_bool_field, parse_provider_model_choice, provider_model_choice_values,
     run_form, Field,
 };
-use super::input::read_key;
+use super::mouse::{ListMouseState, MenuInput};
 use super::multi_select::{run_multi_select, HeaderToggle, SelectEntry, StateStyle};
 use super::theme::{DIM, OK, VALUE};
-use super::ui::{draw_menu_with_details, message, truncate};
+use super::ui::{draw_menu_interactive, message, truncate};
 
 /// 编辑统一 Agent 档案和各运行入口默认项。
 ///
@@ -38,6 +38,7 @@ pub(crate) fn edit_agents(
     config: &mut AppConfig,
 ) -> Result<()> {
     let mut selected = 0usize;
+    let mut mouse = ListMouseState::default();
     let mut status = String::new();
     let mut search = super::search::ListSearch::default();
     loop {
@@ -86,12 +87,13 @@ pub(crate) fn edit_agents(
             .to_string(),
         );
         selected = selected.min(options.len().saturating_sub(1));
-        draw_menu_with_details(
+        let hitbox = draw_menu_interactive(
             stdout,
             t(" AGENTS ", " AGENT 配置 "),
             &options,
             &details,
             selected,
+            &mouse,
             &search.help().unwrap_or_else(|| {
                 if status.is_empty() {
                     super::theme::help_line(&[
@@ -106,7 +108,19 @@ pub(crate) fn edit_agents(
             }),
             "",
         )?;
-        let key = read_key()?;
+        let key = match hitbox.read(&mut mouse, selected, false)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(index) | MenuInput::RightClick(index) => {
+                selected = index;
+                continue;
+            }
+            MenuInput::Activate(index) => {
+                selected = index;
+                KeyCode::Enter
+            }
+            MenuInput::Action(code) => code,
+            MenuInput::Key(key) => key.code,
+        };
         match search.handle(key) {
             super::search::SearchEffect::Updated => {
                 selected = 0;
@@ -262,6 +276,7 @@ fn edit_agent_profile(
     mut profile: AgentProfile,
 ) -> Result<()> {
     let mut selected = 0usize;
+    let mut mouse = ListMouseState::default();
     loop {
         let options = vec![
             t("Basic info", "基本信息").to_string(),
@@ -282,12 +297,13 @@ fn edit_agent_profile(
             .to_string(),
         ];
         let subtitle = format!("{} [{}]", profile.name, profile.id);
-        draw_menu_with_details(
+        let hitbox = draw_menu_interactive(
             stdout,
             t(" EDIT AGENT ", " 编辑 AGENT "),
             &options,
             &details,
             selected,
+            &mouse,
             &super::theme::help_line(&[
                 ("Enter", t("open", "进入")),
                 ("s", t("save", "保存")),
@@ -295,7 +311,20 @@ fn edit_agent_profile(
             ]),
             &subtitle,
         )?;
-        match read_key()? {
+        let code = match hitbox.read(&mut mouse, selected, false)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(index) | MenuInput::RightClick(index) => {
+                selected = index;
+                continue;
+            }
+            MenuInput::Activate(index) => {
+                selected = index;
+                KeyCode::Enter
+            }
+            MenuInput::Action(code) => code,
+            MenuInput::Key(key) => key.code,
+        };
+        match code {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => {

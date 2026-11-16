@@ -7,9 +7,9 @@ use crossterm::event::KeyCode;
 use std::io;
 
 use super::form::{parse_bool_field, parse_number_field, run_form, Field};
-use super::input::read_key;
 use super::jev_connection::{edit_connection, probe_blocking, select_connection};
-use super::ui::{draw_menu_with_details, message};
+use super::mouse::{ListMouseState, MenuInput};
+use super::ui::{draw_menu_interactive, message};
 
 /// Jev 设置菜单。
 ///
@@ -21,6 +21,7 @@ use super::ui::{draw_menu_with_details, message};
 /// - 菜单退出结果
 pub(crate) fn edit_jev(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
     let mut selected = 0usize;
+    let mut mouse = ListMouseState::default();
     loop {
         let options = vec![
             t("Connection", "接入").to_string(),
@@ -44,12 +45,13 @@ pub(crate) fn edit_jev(stdout: &mut io::Stdout, config: &mut AppConfig) -> Resul
             )
             .to_string(),
         ];
-        draw_menu_with_details(
+        let hitbox = draw_menu_interactive(
             stdout,
             " JEV ",
             &options,
             &details,
             selected,
+            &mouse,
             &super::theme::help_line(&[
                 ("↑↓", t("move", "移动")),
                 ("Enter", t("open", "打开")),
@@ -57,7 +59,20 @@ pub(crate) fn edit_jev(stdout: &mut io::Stdout, config: &mut AppConfig) -> Resul
             ]),
             "",
         )?;
-        match read_key()? {
+        let code = match hitbox.read(&mut mouse, selected, false)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(index) | MenuInput::RightClick(index) => {
+                selected = index;
+                continue;
+            }
+            MenuInput::Activate(index) => {
+                selected = index;
+                KeyCode::Enter
+            }
+            MenuInput::Action(code) => code,
+            MenuInput::Key(key) => key.code,
+        };
+        match code {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),

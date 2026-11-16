@@ -115,18 +115,34 @@ fn edit(
     let mut draft = Draft::new(policy, defaults);
     let mut size = terminal::size()?;
     let mut redraw = true;
+    let mut hitbox = view::CardHitbox::default();
+    let mut hovered: Option<view::CardClick> = None;
+    let mut clicks = crate::config_tui::mouse::ClickTracker::default();
     loop {
         if redraw {
-            view::draw(stdout, &draft, context)?;
+            hitbox = view::draw(stdout, &draft, context, hovered)?;
         }
         redraw = false;
-        if let Some(key) =
-            super::input::read_key_event_with_timeout(Some(Duration::from_millis(200)))?
-        {
-            if let Some(outcome) = draft.handle_event(key) {
-                return Ok(outcome);
+        match super::input::read_event_with_timeout(Some(Duration::from_millis(200)))? {
+            Some(super::input::ConfigEvent::Key(key)) => {
+                if let Some(outcome) = draft.handle_event(key) {
+                    return Ok(outcome);
+                }
+                redraw = true;
             }
-            redraw = true;
+            Some(super::input::ConfigEvent::Resize) => {
+                size = terminal::size()?;
+                redraw = true;
+            }
+            Some(super::input::ConfigEvent::Mouse(mouse)) => {
+                let (changed, outcome) =
+                    view::apply_mouse(mouse, &hitbox, &mut draft, &mut hovered, &mut clicks);
+                if let Some(outcome) = outcome {
+                    return Ok(outcome);
+                }
+                redraw = changed;
+            }
+            None => {}
         }
         // 1. 【上下文】【面板交互】空闲时仅检查尺寸，避免持续清屏导致闪烁与输出积压
         let next_size = terminal::size()?;

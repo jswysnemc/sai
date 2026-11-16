@@ -1,6 +1,7 @@
 mod catalog;
 #[cfg(test)]
 mod catalog_tests;
+mod mouse;
 mod render;
 
 use crate::config::{AppConfig, ModelMetadata, ProviderConfig};
@@ -17,11 +18,12 @@ use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
 use super::form::add_custom_model_form;
-use super::input::{read_key, read_key_with_timeout};
+use super::input::{read_event_with_timeout, ConfigEvent};
 use super::layout::three_column_widths;
+use super::mouse::{ClickTracker, ListMouseState, MenuInput};
 use super::provider_fetch::{fetch_models, FetchModelsResult};
 use super::provider_forms::{edit_model_form, edit_provider_form};
-use super::ui::{confirm_delete, display_width, draw_column, draw_menu, message, pad, truncate};
+use super::ui::{confirm_delete, display_width, draw_menu_interactive, message, pad, truncate};
 
 pub(crate) struct ProviderBrowser<'a> {
     config: &'a mut AppConfig,
@@ -29,6 +31,8 @@ pub(crate) struct ProviderBrowser<'a> {
     provider_idx: usize,
     org_idx: usize,
     model_idx: usize,
+    hovered: Option<mouse::ProviderClick>,
+    hovered_footer: Option<super::mouse::HitRect>,
     filter: String,
     filter_mode: bool,
     raw_models: Vec<String>,
@@ -52,6 +56,8 @@ impl<'a> ProviderBrowser<'a> {
             provider_idx: 0,
             org_idx: 0,
             model_idx: 0,
+            hovered: None,
+            hovered_footer: None,
             filter: String::new(),
             filter_mode: false,
             raw_models: Vec::new(),
@@ -71,43 +77,61 @@ impl<'a> ProviderBrowser<'a> {
         // 上一帧签名：轮询 tick 里内容没变就不重绘，避免加载期间
         // 10Hz 清屏重画造成的整屏闪烁
         let mut last_frame: Option<String> = None;
+        let mut last_hitbox = mouse::ProviderHitbox::default();
+        let mut clicks = ClickTracker::default();
         loop {
             self.poll_fetch_result();
             let signature = self.frame_signature();
             if last_frame.as_ref() != Some(&signature) {
-                self.draw(stdout)?;
+                last_hitbox = self.draw(stdout)?;
                 last_frame = Some(signature);
             }
-            match read_key_with_timeout(if self.loading {
+            let timeout = if self.loading {
                 Some(Duration::from_millis(100))
             } else {
                 Some(Duration::from_millis(150))
-            })? {
+            };
+            let key = match read_event_with_timeout(timeout)? {
                 None => continue,
-                Some(key) => match key {
-                    key if self.filter_mode => self.handle_filter_key(key),
-                    KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
-                    KeyCode::Left | KeyCode::Char('h') => self.move_left(),
-                    KeyCode::Right | KeyCode::Char('l') => self.move_right(),
-                    KeyCode::Up | KeyCode::Char('k') => self.move_up(),
-                    KeyCode::Down | KeyCode::Char('j') => self.move_down(),
-                    KeyCode::Char('/') => {
-                        self.filter_mode = true;
-                        self.active_col = 2;
+                Some(ConfigEvent::Resize) => {
+                    last_frame = None;
+                    continue;
+                }
+                Some(ConfigEvent::Mouse(mouse)) => {
+                    match self.handle_browser_mouse(stdout, mouse, &last_hitbox, &mut clicks)? {
+                        mouse::BrowserMouseStep::None => continue,
+                        mouse::BrowserMouseStep::ForceRedraw => {
+                            last_frame = None;
+                            continue;
+                        }
+                        mouse::BrowserMouseStep::Key(mapped) => mapped,
                     }
-                    KeyCode::Char('r') => {
-                        self.model_cache.remove(&self.catalog_key());
-                        self.refresh_models();
-                    }
-                    KeyCode::Char('a') if self.active_col == 2 => self.add_custom_model(stdout)?,
-                    KeyCode::Char('a') => self.add_provider(stdout)?,
-                    KeyCode::Char('d') if self.active_col == 2 => self.delete_model(stdout)?,
-                    KeyCode::Char('d') => self.delete_provider(stdout)?,
-                    KeyCode::Tab if self.active_col == 2 => self.toggle_model_activation(),
-                    KeyCode::Char(' ' | 'u') if self.active_col == 2 => self.set_current_model(),
-                    KeyCode::Enter | KeyCode::Char('i') => self.select_or_edit(stdout)?,
-                    _ => {}
-                },
+                }
+                Some(ConfigEvent::Key(key)) => key.code,
+            };
+            match key {
+                key if self.filter_mode => self.handle_filter_key(key),
+                KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
+                KeyCode::Left | KeyCode::Char('h') => self.move_left(),
+                KeyCode::Right | KeyCode::Char('l') => self.move_right(),
+                KeyCode::Up | KeyCode::Char('k') => self.move_up(),
+                KeyCode::Down | KeyCode::Char('j') => self.move_down(),
+                KeyCode::Char('/') => {
+                    self.filter_mode = true;
+                    self.active_col = 2;
+                }
+                KeyCode::Char('r') => {
+                    self.model_cache.remove(&self.catalog_key());
+                    self.refresh_models();
+                }
+                KeyCode::Char('a') if self.active_col == 2 => self.add_custom_model(stdout)?,
+                KeyCode::Char('a') => self.add_provider(stdout)?,
+                KeyCode::Char('d') if self.active_col == 2 => self.delete_model(stdout)?,
+                KeyCode::Char('d') => self.delete_provider(stdout)?,
+                KeyCode::Tab if self.active_col == 2 => self.toggle_model_activation(),
+                KeyCode::Char(' ' | 'u') if self.active_col == 2 => self.set_current_model(),
+                KeyCode::Enter | KeyCode::Char('i') => self.select_or_edit(stdout)?,
+                _ => {}
             }
             // 1. 【服务商配置】【交互重绘】子表单退出后即使数据未改变，也需恢复列表画面
             last_frame = None;
@@ -126,11 +150,13 @@ impl<'a> ProviderBrowser<'a> {
     /// - 内容签名
     fn frame_signature(&self) -> String {
         format!(
-            "{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{:?}",
+            "{}|{}|{}|{}|{:?}|{:?}|{}|{}|{}|{}|{}|{}|{}|{:?}",
             self.active_col,
             self.provider_idx,
             self.org_idx,
             self.model_idx,
+            self.hovered,
+            self.hovered_footer,
             self.filter,
             self.filter_mode,
             self.loading,
@@ -568,6 +594,7 @@ pub(crate) fn select_active_provider(
             .unwrap_or(false)
     });
     let mut selected = current.unwrap_or(0);
+    let mut mouse = ListMouseState::default();
     let mut search = super::search::ListSearch::default();
     let mut status = String::new();
     loop {
@@ -609,14 +636,33 @@ pub(crate) fn select_active_provider(
                 status.clone()
             }
         });
-        draw_menu(
+        let hitbox = draw_menu_interactive(
             stdout,
             t(" SELECT PROVIDER/MODEL ", " 选择供应商/模型 "),
             &options,
+            &[],
             selected,
+            &mouse,
             &help,
+            "",
         )?;
-        let key = read_key()?;
+        let key = match hitbox.read(&mut mouse, selected, false)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(index) | MenuInput::RightClick(index) => {
+                if !visible.is_empty() {
+                    selected = index;
+                }
+                continue;
+            }
+            MenuInput::Activate(index) => {
+                if !visible.is_empty() {
+                    selected = index;
+                }
+                KeyCode::Enter
+            }
+            MenuInput::Key(key) => key.code,
+            MenuInput::Action(code) => code,
+        };
         match search.handle(key) {
             super::search::SearchEffect::Updated => {
                 selected = 0;

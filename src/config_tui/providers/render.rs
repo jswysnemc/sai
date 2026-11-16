@@ -1,5 +1,7 @@
+use super::mouse::{column_hitbox, ProviderClick, ProviderHitbox};
 use super::*;
 use crate::config_tui::layout::FrameRect;
+use crate::config_tui::mouse::HitRect;
 
 /// 列表区最少行数。
 const MIN_LIST_ROWS: usize = 6;
@@ -7,7 +9,7 @@ const MIN_LIST_ROWS: usize = 6;
 const MAX_LIST_ROWS: usize = 16;
 
 impl ProviderBrowser<'_> {
-    pub(super) fn draw(&mut self, stdout: &mut io::Stdout) -> Result<()> {
+    pub(super) fn draw(&mut self, stdout: &mut io::Stdout) -> Result<ProviderHitbox> {
         let (cols, rows) = terminal::size()?;
         // 高度按三栏中最长者计算并封顶，条目少时不再撑满整屏
         let longest = self
@@ -92,52 +94,92 @@ impl ProviderBrowser<'_> {
             t("PROVIDERS & MODELS", "供应商与模型"),
         )?;
         let filter_cursor = self.draw_filter_bar(stdout, inner_x, inner_y, inner_w)?;
+        let filter_bar = HitRect {
+            x: inner_x,
+            y: inner_y,
+            width: inner_w,
+            height: 1,
+        };
         let list_y = inner_y.saturating_add(2);
         let list_h = inner_h.saturating_sub(2);
+        let mut headers = [None, None, None];
+        let mut columns = [None, None, None];
+        let hover_row_for = |col: usize| match self.hovered {
+            Some(ProviderClick::Row(hover_col, row)) if hover_col == col => Some(row),
+            _ => None,
+        };
+        let header_hovered = |col: usize| self.hovered == Some(ProviderClick::ColumnHeader(col));
         // 1. 终端够宽时绘制三栏；宽度之和不超过内容区，保证不重叠
         if let Some((left_w, mid_w, right_w)) = three_column_widths(inner_w) {
-            draw_column(
+            let area0 = FrameRect {
+                x: inner_x,
+                y: list_y,
+                width: left_w,
+                height: list_h,
+            };
+            crate::config_tui::ui::draw_column_interactive(
                 stdout,
-                FrameRect {
-                    x: inner_x,
-                    y: list_y,
-                    width: left_w,
-                    height: list_h,
-                },
+                area0,
                 t(" PROVIDERS ", " 供应商 "),
                 &providers,
                 self.provider_idx,
+                hover_row_for(0),
+                header_hovered(0),
                 self.active_col == 0,
             )?;
-            draw_column(
+            let (h0, c0) = column_hitbox(area0, self.provider_idx, providers.len());
+            headers[0] = Some(h0);
+            columns[0] = Some(c0);
+
+            let area1 = FrameRect {
+                x: inner_x + left_w + 1,
+                y: list_y,
+                width: mid_w,
+                height: list_h,
+            };
+            crate::config_tui::ui::draw_column_interactive(
                 stdout,
-                FrameRect {
-                    x: inner_x + left_w + 1,
-                    y: list_y,
-                    width: mid_w,
-                    height: list_h,
-                },
+                area1,
                 t(" ORG ", " 组织 "),
                 &self.orgs,
                 self.org_idx,
+                hover_row_for(1),
+                header_hovered(1),
                 self.active_col == 1,
             )?;
-            draw_column(
+            let (h1, c1) = column_hitbox(area1, self.org_idx, self.orgs.len());
+            headers[1] = Some(h1);
+            columns[1] = Some(c1);
+
+            let area2 = FrameRect {
+                x: inner_x + left_w + mid_w + 2,
+                y: list_y,
+                width: right_w,
+                height: list_h,
+            };
+            crate::config_tui::ui::draw_column_interactive(
                 stdout,
-                FrameRect {
-                    x: inner_x + left_w + mid_w + 2,
-                    y: list_y,
-                    width: right_w,
-                    height: list_h,
-                },
+                area2,
                 &models_title,
                 &models,
                 self.model_idx,
+                hover_row_for(2),
+                header_hovered(2),
                 self.active_col == 2,
             )?;
+            let (h2, c2) = column_hitbox(area2, self.model_idx, models.len());
+            headers[2] = Some(h2);
+            columns[2] = Some(c2);
         } else {
             // 2. 窄终端降级为单栏，仅绘制当前激活栏
-            let (title, items, selected) = match self.active_col {
+            let area = FrameRect {
+                x: inner_x,
+                y: list_y,
+                width: inner_w,
+                height: list_h,
+            };
+            let col = self.active_col.min(2);
+            let (title, items, selected) = match col {
                 0 => (
                     t(" PROVIDERS ", " 供应商 ").to_string(),
                     &providers,
@@ -146,19 +188,19 @@ impl ProviderBrowser<'_> {
                 1 => (t(" ORG ", " 组织 ").to_string(), &self.orgs, self.org_idx),
                 _ => (models_title, &models, self.model_idx),
             };
-            draw_column(
+            crate::config_tui::ui::draw_column_interactive(
                 stdout,
-                FrameRect {
-                    x: inner_x,
-                    y: list_y,
-                    width: inner_w,
-                    height: list_h,
-                },
+                area,
                 &title,
                 items,
                 selected,
+                hover_row_for(col),
+                header_hovered(col),
                 true,
             )?;
+            let (hdr, hb) = column_hitbox(area, selected, items.len());
+            headers[col] = Some(hdr);
+            columns[col] = Some(hb);
         }
         use crate::config_tui::theme::{help_line, ACCENT, DANGER, MUTED, RESET};
         let help = if self.filter_mode {
@@ -198,7 +240,13 @@ impl ProviderBrowser<'_> {
                     .to_string()
             ))
         )?;
-        crate::config_tui::ui::draw_status_bar(stdout, &frame, &help)?;
+        crate::config_tui::ui::draw_status_bar_interactive(
+            stdout,
+            &frame,
+            &help,
+            self.hovered_footer,
+        )?;
+        let footer = crate::config_tui::ui::status_bar_hits(&frame, &help);
         // 光标显隐只在过滤态切换后的首帧发送，逐帧重发会放大终端闪烁
         if let Some((cx, cy)) = filter_cursor {
             if !self.cursor_visible {
@@ -211,7 +259,13 @@ impl ProviderBrowser<'_> {
             self.cursor_visible = false;
         }
         crate::config_tui::ui::end_synced_frame(stdout)?;
-        Ok(())
+        Ok(ProviderHitbox {
+            frame: HitRect::from(frame),
+            filter_bar,
+            headers,
+            columns,
+            footer,
+        })
     }
 
     /// 在三栏上方画一条全宽过滤框，避免查询被挤进窄列标题。
@@ -231,7 +285,7 @@ impl ProviderBrowser<'_> {
         y: u16,
         width: u16,
     ) -> Result<Option<(u16, u16)>> {
-        use crate::config_tui::theme::{ACCENT, BOLD, MUTED, RESET, SELECT_BG};
+        use crate::config_tui::theme::{ACCENT, BOLD, MUTED, PILL_BG, RESET, SELECT_BG};
         let prefix = format!("/ {}", t("Search models", "搜索模型"));
         let query = if self.filter.is_empty() && !self.filter_mode {
             t("type to filter", "输入以过滤")
@@ -264,6 +318,15 @@ impl ProviderBrowser<'_> {
                 cursor_x.min(x.saturating_add(width.saturating_sub(1))),
                 y,
             )))
+        } else if self.hovered == Some(ProviderClick::FilterBar) {
+            queue!(
+                stdout,
+                MoveTo(x, y),
+                Print(crate::render::readable_terminal_text(
+                    &(format!("{PILL_BG}{ACCENT} {line}{RESET}")).to_string()
+                ))
+            )?;
+            Ok(None)
         } else {
             queue!(
                 stdout,

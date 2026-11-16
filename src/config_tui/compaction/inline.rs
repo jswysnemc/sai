@@ -37,16 +37,20 @@ pub(super) fn run(
         terminal::enable_raw_mode()?;
     }
     let _guard = ModeGuard(was_raw);
+    let _mouse = crate::cli::mouse_capture::MouseCapture::acquire()?;
     let mut stdout = io::stdout();
     execute!(stdout, Hide)?;
     let mut draft = Draft::new(policy, defaults);
     let mut previous = Vec::new();
     let mut geometry = None;
     let mut top = 0;
+    let mut hitbox = view::CardHitbox::default();
+    let mut hovered: Option<view::CardClick> = None;
+    let mut clicks = crate::config_tui::mouse::ClickTracker::default();
     loop {
         let (cols, rows) = terminal::size()?;
         let lines = card::fit_height(
-            view::frame(&draft, context, usize::from(cols)),
+            view::frame_interactive(&draft, context, hovered, usize::from(cols)),
             usize::from(rows.saturating_sub(1).max(1)),
         );
         let shape = (cols, rows, lines.len());
@@ -66,14 +70,23 @@ pub(super) fn run(
                 Some(&previous),
             )?;
             crate::config_tui::ui::end_synced_frame(&mut stdout)?;
+            hitbox = view::CardHitbox::compute(&draft, top, usize::from(cols), lines.len());
             previous = lines;
         }
-        if let Some(key) =
-            crate::config_tui::input::read_key_event_with_timeout(Some(Duration::from_millis(100)))?
-        {
-            if let Some(outcome) = draft.handle_event(key) {
-                return Ok(outcome);
+        match crate::config_tui::input::read_event_with_timeout(Some(Duration::from_millis(100)))? {
+            Some(crate::config_tui::input::ConfigEvent::Key(key)) => {
+                if let Some(outcome) = draft.handle_event(key) {
+                    return Ok(outcome);
+                }
             }
+            Some(crate::config_tui::input::ConfigEvent::Mouse(mouse)) => {
+                let (_changed, outcome) =
+                    view::apply_mouse(mouse, &hitbox, &mut draft, &mut hovered, &mut clicks);
+                if let Some(outcome) = outcome {
+                    return Ok(outcome);
+                }
+            }
+            Some(crate::config_tui::input::ConfigEvent::Resize) | None => {}
         }
     }
 }

@@ -1,36 +1,39 @@
 mod field;
+mod mouse;
 mod render;
 
 pub(crate) use field::Field;
-use render::draw_form;
+use mouse::{apply_form_mouse, form_hover_target, wait_form_non_hover_key, FormEventStep};
+use render::draw_form_interactive;
 
 use crate::config::AppConfig;
 use crate::default_models::{OPENCODE_DEFAULT_VISION_MODEL, OPENCODE_PROVIDER_ID};
 use crate::i18n::text as t;
 use anyhow::{bail, Result};
 use crossterm::cursor::{Hide, MoveTo, Show};
-use crossterm::event::{KeyCode, KeyModifiers};
+use crossterm::event::{KeyCode, KeyModifiers, MouseEventKind};
 use crossterm::execute;
 use crossterm::terminal::{self, Clear, ClearType};
 use std::io::{self, Write};
 
-use super::input::{read_key, read_key_event};
-use super::ui::draw_menu;
+use super::input::{read_event, ConfigEvent};
+use super::mouse::{ClickTracker, ListMouseState, MenuInput};
+use super::ui::draw_menu_interactive;
 
-struct FcitxState;
+pub(super) struct FcitxState;
 
 impl FcitxState {
     /// 表单导航使用会话级输入法状态：列表里保持关闭，进入文本框再打开。
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         super::ime::disable_for_nav();
         Self
     }
 
-    fn enter_editing(&mut self) {
+    pub(super) fn enter_editing(&mut self) {
         super::ime::enable_for_edit();
     }
 
-    fn leave_editing(&mut self) {
+    pub(super) fn leave_editing(&mut self) {
         super::ime::disable_for_nav();
     }
 }
@@ -42,28 +45,80 @@ impl Drop for FcitxState {
 }
 
 /// 表单行内快捷循环切换的最大候选数；超出时提供可检索完整列表。
-const INLINE_CHOICE_LIMIT: usize = 5;
+pub(super) const INLINE_CHOICE_LIMIT: usize = 5;
 
 pub(crate) fn run_form(stdout: &mut io::Stdout, title: &str, fields: &mut [Field]) -> Result<bool> {
     let mut selected = first_selectable(fields);
+    let mut hovered: Option<usize> = None;
+    let mut footer_hover: Option<super::mouse::HitRect> = None;
     let mut editing = false;
     let mut fcitx = FcitxState::new();
+    let mut clicks = ClickTracker::default();
     let mut cursors = fields
         .iter()
         .map(|field| field.value.chars().count())
         .collect::<Vec<_>>();
     let mut revealed_secrets = vec![false; fields.len()];
     loop {
-        draw_form(
+        let hitbox = draw_form_interactive(
             stdout,
             title,
             fields,
             selected,
+            hovered,
+            footer_hover,
             editing,
             &cursors,
             &revealed_secrets,
         )?;
-        let key = read_key_event()?;
+        let key = match read_event()? {
+            ConfigEvent::Resize => continue,
+            ConfigEvent::Key(key) => key,
+            ConfigEvent::Mouse(mouse) => {
+                // 1. 悬停更新：同时追踪字段、Save/Cancel 按钮及底栏快捷段
+                if matches!(mouse.kind, MouseEventKind::Moved) {
+                    let next = form_hover_target(fields, &hitbox, mouse.column, mouse.row);
+                    let next_footer = hitbox.footer.rect_at(mouse.column, mouse.row);
+                    if next != hovered || next_footer != footer_hover {
+                        hovered = next;
+                        footer_hover = next_footer;
+                        continue;
+                    }
+                    match wait_form_non_hover_key(
+                        stdout,
+                        fields,
+                        &mut selected,
+                        &mut hovered,
+                        &mut footer_hover,
+                        &mut editing,
+                        &mut fcitx,
+                        &mut clicks,
+                        &mut cursors,
+                        &hitbox,
+                    )? {
+                        FormEventStep::Key(k) => k,
+                        FormEventStep::Redraw => continue,
+                        FormEventStep::Finish(saved) => return Ok(saved),
+                    }
+                } else {
+                    match apply_form_mouse(
+                        stdout,
+                        mouse,
+                        fields,
+                        &hitbox,
+                        &mut selected,
+                        &mut editing,
+                        &mut fcitx,
+                        &mut clicks,
+                        &mut cursors,
+                    )? {
+                        FormEventStep::Redraw => continue,
+                        FormEventStep::Finish(saved) => return Ok(saved),
+                        FormEventStep::Key(key) => key,
+                    }
+                }
+            }
+        };
         match key.code {
             KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 fcitx.leave_editing();
@@ -183,7 +238,7 @@ pub(crate) fn run_form(stdout: &mut io::Stdout, title: &str, fields: &mut [Field
 ///
 /// 返回:
 /// - 无
-fn cycle_choice(field: &mut Field, forward: bool) {
+pub(super) fn cycle_choice(field: &mut Field, forward: bool) {
     if field.choices.is_empty() {
         return;
     }
@@ -207,7 +262,7 @@ fn first_selectable(fields: &[Field]) -> usize {
 }
 
 /// 向下移动选中项，跳过分组标题；越过末尾进入按钮区。
-fn next_selectable(fields: &[Field], selected: usize) -> usize {
+pub(super) fn next_selectable(fields: &[Field], selected: usize) -> usize {
     let mut next = selected.saturating_add(1);
     while next < fields.len() && fields[next].section {
         next += 1;
@@ -216,7 +271,7 @@ fn next_selectable(fields: &[Field], selected: usize) -> usize {
 }
 
 /// 向上移动选中项，跳过分组标题；已在顶部时停在首个可选字段。
-fn previous_selectable(fields: &[Field], selected: usize) -> usize {
+pub(super) fn previous_selectable(fields: &[Field], selected: usize) -> usize {
     if selected == 0 {
         return first_selectable(fields);
     }
@@ -252,7 +307,7 @@ pub(crate) fn add_custom_model_form(stdout: &mut io::Stdout) -> Result<Option<St
     Ok((!model.is_empty()).then_some(model))
 }
 
-fn select_choice(
+pub(super) fn select_choice(
     stdout: &mut io::Stdout,
     label: &str,
     current: &str,
@@ -260,6 +315,7 @@ fn select_choice(
     empty_label: &'static str,
 ) -> Result<String> {
     let mut selected = choices.iter().position(|item| item == current).unwrap_or(0);
+    let mut mouse = ListMouseState::default();
     loop {
         // 当前生效值带勾选标记，视线不必依赖记忆
         let options = choices
@@ -278,8 +334,19 @@ fn select_choice(
             ("Enter", t("select", "选择")),
             ("q", t("keep current", "保持当前")),
         ]);
-        draw_menu(stdout, label, &options, selected, &status)?;
-        match read_key()? {
+        let hitbox =
+            draw_menu_interactive(stdout, label, &options, &[], selected, &mouse, &status, "")?;
+        let code = match hitbox.read(&mut mouse, selected, true)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(index) | MenuInput::RightClick(index) => {
+                selected = index;
+                continue;
+            }
+            MenuInput::Activate(index) => return Ok(choices[index].clone()),
+            MenuInput::Key(key) => key.code,
+            MenuInput::Action(code) => code,
+        };
+        match code {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(current.to_string()),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(choices.len() - 1),

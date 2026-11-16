@@ -1,8 +1,8 @@
 //! 首次进入聊天前配置供应商，复用现有终端菜单、表单和终端恢复逻辑。
 
 use super::form::{run_form, Field};
-use super::input::read_key;
-use super::ui::{draw_menu_with_details, message};
+use super::mouse::{ListMouseState, MenuInput};
+use super::ui::{draw_menu_interactive, message};
 use crate::config::onboarding::{complete_provider_setup, ProviderSetupInput};
 use crate::config::{AppConfig, ProviderConfig};
 use crate::i18n::text as t;
@@ -47,23 +47,39 @@ pub(super) fn run(stdout: &mut io::Stdout, paths: &SaiPaths, config: &AppConfig)
         .to_string(),
     );
     let mut selected = 0;
+    let mut mouse = ListMouseState::default();
     loop {
-        draw_menu_with_details(
+        let hitbox = draw_menu_interactive(
             stdout,
             t(" FIRST USE · PROVIDER SETUP ", " 首次使用 · 配置供应商 "),
             &options,
             &details,
             selected,
-            t(
-                "Up/Down select · Enter configure · Esc exit",
-                "上下选择 · Enter 配置 · Esc 退出",
-            ),
+            &mouse,
+            &super::theme::help_line(&[
+                ("↑↓", t("select", "选择")),
+                ("Enter", t("configure", "配置")),
+                ("Esc", t("exit", "退出")),
+            ]),
             t(
                 "Choose a provider before starting your first conversation",
                 "开始首次对话前，请选择并配置供应商",
             ),
         )?;
-        match read_key()? {
+        let code = match hitbox.read(&mut mouse, selected, false)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(index) | MenuInput::RightClick(index) => {
+                selected = index;
+                continue;
+            }
+            MenuInput::Activate(index) => {
+                selected = index;
+                KeyCode::Enter
+            }
+            MenuInput::Action(code) => code,
+            MenuInput::Key(key) => key.code,
+        };
+        match code {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(false),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),

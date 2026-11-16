@@ -11,8 +11,8 @@ use anyhow::Result;
 use crossterm::event::KeyCode;
 use std::io;
 
-use super::input::read_key;
-use super::ui::{draw_menu_with_details, message};
+use super::mouse::{ListMouseState, MenuInput};
+use super::ui::{draw_menu_interactive, message};
 
 /// 全局开关行数量（Skills 总开关 + 允许执行命令）。
 const TOGGLE_ROWS: usize = 2;
@@ -32,6 +32,7 @@ pub(crate) fn edit_skills(
     config: &mut AppConfig,
 ) -> Result<()> {
     let mut selected = 0usize;
+    let mut mouse = ListMouseState::default();
     let mut status = String::new();
     let mut search = super::search::ListSearch::default();
     // 目录扫描只在进入和启停后做。每次按键都扫一遍，长列表会一顿一顿的。
@@ -132,15 +133,32 @@ pub(crate) fn edit_skills(
                 status.clone()
             }
         });
-        draw_menu_with_details(
-            stdout, " SKILLS ", &options, &details, selected, &help, &subtitle,
+        let hitbox = draw_menu_interactive(
+            stdout, " SKILLS ", &options, &details, selected, &mouse, &help, &subtitle,
         )?;
 
+        let code = match hitbox.read(&mut mouse, selected, false)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(index) => {
+                selected = index;
+                status.clear();
+                continue;
+            }
+            MenuInput::Activate(index) => {
+                selected = index;
+                KeyCode::Enter
+            }
+            MenuInput::RightClick(index) => {
+                selected = index;
+                KeyCode::Char(' ')
+            }
+            MenuInput::Action(code) => code,
+            MenuInput::Key(key) => key.code,
+        };
         let skill_index = selected
             .checked_sub(TOGGLE_ROWS)
             .and_then(|index| shown.get(index).copied());
-        let key = read_key()?;
-        match search.handle(key) {
+        match search.handle(code) {
             super::search::SearchEffect::Updated => {
                 selected = 0;
                 continue;
@@ -148,7 +166,7 @@ pub(crate) fn edit_skills(
             super::search::SearchEffect::Closed => continue,
             super::search::SearchEffect::Passthrough => {}
         }
-        match key {
+        match code {
             KeyCode::Esc | KeyCode::Char('q') if !search.editing => return Ok(()),
             KeyCode::Up | KeyCode::Char('k') => {
                 selected = selected.saturating_sub(1);

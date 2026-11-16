@@ -3,21 +3,15 @@
 //! 列表项在若干状态间循环（如 隐藏 → 启用 → 延迟），支持分组标题行、
 //! 顶部布尔开关行和 `/` 过滤；右侧详情栏展示当前项说明。
 
-use crate::i18n::text as t;
+mod render;
+
 use anyhow::Result;
-use crossterm::cursor::MoveTo;
-use crossterm::event::KeyCode;
-use crossterm::queue;
-use crossterm::style::Print;
-use crossterm::terminal::{self, Clear, ClearType};
+use crossterm::event::{KeyCode, MouseEventKind};
 use std::io;
 
-use super::input::read_key;
-use super::layout::{full_frame, master_detail_widths, scroll_start};
-use super::theme::{help_line, selection_marks, ACCENT, BOLD, BRAND, DIM, MUTED, OK, RESET};
-use super::ui::{
-    draw_box, draw_scroll_indicator, draw_status_bar, draw_wrapped_detail, pad, truncate,
-};
+use super::input::{read_event, ConfigEvent};
+use super::mouse::ClickTracker;
+use render::draw;
 
 /// 清单条目的一个可循环状态。
 pub(super) struct StateStyle {
@@ -49,7 +43,7 @@ pub(super) struct HeaderToggle {
 }
 
 /// 清单可见行：开关、分组标题或条目。
-enum Row {
+pub(super) enum Row {
     Toggle(usize),
     Group(String),
     Entry(usize),
@@ -83,8 +77,12 @@ pub(super) fn run_multi_select(
     let mut filter_mode = false;
     let mut rows = build_rows(toggles, entries, &filter);
     let mut selected = first_selectable(&rows);
+    let mut hovered: Option<usize> = None;
+    let mut footer_hover: Option<super::mouse::HitRect> = None;
+    let mut clicks = ClickTracker::default();
+    let mut footer_clicks = ClickTracker::default();
     loop {
-        draw(
+        let hitbox = draw(
             stdout,
             title,
             states,
@@ -92,10 +90,66 @@ pub(super) fn run_multi_select(
             entries,
             &rows,
             selected,
+            hovered,
+            footer_hover,
             &filter,
             filter_mode,
         )?;
-        let key = read_key()?;
+        let key = match read_event()? {
+            ConfigEvent::Resize => continue,
+            ConfigEvent::Key(key) => key.code,
+            ConfigEvent::Mouse(mouse) => {
+                // 1. 悬停更新：同步追踪候选行（跳过分组标题）和底栏按钮
+                if matches!(mouse.kind, MouseEventKind::Moved) {
+                    let next = hitbox
+                        .list
+                        .row_at(mouse.column, mouse.row)
+                        .filter(|idx| rows.get(*idx).is_some_and(Row::selectable));
+                    let next_footer = hitbox.footer.rect_at(mouse.column, mouse.row);
+                    if next != hovered || next_footer != footer_hover {
+                        hovered = next;
+                        footer_hover = next_footer;
+                    }
+                    continue;
+                }
+                // 2. 滚轮上下滚动：跳过不可选的分组标题行
+                if hitbox.list.frame.contains(mouse.column, mouse.row) {
+                    match mouse.kind {
+                        MouseEventKind::ScrollUp => {
+                            selected = previous_selectable(&rows, selected);
+                            continue;
+                        }
+                        MouseEventKind::ScrollDown => {
+                            selected = next_selectable(&rows, selected);
+                            continue;
+                        }
+                        _ => {}
+                    }
+                }
+                // 3. 底栏快捷键胶囊点击（如 A 全选、0 清空、/ 搜索、s 保存、q 取消）
+                let footer_target = hitbox.footer.hit(mouse.column, mouse.row);
+                if let Some(code) = footer_clicks.update(mouse, footer_target) {
+                    code
+                } else {
+                    // 4. 列表行点击：点击左侧状态圆点列立即切换，点击文字先选中、再次点击切换
+                    let target = hitbox
+                        .list
+                        .row_at(mouse.column, mouse.row)
+                        .filter(|idx| rows.get(*idx).is_some_and(Row::selectable));
+                    let Some(index) = clicks.update(mouse, target) else {
+                        continue;
+                    };
+                    let in_mark_col = mouse.column < hitbox.list.list.x.saturating_add(5);
+                    if index == selected || in_mark_col {
+                        selected = index;
+                        KeyCode::Char(' ')
+                    } else {
+                        selected = index;
+                        continue;
+                    }
+                }
+            }
+        };
         if filter_mode {
             let query_changed = match key {
                 KeyCode::Esc => {
@@ -157,8 +211,7 @@ pub(super) fn run_multi_select(
                 rows = build_rows(toggles, entries, &filter);
                 selected = clamp_selection(&rows, selected);
             }
-            // 批量设置：工具列表有几十项，从「全部继承」改成白名单要逐个按空格太折磨人。
-            // 只作用于当前过滤结果，配合 / 可以「先过滤再批量改」
+            // 批量设置：只作用于当前过滤结果，配合 / 可以「先过滤再批量改」
             KeyCode::Char('A') => {
                 if states.len() > 1 {
                     for index in visible_entry_indices(&rows) {
@@ -271,289 +324,9 @@ fn clamp_selection(rows: &[Row], selected: usize) -> usize {
     previous_selectable(rows, selected)
 }
 
-/// 统计各状态条目数量，组装副标题（如 `● 启用 12 · ◐ 延迟 5 · 共 58`）。
-fn state_summary(states: &[StateStyle], entries: &[SelectEntry]) -> String {
-    let mut parts = Vec::new();
-    for (index, state) in states.iter().enumerate() {
-        // 每个状态都计数，包括默认态：工具列表里第 0 态是「隐藏」，
-        // 恰恰是用户最想知道的数量。原先跳过它会渲染成「● 启用 5 · 共 58」，
-        // 读者得自己做 58-5 才知道有 53 项被隐藏
-        let count = entries.iter().filter(|entry| entry.state == index).count();
-        if count > 0 {
-            parts.push(format!("{} {} {count}", state.mark, state.label));
-        }
-    }
-    if parts.is_empty() {
-        format!("{} {}", entries.len(), t("items", "项"))
-    } else {
-        format!(
-            "{} · {} {}",
-            parts.join(" · "),
-            t("total", "共"),
-            entries.len()
-        )
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn draw(
-    stdout: &mut io::Stdout,
-    title: &str,
-    states: &[StateStyle],
-    toggles: &[HeaderToggle],
-    entries: &[SelectEntry],
-    rows: &[Row],
-    selected: usize,
-    filter: &str,
-    filter_mode: bool,
-) -> Result<()> {
-    let (cols, terminal_rows) = terminal::size()?;
-    let frame = full_frame(cols, terminal_rows);
-    super::ui::begin_synced_frame(stdout)?;
-    queue!(stdout, Clear(ClearType::All))?;
-    draw_box(stdout, frame.x, frame.y, frame.width, frame.height, title)?;
-
-    let inner_x = frame.x.saturating_add(2);
-    let inner_w = frame.width.saturating_sub(4);
-    let mut body_y = frame.y.saturating_add(1);
-    // 副标题：状态统计（过滤时展示命中数）
-    let subtitle = if filter.is_empty() {
-        state_summary(states, entries)
-    } else {
-        let visible = rows
-            .iter()
-            .filter(|row| matches!(row, Row::Entry(_)))
-            .count();
-        format!(
-            "{} /{filter} · {visible} {}",
-            t("filter", "过滤"),
-            t("matches", "项命中")
-        )
-    };
-    queue!(
-        stdout,
-        MoveTo(inner_x, body_y),
-        Print(crate::render::readable_terminal_text(
-            &(format!("{MUTED}{}{RESET}", truncate(&subtitle, inner_w as usize))).to_string()
-        ))
-    )?;
-    body_y = body_y.saturating_add(2);
-
-    let body_bottom = frame.y.saturating_add(frame.height.saturating_sub(2));
-    let body_h = body_bottom.saturating_sub(body_y).max(1);
-    let (left_w, right_w) = master_detail_widths(inner_w);
-
-    let visible_rows = body_h as usize;
-    let start = scroll_start(selected, visible_rows);
-    for row in 0..visible_rows {
-        let index = start + row;
-        let row_y = body_y.saturating_add(row as u16);
-        queue!(stdout, MoveTo(inner_x, row_y))?;
-        if index >= rows.len() {
-            queue!(
-                stdout,
-                Print(crate::render::readable_terminal_text(
-                    &(" ".repeat(left_w as usize)).to_string()
-                ))
-            )?;
-            continue;
-        }
-        draw_row(
-            stdout,
-            states,
-            toggles,
-            entries,
-            &rows[index],
-            index == selected,
-            left_w,
-        )?;
-    }
-    draw_scroll_indicator(
-        stdout,
-        inner_x.saturating_add(left_w),
-        body_y,
-        body_h,
-        rows.len(),
-        start,
-        visible_rows,
-    )?;
-
-    if right_w > 0 {
-        let detail_x = inner_x.saturating_add(left_w).saturating_add(2);
-        let detail = detail_text(states, toggles, entries, rows.get(selected));
-        draw_wrapped_detail(stdout, detail_x, body_y, right_w, body_h, &detail)?;
-    }
-
-    let help = if filter_mode {
-        format!(
-            "{ACCENT}{}{RESET}{MUTED}: {filter}{RESET}{ACCENT}_{RESET}  {}",
-            t("Search", "搜索"),
-            help_line(&[("Enter", t("confirm", "确认")), ("Esc", t("clear", "清除")),])
-        )
-    } else {
-        let cycle = states
-            .iter()
-            .map(|state| state.label)
-            .collect::<Vec<_>>()
-            .join("/");
-        help_line(&[
-            ("Space", &format!("{} ({cycle})", t("cycle", "切换"))),
-            ("A", t("select all", "全选")),
-            ("0", t("clear all", "全不选")),
-            ("/", t("search", "搜索")),
-            ("s", t("save", "保存")),
-            ("q", t("cancel", "取消")),
-        ])
-    };
-    draw_status_bar(stdout, &frame, &help)?;
-    super::ui::end_synced_frame(stdout)?;
-    Ok(())
-}
-
-/// 绘制单行：开关行、分组标题或条目行。
-fn draw_row(
-    stdout: &mut io::Stdout,
-    states: &[StateStyle],
-    toggles: &[HeaderToggle],
-    entries: &[SelectEntry],
-    row: &Row,
-    is_selected: bool,
-    width: u16,
-) -> Result<()> {
-    let width = width as usize;
-    match row {
-        Row::Group(label) => {
-            // 分组标题：品牌色短横 + 名称 + 弱化延伸线（与表单分组同款）
-            let name = truncate(label, width.saturating_sub(6));
-            let used = 4 + super::ui::display_width(&name) + 1;
-            let tail = width.saturating_sub(used);
-            queue!(
-                stdout,
-                Print(crate::render::readable_terminal_text(
-                    &(format!(
-                        "{DIM}── {RESET}{BRAND}{BOLD}{name}{RESET} {DIM}{}{RESET}",
-                        "─".repeat(tail)
-                    ))
-                    .to_string()
-                ))
-            )?;
-        }
-        Row::Toggle(index) => {
-            let toggle = &toggles[*index];
-            let (bar, style) = selection_marks(is_selected);
-            let (mark, mark_color) = if toggle.value {
-                ("●", OK)
-            } else {
-                ("○", DIM)
-            };
-            let label = truncate(&toggle.label, width.saturating_sub(6));
-            if is_selected {
-                let line = format!("{mark} {label}");
-                queue!(
-                    stdout,
-                    Print(crate::render::readable_terminal_text(
-                        &(format!(
-                            "{bar}{style} {}{RESET}",
-                            pad(&line, width.saturating_sub(2))
-                        ))
-                        .to_string()
-                    ))
-                )?;
-            } else {
-                queue!(
-                    stdout,
-                    Print(crate::render::readable_terminal_text(
-                        &(format!(
-                            "{bar} {mark_color}{mark}{RESET} {MUTED}{}{RESET}",
-                            pad(&label, width.saturating_sub(4))
-                        ))
-                        .to_string()
-                    ))
-                )?;
-            }
-        }
-        Row::Entry(index) => {
-            let entry = &entries[*index];
-            let (bar, style) = selection_marks(is_selected);
-            let state = states.get(entry.state);
-            let mark = state.map(|state| state.mark).unwrap_or("?");
-            let mark_color = state.map(|state| state.color).unwrap_or(MUTED);
-            let label = truncate(&entry.key, width.saturating_sub(6));
-            if is_selected {
-                let line = format!("{mark} {label}");
-                queue!(
-                    stdout,
-                    Print(crate::render::readable_terminal_text(
-                        &(format!(
-                            "{bar}{style} {}{RESET}",
-                            pad(&line, width.saturating_sub(2))
-                        ))
-                        .to_string()
-                    ))
-                )?;
-            } else {
-                // 未选中：状态标记按语义分色，未启用条目名弱化
-                let name_style = if entry.state == 0 { DIM } else { RESET };
-                queue!(
-                    stdout,
-                    Print(crate::render::readable_terminal_text(
-                        &(format!(
-                            "{bar} {mark_color}{mark}{RESET} {name_style}{}{RESET}",
-                            pad(&label, width.saturating_sub(4))
-                        ))
-                        .to_string()
-                    ))
-                )?;
-            }
-        }
-    }
-    Ok(())
-}
-
-/// 组装右侧详情文本。
-fn detail_text(
-    states: &[StateStyle],
-    toggles: &[HeaderToggle],
-    entries: &[SelectEntry],
-    row: Option<&Row>,
-) -> String {
-    match row {
-        Some(Row::Toggle(index)) => {
-            let toggle = &toggles[*index];
-            let value = if toggle.value {
-                t("on", "开启")
-            } else {
-                t("off", "关闭")
-            };
-            format!(
-                "{}\n\n{}\n\n{}: {value}",
-                toggle.label,
-                toggle.description,
-                t("Current", "当前")
-            )
-        }
-        Some(Row::Entry(index)) => {
-            let entry = &entries[*index];
-            let state = states
-                .get(entry.state)
-                .map(|state| format!("{} {}", state.mark, state.label))
-                .unwrap_or_default();
-            let mut parts = vec![entry.key.clone()];
-            if !entry.group_label.is_empty() {
-                parts.push(format!("{}: {}", t("Group", "分组"), entry.group_label));
-            }
-            parts.push(format!("{}: {state}", t("State", "状态")));
-            if !entry.description.trim().is_empty() {
-                parts.push(entry.description.clone());
-            }
-            parts.join("\n\n")
-        }
-        _ => String::new(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use super::render::state_summary;
     use super::*;
 
     fn entry(key: &str, group: &str, state: usize) -> SelectEntry {

@@ -2,8 +2,8 @@
 
 use super::{
     form::{run_form, Field},
-    input::read_key,
-    ui::draw_menu_with_details,
+    mouse::{ListMouseState, MenuInput},
+    ui::draw_menu_interactive,
 };
 use crate::{config::ProviderConfig, i18n::text as t, paths::SaiPaths};
 use anyhow::Result;
@@ -79,20 +79,36 @@ pub(super) fn select(
         .iter()
         .position(|model| model == &provider.default_model)
         .unwrap_or(0);
+    let mut mouse = ListMouseState::default();
     loop {
-        draw_menu_with_details(
+        let hitbox = draw_menu_interactive(
             stdout,
             t(" SELECT MODEL ", " 选择模型 "),
             &options,
             &details,
             selected,
-            t(
-                "Up/Down select · Enter confirm · Esc back",
-                "上下选择 · Enter 确认 · Esc 返回",
-            ),
+            &mouse,
+            &super::theme::help_line(&[
+                ("↑↓", t("select", "选择")),
+                ("Enter", t("confirm", "确认")),
+                ("Esc", t("back", "返回")),
+            ]),
             status,
         )?;
-        match read_key()? {
+        let code = match hitbox.read(&mut mouse, selected, false)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(index) | MenuInput::RightClick(index) => {
+                selected = index;
+                continue;
+            }
+            MenuInput::Activate(index) => {
+                selected = index;
+                KeyCode::Enter
+            }
+            MenuInput::Action(code) => code,
+            MenuInput::Key(key) => key.code,
+        };
+        match code {
             KeyCode::Esc => return Ok(None),
             KeyCode::Up => selected = selected.saturating_sub(1),
             KeyCode::Down => selected = (selected + 1).min(options.len() - 1),

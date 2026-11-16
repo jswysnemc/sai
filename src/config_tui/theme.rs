@@ -55,10 +55,29 @@ pub(crate) const SELECTION_BAR: char = '▏';
 /// 返回:
 /// - `(左侧指示条, 文本样式前缀)`
 pub(crate) fn selection_marks(selected: bool) -> (String, &'static str) {
+    row_marks(selected, false)
+}
+
+/// 【配置界面】【视觉】构造列表项的选中与悬停样式前缀。
+///
+/// 选中态保持高亮锚点；仅悬停时叠加柔和青灰底色与浅蓝白字，不抢占选中态主焦点。
+///
+/// 参数:
+/// - `selected`: 是否为当前选中项
+/// - `hovered`: 指针是否正悬停在该行
+///
+/// 返回:
+/// - `(左侧指示条, 文本样式前缀)`
+pub(crate) fn row_marks(selected: bool, hovered: bool) -> (String, &'static str) {
     if selected {
         (
             format!("{SELECT_BG}{ACCENT}{SELECTION_BAR}{RESET}"),
             SELECTED_TEXT_STYLE,
+        )
+    } else if hovered {
+        (
+            format!("{HOVER_BG}{VALUE}{SELECTION_BAR}{RESET}"),
+            HOVER_TEXT_STYLE,
         )
     } else {
         (" ".to_string(), MUTED)
@@ -67,6 +86,10 @@ pub(crate) fn selection_marks(selected: bool) -> (String, &'static str) {
 
 /// 选中行文本样式：深底 + 亮青，底色与 SELECT_BG 保持一致。
 const SELECTED_TEXT_STYLE: &str = "\x1b[48;2;36;62;70m\x1b[38;2;190;246;255m";
+/// 悬停行背景色：按同色相柔和提亮（略浅于暗底、弱于 SELECT_BG），与选中态拉开层级。
+const HOVER_BG: &str = "\x1b[48;2;28;48;54m";
+/// 悬停行文本样式：柔和底色搭配明晰前景。
+const HOVER_TEXT_STYLE: &str = "\x1b[48;2;28;48;54m\x1b[38;2;204;228;234m";
 
 /// 【配置界面】【视觉】渲染分段式快捷键帮助条。
 ///

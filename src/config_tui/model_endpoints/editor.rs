@@ -1,5 +1,7 @@
 use super::*;
 use crate::config_tui::form::{run_form, Field};
+use crate::config_tui::mouse::{ListMouseState, MenuInput};
+use crate::config_tui::ui::draw_menu_interactive;
 
 /// 【模型接入】【分区编辑】编辑连接与密钥，支持目录导入及手动模型输入。
 /// 参数: stdout 为终端，item 为独立草稿；返回: 保存后的草稿或取消
@@ -8,6 +10,7 @@ pub(super) fn edit(
     mut item: ModelEndpointConfig,
 ) -> Result<Option<ModelEndpointConfig>> {
     let mut selected = 0usize;
+    let mut mouse = ListMouseState::default();
     loop {
         let options = [
             t("Connection and model", "连接与模型"),
@@ -50,16 +53,34 @@ pub(super) fn edit(
             )
             .into(),
         ];
-        draw_menu_with_details(
+        let hitbox = draw_menu_interactive(
             stdout,
             t(" EDIT CONNECTION ", " 编辑接入 "),
             &options,
             &details,
             selected,
-            "1-5 · Enter · q/Esc",
+            &mouse,
+            &super::super::theme::help_line(&[
+                ("1-5", t("jump", "跳转")),
+                ("Enter", t("open", "打开")),
+                ("q", t("back", "返回")),
+            ]),
             &item.id,
         )?;
-        match read_key()? {
+        let code = match hitbox.read(&mut mouse, selected, false)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(index) | MenuInput::RightClick(index) => {
+                selected = index;
+                continue;
+            }
+            MenuInput::Activate(index) => {
+                selected = index;
+                KeyCode::Enter
+            }
+            MenuInput::Action(code) => code,
+            MenuInput::Key(key) => key.code,
+        };
+        match code {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(None),
             KeyCode::Up => selected = selected.saturating_sub(1),
             KeyCode::Down => selected = (selected + 1).min(4),

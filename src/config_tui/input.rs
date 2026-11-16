@@ -1,6 +1,14 @@
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent};
 use std::time::Duration;
+
+/// 【配置界面】【输入事件】统一承载键盘、鼠标与终端尺寸变更事件。
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum ConfigEvent {
+    Key(KeyEvent),
+    Mouse(MouseEvent),
+    Resize,
+}
 
 /// Ctrl+C / Ctrl+D 中断。
 ///
@@ -37,26 +45,25 @@ fn is_interrupt(event: KeyEvent) -> bool {
     )
 }
 
-pub(crate) fn read_key() -> Result<KeyCode> {
-    Ok(read_key_event()?.code)
-}
-
-pub(crate) fn read_key_with_timeout(timeout: Option<Duration>) -> Result<Option<KeyCode>> {
-    read_key_event_with_timeout(timeout).map(|key| key.map(|key| key.code))
-}
-
-pub(crate) fn read_key_event() -> Result<KeyEvent> {
-    read_key_event_with_timeout(None).map(|key| key.expect("blocking read should return a key"))
-}
-
-/// 读取一个可操作的键盘事件，可选设置等待超时。
+/// 【配置界面】【事件读取】阻塞读取键盘、鼠标或尺寸调整事件。
 ///
 /// 参数:
-/// - `timeout`: 等待终端事件的时长；为空时持续等待
+/// - 无
 ///
 /// 返回:
-/// - 按键事件；超时或没有可操作事件时返回空
-pub(crate) fn read_key_event_with_timeout(timeout: Option<Duration>) -> Result<Option<KeyEvent>> {
+/// - 归一化的配置界面输入事件
+pub(crate) fn read_event() -> Result<ConfigEvent> {
+    read_event_with_timeout(None).map(|event| event.expect("blocking read should return an event"))
+}
+
+/// 【配置界面】【超时事件】读取键盘、鼠标或尺寸调整事件，可选等待超时。
+///
+/// 参数:
+/// - `timeout`: 等待终端事件的时长；为空时持续阻塞等待
+///
+/// 返回:
+/// - 归一化输入事件；超时无事件时返回空
+pub(crate) fn read_event_with_timeout(timeout: Option<Duration>) -> Result<Option<ConfigEvent>> {
     loop {
         // 1. 按需等待终端输入，超时后返回空值
         if let Some(timeout) = timeout {
@@ -64,16 +71,20 @@ pub(crate) fn read_key_event_with_timeout(timeout: Option<Duration>) -> Result<O
                 return Ok(None);
             }
         }
-        // 2. 读取事件并过滤非键盘输入和按键释放事件；
-        //    Ctrl+C/Ctrl+D 直接中断，让「退出」这个通用手势在配置界面同样有效
-        if let Event::Key(event) = event::read()? {
-            if !is_actionable_key_event(event) {
-                continue;
+        // 2. 分发键盘、鼠标与尺寸调整；按键先过滤释放态并响应中断键
+        match event::read()? {
+            Event::Key(event) => {
+                if !is_actionable_key_event(event) {
+                    continue;
+                }
+                if is_interrupt(event) {
+                    return Err(Interrupted.into());
+                }
+                return Ok(Some(ConfigEvent::Key(event)));
             }
-            if is_interrupt(event) {
-                return Err(Interrupted.into());
-            }
-            return Ok(Some(event));
+            Event::Mouse(mouse) => return Ok(Some(ConfigEvent::Mouse(mouse))),
+            Event::Resize(_, _) => return Ok(Some(ConfigEvent::Resize)),
+            _ => {}
         }
     }
 }

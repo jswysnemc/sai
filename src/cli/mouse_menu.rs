@@ -4,7 +4,7 @@ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use std::ops::Range;
 use unicode_width::UnicodeWidthStr;
 
-pub(super) struct ClickTracker<T> {
+pub(crate) struct ClickTracker<T> {
     pressed: Option<(u16, u16, T)>,
 }
 
@@ -17,7 +17,7 @@ impl<T> Default for ClickTracker<T> {
 
 impl<T: Copy + Eq> ClickTracker<T> {
     /// 【终端】【单击判定】参数为鼠标事件与当前目标；仅同点释放且未拖动时返回动作。
-    pub(super) fn update(&mut self, mouse: MouseEvent, target: Option<T>) -> Option<T> {
+    pub(crate) fn update(&mut self, mouse: MouseEvent, target: Option<T>) -> Option<T> {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 self.pressed = target.map(|target| (mouse.column, mouse.row, target));
@@ -35,19 +35,19 @@ impl<T: Copy + Eq> ClickTracker<T> {
     }
 
     /// 【终端】【单击清理】布局或焦点变化后取消旧按下状态；无参数和返回值。
-    pub(super) fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.pressed = None;
     }
 }
 
-pub(super) struct ButtonRow<T> {
-    pub(super) text: String,
+pub(crate) struct ButtonRow<T> {
+    pub(crate) text: String,
     hits: Vec<(Range<usize>, T)>,
 }
 
 impl<T: Copy> ButtonRow<T> {
     /// 【终端】【按钮提示】参数为快捷键说明与行宽；追加可见提示而不改变按钮范围，返回当前行。
-    pub(super) fn with_hint(mut self, hint: &str, width: usize) -> Self {
+    pub(crate) fn with_hint(mut self, hint: &str, width: usize) -> Self {
         let remaining = width.saturating_sub(UnicodeWidthStr::width(self.text.as_str()) + 2);
         if remaining > 0 {
             self.text.push_str("  ");
@@ -57,7 +57,7 @@ impl<T: Copy> ButtonRow<T> {
         self
     }
     /// 【终端】【按钮布局】参数为标签、动作及可用列数；返回完整可见按钮与显示列命中区。
-    pub(super) fn new(buttons: impl IntoIterator<Item = (String, T)>, width: usize) -> Self {
+    pub(crate) fn new(buttons: impl IntoIterator<Item = (String, T)>, width: usize) -> Self {
         let mut result = Self {
             text: String::new(),
             hits: Vec::new(),
@@ -80,7 +80,7 @@ impl<T: Copy> ButtonRow<T> {
     }
 
     /// 【终端】【按钮命中】参数为相对显示列；返回完整可见按钮的动作。
-    pub(super) fn hit(&self, column: u16) -> Option<T> {
+    pub(crate) fn hit(&self, column: u16) -> Option<T> {
         self.hits
             .iter()
             .find(|(range, _)| range.contains(&usize::from(column)))

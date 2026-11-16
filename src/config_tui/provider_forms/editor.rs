@@ -1,6 +1,6 @@
 use super::*;
-use crate::config_tui::input::read_key;
-use crate::config_tui::ui::draw_menu_with_details;
+use crate::config_tui::mouse::{ListMouseState, MenuInput};
+use crate::config_tui::ui::draw_menu_interactive;
 use crossterm::event::KeyCode;
 
 /// 【服务商配置】【分区编辑】管理独立草稿，保存返回新配置，取消丢弃全部分区修改。
@@ -11,6 +11,7 @@ pub(crate) fn edit_provider_form(
     new_provider: bool,
 ) -> Result<Option<ProviderConfig>> {
     let mut selected = 0;
+    let mut mouse = ListMouseState::default();
     let has_models = !provider.models.is_empty() || !provider.default_model.trim().is_empty();
     let mut imported_connection =
         (!new_provider && has_models).then(|| model_import::connection_key(&provider));
@@ -34,12 +35,13 @@ pub(crate) fn edit_provider_form(
             t("Fetch the catalog using this draft. Esc leaves the test; local models remain available on failure.", "使用当前草稿获取模型目录。Esc 返回，失败时仍可手动配置模型。").into(),
             t("Import models when the connection changes, then apply this draft. Save and exit config to write it to disk.", "接入变更后自动导入模型并确认草稿；在配置主菜单保存退出后写入磁盘。").into(),
         ];
-        draw_menu_with_details(
+        let hitbox = draw_menu_interactive(
             stdout,
             t(" EDIT PROVIDER ", " 编辑供应商 "),
             &options,
             &details,
             selected,
+            &mouse,
             &crate::config_tui::theme::help_line(&[
                 ("1-5", t("jump", "跳转")),
                 ("t", t("test", "测试")),
@@ -48,7 +50,20 @@ pub(crate) fn edit_provider_form(
             ]),
             "",
         )?;
-        match read_key()? {
+        let code = match hitbox.read(&mut mouse, selected, false)? {
+            MenuInput::Redraw => continue,
+            MenuInput::Select(index) | MenuInput::RightClick(index) => {
+                selected = index;
+                continue;
+            }
+            MenuInput::Activate(index) => {
+                selected = index;
+                KeyCode::Enter
+            }
+            MenuInput::Action(code) => code,
+            MenuInput::Key(key) => key.code,
+        };
+        match code {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(None),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(4),
