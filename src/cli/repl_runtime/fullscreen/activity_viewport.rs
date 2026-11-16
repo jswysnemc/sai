@@ -98,6 +98,14 @@ impl ActivityViewports {
         let Some(next_region) = next.activities.iter().find(|region| region.key == key) else {
             return;
         };
+        if !next_region.scrollable {
+            return;
+        }
+        let next_height = self.height(next_region);
+        let next_window = ActivityWindow::at(next, next_region, usize::MAX, next_height);
+        if next_window.max <= next_window.min {
+            return;
+        }
         if next.lines == self.source.lines
             && next_region.end.saturating_sub(next_region.start)
                 == prev_region.end.saturating_sub(prev_region.start)

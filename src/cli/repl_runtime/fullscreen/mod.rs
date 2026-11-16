@@ -620,6 +620,9 @@ impl ReplRuntime {
 #[path = "hover_tests.rs"]
 mod hover_tests;
 #[cfg(test)]
+#[path = "inspection_lock_tests.rs"]
+mod inspection_lock_tests;
+#[cfg(test)]
 #[path = "runtime_tests.rs"]
 mod runtime_tests;
 

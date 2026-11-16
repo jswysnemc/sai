@@ -129,7 +129,7 @@ impl FullscreenState {
         (pause_active, pinned)
     }
 
-    /// 【终端】【刷新保护】在同步新文档前冻结悬停中的单元与内部执行链跟随。
+    /// 【终端】【刷新保护】在同步新文档前捕获悬停锚点，仅在已暂停跟随时锁定当前展开步骤。
     ///
     /// 参数: 无
     ///
@@ -137,6 +137,21 @@ impl FullscreenState {
     /// - 刷新前捕获的悬停锚点
     pub(super) fn prepare_inspection_refresh(&mut self) -> Option<InspectAnchor> {
         let anchor = self.hovered_inspect_anchor();
+        // 1. 【终端】【防永久锁定】仅在脱离底部或执行链暂停时持久化已展开步骤；停在底部时由单帧悬停判定保护，移开即失效
+        if !self.follow || !self.activity.all_following() {
+            self.lock_visible_inspection(anchor);
+        }
+        anchor
+    }
+
+    /// 【终端】【阅读锁定】将当前悬停步骤与画面内已展开节点写入持久固定集合，直到恢复底部。
+    ///
+    /// 参数:
+    /// - `anchor`: 当前悬停锚点
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn lock_visible_inspection(&mut self, anchor: Option<InspectAnchor>) {
         if let Some(InspectAnchor {
             target: InspectTarget::Step(cell) | InspectTarget::Reasoning(cell),
             ..
@@ -144,19 +159,16 @@ impl FullscreenState {
         {
             self.pinned_cells.insert(cell);
         }
-        if !self.follow || !self.activity.all_following() || anchor.is_some() {
-            for span in &self.document.paragraphs {
-                if span.expanded
-                    && !matches!(
-                        span.key.part,
-                        ParagraphPart::ActivityGroup | ParagraphPart::OlderActivity
-                    )
-                {
-                    self.pinned_cells.insert(span.key.cell);
-                }
+        for span in &self.document.paragraphs {
+            if span.expanded
+                && !matches!(
+                    span.key.part,
+                    ParagraphPart::ActivityGroup | ParagraphPart::OlderActivity
+                )
+            {
+                self.pinned_cells.insert(span.key.cell);
             }
         }
-        anchor
     }
 
     /// 【终端】【悬停定位】计算新文档中对应锚点的起始行，保持正在查看的元素留在原屏行。
@@ -196,17 +208,31 @@ impl FullscreenState {
         }
     }
 
-    /// 【终端】【恢复跟随】清理查看保护状态并恢复内外层实时跟随，通常由回到底部触发。
+    /// 【终端】【恢复跟随】清理查看保护状态与执行链临时展开键，通常由回到底部触发。
     ///
     /// 参数: 无
     ///
     /// 返回:
     /// - 是否清理了此前的查看锁定并需要重绘文档以恢复默认折叠状态
     pub(super) fn release_inspection_locks(&mut self) -> bool {
+        let before_expanded = self.expanded.len();
+        // 1. 【终端】【恢复自动收缩】回到实时底部时仅解除执行链步骤与较早步骤的临时查看展开，保留消息主体折叠状态
+        let retained = &self.document.retained_keys;
+        self.expanded.retain(|key| match key.part {
+            ParagraphPart::OlderActivity => false,
+            ParagraphPart::Whole => !retained.contains(&ParagraphKey {
+                cell: key.cell,
+                part: ParagraphPart::Active,
+            }),
+            ParagraphPart::Active | ParagraphPart::ActivityGroup => true,
+        });
         let had_locks = !self.pinned_cells.is_empty()
             || !self.activity.all_following()
-            || self.reasoning.any_paused();
+            || self.reasoning.any_paused()
+            || self.expanded.len() != before_expanded
+            || self.hover_froze_fold;
         self.pinned_cells.clear();
+        self.hover_froze_fold = false;
         self.activity.resume_tail_follow();
         self.reasoning.resume_live_follow();
         had_locks

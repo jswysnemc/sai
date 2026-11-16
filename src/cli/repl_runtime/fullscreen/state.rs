@@ -33,6 +33,8 @@ pub(super) struct FullscreenState {
     pub(super) expanded: HashSet<ParagraphKey>,
     /// 查看保护期间固定不折叠的步骤单元下标
     pub(super) pinned_cells: HashSet<usize>,
+    /// 停留在底部时曾因悬停冻结过自动折叠，指针移开后需立即补一次重排
+    pub(super) hover_froze_fold: bool,
     /// 恢复底部分支后触发一次正文重绘
     pub(super) pending_refresh: bool,
     /// 本帧由“回到底部”或手动滚到底部触发恢复，跳过本次光标行重新锁定
@@ -138,9 +140,13 @@ impl FullscreenState {
         // 2. 【终端】【悬停保护】悬停查看工具详情期间若出现新输出或滚动窗口扩展，冻结跟随并锁定当前行
         if self.follow && anchor.is_some() && changed && (max > previous_max || max > self.scroll) {
             self.follow = false;
+            self.hover_froze_fold = false;
+            self.lock_visible_inspection(anchor);
             if grew || max > self.scroll {
                 self.unseen = true;
             }
+        } else if self.follow && anchor.is_some() {
+            self.hover_froze_fold = true;
         }
         // 3. 跟随时贴底；否则保持视觉位置，仅在内容增长或滞后时提示有新输出
         if self.follow {
@@ -198,9 +204,10 @@ impl FullscreenState {
         self.follow = next == max;
         if self.follow {
             self.unseen = false;
-            // 1. 【终端】【主动触底恢复】仅当主动跳到底部或从上方滚抵底部时解除查看锁定
-            if target == usize::MAX || previous_scroll < max {
+            // 1. 【终端】【主动触底恢复】主动跳到底部、向下滚动触底或底部继续下滚时均解除查看锁定
+            if target == usize::MAX || previous_scroll < max || target > previous_scroll {
                 self.resuming_bottom = true;
+                self.hover_froze_fold = false;
                 if self.release_inspection_locks() {
                     self.pending_refresh = true;
                 }

@@ -130,14 +130,19 @@ impl ReplRuntime {
             && !self.sidebar_control.header_hovered;
         let control_hover_cleared =
             control_hover_cleared && self.sidebar_control.scrollbar.hovered.is_none();
-        let effect =
-            if (cleared || review_hover_cleared || control_hover_cleared || diff_selection_cleared)
-                && matches!(effect, Effect::Nothing)
-            {
-                Effect::Repaint
-            } else {
-                effect
-            };
+        let body_hover_cleared = matches!(event, Event::Mouse(mouse) if mouse.kind == MouseEventKind::Moved)
+            && self.clear_stale_body_hover_on_external_move(event);
+        let effect = if (cleared
+            || review_hover_cleared
+            || control_hover_cleared
+            || diff_selection_cleared
+            || body_hover_cleared)
+            && matches!(effect, Effect::Nothing)
+        {
+            Effect::Repaint
+        } else {
+            effect
+        };
         // 1. 选区复制经 OSC 52 写入终端剪贴板，随下一帧一起送出
         if let Some(text) = self
             .fullscreen
@@ -162,6 +167,7 @@ impl ReplRuntime {
                 if review_hover_cleared
                     || control_hover_cleared
                     || diff_selection_cleared
+                    || body_hover_cleared
                     || (picker_was_active
                         && self
                             .fullscreen
@@ -362,6 +368,7 @@ impl ReplRuntime {
                 let before_track =
                     state.pointer_col == Some(layout.scrollbar_col) && state.pointer_row.is_some();
                 let before_pointer = (state.pointer_row, state.pointer_col);
+                let before_inspect = state.hovered_inspect_anchor();
                 let before = state.hovered_paragraph().map(|span| span.key);
                 let before_row = state.pointer_row;
                 let before_button = session.bottom_button.is_some_and(|(start, end)| {
@@ -376,6 +383,7 @@ impl ReplRuntime {
                 state.pointer_row = in_body.then_some(body_row);
                 state.pointer_col = in_body.then_some(mouse.column);
                 let after = state.hovered_paragraph().map(|span| span.key);
+                let after_inspect = state.hovered_inspect_anchor();
                 let after_footer = state.hovered_activity_footer();
                 let after_button = session.bottom_button.is_some_and(|(start, end)| {
                     state.pointer_row == Some(height.saturating_sub(1))
@@ -385,6 +393,15 @@ impl ReplRuntime {
                 });
                 let after_track =
                     state.pointer_col == Some(layout.scrollbar_col) && state.pointer_row.is_some();
+                let release_hover_fold = before_inspect.is_some()
+                    && after_inspect.is_none()
+                    && state.hover_froze_fold
+                    && state.follow
+                    && state.activity.all_following();
+                if release_hover_fold {
+                    state.hover_froze_fold = false;
+                    state.pending_refresh = true;
+                }
                 let changed = before_track != after_track
                     || before_pointer != (state.pointer_row, state.pointer_col)
                     || hover != state.hover
@@ -392,7 +409,8 @@ impl ReplRuntime {
                     || (before.is_some() && before_row != state.pointer_row)
                     || before_button != after_button
                     || header_hover != state.header_hover
-                    || before_footer != after_footer;
+                    || before_footer != after_footer
+                    || release_hover_fold;
                 state.hover = hover;
                 state.header_hover = header_hover;
                 changed
@@ -551,5 +569,35 @@ impl ReplRuntime {
         } else {
             Effect::Nothing
         }
+    }
+
+    /// 【终端】【悬停清理】指针移到侧栏或顶栏控件区时清掉残余正文指针，避免悬停冻结误判。
+    fn clear_stale_body_hover_on_external_move(&mut self, event: &Event) -> bool {
+        let Event::Mouse(mouse) = event else {
+            return false;
+        };
+        let Some(session) = self.fullscreen.as_mut() else {
+            return false;
+        };
+        let state = &mut session.state;
+        let Some(layout) = state.layout else {
+            return false;
+        };
+        let in_body = layout.in_body(mouse.row)
+            && (mouse.column < layout.content_width
+                || mouse.column == layout.scrollbar_col
+                || layout.in_rail(mouse.column));
+        if in_body {
+            return false;
+        }
+        let had_hover = state.pointer_row.take().is_some() | state.pointer_col.take().is_some();
+        let released = if state.hover_froze_fold && state.follow && state.activity.all_following() {
+            state.hover_froze_fold = false;
+            state.pending_refresh = true;
+            true
+        } else {
+            false
+        };
+        had_hover || released
     }
 }

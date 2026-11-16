@@ -2,7 +2,7 @@
 
 use super::state::{ActivityNavigation, FullscreenState};
 use super::wheel_boundary::WheelTarget;
-use crate::render::transcript::ParagraphKey;
+use crate::render::transcript::{ParagraphKey, ParagraphPart};
 
 impl FullscreenState {
     /// 【终端】【滚轮路由】命中内部视口时直接滚动，边界先阻挡一次再交给主会话。
@@ -172,31 +172,53 @@ impl FullscreenState {
             .iter()
             .find(|region| region.footer == Some(row))?
             .key;
+        let was_outer_following = self.follow;
         let selected = self.activity.selected;
         let changed = self.scroll_activity(key, isize::MAX);
         let revealed = self.reveal_activity(key, body_height);
-        if let Some(region) = self
+        self.clear_activity_inspection_locks(key);
+        self.follow =
+            was_outer_following && !revealed && self.scroll == self.max_scroll(body_height);
+        Some(revealed || changed || selected != self.activity.selected || self.pending_refresh)
+    }
+
+    /// 【终端】【链内锁释放】清理指定执行链内的临时固定与展开键，触发回到自动收缩。
+    /// 参数: `key` 为执行链键；返回: 无。
+    fn clear_activity_inspection_locks(&mut self, key: ParagraphKey) {
+        let Some(region) = self
             .document
             .activities
             .iter()
             .find(|region| region.key == key)
-        {
-            let range = region.start..region.end;
-            let cleared_cells: Vec<usize> = self
-                .document
-                .paragraphs
-                .iter()
-                .filter(|span| span.start >= range.start && span.start < range.end)
-                .map(|span| span.key.cell)
-                .collect();
-            for cell in cleared_cells {
-                if self.pinned_cells.remove(&cell) {
-                    self.pending_refresh = true;
-                }
+        else {
+            return;
+        };
+        let range = region.start..region.end;
+        let cells: Vec<usize> = self
+            .document
+            .paragraphs
+            .iter()
+            .filter(|span| span.start >= range.start && span.start < range.end)
+            .map(|span| span.key.cell)
+            .collect();
+        for cell in cells {
+            if self.pinned_cells.remove(&cell) {
+                self.pending_refresh = true;
+            }
+            if self.expanded.remove(&ParagraphKey::whole(cell)) {
+                self.pending_refresh = true;
             }
         }
-        self.follow = false;
-        Some(revealed || changed || selected != self.activity.selected || self.pending_refresh)
+        if self.expanded.remove(&ParagraphKey {
+            cell: key.cell,
+            part: ParagraphPart::OlderActivity,
+        }) {
+            self.pending_refresh = true;
+        }
+        if self.pending_refresh {
+            self.resuming_bottom = true;
+            self.hover_froze_fold = false;
+        }
     }
 
     /// 【终端】【链内状态】应用独立滚动并清理已失效选区。
@@ -204,14 +226,19 @@ impl FullscreenState {
     fn scroll_activity(&mut self, key: ParagraphKey, delta: isize) -> bool {
         // 【终端】【阅读归属】链内键盘与跟随按钮只控制内部，不恢复主会话跟随。
         self.follow = false;
+        let was_following = self.activity.is_following(key);
         let selected = self.activity.selected;
         let changed = self.activity.scroll(key, delta);
+        let now_following = self.activity.is_following(key);
+        if (!was_following && now_following) || (now_following && delta > 0) {
+            self.clear_activity_inspection_locks(key);
+        }
         if changed || selected != self.activity.selected {
             self.document = self.activity.project();
             self.press = None;
             self.selection = None;
             self.copied = None;
         }
-        changed
+        changed || self.pending_refresh
     }
 }
