@@ -16,7 +16,7 @@ def open_endpoints(terminal, kind):
     """terminal 为终端，kind 为类型序号；进入接入列表，返回无。"""
     terminal.send(b"/config\r")
     terminal.wait_for(lambda: "SAI CONFIG" in terminal.text())
-    terminal.send(b"7\r")
+    terminal.send(b"8\r")
     wait_label(terminal, "MODEL CONNECTIONS", "模型接入")
     terminal.send(str(kind).encode() + b"\r")
     wait_label(terminal, "Add connection", "新增接入")
@@ -28,9 +28,7 @@ def leave_and_save(terminal):
     wait_label(terminal, "MODEL CONNECTIONS", "模型接入")
     terminal.send(b"q")
     terminal.wait_for(lambda: "SAI CONFIG" in terminal.text())
-    terminal.send(b"8\r")
-    wait_label(terminal, "Unsaved changes", "未保存的更改")
-    terminal.send(b"\r")
+    terminal.send(b"0\r")
     terminal.wait_for(lambda: "auto" in terminal.text() and "SAI CONFIG" not in terminal.text())
 
 

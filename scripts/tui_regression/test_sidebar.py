@@ -59,7 +59,7 @@ class SidebarTests(unittest.TestCase):
             config["display"]["fullscreen"] = True
             with TerminalSession(config, columns=160, rows=32, prepare=prepare,
                                  arguments=["--lang", "en-US"]) as terminal:
-                terminal.wait_for(lambda: "Working tree clean" in terminal.text())
+                terminal.wait_for(lambda: "Changes" in terminal.text() and "clean" in terminal.text())
                 for heading in ["Subagents", "Changes", "Todo"]:
                     self.assertIn(heading, terminal.text())
                 terminal.send(b"ALPHA\r")

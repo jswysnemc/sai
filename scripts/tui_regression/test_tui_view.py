@@ -106,7 +106,7 @@ class TuiViewTests(unittest.TestCase):
         with TerminalSession(arguments=["--lang", "en-US"], columns=100, rows=32) as terminal:
             terminal.send(b"/config\r")
             terminal.wait_for(lambda: "SAI CONFIG" in terminal.text())
-            terminal.send(b"6\r")
+            terminal.send(b"9\r")
             terminal.wait_for(lambda: "ADVANCED" in terminal.text())
             terminal.send(b"3\r")
             terminal.wait_for(lambda: "GLOBAL PARAMETERS" in terminal.text())

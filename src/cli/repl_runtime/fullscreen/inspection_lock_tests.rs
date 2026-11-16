@@ -304,3 +304,72 @@ fn scrolling_down_at_max_releases_pinned_tools() {
     assert!(state.pinned_cells.is_empty());
     tui_mode::set_override(None);
 }
+
+/// 【终端】【旧步骤保留】链内跳到最新位置时释放工具详情锁，但保留手动展开的历史步骤折叠项。
+#[test]
+fn activity_jump_latest_keeps_older_steps_expanded() {
+    tui_mode::set_override(Some(TuiMode::Fullscreen));
+    let mut runtime = ReplRuntime::new(200, full_options());
+    for idx in 0..17 {
+        push_bash(
+            &mut runtime,
+            &format!("echo old-{idx}"),
+            &format!("STEP-OUT-{idx}"),
+        );
+    }
+    runtime.enter_fullscreen().unwrap();
+
+    // 1. 点击“Show N earlier steps”展开历史步骤，并确认标题转为“Hide”
+    let toggle_row = runtime
+        .fullscreen
+        .as_ref()
+        .unwrap()
+        .state
+        .document
+        .paragraphs
+        .iter()
+        .find(|span| {
+            matches!(
+                span.key.part,
+                crate::render::transcript::ParagraphPart::OlderActivity
+            )
+        })
+        .unwrap()
+        .control;
+    let layout = runtime.fullscreen.as_ref().unwrap().state.layout.unwrap();
+    let scroll = runtime.fullscreen.as_ref().unwrap().state.scroll;
+    click(
+        &mut runtime,
+        6,
+        layout.body_top + (toggle_row - scroll) as u16,
+    );
+    assert!(runtime
+        .fullscreen
+        .as_ref()
+        .unwrap()
+        .state
+        .document
+        .lines
+        .iter()
+        .any(|line| plain(line.as_str()).contains("Hide ")));
+
+    // 2. 在执行链内按 Alt+End 跳转到最新步骤，历史步骤仍保持展开
+    runtime
+        .handle_fullscreen_event(&crossterm::event::Event::Key(
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::End,
+                crossterm::event::KeyModifiers::ALT,
+            ),
+        ))
+        .unwrap();
+    assert!(runtime
+        .fullscreen
+        .as_ref()
+        .unwrap()
+        .state
+        .document
+        .lines
+        .iter()
+        .any(|line| plain(line.as_str()).contains("Hide ")));
+    tui_mode::set_override(None);
+}

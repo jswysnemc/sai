@@ -16,7 +16,7 @@ def fresh_install(root, _environment, _binary):
 
 def setup_visible(terminal):
     """terminal 为测试终端；返回是否已经显示首次配置菜单。"""
-    return "FIRST USE" in terminal.text()
+    return "WELCOME SETUP" in terminal.text()
 
 
 def configuration(terminal):
@@ -32,18 +32,14 @@ class ProviderOnboardingTests(unittest.TestCase):
         with TerminalSession(prepare=fresh_install, ready=setup_visible, arguments=["--lang", "en-US"]) as terminal:
             self.assertFalse(configuration(terminal)["provider_setup_complete"])
             terminal.send(b"\r")
-            terminal.wait_for(lambda: "SAVE TO START" in terminal.text())
-            terminal.send(b"s")
-            terminal.wait_for(lambda: "SELECT MODEL" in terminal.text(), timeout=15)
-            terminal.send(b"\r")
-            terminal.wait_for(lambda: configuration(terminal)["provider_setup_complete"])
-            terminal.wait_for(lambda: "PROVIDER SETUP" not in terminal.text() and "auto" in terminal.text().lower())
+            terminal.wait_for(lambda: configuration(terminal)["provider_setup_complete"], timeout=15)
+            terminal.wait_for(lambda: "WELCOME SETUP" not in terminal.text() and "auto" in terminal.text().lower())
             saved = configuration(terminal)
             self.assertEqual(saved["active_provider"], "opencode")
             self.assertEqual(saved["session"]["new_session_provider_id"], "opencode")
         # 1. 再次使用已完成的同一配置时直接进入聊天
         with TerminalSession(config=saved, arguments=["--lang", "en-US"]) as terminal:
-            self.assertNotIn("FIRST USE", terminal.text())
+            self.assertNotIn("WELCOME SETUP", terminal.text())
 
     def test_cancel_preserves_pending_state_and_restores_terminal(self):
         """取消退出本次启动，保持未完成并恢复备用屏；返回无。"""
@@ -54,7 +50,7 @@ class ProviderOnboardingTests(unittest.TestCase):
             saved = configuration(terminal)
             self.assertFalse(saved["provider_setup_complete"])
         with TerminalSession(config=saved, ready=setup_visible, arguments=["--lang", "en-US"]) as terminal:
-            self.assertIn("FIRST USE", terminal.text())
+            self.assertIn("WELCOME SETUP", terminal.text())
 
     def test_missing_model_can_be_filled_before_chat_client_is_created(self):
         """默认模型为空时先引导填写，密钥在表单中保持隐藏；返回无。"""
@@ -63,11 +59,9 @@ class ProviderOnboardingTests(unittest.TestCase):
             "api_key": "onboarding-secret", "default_model": "", "models": []}]}
         with TerminalSession(config=config, ready=setup_visible, arguments=["--lang", "en-US"]) as terminal:
             terminal.send(b"\r")
-            terminal.wait_for(lambda: "SAVE TO START" in terminal.text())
+            terminal.wait_for(lambda: "STEP 1/2" in terminal.text())
             self.assertNotIn("onboarding-secret", terminal.text())
             terminal.send(b"s")
-            terminal.wait_for(lambda: "SELECT MODEL" in terminal.text())
-            terminal.send(b"\r")
             terminal.wait_for(lambda: "CUSTOM MODEL" in terminal.text())
             terminal.send(b"\rsetup-model\rs")
             terminal.wait_for(lambda: configuration(terminal)["provider_setup_complete"])
@@ -76,7 +70,7 @@ class ProviderOnboardingTests(unittest.TestCase):
     def test_legacy_configuration_does_not_show_onboarding(self):
         """没有引导字段的旧配置直接进入聊天；返回无。"""
         with TerminalSession(arguments=["--lang", "en-US"]) as terminal:
-            self.assertNotIn("FIRST USE", terminal.text())
+            self.assertNotIn("WELCOME SETUP", terminal.text())
             self.assertIn("auto", terminal.text().lower())
 
     def test_discovers_models_and_saves_user_selection_without_inference(self):
@@ -110,7 +104,7 @@ class ProviderOnboardingTests(unittest.TestCase):
         try:
             with TerminalSession(config=config, ready=setup_visible, arguments=["--lang", "en-US"]) as terminal:
                 terminal.send(b"\r")
-                terminal.wait_for(lambda: "SAVE TO START" in terminal.text())
+                terminal.wait_for(lambda: "STEP 1/2" in terminal.text())
                 terminal.send(b"s")
                 terminal.wait_for(lambda: "SELECT MODEL" in terminal.text() and "model-a" in terminal.text())
                 terminal.send(b"\x1b[B\r")

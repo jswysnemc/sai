@@ -2,7 +2,7 @@
 
 use super::state::{ActivityNavigation, FullscreenState};
 use super::wheel_boundary::WheelTarget;
-use crate::render::transcript::{ParagraphKey, ParagraphPart};
+use crate::render::transcript::ParagraphKey;
 
 impl FullscreenState {
     /// 【终端】【滚轮路由】命中内部视口时直接滚动，边界先阻挡一次再交给主会话。
@@ -208,12 +208,6 @@ impl FullscreenState {
             if self.expanded.remove(&ParagraphKey::whole(cell)) {
                 self.pending_refresh = true;
             }
-        }
-        if self.expanded.remove(&ParagraphKey {
-            cell: key.cell,
-            part: ParagraphPart::OlderActivity,
-        }) {
-            self.pending_refresh = true;
         }
         if self.pending_refresh {
             self.resuming_bottom = true;

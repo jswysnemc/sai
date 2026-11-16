@@ -29,9 +29,7 @@ class ProviderModelTests(unittest.TestCase):
         """从供应商列表保存退出；terminal 为终端，返回无。"""
         terminal.send(b"q")
         terminal.wait_for(lambda: "SAI CONFIG" in terminal.text())
-        terminal.send(b"8\r")
-        terminal.wait_for(lambda: "Unsaved changes" in terminal.text())
-        terminal.send(b"\r")
+        terminal.send(b"0\r")
         terminal.wait_for(lambda: "configuration reloaded" in terminal.text())
 
     def save_and_choose(self, terminal, provider_id):

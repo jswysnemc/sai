@@ -94,7 +94,7 @@ exec {shlex.quote(real_git)} "$@"
 
     def assert_divider_hover_is_isolated(self, terminal):
         """【终端侧栏】【悬停取样】terminal 为隔离终端；等待 Git 首帧后验证仅分界线变化，返回无。"""
-        terminal.wait_for(lambda: "Not a Git repository" in terminal.text())
+        terminal.wait_for(lambda: "Changes" in terminal.text() and "no repo" in terminal.text())
         divider = divider_column(terminal)
         before = [[terminal.screen.buffer[row][col]
                    for col in range(160)] for row in range(32)]
