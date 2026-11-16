@@ -17,6 +17,7 @@ pub(crate) mod mouse;
 mod multi_select;
 mod onboarding;
 mod onboarding_models;
+mod onboarding_ui;
 mod plugin_fields;
 mod plugins;
 mod provider_fetch;

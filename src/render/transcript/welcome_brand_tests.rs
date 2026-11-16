@@ -42,7 +42,30 @@ fn fullscreen_welcome_has_compact_brand_and_runtime_details() {
     }
     assert!(text.contains("\x1b[38;5;208mYOLO"));
     assert!(text.contains("\x1b[2mv0.2.13"));
+    let first_plain = strip_ansi(rows[0].as_str());
+    assert!(
+        first_plain.contains("sai  v0.2.13 · YOLO"),
+        "权限标签应紧邻版本号避免孤立悬空: {first_plain}"
+    );
     assert!(!text.contains("\x1b[48;") && !text.contains("\x1b_G"));
+}
+
+/// 【终端欢迎】【长标签适配】沙箱复合权限在窄宽度下自动折行，宽屏仍保持三行紧凑结构。
+/// 参数: 无；返回: 无。
+#[test]
+fn fullscreen_welcome_keeps_composite_permission_harmonious() {
+    let mut cell = sample();
+    cell.permissions = "AUDIT · sandbox bwrap".into();
+    tui_mode::set_override(Some(TuiMode::Fullscreen));
+    let wide = display_lines(&cell, 80);
+    let narrow = display_lines(&cell, 28);
+    tui_mode::set_override(None);
+
+    assert_eq!(wide.len(), 3);
+    assert!(strip_ansi(wide[0].as_str()).contains("sai  v0.2.13 · AUDIT · sandbox bwrap"));
+    assert!(narrow
+        .iter()
+        .all(|row| crate::render::ansi_clip::ansi_visible_width(row.as_str()) <= 28));
 }
 
 /// 【终端欢迎】【响应宽度】窄屏完整换行模型和目录，不截断内容、不溢出或输出图片协议。

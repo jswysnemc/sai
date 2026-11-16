@@ -17,23 +17,29 @@ pub(super) fn render(cell: &WelcomeCell, width: usize) -> Vec<AnsiLine> {
     let show_logo = width >= 40;
     let inset = if show_logo { LOGO_WIDTH + GAP } else { 0 };
     let content_width = width.saturating_sub(inset).clamp(1, MAX_CONTENT_WIDTH);
-    // 1. 【终端欢迎】【标题层次】品牌名强调，版本弱化，权限只使用已有风险色
+    // 1. 【终端欢迎】【标题层次】品牌名强调、版本弱化，权限紧随版本之后避免孤立悬空
     let name = format!("\x1b[1msai{RESET}  {MUTED}v{}{RESET}", cell.version);
-    let mode = format!(
-        "{}{}{RESET}",
-        super::welcome_cell::permission_style(&cell.permissions),
-        cell.permissions
-    );
-    let gap = content_width.saturating_sub(ansi_visible_width(&name) + ansi_visible_width(&mode));
-    let title = if gap >= 2 {
-        format!("{name}{}{mode}", " ".repeat(gap))
-    } else {
-        name
+    let permissions = cell.permissions.trim();
+    let mode = (!permissions.is_empty()).then(|| {
+        format!(
+            "{}{}{RESET}",
+            super::welcome_cell::permission_style(permissions),
+            permissions
+        )
+    });
+    let mut rows = match mode {
+        Some(mode) => {
+            let inline_title = format!("{name} {MUTED}·{RESET} {mode}");
+            if ansi_visible_width(&inline_title) <= content_width {
+                AnsiLine::wrap_block(&inline_title, content_width)
+            } else {
+                let mut head = AnsiLine::wrap_block(&name, content_width);
+                head.extend(AnsiLine::wrap_block(&mode, content_width));
+                head
+            }
+        }
+        None => AnsiLine::wrap_block(&name, content_width),
     };
-    let mut rows = AnsiLine::wrap_block(&title, content_width);
-    if gap < 2 {
-        rows.extend(AnsiLine::wrap_block(&mode, content_width));
-    }
     // 2. 【终端欢迎】【信息换行】真实值完整换行，不用省略号丢弃模型名称或工作目录
     rows.extend(AnsiLine::wrap_block(
         &format!("{MUTED}model{RESET} {}", cell.model),
