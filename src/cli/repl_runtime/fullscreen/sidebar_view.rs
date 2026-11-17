@@ -6,10 +6,40 @@ use super::sidebar_action::{SidebarAction, SidebarSection, SidebarSections};
 use super::sidebar_control::SidebarControl;
 use super::sidebar_git::GitSummary;
 use super::sidebar_palette::{fg, SidebarPalette};
-use super::sidebar_regions::{has_hairlines, regions_with_focus, SidebarPanel};
+use super::sidebar_regions::SidebarPanel;
 use super::sidebar_style;
 use super::sidebar_widgets;
 use crate::render::transcript::{SubagentOverviewEntry, TodoSnapshotItem};
+
+/// 侧栏正文最大列宽，超宽侧栏在两侧对称留白以保持内容贴合侧栏横向视觉中线。
+const MAX_SIDEBAR_CONTENT_COLS: usize = 35;
+
+/// 【终端侧栏】【横向对称视框】计算左留白、正文列宽与右留白，使内容围绕侧栏横向视觉中线居中。
+/// 参数: sidebar_width 为侧栏包含左分界线的总列宽；返回: `(左内边距, 正文净宽, 右内边距)`。
+pub(super) fn horizontal_frame(sidebar_width: u16) -> (usize, usize, usize) {
+    let usable = usize::from(sidebar_width).saturating_sub(1);
+    let min_pad = if usable >= 39 {
+        3
+    } else if usable >= 35 {
+        2
+    } else {
+        1
+    };
+    let content = usable
+        .saturating_sub(min_pad * 2)
+        .min(MAX_SIDEBAR_CONTENT_COLS)
+        .max(usize::from(usable > 0));
+    let spare = usable.saturating_sub(content);
+    let left_pad = spare / 2;
+    let right_pad = spare - left_pad;
+    (left_pad, content, right_pad)
+}
+
+/// 【终端侧栏】【正文净宽】返回扣除对称边距后的侧栏内部排版列宽。
+/// 参数: sidebar_width 为侧栏总列宽；返回: 面板内部净列宽。
+pub(super) fn content_width(sidebar_width: u16) -> usize {
+    horizontal_frame(sidebar_width).1
+}
 
 #[derive(Default)]
 pub(super) struct SidebarDocument {
@@ -125,21 +155,33 @@ pub(super) fn overlay(
     }
     let palette = SidebarPalette::current();
     let panel = panel_rows(sidebar, layout, control);
-    let width = usize::from(geometry.width.saturating_sub(3));
+    let (left_margin, width, right_margin) = horizontal_frame(geometry.width);
+    let left_pad = " ".repeat(left_margin);
+    let right_pad = " ".repeat(right_margin);
     for (row, output) in rows.iter_mut().enumerate() {
         let text = panel.get(row).map(String::as_str).unwrap_or_default();
         let padding = width.saturating_sub(crate::cli::repl_text::visible_width(text));
         output.push_str(&format!(
-            "\x1b[0m{}│\x1b[0m {text}{} ",
+            "\x1b[0m{}│\x1b[0m{left_pad}{text}\x1b[0m{}{right_pad}\x1b[0m",
             fg(palette.border),
             " ".repeat(padding)
         ));
     }
 }
 
-/// 【终端侧栏】【完整面板】品牌区、极细分隔线、独立列表和页脚覆盖右栏全高度，供正文与输入右侧共用。
+/// 【终端侧栏】【完整面板】下沉双行标题、简约指标、留白分隔分组与页脚覆盖右栏全高度。
 /// 参数: sidebar 为文档与焦点，layout 为布局，control 为控件状态；返回: 不含分界线的面板行。
 pub(super) fn panel_rows(
+    sidebar: &Sidebar,
+    layout: &FullscreenLayout,
+    control: &SidebarControl,
+) -> Vec<String> {
+    crate::render::tui_presentation::with_locale(|| panel_rows_in_locale(sidebar, layout, control))
+}
+
+/// 【终端侧栏】【作用域面板】按统一纵向中线规划绘制顶栏、指标、留白分隔分组与页脚。
+/// 参数: sidebar 为文档与焦点，layout 为布局，_control 为控件状态；返回: 不含分界线的面板行。
+fn panel_rows_in_locale(
     sidebar: &Sidebar,
     layout: &FullscreenLayout,
     _control: &SidebarControl,
@@ -147,15 +189,13 @@ pub(super) fn panel_rows(
     let Some(geometry) = layout.sidebar else {
         return Vec::new();
     };
-    let width = usize::from(geometry.width.saturating_sub(3));
+    let width = content_width(geometry.width);
     let height = usize::from(layout.rows);
     let palette = SidebarPalette::current();
     let header = sidebar.metrics.heading(width, height);
     let metrics = sidebar.metrics.rows(width, height);
-    let hairlines = has_hairlines(height);
-    let top_hairline_row = hairlines.then_some(header.len() + metrics.len());
-    let bottom_hairline_row = hairlines.then(|| height.saturating_sub(2));
-    let panels = regions_with_focus(&sidebar.document, height, sidebar.sections.focused_section);
+    let plan = sidebar.vertical_plan(height);
+    let panels = &plan.regions;
     let focused_action = sidebar
         .focused_row
         .and_then(|index| sidebar.document.rows.get(index))
@@ -166,17 +206,16 @@ pub(super) fn panel_rows(
                 .iter()
                 .find_map(|panel| panel.index_at(screen_row, &sidebar.scrolls));
             let entry = index.and_then(|index| sidebar.document.rows.get(index));
-            let text = if let Some(line) = header.get(screen_row) {
+            let text = if let Some(line) = screen_row
+                .checked_sub(plan.chrome.header_top)
+                .and_then(|row| header.get(row))
+            {
                 line.clone()
             } else if let Some(line) = screen_row
-                .checked_sub(header.len())
+                .checked_sub(plan.chrome.metrics_top)
                 .and_then(|row| metrics.get(row))
             {
                 line.clone()
-            } else if Some(screen_row) == top_hairline_row
-                || Some(screen_row) == bottom_hairline_row
-            {
-                sidebar_widgets::hairline(width)
             } else if screen_row + 1 == height {
                 sidebar_style::footer(sidebar, width)
             } else if let Some(entry) = entry {

@@ -21,6 +21,7 @@ mod block_scrollbar_input;
 #[cfg(test)]
 mod block_scrollbar_input_tests;
 mod bottom_button;
+mod bottom_return;
 mod composer_image_input;
 pub(in crate::cli) mod control_hover;
 mod git_preview;
@@ -83,6 +84,8 @@ mod sidebar_control_tests;
 mod sidebar_drag_batch;
 mod sidebar_git;
 mod sidebar_git_view;
+mod sidebar_header_path;
+mod sidebar_i18n;
 #[cfg(test)]
 mod sidebar_interaction_tests;
 mod sidebar_metrics;
@@ -99,6 +102,7 @@ mod sidebar_scrollbar_input;
 #[cfg(test)]
 mod sidebar_scrollbar_tests;
 pub(super) mod sidebar_sessions;
+mod sidebar_sessions_group;
 #[cfg(test)]
 mod sidebar_sessions_tests;
 mod sidebar_sessions_view;
@@ -203,6 +207,33 @@ impl ReplRuntime {
             .map(|layout| layout.main_width)
     }
 
+    /// 【终端布局】【左栏预算】按给定终端总列宽计算全屏左栏净宽，供沉底面板排版与热区共用。
+    /// 参数: terminal_cols 为终端列数；返回: 全屏左栏列数，非全屏时返回 None。
+    pub(super) fn fullscreen_main_columns_for(&self, terminal_cols: u16) -> Option<usize> {
+        let session = self.fullscreen.as_ref()?;
+        let review = session.sidebar.preview.path.is_some();
+        let rows = TerminalSize::current().rows;
+        Some(usize::from(
+            self.sidebar_control
+                .layout(terminal_cols, rows, 0, review)
+                .main_width,
+        ))
+    }
+
+    /// 【全屏视图】【正文行查询】读取指定屏幕坐标对应的全屏正文原始行。
+    /// 参数: column 为屏幕列，row 为屏幕行；返回: 命中的文档行文本。
+    pub(super) fn fullscreen_body_line_at(&self, column: u16, row: u16) -> Option<&str> {
+        let session = self.fullscreen.as_ref()?;
+        let layout = session.state.layout?;
+        if !layout.in_body(row) || column >= layout.content_width {
+            return None;
+        }
+        let doc_row = session
+            .state
+            .body_document_row(usize::from(row - layout.body_top));
+        Some(session.state.document.lines.get(doc_row)?.as_str())
+    }
+
     /// 【终端】【布局状态】查询当前是否处于全屏，而非读取启动偏好。
     /// 参数: 无；返回: 当前全屏状态。
     pub(in crate::cli) fn fullscreen_active(&self) -> bool {
@@ -285,7 +316,7 @@ impl ReplRuntime {
     /// 返回:
     /// - 绘制结果
     fn paint_fullscreen_view(&mut self, refresh_document: bool) -> Result<()> {
-        if self.fullscreen.is_none() {
+        if self.fullscreen.is_none() || self.session_workspace.rendering_suspended {
             return Ok(());
         }
         self.tick_sidebar();
@@ -297,14 +328,6 @@ impl ReplRuntime {
             }
         }
         let size = TerminalSize::current();
-        // 1. 沉底面板可能随实时状态变化，先刷新再计算输入框高度；
-        //    面板里的折叠提示同样不能引导用户按 Ctrl+O
-        let panel = crate::render::omitted_line::with_fullscreen_hints(|| {
-            self.bottom_panel_lines(usize::from(size.cols))
-        });
-        if let Some(composer) = self.composer.as_mut() {
-            composer.set_panel_lines(panel);
-        }
         let review = self
             .fullscreen
             .as_ref()
@@ -313,6 +336,13 @@ impl ReplRuntime {
             .sidebar_control
             .layout(size.cols, size.rows, 0, review)
             .main_width;
+        // 1. 【终端分栏】【沉底宽度】沉底面板按左栏实际宽度排版，避免分栏开启时右侧文字与热区越界
+        let panel = crate::render::omitted_line::with_fullscreen_hints(|| {
+            self.bottom_panel_lines(usize::from(columns))
+        });
+        if let Some(composer) = self.composer.as_mut() {
+            composer.set_panel_lines(panel);
+        }
         let wanted = self.composer_height_for(TerminalSize {
             cols: columns,
             rows: size.rows,
@@ -342,19 +372,34 @@ impl ReplRuntime {
             session.sidebar.preview.close();
             session.image_viewer.close();
         }
-        // 2. 【全屏视图】【正文复用】拖选和滚动不遍历历史；内容、布局或展开状态变化才更新正文
+        // 2. 【全屏视图】【正文复用】拖选和滚动不遍历历史；停放会话若无脏数据且宽度选项未变则直接复用已排文档
         let layout_changed = session.state.layout != Some(layout);
-        if layout_changed {
+        let screen_geometry_changed = session.state.layout.is_some_and(|prev| prev != layout)
+            || session
+                .state
+                .previous
+                .as_ref()
+                .is_some_and(|rows| rows.len() != usize::from(layout.composer_top));
+        if screen_geometry_changed {
             session.state.previous = None;
         }
         let body_height = usize::from(layout.body_height);
-        if refresh_document
+        let can_reuse_cached_doc = !session.state.document.lines.is_empty()
+            && !transcript.is_dirty()
+            && !self.stream_active
+            && session.viewing_subagent.is_none()
+            && !transcript.has_running_subagents()
+            && !transcript.has_running_background_commands()
+            && session.state.rendered_options == Some(self.options)
+            && session.state.rendered_expanded == session.state.expanded;
+        let needs_doc_render = (refresh_document && !can_reuse_cached_doc)
             || session.state.pending_refresh
             || view_changed
             || layout_changed
-            || session.pending_toggle.is_some()
-        {
+            || session.pending_toggle.is_some();
+        if needs_doc_render {
             session.state.pending_refresh = false;
+            session.state.rendered_options = Some(self.options);
             let resuming_bottom = std::mem::take(&mut session.state.resuming_bottom);
             let hover_anchor = if resuming_bottom {
                 None
@@ -420,6 +465,10 @@ impl ReplRuntime {
                 hover_anchor,
                 !resuming_bottom,
             );
+            session
+                .state
+                .rendered_expanded
+                .clone_from(&session.state.expanded);
         }
         if let Some((key, offset)) = session.pending_toggle.take() {
             session
@@ -463,7 +512,7 @@ impl ReplRuntime {
                     viewing: self.transcript.viewing_subagent_id(),
                     compact: session.sidebar.sections.todo_collapsed,
                     sections: &session.sidebar.sections,
-                    width: usize::from(side.width.saturating_sub(3)),
+                    width: sidebar_view::content_width(side.width),
                     frame: self.transcript.live_animation_frame(),
                 },
             );
@@ -571,12 +620,6 @@ impl ReplRuntime {
     /// 返回:
     /// - 输入框顶部行与高度
     pub(super) fn update_fullscreen_composer(&mut self, size: TerminalSize) -> Result<(u16, u16)> {
-        let panel = crate::render::omitted_line::with_fullscreen_hints(|| {
-            self.bottom_panel_lines(usize::from(size.cols))
-        });
-        if let Some(composer) = self.composer.as_mut() {
-            composer.set_panel_lines(panel);
-        }
         let review = self
             .fullscreen
             .as_ref()
@@ -585,6 +628,12 @@ impl ReplRuntime {
             .sidebar_control
             .layout(size.cols, size.rows, 0, review)
             .main_width;
+        let panel = crate::render::omitted_line::with_fullscreen_hints(|| {
+            self.bottom_panel_lines(usize::from(columns))
+        });
+        if let Some(composer) = self.composer.as_mut() {
+            composer.set_panel_lines(panel);
+        }
         let wanted = self.composer_height_for(TerminalSize {
             cols: columns,
             rows: size.rows,

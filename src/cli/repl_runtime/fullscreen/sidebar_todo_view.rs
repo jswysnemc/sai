@@ -22,7 +22,7 @@ pub(super) fn rows(
         .count();
     let quiet = todos.is_empty();
     let summary = if quiet {
-        "0/0".to_string()
+        "0".to_string()
     } else {
         let slots = todos.len().min(5);
         let filled = done.saturating_mul(slots) / todos.len().max(1);
@@ -36,7 +36,13 @@ pub(super) fn rows(
         )
     };
     let mut rows = vec![row(
-        heading_with_tone("Todo", &summary, compact || quiet, quiet, width),
+        heading_with_tone(
+            super::sidebar_i18n::todo_heading(),
+            &summary,
+            compact || quiet,
+            quiet,
+            width,
+        ),
         Some(SidebarAction::Toggle(SidebarSection::Todo)),
     )];
     // 1. 【终端侧栏】【空态收敛】无待办任务时不再追加冗余提示行，把高度让渡给活跃区块

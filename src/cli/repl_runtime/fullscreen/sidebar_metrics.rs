@@ -47,24 +47,18 @@ impl SidebarMetrics {
         }
     }
 
-    /// 【终端指标】【工作区标题】参数：width 为净宽，rows 为高度；返回：品牌、工作区与分支的单行标题
+    /// 【终端指标】【工作区标题】生成工作区目录与 Git 分支双行正文，顶部下沉偏移由纵向布局统一排布。
+    /// 参数: width 为净宽，rows 为侧栏高度；返回: 顶栏正文行。
     pub(super) fn heading(&self, width: usize, rows: usize) -> Vec<String> {
-        // 【终端指标】【控件避让】为终端右上角开关保留四列，避免覆盖分支文字
-        let width = width.saturating_sub(4);
-        let title = super::sidebar_widgets::safe_text(&self.directory);
-        let branch = self.branch.as_deref().unwrap_or_default();
-        let mut header = super::pane_header::render(&title, width, rows);
-        if let Some(line) = header.first_mut() {
-            *line = super::sidebar_widgets::columns(
-                line.trim_end(),
-                &super::sidebar_widgets::safe_text(branch),
-                width,
-            );
-        }
-        header
+        super::sidebar_header_path::body_rows(
+            &self.directory,
+            self.branch.as_deref(),
+            width,
+            rows,
+        )
     }
 
-    /// 【终端】【指标排版】参数为净宽和侧栏高度，返回上下文数值、分段条和缓存生成摘要
+    /// 【终端】【指标排版】参数为净宽和侧栏高度，返回上下文数值、线性轨道和按有效负载着色的生成摘要
     pub(super) fn rows(&self, width: usize, rows: usize) -> Vec<String> {
         let palette = PanelPalette::current();
         let rate = self
@@ -85,52 +79,69 @@ impl SidebarMetrics {
         let output = self
             .output
             .map_or_else(|| "--".into(), super::sidebar_metrics_view::tokens);
-        // 1. 【终端指标】【紧凑读数】数值与自适应比例条共用一行，填充中段空隙并区分标签与数值对比度
+        // 1. 【终端指标】【负载权重】零负载状态弱化百分比与零值字重，仅在高水位预警时加粗强调
         let (numbers, percent) = context.split_once(" · ").unwrap_or((&context, ""));
         let spare = width.saturating_sub(
             crate::cli::repl_text::visible_width(numbers)
                 + crate::cli::repl_text::visible_width(percent)
                 + 3,
         );
-        let gauge = super::sidebar_metrics_view::bar(self.context, spare.min(24));
-        let styled_numbers = if let Some((used, window)) = numbers.split_once(" / ") {
-            format!(
-                "{}{used}{} / {}{window}\x1b[39m",
-                fg(palette.text),
-                fg(palette.muted),
-                fg(palette.muted)
-            )
-        } else {
-            format!("{}{numbers}\x1b[39m", fg(palette.text))
-        };
+        let gauge = super::sidebar_metrics_view::bar(self.context, spare.min(22));
         let ratio = self
             .context
             .filter(|(_, window)| *window > 0)
             .map(|(used, window)| used as f64 / window as f64);
-        let percent_color = if ratio.is_some_and(|ratio| ratio >= 0.9) {
-            palette.removed
-        } else if ratio.is_some_and(|ratio| ratio >= 0.72) {
-            palette.warning
+        let has_load = ratio.is_some_and(|value| value > 0.0)
+            || self.prompt.is_some_and(|prompt| prompt > 0);
+        let styled_numbers = if let Some((used, window)) = numbers.split_once(" / ") {
+            let (used_tone, window_tone) = if has_load {
+                (palette.text, palette.muted)
+            } else {
+                (palette.muted, palette.subtle)
+            };
+            format!(
+                "{}{used}{} / {}{window}\x1b[39m",
+                fg(used_tone),
+                fg(window_tone),
+                fg(window_tone)
+            )
         } else {
-            palette.text
+            let tone = if has_load { palette.text } else { palette.muted };
+            format!("{}{numbers}\x1b[39m", fg(tone))
         };
-        let styled_percent = format!("{}\x1b[1m{percent}\x1b[22m\x1b[39m", fg(percent_color));
+        let styled_percent = if ratio.is_some_and(|value| value >= 0.9) {
+            format!("{}\x1b[1m{percent}\x1b[22m\x1b[39m", fg(palette.removed))
+        } else if ratio.is_some_and(|value| value >= 0.72) {
+            format!("{}\x1b[1m{percent}\x1b[22m\x1b[39m", fg(palette.warning))
+        } else if has_load {
+            format!("{}{percent}\x1b[39m", fg(palette.text))
+        } else {
+            format!("{}{percent}\x1b[39m", fg(palette.muted))
+        };
         let left_part = if spare == 0 {
             styled_numbers
         } else {
             format!("{styled_numbers} {gauge}")
         };
         let first = super::sidebar_widgets::columns(&left_part, &styled_percent, width);
+        // 2. 【终端指标】【空闲降噪】未产生数据的占位读数整体退至静默色，有实测读数时点亮标签与数值
         let sep = format!(" {}· ", fg(palette.subtle));
-        let second = format!(
-            "{}Cache {}{cache}{sep}{}{rate} {}tok/s{sep}{}out {}{output}\x1b[0m",
-            fg(palette.muted),
-            fg(palette.text),
-            fg(palette.text),
-            fg(palette.muted),
-            fg(palette.muted),
-            fg(palette.text)
-        );
+        let cache_part = if self.cache.is_some() {
+            format!("{}Cache {}{cache}", fg(palette.muted), fg(palette.text))
+        } else {
+            format!("{}Cache {cache}", fg(palette.subtle))
+        };
+        let rate_part = if self.rate.is_some() {
+            format!("{}{rate} {}tok/s", fg(palette.text), fg(palette.muted))
+        } else {
+            format!("{}{rate} tok/s", fg(palette.subtle))
+        };
+        let out_part = if self.output.is_some() {
+            format!("{}out {}{output}", fg(palette.muted), fg(palette.text))
+        } else {
+            format!("{}out {output}", fg(palette.subtle))
+        };
+        let second = format!("{cache_part}{sep}{rate_part}{sep}{out_part}\x1b[0m");
         [first, second]
             .into_iter()
             .take(height(rows))

@@ -14,14 +14,34 @@ pub(super) fn rows(git: &GitSummary, collapsed: bool, width: usize) -> Vec<Sideb
     let quiet =
         matches!(git.state.as_str(), "not_repo") || (git.state == "ready" && git.files.is_empty());
     let count = match git.state.as_str() {
-        "not_repo" => format!("{}no repo\x1b[39m", fg(palette.subtle)),
-        "ready" if git.files.is_empty() => format!("{}clean\x1b[39m", fg(palette.subtle)),
+        "not_repo" => format!(
+            "{}{}\x1b[39m",
+            fg(palette.subtle),
+            super::sidebar_i18n::git_no_repo()
+        ),
+        "ready" if git.files.is_empty() => format!(
+            "{}{}\x1b[39m",
+            fg(palette.subtle),
+            super::sidebar_i18n::git_clean()
+        ),
+        // 1. 【终端侧栏】【去重统计】单文件展开时明细行已显示增删数，标题仅保留文件计数消除上下重影
+        "ready" if !collapsed && git.files.len() == 1 => "1".to_string(),
         "ready" => format!("{} {}", git.files.len(), totals(git)),
-        "error" => format!("{}error\x1b[39m", fg(palette.removed)),
+        "error" => format!(
+            "{}{}\x1b[39m",
+            fg(palette.removed),
+            super::sidebar_i18n::git_error()
+        ),
         _ => format!("{}…\x1b[39m", fg(palette.subtle)),
     };
     let mut rows = vec![row(
-        heading_with_tone("Changes", &count, collapsed || quiet, quiet, width),
+        heading_with_tone(
+            super::sidebar_i18n::changes_heading(),
+            &count,
+            collapsed || quiet,
+            quiet,
+            width,
+        ),
         Some(SidebarAction::Toggle(SidebarSection::Git)),
     )];
     if collapsed || quiet {
@@ -36,8 +56,14 @@ pub(super) fn rows(git: &GitSummary, collapsed: bool, width: usize) -> Vec<Sideb
                 ));
             }
         }
-        "error" => rows.push(row(item("  Git status unavailable", width, true), None)),
-        _ => rows.push(row(item("  Checking working tree...", width, true), None)),
+        "error" => rows.push(row(
+            item(super::sidebar_i18n::git_unavailable(), width, true),
+            None,
+        )),
+        _ => rows.push(row(
+            item(super::sidebar_i18n::git_checking(), width, true),
+            None,
+        )),
     }
     rows
 }

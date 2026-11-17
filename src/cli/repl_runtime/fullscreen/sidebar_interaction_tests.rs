@@ -61,7 +61,7 @@ fn todo_heading_padding_is_clickable() {
                 .sections
                 .todo_collapsed;
             let scroll = runtime.fullscreen.as_ref().unwrap().state.scroll;
-            let row = heading(&runtime, "Todo");
+            let row = heading(&runtime, super::sidebar_i18n::todo_heading());
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 156, row))
                 .unwrap();
@@ -105,7 +105,7 @@ fn git_heading_collapses_and_restores_files() {
                 ..Default::default()
             };
             runtime.paint_fullscreen().unwrap();
-            let row = heading(&runtime, "Changes");
+            let row = heading(&runtime, super::sidebar_i18n::changes_heading());
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 124, row))
                 .unwrap();
@@ -119,8 +119,8 @@ fn git_heading_collapses_and_restores_files() {
                 .document
                 .rows
                 .iter()
-                .any(|row| row.text.contains("Todo")));
-            let row = heading(&runtime, "Changes");
+                .any(|row| row.text.contains(super::sidebar_i18n::todo_heading())));
+            let row = heading(&runtime, super::sidebar_i18n::changes_heading());
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 156, row))
                 .unwrap();
@@ -152,7 +152,7 @@ fn heading_hover_explains_action_and_clears_on_exit() {
                 .update_composer(&chrome(), "draft", 5, false, Vec::new(), 0)
                 .unwrap();
             runtime.enter_fullscreen().unwrap();
-            let row = heading(&runtime, "Changes");
+            let row = heading(&runtime, super::sidebar_i18n::changes_heading());
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 156, row))
                 .unwrap();
@@ -174,7 +174,7 @@ fn heading_hover_explains_action_and_clears_on_exit() {
             assert!(!painted[usize::from(row)].contains("\x1b[4m"));
             assert!(panel(&runtime)
                 .iter()
-                .any(|line| line.contains("Click to collapse")));
+                .any(|line| line.contains(super::sidebar_i18n::hint_collapse())));
             // 1. 【侧栏测试】【滚动边界】即使已在顶部，滚轮也必须清除原有悬停反馈
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::ScrollUp, 156, row))
@@ -183,7 +183,7 @@ fn heading_hover_explains_action_and_clears_on_exit() {
             assert!(session.sidebar.hovered.is_none());
             assert!(!panel(&runtime)
                 .iter()
-                .any(|line| line.contains("Click to collapse")));
+                .any(|line| line.contains(super::sidebar_i18n::hint_collapse())));
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 156, row))
                 .unwrap();
@@ -194,7 +194,7 @@ fn heading_hover_explains_action_and_clears_on_exit() {
             assert!(session.sidebar.hovered.is_none());
             assert!(!panel(&runtime)
                 .iter()
-                .any(|line| line.contains("Click to collapse")));
+                .any(|line| line.contains(super::sidebar_i18n::hint_collapse())));
         },
     );
 }
@@ -215,14 +215,14 @@ fn separator_details_and_footer_are_not_clickable() {
             let layout = session.state.layout.unwrap();
             let sidebar = &session.sidebar;
             let left = layout.sidebar.unwrap().left;
-            let agents = heading(&runtime, "Subagents");
+            let agents = heading(&runtime, super::sidebar_i18n::subagents_heading());
             assert_eq!(sidebar.target_at(&layout, left + 1, agents), Some(0));
             assert_eq!(sidebar.target_at(&layout, 154, agents), Some(0));
             assert_eq!(sidebar.target_at(&layout, 156, 0), None);
             assert_eq!(sidebar.target_at(&layout, left, 0), None);
             assert_eq!(sidebar.target_at(&layout, 159, 0), None);
             assert_eq!(sidebar.target_at(&layout, 156, layout.rows - 1), None);
-            let detail = heading(&runtime, "Checking working tree");
+            let detail = heading(&runtime, super::sidebar_i18n::git_checking().trim());
             assert_eq!(sidebar.target_at(&layout, 156, detail), None);
         },
     );
@@ -248,7 +248,7 @@ fn subagents_can_fold_without_hiding_main_navigation() {
                 r#"{"subagent":{"id":"sidebar-fold","status":"completed"}}"#.into(),
             );
             runtime.enter_fullscreen().unwrap();
-            let agents = heading(&runtime, "Subagents");
+            let agents = heading(&runtime, super::sidebar_i18n::subagents_heading());
             runtime
                 .handle_fullscreen_event(&mouse(
                     MouseEventKind::Down(MouseButton::Left),
@@ -263,7 +263,9 @@ fn subagents_can_fold_without_hiding_main_navigation() {
                 .rows
                 .iter()
                 .any(|row| row.text.contains("CHILD-TASK")));
-            assert!(sidebar.document.rows[1].text.contains("Main conversation"));
+            assert!(sidebar.document.rows[1]
+                .text
+                .contains(super::sidebar_i18n::main_conversation()));
             runtime
                 .handle_fullscreen_event(&mouse(
                     MouseEventKind::Down(MouseButton::Left),
@@ -304,7 +306,7 @@ fn scrolled_heading_uses_document_offset_and_retains_fold_on_resize() {
                 ..Default::default()
             };
             runtime.paint_fullscreen().unwrap();
-            let before_heading = heading(&runtime, "Changes");
+            let before_heading = heading(&runtime, super::sidebar_i18n::changes_heading());
             runtime
                 .handle_fullscreen_event(&mouse(
                     MouseEventKind::ScrollDown,
@@ -312,7 +314,7 @@ fn scrolled_heading_uses_document_offset_and_retains_fold_on_resize() {
                     before_heading + 1,
                 ))
                 .unwrap();
-            let row = heading(&runtime, "Changes");
+            let row = heading(&runtime, super::sidebar_i18n::changes_heading());
             assert_eq!(row, before_heading);
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 156, row))

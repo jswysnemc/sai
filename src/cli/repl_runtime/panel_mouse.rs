@@ -12,7 +12,14 @@ pub(super) enum PanelAction {
 }
 
 impl ReplRuntime {
-    /// 【用户队列】【命中映射】队列绘制和操作共享行与列，不把按钮间空白识别成操作。
+    /// 【终端】【左栏宽度】全屏开启侧栏或代码审查时返回左侧会话实际列宽，否则返回终端整宽。
+    /// 参数: `terminal_cols` 为当前终端总列数；返回: 沉底面板与输入框的实际可用列宽。
+    pub(super) fn composer_columns(&self, terminal_cols: u16) -> usize {
+        self.fullscreen_main_columns_for(terminal_cols)
+            .unwrap_or_else(|| usize::from(terminal_cols))
+    }
+
+    /// 【用户队列】【命中映射】队列绘制和操作共享左栏行与列，不把按钮间空白识别成操作。
     /// 参数: cols 为当前输入区域宽度；返回: 队列在沉底面板中的操作区域。
     pub(super) fn queue_panel_hits(&self, cols: usize) -> Vec<super::queue_panel_view::QueueHit> {
         let todos =
@@ -51,11 +58,13 @@ impl ReplRuntime {
         })
         .collect()
     }
-    /// 【终端】【面板命中】与面板渲染使用同一来源，计算标题和子代理行的操作映射。
-    /// 参数: 无；返回: 原面板行号与操作。
-    pub(super) fn panel_targets(&self) -> Vec<(usize, PanelAction)> {
+
+    /// 【终端】【面板命中】与沉底面板渲染共享左栏实际宽度，计算标题和子代理行的操作映射。
+    /// 参数: `cols` 为沉底面板实际渲染列宽；返回: 原面板行号与操作。
+    pub(super) fn panel_targets(&self, cols: usize) -> Vec<(usize, PanelAction)> {
         let mut targets = Vec::new();
-        let sidebar = self.sidebar_visible(usize::from(self.viewport.size().cols));
+        let sidebar =
+            self.sidebar_visible(usize::from(super::viewport::TerminalSize::current().cols));
         let todos = if sidebar {
             &[][..]
         } else {
@@ -67,15 +76,21 @@ impl ReplRuntime {
         {
             targets.push((0, PanelAction::Todo));
         }
-        let queue = self
-            .queue_panel
-            .panel_lines(&self.queued_items(), self.stream_active);
+        let queue = super::queue_panel_view::render_at(
+            &self.queue_panel,
+            &self.queued_items(),
+            self.stream_active,
+            cols,
+        )
+        .into_iter()
+        .map(|row| row.text)
+        .collect::<Vec<_>>();
         let offset = super::bottom_panel::render_panel_lines(
             todos,
             &queue,
             &self.queued_control_commands(),
             &[],
-            usize::from(self.viewport.size().cols),
+            cols,
             self.todo_panel_compact,
             0,
         )

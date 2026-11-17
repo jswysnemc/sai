@@ -44,7 +44,7 @@ impl ReplRuntime {
         frame.set_input_style(self.input_style.current());
         frame.set_images(image_sources, self.composer.as_mut());
         frame.set_mention_candidates(self.mention_candidates(input, cursor));
-        frame.set_panel_lines(self.bottom_panel_lines(usize::from(size.cols)));
+        frame.set_panel_lines(self.bottom_panel_lines(self.composer_columns(size.cols)));
         // 运行期间置灰打断类命令：排队会让用户不知道命令何时才执行，
         // 而提示"本轮结束后可用"至少是可预期的
         frame.set_streaming(self.stream_active);
@@ -122,7 +122,7 @@ impl ReplRuntime {
         .into_iter()
         .map(|row| row.text)
         .collect::<Vec<_>>();
-        let sidebar = self.sidebar_visible(cols);
+        let sidebar = self.sidebar_visible(usize::from(TerminalSize::current().cols));
         let mut agent_lines = if sidebar && !self.agent_panel.is_active() {
             Vec::new()
         } else {
@@ -228,7 +228,7 @@ impl ReplRuntime {
             return Ok(());
         }
         let size = self.viewport.size();
-        let lines = self.bottom_panel_lines(usize::from(size.cols));
+        let lines = self.bottom_panel_lines(self.composer_columns(size.cols));
         let Some(composer) = self.composer.as_mut() else {
             return Ok(());
         };
@@ -280,8 +280,9 @@ impl ReplRuntime {
         } else {
             viewport
         };
-        let actions = self.panel_targets();
-        let queue_hits = self.queue_panel_hits(usize::from(viewport.size().cols));
+        let panel_cols = usize::from(viewport.size().cols);
+        let actions = self.panel_targets(panel_cols);
+        let queue_hits = self.queue_panel_hits(panel_cols);
         let expanded_rows = actions
             .iter()
             .filter_map(|(row, action)| {

@@ -229,14 +229,6 @@ pub(crate) fn process_stream_input(
                     return Ok(StreamInputAction::Interrupt);
                 }
                 if key.code == KeyCode::Char('o') && key.modifiers.contains(KeyModifiers::CONTROL) {
-                    // #region agent log
-                    super::super::repl_pager::debug_agent_log(
-                        "A",
-                        "event_loop.rs:ctrl_o",
-                        "open pager during run",
-                        "{\"cancel\":false}",
-                    );
-                    // #endregion
                     return Ok(StreamInputAction::ToggleFullscreen);
                 }
                 if runtime.handle_queue_panel_key(key.code, key.modifiers)? {

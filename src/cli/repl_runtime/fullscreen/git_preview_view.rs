@@ -71,7 +71,37 @@ impl PreviewLayout {
             && usize::from(row) < self.height
     }
 
-    /// 【终端审查】【比较控件】模式切换控件固定在标题下方，不随内容移动。
+    /// 【终端审查】【返回按钮】在首行右侧（侧栏开关左方）提供点击返回概览侧栏的入口。
+    /// 参数: 无；返回: 当前宽度下可完整显示的返回控件文案，过窄时返回空串。
+    pub(super) fn back_label(&self) -> &'static str {
+        let usable = self.width.saturating_sub(6);
+        if usable >= 28 {
+            super::sidebar_i18n::review_back_label(false)
+        } else if usable >= 20 {
+            super::sidebar_i18n::review_back_label(true)
+        } else {
+            ""
+        }
+    }
+
+    /// 【终端审查】【返回命中】判断首行点击是否落在返回概览控件上（避开最右侧 4 列侧栏开关）。
+    /// 参数: column/row 为屏幕坐标；返回: 是否命中返回控件。
+    pub(super) fn back_at(&self, column: u16, row: u16) -> bool {
+        if row != 0 || self.height == 0 || !self.contains(column, row) {
+            return false;
+        }
+        let label = self.back_label();
+        if label.is_empty() {
+            return false;
+        }
+        let label_width = crate::cli::repl_text::visible_width(label);
+        let usable = self.width.saturating_sub(6);
+        let start = self.left + 2 + usable.saturating_sub(label_width);
+        let end = self.left + 2 + usable;
+        (start..end).contains(&usize::from(column))
+    }
+
+    /// 【终端审查】【比较控件】模式切换控件固定在标题下方，按显示列宽对齐中英文标签。
     /// 参数: column/row 为坐标；返回: 命中模式。
     pub(super) fn mode_at(&self, column: u16, row: u16) -> Option<DiffMode> {
         if !self.chrome || usize::from(row) != self.header_height || !self.contains(column, row) {
@@ -83,7 +113,7 @@ impl PreviewLayout {
         let relative = usize::from(column).saturating_sub(self.left + 2);
         let mut start = 0;
         for mode in [DiffMode::Working, DiffMode::Staged, DiffMode::Unstaged] {
-            let width = self.mode_label(mode).len() + 4;
+            let width = crate::cli::repl_text::visible_width(self.mode_label(mode)) + 4;
             if relative >= start && relative < start + width {
                 return Some(mode);
             }
@@ -100,7 +130,7 @@ impl PreviewLayout {
         }
         if self.width >= 38 {
             return match mode {
-                DiffMode::Working => "Working",
+                DiffMode::Working => crate::i18n::text("Working", "工作树"),
                 _ => mode.label(),
             };
         }
@@ -122,6 +152,9 @@ impl PreviewLayout {
     ) -> Option<ReviewHover> {
         if !self.contains(column, row) || usize::from(column) < self.left + 2 {
             return None;
+        }
+        if self.back_at(column, row) {
+            return Some(ReviewHover::Back);
         }
         if let Some(mode) = self.mode_at(column, row) {
             return Some(ReviewHover::Mode(mode));
@@ -192,11 +225,26 @@ pub(super) fn panel_rows(
     let width = geometry.width.saturating_sub(3);
     let palette = SidebarPalette::current();
     let mut panel = vec![String::new(); geometry.height];
-    for (index, title) in super::pane_header::render("Review", width, geometry.height)
-        .into_iter()
-        .enumerate()
+    for (index, title) in super::pane_header::render(
+        super::sidebar_i18n::review_heading(),
+        width,
+        geometry.height,
+    )
+    .into_iter()
+    .enumerate()
     {
         panel[index] = title;
+    }
+    let back_label = geometry.back_label();
+    if !back_label.is_empty() && !panel.is_empty() {
+        let raw_back = format!("{}{back_label}\x1b[39m", fg(palette.muted));
+        let styled_back = if preview.hovered == Some(ReviewHover::Back) {
+            highlight(&raw_back, false)
+        } else {
+            raw_back
+        };
+        let left_title = panel[0].trim_end().to_string();
+        panel[0] = columns(&left_title, &format!("{styled_back}   "), width);
     }
     if geometry.chrome {
         panel[geometry.header_height] = [DiffMode::Working, DiffMode::Staged, DiffMode::Unstaged]
@@ -217,7 +265,7 @@ pub(super) fn panel_rows(
             .collect::<Vec<_>>()
             .join(" ");
         panel[geometry.header_height + 1] = columns(
-            &format!("\x1b[1m{} files changed\x1b[22m", git.files.len()),
+            &super::sidebar_i18n::files_changed_summary(git.files.len()),
             &super::sidebar_git_view::totals(git),
             width,
         );
@@ -309,7 +357,7 @@ pub(super) fn panel_rows(
                 })
                 .unwrap_or_default()
         } else if offset == 0 {
-            "Loading changes...".into()
+            super::sidebar_i18n::loading_changes().into()
         } else {
             String::new()
         };
@@ -318,26 +366,47 @@ pub(super) fn panel_rows(
         panel[geometry.diff_top + offset] = item(&text, width, false);
     }
     if let Some(footer) = panel.last_mut() {
+        use crate::i18n::text as t;
         let total = preview
             .content
             .as_ref()
             .map_or(0, |content| content.lines.len());
         let focus = match preview.focus {
-            Some(ReviewFocus::Files) => "files",
-            Some(ReviewFocus::Diff) => "diff",
-            None => "chat",
+            Some(ReviewFocus::Files) => t("files", "文件"),
+            Some(ReviewFocus::Diff) => t("diff", "差异"),
+            None => t("chat", "聊天"),
         };
         let truncated = preview
             .content
             .as_ref()
             .is_some_and(|content| content.truncated);
-        *footer = format!(
-            "{}{}-{}/{total} · F6 {focus}{}",
-            fg(palette.muted),
+        let range = format!(
+            "{}-{}/{total}",
             preview.scroll + usize::from(total > 0),
             (preview.scroll + geometry.visible).min(total),
-            if truncated { " · truncated" } else { "" }
         );
+        let trunc_suffix = if truncated {
+            t(" · truncated", " · 已截断")
+        } else {
+            ""
+        };
+        let full = format!(
+            "{range} · {} · F6 {focus} · {}{trunc_suffix}",
+            t("Tab mode", "Tab 切模式"),
+            t("Esc overview", "Esc 返回"),
+        );
+        let medium = format!(
+            "{range} · F6 {focus} · {}{trunc_suffix}",
+            t("Esc back", "Esc 返回"),
+        );
+        let body = if crate::cli::repl_text::visible_width(&full) <= width {
+            full
+        } else if crate::cli::repl_text::visible_width(&medium) <= width {
+            medium
+        } else {
+            format!("{range} · F6 {focus}{trunc_suffix}")
+        };
+        *footer = format!("{}{}", fg(palette.muted), clip(&body, width));
     }
     panel
 }

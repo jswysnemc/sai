@@ -1,6 +1,9 @@
 //! 顶部侧栏开关和紧凑位置指示的回归测试。
 
-use super::header_controls::{overlay, position, target, SIDEBAR_ICON};
+use super::header_controls::{
+    current_sidebar_icon, overlay, overlay_for_background, position, target,
+    FALLBACK_SIDEBAR_ICON, SIDEBAR_ICON,
+};
 use super::layout::FullscreenLayout;
 use super::runtime_tests::{chrome, mouse, runtime};
 use super::sidebar_control::{SidebarControl, Visibility};
@@ -31,7 +34,7 @@ fn sidebar_toggle_only_exists_when_manual_open_is_possible() {
             crate::cli::repl_text::visible_width(&text),
             usize::from(cols)
         );
-        assert_eq!(text.contains(SIDEBAR_ICON), visible);
+        assert_eq!(text.contains(current_sidebar_icon()), visible);
         if let Some(range) = target(&layout) {
             assert_eq!(range.end, usize::from(cols) - 1);
             assert_eq!(range.len(), 3);
@@ -116,8 +119,9 @@ fn hover_colors_only_toggle_and_clears_on_departure() {
                 .previous
                 .as_ref()
                 .unwrap()[0];
+            let icon = current_sidebar_icon();
             assert!(header.contains(&format!(
-                "{} {SIDEBAR_ICON} ",
+                "{} {icon} ",
                 super::sidebar_palette::fg(
                     super::sidebar_palette::SidebarPalette::current().accent
                 )
@@ -138,7 +142,7 @@ fn hover_colors_only_toggle_and_clears_on_departure() {
                 .as_ref()
                 .unwrap()[0];
             assert!(header.contains(&format!(
-                "{} {SIDEBAR_ICON} ",
+                "{} {icon} ",
                 super::sidebar_palette::fg(super::sidebar_palette::SidebarPalette::current().text)
             )));
         },
@@ -187,4 +191,27 @@ fn position_tracks_top_middle_and_latest() {
         );
         assert!(crate::cli::repl_text::visible_width(&text) <= 10);
     }
+}
+
+/// 【标题测试】【浅色与几何回退】侧栏关闭时浅色背景不使用深黑底条，禁用 Nerd Font 时回退标准分栏符。
+/// 参数: 无；返回: 无。
+#[test]
+fn closed_sidebar_toggle_adapts_to_light_background_and_fallback_glyph() {
+    let layout = FullscreenLayout::compute(100, 30, 4);
+    assert!(layout.sidebar.is_none());
+    let mut lines = vec![" ".repeat(100)];
+    overlay_for_background(
+        &SidebarControl::default(),
+        &layout,
+        &mut lines,
+        (250, 250, 250),
+        false,
+    );
+    assert!(!lines[0].contains("\x1b[48;5;235m"), "{:?}", lines[0]);
+    let palette = crate::render::panel_palette::PanelPalette::for_background((250, 250, 250));
+    assert!(lines[0].contains(&crate::render::panel_palette::bg(palette.hover_bg)));
+    assert!(lines[0].contains(&crate::render::panel_palette::fg(palette.text)));
+    let plain = strip_ansi_for_test(&lines[0]);
+    assert!(plain.contains(FALLBACK_SIDEBAR_ICON) && !plain.contains(SIDEBAR_ICON));
+    assert_eq!(crate::cli::repl_text::visible_width(&plain), 100);
 }

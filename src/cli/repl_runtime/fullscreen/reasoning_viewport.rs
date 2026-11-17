@@ -16,6 +16,7 @@ struct Position {
 pub(super) struct ReasoningViewports {
     source: FullscreenDocument,
     positions: HashMap<usize, Position>,
+    width: usize,
 }
 
 impl ReasoningViewports {
@@ -77,12 +78,13 @@ impl ReasoningViewports {
     }
 
     /// 【终端】【思考窗口】更新完整源文档；流式默认跟随，历史默认从开头阅读。
-    /// 参数: `source` 为源文档，`_width` 为调用方已完成排版的显示列数；返回: 每段正文至多五行的文档。
+    /// 参数: `source` 为源文档，`width` 为调用方已完成排版的显示列数；返回: 每段正文至多五行的文档。
     pub(super) fn update(
         &mut self,
         source: FullscreenDocument,
-        _width: usize,
+        width: usize,
     ) -> FullscreenDocument {
+        self.width = width;
         self.positions.retain(|cell, _| {
             source
                 .reasonings
@@ -124,9 +126,12 @@ impl ReasoningViewports {
         let mut projection = DocumentProjection::new(&self.source);
         let mut cursor = 0;
         let mut scrollbars = Vec::new();
+        let mut paused_titles = Vec::new();
         for region in &self.source.reasonings {
             let total = region.end.saturating_sub(region.start + 1);
-            projection.copy(cursor..region.start + 1);
+            projection.copy(cursor..region.start);
+            let title_row = projection.len();
+            projection.copy(region.start..region.start + 1);
             let position = self.positions.entry(region.key.cell).or_insert(Position {
                 offset: 0,
                 follow: region.live,
@@ -147,6 +152,9 @@ impl ReasoningViewports {
             } else {
                 position.offset.min(max)
             };
+            if position.live && !position.follow && max > 0 {
+                paused_titles.push(title_row);
+            }
             let first = region.start + 1 + position.offset;
             let body_start = projection.len();
             projection.copy(first..(first + BODY_ROWS).min(region.end));
@@ -156,7 +164,26 @@ impl ReasoningViewports {
         projection.copy(cursor..self.source.lines.len());
         projection.remap_activities();
         let mut document = projection.finish();
-        // 2. 【终端】【思考滚动条】只为投影正文着色，完整源文档保持原有样式
+        // 2. 【终端】【思考暂停提示】实时流式思考被用户上滚暂停跟随时在标题追加轻量状态
+        if !paused_titles.is_empty() {
+            let limit = if self.width > 0 { self.width } else { 80 };
+            let label = format!(" · {}", crate::i18n::text("paused", "已暂停跟随"));
+            let label_width = unicode_width::UnicodeWidthStr::width(label.as_str());
+            let muted = super::sidebar_palette::fg(
+                super::sidebar_palette::SidebarPalette::current().muted,
+            );
+            for title_row in paused_titles {
+                if let Some(line) = document.lines.get_mut(title_row) {
+                    let current = line.as_str();
+                    if crate::render::ansi_clip::ansi_visible_width(current) + label_width <= limit {
+                        *line = crate::render::transcript::AnsiLine::new(format!(
+                            "{current}{muted}{label}\x1b[0m"
+                        ));
+                    }
+                }
+            }
+        }
+        // 3. 【终端】【思考滚动条】只为投影正文着色，完整源文档保持原有样式
         for (rows, offset, total) in scrollbars {
             super::block_scrollbar::decorate(&mut document.lines[rows], offset, total);
         }

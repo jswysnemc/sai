@@ -246,9 +246,13 @@ impl ReplRuntime {
             KeyCode::Up if alt => state.jump_relative(false, height),
             KeyCode::Down if alt => state.jump_relative(true, height),
             KeyCode::Home if ctrl => state.scroll_to(0, height),
-            KeyCode::End if ctrl => state.scroll_to(usize::MAX, height),
-            // Ctrl+↓ 与内联模式一致：回到最新输出
-            KeyCode::Down if ctrl => state.scroll_to(usize::MAX, height),
+            KeyCode::End | KeyCode::Down if ctrl => {
+                // 1. 【全屏视图】【快捷回底】Ctrl+End / Ctrl+Down 与底部按钮一致，收起离屏详情并保留底屏可视项
+                let offscreen =
+                    state.return_to_bottom_closing_offscreen(height, usize::from(layout.rows));
+                self.transcript.fold_offscreen_cells(&offscreen);
+                return Effect::Refresh;
+            }
             _ => return Effect::Pass,
         };
         if changed {
@@ -422,6 +426,7 @@ impl ReplRuntime {
             // 2. 正文拖动：扩展选区，拖到上下边缘时顺带滚动
             MouseEventKind::Drag(MouseButton::Left) => match state.press {
                 Some(anchor) => {
+                    state.dismissed_selection = false;
                     let mut scrolled = false;
                     if mouse.row <= layout.body_top {
                         scrolled = state.scroll_by(-1, height);
@@ -445,6 +450,7 @@ impl ReplRuntime {
             },
             // 3. 松开：有选区则复制，否则按点击展开或收起段落
             MouseEventKind::Up(MouseButton::Left) => {
+                let dismissed_selection = std::mem::take(&mut state.dismissed_selection);
                 let was_dragging = std::mem::take(&mut state.dragging);
                 if was_dragging {
                     let in_track =
@@ -481,7 +487,11 @@ impl ReplRuntime {
                     }
                     None => {
                         state.selection = None;
-                        // 2. 【全屏视图】【单击判定】释放位置离开原文字时不触发段落收起
+                        // 2. 【全屏视图】【取消选区保护】刚刚用于清除有效选区的单击不再串联触发整段收起
+                        if dismissed_selection {
+                            return Effect::Nothing;
+                        }
+                        // 3. 【全屏视图】【单击判定】释放位置离开原文字时不触发段落收起
                         if !layout.in_body(mouse.row)
                             || mouse.column >= layout.content_width
                             || press.row != state.body_document_row(body_row)
@@ -507,8 +517,11 @@ impl ReplRuntime {
                 }
             }
             MouseEventKind::Down(MouseButton::Left) => {
-                // 新的按下清掉上一次选区与复制提示
-                let cleared = state.selection.take().is_some() | state.copied.take().is_some();
+                // 1. 【全屏视图】【选区清理】记录是否清除了非空选区，防止取消选区的单击误触折叠
+                let previous_selection = state.selection.take();
+                state.dismissed_selection =
+                    previous_selection.is_some_and(|selection| !selection.is_empty());
+                let cleared = previous_selection.is_some() | state.copied.take().is_some();
                 let handled = {
                     // 2. 【消息导航】【标题入口】展开所有用户消息，不直接改变会话位置
                     if super::paint::header_target_at(state, &layout, mouse.column, mouse.row) {
@@ -529,8 +542,13 @@ impl ReplRuntime {
                             .bottom_button
                             .is_some_and(|(start, end)| mouse.column >= start && mouse.column < end)
                     {
-                        // 输入框正上方的“回到底部”按钮：直接跳到最新输出，不开始拖选
-                        state.scroll_to(usize::MAX, height)
+                        // 2. 【全屏视图】【回到底部按钮】跳至底部，收起可视区外的工具详情并保留最下方可见区域展开项
+                        let offscreen = state.return_to_bottom_closing_offscreen(
+                            height,
+                            usize::from(layout.rows),
+                        );
+                        self.transcript.fold_offscreen_cells(&offscreen);
+                        return Effect::Refresh;
                     } else if !layout.in_body(mouse.row) {
                         // 输入框区域：交回终端，不做处理
                         false

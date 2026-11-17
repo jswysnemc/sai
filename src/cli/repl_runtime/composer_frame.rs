@@ -418,6 +418,12 @@ impl ComposerFrame {
         &self.chrome
     }
 
+    /// 【终端】【草稿判空】查询当前输入框源码是否为空，供全屏审查区 Esc 分流判断。
+    /// 参数: 无；返回: 草稿为空时返回 true。
+    pub(in crate::cli::repl_runtime) fn input_is_empty(&self) -> bool {
+        self.input.is_empty()
+    }
+
     /// 返回 composer 在指定终端宽度下的视觉行数。
     ///
     /// 参数:
@@ -466,7 +472,7 @@ impl ComposerFrame {
 /// 状态栏下方按键提示占用的行数。
 const KEY_HINT_ROWS: u16 = 1;
 
-pub(super) use key_hints::{KeyHintContext, KeyNotice};
+pub(super) use key_hints::{ActiveBottomMode, KeyHintContext, KeyNotice};
 
 /// composer 在单一终端宽度下的计算结果。
 struct ComposerLayout {

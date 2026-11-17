@@ -49,23 +49,21 @@ impl ShellHintPanel {
         }
     }
 
-    /// 返回面板各行文本（供签名与测试）。
-    ///
-    /// 参数:
-    /// - `cols`: 终端列数
-    ///
-    /// 返回:
-    /// - 面板行
+    /// 【终端】【命令提示】返回对齐第 3 列正文基线的面板各行文本。
+    /// 参数: `cols` 为终端列数；返回: 面板行列表。
     pub(super) fn rendered_lines(&self, cols: usize) -> Vec<String> {
         if !self.visible {
             return Vec::new();
         }
+        let palette = crate::render::panel_palette::PanelPalette::current();
+        let muted = crate::render::panel_palette::fg(palette.muted);
+        let accent = crate::render::panel_palette::fg(palette.accent);
         let hint = t("Run a command – e.g., ls", "运行命令 – 例如 ls");
         let cwd = display_cwd(&self.directory);
         vec![
-            truncate_ansi(&format!("\x1b[2m  {hint}\x1b[0m"), cols),
-            truncate_ansi(&format!("\x1b[38;5;81m  {}\x1b[0m", self.model), cols),
-            truncate_ansi(&format!("\x1b[2m  {cwd}\x1b[0m"), cols),
+            truncate_ansi(&format!("{muted}   {hint}\x1b[0m"), cols),
+            truncate_ansi(&format!("{accent}   {}\x1b[0m", self.model), cols),
+            truncate_ansi(&format!("{muted}   {cwd}\x1b[0m"), cols),
         ]
     }
 }

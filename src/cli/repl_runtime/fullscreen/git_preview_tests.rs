@@ -471,21 +471,81 @@ fn long_filename_stays_visible_in_sticky_header_at_narrow_width() {
 /// 参数: 无；返回: 无。
 #[test]
 fn mode_controls_fit_narrow_review_and_match_click_columns() {
-    for cols in [40, 80, 100, 160] {
-        let layout = FullscreenLayout::compute_for(cols, 28, 4, true);
-        let geometry = PreviewLayout::compute(&layout, 1);
-        let mut start = 0;
-        for mode in [DiffMode::Working, DiffMode::Staged, DiffMode::Unstaged] {
-            let width = geometry.mode_label(mode).len() + 4;
-            assert_eq!(
-                geometry.mode_at(
-                    (geometry.left + 2 + start) as u16,
-                    geometry.header_height as u16
-                ),
-                Some(mode)
-            );
-            start += width + 1;
-        }
-        assert!(start - 1 <= geometry.width - 3);
+    for locale in [crate::i18n::Locale::En, crate::i18n::Locale::Zh] {
+        crate::i18n::with_locale(locale, || {
+            for cols in [40, 80, 100, 160] {
+                let layout = FullscreenLayout::compute_for(cols, 28, 4, true);
+                let geometry = PreviewLayout::compute(&layout, 1);
+                let mut start = 0;
+                for mode in [DiffMode::Working, DiffMode::Staged, DiffMode::Unstaged] {
+                    let width =
+                        crate::cli::repl_text::visible_width(geometry.mode_label(mode)) + 4;
+                    assert_eq!(
+                        geometry.mode_at(
+                            (geometry.left + 2 + start) as u16,
+                            geometry.header_height as u16
+                        ),
+                        Some(mode)
+                    );
+                    start += width + 1;
+                }
+                assert!(start - 1 <= geometry.width - 3);
+            }
+        });
     }
+}
+
+/// 【审查测试】【返回概览与失焦关闭】点击左侧聊天使审查失焦后无草稿按 Esc 仍可退出，顶栏返回按钮也可直接关闭审查。
+/// 参数: 无；返回: 无。
+#[test]
+fn unfocused_esc_with_empty_draft_and_header_back_button_both_close_review() {
+    TerminalSize::with_size(
+        TerminalSize {
+            cols: 160,
+            rows: 30,
+        },
+        || {
+            let mut runtime = runtime(1);
+            runtime
+                .update_composer(&chrome(), "", 0, false, Vec::new(), 0)
+                .unwrap();
+            runtime.enter_fullscreen().unwrap();
+            runtime.fullscreen.as_mut().unwrap().sidebar.git.summary = GitSummary {
+                state: "ready".into(),
+                files: vec![(" M".into(), "src/changed.rs".into())],
+                ..Default::default()
+            };
+            runtime.paint_fullscreen().unwrap();
+            runtime.apply_sidebar_action(SidebarAction::GitFile(0));
+            runtime.paint_fullscreen().unwrap();
+            // 1. 【审查测试】【失焦关闭】点击左侧聊天使 preview.focus 置空，无草稿遮挡时 Esc 直接关闭审查
+            runtime
+                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), 5, 5))
+                .unwrap();
+            assert!(runtime.fullscreen.as_ref().unwrap().sidebar.preview.focus.is_none());
+            assert_eq!(key(&mut runtime, KeyCode::Esc), FullscreenEvent::Consumed);
+            assert!(runtime.fullscreen.as_ref().unwrap().sidebar.preview.path.is_none());
+
+            // 2. 【审查测试】【顶栏返回按钮】再次打开审查，点击首行返回控件同样返回概览侧栏
+            runtime.apply_sidebar_action(SidebarAction::GitFile(0));
+            runtime.paint_fullscreen().unwrap();
+            let layout = runtime.fullscreen.as_ref().unwrap().state.layout.unwrap();
+            let geometry = PreviewLayout::compute(&layout, 1);
+            let back_col = (geometry.left + 2..usize::from(layout.cols))
+                .map(|col| col as u16)
+                .find(|&col| geometry.back_at(col, 0))
+                .expect("宽屏首行必须提供返回概览控件");
+            runtime
+                .handle_fullscreen_event(&mouse(MouseEventKind::Moved, back_col, 0))
+                .unwrap();
+            assert_eq!(
+                runtime.fullscreen.as_ref().unwrap().sidebar.preview.hovered,
+                Some(ReviewHover::Back)
+            );
+            runtime
+                .handle_fullscreen_event(&mouse(MouseEventKind::Down(MouseButton::Left), back_col, 0))
+                .unwrap();
+            assert!(runtime.fullscreen.as_ref().unwrap().sidebar.preview.path.is_none());
+        },
+    );
 }

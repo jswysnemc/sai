@@ -2,10 +2,19 @@ use super::*;
 use crate::render::transcript::DisplayWindow;
 
 impl ReplRuntime {
-    /// 【会话载入】【完整重放】将已载入历史依次写入终端并同步输入区位置。
+    /// 【会话载入】【完整重放】将已载入历史依次写入终端并同步输入区位置，全屏模式改走备用屏单帧差量绘制。
     /// 参数: 无
     /// 返回: 终端绘制结果
     pub(super) fn restore_history(&mut self) -> Result<()> {
+        if self.session_workspace.rendering_suspended {
+            return Ok(());
+        }
+        // 1. 【会话载入】【备用屏隔离】全屏模式下禁止向备用屏倾泻主屏回滚流，消除原始序列外泄与二次排版开销
+        if self.fullscreen.is_some() {
+            self.reflow.clear_pending();
+            self.reflow.mark_reflowed(TerminalSize::current(), false);
+            return self.paint_fullscreen();
+        }
         self.commit_frame()?;
         let size = TerminalSize::current();
         let composer_height = self.composer_height_for(size);
@@ -17,7 +26,7 @@ impl ReplRuntime {
             size,
             composer_height,
         )?;
-        // 1. 【会话载入】【滚动记账】完整输出后只将可见尾部计为屏幕内内容
+        // 2. 【会话载入】【滚动记账】完整输出后只将可见尾部计为屏幕内内容
         self.transcript.clear_dirty();
         self.stream.reset(&window, painted);
         self.last_composer_signature = None;
@@ -101,5 +110,27 @@ mod tests {
             );
             assert!(matches!(runtime.stream.sync(&next), SyncPlan::Unchanged));
         }
+    }
+
+    /// 【会话载入】【全屏批处理隔离】全屏挂起期间跳过中间绘制，恢复后仅通过全屏引擎输出一帧而不污染内联流状态。
+    #[test]
+    fn fullscreen_session_switch_skips_inline_scrollback_dump() {
+        let options = TranscriptRenderOptions {
+            reasoning_mode: crate::render::ReasoningDisplayMode::Summary,
+            tool_call_mode: crate::render::ToolCallDisplayMode::Summary,
+        };
+        let mut runtime = ReplRuntime::new(200, options);
+        runtime.enter_fullscreen().unwrap();
+        runtime
+            .with_fullscreen_batch(|rt| {
+                for index in 0..40 {
+                    rt.transcript.push_meta(format!("switch-row-{index:02}"));
+                }
+                rt.restore_history()
+            })
+            .unwrap();
+        // 全屏恢复只驱动备用屏文档，不触碰内联滚动记账
+        assert_eq!(runtime.stream.offscreen(), 0);
+        assert!(!runtime.transcript.is_dirty());
     }
 }

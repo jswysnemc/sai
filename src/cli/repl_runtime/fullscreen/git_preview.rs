@@ -21,6 +21,7 @@ pub(super) enum ReviewFocus {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ReviewHover {
+    Back,
     Mode(DiffMode),
     File(usize),
 }
@@ -36,13 +37,14 @@ impl DiffMode {
         }
     }
 
-    /// 【Git预览】【模式名称】返回比较控件上的名称。
+    /// 【Git预览】【模式名称】返回比较控件上的本地化名称。
     /// 参数: 无；返回: 界面名称。
     pub(super) fn label(self) -> &'static str {
+        use crate::i18n::text as t;
         match self {
-            Self::Working => "Working tree",
-            Self::Staged => "Staged",
-            Self::Unstaged => "Unstaged",
+            Self::Working => t("Working tree", "工作树"),
+            Self::Staged => t("Staged", "已暂存"),
+            Self::Unstaged => t("Unstaged", "未暂存"),
         }
     }
 
@@ -131,11 +133,13 @@ impl GitPreview {
             return;
         };
         let Ok(handle) = tokio::runtime::Handle::try_current() else {
-            self.error = Some("Diff loading is unavailable".into());
+            self.error = Some(crate::i18n::text("Diff loading is unavailable", "当前无法加载差异").into());
             return;
         };
         let directory = self.directory.clone();
         let mode = self.mode;
+        let render_failed = crate::i18n::text("Diff rendering failed", "差异渲染失败");
+        let timed_out = crate::i18n::text("Diff loading timed out", "加载差异超时");
         let (sender, receiver) = mpsc::channel();
         self.receiver = Some(receiver);
         self.task = Some(handle.spawn(async move {
@@ -151,9 +155,9 @@ impl GitPreview {
                     content
                 })
                 .await
-                .map_err(|_| "Diff rendering failed".to_string()),
+                .map_err(|_| render_failed.to_string()),
                 Ok(Err(error)) => Err(error.to_string()),
-                Err(_) => Err("Diff loading timed out".into()),
+                Err(_) => Err(timed_out.into()),
             };
             let _ = sender.send(result);
         }));

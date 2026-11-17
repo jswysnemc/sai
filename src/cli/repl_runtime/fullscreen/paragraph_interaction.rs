@@ -6,7 +6,7 @@ use crate::render::transcript::{ParagraphKey, ParagraphPart, ParagraphSpan};
 impl FullscreenState {
     /// 【终端】【段落切换】折叠提示支持展开，展开区域支持收起，执行链锚定当前步骤。
     ///
-    /// 拖选由输入层优先处理，此处只处理已经确认的单击。
+    /// 拖选与取消既有选区的单击均由输入层提前拦截，此处只处理无选区前提下的确认单击。
     ///
     /// 参数:
     /// - `row`: 被点击的文档行

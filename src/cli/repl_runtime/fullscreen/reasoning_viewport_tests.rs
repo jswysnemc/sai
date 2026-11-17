@@ -180,3 +180,21 @@ fn narrow_reasoning_keeps_the_scrollbar_without_a_title_hint() {
         .iter()
         .all(|line| crate::render::ansi_clip::ansi_visible_width(line.as_str()) <= 18));
 }
+
+/// 【终端】【暂停提示回归】实时思考上滚暂停跟随时标题显示轻量暂停提示，恢复或结算后自动消失。
+/// 参数: 无；返回: 无。
+#[test]
+fn live_paused_reasoning_shows_lightweight_status_until_resumed_or_settled() {
+    let mut viewport = ReasoningViewports::default();
+    let raw = source(true);
+    let key = raw.reasonings[0].key;
+    let following = viewport.update(raw.clone(), 80);
+    let badge = crate::i18n::text("paused", "已暂停跟随");
+    assert!(!following.lines[0].as_str().contains(badge));
+    assert!(viewport.scroll(key, -3));
+    let paused = viewport.update(raw.clone(), 80);
+    assert!(paused.lines[0].as_str().contains(badge), "{:?}", paused.lines[0]);
+    viewport.resume_live_follow();
+    let resumed = viewport.update(raw, 80);
+    assert!(!resumed.lines[0].as_str().contains(badge));
+}

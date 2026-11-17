@@ -1,4 +1,4 @@
-//! 各分组的固定标题、可见范围和独立滚动状态。
+//! 各分组的固定标题、可见范围、纵向视觉中线排布与独立滚动状态。
 
 use super::sidebar_action::SidebarSection;
 use super::sidebar_view::SidebarDocument;
@@ -18,6 +18,22 @@ pub(super) struct SidebarRegion {
     pub(super) visible: usize,
 }
 
+/// 侧栏纵向基准行号：统一支配顶栏、上下文指标与可滚动分组的屏幕坐标。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct SidebarChromeRows {
+    pub(super) header_top: usize,
+    pub(super) metrics_top: usize,
+    pub(super) sections_top: usize,
+}
+
+/// 侧栏单帧完整纵向布局结果。
+pub(super) struct SidebarVerticalPlan {
+    pub(super) chrome: SidebarChromeRows,
+    pub(super) regions: Vec<SidebarRegion>,
+    pub(super) surplus: usize,
+    pub(super) ideal_shift: usize,
+}
+
 #[derive(Default)]
 pub(super) struct SidebarScrolls {
     pub(super) sessions: usize,
@@ -28,8 +44,8 @@ pub(super) struct SidebarScrolls {
 }
 
 impl SidebarScrolls {
-    /// 【终端侧栏】【偏移更新】设置指定分组偏移，由调用方按区域可见范围夹紧
-    /// 参数：section 为分组，offset 为有效偏移；返回：无
+    /// 【终端侧栏】【偏移更新】设置指定分组偏移，由调用方按区域可见范围夹紧。
+    /// 参数: section 为分组，offset 为有效偏移；返回: 无。
     pub(super) fn set(&mut self, section: SidebarSection, offset: usize) {
         match section {
             SidebarSection::Sessions => self.sessions = offset,
@@ -93,31 +109,56 @@ impl SidebarScrolls {
     }
 }
 
-/// 【终端侧栏】【极细线判定】高屏预留顶栏与底栏呼吸分割线，矮屏保留所有行给列表正文。
-/// 参数: height 为侧栏高度；返回: 是否绘制分割线。
-pub(super) fn has_hairlines(height: usize) -> bool {
+/// 【终端侧栏】【呼吸留白判定】高屏在指标区下方与底栏上方各预留一行透明呼吸空白，矮屏让渡给列表正文。
+/// 参数: height 为侧栏高度；返回: 是否预留顶底呼吸空行。
+pub(super) fn has_breathing_gaps(height: usize) -> bool {
     height >= 22
 }
 
-/// 【终端侧栏】【区域分配】默认走双阶段弹性分配消除底部留白；供测试调用。
+/// 【终端侧栏】【区域分配】默认按黄金比例将盈余高度收拢至侧栏纵向视觉中线；供测试调用。
 /// 参数: document 为分组文档，height 为侧栏高度；返回: 分组布局。
 #[cfg(test)]
 pub(super) fn regions(document: &SidebarDocument, height: usize) -> Vec<SidebarRegion> {
-    regions_with_focus(document, height, None)
+    plan_vertical(document, height, None, None).regions
 }
 
-/// 【终端侧栏】【聚焦分配】支持手风琴单区聚焦（独占可用行）或均衡模式余量重分配。
+/// 【终端侧栏】【聚焦分配】计算带手风琴焦点的默认居中分组布局。
 /// 参数: document 为分组文档，height 为侧栏高度，focused_section 为可选手风琴焦点；返回: 分组布局。
+#[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn regions_with_focus(
     document: &SidebarDocument,
     height: usize,
     focused_section: Option<SidebarSection>,
 ) -> Vec<SidebarRegion> {
-    let hairlines = usize::from(has_hairlines(height));
-    let header =
-        super::pane_header::height(height) + super::sidebar_metrics::height(height) + hairlines;
-    let footer = 1 + hairlines;
-    let available = height.saturating_sub(header + footer + document.panels.len());
+    plan_vertical(document, height, focused_section, None).regions
+}
+
+/// 【终端侧栏】【完整纵向规划】计算顶栏、指标与分组位置，将盈余留白按约 40%/60% 垫入上缘使内容向侧栏纵向视觉中线靠拢。
+/// 参数: document 为分组文档，height 为总高度，focused_section 为手风琴焦点，locked_shift 为指针驻留期间锁定的偏移；返回: 纵向规划。
+pub(super) fn plan_vertical(
+    document: &SidebarDocument,
+    height: usize,
+    focused_section: Option<SidebarSection>,
+    locked_shift: Option<usize>,
+) -> SidebarVerticalPlan {
+    let header_len = super::sidebar_header_path::content_height(height);
+    let top_sink = usize::from(header_len > 0);
+    let metrics_len = super::sidebar_metrics::height(height);
+    let header_metrics_gap = usize::from(height >= 34 && header_len > 0 && metrics_len > 0);
+    let gaps = usize::from(has_breathing_gaps(height));
+    let base_header = top_sink + header_len + header_metrics_gap + metrics_len + gaps;
+    let footer = 1 + gaps;
+    let body_end = height.saturating_sub(footer);
+    let panel_count = document.panels.len();
+    let raw_available = body_end.saturating_sub(base_header + panel_count);
+
+    // 1. 【终端侧栏】【纯留白分组隔离】高屏均衡模式下在相邻分组之间预留一行透明空白，替代生硬分割线
+    let separators = if focused_section.is_none() && height >= 24 && panel_count > 1 {
+        (panel_count - 1).min(raw_available / 2)
+    } else {
+        0
+    };
+    let available = raw_available.saturating_sub(separators);
     let len = |section| {
         document
             .panels
@@ -126,7 +167,7 @@ pub(super) fn regions_with_focus(
             .map_or(0, |panel| panel.content.len())
     };
 
-    // 1. 【终端侧栏】【手风琴模式】单区聚焦时，将其余非焦点区域收敛至 0 行，释放全屏高度
+    // 2. 【终端侧栏】【手风琴模式】单区聚焦时将其余非焦点区域收敛至 0 行，释放全屏高度
     let (mut agents, mut todo, mut git, mut sessions, background) = if let Some(target) =
         focused_section
     {
@@ -141,7 +182,7 @@ pub(super) fn regions_with_focus(
                 * len(SidebarSection::Background).min(available),
         )
     } else {
-        // 2. 【终端侧栏】【阶段一：保底分配】后台入口与短分组优先保底，长文件与待办均衡共享
+        // 3. 【终端侧栏】【保底分配】后台入口与短分组优先保底，长文件与待办均衡共享
         let background = len(SidebarSection::Background)
             .min(4)
             .min((available / 3).max(1))
@@ -161,7 +202,7 @@ pub(super) fn regions_with_focus(
         (agents, todo, git, sessions, background)
     };
 
-    // 3. 【终端侧栏】【阶段二：余量回收】将空分组留出的多余行依次让渡给未展示完的活跃分组，避免底部留白
+    // 4. 【终端侧栏】【余量回收】剩余空间优先归还会话、变更与待办列表
     if focused_section.is_none() {
         let used = agents + todo + git + sessions + background;
         let mut leftover = available.saturating_sub(used);
@@ -179,18 +220,53 @@ pub(super) fn regions_with_focus(
         }
     }
 
-    let mut top = header;
-    document
+    // 5. 【终端侧栏】【纵向视觉中线】将纵向盈余按约 2:3 光学比例分配到顶栏与分组上缘，使会话与列表围绕侧栏纵向中线排布
+    let visible_for = |section| match section {
+        SidebarSection::Sessions => sessions,
+        SidebarSection::Agents => agents,
+        SidebarSection::Git => git,
+        SidebarSection::Todo => todo,
+        SidebarSection::Background => background,
+    };
+    let total_visible: usize = document
         .panels
         .iter()
-        .map(|panel| {
-            let visible = match panel.section {
-                SidebarSection::Sessions => sessions,
-                SidebarSection::Agents => agents,
-                SidebarSection::Git => git,
-                SidebarSection::Todo => todo,
-                SidebarSection::Background => background,
-            };
+        .map(|panel| visible_for(panel.section))
+        .sum();
+    let occupied = panel_count + separators + total_visible;
+    let surplus = body_end.saturating_sub(base_header).saturating_sub(occupied);
+    let ideal_shift = if focused_section.is_none() && height >= 26 {
+        ((surplus * 2) / 5).min(14)
+    } else {
+        0
+    };
+    let applied_shift = if focused_section.is_some() {
+        0
+    } else {
+        locked_shift.unwrap_or(ideal_shift).min(surplus)
+    };
+    let extra_top_sink = if header_len > 0 {
+        (applied_shift / 3).min(3)
+    } else {
+        0
+    };
+    let extra_section_sink = applied_shift - extra_top_sink;
+    let header_top = top_sink + extra_top_sink;
+    let metrics_top = header_top + header_len + header_metrics_gap;
+    let sections_top = metrics_top + metrics_len + gaps + extra_section_sink;
+
+    let mut remaining_seps = separators;
+    let mut top = sections_top;
+    let regions = document
+        .panels
+        .iter()
+        .enumerate()
+        .map(|(idx, panel)| {
+            let visible = visible_for(panel.section);
+            if idx > 0 && remaining_seps > 0 {
+                top += 1;
+                remaining_seps -= 1;
+            }
             let region = SidebarRegion {
                 section: panel.section,
                 top,
@@ -201,7 +277,18 @@ pub(super) fn regions_with_focus(
             top += 1 + visible;
             region
         })
-        .collect()
+        .collect();
+
+    SidebarVerticalPlan {
+        chrome: SidebarChromeRows {
+            header_top,
+            metrics_top,
+            sections_top,
+        },
+        regions,
+        surplus,
+        ideal_shift,
+    }
 }
 
 impl SidebarRegion {

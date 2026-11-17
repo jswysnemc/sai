@@ -510,22 +510,13 @@ impl ReplRuntime {
         Ok(())
     }
 
-    /// 关闭副屏后把主缓冲补到最新。副屏期间没有往主屏画过，历史增长时整屏重放。
-    ///
-    /// 返回: 是否成功
+    /// 【终端】【副屏恢复】关闭副屏后把主缓冲补到最新，历史增长或尺寸变化时整屏重放。
+    /// 参数: 无；返回: 终端同步结果。
     pub(in crate::cli) fn resume_after_pager(&mut self) -> Result<()> {
         let dirty = self.overlay_dirty;
         self.overlay_open = false;
         self.overlay_dirty = false;
         self.desynced = false;
-        // #region agent log
-        crate::cli::repl_pager::debug_agent_log(
-            "C",
-            "repl_runtime/mod.rs:resume_after_pager",
-            "leave pager without cancelling the turn",
-            &format!("{{\"dirty\":{dirty},\"cancel\":false}}"),
-        );
-        // #endregion
         if !crossterm::terminal::is_raw_mode_enabled().unwrap_or(false) {
             crossterm::terminal::enable_raw_mode()?;
         }
@@ -570,19 +561,8 @@ impl ReplRuntime {
             return self.paint_fullscreen();
         }
         if self.overlay_open {
-            let first = !self.overlay_dirty;
             self.overlay_dirty = true;
             self.live_sync_pending = true;
-            if first {
-                // #region agent log
-                crate::cli::repl_pager::debug_agent_log(
-                    "B",
-                    "repl_runtime/mod.rs:sync_transcript",
-                    "skip main paint while pager is open",
-                    "{\"painted\":false}",
-                );
-                // #endregion
-            }
             return Ok(());
         }
         if self.desynced {
@@ -668,6 +648,9 @@ impl ReplRuntime {
 
     /// 清屏范围内从 source 重新铺设当前宽度的可视历史。
     fn replay(&mut self, streaming: bool) -> Result<()> {
+        if self.session_workspace.rendering_suspended {
+            return Ok(());
+        }
         // 全屏视图：丢弃差异基线后整屏重画，主屏记账留到退出时重锚
         if self.fullscreen.is_some() {
             self.reflow.clear_pending();

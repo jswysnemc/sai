@@ -75,7 +75,9 @@ fn chat_files_and_diff_scroll_independently_without_hiding_chat() {
                 .collect::<Vec<_>>()
                 .join("\n");
             assert!(left.contains("turn-2-answer"), "{left}");
-            assert!(!left.contains("Review") && !left.contains("CODE-"));
+            assert!(
+                !left.contains(super::sidebar_i18n::review_heading()) && !left.contains("CODE-")
+            );
             assert!(screen[0].contains("\x1b[48;5;235m"));
             let panel = super::git_preview_view::panel_rows(
                 &session.sidebar.preview,

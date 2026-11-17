@@ -123,14 +123,45 @@ fn surplus_height_expands_sessions_and_accordion_focus_isolates_section() {
         ..Default::default()
     };
 
-    let balanced = regions(&doc, 40);
+    let balanced = regions(&doc, 44);
     let sessions = balanced
         .iter()
         .find(|region| region.section == SidebarSection::Sessions)
         .unwrap();
+    let background = balanced
+        .iter()
+        .find(|region| region.section == SidebarSection::Background)
+        .unwrap();
     assert_eq!(sessions.visible, 24);
+    assert_eq!(background.top, sessions.top + 1 + sessions.visible + 1);
 
-    let focused = regions_with_focus(&doc, 40, Some(SidebarSection::Sessions));
+    let tall_plan = super::sidebar_regions::plan_vertical(&doc, 62, None, None);
+    let tall_sessions = tall_plan
+        .regions
+        .iter()
+        .find(|region| region.section == SidebarSection::Sessions)
+        .unwrap();
+    let tall_bg = tall_plan
+        .regions
+        .iter()
+        .find(|region| region.section == SidebarSection::Background)
+        .unwrap();
+    assert!(
+        tall_plan.ideal_shift >= 5 && tall_plan.chrome.header_top >= 2,
+        "高屏盈余高度应下移顶栏与分组使会话向侧栏纵向视觉中线收拢"
+    );
+    let sessions_mid = tall_sessions.top + (1 + tall_sessions.visible) / 2;
+    assert!(
+        (24..=38).contains(&sessions_mid),
+        "62 行侧栏中会话区块中点应贴近侧栏纵向中线: mid={sessions_mid}"
+    );
+    assert_eq!(
+        tall_bg.top,
+        tall_sessions.top + 1 + tall_sessions.visible + 1,
+        "后台任务应自然紧随会话列表而非孤立流放到底部"
+    );
+
+    let focused = regions_with_focus(&doc, 44, Some(SidebarSection::Sessions));
     assert!(focused
         .iter()
         .filter(|r| r.section != SidebarSection::Sessions)

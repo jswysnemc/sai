@@ -19,20 +19,14 @@ pub(super) fn badge(label: &str, color: Rgb) -> String {
     format!("{}{label}\x1b[39m", fg(color))
 }
 
-/// 【终端侧栏】【极细分隔线】绘制与终端背景低对比融合的单行分割线，隔开 HUD 与底栏
-/// 参数: width 为净宽；返回: 整行细线 ANSI 文本
-pub(super) fn hairline(width: usize) -> String {
-    let palette = SidebarPalette::current();
-    format!("{}{}\x1b[0m", fg(palette.border), "─".repeat(width))
-}
-
 /// 【终端侧栏】【固定标题】标题和计数占一行，不随区域正文滚动。
 /// 参数: title 为标题，count 为计数，collapsed 为折叠状态，width 为宽度；返回: 标题行。
+#[cfg(test)]
 pub(super) fn heading(title: &str, count: &str, collapsed: bool, width: usize) -> String {
     heading_with_tone(title, count, collapsed, false, width)
 }
 
-/// 【终端侧栏】【分级标题】支持空载分组降噪弱化，保留右侧统计与固定宽度。
+/// 【终端侧栏】【分级标题】通过强调色折叠箭头、加粗标题与静默空态拉开视觉层级，无需横线分割。
 /// 参数: title 为标题，count 为计数，collapsed 为折叠状态，quiet 为空态降噪标志，width 为宽度；返回: 标题行。
 pub(super) fn heading_with_tone(
     title: &str,
@@ -41,12 +35,17 @@ pub(super) fn heading_with_tone(
     quiet: bool,
     width: usize,
 ) -> String {
-    let marker = if collapsed { "▸" } else { "▾" };
     let palette = SidebarPalette::current();
+    // 1. 【终端侧栏】【无横线层级】活跃分组以主题色三角与粗体标题锚定组首，空载分组降为静默圆点
     let left = if quiet {
-        format!("{}{marker} {title}\x1b[39m", fg(palette.muted))
+        format!("{}· {}{title}\x1b[39m", fg(palette.subtle), fg(palette.muted))
     } else {
-        format!("{}\x1b[1m{marker} {title}\x1b[22m", fg(palette.text))
+        let marker = if collapsed { "▸" } else { "▾" };
+        format!(
+            "{}{marker} {}\x1b[1m{title}\x1b[22m\x1b[39m",
+            fg(palette.accent),
+            fg(palette.text)
+        )
     };
     let count = format!(
         "{}{count}\x1b[39m",

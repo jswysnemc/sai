@@ -180,4 +180,29 @@ impl ReplRuntime {
     ) {
         self.session_workspace.current = Some(state.session_id().into());
     }
+
+    /// 【会话切换】【底栏预热】提前注入目标会话状态栏快照，避免首帧渲染空指标后再触发二次重绘。
+    /// 参数: `chrome` 为目标会话状态栏数据；返回: 无。
+    pub(in crate::cli) fn prime_session_chrome(&mut self, chrome: ReplChrome) {
+        self.last_chrome = Some(chrome);
+    }
+
+    /// 【会话切换】【全屏单帧批处理】全屏模式下挂起中间绘制步骤，全部数据就绪后执行一次原子差量重绘。
+    /// 参数: `work` 为会话装载闭包；返回: 闭包执行结果。
+    pub(in crate::cli) fn with_fullscreen_batch<T>(
+        &mut self,
+        work: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        if self.fullscreen.is_none() || self.session_workspace.rendering_suspended {
+            return work(self);
+        }
+        // 1. 【会话切换】【挂起中间帧】阻止清屏、元信息写入与历史装载各自向终端提交半成品帧
+        self.session_workspace.rendering_suspended = true;
+        let outcome = work(self);
+        self.session_workspace.rendering_suspended = false;
+        let value = outcome?;
+        // 2. 【会话切换】【原子提交】全部状态与历史就绪后一次性完成全屏差量合成
+        self.paint_fullscreen()?;
+        Ok(value)
+    }
 }

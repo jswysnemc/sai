@@ -51,19 +51,22 @@ impl ReplRuntime {
         self.session_browser.tick(visible)
     }
 
-    /// 【会话切换】【阅读停放】无参数；返回逻辑阅读状态，不移动鼠标捕获和备用屏所有权
+    /// 【会话切换】【阅读停放】无参数；返回逻辑阅读状态，物理屏幕已绘制行留在全屏宿主供下一会话差量覆盖
     pub(in crate::cli::repl_runtime) fn take_session_view(&mut self) -> Option<SessionViewState> {
         let session = self.fullscreen.as_mut()?;
         session.sidebar.preview.close();
         session.image_viewer.close();
-        let state = std::mem::replace(&mut session.state, FullscreenState::new());
+        let screen_previous = session.state.previous.take();
+        let mut next_state = FullscreenState::new();
+        next_state.previous = screen_previous;
+        let state = std::mem::replace(&mut session.state, next_state);
         Some(SessionViewState {
             state,
             viewing_subagent: session.viewing_subagent.take(),
         })
     }
 
-    /// 【会话切换】【阅读恢复】参数 view 为目标会话阅读状态；返回无，清除旧会话所有命中和图像缓存
+    /// 【会话切换】【阅读恢复】参数 view 为目标会话阅读状态；保留当前物理屏幕基线实现无闪烁逐行差量替换
     pub(in crate::cli::repl_runtime) fn restore_session_view(
         &mut self,
         view: Option<SessionViewState>,
@@ -71,12 +74,15 @@ impl ReplRuntime {
         let Some(session) = self.fullscreen.as_mut() else {
             return;
         };
+        let had_images = !session.images.is_empty();
+        let screen_previous = session.state.previous.take();
         let view = view.unwrap_or(SessionViewState {
             state: FullscreenState::new(),
             viewing_subagent: None,
         });
         session.state = view.state;
-        session.state.previous = None;
+        // 1. 【会话切换】【基线继承】旧画面不含协议图片时保留物理屏幕行基线，仅重绘实际变化行
+        session.state.previous = if had_images { None } else { screen_previous };
         session.viewing_subagent = view.viewing_subagent;
         session.pending_toggle = None;
         session.pending_copy = None;

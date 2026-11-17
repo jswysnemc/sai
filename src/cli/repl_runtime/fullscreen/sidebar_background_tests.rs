@@ -85,8 +85,8 @@ fn background_manager_is_visible_in_sidebar_without_tasks() {
                 .unwrap();
             runtime.enter_fullscreen().unwrap();
             let text = sidebar_text(&runtime);
-            assert!(text.contains("Background tasks"), "{text}");
-            assert!(text.contains("Manage tasks"), "{text}");
+            assert!(text.contains(super::sidebar_i18n::background_heading()), "{text}");
+            assert!(text.contains(super::sidebar_i18n::manage_tasks()), "{text}");
         },
     );
 }
@@ -111,7 +111,7 @@ fn background_sidebar_opens_manager_without_submitting_or_losing_draft() {
             click(&mut runtime, SidebarAction::Background(None));
             assert!(runtime.background_panel_active());
             let text = strip_ansi(&screen_rows(&runtime).join("\n"));
-            assert!(text.contains("Background tasks"), "{text}");
+            assert!(text.contains(super::sidebar_i18n::background_heading()), "{text}");
             assert!(text.contains("Esc"), "{text}");
             assert_eq!(
                 runtime
@@ -159,14 +159,14 @@ fn background_manager_stays_visible_at_small_sizes_and_when_collapsed() {
                 .collect();
             runtime.paint_fullscreen().unwrap();
             assert!(
-                sidebar_text(&runtime).contains("Manage tasks"),
+                sidebar_text(&runtime).contains(super::sidebar_i18n::manage_tasks()),
                 "{cols}x{rows}"
             );
             click(
                 &mut runtime,
                 SidebarAction::Toggle(SidebarSection::Background),
             );
-            assert!(sidebar_text(&runtime).contains("Manage tasks"));
+            assert!(sidebar_text(&runtime).contains(super::sidebar_i18n::manage_tasks()));
             click(&mut runtime, SidebarAction::Background(None));
             assert!(runtime.background_panel_active());
             for line in screen_rows(&runtime) {
@@ -271,7 +271,10 @@ async fn background_sidebar_refreshes_persisted_tasks_and_opens_selected_logs() 
     assert_eq!(runtime.background_panel.tasks().len(), 1);
     let text = sidebar_text(&runtime);
     assert!(
-        text.contains("PERSISTED-COMMAND") && text.contains("running"),
+        text.contains("PERSISTED-COMMAND")
+            && text.contains(crate::render::tui_presentation::with_locale(|| {
+                crate::i18n::text("running", "运行中")
+            })),
         "{text}"
     );
     TerminalSize::with_size(
@@ -287,7 +290,9 @@ async fn background_sidebar_refreshes_persisted_tasks_and_opens_selected_logs() 
     task.completion_notified = false;
     store.upsert(task).unwrap();
     wait_status(&mut runtime, "exited").await;
-    assert!(sidebar_text(&runtime).contains("exited"));
+    assert!(sidebar_text(&runtime).contains(
+        crate::render::tui_presentation::with_locale(|| crate::i18n::text("exited", "已退出"))
+    ));
     TerminalSize::with_size(
         TerminalSize {
             cols: 160,
@@ -410,7 +415,8 @@ fn background_manager_survives_stream_refresh_and_terminal_resize() {
                 assert!(lines
                     .iter()
                     .all(|line| crate::render::ansi_clip::ansi_visible_width(line) == 60));
-                assert!(strip_ansi(&lines.join("\n")).contains("Background tasks"));
+                assert!(strip_ansi(&lines.join("\n"))
+                    .contains(super::sidebar_i18n::background_heading()));
                 assert!(!lines
                     .iter()
                     .any(|line| line.contains("STREAM-WHILE-MANAGING")));
@@ -495,11 +501,53 @@ fn background_manager_overlays_body_and_keeps_header_and_sidebar() {
                     .collect::<Vec<_>>()
                     .join("\n")
             };
-            assert!(sidebar(&after).contains("Manage tasks"));
+            assert!(sidebar(&after).contains(super::sidebar_i18n::manage_tasks()));
             assert_eq!(sidebar(&before), sidebar(&after));
             key(&mut runtime, KeyCode::Esc);
             runtime.paint_fullscreen().unwrap();
             assert_eq!(screen_rows(&runtime), before);
+        },
+    );
+}
+
+/// 【后台任务测试】【外部点击收起】全屏打开后台管理浮层后，点击右侧侧栏或底部输入区均优雅关闭浮层。
+/// 参数: 无；返回: 无。
+#[test]
+fn clicking_sidebar_or_composer_outside_embedded_panel_dismisses_overlay() {
+    TerminalSize::with_size(
+        TerminalSize {
+            cols: 160,
+            rows: 30,
+        },
+        || {
+            let mut runtime = runtime(2);
+            runtime
+                .update_composer(&chrome(), "kept draft", 4, false, Vec::new(), 0)
+                .unwrap();
+            runtime.enter_fullscreen().unwrap();
+            click(&mut runtime, SidebarAction::Background(None));
+            assert!(runtime.background_panel_active());
+            let layout = runtime.fullscreen.as_ref().unwrap().state.layout.unwrap();
+            // 1. 【后台任务测试】【点击右侧侧栏】浮层立即收起
+            runtime
+                .handle_fullscreen_event(&mouse(
+                    MouseEventKind::Down(MouseButton::Left),
+                    layout.cols - 3,
+                    5,
+                ))
+                .unwrap();
+            assert!(!runtime.background_panel_active());
+            // 2. 【后台任务测试】【点击底部外部输入区】浮层同样优雅关闭
+            click(&mut runtime, SidebarAction::Background(None));
+            assert!(runtime.background_panel_active());
+            runtime
+                .handle_fullscreen_event(&mouse(
+                    MouseEventKind::Down(MouseButton::Left),
+                    10,
+                    layout.composer_top + 1,
+                ))
+                .unwrap();
+            assert!(!runtime.background_panel_active());
         },
     );
 }

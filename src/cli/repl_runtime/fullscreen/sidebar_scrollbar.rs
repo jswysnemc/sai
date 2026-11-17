@@ -5,7 +5,6 @@ use super::layout::FullscreenLayout;
 use super::sidebar::Sidebar;
 use super::sidebar_action::SidebarSection;
 use super::sidebar_palette::{fg, SidebarPalette};
-use super::sidebar_regions::regions_with_focus;
 use std::ops::Range;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -102,20 +101,18 @@ pub(super) fn scrollbars(sidebar: &Sidebar, layout: &FullscreenLayout) -> Vec<Sc
             },
         ]
     } else {
-        regions_with_focus(
-            &sidebar.document,
-            usize::from(layout.rows),
-            sidebar.sections.focused_section,
-        )
-        .into_iter()
-        .map(|region| Scrollbar {
-            target: ScrollTarget::Section(region.section),
-            top: region.top + 1,
-            visible: region.visible,
-            total: region.content.len(),
-            offset: sidebar.scrolls.get(region.section),
-        })
-        .collect()
+        sidebar
+            .vertical_plan(usize::from(layout.rows))
+            .regions
+            .into_iter()
+            .map(|region| Scrollbar {
+                target: ScrollTarget::Section(region.section),
+                top: region.top + 1,
+                visible: region.visible,
+                total: region.content.len(),
+                offset: sidebar.scrolls.get(region.section),
+            })
+            .collect()
     };
     bars.into_iter()
         .filter(|bar| bar.visible > 0 && bar.total > bar.visible)

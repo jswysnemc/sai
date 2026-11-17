@@ -179,14 +179,9 @@ impl StreamState {
         self.offscreen = self.offscreen.min(next.total);
     }
 
-    /// 按全局行号读取快照内的行。
-    ///
-    /// 参数:
-    /// - `row`: 全局行号
-    ///
-    /// 返回:
-    /// - 窗口覆盖该行时返回内容
-    fn line_at(&self, row: usize) -> Option<&AnsiLine> {
+    /// 【终端】【行查询】按全局行号读取当前受管快照内的 ANSI 行。
+    /// 参数: `row` 为全局行号；返回: 窗口覆盖该行时返回对应行引用。
+    pub(super) fn line_at(&self, row: usize) -> Option<&AnsiLine> {
         row.checked_sub(self.start)
             .and_then(|offset| self.window.get(offset))
     }

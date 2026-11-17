@@ -21,7 +21,7 @@ pub(super) fn rows(
     let quiet = agents.is_empty() && viewing.is_none();
     let mut rows = vec![row(
         heading_with_tone(
-            "Subagents",
+            super::sidebar_i18n::subagents_heading(),
             &agents.len().to_string(),
             collapsed || quiet,
             quiet,
@@ -35,7 +35,7 @@ pub(super) fn rows(
     }
     // 2. 【终端侧栏】【当前会话】主会话固定在首位，使用 2 列缩进与语义圆点对齐子任务行
     let current = if viewing.is_none() {
-        badge("active", palette.accent)
+        badge(super::sidebar_i18n::agent_active_badge(), palette.accent)
     } else {
         String::new()
     };
@@ -46,7 +46,11 @@ pub(super) fn rows(
     };
     let mut main = row(
         item(
-            &columns(&format!("{main_dot}Main conversation"), &current, width),
+            &columns(
+                &format!("{main_dot}{}", super::sidebar_i18n::main_conversation()),
+                &current,
+                width,
+            ),
             width,
             false,
         ),
@@ -57,10 +61,22 @@ pub(super) fn rows(
     if !collapsed {
         for entry in agents {
             let (label, glyph, color) = match entry.status {
-                "err" => ("err", "×", palette.removed),
-                "idle" => ("idle", "○", palette.muted),
+                "err" => (
+                    super::sidebar_i18n::subagent_status_label("err"),
+                    "×",
+                    palette.removed,
+                ),
+                "idle" => (
+                    super::sidebar_i18n::subagent_status_label("idle"),
+                    "○",
+                    palette.muted,
+                ),
                 _ if entry.running => ("", "", palette.accent),
-                _ => ("done", "✓", palette.added),
+                _ => (
+                    super::sidebar_i18n::subagent_status_label("done"),
+                    "✓",
+                    palette.added,
+                ),
             };
             let status_text = entry
                 .progress

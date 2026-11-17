@@ -373,3 +373,83 @@ fn activity_jump_latest_keeps_older_steps_expanded() {
         .any(|line| plain(line.as_str()).contains("Hide ")));
     tui_mode::set_override(None);
 }
+
+/// 【终端】【回到底部可视区保留】点击回到底部按钮时收起上方离屏工具详情，仅保留底部可视区域内已展开的工具详情。
+#[test]
+fn clicking_bottom_closes_offscreen_details_while_keeping_bottom_visible_expanded() {
+    tui_mode::set_override(Some(TuiMode::Fullscreen));
+    let mut runtime = ReplRuntime::new(400, full_options());
+
+    // 1. 构造上方早期轮次工具与间隔正文，再构造位于底屏可视区内的近期轮次工具
+    push_bash(&mut runtime, "echo early", "EARLY-OFFSCREEN-DETAIL");
+    runtime.transcript.push_chunk(&crate::llm::ChatStreamChunk {
+        kind: crate::llm::ChatStreamKind::Content,
+        text: (0..32)
+            .map(|idx| format!("filler paragraph line {idx}"))
+            .collect::<Vec<_>>()
+            .join("\n"),
+    });
+    runtime.transcript.finalize_live_tail();
+    push_bash(&mut runtime, "echo bottom-kept", "BOTTOM-VISIBLE-DETAIL");
+    push_bash(&mut runtime, "echo bottom-tail", "TAIL-DETAIL");
+    runtime.enter_fullscreen().unwrap();
+
+    // 2. 将上方离屏工具与底屏工具均写入手动全文展开键，随后上滚离开底部使“回到底部”胶囊出现
+    {
+        let session = runtime.fullscreen.as_mut().unwrap();
+        let layout = session.state.layout.unwrap();
+        session
+            .state
+            .expanded
+            .insert(crate::render::transcript::ParagraphKey::whole(0));
+        session
+            .state
+            .expanded
+            .insert(crate::render::transcript::ParagraphKey::whole(2));
+        session.state.scroll_to(0, usize::from(layout.body_height));
+    }
+    runtime.paint_fullscreen().unwrap();
+    assert!(runtime
+        .fullscreen
+        .as_ref()
+        .unwrap()
+        .state
+        .document
+        .lines
+        .iter()
+        .any(|line| plain(line.as_str()).contains("EARLY-OFFSCREEN-DETAIL")));
+
+    // 3. 点击“回到底部”按钮：离屏的早期工具详情被收起，底屏可视区内的展开工具详情得以保留
+    let (layout, button) = {
+        let session = runtime.fullscreen.as_ref().unwrap();
+        (
+            session.state.layout.unwrap(),
+            session.bottom_button.expect("离开底部后应显示回到底部胶囊"),
+        )
+    };
+    click(
+        &mut runtime,
+        (button.0 + button.1) / 2,
+        layout.body_top + layout.body_height - 1,
+    );
+
+    let session = runtime.fullscreen.as_ref().unwrap();
+    assert!(session.state.follow);
+    let rendered = session
+        .state
+        .document
+        .lines
+        .iter()
+        .map(|line| plain(line.as_str()))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        !rendered.contains("EARLY-OFFSCREEN-DETAIL"),
+        "不在最下方可视区域内的工具详情必须收起:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("BOTTOM-VISIBLE-DETAIL"),
+        "最下方可视区域内的工具详情必须保留:\n{rendered}"
+    );
+    tui_mode::set_override(None);
+}

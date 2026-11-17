@@ -245,6 +245,56 @@ fn block_interaction_dragging_expanded_output_keeps_it_open() {
     assert!(state.copied.is_some());
 }
 
+/// 【终端】【取消选区防误折回归】拖选文字后首次单击仅清除选区不折叠正文，再次单击才收起。
+/// 参数: 无；返回: 无。
+#[test]
+fn block_interaction_clicking_to_clear_selection_does_not_collapse_paragraph() {
+    let mut runtime = command_runtime();
+    let state = &runtime.fullscreen.as_ref().unwrap().state;
+    let row = state
+        .document
+        .lines
+        .iter()
+        .position(|line| line.as_str().contains("output-0"))
+        .unwrap();
+    let screen_row = state.layout.unwrap().body_top + (row - state.scroll) as u16;
+    for (kind, col, event_row) in [
+        (MouseEventKind::Down(MouseButton::Left), 6, screen_row),
+        (MouseEventKind::Drag(MouseButton::Left), 12, screen_row),
+        (MouseEventKind::Up(MouseButton::Left), 12, screen_row),
+    ] {
+        runtime
+            .handle_fullscreen_event(&mouse(kind, col, event_row))
+            .unwrap();
+    }
+    assert!(
+        runtime
+            .fullscreen
+            .as_ref()
+            .unwrap()
+            .state
+            .selection
+            .is_some()
+    );
+    // 1. 【终端】【首次单击】清除既有拖选高亮，展开正文必须保持打开
+    click(&mut runtime, screen_row);
+    let state = &runtime.fullscreen.as_ref().unwrap().state;
+    assert!(state.selection.is_none());
+    assert!(state.document.paragraphs[0].expanded);
+    // 2. 【终端】【二次单击】无选区状态下再次单击正常收起输出正文
+    click(&mut runtime, screen_row);
+    assert!(
+        !runtime
+            .fullscreen
+            .as_ref()
+            .unwrap()
+            .state
+            .document
+            .paragraphs[0]
+            .expanded
+    );
+}
+
 /// 【终端】【输出引导线回归】命令、读取和普通工具的可滚动输出都展示双色左侧滚动条。
 /// 参数: 无；返回: 无。
 #[test]

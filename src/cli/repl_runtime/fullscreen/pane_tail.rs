@@ -33,7 +33,14 @@ impl ReplRuntime {
             return Ok(false);
         };
         let geometry = PreviewLayout::compute(&layout, session.sidebar.git.summary.files.len());
-        let width = geometry.width.saturating_sub(3);
+        let (left_margin, width, right_margin) = if layout.review {
+            (1, geometry.width.saturating_sub(3), 1)
+        } else {
+            let side_w = geometry.width.min(u16::MAX as usize) as u16;
+            super::sidebar_view::horizontal_frame(side_w)
+        };
+        let left_pad = " ".repeat(left_margin);
+        let right_pad = " ".repeat(right_margin);
         let palette = SidebarPalette::current();
         let panel = if layout.review {
             panel_rows(
@@ -51,7 +58,7 @@ impl ReplRuntime {
                 let text = clip(&line, width);
                 let padding = width.saturating_sub(crate::cli::repl_text::visible_width(&text));
                 format!(
-                    "\x1b[0m{}│\x1b[0m {text}{} ",
+                    "\x1b[0m{}│\x1b[0m{left_pad}{text}\x1b[0m{}{right_pad}\x1b[0m",
                     fg(palette.border),
                     " ".repeat(padding)
                 )

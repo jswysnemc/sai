@@ -84,6 +84,12 @@ impl SlashPanel {
         (show_header, start, item_budget)
     }
 
+    /// 【终端】【顶栏状态】返回当前窗口是否包含自带操作说明的顶栏。
+    /// 参数: 无；返回: 显示顶栏时为 true，单条匹配或极矮窗口隐藏顶栏时为 false。
+    pub(super) fn has_header(&self) -> bool {
+        self.visible_window().0
+    }
+
     /// 返回面板占用的终端行数。
     ///
     /// 返回:
@@ -185,7 +191,7 @@ mod tests {
         );
     }
 
-    /// 选中行不得铺实心背景，并使用 `→` 指示当前项。
+    /// 选中行不得铺实心背景，使用对齐第 3 列基线的 `→` 与主题自适应正文色加粗。
     #[test]
     fn selected_suggestion_uses_arrow_without_background_fill() {
         let suggestion = ReplCommandSuggestion {
@@ -195,18 +201,28 @@ mod tests {
         };
         let selected = render::format_suggestion(suggestion, 18, 72, true);
         let plain = crate::render::activity_animation::strip_ansi_for_test(&selected);
-        assert!(plain.starts_with('→'), "selected should use arrow: {plain}");
+        assert!(
+            plain.starts_with(" → /model"),
+            "selected should use aligned arrow: {plain}"
+        );
         assert!(
             !selected.contains("48;5;") && !selected.contains("48;2;") && !selected.contains("[K"),
             "selected must not paint a solid background bar: {selected:?}"
         );
         assert!(
-            selected.contains("\x1b[97m"),
-            "selected command should be bright white"
+            !selected.contains("\x1b[97m"),
+            "selected command must not hardcode bright white on light terminals"
+        );
+        assert!(
+            selected.contains("\x1b[1m")
+                && selected.contains(&crate::render::panel_palette::fg(
+                    crate::render::panel_palette::PanelPalette::current().text
+                )),
+            "selected command should use bold adaptive palette text"
         );
     }
 
-    /// 未选中行保持弱化样式，前缀为空位以对齐选中箭头。
+    /// 未选中行保持弱化样式，前缀留出 3 列空位对齐输入框与选中箭头。
     #[test]
     fn unselected_suggestion_is_dim_and_aligned() {
         let suggestion = ReplCommandSuggestion {
@@ -216,10 +232,7 @@ mod tests {
         };
         let line = render::format_suggestion(suggestion, 18, 72, false);
         let plain = crate::render::activity_animation::strip_ansi_for_test(&line);
-        assert!(
-            plain.starts_with("  /help") || plain.starts_with(' '),
-            "{plain}"
-        );
+        assert!(plain.starts_with("   /help"), "{plain}");
         assert!(!line.contains("48;5;") && !line.contains("48;2;"));
         assert!(line.contains("\x1b[2m"));
     }
@@ -235,7 +248,7 @@ mod tests {
             lines
                 .iter()
                 .map(|line| crate::render::activity_animation::strip_ansi_for_test(line))
-                .any(|plain| plain.starts_with('→')),
+                .any(|plain| plain.starts_with(" → ")),
             "滚动窗口内必须始终包含选中指示"
         );
     }

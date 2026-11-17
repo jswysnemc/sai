@@ -339,7 +339,8 @@ impl ComposerFrame {
         }
         lines.extend((0..CHROME_INPUT_INNER_PAD_ROWS).map(|_| self.input_padding(cols, false)));
         let mut meta = vec![None; lines.len()];
-        let panel_open = if layout.mention_panel.is_visible() {
+        let mut hints = self.key_hints;
+        let suppress_hint_row = if layout.mention_panel.is_visible() {
             let (panel_lines, panel_meta) = layout.mention_panel.rendered_rows_with_meta(cols);
             lines.extend(panel_lines);
             meta.extend(
@@ -347,7 +348,8 @@ impl ComposerFrame {
                     .into_iter()
                     .map(|item| Some((CompletionPanelKind::Mention, item))),
             );
-            true
+            hints.mode = super::key_hints::ActiveBottomMode::Completion;
+            false
         } else if layout.slash_panel.is_visible() {
             let (panel_lines, panel_meta) = layout.slash_panel.rendered_rows_with_meta(cols);
             lines.extend(panel_lines);
@@ -356,7 +358,12 @@ impl ComposerFrame {
                     .into_iter()
                     .map(|item| Some((CompletionPanelKind::Slash, item))),
             );
-            true
+            if layout.slash_panel.has_header() {
+                true
+            } else {
+                hints.mode = super::key_hints::ActiveBottomMode::Completion;
+                false
+            }
         } else if layout.shell_hint.is_visible() {
             lines.extend(layout.shell_hint.rendered_lines(cols));
             meta.resize(lines.len(), None);
@@ -366,11 +373,11 @@ impl ComposerFrame {
             meta.push(None);
             false
         };
-        // 最后一行固定为按键提示；面板打开时留空行，输入框高度保持不变
+        // 最后一行固定为按键提示：无顶栏的补全候选显示操作说明，有顶栏面板时仅保留确认提示
         lines.push(super::key_hints::render_key_hints(
-            self.key_hints,
+            hints,
             self.input.is_empty(),
-            panel_open,
+            suppress_hint_row,
             cols,
         ));
         meta.push(None);

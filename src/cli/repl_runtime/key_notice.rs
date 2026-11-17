@@ -1,6 +1,6 @@
 //! 输入框下方的二次按键确认与快捷键速查面板状态。
 
-use super::composer_frame::{KeyHintContext, KeyNotice};
+use super::composer_frame::{ActiveBottomMode, KeyHintContext, KeyNotice};
 use super::ReplRuntime;
 use std::time::{Duration, Instant};
 
@@ -43,10 +43,8 @@ impl ReplRuntime {
         self.key_notice.map(|(_, deadline)| deadline)
     }
 
-    /// 汇总按键提示行需要的界面状态；过期的提示在这里清除。
-    ///
-    /// 返回:
-    /// - 按键提示上下文
+    /// 【终端】【按键上下文】汇总底栏按键提示所需的界面与激活面板状态，并清理已过期的确认提示。
+    /// 参数: 无；返回: 按键提示上下文。
     pub(super) fn key_hint_context(&mut self) -> KeyHintContext {
         if self
             .key_notice
@@ -54,10 +52,18 @@ impl ReplRuntime {
         {
             self.key_notice = None;
         }
+        let mode = if self.queue_panel.is_active() {
+            ActiveBottomMode::QueuePanel
+        } else if self.agent_panel.is_active() {
+            ActiveBottomMode::AgentPanel
+        } else {
+            ActiveBottomMode::Normal
+        };
         KeyHintContext {
             streaming: self.stream_active,
             fullscreen: self.fullscreen.is_some(),
             notice: self.key_notice.map(|(notice, _)| notice),
+            mode,
         }
     }
 

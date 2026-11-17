@@ -246,3 +246,44 @@ fn global_shortcuts_close_panel_before_passing_to_input() {
         click(&mut runtime, 3, 0);
     }
 }
+
+/// 【消息导航测试】【宽屏局部覆盖】宽屏下消息列表仅覆盖自身宽度，保留右侧正文与概览轨道。
+/// 参数: 无；返回: 无。
+#[test]
+fn wide_screen_overlay_preserves_right_body_and_overview_rail() {
+    use crate::render::transcript::{AnsiLine, FullscreenDocument, UserAnchor};
+
+    let layout = FullscreenLayout::compute(130, 24, 4);
+    let mut state = FullscreenState::new();
+    state.apply_document(
+        FullscreenDocument {
+            lines: vec![
+                AnsiLine::new(format!("{}RIGHT-SIDE-BODY", " ".repeat(92))),
+                AnsiLine::new(format!("{}SECOND-RIGHT-ROW", " ".repeat(92))),
+                AnsiLine::new("row-3".into()),
+            ],
+            anchors: (0..10)
+                .map(|idx| UserAnchor {
+                    row: idx,
+                    summary: format!("prompt {idx}"),
+                })
+                .collect(),
+            ..Default::default()
+        },
+        usize::from(layout.body_height),
+    );
+    state.message_picker.open(Some(0), 10, 8);
+    let painted = paint::compose(&state, &layout);
+    let top_row = strip_ansi_for_test(&painted.rows[usize::from(layout.body_top)]);
+    let second_row = strip_ansi_for_test(&painted.rows[usize::from(layout.body_top) + 1]);
+    assert!(top_row.contains("RIGHT-SIDE-BODY"), "{top_row}");
+    assert!(
+        top_row.contains("╶─") || top_row.contains("━━"),
+        "概览轨道不得被擦除: {top_row}"
+    );
+    assert!(second_row.contains("SECOND-RIGHT-ROW"), "{second_row}");
+    assert_eq!(
+        crate::cli::repl_text::visible_width(&top_row),
+        usize::from(layout.main_width)
+    );
+}

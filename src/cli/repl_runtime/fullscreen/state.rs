@@ -41,6 +41,10 @@ pub(super) struct FullscreenState {
     pub(super) resuming_bottom: bool,
     /// 最近一次渲染的正文
     pub(super) document: FullscreenDocument,
+    /// 最近一次渲染正文所使用的显示选项快照
+    pub(super) rendered_options: Option<crate::render::transcript::TranscriptRenderOptions>,
+    /// 最近一次渲染正文所使用的展开键快照
+    pub(super) rendered_expanded: HashSet<ParagraphKey>,
     /// 最近一次绘制的屏幕分区
     pub(super) layout: Option<FullscreenLayout>,
     /// 上一帧逐行内容，用于只重绘变化行
@@ -59,6 +63,8 @@ pub(super) struct FullscreenState {
     pub(super) press: Option<super::selection::TextPoint>,
     /// 当前拖动选区
     pub(super) selection: Option<super::selection::Selection>,
+    /// 本次左键按下刚刚消除了非空选区，紧随其后的松开不触发段落折叠
+    pub(super) dismissed_selection: bool,
     /// 最近一次复制的字符数，显示在标题上直到下一次操作
     pub(super) copied: Option<usize>,
 }
@@ -204,11 +210,11 @@ impl FullscreenState {
         self.follow = next == max;
         if self.follow {
             self.unseen = false;
-            // 1. 【终端】【主动触底恢复】主动跳到底部、向下滚动触底或底部继续下滚时均解除查看锁定
+            // 1. 【终端】【主动触底恢复】主动跳到底部、向下滚动触底或底部继续下滚时均解除查看锁定并强制刷新折叠态
             if target == usize::MAX || previous_scroll < max || target > previous_scroll {
                 self.resuming_bottom = true;
                 self.hover_froze_fold = false;
-                if self.release_inspection_locks() {
+                if self.release_inspection_locks() || !was_following {
                     self.pending_refresh = true;
                 }
             }

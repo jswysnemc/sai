@@ -26,10 +26,16 @@ mod tests {
     }
 
     #[test]
-    fn down_on_last_item_returns_to_input() {
+    fn down_on_last_item_arms_then_returns_to_input() {
         let mut panel = QueuePanelState::default();
         panel.activate(2);
         assert_eq!(panel.selected(), 1);
+        assert_eq!(
+            panel.handle_key(KeyCode::Down, KeyModifiers::NONE, 2),
+            QueuePanelAction::Consumed
+        );
+        assert!(panel.is_active());
+        assert!(panel.notice.is_some());
         assert_eq!(
             panel.handle_key(KeyCode::Down, KeyModifiers::NONE, 2),
             QueuePanelAction::Exit

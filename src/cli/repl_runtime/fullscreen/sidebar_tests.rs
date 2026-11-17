@@ -51,7 +51,11 @@ fn sidebar_breakpoint_preserves_readable_conversation_width() {
         let layout = FullscreenLayout::compute(cols, 30, 4);
         let side = layout.sidebar.unwrap();
         assert!(layout.content_width >= 99);
+        assert_eq!(layout.content_width, layout.main_width - 5);
         assert!((36..=44).contains(&side.width));
+        let (left_pad, inner_w, right_pad) = super::sidebar_view::horizontal_frame(side.width);
+        assert!(left_pad.abs_diff(right_pad) <= 1 && inner_w <= 35);
+        assert_eq!(left_pad + inner_w + right_pad + 1, usize::from(side.width));
         assert_eq!(layout.scrollbar_col + 2, side.left);
         assert_eq!(side.left + side.width, cols);
         assert!(layout.in_sidebar(cols - 1, 0));
@@ -97,9 +101,9 @@ fn wide_sidebar_moves_overviews_and_restores_bottom_at_narrow_width() {
             runtime.paint_fullscreen().unwrap();
             let text = screen(&runtime).join("\n");
             for expected in [
-                "Subagents",
-                "Changes",
-                "Todo",
+                super::sidebar_i18n::subagents_heading(),
+                super::sidebar_i18n::changes_heading(),
+                super::sidebar_i18n::todo_heading(),
                 "CHILD-TASK",
                 "example.rs",
                 "CURRENT-TODO",
@@ -108,7 +112,12 @@ fn wide_sidebar_moves_overviews_and_restores_bottom_at_narrow_width() {
             }
             let bottom =
                 strip_ansi_for_test(&runtime.composer.as_ref().unwrap().panel_lines().join("\n"));
-            assert!(!bottom.contains("Todo") && !bottom.contains("subagents"));
+            assert!(
+                !bottom.contains(super::sidebar_i18n::todo_heading())
+                    && !bottom.contains(crate::render::tui_presentation::with_locale(|| {
+                        crate::i18n::text("subagents", "子任务")
+                    }))
+            );
             let side = runtime
                 .fullscreen
                 .as_ref()
@@ -122,11 +131,12 @@ fn wide_sidebar_moves_overviews_and_restores_bottom_at_narrow_width() {
                 assert!(unicode_width::UnicodeWidthStr::width(line.as_str()) <= 160);
             }
             assert!(
-                screen(&runtime)[usize::from(row_for(&runtime, "Subagents"))]
-                    .chars()
-                    .skip(usize::from(side.left))
-                    .collect::<String>()
-                    .contains("Subagents")
+                screen(&runtime)
+                    [usize::from(row_for(&runtime, super::sidebar_i18n::subagents_heading()))]
+                .chars()
+                .skip(usize::from(side.left))
+                .collect::<String>()
+                .contains(super::sidebar_i18n::subagents_heading())
             );
         },
     );
@@ -142,7 +152,10 @@ fn wide_sidebar_moves_overviews_and_restores_bottom_at_narrow_width() {
         .is_none());
     let bottom = strip_ansi_for_test(&runtime.composer.as_ref().unwrap().panel_lines().join("\n"));
     assert!(
-        bottom.contains("Todo") && bottom.contains("subagents"),
+        bottom.contains(super::sidebar_i18n::todo_heading())
+            && bottom.contains(crate::render::tui_presentation::with_locale(|| {
+                crate::i18n::text("subagents", "子任务")
+            })),
         "{bottom}"
     );
 }
@@ -194,7 +207,7 @@ fn sidebar_scroll_and_click_do_not_move_or_select_conversation() {
                 runtime.transcript.viewing_subagent_id(),
                 Some("sidebar-click")
             );
-            let main = row_for(&runtime, "Main conversation");
+            let main = row_for(&runtime, super::sidebar_i18n::main_conversation());
             runtime
                 .handle_fullscreen_event(&mouse(
                     MouseEventKind::Down(MouseButton::Left),
@@ -220,7 +233,7 @@ fn sidebar_scroll_and_click_do_not_move_or_select_conversation() {
                 .state
                 .scroll
                 .max(before);
-            let files = row_for(&runtime, "Changes") + 1;
+            let files = row_for(&runtime, super::sidebar_i18n::changes_heading()) + 1;
             runtime
                 .handle_fullscreen_event(&mouse(MouseEventKind::ScrollDown, column, files))
                 .unwrap();
@@ -369,10 +382,11 @@ fn redesigned_sidebar_compacts_empty_sections_and_supports_accordion_focus() {
     assert!(!plain_doc.contains("No active tasks"));
     assert!(!plain_doc.contains("Not a Git repository"));
     assert!(!plain_doc.contains("+0 -0"));
-    assert!(plain_doc.contains("no repo"));
+    assert!(plain_doc.contains(super::sidebar_i18n::git_no_repo()));
     assert!(!plain_doc.contains("No background commands"));
     assert!(!plain_doc.contains("Current · "));
-    assert!(plain_doc.contains("▎ ● snow-shot 自启动配置"));
+    assert!(!plain_doc.contains("0/0"), "{plain_doc}");
+    assert!(plain_doc.contains("▎ ● snow-shot 自启动配置"), "{plain_doc}");
     assert!(plain_doc.contains("2h"));
 
     TerminalSize::with_size(
@@ -388,7 +402,34 @@ fn redesigned_sidebar_compacts_empty_sections_and_supports_accordion_focus() {
                 &runtime.fullscreen.as_ref().unwrap().state.layout.unwrap(),
                 &runtime.sidebar_control,
             );
-            assert!(panel.iter().filter(|line| line.contains("───")).count() >= 2);
+            let plan = runtime
+                .fullscreen
+                .as_ref()
+                .unwrap()
+                .sidebar
+                .vertical_plan(32);
+            assert!(
+                strip_ansi_for_test(&panel[0]).trim().is_empty(),
+                "侧栏第 0 行必须留空避让右上角开关图标"
+            );
+            assert!(
+                !panel[plan.chrome.sections_top..]
+                    .iter()
+                    .any(|line| line.contains("───") || line.contains("╌╌╌")),
+                "侧栏分组禁止使用横实线或虚线分割，改由透明留白与标题字重隔离"
+            );
+            for pair in plan.regions.windows(2) {
+                let gap_row = pair[1].top - 1;
+                assert!(
+                    strip_ansi_for_test(&panel[gap_row]).trim().is_empty(),
+                    "相邻分组之间必须保留纯空白呼吸行: row={gap_row}"
+                );
+            }
+            let unfocused_footer = strip_ansi_for_test(panel.last().unwrap());
+            let focus_hint = format!("F6 {}", super::sidebar_i18n::key_focus());
+            let open_hint = format!("Enter {}", super::sidebar_i18n::key_open());
+            assert!(unfocused_footer.contains(&focus_hint), "{unfocused_footer}");
+            assert!(!unfocused_footer.contains(&open_hint), "{unfocused_footer}");
 
             runtime
                 .handle_fullscreen_event(&Event::Key(KeyEvent::new(

@@ -10,6 +10,16 @@ impl ReplRuntime {
     /// 【终端审查】【区域输入】聊天、文件清单和差异各自接管所属区域的滚动，不全局捕获鼠标。
     /// 参数: event 为终端事件；返回: 处理效果，聊天事件为空。
     pub(super) fn git_preview_event(&mut self, event: &Event) -> Option<Effect> {
+        let draft_empty = if self.stream_active {
+            self.stream_draft.text.is_empty()
+        } else {
+            self.composer
+                .as_ref()
+                .is_none_or(|composer| composer.input_is_empty())
+        };
+        let left_idle = draft_empty
+            && !self.queue_panel.is_active()
+            && !self.agent_panel.is_active();
         let session = self.fullscreen.as_mut()?;
         let layout = session.state.layout?;
         let count = session.sidebar.git.summary.files.len();
@@ -50,6 +60,10 @@ impl ReplRuntime {
                 let cleared = preview.hovered.take().is_some();
                 match mouse.kind {
                     MouseEventKind::Down(MouseButton::Left) => {
+                        if geometry.back_at(mouse.column, mouse.row) {
+                            preview.close();
+                            return Some(Effect::Refresh);
+                        }
                         if let Some(mode) = geometry.mode_at(mouse.column, mouse.row) {
                             preview.focus = Some(ReviewFocus::Diff);
                             preview.set_mode(mode);
@@ -101,6 +115,15 @@ impl ReplRuntime {
                     };
                     session.sidebar.focused = false;
                     return Some(Effect::Repaint);
+                }
+                // 2. 【终端审查】【失焦返回】点击左侧聊天后若输入框与左栏浮层均空闲，Esc 仍直接关闭审查返回概览
+                if preview.focus.is_none()
+                    && key.code == KeyCode::Esc
+                    && left_idle
+                    && !session.state.message_picker.active
+                {
+                    preview.close();
+                    return Some(Effect::Refresh);
                 }
                 let focus = preview.focus?;
                 if key.modifiers.contains(KeyModifiers::CONTROL)

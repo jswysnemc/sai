@@ -1,18 +1,27 @@
-//! 状态栏下方的按键提示行：按当前场景列出可用操作，窄终端从低优先级开始省略。
+//! 状态栏下方的按键提示行：按当前场景列出可用操作，接入 PanelPalette 自适应明暗背景。
 
 use crate::cli::repl_chrome::CHROME_FOOTER_SIDE_PAD;
 use crate::cli::repl_text::visible_width;
 use crate::i18n::text as t;
+use crate::render::panel_palette::{fg, PanelPalette};
 
-/// 按键名的颜色。
-const KEY_STYLE: &str = "\x1b[38;5;250m";
-/// 说明文字与分隔符的颜色。
-const LABEL_STYLE: &str = "\x1b[38;5;242m";
-/// 需要立即留意的提示（如再按一次退出）。
-const NOTICE_STYLE: &str = "\x1b[38;5;214m";
 const RESET: &str = "\x1b[0m";
 /// 条目间分隔符。
 const SEPARATOR: &str = " · ";
+
+/// 底部提示行所处的焦点模式。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(in crate::cli::repl_runtime) enum ActiveBottomMode {
+    /// 常规输入与状态浏览模式
+    #[default]
+    Normal,
+    /// 引用面板或隐藏顶栏的单条斜杠补全候选模式
+    Completion,
+    /// 用户消息队列管理面板焦点模式
+    QueuePanel,
+    /// 主/子智能体切换面板焦点模式
+    AgentPanel,
+}
 
 /// 生成按键提示所需的界面状态。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -23,6 +32,8 @@ pub(in crate::cli::repl_runtime) struct KeyHintContext {
     pub(in crate::cli::repl_runtime) fullscreen: bool,
     /// 需要立即提醒的二次按键确认
     pub(in crate::cli::repl_runtime) notice: Option<KeyNotice>,
+    /// 当前激活的底部面板或补全状态
+    pub(in crate::cli::repl_runtime) mode: ActiveBottomMode,
 }
 
 /// 二次按键确认提示。
@@ -35,7 +46,8 @@ pub(in crate::cli::repl_runtime) enum KeyNotice {
 }
 
 impl KeyNotice {
-    /// 返回提示文本。
+    /// 【终端】【确认提示】返回二次按键提示文本。
+    /// 参数: `self` 为通知枚举；返回: 当前语言下的静态提示字符串。
     fn text(self) -> &'static str {
         match self {
             Self::Exit => t("Press Ctrl+C again to exit", "再按一次 Ctrl+C 退出"),
@@ -50,23 +62,42 @@ struct Hint {
     label: &'static str,
 }
 
-/// 构造一条提示。
+/// 【终端】【提示构造】构造单条按键提示项。
+/// 参数: `key` 为键名，`label` 为动作说明；返回: 提示结构体。
 fn hint(key: &'static str, label: &'static str) -> Hint {
     Hint { key, label }
 }
 
-/// 【终端】【按键提示】按场景返回按键条目，越靠前优先级越高。
-///
-/// 输入为空时列出浏览与模式类按键；开始输入后才出现 Enter、Shift+Enter 等编辑类按键。
-/// Ctrl+O 与 Alt+↑↓ 不在这里重复，全屏标题栏已经给出。
-///
-/// 参数:
-/// - `context`: 界面状态
-/// - `input_empty`: 输入框是否为空
-///
-/// 返回:
-/// - 按键条目
+/// 【终端】【按键提示】按焦点面板与输入场景返回有序按键条目，越靠前优先级越高。
+/// 参数: `context` 为界面状态，`input_empty` 为输入框是否为空；返回: 按键条目列表。
 fn keys_for(context: KeyHintContext, input_empty: bool) -> Vec<Hint> {
+    match context.mode {
+        ActiveBottomMode::Completion => {
+            return vec![
+                hint("↑↓", t("select", "选择")),
+                hint("Tab/Enter", t("apply", "补全")),
+                hint("Esc", t("dismiss", "关闭")),
+            ];
+        }
+        ActiveBottomMode::QueuePanel => {
+            return vec![
+                hint("↑↓", t("select", "选择")),
+                hint("k/j", t("reorder", "调序")),
+                hint("Tab", t("timing", "时机")),
+                hint("Enter", t("edit", "编辑")),
+                hint("Esc", t("close", "关闭")),
+            ];
+        }
+        ActiveBottomMode::AgentPanel => {
+            return vec![
+                hint("↑↓", t("select", "选择")),
+                hint("Enter", t("switch view", "切换视图")),
+                hint("Esc", t("close", "关闭")),
+            ];
+        }
+        ActiveBottomMode::Normal => {}
+    }
+
     let mut keys = match (context.streaming, input_empty) {
         (true, true) => vec![
             hint("Ctrl+C", t("stop", "停止")),
@@ -103,37 +134,50 @@ fn keys_for(context: KeyHintContext, input_empty: bool) -> Vec<Hint> {
     keys
 }
 
-/// 【终端】【按键提示】渲染状态栏下方的按键提示行。
-///
-/// 参数:
-/// - `context`: 界面状态
-/// - `input_empty`: 输入框是否为空
-/// - `panel_open`: 是否有补全或 Shell 面板；面板自带操作说明，此时只保留退出确认
-/// - `cols`: 终端列数
-///
-/// 返回:
-/// - 已着色、不超过终端宽度的提示行
+/// 【终端】【按键提示】按当前终端背景渲染状态栏下方的按键提示行。
+/// 参数: `context` 为界面状态，`input_empty` 为输入是否为空，`panel_open` 为是否已有自带说明的面板，`cols` 为列宽；返回: 已着色提示行。
 pub(in crate::cli::repl_runtime) fn render_key_hints(
     context: KeyHintContext,
     input_empty: bool,
     panel_open: bool,
     cols: usize,
 ) -> String {
+    render_key_hints_with_palette(
+        context,
+        input_empty,
+        panel_open,
+        cols,
+        &PanelPalette::current(),
+    )
+}
+
+/// 【终端】【色板渲染】使用指定面板色板渲染按键提示行，保证主键名在明暗终端均重于说明词。
+/// 参数: `context` 为界面状态，`input_empty` 为是否空输入，`panel_open` 为是否抑制常规条目，`cols` 为列宽，`palette` 为色板；返回: 提示行。
+fn render_key_hints_with_palette(
+    context: KeyHintContext,
+    input_empty: bool,
+    panel_open: bool,
+    cols: usize,
+    palette: &PanelPalette,
+) -> String {
     let pad = CHROME_FOOTER_SIDE_PAD.min(cols.saturating_sub(1) / 2);
     let budget = cols.saturating_sub(pad * 2);
-    let separator = format!("{LABEL_STYLE}{SEPARATOR}{RESET}");
+    let key_style = fg(palette.text);
+    let label_style = fg(palette.muted);
+    let notice_style = fg(palette.warning);
+    let separator = format!("{label_style}{SEPARATOR}{RESET}");
     let mut line = String::new();
     let mut used = 0usize;
-    // 1. 退出确认优先占据行首；窄终端按显示列裁剪，避免中文提示撑出屏幕
+    // 1. 【终端】【退出确认】退出或清空确认优先占据行首，窄终端按显示列裁剪
     if let Some(notice) = context.notice {
         let notice = clip_notice(notice.text(), budget);
         used = visible_width(&notice);
         if !notice.is_empty() {
-            line.push_str(&format!("{NOTICE_STYLE}{notice}{RESET}"));
+            line.push_str(&format!("{notice_style}{notice}{RESET}"));
         }
     }
     if !panel_open {
-        // 2. 按键条目：从高优先级开始放入，放不下就停止，不截断半个条目
+        // 2. 【终端】【分段填充】按优先级依次放入按键与说明，空间不足时整段停止不截半词
         for item in keys_for(context, input_empty) {
             let plain = format!("{} {}", item.key, item.label);
             let extra = if used == 0 {
@@ -149,7 +193,7 @@ pub(in crate::cli::repl_runtime) fn render_key_hints(
             }
             used += extra + visible_width(&plain);
             line.push_str(&format!(
-                "{KEY_STYLE}{}{RESET} {LABEL_STYLE}{}{RESET}",
+                "{key_style}{}{RESET} {label_style}{}{RESET}",
                 item.key, item.label
             ));
         }
@@ -157,14 +201,8 @@ pub(in crate::cli::repl_runtime) fn render_key_hints(
     format!("{}{line}", " ".repeat(pad))
 }
 
-/// 把提示裁到指定显示列数。
-///
-/// 参数:
-/// - `text`: 纯文本提示
-/// - `width`: 最大显示列数
-///
-/// 返回:
-/// - 不超过列数的文本；放不下省略号时改用点号
+/// 【终端】【提示裁剪】把确认提示裁到指定显示列数。
+/// 参数: `text` 为纯文本提示，`width` 为最大显示列数；返回: 不超过列数的文本。
 fn clip_notice(text: &str, width: usize) -> String {
     if width == 0 || text.is_empty() {
         return String::new();
@@ -231,7 +269,7 @@ mod tests {
         assert!(!running.contains(t("Tips", "技巧")));
     }
 
-    /// 验证补全或 Shell 面板打开时提示行留空，面板自带说明。
+    /// 验证自带操作顶栏的面板打开时提示行留空。
     #[test]
     fn panels_suppress_the_hint_row() {
         let line = plain(&render_key_hints(
@@ -241,6 +279,45 @@ mod tests {
             200,
         ));
         assert!(line.trim().is_empty(), "{line}");
+    }
+
+    /// 【按键提示测试】【专属面板与浅色对比度】验证补全、队列、子代理专属提示及浅色终端键名层次。
+    #[test]
+    fn dedicated_modes_and_light_palette_keep_key_hierarchy() {
+        let completion = text(
+            KeyHintContext {
+                mode: ActiveBottomMode::Completion,
+                ..KeyHintContext::default()
+            },
+            false,
+            200,
+        );
+        assert!(completion.contains("Tab/Enter") && completion.contains("Esc"));
+        let queue = text(
+            KeyHintContext {
+                mode: ActiveBottomMode::QueuePanel,
+                ..KeyHintContext::default()
+            },
+            true,
+            200,
+        );
+        assert!(queue.contains("k/j") && queue.contains("Tab"));
+        let agent = text(
+            KeyHintContext {
+                mode: ActiveBottomMode::AgentPanel,
+                ..KeyHintContext::default()
+            },
+            true,
+            200,
+        );
+        assert!(agent.contains("Enter") && agent.contains("Esc"));
+
+        let light = PanelPalette::for_background((250, 250, 250));
+        assert!(light.text.0 < light.muted.0);
+        let rendered =
+            render_key_hints_with_palette(KeyHintContext::default(), true, false, 120, &light);
+        assert!(rendered.contains(&fg(light.text)));
+        assert!(rendered.contains(&fg(light.muted)));
     }
 
     /// 验证 Ctrl+O 与 Alt+↑↓ 不出现在提示行，全屏也不提示 PgUp/PgDn。

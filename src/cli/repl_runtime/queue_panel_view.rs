@@ -64,6 +64,7 @@ fn preview(text: &str, width: usize) -> String {
 
 /// 【用户队列】【完整视图】展开时仅显示选中项附近的片段，收起时保留统计和最新消息。
 /// 参数: state 为管理状态，items 为队列快照，streaming 为运行状态；返回: 定宽行及点击范围。
+#[cfg(test)]
 pub(super) fn render(
     state: &QueuePanelState,
     items: &[QueuedSubmission],
@@ -184,12 +185,26 @@ pub(super) fn render_at(
             hits: Vec::new(),
         });
     }
-    // 3. 【用户队列】【操作控件】窄屏使用短标签，命中只覆盖真正显示的按钮
+    // 3. 【用户队列】【操作控件】明确区分 k/j 移动消息顺序与上下方向键切换选中，窄屏使用紧凑键名
     let short = width < 68;
     rows.push(controls(
         &[
-            ("↑", QueuePanelAction::MoveUp),
-            ("↓", QueuePanelAction::MoveDown),
+            (
+                if short {
+                    "k↑"
+                } else {
+                    t("k Up", "k 上移")
+                },
+                QueuePanelAction::MoveUp,
+            ),
+            (
+                if short {
+                    "j↓"
+                } else {
+                    t("j Down", "j 下移")
+                },
+                QueuePanelAction::MoveDown,
+            ),
             (
                 if short { "T" } else { t("T Top", "T 置顶") },
                 QueuePanelAction::Top,

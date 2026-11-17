@@ -10,6 +10,7 @@ pub(super) struct QueuePanelState {
     pub(super) selected: usize,
     pub(super) selected_id: Option<String>,
     pub(super) pending_delete: bool,
+    pub(super) exit_armed: bool,
     pub(super) scroll: usize,
     pub(super) deleted: VecDeque<(usize, QueuedSubmission)>,
     pub(super) notice: Option<String>,
@@ -51,6 +52,7 @@ impl QueuePanelState {
         self.selected = len.saturating_sub(1);
         self.selected_id = None;
         self.pending_delete = false;
+        self.exit_armed = false;
         self.notice = None;
         true
     }
@@ -62,6 +64,7 @@ impl QueuePanelState {
         self.selected = 0;
         self.selected_id = None;
         self.pending_delete = false;
+        self.exit_armed = false;
         self.scroll = 0;
         self.notice = None;
     }
@@ -105,10 +108,11 @@ impl QueuePanelState {
         self.selected = index;
         self.selected_id = None;
         self.pending_delete = false;
+        self.exit_armed = false;
         self.notice = None;
     }
 
-    /// 【用户队列】【按键动作】焦点态只派发管理动作，删除确认必须连续两次针对同一条消息。
+    /// 【用户队列】【按键动作】焦点态只派发管理动作，删除确认与队尾下移退出均防单次误触。
     /// 参数: code/modifiers 为按键，len 为队列数量；返回: 管理动作。
     pub(super) fn handle_key(
         &mut self,
@@ -120,6 +124,7 @@ impl QueuePanelState {
             return QueuePanelAction::Ignored;
         }
         if code == KeyCode::Esc {
+            self.exit_armed = false;
             if self.pending_delete {
                 self.pending_delete = false;
                 return QueuePanelAction::Consumed;
@@ -131,6 +136,7 @@ impl QueuePanelState {
             || code == KeyCode::Char('z') && modifiers.contains(KeyModifiers::CONTROL)
         {
             self.pending_delete = false;
+            self.exit_armed = false;
             return QueuePanelAction::UndoDelete;
         }
         self.clamp(len);
@@ -138,6 +144,7 @@ impl QueuePanelState {
             return QueuePanelAction::Consumed;
         }
         if matches!(code, KeyCode::Char('d' | 'D') | KeyCode::Delete) {
+            self.exit_armed = false;
             if self.pending_delete {
                 self.pending_delete = false;
                 return QueuePanelAction::Delete;
@@ -148,6 +155,23 @@ impl QueuePanelState {
         self.pending_delete = false;
         self.notice = None;
         let shift = modifiers.contains(KeyModifiers::SHIFT);
+        if code == KeyCode::Down && !shift && modifiers.is_empty() && self.selected + 1 >= len {
+            // 1. 【用户队列】【防误关保护】唤出后默认停在队尾，首次按下键仅提示，连续第二次才退出面板
+            if self.exit_armed {
+                self.deactivate();
+                return QueuePanelAction::Exit;
+            }
+            self.exit_armed = true;
+            self.notice = Some(
+                crate::i18n::text(
+                    "At bottom · press ↓ again or Esc to return to input",
+                    "已在队尾 · 再按一次 ↓ 或 Esc 返回输入",
+                )
+                .into(),
+            );
+            return QueuePanelAction::Consumed;
+        }
+        self.exit_armed = false;
         match code {
             KeyCode::Up if shift => QueuePanelAction::MoveUp,
             KeyCode::Down if shift => QueuePanelAction::MoveDown,
@@ -179,10 +203,6 @@ impl QueuePanelState {
                 self.select(self.selected.saturating_sub(1));
                 QueuePanelAction::Consumed
             }
-            KeyCode::Down if self.selected + 1 >= len => {
-                self.deactivate();
-                QueuePanelAction::Exit
-            }
             KeyCode::Down => {
                 self.select(self.selected + 1);
                 QueuePanelAction::Consumed
@@ -204,6 +224,7 @@ impl QueuePanelState {
 
     /// 【用户队列】【面板组合】只返回限高视图行，完整内容保持在消息队列中。
     /// 参数: queued 为快照，streaming 为运行状态；返回: ANSI 面板行。
+    #[cfg(test)]
     pub(super) fn panel_lines(&self, queued: &[QueuedSubmission], streaming: bool) -> Vec<String> {
         super::queue_panel_view::render(self, queued, streaming)
             .into_iter()
