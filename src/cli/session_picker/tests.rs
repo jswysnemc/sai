@@ -141,3 +141,85 @@ fn symbolic_link_uses_the_same_workspace_scope() {
     assert_eq!(targets.len(), 1);
     assert_eq!(targets[0].directory(&paths).unwrap(), a);
 }
+
+/// 【会话选择测试】【视口与鼠标】验证向上移动露出工作区标题、框内标题行滚轮不断触、二次点击直接恢复与底栏快捷键提示。
+#[test]
+fn viewport_wheel_double_click_and_paste_behave_smoothly() {
+    use super::mouse::{buttons, DrawHits, Mouse, Target};
+    use super::view::list_viewport_start;
+    use crossterm::event::{Event, KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+    // 1. 向上移动焦点时不再钉死视口最后一行，提前露出上方工作区标题行
+    let mut scroll = 0;
+    scroll = list_viewport_start(scroll, 12, 20, 8);
+    assert_eq!(scroll, 6);
+    scroll = list_viewport_start(scroll, 11, 20, 8);
+    assert_eq!(scroll, 6, "上移时焦点在视口内移动而非钉死底边");
+    scroll = list_viewport_start(scroll, 7, 20, 8);
+    assert_eq!(scroll, 5, "接近顶边时提前保留上方 2 行上下文露出分组标题");
+
+    // 2. 底栏包含 Enter、Tab、Esc 快捷键提示
+    let footer = buttons(80).text;
+    assert!(footer.contains("Enter") && footer.contains("Tab") && footer.contains("Esc"));
+
+    // 3. 鼠标在分组标题行（无 Target::Item）滚动滚轮依然生效，二次点击已选中项返回 Enter
+    let (_guard, root) = temp_root();
+    let paths = SaiPaths::for_tests(&root);
+    let (a, _b) = workspaces(&paths, &root);
+    state::ensure_workspace_session(&paths, &a, "second", "Second session").unwrap();
+    let targets = state::resume_catalog(&paths, &a, true).unwrap();
+    let current = state::workspace_id_for_path(&a);
+    let mut picker = Picker::new(targets, current, true);
+    assert!(picker.visible.len() >= 3);
+
+    // 粘贴过滤自动剔除换行与控制序列
+    assert!(picker.paste_query("session\r\n\x1b[31m"));
+    assert_eq!(picker.query, "session");
+    picker.query.clear();
+    picker.filter();
+
+    let mut mouse = Mouse {
+        state: DrawHits {
+            hits: vec![
+                (5, 2..60, Target::Item(0)),
+                (6, 2..60, Target::Item(1)),
+            ],
+            list_rows: 4..12,
+            list_cols: 0..64,
+        },
+        ..Default::default()
+    };
+    // 指针悬停在第 4 行（工作区分组标题行）向下滚动
+    let wheel_on_group_header = Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: 10,
+        row: 4,
+        modifiers: KeyModifiers::NONE,
+    });
+    mouse.event(wheel_on_group_header, &mut picker);
+    assert_eq!(picker.selected, 1);
+
+    // 首次点击第 0 项仅移动焦点，二次点击第 0 项触发 Enter 恢复
+    let click = |mouse: &mut Mouse, picker: &mut Picker, row: u16| -> Event {
+        let down = Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row,
+            modifiers: KeyModifiers::NONE,
+        });
+        let up = Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: 10,
+            row,
+            modifiers: KeyModifiers::NONE,
+        });
+        mouse.event(down, picker);
+        mouse.event(up, picker)
+    };
+    let first = click(&mut mouse, &mut picker, 5);
+    assert!(matches!(first, Event::Mouse(_)));
+    assert_eq!(picker.selected, 0);
+
+    let second = click(&mut mouse, &mut picker, 5);
+    assert!(matches!(second, Event::Key(k) if k.code == KeyCode::Enter));
+}

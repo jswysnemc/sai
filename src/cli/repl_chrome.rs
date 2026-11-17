@@ -427,6 +427,13 @@ fn truncate_to_width(value: &str, width: usize) -> String {
 
 /// 输入面板背景（暗色终端上的深色抬升条）。
 const CHROME_PANEL_BG: &str = "\x1b[48;5;235m";
+
+/// 【终端】【背景亮度】判定终端背景是否为浅色，阈值与 PanelPalette 保持严格一致。
+/// 参数: `background` 为终端背景 RGB；返回: 浅色背景时返回 true。
+fn is_light_background((r, g, b): (u8, u8, u8)) -> bool {
+    u32::from(r) * 299 + u32::from(g) * 587 + u32::from(b) * 114 > 128_000
+}
+
 /// 输入行提示符形态。
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(super) enum ChromeInputPrefix {
@@ -439,14 +446,34 @@ pub(super) enum ChromeInputPrefix {
 }
 
 impl ChromeInputPrefix {
-    /// 返回带样式的前缀文本（宽度恒为 `CHROME_INPUT_PREFIX_COLS`）。
-    ///
-    /// 用 `\x1b[39m` 只重置前景，保持整行背景连续。
-    pub(in crate::cli) fn render(self) -> &'static str {
+    /// 【终端】【提示符渲染】按当前终端背景渲染 3 列固定宽度的输入提示符。
+    /// 参数: `self` 为提示符类型；返回: 带 ANSI 样式的前缀字符串。
+    pub(in crate::cli) fn render(self) -> String {
+        self.render_for_background(crate::render::terminal_palette::terminal_palette().background)
+    }
+
+    /// 【终端】【主题提示符】按给定背景明暗输出提示符，浅色终端恢复深色输入前景。
+    /// 参数: `self` 为提示符类型，`background` 为终端背景 RGB；返回: 带 ANSI 样式的前缀字符串。
+    fn render_for_background(self, background: (u8, u8, u8)) -> String {
+        if is_light_background(background) {
+            let palette = crate::render::panel_palette::PanelPalette::for_background(background);
+            let text_fg = crate::render::panel_palette::fg(palette.text);
+            return match self {
+                Self::Message => format!(
+                    " {}→{text_fg} ",
+                    crate::render::panel_palette::fg(palette.muted)
+                ),
+                Self::Shell => format!(
+                    " {}${text_fg} ",
+                    crate::render::panel_palette::fg(palette.warning)
+                ),
+                Self::Continuation => format!("{text_fg}   "),
+            };
+        }
         match self {
-            Self::Message => " \x1b[38;5;245m→\x1b[39m ",
-            Self::Shell => " \x1b[38;5;208m$\x1b[39m ",
-            Self::Continuation => "   ",
+            Self::Message => " \x1b[38;5;245m→\x1b[39m ".to_string(),
+            Self::Shell => " \x1b[38;5;208m$\x1b[39m ".to_string(),
+            Self::Continuation => "   ".to_string(),
         }
     }
 }
@@ -459,22 +486,48 @@ pub(super) const CHROME_INPUT_INNER_PAD_ROWS: u16 = 1;
 /// 底栏状态左右外边距：与输入条的文字起点对齐。
 pub(in crate::cli) const CHROME_FOOTER_SIDE_PAD: usize = CHROME_INPUT_PREFIX_COLS;
 
-/// 输入行：深色背景通栏 + 按行形态渲染提示符。
+/// 【终端】【面板输入行】按终端背景明暗渲染通栏输入行，浅色终端切换柔和灰底与深色文字。
+/// 参数: `prefix` 为提示符形态，`content` 为本行内容，`cols` 为可用总列数；返回: 定宽 ANSI 行。
 pub(super) fn chrome_input_row(prefix: ChromeInputPrefix, content: &str, cols: usize) -> String {
+    chrome_input_row_for_background(
+        crate::render::terminal_palette::terminal_palette().background,
+        prefix,
+        content,
+        cols,
+    )
+}
+
+/// 【终端】【指定背景输入行】在指定终端背景 RGB 下生成通栏输入行，便于跨明暗主题精确测试。
+/// 参数: `background` 为终端背景 RGB，`prefix` 为提示符，`content` 为正文，`cols` 为列宽；返回: 定宽 ANSI 行。
+pub(super) fn chrome_input_row_for_background(
+    background: (u8, u8, u8),
+    prefix: ChromeInputPrefix,
+    content: &str,
+    cols: usize,
+) -> String {
     let inner = chrome_input_content_cols(cols);
     let width = visible_width(content);
-    let glyph = prefix.render();
-    // 正文样式中的 reset 会打断整行背景（占位提示自带 \x1b[0m），
-    // reset 后立即恢复面板底色，保证背景条贯穿整行
-    let content = content.replace("\x1b[0m", &format!("\x1b[0m{CHROME_PANEL_BG}"));
+    let (panel_bg, panel_fg) = if is_light_background(background) {
+        let palette = crate::render::panel_palette::PanelPalette::for_background(background);
+        (
+            crate::render::panel_palette::bg(palette.hover_bg),
+            crate::render::panel_palette::fg(palette.text),
+        )
+    } else {
+        (CHROME_PANEL_BG.to_string(), String::new())
+    };
+    let glyph = prefix.render_for_background(background);
+    // 1. 【终端】【底色贯通】正文复位序列后立即恢复面板底色与自适应输入前景
+    let restore = format!("\x1b[0m{panel_bg}{panel_fg}");
+    let content = content.replace("\x1b[0m", &restore);
     if width >= inner {
         format!(
-            "{CHROME_PANEL_BG}{glyph}{}\x1b[0m",
-            truncate_ansi_to_width(&content, inner)
+            "{panel_bg}{glyph}{}\x1b[0m",
+            truncate_ansi_to_width_with_restore(&content, inner, &panel_bg, &panel_fg)
         )
     } else {
         format!(
-            "{CHROME_PANEL_BG}{glyph}{content}{}\x1b[0m",
+            "{panel_bg}{glyph}{content}{}\x1b[0m",
             " ".repeat(inner - width)
         )
     }
@@ -485,15 +538,38 @@ pub(super) fn chrome_input_content_cols(cols: usize) -> usize {
     cols.saturating_sub(CHROME_INPUT_PREFIX_COLS).max(1)
 }
 
-/// 输入条内部的背景内边距行（整行底色，无内容）。
+/// 【终端】【背景内边距行】按当前终端明暗输出输入条上下背景内边距行。
+/// 参数: `cols` 为终端列数；返回: 整行背景填充文本。
 pub(super) fn chrome_input_pad_row(cols: usize) -> String {
-    format!("{CHROME_PANEL_BG}{}\x1b[0m", " ".repeat(cols.max(1)))
+    chrome_input_pad_row_for_background(
+        crate::render::terminal_palette::terminal_palette().background,
+        cols,
+    )
 }
 
-/// 【终端】【输入截断】截断 ANSI 文本，并恢复共用输入框的背景。
-/// 参数: `text` 为正文，`width` 为最大宽度
-/// 返回: 不超过指定列宽的 ANSI 文本。
-fn truncate_ansi_to_width(text: &str, width: usize) -> String {
+/// 【终端】【指定背景内边距行】在指定终端背景 RGB 下生成输入条上下背景内边距行。
+/// 参数: `background` 为终端背景 RGB，`cols` 为列宽；返回: 整行背景填充文本。
+pub(super) fn chrome_input_pad_row_for_background(
+    background: (u8, u8, u8),
+    cols: usize,
+) -> String {
+    let panel_bg = if is_light_background(background) {
+        let palette = crate::render::panel_palette::PanelPalette::for_background(background);
+        crate::render::panel_palette::bg(palette.hover_bg)
+    } else {
+        CHROME_PANEL_BG.to_string()
+    };
+    format!("{panel_bg}{}\x1b[0m", " ".repeat(cols.max(1)))
+}
+
+/// 【终端】【输入截断】截断 ANSI 文本，并恢复共用输入框的背景与前景。
+/// 参数: `text` 为正文，`width` 为最大宽度，`panel_bg` 为面板底色，`panel_fg` 为输入前景；返回: 截断后的 ANSI 文本。
+fn truncate_ansi_to_width_with_restore(
+    text: &str,
+    width: usize,
+    panel_bg: &str,
+    panel_fg: &str,
+) -> String {
     use unicode_width::UnicodeWidthChar;
     if width == 0 {
         return String::new();
@@ -520,9 +596,10 @@ fn truncate_ansi_to_width(text: &str, width: usize) -> String {
         used = used.saturating_add(char_width);
         index += ch.len_utf8();
     }
-    // 1. 【终端】【输入截断】恢复面板底色，避免后续留白丢失背景
+    // 1. 【终端】【输入截断】恢复面板底色与前景，避免后续留白丢失背景
     out.push_str("\x1b[0m");
-    out.push_str(CHROME_PANEL_BG);
+    out.push_str(panel_bg);
+    out.push_str(panel_fg);
     out
 }
 

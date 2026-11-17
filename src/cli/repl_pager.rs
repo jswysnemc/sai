@@ -35,16 +35,22 @@ pub(in crate::cli) struct PagerScreen {
     /// 上次看到的段落数；停在末段时新段落出现就跟着展开
     prev_count: usize,
     drag_target: ScrollDragTarget,
+    close_click: super::mouse_menu::ClickTracker<()>,
+    footer_close: Option<(u16, std::ops::Range<u16>)>,
     previous: Option<(usize, usize, Vec<String>)>,
     frame: TerminalFrame,
     active: bool,
 }
 
 impl PagerScreen {
-    /// 进入备用屏，初始展开 `start` 段。
+    /// 【终端分页】【进入副屏】进入备用屏并初始展开指定段落。
     ///
-    /// 参数: `start` 为初始段落，`count` 为进入时的段落数
-    /// 返回: 已接管终端的副屏
+    /// 参数:
+    /// - `start`: 初始展开段落下标
+    /// - `count`: 进入时的段落总数
+    ///
+    /// 返回:
+    /// - 已接管终端的副屏会话
     pub(in crate::cli) fn enter(start: usize, count: usize) -> Result<Self> {
         let mouse = super::mouse_capture::MouseCapture::acquire()?;
         let mut stdout = io::stdout();
@@ -73,17 +79,22 @@ impl PagerScreen {
             body_width: 0,
             prev_count: count,
             drag_target: ScrollDragTarget::None,
+            close_click: super::mouse_menu::ClickTracker::default(),
+            footer_close: None,
             previous: None,
             frame: TerminalFrame::new(),
             active: true,
         })
     }
 
-    /// 按当前段落重绘，并处理已经到达的按键。
+    /// 【终端分页】【事件轮询】按当前段落重绘，并处理已经到达的按键与鼠标事件。
     ///
-    /// 参数: `wait` 为空时阻塞到下一个事件；`Some(0)` 只处理已经在队列里的键。
-    /// `render` 用当前焦点和列宽画出和前台同一套的正文
-    /// 返回: 用户关闭副屏时为 true
+    /// 参数:
+    /// - `wait`: 为空时阻塞到下一个事件；`Some(0)` 只处理已在队列中的事件
+    /// - `render`: 用当前焦点和列宽渲染正文的闭包
+    ///
+    /// 返回:
+    /// - 用户关闭副屏时返回 true
     pub(in crate::cli) fn poll(
         &mut self,
         wait: Option<Duration>,
@@ -99,7 +110,7 @@ impl PagerScreen {
         self.layout(&mut render, body_width, view_h);
         let count = self.view.paragraphs;
         self.draw(cols, rows, header_rows, footer_rows, view_h, count)?;
-        self.read_input(wait, cols, view_h, header_rows, count)
+        self.read_input(wait, cols, view_h, header_rows, footer_rows, count)
     }
 
     /// 离开备用屏并恢复进入前的终端模式。可以重复调用。
@@ -158,33 +169,12 @@ impl PagerScreen {
             if let Some(hit) = self.state.search.current() {
                 if let Some(paragraph) = view.search_paragraph.get(hit).copied().flatten() {
                     let next = paragraph.min(count.saturating_sub(1));
-                    // #region agent log
-                    debug_agent_log(
-                        "E",
-                        "repl_pager.rs:layout",
-                        "search hit expands paragraph",
-                        &format!(
-                            "{{\"hit\":{hit},\"paragraph\":{next},\"matches\":{}}}",
-                            self.state.search.matches.len()
-                        ),
-                    );
-                    // #endregion
                     if next != self.state.index {
                         self.state.index = next;
                         view = render(self.state.index, body_width);
                     }
                 }
             }
-        }
-        if snap {
-            // #region agent log
-            debug_agent_log(
-                "D",
-                "repl_pager.rs:layout",
-                "paragraph focus changed",
-                &format!("{{\"index\":{},\"count\":{count}}}", self.state.index),
-            );
-            // #endregion
         }
         self.view = view;
         let max_scroll = self.view.display.len().saturating_sub(view_h);
@@ -272,20 +262,25 @@ impl PagerScreen {
             page_lines[header_rows + view_h] =
                 horizontal_progress_track(cols, total, view_h, self.state.scroll);
         }
+        let close_label = t("Esc close", "Esc 关闭");
         let hint = if self.state.editing_search {
             t(
                 "type to jump · Enter keep · Esc abort · Ctrl+U clear",
                 "输入即跳转 · Enter 保留 · Esc 取消 · Ctrl+U 清空",
             )
+            .to_string()
         } else {
-            t(
-                "Ctrl+J/K paragraphs · ↑↓ scroll · /? search · n/N jump · Esc close",
-                "Ctrl+J/K 段落 · ↑↓ 滚动 · /? 搜索 · n/N 跳转 · Esc 关闭",
-            )
+            pager_footer_hint(cols, close_label)
         };
+        self.footer_close = None;
         if footer_rows > 0 {
             let footer = format!("{hint}  {pct}%  {shown}/{count}");
-            page_lines[rows - 1] = format!("\x1b[2m{}\x1b[0m", truncate_visible(&footer, cols));
+            let clipped = truncate_visible(&footer, cols);
+            if !self.state.editing_search {
+                self.footer_close = footer_close_columns(&clipped, close_label)
+                    .map(|range| ((rows - 1) as u16, range));
+            }
+            page_lines[rows - 1] = format!("\x1b[2m{clipped}\x1b[0m");
         }
         let old_lines = self
             .previous
@@ -298,13 +293,25 @@ impl PagerScreen {
         Ok(())
     }
 
-    /// 读取一个或一批按键。关闭副屏时返回 true。
+    /// 【终端分页】【输入读取】读取一个或一批终端事件，关闭副屏时返回 true。
+    ///
+    /// 参数:
+    /// - `wait`: 可选超时
+    /// - `cols`: 终端列数
+    /// - `view_h`: 正文可视行数
+    /// - `header_rows`: 顶栏行数
+    /// - `footer_rows`: 底栏行数
+    /// - `count`: 段落总数
+    ///
+    /// 返回:
+    /// - 用户关闭副屏时返回 true
     fn read_input(
         &mut self,
         wait: Option<Duration>,
         cols: usize,
         view_h: usize,
         header_rows: usize,
+        footer_rows: usize,
         count: usize,
     ) -> Result<bool> {
         let progress_row = (header_rows + view_h) as u16;
@@ -327,6 +334,7 @@ impl PagerScreen {
                     ..
                 }) if kind != KeyEventKind::Release => {
                     self.drag_target = ScrollDragTarget::None;
+                    self.close_click.clear();
                     if self.state.handle_key(
                         code,
                         modifiers,
@@ -338,8 +346,20 @@ impl PagerScreen {
                         return Ok(true);
                     }
                 }
-                Event::Paste(text) => self.state.paste_search(&text, &search_lines),
+                Event::Paste(text) => {
+                    self.close_click.clear();
+                    self.state.paste_search(&text, &search_lines);
+                }
                 Event::Mouse(mouse) => {
+                    // 1. 【终端分页】【底栏关闭】左键点击底栏关闭提示直接退出预览
+                    let hit_close = self
+                        .footer_close
+                        .as_ref()
+                        .filter(|(row, range)| *row == mouse.row && range.contains(&mouse.column))
+                        .map(|_| ());
+                    if self.close_click.update(mouse, hit_close).is_some() {
+                        return Ok(true);
+                    }
                     apply_mouse(
                         mouse,
                         scroll::ScrollViewport {
@@ -348,6 +368,7 @@ impl PagerScreen {
                             total_lines: self.view.display.len(),
                             max_scroll,
                             progress_row,
+                            has_progress: footer_rows > 1,
                             body_top_row: header_rows as u16,
                         },
                         &mut self.state.scroll,
@@ -356,6 +377,7 @@ impl PagerScreen {
                 }
                 Event::Resize(_, _) => {
                     self.drag_target = ScrollDragTarget::None;
+                    self.close_click.clear();
                     self.previous = None;
                 }
                 _ => {}
@@ -374,10 +396,15 @@ impl Drop for PagerScreen {
     }
 }
 
-/// 在备用屏幕中展示会话：渲染和前台相同，只展开 `start_index` 那一段。
+/// 【终端分页】【阻塞打开】在备用屏幕中展示会话，仅展开初始指定段落。
 ///
-/// 参数: `start_index` 为初始段落，`paragraphs` 为段落数，`render` 按焦点和列宽出图
-/// 返回: 是否成功
+/// 参数:
+/// - `start_index`: 初始段落下标
+/// - `paragraphs`: 段落总数
+/// - `render`: 按焦点和列宽渲染正文的闭包
+///
+/// 返回:
+/// - 操作是否成功
 pub(super) fn open_blocks_pager(
     start_index: usize,
     paragraphs: usize,
@@ -396,25 +423,48 @@ pub(super) fn open_blocks_pager(
     result.and(left)
 }
 
-/// 把调试记录追加到本次会话的日志文件。
-pub(in crate::cli) fn debug_agent_log(hypothesis: &str, location: &str, message: &str, data: &str) {
-    // #region agent log
-    let Ok(mut file) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("/home/snemc/workspace/sai/.cursor/debug-ff618c.log")
-    else {
-        return;
-    };
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_millis())
-        .unwrap_or(0);
-    let _ = writeln!(
-        file,
-        "{{\"sessionId\":\"ff618c\",\"hypothesisId\":\"{hypothesis}\",\"location\":\"{location}\",\"message\":\"{message}\",\"data\":{data},\"timestamp\":{now}}}"
+/// 【终端分页】【底栏提示】根据终端列宽自适应选择保留关闭入口的提示文本。
+///
+/// 参数:
+/// - `cols`: 终端列宽
+/// - `close_label`: 关闭提示短语
+///
+/// 返回:
+/// - 适配当前列宽的底栏操作说明
+fn pager_footer_hint(cols: usize, close_label: &str) -> String {
+    let full = t(
+        "Ctrl+J/K paragraphs · ↑↓ scroll · /? search · n/N jump · Esc close",
+        "Ctrl+J/K 段落 · ↑↓ 滚动 · /? 搜索 · n/N 跳转 · Esc 关闭",
     );
-    // #endregion
+    if unicode_width::UnicodeWidthStr::width(full) + 12 <= cols {
+        return full.to_string();
+    }
+    let medium = t(
+        "↑↓ scroll · /? search · Esc close",
+        "↑↓ 滚动 · /? 搜索 · Esc 关闭",
+    );
+    if unicode_width::UnicodeWidthStr::width(medium) + 8 <= cols {
+        return medium.to_string();
+    }
+    close_label.to_string()
+}
+
+/// 【终端分页】【关闭命中区】计算底栏可见文本中关闭提示短语所占的显示列区间。
+///
+/// 参数:
+/// - `footer_visible`: 已按列宽裁剪后的纯文本底栏
+/// - `close_label`: 关闭提示短语
+///
+/// 返回:
+/// - 关闭提示完整可见时返回列范围
+fn footer_close_columns(footer_visible: &str, close_label: &str) -> Option<std::ops::Range<u16>> {
+    let byte_start = footer_visible.find(close_label)?;
+    let start_col = unicode_width::UnicodeWidthStr::width(&footer_visible[..byte_start]);
+    let width = unicode_width::UnicodeWidthStr::width(close_label);
+    let end_col = start_col.saturating_add(width);
+    (width > 0).then_some(
+        (start_col.min(u16::MAX as usize) as u16)..(end_col.min(u16::MAX as usize) as u16),
+    )
 }
 
 /// 兼容单文本打开（单块）。
@@ -493,4 +543,21 @@ fn visible_width_ansi(value: &str) -> usize {
 /// - 截断文本
 fn truncate_visible(value: &str, width: usize) -> String {
     crate::render::clip_to_width(value, width, "")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{footer_close_columns, pager_footer_hint, truncate_visible};
+
+    #[test]
+    fn footer_close_hit_tracks_wide_and_narrow_hints() {
+        for cols in [24, 52, 96] {
+            let close = crate::i18n::text("Esc close", "Esc 关闭");
+            let hint = pager_footer_hint(cols, close);
+            let visible = truncate_visible(&format!("{hint}  100%  1/1"), cols);
+            let range = footer_close_columns(&visible, close).expect("关闭提示在各宽度均可见");
+            assert!(range.end > range.start);
+            assert!(usize::from(range.end) <= cols);
+        }
+    }
 }

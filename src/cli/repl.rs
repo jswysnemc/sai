@@ -11,6 +11,7 @@ use crate::agent::Agent;
 mod agent_selection;
 pub(in crate::cli) mod agent_slot;
 mod automatic_turn;
+mod command_screen;
 mod compact;
 mod exit_confirmation;
 mod exit_hint;
@@ -42,6 +43,15 @@ use submission_queue::{
     apply_stream_mode, drain_submission_queue, repl_runner_submission, take_stream_draft_prefill,
 };
 
+/// 【REPL】【主循环】初始化会话、工具注册表与终端运行期，驱动交互对话与斜杠命令。
+///
+/// 参数:
+/// - `paths`: Sai 路径集合
+/// - `initial_mode`: 初始权限模式
+/// - `thinking_override`: 命令行传入的思考等级覆盖
+///
+/// 返回:
+/// - 会话退出结果
 pub(super) async fn run_repl(
     paths: &SaiPaths,
     initial_mode: AgentMode,
@@ -280,11 +290,9 @@ pub(super) async fn run_repl(
             exit_armed = false;
             continue;
         }
-        // 1. 【终端】【命令交接】独占界面退出全屏；上下文查看、编辑与别名沿用当前画布
-        if input.starts_with('/') && !session_commands::uses_context_panel(input) {
-            restore_fullscreen_after_command = runtime.fullscreen_active();
-            runtime.leave_fullscreen()?;
-        }
+        // 1. 【终端】【命令交接】按命令屏幕策略分流，全屏备用屏命令原地嵌套而不退回主屏
+        restore_fullscreen_after_command =
+            command_screen::prepare_command_screen(input, &mut runtime)?;
         if !input.eq_ignore_ascii_case("/undo") {
             pending_undo = false;
         }
@@ -536,10 +544,7 @@ pub(super) async fn run_repl(
             continue;
         }
         if input.eq_ignore_ascii_case("/ps") {
-            // 面板内的操作失败只提示，不能让整个 REPL 退出
-            if let Err(err) = run_repl_background_manager(paths, &config).await {
-                runtime.record_meta(err.to_string())?;
-            }
+            command_screen::run_background_manager_overlay(paths, &config, &mut runtime).await?;
             continue;
         }
         // 剩余的 / 开头命令形态输入不再静默发给模型：拼错的命令、
@@ -636,39 +641,7 @@ pub(super) async fn run_repl(
             } else if let Some(draft) = outcome.leftover_draft {
                 prefill = Some(draft);
             }
-            // 【终端队列】【暂停恢复】中断后队列保持暂停，收尾流程继续恢复流式草稿
-            let exit = drain_submission_queue(
-                ReplTurnContext {
-                    paths,
-                    config: &config,
-                    owner_key: &owner_key,
-                },
-                &mut agent,
-                &mut runtime,
-                &mut mode,
-                &mut input_history,
-                transcript_options.reasoning_mode,
-                transcript_options.tool_call_mode,
-            )
-            .await?;
-            if runtime.has_session_switch_request() {
-                continue;
-            }
-            if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {
-                prefill = Some(draft);
-                prefill_clipboard = Some(clipboard);
-            }
-            if exit
-                && !confirm_repl_exit(paths, &config, &state, &mut runtime, &mut exit_armed).await?
-            {
-                continue;
-            }
-            if exit {
-                break;
-            }
-            continue;
-        }
-        if let Err(error) = outcome.result {
+        } else if let Err(error) = outcome.result {
             // 断连类错误保留可重试提示，其余错误展示完整错误链
             runtime.record_failure(turn_failure_text(&error))?;
             if !goal_continuation && crate::llm::is_transient_transport_error(&error) {
@@ -683,11 +656,10 @@ pub(super) async fn run_repl(
                 prefill_clipboard = Some(clipboard);
             }
             continue;
-        }
-        if let Some(draft) = outcome.leftover_draft {
+        } else if let Some(draft) = outcome.leftover_draft {
             prefill = Some(draft);
         }
-        // 1. 本轮成功后依次执行 Tab 入队的消息
+        // 1. 【终端队列】【轮次收尾】本轮中断或成功后执行排队项并恢复流式草稿
         let exit = drain_submission_queue(
             ReplTurnContext {
                 paths,

@@ -64,6 +64,8 @@ impl EmbeddedTaskPanel {
         self.manager.filter = Default::default();
         self.manager.hovered = None;
         self.manager.pager = false;
+        self.manager.command_expanded = false;
+        self.manager.command_offset = 0;
         self.manager.confirm = None;
         self.manager.reconcile();
         self.active = true;

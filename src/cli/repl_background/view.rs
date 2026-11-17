@@ -27,8 +27,12 @@ pub(super) struct TaskFrame {
     pub lines: Vec<String>,
     /// 任务行的终端行号与任务标识
     pub targets: Vec<(u16, String)>,
-    /// 已渲染控件的精确可点击热区（筛选标签、通道胶囊、页脚按钮）
+    /// 已渲染控件的精确可点击热区（筛选标签、通道胶囊、命令展开按钮、页脚按钮）
     pub buttons: Vec<ControlHit>,
+    /// 详情区展开命令时的独立滚轮矩形及命令分页行数
+    pub cmd_rect: Option<PanelRect>,
+    pub cmd_visible_rows: usize,
+    pub cmd_total_rows: usize,
     /// 尾部输出区的终端屏幕范围与可见行数（用于独立滚轮滚动）
     pub tail_rect: Option<PanelRect>,
     pub tail_rows: usize,
@@ -63,9 +67,13 @@ pub(super) fn render(manager: &mut TaskManager, rect: PanelRect) -> TaskFrame {
     let palette = PanelPalette::current();
     let inner = usize::from(rect.width.saturating_sub(4));
     let body_rows = usize::from(rect.height.saturating_sub(2));
+    let bottom = rect.y.saturating_add(rect.height.saturating_sub(1));
     let mut targets = Vec::new();
     let mut buttons = Vec::new();
     let mut thumb = 0..0;
+    let mut cmd_rect = None;
+    let mut cmd_visible_rows = 0usize;
+    let mut cmd_total_rows = 0usize;
     let mut tail_rect = None;
     let mut tail_rows = 0usize;
     let content_left = usize::from(rect.x) + 2;
@@ -76,13 +84,15 @@ pub(super) fn render(manager: &mut TaskManager, rect: PanelRect) -> TaskFrame {
         thumb = rows;
         if body_rows > 0 && rect.width >= 4 {
             let row = rect.y.saturating_add(1);
-            for item in header_hits {
-                buttons.push(ControlHit {
-                    row,
-                    start_col: (content_left + item.start) as u16,
-                    end_col: (content_left + item.end) as u16,
-                    key: item.key,
-                });
+            if row < bottom {
+                for item in header_hits {
+                    buttons.push(ControlHit {
+                        row,
+                        start_col: (content_left + item.start) as u16,
+                        end_col: (content_left + item.end) as u16,
+                        key: item.key,
+                    });
+                }
             }
         }
         (pager_title(manager, &palette), body, page_rows)
@@ -97,18 +107,23 @@ pub(super) fn render(manager: &mut TaskManager, rect: PanelRect) -> TaskFrame {
             &mut targets,
             &palette,
         );
+        cmd_rect = rendered.cmd_rect;
+        cmd_visible_rows = rendered.cmd_visible_rows;
+        cmd_total_rows = rendered.cmd_total_rows;
         tail_rect = rendered.tail_rect;
         tail_rows = rendered.tail_rows;
         if body_rows > 0 && rect.width >= 4 {
-            let row = top;
-            for item in rendered.ribbon_hits {
-                buttons.push(ControlHit {
-                    row,
-                    start_col: (content_left + item.start) as u16,
-                    end_col: (content_left + item.end) as u16,
-                    key: item.key,
-                });
+            if top < bottom {
+                for item in rendered.ribbon_hits {
+                    buttons.push(ControlHit {
+                        row: top,
+                        start_col: (content_left + item.start) as u16,
+                        end_col: (content_left + item.end) as u16,
+                        key: item.key,
+                    });
+                }
             }
+            buttons.extend(rendered.detail_hits.into_iter().filter(|hit| hit.row < bottom));
         }
         (
             list_title(manager, &palette),
@@ -118,10 +133,9 @@ pub(super) fn render(manager: &mut TaskManager, rect: PanelRect) -> TaskFrame {
     };
     let (footer_text, footer_hits) = footer_with_hits(manager, inner);
     if rect.height >= 2 && rect.width >= 4 {
-        let bottom_row = rect.y.saturating_add(rect.height.saturating_sub(1));
         for item in footer_hits {
             buttons.push(ControlHit {
-                row: bottom_row,
+                row: bottom,
                 start_col: (content_left + item.start) as u16,
                 end_col: (content_left + item.end) as u16,
                 key: item.key,
@@ -141,7 +155,6 @@ pub(super) fn render(manager: &mut TaskManager, rect: PanelRect) -> TaskFrame {
     }
     lines.truncate(usize::from(rect.height));
     // 3. 【后台任务】【命中裁剪】极小高度下被底框挤掉的任务与按钮热区不再响应点击
-    let bottom = rect.y.saturating_add(rect.height.saturating_sub(1));
     targets.retain(|(row, _)| *row < bottom);
     buttons.retain(|hit| hit.row <= bottom);
     // 4. 【后台任务】【按钮悬停】使用保色相悬停高亮突出指针所在的可点击胶囊与页脚按键
@@ -162,6 +175,9 @@ pub(super) fn render(manager: &mut TaskManager, rect: PanelRect) -> TaskFrame {
         lines,
         targets,
         buttons,
+        cmd_rect,
+        cmd_visible_rows,
+        cmd_total_rows,
         tail_rect,
         tail_rows,
         page_rows,

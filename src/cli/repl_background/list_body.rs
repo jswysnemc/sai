@@ -1,23 +1,28 @@
 //! 后台任务列表模式正文排版：在宽屏下采用左右双栏、在窄屏下采用上下堆叠，确认时固定任务列表。
 
 use super::{
-    inspector_view::{confirm_rows, detail_rows},
+    inspector_view::{confirm_rows, detail_rows, expanded_command_row_count},
     model::TaskManager,
     pager_view::tail_rows,
     panel_rect::PanelRect,
     split_layout::SplitLayout,
     theme::{fit, section_header, stream_name},
+    view::ControlHit,
     view_list::{filter_ribbon, task_row, RibbonItem},
 };
 use crate::i18n::text as t;
 use crate::render::ansi_clip::ansi_visible_width;
 use crate::render::panel_palette::{fg, PanelPalette};
 
-/// 【后台任务】【列表正文渲染结果】返回正文视觉行、任务视口容量、筛选栏热区与尾部输出区。
+/// 【后台任务】【列表正文渲染结果】返回正文视觉行、任务视口容量、控制热区及独立滚动矩形。
 pub(super) struct ListBodyRender {
     pub lines: Vec<String>,
     pub task_viewport_rows: usize,
     pub ribbon_hits: Vec<RibbonItem>,
+    pub detail_hits: Vec<ControlHit>,
+    pub cmd_rect: Option<PanelRect>,
+    pub cmd_visible_rows: usize,
+    pub cmd_total_rows: usize,
     pub tail_rect: Option<PanelRect>,
     pub tail_rows: usize,
 }
@@ -51,14 +56,29 @@ pub(super) fn render(
         .count();
     let (ribbon, ribbon_hits) = filter_ribbon(manager, running, inner, palette);
     let divider = format!("{}{}\x1b[0m", fg(palette.border), "─".repeat(inner));
-    let layout = SplitLayout::compute(inner, rows, manager.tasks.len(), manager.confirm.is_some());
+    let detail_w = SplitLayout::detail_width(inner, rows);
+    let expanded_cmd_rows = if manager.confirm.is_none() && manager.command_expanded {
+        manager
+            .selected()
+            .map(|task| expanded_command_row_count(&task.command, detail_w, palette))
+            .unwrap_or(0)
+    } else {
+        0
+    };
+    let (layout, detail_cap) = SplitLayout::compute_with_detail(
+        inner,
+        rows,
+        manager.tasks.len(),
+        manager.confirm.is_some(),
+        expanded_cmd_rows,
+    );
 
     match layout {
         SplitLayout::Split {
             left_w,
             right_w,
             task_rows,
-            detail_rows: detail_cap,
+            detail_rows: _,
             tail_rows: tail_cap,
         } => {
             // 1. 【后台任务】【左栏队列】左侧列展示带状态条和悬停态的独立任务列表
@@ -70,12 +90,36 @@ pub(super) fn render(
                 targets,
                 palette,
             );
+            let right_x = content_x.saturating_add(left_w as u16).saturating_add(3);
+            let detail_top = top.saturating_add(2);
+            let mut detail_hits = Vec::new();
+            let mut cmd_visible_rows = 0;
+            let mut cmd_total_rows = 0;
             // 2. 【后台任务】【右栏检视】确认期间切为目标确认卡，常规状态显示元数据与尾部日志
             let mut right = if let Some(request) = &manager.confirm {
                 targets.clear();
                 confirm_rows(request, manager, right_w, task_rows, palette)
             } else {
-                let mut panel = detail_rows(manager, right_w, detail_cap, palette);
+                let detail = detail_rows(manager, right_w, detail_cap, palette);
+                cmd_visible_rows = detail.cmd_visible_rows;
+                cmd_total_rows = detail.cmd_total_rows;
+                if !manager.busy {
+                    for (rel_row, start, end, key) in detail.hits {
+                        if rel_row < task_rows
+                            && 2 + rel_row < rows
+                            && start < end
+                            && end <= right_w
+                        {
+                            detail_hits.push(ControlHit {
+                                row: detail_top.saturating_add(rel_row as u16),
+                                start_col: right_x.saturating_add(start as u16),
+                                end_col: right_x.saturating_add(end as u16),
+                                key,
+                            });
+                        }
+                    }
+                }
+                let mut panel = detail.lines;
                 if tail_cap > 0 && manager.selected().is_some() {
                     let logs = manager.log_lines();
                     panel.push(section_header(
@@ -98,18 +142,45 @@ pub(super) fn render(
                 body.push(format!("{l}{l_pad}{sep}{r}"));
             }
             body.resize(rows, String::new());
-            let tail_rect =
+            let cmd_h = detail_cap.min(task_rows).min(rows.saturating_sub(2));
+            let cmd_rect = (manager.confirm.is_none()
+                && manager.command_expanded
+                && manager.selected().is_some()
+                && cmd_h > 0)
+                .then_some(PanelRect {
+                    x: right_x,
+                    y: detail_top,
+                    width: right_w as u16,
+                    height: cmd_h as u16,
+                });
+            let tail_rect = if manager.command_expanded {
+                (manager.confirm.is_none()
+                    && tail_cap > 0
+                    && manager.selected().is_some()
+                    && task_rows > detail_cap)
+                    .then_some(PanelRect {
+                        x: right_x,
+                        y: detail_top.saturating_add(detail_cap as u16),
+                        width: right_w as u16,
+                        height: task_rows.saturating_sub(detail_cap) as u16,
+                    })
+            } else {
                 (manager.confirm.is_none() && tail_cap > 0 && manager.selected().is_some())
                     .then_some(PanelRect {
-                        x: content_x.saturating_add(left_w as u16).saturating_add(3),
-                        y: top.saturating_add(2),
+                        x: right_x,
+                        y: detail_top,
                         width: right_w as u16,
                         height: task_rows as u16,
-                    });
+                    })
+            };
             ListBodyRender {
                 lines: body,
                 task_viewport_rows: task_rows,
                 ribbon_hits,
+                detail_hits,
+                cmd_rect,
+                cmd_visible_rows,
+                cmd_total_rows,
                 tail_rect,
                 tail_rows: tail_cap,
             }
@@ -118,7 +189,7 @@ pub(super) fn render(
             task_rows,
             tail_rows: tail_cap,
         } => {
-            // 3. 【后台任务】【窄屏堆叠】窄终端保持纵向分区，不挤占任务标题和路径空间
+            // 3. 【后台任务】【窄屏堆叠】窄终端保持纵向分区，展开命令时适度扩展详情区高度
             let mut body = vec![ribbon, divider];
             let list = build_task_lines(
                 manager,
@@ -129,13 +200,35 @@ pub(super) fn render(
                 palette,
             );
             body.extend(list);
-            let tail_start_row = body.len();
+            let detail_start_row = body.len();
             let tail_visible = tail_cap.saturating_sub(1);
+            let mut detail_hits = Vec::new();
+            let mut cmd_visible_rows = 0;
+            let mut cmd_total_rows = 0;
+            let output_start_row;
             if let Some(request) = &manager.confirm {
                 targets.clear();
-                body.extend(confirm_rows(request, manager, inner, 4, palette));
+                body.extend(confirm_rows(request, manager, inner, detail_cap, palette));
+                output_start_row = body.len();
             } else {
-                body.extend(detail_rows(manager, inner, 4, palette));
+                let detail = detail_rows(manager, inner, detail_cap, palette);
+                cmd_visible_rows = detail.cmd_visible_rows;
+                cmd_total_rows = detail.cmd_total_rows;
+                if !manager.busy {
+                    for (rel_row, start, end, key) in detail.hits {
+                        let abs_idx = detail_start_row + rel_row;
+                        if abs_idx < rows && start < end && end <= inner {
+                            detail_hits.push(ControlHit {
+                                row: top.saturating_add(abs_idx as u16),
+                                start_col: content_x.saturating_add(start as u16),
+                                end_col: content_x.saturating_add(end as u16),
+                                key,
+                            });
+                        }
+                    }
+                }
+                body.extend(detail.lines);
+                output_start_row = body.len();
                 if tail_cap > 0 && manager.selected().is_some() {
                     let logs = manager.log_lines();
                     body.push(section_header(
@@ -147,20 +240,43 @@ pub(super) fn render(
                     body.extend(tail_rows(manager, &logs, inner, tail_visible, palette));
                 }
             }
-            let tail_len = body.len().saturating_sub(tail_start_row);
+            let used_rows = body.len().min(rows);
             body.resize(rows, String::new());
-            let tail_rect =
-                (manager.confirm.is_none() && tail_visible > 0 && manager.selected().is_some())
-                    .then_some(PanelRect {
-                        x: content_x,
-                        y: top.saturating_add(tail_start_row as u16),
-                        width: inner as u16,
-                        height: tail_len as u16,
-                    });
+            let cmd_h = detail_cap.min(used_rows.saturating_sub(detail_start_row));
+            let cmd_rect = (manager.confirm.is_none()
+                && manager.command_expanded
+                && manager.selected().is_some()
+                && cmd_h > 0)
+                .then_some(PanelRect {
+                    x: content_x,
+                    y: top.saturating_add(detail_start_row as u16),
+                    width: inner as u16,
+                    height: cmd_h as u16,
+                });
+            let tail_base = if manager.command_expanded {
+                output_start_row
+            } else {
+                detail_start_row
+            };
+            let tail_len = used_rows.saturating_sub(tail_base);
+            let tail_rect = (manager.confirm.is_none()
+                && tail_visible > 0
+                && manager.selected().is_some()
+                && tail_len > 0)
+                .then_some(PanelRect {
+                    x: content_x,
+                    y: top.saturating_add(tail_base as u16),
+                    width: inner as u16,
+                    height: tail_len as u16,
+                });
             ListBodyRender {
                 lines: body,
                 task_viewport_rows: task_rows,
                 ribbon_hits,
+                detail_hits,
+                cmd_rect,
+                cmd_visible_rows,
+                cmd_total_rows,
                 tail_rect,
                 tail_rows: tail_visible,
             }

@@ -51,6 +51,56 @@ impl ContextSelection {
         self.index
     }
 
+    /// 【终端】【上下文选择】判断当前是否选中自定义输入项。
+    ///
+    /// 参数:
+    /// - `self`: 上下文选择状态
+    ///
+    /// 返回:
+    /// - 选中自定义行时返回 true
+    pub(super) fn is_custom_selected(&self) -> bool {
+        self.index == CUSTOM_INDEX
+    }
+
+    /// 【终端】【上下文选择】返回当前自定义输入原始文本。
+    ///
+    /// 参数:
+    /// - `self`: 上下文选择状态
+    ///
+    /// 返回:
+    /// - 自定义数值文本
+    pub(super) fn custom_input(&self) -> &str {
+        &self.input
+    }
+
+    /// 【终端】【上下文粘贴】净化粘贴内容并将合法容量字符填入自定义输入栏。
+    ///
+    /// 参数:
+    /// - `text`: 终端粘贴文本
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn paste_input(&mut self, text: &str) {
+        let cleaned: String = crate::cli::repl_text::strip_terminal_control_sequences(text)
+            .chars()
+            .filter(|ch| ch.is_ascii_digit() || matches!(ch, '.' | 'k' | 'K' | 'm' | 'M' | '_'))
+            .collect();
+        if cleaned.is_empty() {
+            return;
+        }
+        if self.index != CUSTOM_INDEX {
+            self.input.clear();
+        }
+        for ch in cleaned.chars() {
+            if self.input.len() >= 32 {
+                break;
+            }
+            self.input.push(ch);
+        }
+        self.index = CUSTOM_INDEX;
+        self.error = None;
+    }
+
     /// 【终端】【上下文选择】移动选项并清除上次输入错误。
     /// 参数: `down` 为是否向下移动；返回: 无
     pub(super) fn move_selection(&mut self, down: bool) {

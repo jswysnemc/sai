@@ -1,22 +1,18 @@
 use super::mouse_menu::{ButtonRow, ClickTracker};
 use super::*;
-use crossterm::event::MouseEventKind;
+use crate::render::panel_palette::{fg, PanelPalette};
+use crossterm::event::{DisableBracketedPaste, EnableBracketedPaste, MouseEventKind};
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-/// 与 `sai models` 一致的选中高亮（无反色黑底）。
-const FOCUS_STYLE: &str = "\x1b[1m\x1b[38;2;190;246;255m";
-const DIM_STYLE: &str = "\x1b[2m";
 const RESET: &str = "\x1b[0m";
 
-/// 内联模糊选择列表，供 `/agent` `/resume` `/tree` `/thinking` 等共用。
-///
-/// 视觉对齐 models 选择器：`→` + 亮色选中、弱化未选中，不铺反色黑底；
-/// 可在 REPL 已启用 raw mode 时嵌套调用。
+/// 【模糊选择】【内联入口】内联模糊选择列表，供 `/agent`、`/tree`、`/thinking` 等命令共用。
 ///
 /// 参数:
-/// - `items`: 候选项展示文本
+/// - `items`: 候选项展示文本列表
 ///
 /// 返回:
-/// - 选中项下标；取消时返回空
+/// - 选中项在原列表中的下标；取消时返回空
 pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
     let mut menu_lines = inline_fuzzy_lines(items.len()).min(terminal::size()?.1);
     reserve_inline_fuzzy_space(menu_lines)?;
@@ -55,6 +51,16 @@ pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
                 let _ = columns;
                 continue;
             }
+            Event::Paste(text) => {
+                // 1. 【模糊选择】【粘贴净化】过滤回车换行与控制序列，防止误触发提交或破坏终端状态
+                click.clear();
+                let cleaned = sanitize_paste_query(&text);
+                if !cleaned.is_empty() {
+                    query.push_str(&cleaned);
+                    selected = 0;
+                }
+                continue;
+            }
             Event::Mouse(mouse) => {
                 let width = usize::from(terminal::size()?.0.saturating_sub(2));
                 let row = mouse.row.checked_sub(anchor_y).map(usize::from);
@@ -70,6 +76,11 @@ pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
                 if let Some(target) = click.update(mouse, target) {
                     match target {
                         FuzzyTarget::Item(index) => {
+                            // 2. 【模糊选择】【二次点击确认】首次点击移动焦点，再次点击已选中项立即确认
+                            if selected == index {
+                                clear_inline_fuzzy(&mut session.stdout, anchor_y, menu_lines)?;
+                                return Ok(matches.get(selected).map(|(_, item_idx)| *item_idx));
+                            }
                             selected = index;
                             continue;
                         }
@@ -78,7 +89,7 @@ pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
                         }
                     }
                 } else {
-                    if row.is_some_and(|row| row > 0 && row <= visible) {
+                    if row.is_some_and(|row| row < usize::from(menu_lines)) {
                         match mouse.kind {
                             MouseEventKind::ScrollUp => selected = selected.saturating_sub(1),
                             MouseEventKind::ScrollDown => {
@@ -127,6 +138,10 @@ pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
                 KeyCode::Char('n') if modifiers.contains(KeyModifiers::CONTROL) => {
                     selected = (selected + 1).min(matches.len().saturating_sub(1));
                 }
+                KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    query.clear();
+                    selected = 0;
+                }
                 KeyCode::Backspace => {
                     query.pop();
                     selected = 0;
@@ -141,7 +156,29 @@ pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
     }
 }
 
-/// 判断内联选择器是否应处理终端按键事件。
+/// 【模糊选择】【粘贴清理】剥离终端控制序列并过滤换行与控制字符，制表符转为空格。
+///
+/// 参数:
+/// - `text`: 原始粘贴文本
+///
+/// 返回:
+/// - 安全的单行过滤词片段
+fn sanitize_paste_query(text: &str) -> String {
+    strip_terminal_control_sequences(text)
+        .chars()
+        .filter_map(|ch| {
+            if ch == '\t' {
+                Some(' ')
+            } else if ch.is_control() {
+                None
+            } else {
+                Some(ch)
+            }
+        })
+        .collect()
+}
+
+/// 【模糊选择】【按键过滤】判断内联选择器是否应处理终端按键事件。
 ///
 /// 参数:
 /// - `kind`: 终端上报的按键事件类型
@@ -152,6 +189,15 @@ fn should_process_inline_fuzzy_key(kind: KeyEventKind) -> bool {
     kind != KeyEventKind::Release
 }
 
+/// 【模糊选择】【匹配排序】按查询词过滤并按匹配得分排序候选项。
+///
+/// 参数:
+/// - `matcher`: 模糊匹配器
+/// - `items`: 原始候选文本
+/// - `query`: 当前过滤词
+///
+/// 返回:
+/// - `(得分, 原始索引)` 列表
 fn fuzzy_matches(matcher: &SkimMatcherV2, items: &[String], query: &str) -> Vec<(i64, usize)> {
     let mut matches = items
         .iter()
@@ -170,6 +216,45 @@ fn fuzzy_matches(matcher: &SkimMatcherV2, items: &[String], query: &str) -> Vec<
     matches
 }
 
+/// 【模糊选择】【选中行样式】根据给定调色板渲染单条候选行。
+///
+/// 参数:
+/// - `palette`: 终端自适应调色板
+/// - `item`: 候选文本
+/// - `selected_row`: 是否为当前选中行
+/// - `width`: 最大可见列宽
+///
+/// 返回:
+/// - 带自适应前景样式的单行文本
+fn format_candidate_row(
+    palette: PanelPalette,
+    item: &str,
+    selected_row: bool,
+    width: usize,
+) -> String {
+    let marker = if selected_row { "→" } else { " " };
+    let style = if selected_row {
+        format!("\x1b[1m{}", fg(palette.accent))
+    } else {
+        fg(palette.muted)
+    };
+    let line = truncate_display(&format!("{marker} {item}"), width);
+    format!("{style}{line}{RESET}")
+}
+
+/// 【模糊选择】【界面绘制】按明暗自适应配色重绘内联列表并将光标定位到过滤输入处。
+///
+/// 参数:
+/// - `stdout`: 标准输出
+/// - `anchor_y`: 面板锚点行
+/// - `menu_lines`: 面板总行数
+/// - `query`: 当前过滤词
+/// - `items`: 原始候选文本
+/// - `matches`: 匹配结果
+/// - `selected`: 当前选中下标
+///
+/// 返回:
+/// - 绘制结果
 fn draw_inline_fuzzy(
     stdout: &mut io::Stdout,
     anchor_y: u16,
@@ -183,6 +268,10 @@ fn draw_inline_fuzzy(
     let width = cols.saturating_sub(2).max(1) as usize;
     let visible = matches.len().min(menu_lines.saturating_sub(2) as usize);
     let scroll = inline_fuzzy_scroll_offset(selected, visible);
+    let palette = PanelPalette::current();
+    let muted = fg(palette.muted);
+    let input_fg = format!("\x1b[1m{}", fg(palette.text));
+
     queue!(stdout, Hide)?;
     for row in 0..menu_lines {
         queue!(
@@ -192,44 +281,54 @@ fn draw_inline_fuzzy(
         )?;
     }
 
-    // 过滤行：与 models 选择器同款弱化标签 + 亮色输入
-    let filter_label = if query.is_empty() {
-        t("type to filter", "输入内容过滤")
+    // 1. 【模糊选择】【过滤行与光标】保留最新输入尾部，计算精确光标列防止输入法候选窗漂移
+    let filter_title = format!("{}: ", t("Filter", "过滤"));
+    let prefix_width = UnicodeWidthStr::width(filter_title.as_str());
+    let count_suffix = format!("  ({}/{})", matches.len(), items.len());
+    let query_budget = width
+        .saturating_sub(prefix_width + UnicodeWidthStr::width(count_suffix.as_str()))
+        .max(4);
+    let (rendered_query, cursor_offset) = if query.is_empty() {
+        let placeholder = crate::render::clip_to_width(
+            t("type to filter", "输入内容过滤"),
+            query_budget,
+            "…",
+        );
+        (format!("{muted}{placeholder}{RESET}"), 0usize)
     } else {
-        query
+        let tail = keep_query_tail(query, query_budget);
+        let tail_w = UnicodeWidthStr::width(tail.as_str());
+        (format!("{input_fg}{tail}{RESET}"), tail_w)
     };
-    let header = format!(
-        "{DIM_STYLE}{}:{RESET} {FOCUS_STYLE}{filter_label}{RESET}  {DIM_STYLE}({}/{}){RESET}",
-        t("Filter", "过滤"),
-        matches.len(),
-        items.len()
-    );
+    let header = format!("{muted}{filter_title}{RESET}{rendered_query}{muted}{count_suffix}{RESET}");
     queue!(
         stdout,
         MoveTo(0, anchor_y),
         Print(truncate_display(&header, width)),
     )?;
 
+    // 2. 【模糊选择】【候选列表】使用明暗自适应强调色绘制选中箭头行
     if matches.is_empty() {
         queue!(
             stdout,
             MoveTo(0, anchor_y + 1),
             Print(format!(
-                "{DIM_STYLE}{}{RESET}",
+                "{muted}{}{RESET}",
                 t("  no matches", "  没有匹配项")
             ))
         )?;
     } else {
         for (row, (_, item_index)) in matches.iter().skip(scroll).take(visible).enumerate() {
-            let item_position = scroll + row;
-            let selected_row = item_position == selected;
-            let marker = if selected_row { "→" } else { " " };
-            let style = if selected_row { FOCUS_STYLE } else { DIM_STYLE };
-            let line = truncate_display(&format!("{marker} {}", items[*item_index]), width);
+            let selected_row = scroll + row == selected;
             queue!(
                 stdout,
                 MoveTo(0, anchor_y + row as u16 + 1),
-                Print(format!("{style}{line}{RESET}"))
+                Print(format_candidate_row(
+                    palette,
+                    &items[*item_index],
+                    selected_row,
+                    width
+                ))
             )?;
         }
     }
@@ -237,15 +336,45 @@ fn draw_inline_fuzzy(
         stdout,
         MoveTo(0, anchor_y + menu_lines.saturating_sub(1)),
         Print(truncate_display(
-            &format!("{DIM_STYLE}{}{RESET}", fuzzy_buttons(width).text),
+            &format!("{muted}{}{RESET}", fuzzy_buttons(width).text),
             width
         ))
     )?;
+    let cursor_x = (prefix_width + cursor_offset).min(usize::from(cols.saturating_sub(1))) as u16;
+    queue!(stdout, MoveTo(cursor_x, anchor_y), Show)?;
     stdout.flush()?;
     Ok(())
 }
 
-/// 计算模糊选择列表的可视窗口起始位置。
+/// 【模糊选择】【尾部保留】当搜索词超出列宽预算时保留最新输入的末尾片段。
+///
+/// 参数:
+/// - `query`: 完整搜索词
+/// - `budget`: 可用显示列宽
+///
+/// 返回:
+/// - 不超过预算的搜索词文本
+fn keep_query_tail(query: &str, budget: usize) -> String {
+    if UnicodeWidthStr::width(query) <= budget {
+        return query.to_string();
+    }
+    if budget <= 1 {
+        return "…".repeat(budget);
+    }
+    let mut kept = Vec::new();
+    let mut used = 1usize;
+    for ch in query.chars().rev() {
+        let ch_w = ch.width().unwrap_or(0);
+        if used + ch_w > budget {
+            break;
+        }
+        kept.push(ch);
+        used += ch_w;
+    }
+    format!("…{}", kept.into_iter().rev().collect::<String>())
+}
+
+/// 【模糊选择】【滚动窗口】计算模糊选择列表的可视窗口起始位置。
 ///
 /// 参数:
 /// - `selected`: 当前选中项在匹配结果中的索引
@@ -261,6 +390,15 @@ fn inline_fuzzy_scroll_offset(selected: usize, visible: usize) -> usize {
     }
 }
 
+/// 【模糊选择】【清理区域】擦除内联列表占用的全部行并恢复光标。
+///
+/// 参数:
+/// - `stdout`: 标准输出
+/// - `anchor_y`: 面板首行
+/// - `lines`: 占用行数
+///
+/// 返回:
+/// - 擦除结果
 fn clear_inline_fuzzy(stdout: &mut io::Stdout, anchor_y: u16, lines: u16) -> Result<()> {
     for row in 0..lines {
         queue!(
@@ -274,6 +412,13 @@ fn clear_inline_fuzzy(stdout: &mut io::Stdout, anchor_y: u16, lines: u16) -> Res
     Ok(())
 }
 
+/// 【模糊选择】【预留空间】在当前光标下推进所需行数。
+///
+/// 参数:
+/// - `lines`: 面板行数
+///
+/// 返回:
+/// - 推进结果
 fn reserve_inline_fuzzy_space(lines: u16) -> Result<()> {
     // raw mode 下用 \r\n 推进，避免 println 依赖 cooked 模式
     let mut stdout = io::stdout();
@@ -284,10 +429,25 @@ fn reserve_inline_fuzzy_space(lines: u16) -> Result<()> {
     Ok(())
 }
 
+/// 【模糊选择】【面板高度】计算给定候选数对应的内联面板行数。
+///
+/// 参数:
+/// - `item_count`: 候选数量
+///
+/// 返回:
+/// - 面板占用行数
 fn inline_fuzzy_lines(item_count: usize) -> u16 {
     ((item_count.min(10) + 2) as u16).max(3)
 }
 
+/// 【模糊选择】【截断文本】按可见宽度裁剪含 ANSI 序列的字符串。
+///
+/// 参数:
+/// - `value`: 原文
+/// - `max`: 最大列数
+///
+/// 返回:
+/// - 裁剪结果
 fn truncate_display(value: &str, max: usize) -> String {
     crate::render::ansi_clip::clip_ansi_to_width(value, max, "…")
 }
@@ -299,16 +459,24 @@ struct InlineRawMode {
 }
 
 impl InlineRawMode {
-    /// 【终端】【列表输入】无参数；先取得鼠标捕获，再启用原始模式，返回自动恢复守卫。
+    /// 【模糊选择】【会话启动】获取鼠标捕获、开启括号粘贴与原始模式，返回自动恢复守卫。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 终端模式守卫
     fn start() -> Result<Self> {
         let mouse = super::mouse_capture::MouseCapture::acquire()?;
         let was_raw = terminal::is_raw_mode_enabled().unwrap_or(false);
         if !was_raw {
             terminal::enable_raw_mode()?;
         }
+        let mut stdout = io::stdout();
+        let _ = execute!(stdout, EnableBracketedPaste);
         Ok(Self {
             _mouse: mouse,
-            stdout: io::stdout(),
+            stdout,
             was_raw,
         })
     }
@@ -320,7 +488,13 @@ enum FuzzyTarget {
     Key(KeyCode),
 }
 
-/// 【终端】【列表按钮】参数为可用列数；返回确认与取消按钮及其显示列范围。
+/// 【模糊选择】【底栏按钮】构造确认与取消按钮及其快捷键提示。
+///
+/// 参数:
+/// - `width`: 可用列宽
+///
+/// 返回:
+/// - 可点击的按钮行
 fn fuzzy_buttons(width: usize) -> ButtonRow<FuzzyTarget> {
     ButtonRow::new(
         [
@@ -340,7 +514,7 @@ fn fuzzy_buttons(width: usize) -> ButtonRow<FuzzyTarget> {
 
 impl Drop for InlineRawMode {
     fn drop(&mut self) {
-        let _ = execute!(self.stdout, Show);
+        let _ = execute!(self.stdout, DisableBracketedPaste, Show);
         // 仅恢复调用前状态：嵌套在 REPL raw mode 时不要关掉
         if !self.was_raw {
             let _ = terminal::disable_raw_mode();
@@ -350,7 +524,12 @@ impl Drop for InlineRawMode {
 
 #[cfg(test)]
 mod tests {
-    use super::{inline_fuzzy_scroll_offset, should_process_inline_fuzzy_key};
+    use super::{
+        format_candidate_row, inline_fuzzy_scroll_offset, sanitize_paste_query,
+        should_process_inline_fuzzy_key,
+    };
+    use crate::render::panel_palette::{fg, PanelPalette};
+    use crate::render::terminal_contrast::{contrast, MIN_TEXT_CONTRAST};
     use crossterm::event::KeyEventKind;
 
     /// Windows 上报回车释放事件时，选择器不能将其解释为确认。
@@ -388,12 +567,25 @@ mod tests {
         assert_eq!(inline_fuzzy_scroll_offset(4, 0), 0);
     }
 
-    /// 选中行样式不含反色，使用箭头标记。
+    /// 【模糊选择测试】【自适应对比度】验证深浅背景下选中行均保持箭头标记、无反色且对比度达标。
     #[test]
-    fn selected_row_uses_arrow_without_reverse_video() {
-        let line = format!("{}→ item{}", super::FOCUS_STYLE, super::RESET);
-        assert!(line.contains('→'));
-        assert!(!line.contains("\x1b[7m"));
-        assert!(line.contains("190;246;255"));
+    fn selected_row_uses_arrow_without_reverse_video_and_adapts_to_light_theme() {
+        for bg in [(18, 20, 24), (248, 249, 250), (194, 213, 231)] {
+            let palette = PanelPalette::for_background(bg);
+            let line = format_candidate_row(palette, "item", true, 40);
+            assert!(line.contains('→'));
+            assert!(!line.contains("\x1b[7m"));
+            assert!(line.contains(&fg(palette.accent)));
+            assert!(contrast(palette.accent, bg) >= MIN_TEXT_CONTRAST);
+            assert!(contrast(palette.muted, bg) >= MIN_TEXT_CONTRAST);
+        }
+    }
+
+    /// 【模糊选择测试】【粘贴净化】验证粘贴内容自动剔除回车换行与控制序列。
+    #[test]
+    fn paste_sanitizes_newlines_and_control_sequences() {
+        let cleaned = sanitize_paste_query("gpt-5\r\n\x1b[31m\tmini\x07");
+        assert_eq!(cleaned, "gpt-5 mini");
+        assert!(!cleaned.contains('\n') && !cleaned.contains('\r') && !cleaned.contains('\x1b'));
     }
 }

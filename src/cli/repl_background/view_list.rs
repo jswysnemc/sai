@@ -1,6 +1,7 @@
 //! 后台任务列表视图组件：筛选胶囊、通道切换入口与单行任务条目。
 
 use super::{
+    command_style::highlight_inline,
     model::{safe_text, Filter, Stream, Task, TaskManager},
     task_style::status_style,
     theme::{fit, pill, status_glyph, stream_name, RESET},
@@ -135,16 +136,16 @@ pub(super) fn task_row(
         format!("{elapsed:>7}")
     };
     let indicator = if selected { "▎" } else { " " };
-    let status_block = format!("{glyph} {status:<7}");
+    let status_pad = 7usize.saturating_sub(ansi_visible_width(status));
+    let status_block = format!("{glyph} {status}{}", " ".repeat(status_pad));
     // 1. 【后台任务】【列宽分配】留出左指示条(1) + 空格(1) + 状态(9) + 间隔(2) + 元信息 + 尾空格(1)
     let fixed = 1 + 1 + ansi_visible_width(&status_block) + 2 + metadata.len() + 1;
     let label_width = width.saturating_sub(fixed).max(1);
-    let label = if task.label.trim().is_empty() {
-        &task.command
+    let name = if task.label.trim().is_empty() {
+        highlight_inline(&task.command, label_width, false, palette)
     } else {
-        &task.label
+        fit(&safe_text(&task.label), label_width)
     };
-    let name = fit(&safe_text(label), label_width);
     let padding = label_width.saturating_sub(ansi_visible_width(&name));
     let row = format!(
         "{}{}{indicator}{} {}{status_block}\x1b[39m {}{name}\x1b[22m{} {}{metadata}\x1b[39m ",

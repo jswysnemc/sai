@@ -1,6 +1,7 @@
 mod context;
 #[cfg(test)]
 mod context_tests;
+mod hover_style;
 mod mouse;
 #[cfg(test)]
 mod mouse_tests;
@@ -13,9 +14,10 @@ use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use anyhow::{bail, Result};
 use crossterm::cursor::{Hide, MoveTo, Show};
-use crossterm::event::{KeyCode, KeyModifiers};
+use crossterm::event::{DisableBracketedPaste, EnableBracketedPaste, KeyCode, KeyModifiers};
 use crossterm::terminal::{self, Clear, ClearType};
 use crossterm::{execute, queue};
+use mouse::PickerInput;
 use state::{PickerColumn, PickerState};
 use std::io::{self, IsTerminal, Write};
 
@@ -34,7 +36,7 @@ pub(super) enum PickerOutcome {
     },
 }
 
-/// 【CLI】【模型选择】运行交互式模型与思考等级选择（终端打印结果）。
+/// 【CLI】【模型选择】运行交互式模型与思考等级选择并在终端打印结果。
 ///
 /// 参数:
 /// - `paths`: Sai 路径集合
@@ -55,9 +57,6 @@ pub(super) fn run(paths: &SaiPaths) -> Result<()> {
 }
 
 /// 【CLI/TUI】【模型选择】运行交互式三列选择并写回配置。
-///
-/// 与独立 `sai models` 相同：↑↓ 当前列移动，←→ 切换模型/思考/上下文列，
-/// 输入过滤，Enter 保存，Esc 取消。可在 REPL 已启用 raw mode 时嵌套调用。
 ///
 /// 参数:
 /// - `paths`: Sai 路径集合
@@ -88,7 +87,7 @@ pub(super) fn run_interactive(paths: &SaiPaths) -> Result<PickerOutcome> {
         );
     }
 
-    // 1. 以当前生效的供应商与模型为起点
+    // 1. 【模型选择】【起点定位】以当前生效的供应商与模型为初始选中项
     let active = config.provider(None)?;
     let current_provider = active.id.clone();
     let current_model = active.default_model.clone();
@@ -102,7 +101,7 @@ pub(super) fn run_interactive(paths: &SaiPaths) -> Result<PickerOutcome> {
     );
     picker.enable_context(&config);
 
-    // 2. 进入交互循环
+    // 2. 【模型选择】【交互循环】支持键盘、粘贴与鼠标三列选择
     let Some(()) = run_loop(&mut picker, &mut config, paths)? else {
         if config.subagent != initial_subagent {
             return Ok(PickerOutcome::Saved {
@@ -113,7 +112,7 @@ pub(super) fn run_interactive(paths: &SaiPaths) -> Result<PickerOutcome> {
         return Ok(PickerOutcome::Cancelled);
     };
 
-    // 3. 保存所选取值
+    // 3. 【模型选择】【持久化保存】写回激活模型、思考等级与上下文预算
     let selected = picker
         .selected_model()
         .cloned()
@@ -129,7 +128,13 @@ pub(super) fn run_interactive(paths: &SaiPaths) -> Result<PickerOutcome> {
         .providers
         .iter_mut()
         .find(|provider| provider.id == selected.provider_id)
-        .ok_or_else(|| anyhow::anyhow!("unknown provider: {}", selected.provider_id))?
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "{}: {}",
+                t("unknown provider", "未知供应商"),
+                selected.provider_id
+            )
+        })?
         .set_model_context_limit_tokens_for(&selected.model, limit);
     config.save(paths)?;
     let message = format!(
@@ -146,7 +151,7 @@ pub(super) fn run_interactive(paths: &SaiPaths) -> Result<PickerOutcome> {
     })
 }
 
-/// 运行按键循环（固定锚点行绘制，兼容 CLI 与 TUI 嵌套）。
+/// 【模型选择】【事件循环】在固定锚点绘制内联面板，响应键盘、粘贴与子面板切换。
 ///
 /// 参数:
 /// - `picker`: 选择状态
@@ -154,7 +159,7 @@ pub(super) fn run_interactive(paths: &SaiPaths) -> Result<PickerOutcome> {
 /// - `paths`: Sai 路径集合，用于配置落盘
 ///
 /// 返回:
-/// - 确认时返回 Some(())，取消时返回 None
+/// - 确认时返回 `Some(())`，取消或中断时返回 `None`
 fn run_loop(
     picker: &mut PickerState,
     config: &mut AppConfig,
@@ -169,7 +174,7 @@ fn run_loop(
     }
     impl Drop for ModeGuard {
         fn drop(&mut self) {
-            let _ = execute!(io::stdout(), Show);
+            let _ = execute!(io::stdout(), DisableBracketedPaste, Show);
             if !self.was_raw {
                 let _ = terminal::disable_raw_mode();
             }
@@ -179,15 +184,30 @@ fn run_loop(
     let _mouse = crate::cli::mouse_capture::MouseCapture::acquire()?;
 
     let mut stdout = io::stdout();
-    execute!(stdout, Hide)?;
+    execute!(stdout, EnableBracketedPaste, Hide)?;
 
     let mut frame = mouse::PickerFrame::new()?;
     let mut click = Default::default();
     loop {
         let lines = render::render_sized(picker, frame.width, usize::from(frame.rows), true);
-        draw_at(&mut stdout, frame.anchor, frame.rows, &lines)?;
-        let Some(key) = frame.read(picker, &mut click, true)? else {
+        let cursor = render::input_cursor_position(picker, frame.width, usize::from(frame.rows));
+        draw_at(&mut stdout, frame.anchor, frame.rows, &lines, cursor)?;
+        let Some(input) = frame.read(picker, &mut click, true)? else {
             continue;
+        };
+        let key = match input {
+            PickerInput::Paste(text) => {
+                // 1. 【模型选择】【粘贴分发】上下文列粘贴数值，其余列粘贴过滤词
+                if picker.column() == PickerColumn::Context {
+                    if let Some(context) = picker.context_selection_mut() {
+                        context.paste_input(&text);
+                        continue;
+                    }
+                }
+                picker.paste_filter(&text);
+                continue;
+            }
+            PickerInput::Key(key) => key,
         };
         if picker.column() == PickerColumn::Context {
             if let Some(context) = picker.context_selection_mut() {
@@ -222,8 +242,12 @@ fn run_loop(
             KeyCode::Left => picker.focus_left(),
             KeyCode::Right => picker.focus_right(),
             KeyCode::Tab => {
-                // 子智能体模型设置与主选择器共用同一锚点绘制区
-                subagents::run(&mut stdout, &mut frame, config, paths)?;
+                // 2. 【模型选择】【子任务面板】子面板按 Ctrl+C 时直接退出整个选择器
+                click.clear();
+                picker.set_hovered(None);
+                if subagents::run(&mut stdout, &mut frame, config, paths)? {
+                    return Ok(None);
+                }
             }
             KeyCode::Backspace => picker.pop_filter(),
             KeyCode::Delete => picker.clear_filter(),
@@ -242,7 +266,7 @@ fn run_loop(
     }
 }
 
-/// 预留下拉选择区域。
+/// 【模型选择】【预留空间】在 raw mode 下推进下拉选择区域所需行数。
 ///
 /// 参数:
 /// - `rows`: 占用行数
@@ -250,7 +274,6 @@ fn run_loop(
 /// 返回:
 /// - 是否成功
 fn reserve_frame_space(rows: u16) -> Result<()> {
-    // 在 raw mode 下用 \r\n 推进光标，避免禁用 raw 再 println
     let mut stdout = io::stdout();
     for _ in 1..rows {
         queue!(stdout, crossterm::style::Print("\r\n"))?;
@@ -259,13 +282,14 @@ fn reserve_frame_space(rows: u16) -> Result<()> {
     Ok(())
 }
 
-/// 在固定锚点绘制一帧。
+/// 【模型选择】【锚点绘制】在固定锚点重绘一帧并按需定位显示输入光标。
 ///
 /// 参数:
 /// - `stdout`: 标准输出
 /// - `anchor_y`: 首行行号
 /// - `frame_rows`: 预留总行数
 /// - `lines`: 待绘制内容
+/// - `cursor`: 相对面板左上角的输入光标位置
 ///
 /// 返回:
 /// - 绘制结果
@@ -274,8 +298,10 @@ fn draw_at(
     anchor_y: u16,
     frame_rows: u16,
     lines: &[String],
+    cursor: Option<(u16, u16)>,
 ) -> Result<()> {
     let width = usize::from(terminal::size()?.0.saturating_sub(1));
+    queue!(stdout, Hide)?;
     for row in 0..frame_rows {
         queue!(
             stdout,
@@ -291,11 +317,18 @@ fn draw_at(
             )?;
         }
     }
+    if let Some((col, row)) = cursor.filter(|(_, r)| *r < frame_rows) {
+        queue!(
+            stdout,
+            MoveTo(col.min(width as u16), anchor_y.saturating_add(row)),
+            Show
+        )?;
+    }
     stdout.flush()?;
     Ok(())
 }
 
-/// 清空选择区域。
+/// 【模型选择】【清理面板】清空选择区域并恢复光标显示。
 ///
 /// 参数:
 /// - `stdout`: 标准输出
@@ -317,13 +350,13 @@ fn clear_frame(stdout: &mut io::Stdout, anchor_y: u16, frame_rows: u16) -> Resul
     Ok(())
 }
 
-/// 归一化配置中的思考等级。
+/// 【模型选择】【等级归一】将配置中的空思考等级归一化为 auto。
 ///
 /// 参数:
 /// - `level`: 配置中的原始取值
 ///
 /// 返回:
-/// - 可选列表中的等级；空值视为 auto
+/// - 可选列表中的等级名称
 fn normalized_level(level: &str) -> &str {
     let trimmed = level.trim();
     if trimmed.is_empty() {
@@ -333,12 +366,12 @@ fn normalized_level(level: &str) -> &str {
     }
 }
 
-/// 将思考等级写回指定供应商。
+/// 【模型选择】【写回等级】将思考等级按统一存储编码写回指定供应商。
 ///
 /// 参数:
 /// - `config`: 应用配置
 /// - `provider_id`: 供应商标识
-/// - `level`: 目标思考等级；auto 表示交由供应商默认行为
+/// - `level`: 目标思考等级；auto 存为空串以保留默认行为
 ///
 /// 返回:
 /// - 找到供应商时为 Ok
@@ -348,13 +381,9 @@ fn apply_level(config: &mut AppConfig, provider_id: &str, level: &str) -> Result
         .iter_mut()
         .find(|provider| provider.id == provider_id)
         .ok_or_else(|| {
-            anyhow::anyhow!("{}: {provider_id}", t("unknown provider", "未知 provider"))
+            anyhow::anyhow!("{}: {provider_id}", t("unknown provider", "未知供应商"))
         })?;
-    provider.thinking_level = if level == "auto" {
-        String::new()
-    } else {
-        level.to_string()
-    };
+    provider.thinking_level = crate::cli::providers::stored_thinking_level(level);
     Ok(())
 }
 
@@ -375,12 +404,15 @@ mod tests {
         assert!(config.providers[0].thinking_level.is_empty());
     }
 
-    /// 【CLI】【模型选择】验证未知供应商返回错误而不静默忽略。
+    /// 【CLI】【模型选择】验证未知供应商返回规范提示而不静默忽略。
     #[test]
     fn unknown_provider_is_reported() {
         let mut config = AppConfig::default();
-
-        assert!(apply_level(&mut config, "missing-provider", "high").is_err());
+        let err = apply_level(&mut config, "missing-provider", "high")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("missing-provider"));
+        assert!(!err.contains("未知 provider"));
     }
 
     /// 【CLI】【模型选择】验证空思考等级归一化为 auto。

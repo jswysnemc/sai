@@ -274,18 +274,29 @@ fn footer_shows_branch_after_directory() {
 
 #[test]
 fn input_row_prefix_follows_line_role() {
-    let first = chrome_input_row(ChromeInputPrefix::Message, "hello", 20);
+    let first = chrome_input_row_for_background((24, 28, 32), ChromeInputPrefix::Message, "hello", 20);
     assert!(first.contains(CHROME_PANEL_BG));
     assert!(first.contains('→'));
     assert!(first.contains("hello"));
     // shell 模式换 $ 提示符
-    let shell = chrome_input_row(ChromeInputPrefix::Shell, "!ls", 20);
+    let shell = chrome_input_row_for_background((24, 28, 32), ChromeInputPrefix::Shell, "!ls", 20);
     assert!(shell.contains('$'));
     assert!(!shell.contains('→'));
     // 续行只保留缩进
-    let cont = chrome_input_row(ChromeInputPrefix::Continuation, "wrapped", 20);
+    let cont =
+        chrome_input_row_for_background((24, 28, 32), ChromeInputPrefix::Continuation, "wrapped", 20);
     assert!(!cont.contains('→') && !cont.contains('$'));
     assert!(cont.contains("wrapped"));
+    // 浅色背景自动切换柔和浅灰面板与深色正文，不使用深黑 235 背景
+    let light_palette = crate::render::panel_palette::PanelPalette::for_background((250, 250, 250));
+    let light_row =
+        chrome_input_row_for_background((250, 250, 250), ChromeInputPrefix::Message, "hello", 20);
+    let light_pad = chrome_input_pad_row_for_background((250, 250, 250), 20);
+    assert!(!light_row.contains(CHROME_PANEL_BG));
+    assert!(light_row.contains(&crate::render::panel_palette::bg(light_palette.hover_bg)));
+    assert!(light_row.contains(&crate::render::panel_palette::fg(light_palette.text)));
+    assert!(light_pad.contains(&crate::render::panel_palette::bg(light_palette.hover_bg)));
+    assert_eq!(visible_width(&light_row), 20);
     // 输入上方紧凑，不留额外空白行
     assert_eq!(chrome_fixed_rows(), 0);
 }

@@ -56,7 +56,7 @@ pub(super) fn flatten_index(tree: &SessionTreeIndex) -> Vec<TreeRow> {
             "○"
         };
         let summary = if node.user_summary.is_empty() {
-            "(空)"
+            super::t("(empty)", "（空）")
         } else {
             &node.user_summary
         };

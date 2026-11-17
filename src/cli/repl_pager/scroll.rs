@@ -18,16 +18,20 @@ pub(super) struct ScrollViewport {
     pub total_lines: usize,
     pub max_scroll: usize,
     pub progress_row: u16,
+    pub has_progress: bool,
     pub body_top_row: u16,
 }
 
-/// 处理鼠标事件（滚轮、点击/拖动进度条）。
+/// 【终端分页】【鼠标滚动】处理鼠标事件（滚轮、点击与拖动进度条）。
 ///
 /// 参数:
 /// - `mouse`: 鼠标事件
 /// - `viewport`: 正文尺寸、滚动范围与进度条位置
 /// - `scroll`: 当前滚动偏移（可写）
 /// - `drag_target`: 当前拖动目标（可写）
+///
+/// 返回:
+/// - 无
 pub(super) fn apply_mouse(
     mouse: MouseEvent,
     viewport: ScrollViewport,
@@ -40,12 +44,12 @@ pub(super) fn apply_mouse(
         total_lines,
         max_scroll,
         progress_row,
+        has_progress,
         body_top_row,
     } = viewport;
     let body_bottom = body_top_row.saturating_add(view_h as u16);
-    let on_horizontal = mouse.row == progress_row
-        || mouse.row.saturating_add(1) == progress_row
-        || progress_row.saturating_add(1) == mouse.row;
+    // 1. 【终端分页】【轨道命中】仅在横向进度条实际存在且命中该行时启动横向拖拽，避免吞噬底栏关闭点击
+    let on_horizontal = has_progress && mouse.row == progress_row;
     let on_vertical = mouse.row >= body_top_row
         && mouse.row < body_bottom
         && cols > 0

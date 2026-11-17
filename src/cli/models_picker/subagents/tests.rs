@@ -70,3 +70,161 @@ fn choice_state_restores_independent_model_and_thinking() {
     );
     assert_eq!(picker.selected_level(), "high");
 }
+
+/// 【子任务设置测试】【80列排版】长供应商与模型名称在 80 列终端中压缩中间列，右侧思考等级始终完整保留。
+#[test]
+fn eighty_column_subagent_row_preserves_right_aligned_thinking_level() {
+    let mut config = AppConfig::default();
+    config.providers[0].id = "openrouter-enterprise".into();
+    config.providers[0].models =
+        vec!["anthropic/claude-3.7-sonnet-thinking-preview-2026".into()];
+    config.providers[0].default_model = config.providers[0].models[0].clone();
+    config.active_provider = "openrouter-enterprise".into();
+    config
+        .set_subagent_model_choice(
+            None,
+            SubagentModelChoice {
+                provider_id: "openrouter-enterprise".into(),
+                model: "anthropic/claude-3.7-sonnet-thinking-preview-2026".into(),
+                thinking_level: "xhigh".into(),
+            },
+        )
+        .unwrap();
+    let state = SubagentListState::new(&config, None);
+    let lines = render::list(&state, 79, 12, "");
+    let plain = crate::cli::repl_text::strip_terminal_control_sequences(&lines[3]);
+    assert!(
+        plain.ends_with("·  xhigh"),
+        "右侧思考等级不应被长模型名截断: {plain}"
+    );
+    assert!(unicode_width::UnicodeWidthStr::width(plain.as_str()) <= 79);
+}
+
+/// 【子任务设置测试】【鼠标悬停与二次点击】验证子任务列表悬停行、悬停返回按钮及二次点击进入编辑。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn subagent_list_highlights_hovered_controls_and_confirms_on_second_click() {
+    use crate::render::ansi_clip::strip_ansi;
+    use crate::render::panel_palette::{bg, PanelPalette};
+    use crossterm::event::MouseButton;
+
+    let mut config = AppConfig::default();
+    config.agents.push(profile("worker", true));
+    let mut state = SubagentListState::new(&config, None);
+    let mut click = ClickTracker::default();
+    let palette = PanelPalette::for_background((16, 18, 22));
+    let hover_sgr = bg(palette.hover_bg);
+    let focus_sgr = bg(palette.focus_bg);
+
+    // 1. 【子任务设置测试】【默认焦点底色】初始选中首行带焦点底色，次行与底栏无悬停底色
+    let baseline = render::list_with_palette(&state, 80, 12, "", palette);
+    assert!(baseline[3].contains(&focus_sgr));
+    assert!(!baseline[4].contains(&hover_sgr));
+    assert!(!baseline[11].contains(&hover_sgr));
+
+    // 2. 【子任务设置测试】【行悬停反馈】移入未选中子任务行时渲染悬停底色
+    let move_row = handle_list_mouse(
+        &mut state,
+        &mut click,
+        0,
+        12,
+        80,
+        MouseEvent {
+            kind: MouseEventKind::Moved,
+            column: 4,
+            row: 4,
+            modifiers: KeyModifiers::NONE,
+        },
+    );
+    assert_eq!(move_row, SubagentMouseAction::Redraw);
+    assert_eq!(state.hovered(), Some(ListTarget::Item(1)));
+    let row_hovered = render::list_with_palette(&state, 80, 12, "", palette);
+    assert!(row_hovered[4].contains(&hover_sgr));
+    assert!(unicode_width::UnicodeWidthStr::width(strip_ansi(&row_hovered[4]).as_str()) <= 80);
+
+    // 3. 【子任务设置测试】【返回按钮悬停】移入底栏返回按钮时点亮悬停底色
+    let move_back = handle_list_mouse(
+        &mut state,
+        &mut click,
+        0,
+        12,
+        80,
+        MouseEvent {
+            kind: MouseEventKind::Moved,
+            column: 2,
+            row: 11,
+            modifiers: KeyModifiers::NONE,
+        },
+    );
+    assert_eq!(move_back, SubagentMouseAction::Redraw);
+    assert_eq!(state.hovered(), Some(ListTarget::Back));
+    let back_hovered = render::list_with_palette(&state, 80, 12, "", palette);
+    assert!(back_hovered[11].contains(&hover_sgr));
+    assert!(unicode_width::UnicodeWidthStr::width(strip_ansi(&back_hovered[11]).as_str()) <= 80);
+
+    // 4. 【子任务设置测试】【二次点击进入】未选中行首次点击先切换焦点，再次点击进入设置
+    handle_list_mouse(
+        &mut state,
+        &mut click,
+        0,
+        12,
+        80,
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 4,
+            row: 4,
+            modifiers: KeyModifiers::NONE,
+        },
+    );
+    let first = handle_list_mouse(
+        &mut state,
+        &mut click,
+        0,
+        12,
+        80,
+        MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: 4,
+            row: 4,
+            modifiers: KeyModifiers::NONE,
+        },
+    );
+    assert_eq!(first, SubagentMouseAction::Redraw);
+    assert_eq!(state.index, 1);
+
+    handle_list_mouse(
+        &mut state,
+        &mut click,
+        0,
+        12,
+        80,
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 4,
+            row: 4,
+            modifiers: KeyModifiers::NONE,
+        },
+    );
+    let second = handle_list_mouse(
+        &mut state,
+        &mut click,
+        0,
+        12,
+        80,
+        MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: 4,
+            row: 4,
+            modifiers: KeyModifiers::NONE,
+        },
+    );
+    assert_eq!(
+        second,
+        SubagentMouseAction::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    );
+}

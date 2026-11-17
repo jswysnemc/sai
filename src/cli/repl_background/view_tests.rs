@@ -77,8 +77,14 @@ fn frame_contains_status_details_and_confirm_target() {
             .unwrap_or_default()
             .to_string()
     };
-    assert!(row("任务 run").contains(" running "), "{text}");
-    assert!(row("任务 done").contains(" stopped "), "{text}");
+    assert!(
+        row("任务 run").contains(crate::i18n::text(" running ", " 运行中")),
+        "{text}"
+    );
+    assert!(
+        row("任务 done").contains(crate::i18n::text(" stopped ", " 已停止")),
+        "{text}"
+    );
     assert!(text.contains("/tmp/项目"));
     assert!(text.contains("echo hello"));
     manager.confirm = Some(Request::Stop {
@@ -304,4 +310,114 @@ fn wheel_outside_panel_rect_is_ignored() {
     assert_eq!(manager.selected_id.as_deref(), Some("run"));
     input::mouse(&mut manager, wheel(10), &frame);
     assert_eq!(manager.selected_id.as_deref(), Some("done"));
+}
+
+/// 【后台任务测试】【命令语法着色】详情卡、停止确认卡与无标签队列行均输出 ANSI 着色且保留纯文本命令。
+/// 参数: 无；返回: 无。
+#[test]
+fn details_and_unlabeled_row_render_syntax_colored_commands() {
+    let mut manager = TaskManager::default();
+    let mut unlabeled = task("t1", "running");
+    unlabeled.label.clear();
+    unlabeled.command = "echo 'hello' && sleep 5".into();
+    manager.tasks = vec![unlabeled];
+    manager.loading = false;
+    manager.reconcile();
+
+    let frame = with_locale(Locale::En, || view::render(&mut manager, rect((110, 24))));
+    let cmd_line = frame
+        .lines
+        .iter()
+        .find(|line| strip_ansi(line).contains("Command"))
+        .expect("command detail line");
+    let plain_cmd = strip_ansi(cmd_line);
+    assert!(
+        plain_cmd.contains("$ echo 'hello' && sleep 5"),
+        "{plain_cmd}"
+    );
+    let echo_pos = cmd_line.find("echo").expect("command token present");
+    let sleep_end = cmd_line.find("sleep").expect("sleep token present");
+    assert!(
+        cmd_line[echo_pos..sleep_end].contains("\x1b[38;"),
+        "expected syntax foreground SGR between command tokens: {cmd_line:?}"
+    );
+
+    let list_line = frame
+        .lines
+        .iter()
+        .find(|line| {
+            let stripped = strip_ansi(line);
+            stripped.contains("▎") && stripped.contains("echo 'hello'")
+        })
+        .expect("unlabeled task row falls back to colored command");
+    assert!(list_line.contains("\x1b[48;2;"), "{list_line:?}");
+
+    manager.confirm = Some(Request::Stop {
+        id: "t1".into(),
+        force: false,
+    });
+    let confirm_frame = with_locale(Locale::En, || view::render(&mut manager, rect((110, 24))));
+    let confirm_cmd = confirm_frame
+        .lines
+        .iter()
+        .find(|line| strip_ansi(line).contains("Command"))
+        .expect("confirm command line");
+    assert!(strip_ansi(confirm_cmd).contains("$ echo 'hello' && sleep 5"));
+    let confirm_echo = confirm_cmd.find("echo").expect("confirm echo token");
+    let confirm_sleep = confirm_cmd.find("sleep").expect("confirm sleep token");
+    assert!(confirm_cmd[confirm_echo..confirm_sleep].contains("\x1b[38;"));
+}
+
+/// 【后台任务测试】【命令展开与边界】按 c 展开被截断的多行命令，并在各终端尺寸下严守列宽行高上限。
+/// 参数: 无；返回: 无。
+#[test]
+fn command_expand_key_reveals_truncated_multiline_command_within_bounds() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let mut manager = TaskManager::default();
+    let mut item = task("long", "running");
+    item.command = concat!(
+        "export DATABASE_URL='postgres://localhost:5432/app'\n",
+        "cargo run --release --bin worker -- --concurrency 8 --queue priority_jobs\n",
+        "echo 'FINAL_SENTINEL_MARKER'"
+    )
+    .into();
+    manager.tasks = vec![item];
+    manager.loading = false;
+    manager.reconcile();
+
+    let collapsed = plain(&mut manager, (100, 24)).join("\n");
+    assert!(collapsed.contains("[c] Expand cmd"), "{collapsed}");
+    assert!(collapsed.contains("c command"), "{collapsed}");
+    assert!(
+        !collapsed.contains("FINAL_SENTINEL_MARKER"),
+        "single-line preview should truncate multiline tail: {collapsed}"
+    );
+
+    input::handle(
+        &mut manager,
+        KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE),
+        10,
+    );
+    assert!(manager.command_expanded);
+
+    let expanded = plain(&mut manager, (100, 24)).join("\n");
+    assert!(expanded.contains("[c] Collapse cmd"), "{expanded}");
+    assert!(expanded.contains("c collapse"), "{expanded}");
+    assert!(expanded.contains("DATABASE_URL"), "{expanded}");
+    assert!(expanded.contains("priority_jobs"), "{expanded}");
+    assert!(expanded.contains("FINAL_SENTINEL_MARKER"), "{expanded}");
+
+    for size in [(96, 20), (60, 16), (20, 8), (2, 2), (0, 0)] {
+        for locale in [Locale::En, Locale::Zh] {
+            let frame = with_locale(locale, || view::render(&mut manager, rect(size)));
+            assert!(frame.lines.len() <= usize::from(size.1), "{size:?}");
+            for line in &frame.placed() {
+                assert!(
+                    ansi_visible_width(line) <= usize::from(size.0),
+                    "{size:?}: {line}"
+                );
+            }
+        }
+    }
 }

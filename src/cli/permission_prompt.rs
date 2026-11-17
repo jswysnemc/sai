@@ -7,13 +7,15 @@ use crate::render::{
 };
 use anyhow::Result;
 use crossterm::cursor::{Hide, MoveTo, Show};
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{
+    self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEventKind, KeyModifiers,
+};
 use crossterm::style::Print;
 use crossterm::terminal::{Clear, ClearType};
 use crossterm::{execute, queue};
 use std::io::{self, IsTerminal, Write};
 
-/// 终端原始模式与光标恢复守卫。
+/// 终端原始模式、括号粘贴与光标恢复守卫。
 struct TerminalGuard {
     show_cursor: bool,
 }
@@ -21,6 +23,7 @@ struct TerminalGuard {
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
         let mut stdout = io::stdout();
+        let _ = execute!(stdout, DisableBracketedPaste);
         if self.show_cursor {
             let _ = execute!(stdout, Show);
         }
@@ -60,10 +63,10 @@ pub(super) fn read_permission_decision(
 fn read_terminal_decision(request: &PermissionRequest) -> Result<Option<PermissionDecision>> {
     let mut state = PermissionInteractionState::new();
     let mut stdout = io::stdout();
-    // 1. 先刷掉上游流式输出，再进入 raw mode
+    // 1. 先刷掉上游流式输出，再进入 raw mode 与括号粘贴
     stdout.flush()?;
     crossterm::terminal::enable_raw_mode()?;
-    execute!(stdout, Hide)?;
+    execute!(stdout, EnableBracketedPaste, Hide)?;
     let _guard = TerminalGuard { show_cursor: true };
     // 2. 预留菜单空间并记录锚点行，之后的重绘都从锚点开始
     let mut anchor = reserve_menu_anchor(&mut stdout, menu_rows(request, &state))?;
@@ -254,13 +257,14 @@ fn ensure_anchor_space(stdout: &mut io::Stdout, anchor: u16, rows: u16) -> Resul
     Ok(anchor.saturating_sub(overflow))
 }
 
-/// 从锚点行绘制完整权限菜单。
+/// 【权限提示】【菜单绘制】从锚点行重绘完整权限菜单，并在编辑拒绝原因时定位终端光标。
 ///
 /// 参数:
 /// - `stdout`: 标准输出
 /// - `anchor`: 菜单锚点行
 /// - `request`: 权限请求
 /// - `state`: 交互状态
+/// - `show_auto_audit`: 是否展示自动审核进行中提示
 ///
 /// 返回:
 /// - 绘制是否成功
@@ -277,18 +281,31 @@ fn paint_menu_at(
         sandbox_lines(request)
     );
     let controls = render_permission_controls(state.selected(), state.reply_draft());
-    // raw mode 下必须 \r\n，否则会阶梯缩进
-    let body = if show_auto_audit {
+    let logical = if show_auto_audit {
         format!(
             "{title}\n{}\n{controls}",
             crate::render::render_auto_audit_status(true)
         )
     } else {
         format!("{title}\n{controls}")
-    }
-    .replace('\n', "\r\n");
-    queue!(stdout, MoveTo(0, anchor), Clear(ClearType::FromCursorDown))?;
+    };
+    let body = crate::render::readable_terminal_text(&logical).replace('\n', "\r\n");
+    queue!(stdout, Hide, MoveTo(0, anchor), Clear(ClearType::FromCursorDown))?;
     write!(stdout, "{body}")?;
+    // 1. 【权限提示】【输入法光标】在拒绝说明输入行末尾显示光标以对齐中文输入法候选窗
+    if let Some(draft) = state.reply_draft() {
+        let width = terminal_width().max(1);
+        let logical_lines: Vec<&str> = logical.split('\n').collect();
+        if logical_lines.len() >= 2 {
+            let before = logical_lines[..logical_lines.len() - 2].join("\n");
+            let above_rows = rendered_visual_rows(&before, width) as u16;
+            let draft_col = 4usize.saturating_add(unicode_width::UnicodeWidthStr::width(draft));
+            let extra_rows = (draft_col / width) as u16;
+            let cursor_col = (draft_col % width).min(width.saturating_sub(1)) as u16;
+            let cursor_row = anchor.saturating_add(above_rows).saturating_add(extra_rows);
+            queue!(stdout, MoveTo(cursor_col, cursor_row), Show)?;
+        }
+    }
     stdout.flush()?;
     Ok(())
 }

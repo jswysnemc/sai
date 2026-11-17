@@ -53,6 +53,8 @@ pub(super) struct TaskManager {
     pub stream: Stream,
     pub offset: usize,
     pub tail_offset: usize,
+    pub command_expanded: bool,
+    pub command_offset: usize,
     pub follow: bool,
     pub output: Output,
     pub output_id: Option<String>,
@@ -78,6 +80,8 @@ impl Default for TaskManager {
             stream: Stream::Stdout,
             offset: 0,
             tail_offset: 0,
+            command_expanded: false,
+            command_offset: 0,
             follow: true,
             output: Output::default(),
             output_id: None,
@@ -125,14 +129,17 @@ impl TaskManager {
             self.selected_id = visible.first().map(|index| self.tasks[*index].id.clone());
             self.offset = 0;
             self.tail_offset = 0;
+            self.command_offset = 0;
             self.follow = true;
         }
         if self.selected_id.is_none() {
             self.pager = false;
+            self.command_expanded = false;
+            self.command_offset = 0;
         }
     }
 
-    /// 【后台任务】【光标移动】移动列表选择并重置日志视口。
+    /// 【后台任务】【光标移动】移动列表选择并重置日志视口与命令滚动偏移。
     /// 参数: delta 为相对行数；返回: 无。
     pub fn move_selection(&mut self, delta: isize) {
         let visible = self.visible();
@@ -146,6 +153,7 @@ impl TaskManager {
         self.selected_id = visible.get(next).map(|index| self.tasks[*index].id.clone());
         self.offset = 0;
         self.tail_offset = 0;
+        self.command_offset = 0;
         self.follow = true;
     }
 
@@ -271,6 +279,36 @@ impl TaskManager {
         } else {
             self.tail_offset = self.tail_offset.min(max).saturating_sub(delta as usize);
         }
+    }
+
+    /// 【后台任务】【命令展开切换】切换详情区完整命令展开态并归零命令滚动偏移。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    pub fn toggle_command(&mut self) {
+        self.command_expanded = !self.command_expanded;
+        self.command_offset = 0;
+    }
+
+    /// 【后台任务】【命令滚轮】在展开命令超出详情可视行数时按方向平滑滚动命令视口。
+    ///
+    /// 参数:
+    /// - `delta`: 滚动行数位移（负值向上回看开头，正值向下查看续行）
+    /// - `visible_rows`: 详情区可容纳的命令显示行数
+    /// - `total_rows`: 命令折行后的总显示行数
+    ///
+    /// 返回:
+    /// - 无
+    pub fn scroll_command(&mut self, delta: isize, visible_rows: usize, total_rows: usize) {
+        let max = total_rows.saturating_sub(visible_rows);
+        self.command_offset = self
+            .command_offset
+            .min(max)
+            .saturating_add_signed(delta)
+            .min(max);
     }
 
     /// 【后台任务】【结果提示】保存操作反馈，错误持续保留直到下一次操作。

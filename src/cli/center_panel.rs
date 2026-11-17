@@ -1,8 +1,12 @@
+use crate::cli::mouse_menu::ClickTracker;
 use crate::i18n::text as t;
+use crate::render::ansi_clip::{ansi_visible_width, clip_ansi_to_width};
+use crate::render::panel_palette::{fg, PanelPalette};
+use crate::render::readable_terminal_text;
 use crate::render::transcript::AnsiLine;
 use anyhow::Result;
 use crossterm::cursor::{Hide, MoveTo, Show};
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
 use crossterm::style::Print;
 use crossterm::{execute, queue};
 use std::io::{self, Write};
@@ -10,12 +14,12 @@ use std::time::Duration;
 
 /// 面板最大内容宽度（不含边框）。
 const MAX_PANEL_WIDTH: usize = 84;
-/// 面板最小内容宽度。
+/// 面板最小期望内容宽度（宽终端下）。
 const MIN_PANEL_WIDTH: usize = 30;
 
-/// 在主屏中央显示一个浮动面板，任意关闭键退出。
+/// 【居中面板】【入口】在当前屏幕中央显示浮动面板，支持键盘、滚轮与点击关闭。
 ///
-/// 面板绘制在现有内容之上；调用方在返回后负责全量重绘恢复底层内容。
+/// 面板绘制在现有内容之上；调用方在返回后负责重绘恢复底层画面。
 ///
 /// 参数:
 /// - `title`: 面板标题
@@ -24,20 +28,28 @@ const MIN_PANEL_WIDTH: usize = 30;
 /// 返回:
 /// - 展示是否成功
 pub(super) fn show_center_panel(title: &str, body: &str) -> Result<()> {
+    let _mouse = super::mouse_capture::MouseCapture::acquire()?;
     let was_raw = crossterm::terminal::is_raw_mode_enabled().unwrap_or(false);
     if !was_raw {
         crossterm::terminal::enable_raw_mode()?;
     }
-    execute!(io::stdout(), Hide)?;
-    let result = run_panel_loop(title, body);
-    execute!(io::stdout(), Show)?;
-    if !was_raw {
-        crossterm::terminal::disable_raw_mode()?;
+    struct PanelGuard {
+        was_raw: bool,
     }
-    result
+    impl Drop for PanelGuard {
+        fn drop(&mut self) {
+            let _ = execute!(io::stdout(), Show);
+            if !self.was_raw {
+                let _ = crossterm::terminal::disable_raw_mode();
+            }
+        }
+    }
+    let _guard = PanelGuard { was_raw };
+    execute!(io::stdout(), Hide)?;
+    run_panel_loop(title, body)
 }
 
-/// 面板绘制与按键循环。
+/// 【居中面板】【事件循环】驱动绘制、键盘翻页、滚轮滚动与点击关闭。
 ///
 /// 参数:
 /// - `title`: 面板标题
@@ -47,31 +59,49 @@ pub(super) fn show_center_panel(title: &str, body: &str) -> Result<()> {
 /// - 循环是否成功结束
 fn run_panel_loop(title: &str, body: &str) -> Result<()> {
     let mut offset = 0usize;
+    let mut click = ClickTracker::default();
     loop {
-        // 1. 每轮按当前终端尺寸重排并绘制（resize 后自动重新居中）
+        // 1. 【居中面板】【自适应重排】每轮按实时终端尺寸重排并绘制，窗口缩放后自动重新居中
         let (cols, rows) = crossterm::terminal::size().unwrap_or((80, 24));
         let layout = PanelLayout::compute(cols, rows, title, body);
         offset = offset.min(layout.max_offset());
         layout.draw(&mut io::stdout(), offset)?;
-        // 2. 阻塞等待按键；超时轮询以响应 resize
+        // 2. 【居中面板】【事件监听】轮询键盘、鼠标滚轮、点击关闭与窗口缩放
         if !event::poll(Duration::from_millis(250))? {
             continue;
         }
+        let page = layout.content_height.max(1);
         match event::read()? {
-            Event::Key(key) if key.kind != KeyEventKind::Release => match key.code {
-                KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => return Ok(()),
-                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    return Ok(())
+            Event::Key(key) if key.kind != KeyEventKind::Release => {
+                click.clear();
+                match key.code {
+                    KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => return Ok(()),
+                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        return Ok(())
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => offset = offset.saturating_sub(1),
+                    KeyCode::Down | KeyCode::Char('j') => offset = offset.saturating_add(1),
+                    KeyCode::PageUp => offset = offset.saturating_sub(page),
+                    KeyCode::PageDown | KeyCode::Char(' ') => {
+                        offset = offset.saturating_add(page)
+                    }
+                    KeyCode::Home => offset = 0,
+                    KeyCode::End => offset = usize::MAX,
+                    _ => {}
                 }
-                KeyCode::Up => offset = offset.saturating_sub(1),
-                KeyCode::Down => offset = offset.saturating_add(1),
-                KeyCode::PageUp => offset = offset.saturating_sub(10),
-                KeyCode::PageDown => offset = offset.saturating_add(10),
-                KeyCode::Home => offset = 0,
-                KeyCode::End => offset = usize::MAX,
-                _ => {}
-            },
-            Event::Resize(_, _) => {}
+            }
+            Event::Mouse(mouse) => {
+                let can_close = layout.is_close_hit(mouse.column, mouse.row);
+                if click.update(mouse, can_close.then_some(())).is_some() {
+                    return Ok(());
+                }
+                match mouse.kind {
+                    MouseEventKind::ScrollUp => offset = offset.saturating_sub(3),
+                    MouseEventKind::ScrollDown => offset = offset.saturating_add(3),
+                    _ => {}
+                }
+            }
+            Event::Resize(_, _) => click.clear(),
             _ => {}
         }
     }
@@ -87,6 +117,10 @@ struct PanelLayout {
     content_width: usize,
     /// 内容区可视行数
     content_height: usize,
+    /// 面板总列宽
+    panel_width: usize,
+    /// 面板总行数
+    panel_height: usize,
     /// 标题文本
     title: String,
     /// 预折行的正文
@@ -94,7 +128,7 @@ struct PanelLayout {
 }
 
 impl PanelLayout {
-    /// 按终端尺寸计算面板布局。
+    /// 【居中面板】【布局计算】按真实终端尺寸计算居中位置与内容视口，窄屏严格不越界。
     ///
     /// 参数:
     /// - `cols`: 终端列数
@@ -103,17 +137,21 @@ impl PanelLayout {
     /// - `body`: 面板正文
     ///
     /// 返回:
-    /// - 布局参数
+    /// - 面板布局参数
     fn compute(cols: u16, rows: u16, title: &str, body: &str) -> Self {
-        let cols = usize::from(cols.max(20));
-        let rows = usize::from(rows.max(8));
+        let cols = usize::from(cols.max(5));
+        let rows = usize::from(rows.max(3));
+        let max_inner = cols.saturating_sub(4).max(1);
         let content_width = cols
             .saturating_sub(8)
             .min(MAX_PANEL_WIDTH)
-            .max(MIN_PANEL_WIDTH.min(cols.saturating_sub(4)));
+            .max(MIN_PANEL_WIDTH.min(max_inner))
+            .min(max_inner)
+            .max(1);
         let lines = AnsiLine::wrap_block(body.trim_end_matches('\n'), content_width);
-        // 上下边框各 1 行，外加 1 行留白余量
-        let content_height = lines.len().min(rows.saturating_sub(4)).max(1);
+        let max_body_rows = rows.saturating_sub(2).max(1);
+        let preferred_rows = rows.saturating_sub(4).max(1).min(max_body_rows);
+        let content_height = lines.len().max(1).min(preferred_rows);
         let panel_width = content_width + 4;
         let panel_height = content_height + 2;
         let origin_col = cols.saturating_sub(panel_width) / 2;
@@ -123,20 +161,46 @@ impl PanelLayout {
             origin_row: origin_row.min(u16::MAX as usize) as u16,
             content_width,
             content_height,
+            panel_width,
+            panel_height,
             title: title.to_string(),
             lines,
         }
     }
 
-    /// 返回滚动偏移上限。
+    /// 【居中面板】【滚动上限】返回正文滚动偏移的最大值。
+    ///
+    /// 参数:
+    /// - `self`: 当前布局
     ///
     /// 返回:
-    /// - 最大偏移
+    /// - 最大偏移行数
     fn max_offset(&self) -> usize {
         self.lines.len().saturating_sub(self.content_height)
     }
 
-    /// 将面板绘制到终端。
+    /// 【居中面板】【关闭命中】点击面板底边框关闭提示或点击面板外部空白区均视为关闭动作。
+    ///
+    /// 参数:
+    /// - `column`: 鼠标列号
+    /// - `row`: 鼠标行号
+    ///
+    /// 返回:
+    /// - 属于关闭区域时返回 true
+    fn is_close_hit(&self, column: u16, row: u16) -> bool {
+        let col = usize::from(column);
+        let r = usize::from(row);
+        let left = usize::from(self.origin_col);
+        let top = usize::from(self.origin_row);
+        let right = left + self.panel_width;
+        let bottom = top + self.panel_height;
+        if col < left || col >= right || r < top || r >= bottom {
+            return true;
+        }
+        r + 1 == bottom
+    }
+
+    /// 【居中面板】【终端绘制】将标题框、内容行与底栏提示输出到终端。
     ///
     /// 参数:
     /// - `output`: 终端输出句柄
@@ -145,42 +209,58 @@ impl PanelLayout {
     /// 返回:
     /// - 绘制是否成功
     fn draw<W: Write>(&self, output: &mut W, offset: usize) -> Result<()> {
+        let palette = PanelPalette::current();
+        let border = fg(palette.subtle);
         let inner = self.content_width + 2;
-        // 1. 顶边框嵌标题
+        // 1. 【居中面板】【顶边框】嵌入裁剪后的标题并对齐圆角细框
         let top = frame_line('╭', '╮', &format!(" {} ", self.title), inner);
         queue!(
             output,
             MoveTo(self.origin_col, self.origin_row),
-            Print(format!("\x1b[2m{top}\x1b[0m"))
+            Print(format!("{border}{top}\x1b[0m"))
         )?;
-        // 2. 内容行：左右边框 + 定宽内容
+        // 2. 【居中面板】【内容行】左右边框包裹定宽正文并进行明暗对比度校正
         for row in 0..self.content_height {
-            let content = self
+            let raw = self
                 .lines
                 .get(offset + row)
                 .map(AnsiLine::as_str)
                 .unwrap_or("");
+            let clipped = clip_ansi_to_width(raw, self.content_width, "…");
+            let content = readable_terminal_text(&clipped);
             let padding = self
                 .content_width
-                .saturating_sub(visible_width_ansi(content));
+                .saturating_sub(visible_width_ansi(&content));
             queue!(
                 output,
                 MoveTo(self.origin_col, self.origin_row + 1 + row as u16),
                 Print(format!(
-                    "\x1b[2m│\x1b[0m {content}{} \x1b[2m│\x1b[0m",
+                    "{border}│\x1b[0m {content}\x1b[0m{} {border}│\x1b[0m",
                     " ".repeat(padding)
                 ))
             )?;
         }
-        // 3. 底边框嵌操作提示（可滚动时附带位置）
+        // 3. 【居中面板】【底边框】嵌入自适应宽度的滚动与关闭提示
         let hint = if self.max_offset() > 0 {
-            format!(
-                " {}/{} · ↑↓ {} · Esc {} ",
-                offset + self.content_height,
+            let full = format!(
+                " {}/{} · ↑↓/jk {} · Space {} · Esc {} ",
+                (offset + self.content_height).min(self.lines.len()),
                 self.lines.len(),
                 t("scroll", "滚动"),
+                t("page", "翻页"),
                 t("close", "关闭")
-            )
+            );
+            if visible_width_ansi(&full) <= inner {
+                full
+            } else {
+                format!(
+                    " {}/{} · ↑↓ {} · Esc {} ",
+                    (offset + self.content_height).min(self.lines.len()),
+                    self.lines.len(),
+                    t("scroll", "滚动"),
+                    t("close", "关闭")
+                )
+            }
         } else {
             format!(" Esc {} ", t("close", "关闭"))
         };
@@ -191,69 +271,51 @@ impl PanelLayout {
                 self.origin_col,
                 self.origin_row + 1 + self.content_height as u16
             ),
-            Print(format!("\x1b[2m{bottom}\x1b[0m"))
+            Print(format!("{border}{bottom}\x1b[0m"))
         )?;
         output.flush()?;
         Ok(())
     }
 }
 
-/// 生成一条嵌入文字的边框线。
+/// 【居中面板】【边框拼装】剥离 ANSI 计算标签可见宽度并在窄屏自动裁剪，严格保证不破框。
 ///
 /// 参数:
-/// - `left`: 左端角字符
-/// - `right`: 右端角字符
-/// - `label`: 嵌入文本
-/// - `inner`: 边框内宽度
+/// - `left`: 左端圆角字符
+/// - `right`: 右端圆角字符
+/// - `label`: 嵌入标题或提示文本（可含 ANSI）
+/// - `inner`: 边框内部总列宽
 ///
 /// 返回:
-/// - 边框行文本
+/// - 可见宽度严格等于 `inner + 2` 的边框行文本
 fn frame_line(left: char, right: char, label: &str, inner: usize) -> String {
-    let label_width = label.chars().map(char_width).sum::<usize>();
+    if inner == 0 {
+        return format!("{left}{right}");
+    }
+    let clipped = if visible_width_ansi(label) > inner {
+        clip_ansi_to_width(label, inner, "…")
+    } else {
+        label.to_string()
+    };
+    let label_width = visible_width_ansi(&clipped);
     let dashes = inner.saturating_sub(label_width);
     let head = dashes / 2;
     format!(
-        "{left}{}{label}{}{right}",
+        "{left}{}{clipped}{}{right}",
         "─".repeat(head),
         "─".repeat(dashes - head)
     )
 }
 
-/// 计算含 ANSI 文本的显示宽度。
+/// 【居中面板】【可见宽度】计算含 ANSI 转义序列文本的真实显示列数。
 ///
 /// 参数:
-/// - `text`: ANSI 文本
+/// - `text`: 含 ANSI 序列的文本
 ///
 /// 返回:
-/// - 显示列数
+/// - 终端可见列宽
 fn visible_width_ansi(text: &str) -> usize {
-    let mut width = 0usize;
-    let mut chars = text.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '\u{1b}' {
-            if chars.peek() == Some(&'[') {
-                for next in chars.by_ref() {
-                    if next.is_ascii_alphabetic() {
-                        break;
-                    }
-                }
-            }
-            continue;
-        }
-        width += char_width(ch);
-    }
-    width
-}
-
-/// 计算单个字符显示宽度。
-///
-/// 参数:
-/// - `ch`: 字符
-///
-/// 返回:
-/// - 显示列数
-fn char_width(ch: char) -> usize {
-    unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0)
+    ansi_visible_width(text)
 }
 
 #[cfg(test)]
@@ -280,20 +342,30 @@ mod tests {
     }
 
     #[test]
-    fn frame_line_fits_inner_width() {
-        let line = frame_line('╭', '╮', " 标题 ", 40);
-        let width: usize = line.chars().map(char_width).sum();
-        assert_eq!(width, 42);
+    fn frame_line_strips_ansi_and_clips_narrow_labels_without_overflow() {
+        let styled = "\x1b[1;36m 彩色标题 \x1b[0m";
+        let line = frame_line('╭', '╮', styled, 40);
+        assert_eq!(visible_width_ansi(&line), 42);
+
+        let overlong = " 10/50 · ↑↓ 滚动 · Space 翻页 · Esc 关闭 ";
+        let narrow = frame_line('╰', '╯', overlong, 14);
+        assert_eq!(visible_width_ansi(&narrow), 16);
+        assert!(narrow.starts_with('╰') && narrow.ends_with('╯'));
     }
 
     #[test]
-    fn draw_pads_content_to_fixed_width() {
-        let layout = PanelLayout::compute(100, 30, "t", "short\n一段中文内容");
+    fn narrow_terminal_draw_keeps_every_row_within_bounds() {
+        let layout = PanelLayout::compute(
+            18,
+            8,
+            "非常长的面板标题不会撑破边框",
+            &"一段很长的中文帮助正文需要折行显示\n".repeat(10),
+        );
+        assert!(usize::from(layout.origin_col) + layout.panel_width <= 18);
+        assert!(usize::from(layout.origin_row) + layout.panel_height <= 8);
         let mut sink = Vec::new();
         layout.draw(&mut sink, 0).unwrap();
         let output = String::from_utf8(sink).unwrap();
-        assert!(output.contains("short"));
-        assert!(output.contains("一段中文内容"));
         assert!(output.contains('╭'));
         assert!(output.contains('╯'));
     }

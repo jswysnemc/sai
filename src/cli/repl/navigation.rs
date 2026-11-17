@@ -39,8 +39,6 @@ pub(super) fn select_turn(
     };
     match result {
         Ok(()) => {
-            runtime.clear()?;
-            record_repl_history(runtime, agent.state())?;
             let message = if target == tree_select::TreeSelection::Start {
                 t(
                     "At session start; the next message starts a new branch",
@@ -49,7 +47,11 @@ pub(super) fn select_turn(
             } else {
                 t("switched to the selected turn", "已切换到所选轮次")
             };
-            runtime.record_meta(message.to_string())?;
+            runtime.with_fullscreen_batch(|rt| {
+                rt.clear()?;
+                record_repl_history(rt, agent.state())?;
+                rt.record_meta(message.to_string())
+            })?;
         }
         Err(err) => runtime.record_meta(err.to_string())?,
     }

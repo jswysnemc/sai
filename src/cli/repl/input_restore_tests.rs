@@ -63,10 +63,7 @@ fn restored_submission_keeps_images_and_references_together() {
     let restored = text.unwrap();
     assert_eq!(clipboard.block_spans(&restored).len(), 3);
     let resent = clipboard.to_chat_input(&restored);
-    assert_eq!(
-        resent.image_urls,
-        ["data:image/png;base64,original"]
-    );
+    assert_eq!(resent.image_urls, ["data:image/png;base64,original"]);
     assert!(resent.message.contains("@src/main.rs"));
     assert!(resent.message.contains("#review"));
 }

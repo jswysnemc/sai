@@ -56,9 +56,10 @@ pub(super) fn footer_with_hits(manager: &TaskManager, width: usize) -> (String, 
                 ("Esc", t("back", "返回"), KeyCode::Esc),
                 ("Tab", t("stream", "通道"), KeyCode::Tab),
                 ("f", t("follow", "跟随"), KeyCode::Char('f')),
-                ("↑↓", t("scroll", "滚动"), KeyCode::Down),
-                ("PgUp/PgDn", t("page", "翻页"), KeyCode::PageDown),
-                ("g/G", t("first/last", "首尾"), KeyCode::Home),
+                ("PgUp", t("prev", "上页"), KeyCode::PageUp),
+                ("PgDn", t("next", "下页"), KeyCode::PageDown),
+                ("g", t("top", "顶部"), KeyCode::Home),
+                ("G", t("end", "底部"), KeyCode::End),
             ],
             width,
             &palette,
@@ -80,6 +81,12 @@ fn list_keys(manager: &TaskManager) -> Vec<(&'static str, &'static str, KeyCode)
     let mut segments = vec![("Esc", t("back", "返回"), KeyCode::Esc)];
     if selected.is_some() {
         segments.push(("Enter", t("logs", "日志"), KeyCode::Enter));
+        let cmd_label = if manager.command_expanded {
+            t("collapse", "收起命令")
+        } else {
+            t("command", "展开命令")
+        };
+        segments.push(("c", cmd_label, KeyCode::Char('c')));
     }
     segments.push(("Tab", t("filter", "筛选"), KeyCode::Tab));
     if running {

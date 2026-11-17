@@ -83,6 +83,7 @@ pub(super) fn handle(manager: &mut TaskManager, key: KeyEvent, rows: usize) -> E
             manager.pager = true;
             manager.follow = true;
         }
+        KeyCode::Char('c' | 'C') if manager.selected().is_some() => manager.toggle_command(),
         KeyCode::Tab | KeyCode::BackTab => manager.set_filter(match manager.filter {
             Filter::All => Filter::Running,
             Filter::Running => Filter::Finished,
@@ -114,7 +115,7 @@ pub(super) fn handle(manager: &mut TaskManager, key: KeyEvent, rows: usize) -> E
     Effect::None
 }
 
-/// 【后台任务】【鼠标操作】支持筛选栏、通道胶囊、任务行、确认按钮点击及区域内滚轮。
+/// 【后台任务】【鼠标操作】支持筛选栏、通道胶囊、命令展开控件、任务行、确认按钮点击及分区域滚轮。
 ///
 /// 参数:
 /// - `manager`: 任务管理状态
@@ -145,11 +146,20 @@ pub(super) fn mouse(manager: &mut TaskManager, mouse: MouseEvent, frame: &TaskFr
             super::controls::hit(manager, mouse, frame).map(|_| (mouse.column, mouse.row));
         return Effect::None;
     }
+    if !inside && mouse.kind == MouseEventKind::Down(MouseButton::Left) {
+        // 2. 【后台任务】【外部点击关闭】在全屏侧栏、顶栏或输入区单击时优雅收起浮层（确认态先取消确认）
+        if manager.confirm.is_some() {
+            manager.confirm = None;
+            return Effect::None;
+        }
+        return Effect::Exit;
+    }
     if manager.confirm.is_some() || !inside {
         return Effect::None;
     }
     match mouse.kind {
         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
+            // 3. 【后台任务】【分区滚轮】按指针所在矩形依次分发给日志页、展开命令区、尾部输出区或左栏队列
             let delta = if mouse.kind == MouseEventKind::ScrollUp {
                 -3
             } else {
@@ -157,6 +167,15 @@ pub(super) fn mouse(manager: &mut TaskManager, mouse: MouseEvent, frame: &TaskFr
             };
             if manager.pager {
                 manager.scroll(delta, frame.page_rows);
+            } else if frame
+                .cmd_rect
+                .is_some_and(|rect| rect.contains(mouse.column, mouse.row))
+            {
+                if frame.cmd_total_rows > frame.cmd_visible_rows && frame.cmd_visible_rows > 0 {
+                    manager.scroll_command(delta, frame.cmd_visible_rows, frame.cmd_total_rows);
+                } else if frame.tail_rows > 0 {
+                    manager.scroll_tail(delta, frame.tail_rows);
+                }
             } else if frame
                 .tail_rect
                 .is_some_and(|rect| rect.contains(mouse.column, mouse.row))
@@ -170,12 +189,14 @@ pub(super) fn mouse(manager: &mut TaskManager, mouse: MouseEvent, frame: &TaskFr
         MouseEventKind::Down(MouseButton::Left) if !manager.pager => {
             if let Some((_, id)) = frame.targets.iter().find(|(row, _)| *row == mouse.row) {
                 if manager.selected_id.as_deref() == Some(id.as_str()) {
-                    // 2. 【后台任务】【快捷打开】再次单击已选中条目时直接进入全屏日志视图
+                    // 4. 【后台任务】【快捷打开】再次单击已选中条目时直接进入全屏日志视图
                     manager.pager = true;
                     manager.follow = true;
                 } else {
                     manager.selected_id = Some(id.clone());
                     manager.offset = 0;
+                    manager.tail_offset = 0;
+                    manager.command_offset = 0;
                     manager.follow = true;
                 }
             }

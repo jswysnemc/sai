@@ -178,6 +178,11 @@ pub(in crate::cli) fn read_repl_input(
                 cursor = position;
                 slash_selection = 0;
             }
+            if !matches!(&event, Event::Mouse(m) if m.kind == crossterm::event::MouseEventKind::Moved)
+            {
+                input_row = 0;
+                rendered_rows = 0;
+            }
             redraw_input!()?;
             continue;
         }
@@ -457,63 +462,30 @@ pub(in crate::cli) fn read_repl_input(
                         redraw_input!()?;
                     }
                     KeyCode::Up => {
-                        let plain_prefix = String::new();
-                        // 折行宽度必须与 composer 绘制时一致：绘制用的是去掉
-                        // "> " 边距后的内容宽，用整宽会让落点逐行偏移
-                        if let Some(next_cursor) = move_cursor_up_by_visual_row(
-                            &plain_prefix,
-                            &input,
-                            cursor,
-                            chrome_input_content_cols(terminal_cols()),
+                        if history::navigate_up(
+                            &mut input,
+                            &mut cursor,
+                            &mut clipboard_state,
+                            history,
+                            &mut history_index,
+                            &mut history_clean_index,
+                            &mut slash_selection,
+                            &mut is_pasted,
                         ) {
-                            cursor = next_cursor;
-                            redraw_input!()?;
-                        } else if repl_should_browse_history(&input, history, history_clean_index) {
-                            if input.is_empty() {
-                                history_index = history.len();
-                            }
-                            history_index = history_index.saturating_sub(1);
-                            let draft = history::restore_history_entry(&history[history_index]);
-                            input = draft.text;
-                            clipboard_state = draft.clipboard_state;
-                            cursor = input.chars().count();
-                            history_clean_index = Some(history_index);
-                            slash_selection = 0;
-                            is_pasted = false;
                             redraw_input!()?;
                         }
                     }
                     KeyCode::Down => {
-                        let plain_prefix = String::new();
-                        if let Some(next_cursor) = move_cursor_down_by_visual_row(
-                            &plain_prefix,
-                            &input,
-                            cursor,
-                            chrome_input_content_cols(terminal_cols()),
-                        ) {
-                            cursor = next_cursor;
-                        } else if repl_history_is_clean(&input, history, history_clean_index)
-                            && history_index + 1 < history.len()
-                        {
-                            history_index += 1;
-                            let draft = history::restore_history_entry(&history[history_index]);
-                            input = draft.text;
-                            clipboard_state = draft.clipboard_state;
-                            cursor = input.chars().count();
-                            history_clean_index = Some(history_index);
-                            slash_selection = 0;
-                            is_pasted = false;
-                        } else if repl_history_is_clean(&input, history, history_clean_index)
-                            && history_index < history.len()
-                        {
-                            history_index = history.len();
-                            input.clear();
-                            cursor = input.chars().count();
-                            history_clean_index = None;
-                            slash_selection = 0;
-                            clipboard_state.clear();
-                            is_pasted = false;
-                        }
+                        history::navigate_down(
+                            &mut input,
+                            &mut cursor,
+                            &mut clipboard_state,
+                            history,
+                            &mut history_index,
+                            &mut history_clean_index,
+                            &mut slash_selection,
+                            &mut is_pasted,
+                        );
                         redraw_input!()?;
                     }
                     KeyCode::Enter if modifiers.contains(KeyModifiers::SHIFT) => {

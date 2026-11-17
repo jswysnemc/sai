@@ -14,6 +14,7 @@ pub(super) struct SubagentTarget {
 pub(super) struct SubagentListState {
     pub targets: Vec<SubagentTarget>,
     pub index: usize,
+    hovered: Option<super::ListTarget>,
 }
 
 impl SubagentListState {
@@ -34,7 +35,35 @@ impl SubagentListState {
             .iter()
             .position(|target| target.profile_id.as_deref() == focus_id)
             .unwrap_or(0);
-        Self { targets, index }
+        Self {
+            targets,
+            index,
+            hovered: None,
+        }
+    }
+
+    /// 【子任务设置】【读取悬停】读取当前鼠标悬停目标。
+    ///
+    /// 参数:
+    /// - `self`: 子任务列表状态
+    ///
+    /// 返回:
+    /// - 当前悬停目标，未悬停时返回空
+    pub(super) fn hovered(&self) -> Option<super::ListTarget> {
+        self.hovered
+    }
+
+    /// 【子任务设置】【更新悬停】写入当前鼠标悬停目标并返回是否变化。
+    ///
+    /// 参数:
+    /// - `hovered`: 最新悬停目标
+    ///
+    /// 返回:
+    /// - 悬停状态发生改变时返回 true
+    pub(super) fn set_hovered(&mut self, hovered: Option<super::ListTarget>) -> bool {
+        let changed = self.hovered != hovered;
+        self.hovered = hovered;
+        changed
     }
 
     /// 返回当前编辑对象，无参数，返回始终存在的选中项。
@@ -42,13 +71,15 @@ impl SubagentListState {
         &self.targets[self.index]
     }
 
-    /// 上移选中项，无参数和返回值。
+    /// 上移选中项并清除鼠标悬停，无参数和返回值。
     pub(super) fn move_up(&mut self) {
+        self.hovered = None;
         self.index = self.index.saturating_sub(1);
     }
 
-    /// 下移选中项，无参数和返回值。
+    /// 下移选中项并清除鼠标悬停，无参数和返回值。
     pub(super) fn move_down(&mut self) {
+        self.hovered = None;
         self.index = next_index(self.index, self.targets.len());
     }
 }

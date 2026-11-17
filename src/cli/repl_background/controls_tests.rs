@@ -247,3 +247,153 @@ fn hovered_control_pill_highlights_only_when_pointer_enters() {
     );
     assert_eq!(manager.hovered_button, None);
 }
+
+/// 【后台任务】【分页页脚拆分与外部点击关闭】验证日志页脚拆分为独立可点击按键且面板外左键优雅退出。
+#[test]
+fn pager_footer_exposes_distinct_navigation_buttons_and_outside_click_exits() {
+    use super::model_tests::task;
+    use super::service::Update;
+
+    let mut manager = TaskManager::default();
+    let lines = (0..40)
+        .map(|index| format!("line-{index}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    manager.apply(Update {
+        tasks: vec![task("t1", "running")],
+        output: Some((
+            "t1".into(),
+            Ok(super::model::Output {
+                stdout: Some(lines),
+                ..Default::default()
+            }),
+        )),
+        notice: None,
+    });
+    manager.pager = true;
+    let frame = view::render(
+        &mut manager,
+        PanelRect {
+            x: 2,
+            y: 2,
+            width: 96,
+            height: 20,
+        },
+    );
+    let bottom_row = frame.rect.y + frame.rect.height - 1;
+    for expected in [
+        KeyCode::PageUp,
+        KeyCode::PageDown,
+        KeyCode::Home,
+        KeyCode::End,
+    ] {
+        assert!(
+            frame
+                .buttons
+                .iter()
+                .any(|hit| hit.row == bottom_row && hit.key == expected),
+            "missing footer button {expected:?}"
+        );
+    }
+    let outside = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: 120,
+        row: 5,
+        modifiers: KeyModifiers::NONE,
+    };
+    assert_eq!(
+        super::input::mouse(&mut manager, outside, &frame),
+        super::input::Effect::Exit
+    );
+}
+
+/// 【后台任务】【命令展开点击与滚轮】点击详情标题胶囊或命令字段行可展开收起，超长展开命令支持滚轮翻看。
+#[test]
+fn command_toggle_pill_and_command_row_click_and_wheel_scroll_work() {
+    use super::model_tests::task;
+    use super::service::Update;
+    use crate::render::ansi_clip::strip_ansi;
+
+    let mut manager = TaskManager::default();
+    let mut item = task("t1", "running");
+    item.command = (1..=16)
+        .map(|index| format!("echo step_{index:02}_marker"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    manager.apply(Update {
+        tasks: vec![item],
+        output: None,
+        notice: None,
+    });
+
+    let area = PanelRect {
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 22,
+    };
+    let frame = view::render(&mut manager, area);
+    let header_pill = frame
+        .buttons
+        .iter()
+        .find(|hit| hit.row == 3 && hit.key == KeyCode::Char('c'))
+        .copied()
+        .expect("details header [c] pill hitbox");
+    let cmd_row_hit = frame
+        .buttons
+        .iter()
+        .find(|hit| hit.row == 6 && hit.key == KeyCode::Char('c'))
+        .copied()
+        .expect("details command row hitbox");
+
+    super::input::mouse(
+        &mut manager,
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: header_pill.start_col,
+            row: header_pill.row,
+            modifiers: KeyModifiers::NONE,
+        },
+        &frame,
+    );
+    assert!(manager.command_expanded);
+
+    let expanded = view::render(&mut manager, area);
+    let cmd_rect = expanded.cmd_rect.expect("expanded mode exposes cmd_rect");
+    assert!(expanded.cmd_total_rows > expanded.cmd_visible_rows);
+    let top_text = strip_ansi(&expanded.lines.join("\n"));
+    assert!(top_text.contains("step_01_marker"), "{top_text}");
+    assert!(!top_text.contains("step_16_marker"), "{top_text}");
+
+    for _ in 0..4 {
+        super::input::mouse(
+            &mut manager,
+            MouseEvent {
+                kind: MouseEventKind::ScrollDown,
+                column: cmd_rect.x + 2,
+                row: cmd_rect.y + 1,
+                modifiers: KeyModifiers::NONE,
+            },
+            &expanded,
+        );
+    }
+    assert!(manager.command_offset > 0);
+    assert_eq!(manager.selected_id.as_deref(), Some("t1"));
+
+    let scrolled = view::render(&mut manager, area);
+    let bottom_text = strip_ansi(&scrolled.lines.join("\n"));
+    assert!(bottom_text.contains("step_16_marker"), "{bottom_text}");
+
+    super::input::mouse(
+        &mut manager,
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: cmd_row_hit.start_col,
+            row: cmd_row_hit.row,
+            modifiers: KeyModifiers::NONE,
+        },
+        &scrolled,
+    );
+    assert!(!manager.command_expanded);
+    assert_eq!(manager.command_offset, 0);
+}

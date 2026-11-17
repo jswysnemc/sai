@@ -1,4 +1,5 @@
 use super::context::ContextSelection;
+use super::mouse::Target;
 use crate::config::{AppConfig, ProviderModelChoice};
 use std::collections::HashMap;
 
@@ -26,10 +27,35 @@ pub(super) struct PickerState {
     model_index: usize,
     level_index: usize,
     column: PickerColumn,
+    hovered: Option<Target>,
     contexts: Option<HashMap<String, ContextSelection>>,
 }
 
 impl PickerState {
+    /// 【模型选择】【读取悬停】读取当前鼠标悬停目标。
+    ///
+    /// 参数:
+    /// - `self`: 选择状态
+    ///
+    /// 返回:
+    /// - 当前悬停目标，未悬停时返回空
+    pub(super) fn hovered(&self) -> Option<Target> {
+        self.hovered
+    }
+
+    /// 【模型选择】【更新悬停】写入最新鼠标悬停目标并返回是否发生变化。
+    ///
+    /// 参数:
+    /// - `hovered`: 最新悬停目标
+    ///
+    /// 返回:
+    /// - 悬停状态发生改变时返回 true
+    pub(super) fn set_hovered(&mut self, hovered: Option<Target>) -> bool {
+        let changed = self.hovered != hovered;
+        self.hovered = hovered;
+        changed
+    }
+
     /// 【终端】【鼠标聚焦】参数为目标列；隐藏上下文列不可聚焦，返回无。
     pub(super) fn focus(&mut self, column: PickerColumn) {
         if column != PickerColumn::Context || self.context_enabled() {
@@ -87,6 +113,7 @@ impl PickerState {
             model_index,
             level_index,
             column: PickerColumn::Model,
+            hovered: None,
             contexts: None,
         }
     }
@@ -137,6 +164,7 @@ impl PickerState {
     /// 【终端】【模型选择】将焦点移到相邻的左列。
     /// 参数: 无；返回: 无
     pub(super) fn focus_left(&mut self) {
+        self.hovered = None;
         match self.column {
             PickerColumn::Context => self.focus_thinking(),
             _ => self.focus_model(),
@@ -146,6 +174,7 @@ impl PickerState {
     /// 【终端】【模型选择】将焦点移到相邻的右列。
     /// 参数: 无；返回: 无
     pub(super) fn focus_right(&mut self) {
+        self.hovered = None;
         self.column = match self.column {
             PickerColumn::Model => PickerColumn::Thinking,
             _ if self.context_enabled() => PickerColumn::Context,
@@ -158,6 +187,7 @@ impl PickerState {
     /// 返回:
     /// - 无
     pub(super) fn move_up(&mut self) {
+        self.hovered = None;
         match self.column {
             PickerColumn::Model => self.model_index = self.model_index.saturating_sub(1),
             PickerColumn::Thinking => self.level_index = self.level_index.saturating_sub(1),
@@ -174,6 +204,7 @@ impl PickerState {
     /// 返回:
     /// - 无
     pub(super) fn move_down(&mut self) {
+        self.hovered = None;
         match self.column {
             PickerColumn::Model => {
                 self.model_index = next_index(self.model_index, self.models.len());
@@ -194,6 +225,7 @@ impl PickerState {
     /// 返回:
     /// - 无
     pub(super) fn focus_model(&mut self) {
+        self.hovered = None;
         self.column = PickerColumn::Model;
     }
 
@@ -202,10 +234,11 @@ impl PickerState {
     /// 返回:
     /// - 无
     pub(super) fn focus_thinking(&mut self) {
+        self.hovered = None;
         self.column = PickerColumn::Thinking;
     }
 
-    /// 追加一个过滤字符并重新筛选全部供应商模型。
+    /// 【模型选择】【字符过滤】追加一个过滤字符并重新筛选全部供应商模型。
     ///
     /// 参数:
     /// - `ch`: 用户输入字符
@@ -216,7 +249,37 @@ impl PickerState {
         if ch.is_control() {
             return;
         }
+        self.hovered = None;
         self.filter.push(ch);
+        self.column = PickerColumn::Model;
+        self.apply_filter();
+    }
+
+    /// 【模型选择】【粘贴过滤】剥离控制序列与换行后将粘贴文本追加到过滤条件。
+    ///
+    /// 参数:
+    /// - `text`: 粘贴的原始文本
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn paste_filter(&mut self, text: &str) {
+        let cleaned: String = crate::cli::repl_text::strip_terminal_control_sequences(text)
+            .chars()
+            .filter_map(|ch| {
+                if ch == '\t' {
+                    Some(' ')
+                } else if ch.is_control() {
+                    None
+                } else {
+                    Some(ch)
+                }
+            })
+            .collect();
+        if cleaned.is_empty() {
+            return;
+        }
+        self.hovered = None;
+        self.filter.push_str(&cleaned);
         self.column = PickerColumn::Model;
         self.apply_filter();
     }
@@ -226,6 +289,7 @@ impl PickerState {
     /// 返回:
     /// - 无
     pub(super) fn pop_filter(&mut self) {
+        self.hovered = None;
         self.filter.pop();
         self.column = PickerColumn::Model;
         self.apply_filter();
@@ -239,6 +303,7 @@ impl PickerState {
         if self.filter.is_empty() {
             return;
         }
+        self.hovered = None;
         self.filter.clear();
         self.column = PickerColumn::Model;
         self.apply_filter();

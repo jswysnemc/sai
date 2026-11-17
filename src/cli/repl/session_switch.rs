@@ -96,14 +96,18 @@ pub(super) fn switch(
     parked.insert(old_key, old);
     *prefill = None;
     *clipboard = None;
-    if !restored {
-        record_repl_history(runtime, state)?;
-    }
-    if !agent.is_running() {
-        let draft = runtime.take_session_input_draft();
-        runtime.save_footer_draft(draft);
-    }
-    Ok(())
+    // 1. 【会话切换】【单帧同步】预先注入目标会话底栏指标并合并全屏历史装载，消除多帧闪烁与重复排版
+    runtime.prime_session_chrome(ReplChrome::from_runtime(config, paths, state, *mode));
+    runtime.with_fullscreen_batch(|rt| {
+        if !restored {
+            record_repl_history(rt, state)?;
+        }
+        if !agent.is_running() {
+            let draft = rt.take_session_input_draft();
+            rt.save_footer_draft(draft);
+        }
+        Ok(())
+    })
 }
 
 /// 退出时取消本终端仍运行的轮次并恰好关闭一次插件；参数为前台槽和停放表；返回无。
@@ -169,10 +173,13 @@ pub(super) fn resume(
     *warmup = next.warmup;
     *prefill = None;
     *clipboard = None;
-    runtime.clear()?;
-    runtime.initialize_session_workspace(state);
-    runtime.record_meta(crate::cli::session_resume::message(target))?;
-    record_repl_history(runtime, state)
+    runtime.prime_session_chrome(ReplChrome::from_runtime(config, paths, state, *mode));
+    runtime.with_fullscreen_batch(|rt| {
+        rt.clear()?;
+        rt.initialize_session_workspace(state);
+        rt.record_meta(crate::cli::session_resume::message(target))?;
+        record_repl_history(rt, state)
+    })
 }
 
 /// 接回运行会话并处理结束；参数为前台状态及输入草稿；返回空表示再次脱离、true表示退出。
@@ -227,13 +234,15 @@ pub(super) fn new_session(
     clipboard: &mut Option<super::super::repl_clipboard::ReplClipboardState>,
 ) -> Result<()> {
     let next = crate::state::create_session_detached(paths, Some(title))?;
-    switch(
-        paths, config, client, &next.id, state, agent, warmup, mode, runtime, parked, prefill,
-        clipboard,
-    )?;
-    runtime.record_meta(format!(
-        "{}: {}",
-        t("created session", "已创建会话"),
-        next.id
-    ))
+    runtime.with_fullscreen_batch(|rt| {
+        switch(
+            paths, config, client, &next.id, state, agent, warmup, mode, rt, parked, prefill,
+            clipboard,
+        )?;
+        rt.record_meta(format!(
+            "{}: {}",
+            t("created session", "已创建会话"),
+            next.id
+        ))
+    })
 }

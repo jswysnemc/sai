@@ -103,7 +103,7 @@ fn render_label(
     // 活动叶子用实心圆点标记，其余用空心
     let marker = if is_active { "●" } else { "○" };
     let summary = if node.user_summary.is_empty() {
-        "(空)".to_string()
+        super::t("(empty)", "（空）").to_string()
     } else {
         node.user_summary.clone()
     };
