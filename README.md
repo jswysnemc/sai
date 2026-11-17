@@ -62,7 +62,7 @@ Tool results show only what the user needs: goals show the objective, status and
 
 ### Terminal config TUI
 
-Run `sai config` to open the hierarchical configurator covering providers, models, agent profiles, tools, and sandboxing policies.
+Run `sai config` to open the dashboard configurator covering providers, models, agent profiles, tools, and sandboxing policies. The interface adapts to dark and light terminal themes, switches to a stacked layout on narrow terminals, and supports full mouse click, wheel scroll, and hover controls alongside keyboard navigation.
 
 ![Config TUI main menu](pics/config.png)
 
@@ -123,10 +123,12 @@ Run `sai config` to open the hierarchical configurator covering providers, model
 
 ### Terminal interaction & fullscreen view
 
-- **Interactive streaming REPL**: Multi-line editing, clipboard image paste (`-c`), direct Shell execution (`!` prefix), and slash commands (`/` prefix).
-- **Fullscreen view (default, Ctrl+O switches to inline)**: History exploration, block folding for reasoning and commands, and OSC 52 drag-to-copy.
-- **Interactive question cards**: Borderless card UI supporting number shortcuts (1-9), Space toggle, Tab navigation, and custom input.
-- **Terminal state safety**: Restores terminal raw mode, alternate screen, and keyboard protocol upon exit signals or unexpected interrupts.
+- **Interactive streaming REPL**: Multi-line editing, clipboard image paste (`-c`), direct Shell execution (`!` prefix), and categorized slash command palette (`/` prefix) with scrollable viewport and mouse selection.
+- **Fullscreen view & sidebar (default, Ctrl+O switches to inline)**: History exploration, block folding for reasoning and commands, OSC 52 drag-to-copy, and a borderless right-hand sidebar showing a dual-line workspace/branch header, minimalist context usage bar, `Subagents`, `Todo`, `Changes`, time-grouped `Sessions`, and `Background tasks` (`F6` focus and single-section accordion).
+- **Split-pane background manager (`/ps`)**: Master-detail split view on wide terminals with shell command syntax coloring, `[c]` multi-line command expansion, log inspection, and mouse controls.
+- **Interactive question cards**: Theme-adaptive card UI supporting mouse clicks, wheel scrolling, number shortcuts (1-9), Space toggle, Tab navigation, and custom input.
+- **Theme & font compatibility**: Adapts to dark and light terminal palettes (`COLORFGBG` and OSC 10/11), preserves syntax hues on hover, and falls back to standard single-width Unicode symbols when `SAI_NERD_FONT=0` is set.
+- **Terminal state safety**: Restores terminal raw mode, nested alternate screen state, and keyboard protocol upon exit signals or unexpected interrupts.
 
 ### Long-term memory
 
@@ -277,9 +279,10 @@ Common REPL commands and controls:
 - Natural conversation input;
 - `/plan`: Enter read-only planning mode;
 - `/sandbox`: Inspect active sandbox policies;
-- `/model`: Switch models, adjust reasoning tiers and context limits, or set subagent models. Context options include 200k, 300k, 400k, 500k, custom input, and Maximum; limits are saved per provider/model without overwriting the capacity fetched from the API;
+- `/model`: Switch models, adjust reasoning tiers and context limits, or set subagent models with full mouse hover and click support. Context options include 200k, 300k, 400k, 500k, click-to-edit custom input, and Maximum; limits are saved per provider/model without overwriting the capacity fetched from the API;
+- `/ps`: Open the responsive background command manager with syntax-colored commands and expandable multi-line command inspection;
 - `/view`: Toggle between the fullscreen and inline views and save the choice; `/view fullscreen` and `/view inline` select a view explicitly;
-- `/context`: Open a centered context overlay with a segmented usage chart, per-category usage, the auto-compaction reserve, and this turn's input, cache hits, cache writes and output; `Esc` closes it;
+- `/context`: Open a centered context overlay with a minimalist linear usage bar, segmented category chart, per-category usage, the auto-compaction reserve, and this turn's input, cache hits, cache writes and output; `Esc` closes it;
 - `?`: Toggle shortcut help sheet;
 - `Ctrl+O`: Switch between the fullscreen and inline views for the current session.
 
