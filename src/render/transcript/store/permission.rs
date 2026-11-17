@@ -151,6 +151,7 @@ impl TranscriptStore {
                     && crate::render::stream_text::is_file_edit_tool(&request.tool) =>
             {
                 cell.request_permission_with_auto_audit(request.id.clone(), request.auto_audit);
+                cell.set_permission_sandbox(request.sandbox.clone());
                 true
             }
             _ => false,
@@ -216,5 +217,55 @@ mod tests {
         });
         assert!(store.set_permission_choice("standalone", crate::render::PermissionChoice::Deny));
         assert_eq!(store.cells.len(), 1);
+    }
+
+    /// 【权限】【编辑沙箱警示回归】验证文件修改审批同样保留并渲染沙箱越权范围说明。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn diff_permission_preserves_and_renders_sandbox_scope_warning() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("target.txt");
+        std::fs::write(&path, "before\n").unwrap();
+        let arguments = serde_json::json!({
+            "path": path.display().to_string(),
+            "old_string": "before",
+            "new_string": "after"
+        })
+        .to_string();
+        let mut store = TranscriptStore::new(100);
+        store.push_tool_call("str_replace".into(), arguments.clone());
+        let scope = crate::permission::SandboxScope {
+            kind: crate::permission::SandboxScopeKind::Unsandboxed,
+            backend: "none".into(),
+            network: true,
+            reasons: vec!["outside_workspace".into()],
+            justification: Some("edit system config".into()),
+        };
+        store.push_permission_request(crate::permission::PermissionRequest {
+            id: "diff-sandbox".into(),
+            session_id: "session".into(),
+            tool: "str_replace".into(),
+            arguments,
+            auto_audit: false,
+            sandbox: Some(scope.clone()),
+        });
+        let options = TranscriptRenderOptions {
+            reasoning_mode: ReasoningDisplayMode::Summary,
+            tool_call_mode: ToolCallDisplayMode::Summary,
+        };
+        let rendered = store
+            .display_tail(100, &options)
+            .iter()
+            .map(|line| line.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(rendered.contains(&scope.summary()), "{rendered}");
+        assert!(rendered.contains("edit system config"), "{rendered}");
+        assert!(rendered.contains("\x1b[1;31m"), "{rendered}");
     }
 }

@@ -2,13 +2,80 @@
 
 use super::terminal_contrast::{blend, readable_color_on, Rgb, MIN_TEXT_CONTRAST};
 
+#[derive(Clone, Copy)]
+enum ForegroundColor {
+    Ansi16(u8),
+    Rgb(Rgb),
+}
+
 #[derive(Default)]
 struct TextStyle {
-    foreground: Option<Rgb>,
+    foreground: Option<ForegroundColor>,
     background: Option<Rgb>,
     background_unknown: bool,
     dim: bool,
     bold: bool,
+}
+
+/// 【终端】【明暗判定】按感知亮度判断背景是否属于浅色主题。
+///
+/// 参数:
+/// - `background`: 终端背景 RGB 颜色
+///
+/// 返回:
+/// - 背景为浅色时返回 true
+fn is_light_background((red, green, blue): Rgb) -> bool {
+    u32::from(red) * 299 + u32::from(green) * 587 + u32::from(blue) * 114 > 128_000
+}
+
+/// 【终端】【基准映射】为 ANSI 16 色选择兼顾明暗背景对比度的语义基准 RGB。
+///
+/// 参数:
+/// - `index`: 0 到 15 的 ANSI 色号
+/// - `background`: 当前生效的背景 RGB 颜色
+///
+/// 返回:
+/// - 保留语义色相的基准前景 RGB
+fn ansi_16_rgb(index: u8, background: Rgb) -> Rgb {
+    if is_light_background(background) {
+        match index {
+            0 => (38, 40, 42),
+            1 => (184, 36, 44),
+            2 => (28, 124, 58),
+            3 => (152, 98, 12),
+            4 => (26, 98, 196),
+            5 => (152, 46, 168),
+            6 => (14, 118, 136),
+            7 => (92, 98, 106),
+            8 => (100, 106, 114),
+            9 => (200, 48, 56),
+            10 => (32, 128, 62),
+            11 => (158, 102, 14),
+            12 => (36, 108, 210),
+            13 => (168, 56, 184),
+            14 => (18, 124, 144),
+            _ => (62, 66, 72),
+        }
+    } else {
+        match index {
+            0 => (40, 44, 52),
+            1 => (228, 82, 88),
+            2 => (118, 198, 126),
+            3 => (230, 190, 96),
+            4 => (110, 166, 238),
+            5 => (206, 126, 224),
+            6 => (68, 196, 218),
+            7 => (214, 218, 222),
+            8 => (138, 144, 152),
+            9 => (242, 118, 124),
+            10 => (142, 218, 148),
+            11 => (244, 208, 118),
+            12 => (134, 184, 248),
+            13 => (224, 148, 240),
+            14 => (114, 214, 232),
+            _ => (246, 248, 250),
+        }
+    }
 }
 
 /// 【终端】【色号解析】解析 xterm 256 色，不把 ANSI 主题色假定为固定 RGB。
@@ -93,12 +160,18 @@ impl TextStyle {
                     self.background_unknown = false;
                     kept.push(49);
                 }
-                30..=37 | 90..=97 => {
-                    self.foreground = None;
+                30..=37 => {
+                    // 1. 【终端】【语义色相】记录标准 ANSI 8 色索引，避免 dim 混色丢失色相
+                    self.foreground = Some(ForegroundColor::Ansi16((value - 30) as u8));
+                    kept.push(value);
+                }
+                90..=97 => {
+                    // 2. 【终端】【高亮色相】记录高亮 ANSI 8 色索引，与标准色共享对比度混合管线
+                    self.foreground = Some(ForegroundColor::Ansi16((value - 90 + 8) as u8));
                     kept.push(value);
                 }
                 40..=47 | 100..=107 => {
-                    // 1. 【终端】【显式底色】标准黑白底色可确定，其他 ANSI 底色保持终端所有权
+                    // 3. 【终端】【显式底色】标准黑白底色可确定，其他 ANSI 底色保持终端所有权
                     self.background = match value {
                         40 => Some((0, 0, 0)),
                         47 | 107 => Some((255, 255, 255)),
@@ -116,19 +189,34 @@ impl TextStyle {
                     if index + count > values.len() {
                         return format!("\x1b[{parameters}m");
                     }
-                    let color = match values.get(index + 1) {
-                        Some(2) => Some((
-                            values[index + 2].min(255) as u8,
-                            values[index + 3].min(255) as u8,
-                            values[index + 4].min(255) as u8,
-                        )),
-                        Some(5) => palette_rgb(values[index + 2].min(255) as u8),
-                        _ => None,
-                    };
                     if value == 38 {
-                        self.foreground = color;
+                        self.foreground = match values.get(index + 1) {
+                            Some(2) => Some(ForegroundColor::Rgb((
+                                values[index + 2].min(255) as u8,
+                                values[index + 3].min(255) as u8,
+                                values[index + 4].min(255) as u8,
+                            ))),
+                            Some(5) => {
+                                let code = values[index + 2].min(255) as u8;
+                                if code < 16 {
+                                    Some(ForegroundColor::Ansi16(code))
+                                } else {
+                                    palette_rgb(code).map(ForegroundColor::Rgb)
+                                }
+                            }
+                            _ => None,
+                        };
                     }
                     if value == 48 {
+                        let color = match values.get(index + 1) {
+                            Some(2) => Some((
+                                values[index + 2].min(255) as u8,
+                                values[index + 3].min(255) as u8,
+                                values[index + 4].min(255) as u8,
+                            )),
+                            Some(5) => palette_rgb(values[index + 2].min(255) as u8),
+                            _ => None,
+                        };
                         self.background = color;
                         self.background_unknown = color.is_none();
                     }
@@ -155,7 +243,11 @@ impl TextStyle {
         }
         if let Some((foreground, background)) = defaults.filter(|_| !self.background_unknown) {
             let background = self.background.unwrap_or(background);
-            let original = self.foreground.unwrap_or(foreground);
+            let original = match self.foreground {
+                Some(ForegroundColor::Ansi16(code)) => ansi_16_rgb(code, background),
+                Some(ForegroundColor::Rgb(rgb)) => rgb,
+                None => foreground,
+            };
             let desired = if self.dim {
                 blend(original, background, 0.6)
             } else {

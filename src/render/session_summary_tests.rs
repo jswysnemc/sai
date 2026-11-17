@@ -78,9 +78,12 @@ fn renders_compact_session_summary_with_key_fields() {
         "{icons}"
     );
     assert!(
-        icons.contains("\u{f00e8} 75% · \u{f04c5} 320 toks/s"),
+        icons.contains("\u{f021} 75% · \u{f0e4} 320 toks/s"),
         "{icons}"
     );
+    for icon in [ICON_LABELS.input, ICON_LABELS.output, ICON_LABELS.cached, ICON_LABELS.speed] {
+        assert!(icon.chars().all(|ch| ('\u{e000}'..='\u{f8ff}').contains(&ch)));
+    }
     // 数值保持正文色，不带青、绿色
     let colored = render_session_summary_with(&snapshot, ICON_LABELS);
     assert!(

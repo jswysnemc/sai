@@ -84,6 +84,39 @@ impl TranscriptStore {
         self.dirty_from_cell = None;
     }
 
+    /// 【终端】【脏状态查询】判断当前会话记录是否存在尚未消费的增量变更。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 存在未渲染单元或实时尾部变更时返回 true
+    pub(crate) fn is_dirty(&self) -> bool {
+        self.dirty_from_cell.is_some()
+            || self.live_tail.is_some()
+            || self.live_tool_call.is_some()
+    }
+
+    /// 【终端】【离屏工具收起】在当前活动视图（主会话或子智能体）中收起不在底部可视区内的工具详情。
+    ///
+    /// 参数:
+    /// - `cells`: 需回归自动折叠状态的单元下标列表
+    ///
+    /// 返回:
+    /// - 是否收起了至少一个未折叠单元
+    pub(crate) fn fold_offscreen_cells(&mut self, cells: &[usize]) -> bool {
+        if cells.is_empty() {
+            return false;
+        }
+        match &self.view {
+            super::TranscriptView::Main => self.recent_details.fold_cells(cells.iter().copied()),
+            super::TranscriptView::Subagent { .. } => self
+                .subagent_document
+                .as_mut()
+                .is_some_and(|(_, store)| store.recent_details.fold_cells(cells.iter().copied())),
+        }
+    }
+
     /// 标记所有子智能体单元需要重绘（后台时间线更新时调用）。
     ///
     /// 参数:

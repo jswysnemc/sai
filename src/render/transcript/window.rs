@@ -115,21 +115,25 @@ impl TranscriptStore {
         let frame = self.live_animation_frame();
         // 1. 【终端】【长表格】保留全部已完成行，超过预算只固定布局，不删除前缀
         let mut live = self.render_live_tail(width, options, live_cap);
-        // 1. 统计每个 cell 的行数。工具调用始终占自己的行，避免连续读取时整段被收起后又弹出
+        // 1. 【终端】【可见行统计】仅对非空可见单元插入区块过渡空行，跳过隐藏的思考或工具
         let mut counts = Vec::with_capacity(self.cells.len());
         let mut gap_before = vec![false; self.cells.len()];
         let mut cell_rows = 0usize;
         for (index, cell) in self.cells.iter().enumerate() {
-            if index > 0 && spacing::needs_section_gap(&self.cells[index - 1], cell) {
+            let count = self.cache.count_for(index, cell, width, options, frame);
+            let prev_visible = (0..index).rev().find(|&prev| counts[prev] > 0);
+            if count > 0
+                && prev_visible
+                    .is_some_and(|prev| spacing::needs_section_gap(&self.cells[prev], cell))
+            {
                 gap_before[index] = true;
                 cell_rows += 1;
             }
-            let count = self.cache.count_for(index, cell, width, options, frame);
             counts.push(count);
             cell_rows += count;
         }
-        // 2. 定稿区最后一行若已是空行，丢掉 live 自己的前空行；正文后的工具 live 再补一块空行
-        if let Some(last_index) = self.cells.len().checked_sub(1) {
+        // 2. 【终端】【实时拼接】末尾可见单元若已带空行则去重，正文或思考后的工具补过渡空行
+        if let Some(last_index) = (0..counts.len()).rev().find(|&index| counts[index] > 0) {
             let last_lines =
                 self.cache
                     .lines_for(last_index, &self.cells[last_index], width, options, frame);
@@ -253,7 +257,7 @@ impl TranscriptStore {
             0
         };
         let mut lines = Vec::new();
-        let mut emitted_live_content = false;
+        let mut emitted_live_block = false;
         if let Some(tail) = &mut self.live_tail {
             // 【终端】【流式正文】1. 按内容类型选择渲染方式，避免宽度与折行分支漂移
             let mut rendered_lines = match tail.kind {
@@ -298,13 +302,9 @@ impl TranscriptStore {
             // 3. 丢掉折行带进来的首尾视觉空行，区块前距只保留下面这一行
             spacing::trim_leading_visual_blanks(&mut rendered_lines);
             spacing::trim_trailing_visual_blanks(&mut rendered_lines);
-            // 与定稿 Markdown / Reasoning 一致：区块前空一行。
-            // 以前只在 finalize 后由 cell.display_lines 插入，造成「工作时无空行、完成后突然空行」。
             if !rendered_lines.is_empty() {
                 lines.push(AnsiLine::new(String::new()));
-                if tail.kind == ChatStreamKind::Content {
-                    emitted_live_content = true;
-                }
+                emitted_live_block = true;
             }
             lines.extend(rendered_lines);
         }
@@ -329,8 +329,8 @@ impl TranscriptStore {
             if !rendered.is_empty() {
                 let mut tool_lines = AnsiLine::wrap_block(&rendered, width);
                 spacing::trim_trailing_visual_blanks(&mut tool_lines);
-                // 流式正文与工具预览同在 live 区时，也要留下和定稿一样的一块空行
-                if emitted_live_content {
+                // 4. 【终端】【实时工具过渡】流式正文或思考与工具预览同在实时区时保留一致的过渡空行
+                if emitted_live_block {
                     spacing::ensure_blank_before(&mut lines);
                 }
                 lines.extend(tool_lines);

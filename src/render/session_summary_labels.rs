@@ -19,17 +19,17 @@ pub(crate) struct SummaryLabels {
     pub tokens: &'static str,
 }
 
-/// Nerd Font 图标（Font Awesome / Material 区段，主流 Nerd Font 均包含）。
+/// Nerd Font 图标（BMP 私有区 Font Awesome 码点，兼容 Nerd Fonts v2/v3）。
 pub(crate) const ICON_LABELS: SummaryLabels = SummaryLabels {
     worked: "Worked for",
     first_word: "TTFT",
     // nf-fa-arrow_up / nf-fa-arrow_down
     input: "\u{f062}",
     output: "\u{f063}",
-    // nf-md-cached：环形箭头，语义即「缓存复用」
-    cached: "\u{f00e8}",
-    // nf-md-speedometer
-    speed: "\u{f04c5}",
+    // nf-fa-refresh（BMP U+F021）：环形刷新箭头，表达缓存复用
+    cached: "\u{f021}",
+    // nf-fa-tachometer（BMP U+F0E4）：速率仪表盘，兼容 v2 与 v3
+    speed: "\u{f0e4}",
     tokens: "toks",
 };
 
@@ -44,22 +44,17 @@ pub(crate) const TEXT_LABELS: SummaryLabels = SummaryLabels {
     tokens: "toks",
 };
 
-/// 按环境选择标签集。
+/// 【会话总览】【标签选择】复用全局 `nerd_font_enabled()` 按环境选择图标或纯字符标签集。
 ///
-/// `SAI_NERD_FONT` 为 `0` / `false` / `off` 时使用字符标签，其余情况使用图标。
+/// 参数:
+/// - 无
 ///
 /// 返回:
 /// - 当前终端使用的标签集
 pub(crate) fn summary_labels() -> SummaryLabels {
-    match std::env::var("SAI_NERD_FONT") {
-        Ok(value)
-            if matches!(
-                value.trim().to_ascii_lowercase().as_str(),
-                "0" | "false" | "off"
-            ) =>
-        {
-            TEXT_LABELS
-        }
-        _ => ICON_LABELS,
+    if crate::render::nerd_font::nerd_font_enabled() {
+        ICON_LABELS
+    } else {
+        TEXT_LABELS
     }
 }

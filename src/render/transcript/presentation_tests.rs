@@ -66,10 +66,18 @@ fn view_switch_invalidates_transcript_cache() {
     tui_mode::set_override(None);
 }
 
-/// 【终端】【用户消息回滚测试】两种样式使用相同模式标记，不修改中文或多行内容。
-/// 参数: 无；返回: 无。
+/// 【终端】【用户消息层级测试】全屏模式保持纯文本引导列不变，并以粗体和醒目色阶同助手正文首行拉开区分。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
 #[test]
-fn fullscreen_user_message_matches_inline_for_every_mode() {
+fn fullscreen_user_message_keeps_plain_layout_and_distinguishes_from_assistant_body() {
+    let assistant_first = assistant_lines("助手首行回答", 80).remove(0);
+    assert!(assistant_first.as_str().starts_with("\x1b[2m●\x1b[0m "));
+
     for mode in [
         TranscriptMode::Yolo,
         TranscriptMode::Plan,
@@ -80,10 +88,14 @@ fn fullscreen_user_message_matches_inline_for_every_mode() {
         let inline = super::super::user_echo_cell::render(&cell);
         tui_mode::set_override(Some(TuiMode::Fullscreen));
         let fullscreen = super::super::user_echo_cell::render(&cell);
-        assert_eq!(fullscreen, inline);
+        assert_eq!(
+            crate::render::activity_animation::strip_ansi_for_test(&fullscreen),
+            crate::render::activity_animation::strip_ansi_for_test(&inline)
+        );
         assert!(fullscreen.contains('●'));
         assert!(!fullscreen.contains('›'));
-        assert!(fullscreen.contains("用户消息"));
+        assert!(fullscreen.contains("\x1b[1m用户消息"));
+        assert!(!fullscreen.contains("\x1b[2m●\x1b[0m "));
     }
     tui_mode::set_override(None);
 }

@@ -35,7 +35,11 @@ pub(crate) fn strip_ansi(text: &str) -> String {
 /// - 不超过最大列数且样式完整闭合的文本
 pub(crate) fn clip_ansi_to_width(text: &str, max_width: usize, ellipsis: &str) -> String {
     let ellipsis_width = unicode_width::UnicodeWidthStr::width(ellipsis);
-    let budget = max_width.saturating_sub(ellipsis_width);
+    let budget = if ellipsis_width == 0 || ansi_visible_width(text) <= max_width {
+        max_width
+    } else {
+        max_width.saturating_sub(ellipsis_width)
+    };
     let mut visible_width = 0usize;
     let mut truncated = false;
     let mut output = String::new();

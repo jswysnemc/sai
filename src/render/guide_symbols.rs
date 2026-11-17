@@ -27,11 +27,194 @@ const PACKAGE: &str = "\u{f187}";
 const NETWORK: &str = "\u{f0e8}";
 const CALCULATE: &str = "\u{f1ec}";
 
-/// 【终端】【工具标记】按工具职责选择单色字形，未知扩展仍使用通用工具标记。
-/// 参数: `name` 为原始或 MCP 限定工具名；返回: 单列语义标记。
-pub(crate) fn tool(name: &str) -> &'static str {
+/// 【终端】【字体回退】将私有区图标按字体开关映射为标准单列几何符号。
+///
+/// 参数:
+/// - `icon`: 原始图标字符串
+/// - `nerd_font`: 是否启用 Nerd Fonts 私有区图标
+///
+/// 返回:
+/// - 启用时保留原图标，禁用时返回单列标准 Unicode 符号
+pub(crate) fn resolve_icon_for(icon: &str, nerd_font: bool) -> &str {
+    if nerd_font {
+        return icon;
+    }
+    match icon {
+        ACTIVITY_GROUP => "≡",
+        TOOL => "◆",
+        READ | FOLDER => "▸",
+        EDIT | IMAGE | MEMORY => "◈",
+        COMMAND => "$",
+        SEARCH => "○",
+        ASK => "?",
+        TODO => "•",
+        TRASH => "✗",
+        BROWSER | CLOCK => "◦",
+        ROUTING | SESSION | INFO | NETWORK => "›",
+        AGENTS | DESKTOP | SHIELD | PACKAGE | CALCULATE => "◆",
+        THOUGHT => "◇",
+        WORKING => "●",
+        _ => icon,
+    }
+}
+
+/// 【终端】【图标解析】按当前环境 `SAI_NERD_FONT` 解析单列图标。
+///
+/// 参数:
+/// - `icon`: 原始图标字符串
+///
+/// 返回:
+/// - 适配当前字体能力的单列图标
+pub(crate) fn resolve_icon(icon: &str) -> &str {
+    resolve_icon_for(icon, crate::render::nerd_font::nerd_font_enabled())
+}
+
+/// 【终端】【汇总图标】返回执行链分组汇总标记。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 单列分组汇总图标
+pub(crate) fn activity_group_icon() -> &'static str {
+    if crate::render::nerd_font::nerd_font_enabled() {
+        ACTIVITY_GROUP
+    } else {
+        "≡"
+    }
+}
+
+/// 【终端】【通用工具图标】返回通用动作工具标记。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 单列工具图标
+pub(crate) fn tool_icon() -> &'static str {
+    if crate::render::nerd_font::nerd_font_enabled() {
+        TOOL
+    } else {
+        "◆"
+    }
+}
+
+/// 【终端】【读取图标】返回文件读取标记。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 单列读取图标
+pub(crate) fn read_icon() -> &'static str {
+    if crate::render::nerd_font::nerd_font_enabled() {
+        READ
+    } else {
+        "▸"
+    }
+}
+
+/// 【终端】【编辑图标】返回文件编辑标记。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 单列编辑图标
+pub(crate) fn edit_icon() -> &'static str {
+    if crate::render::nerd_font::nerd_font_enabled() {
+        EDIT
+    } else {
+        "◈"
+    }
+}
+
+/// 【终端】【命令图标】返回命令执行标记。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 单列命令图标
+pub(crate) fn command_icon() -> &'static str {
+    if crate::render::nerd_font::nerd_font_enabled() {
+        COMMAND
+    } else {
+        "$"
+    }
+}
+
+/// 【终端】【代理图标】返回子代理协作标记。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 单列子代理图标
+pub(crate) fn agents_icon() -> &'static str {
+    if crate::render::nerd_font::nerd_font_enabled() {
+        AGENTS
+    } else {
+        "◆"
+    }
+}
+
+/// 【终端】【会话图标】返回会话提示标记。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 单列会话图标
+pub(crate) fn session_icon() -> &'static str {
+    if crate::render::nerd_font::nerd_font_enabled() {
+        SESSION
+    } else {
+        "›"
+    }
+}
+
+/// 【终端】【信息图标】返回系统信息提示标记。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 单列信息图标
+pub(crate) fn info_icon() -> &'static str {
+    if crate::render::nerd_font::nerd_font_enabled() {
+        INFO
+    } else {
+        "›"
+    }
+}
+
+/// 【终端】【思考图标】返回思考统计标记。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 单列思考图标
+pub(crate) fn thought_icon() -> &'static str {
+    if crate::render::nerd_font::nerd_font_enabled() {
+        THOUGHT
+    } else {
+        "◇"
+    }
+}
+
+/// 【终端】【工具标记】按工具职责与字体开关选择单列字形。
+///
+/// 参数:
+/// - `name`: 原始或 MCP 限定工具名
+/// - `nerd_font`: 是否启用 Nerd Fonts 私有区图标
+///
+/// 返回:
+/// - 单列语义标记
+pub(crate) fn tool_for(name: &str, nerd_font: bool) -> &'static str {
     let name = name.rsplit("__").next().unwrap_or(name);
-    match name {
+    let raw = match name {
         "read_file" | "read" | "man_read" | "online_man_get_page" => READ,
         "str_replace" | "write_file" | "edit_file" | "apply_patch" | "replace" => EDIT,
         "ask_question" | "ask" => ASK,
@@ -73,13 +256,50 @@ pub(crate) fn tool(name: &str) -> &'static str {
         name if name.starts_with("read_") => READ,
         name if name.starts_with("search_") || name.ends_with("_query") => SEARCH,
         _ => TOOL,
+    };
+    if nerd_font {
+        raw
+    } else {
+        match raw {
+            ACTIVITY_GROUP => "≡",
+            TOOL => "◆",
+            READ | FOLDER => "▸",
+            EDIT | IMAGE | MEMORY => "◈",
+            COMMAND => "$",
+            SEARCH => "○",
+            ASK => "?",
+            TODO => "•",
+            TRASH => "✗",
+            BROWSER | CLOCK => "◦",
+            ROUTING | SESSION | INFO | NETWORK => "›",
+            AGENTS | DESKTOP | SHIELD | PACKAGE | CALCULATE => "◆",
+            THOUGHT => "◇",
+            WORKING => "●",
+            _ => "◆",
+        }
     }
 }
 
+/// 【终端】【工具标记】按工具职责选择单色字形，未知扩展仍使用通用工具标记。
+///
+/// 参数:
+/// - `name`: 原始或 MCP 限定工具名
+///
+/// 返回:
+/// - 单列语义标记
+pub(crate) fn tool(name: &str) -> &'static str {
+    tool_for(name, crate::render::nerd_font::nerd_font_enabled())
+}
+
 /// 【终端】【语义识别】区分单列图标与正文字符，不依赖标题文案。
-/// 参数: `character` 为可见字符；返回: 是否属于本模块图标集合。
+///
+/// 参数:
+/// - `character`: 可见字符
+///
+/// 返回:
+/// - 是否属于本模块图标集合
 pub(crate) fn is_semantic(character: char) -> bool {
-    [
+    let is_pua = [
         TOOL,
         READ,
         EDIT,
@@ -107,12 +327,27 @@ pub(crate) fn is_semantic(character: char) -> bool {
         ACTIVITY_GROUP,
     ]
     .iter()
-    .any(|icon| icon.starts_with(character))
+    .any(|icon| icon.starts_with(character));
+    if is_pua {
+        return true;
+    }
+    !crate::render::nerd_font::nerd_font_enabled()
+        && matches!(
+            character,
+            '≡' | '◆' | '▸' | '◈' | '$' | '○' | '?' | '•' | '✗' | '◦'
+        )
 }
 
 /// 【终端】【标题替换】仅替换首个标题引导符，不改动颜色、缩进或后续正文。
-/// 参数: `text` 为 ANSI 文本，`icon` 为目标单列标记；返回: 完整渲染文本。
+///
+/// 参数:
+/// - `text`: ANSI 文本
+/// - `icon`: 目标单列标记
+///
+/// 返回:
+/// - 完整渲染文本
 pub(crate) fn replace(text: &str, icon: &str) -> String {
+    let icon = resolve_icon(icon);
     let mut index = 0;
     while index < text.len() {
         let ch = text[index..].chars().next().unwrap();
@@ -136,6 +371,8 @@ pub(crate) fn replace(text: &str, icon: &str) -> String {
                     | '›'
                     | '⌄'
                     | '$'
+                    | '?'
+                    | '≡'
                     | '─'
                     | '╶'
                     | '╴'
@@ -153,8 +390,15 @@ pub(crate) fn replace(text: &str, icon: &str) -> String {
 }
 
 /// 【终端】【工具动效】仅改变图标亮度，工具语义和正文颜色保持不变。
-/// 参数: `icon` 为单列图标，`frame` 为动画帧；返回: 不移动标题的 ANSI 图标。
+///
+/// 参数:
+/// - `icon`: 单列图标
+/// - `frame`: 动画帧
+///
+/// 返回:
+/// - 不移动标题的 ANSI 图标
 pub(crate) fn pulse(icon: &str, frame: usize) -> String {
+    let icon = resolve_icon(icon);
     if (frame / 5) % 2 == 0 {
         format!("\x1b[2m{icon}\x1b[22m")
     } else {
@@ -163,8 +407,15 @@ pub(crate) fn pulse(icon: &str, frame: usize) -> String {
 }
 
 /// 【终端】【语义提示】为路由和会话等消息保留独立图标，不借用折叠箭头。
-/// 参数: `icon` 为图标，`text` 为提示原文；返回: 带中性样式的提示。
+///
+/// 参数:
+/// - `icon`: 图标
+/// - `text`: 提示原文
+///
+/// 返回:
+/// - 带中性样式的提示
 pub(crate) fn notice(icon: &str, text: &str) -> String {
+    let icon = resolve_icon(icon);
     format!("\x1b[2m{icon} {text}\x1b[0m")
 }
 
@@ -257,5 +508,45 @@ mod tests {
         assert_ne!(tool("web_search"), tool("grep"));
         assert_ne!(tool("mcp__web_search"), tool("mcp__search_text"));
         assert_eq!(tool("run_command"), "\u{f489}");
+    }
+
+    /// 【终端】【字体降级测试】禁用 Nerd Fonts 时全部图标降级为单列非私有区标准 Unicode 符号。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn nerd_font_disabled_degrades_all_icons_to_single_column_standard_unicode() {
+        for raw in [
+            TOOL,
+            ACTIVITY_GROUP,
+            READ,
+            EDIT,
+            ASK,
+            TODO,
+            TRASH,
+            COMMAND,
+            SEARCH,
+            BROWSER,
+            ROUTING,
+            SESSION,
+            AGENTS,
+            INFO,
+            THOUGHT,
+            WORKING,
+        ] {
+            let fallback = resolve_icon_for(raw, false);
+            assert_eq!(unicode_width::UnicodeWidthStr::width(fallback), 1);
+            let ch = fallback.chars().next().unwrap();
+            assert!(!('\u{e000}'..='\u{f8ff}').contains(&ch), "{fallback:?}");
+        }
+        for name in ["read_file", "write_file", "run_command", "grep", "custom"] {
+            let fallback = tool_for(name, false);
+            assert_eq!(unicode_width::UnicodeWidthStr::width(fallback), 1);
+            let ch = fallback.chars().next().unwrap();
+            assert!(!('\u{e000}'..='\u{f8ff}').contains(&ch), "{name}: {fallback:?}");
+        }
     }
 }

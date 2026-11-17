@@ -5,7 +5,7 @@ use super::{
 
 /// 【上下文】【分类分配】单元足够时每个非零分类至少占一格，其余按最大余数分配，总量保持不变。
 /// 参数: 分类权重和单元预算；返回: 每类单元数。
-fn allocate(weights: &[usize], cells: usize) -> Vec<usize> {
+pub(super) fn allocate(weights: &[usize], cells: usize) -> Vec<usize> {
     let nonzero = weights.iter().filter(|weight| **weight > 0).count();
     if nonzero == 0 || cells < nonzero {
         return proportional(weights, cells);

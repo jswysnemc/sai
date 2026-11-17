@@ -48,7 +48,7 @@ pub(super) fn for_cell(cell: &HistoryCell, width: usize, approval: bool) -> Stri
         HistoryCell::Diff(cell) => {
             format!(
                 "{} {}",
-                crate::render::guide_symbols::EDIT,
+                crate::render::guide_symbols::edit_icon(),
                 with_status(cell.timeline_summary(), health, approval)
             )
         }
@@ -63,7 +63,7 @@ pub(super) fn for_cell(cell: &HistoryCell, width: usize, approval: bool) -> Stri
         HistoryCell::Tool(ToolCell::Subagent(cell)) => {
             format!(
                 "{} {}",
-                crate::render::guide_symbols::AGENTS,
+                crate::render::guide_symbols::agents_icon(),
                 with_status(cell.timeline_summary(), health, false)
             )
         }

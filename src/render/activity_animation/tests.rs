@@ -1,4 +1,4 @@
-use super::guide::render_guide_at;
+use super::guide::{activity_guide_for, render_guide_at, render_guide_at_with_glyph};
 use super::shimmer::render_shimmer_at;
 use super::*;
 use crate::render::terminal_palette::TerminalPalette;
@@ -175,6 +175,10 @@ fn guide_keeps_a_spinner_icon_and_column_width() {
             assert_eq!(rendered, render_guide_at(frame + 50, None, palette));
         }
     }
+    let fallback = render_guide_at_with_glyph(8, None, DARK, activity_guide_for(false));
+    let fallback_plain = strip_ansi_for_test(&fallback);
+    assert_eq!(fallback_plain, "●");
+    assert_eq!(UnicodeWidthStr::width(fallback_plain.as_str()), 1);
 }
 
 /// 【终端】【引导符测试】每轮包含一强一弱两个平滑脉冲，停歇时仍保留六成对比度。

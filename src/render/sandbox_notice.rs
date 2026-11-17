@@ -2,7 +2,7 @@ use crate::i18n::text as t;
 use crate::permission::{SandboxScope, SandboxScopeKind};
 use serde_json::Value;
 
-/// 【终端】【沙箱范围】渲染审批卡上的沙箱范围说明；提升与不可用用醒目色，其余为弱化色。
+/// 【终端】【沙箱范围】渲染审批卡上的沙箱范围说明；无沙箱、提升与不可用使用醒目警示色，仅沙箱内受保护请求弱化。
 ///
 /// 参数:
 /// - `scope`: 权限请求附带的沙箱范围
@@ -11,13 +11,14 @@ use serde_json::Value;
 /// - ANSI 文本，可能包含理由第二行
 pub(crate) fn render_sandbox_scope(scope: &SandboxScope) -> String {
     let color = match scope.kind {
+        SandboxScopeKind::Unsandboxed => "\x1b[1;31m",
         SandboxScopeKind::Escalated | SandboxScopeKind::Unavailable => "\x1b[38;5;214m",
-        SandboxScopeKind::Sandboxed | SandboxScopeKind::Unsandboxed => "\x1b[2m",
+        SandboxScopeKind::Sandboxed => "\x1b[2m",
     };
     let mut text = format!("  {color}{}\x1b[0m", scope.summary());
     if let Some(justification) = &scope.justification {
         text.push_str(&format!(
-            "\n  \x1b[2m{}{justification}\x1b[0m",
+            "\n  \x1b[2m{}\x1b[0m{justification}",
             t("justification: ", "理由：")
         ));
     }
@@ -47,7 +48,7 @@ pub(crate) fn render_sandbox_denial(output: &str) -> String {
         .and_then(Value::as_str)
         .unwrap_or_default();
     format!(
-        "  \x1b[38;5;214m{} · {kind}\x1b[0m  \x1b[2m{hint}\x1b[0m",
+        "  \x1b[38;5;214m{} · {kind}\x1b[0m  {hint}",
         t("Blocked by sandbox", "沙箱拦截")
     )
 }
@@ -67,13 +68,24 @@ mod tests {
         }
     }
 
-    /// 验证提升请求使用醒目色并附带理由行，沙箱内请求使用弱化色。
+    /// 【终端】【沙箱范围测试】验证提升与完全无沙箱使用醒目警示色，仅沙箱内使用弱化色。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
     #[test]
-    fn escalation_is_highlighted_with_justification() {
+    fn escalation_and_unsandboxed_are_highlighted_distinctly_from_sandboxed() {
         let text = render_sandbox_scope(&scope(SandboxScopeKind::Escalated, Some("fetch deps")));
         assert!(text.contains("\x1b[38;5;214m"));
         assert!(text.contains("fetch deps"));
         assert_eq!(text.lines().count(), 2);
+
+        let unsandboxed = render_sandbox_scope(&scope(SandboxScopeKind::Unsandboxed, None));
+        assert!(unsandboxed.contains("\x1b[1;31m"), "{unsandboxed:?}");
+        assert!(!unsandboxed.starts_with("  \x1b[2m"));
+
         let inside = render_sandbox_scope(&scope(SandboxScopeKind::Sandboxed, None));
         assert!(inside.starts_with("  \x1b[2m"));
         assert_eq!(inside.lines().count(), 1);

@@ -35,7 +35,7 @@ fn reasoning_cell_lines_fit_display_width() {
                 continue;
             }
             assert!(
-                plain.starts_with("│ "),
+                plain == "│" || plain.starts_with("│ "),
                 "width={width} line {index} lost gutter: {plain:?}"
             );
         }

@@ -90,9 +90,9 @@ impl HistoryCell {
         };
         // 1. 【终端】【工具标记】旧 diff、子代理与本地命令同样使用语义图标
         let icon = match self {
-            Self::Diff(_) => Some(crate::render::guide_symbols::EDIT),
-            Self::Shell(_) => Some(crate::render::guide_symbols::COMMAND),
-            Self::Tool(ToolCell::Subagent(_)) => Some(crate::render::guide_symbols::AGENTS),
+            Self::Diff(_) => Some(crate::render::guide_symbols::edit_icon()),
+            Self::Shell(_) => Some(crate::render::guide_symbols::command_icon()),
+            Self::Tool(ToolCell::Subagent(_)) => Some(crate::render::guide_symbols::agents_icon()),
             Self::Tool(
                 ToolCell::CompactionStarted { .. } | ToolCell::CompactionFinished { .. },
             ) => Some(crate::render::guide_symbols::tool("compress_context")),

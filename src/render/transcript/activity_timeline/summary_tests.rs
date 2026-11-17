@@ -3,7 +3,7 @@ use super::node;
 use crate::render::tool_view::ToolView;
 use unicode_width::UnicodeWidthStr;
 
-/// 【终端】【分组图标测试】分组标题使用汇总图标，子项和后续分类图标保持原样。
+/// 【终端】【分组图标测试】分组标题以汇总图标替换首槽位并保留后续分类图标，窄屏用省略号收尾。
 /// 参数：无；返回：无。
 #[test]
 fn group_guide_is_distinct_from_individual_tool_icons() {
@@ -14,12 +14,17 @@ fn group_guide_is_distinct_from_individual_tool_icons() {
         let rendered = super::appearance::group_title(&title, 80);
         let plain = crate::render::ansi_clip::strip_ansi(rendered.as_str());
         assert_eq!(plain, format!("\u{f03a}{suffix}"));
-        for width in [1, 8, 24] {
+        for width in [8, 24] {
             let rendered = super::appearance::group_title(&title, width);
             let plain = crate::render::ansi_clip::strip_ansi(rendered.as_str());
             assert!(plain.starts_with('\u{f03a}'));
+            assert!(plain.ends_with('…'), "expected ellipsis at width={width}: {plain:?}");
             assert!(UnicodeWidthStr::width(plain.as_str()) <= width);
         }
+        let tiny = super::appearance::group_title(&title, 1);
+        let tiny_plain = crate::render::ansi_clip::strip_ansi(tiny.as_str());
+        assert_eq!(tiny_plain, "…");
+        assert!(UnicodeWidthStr::width(tiny_plain.as_str()) <= 1);
     }
     assert!(title(&read_cell("fixture.rs", "1\tcontent"), 80).starts_with(icons::READ));
 }

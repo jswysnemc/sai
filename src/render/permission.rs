@@ -100,7 +100,7 @@ pub(crate) fn render_permission_controls(
     lines.join("\n")
 }
 
-/// 渲染 CLI 审计提示标题行。
+/// 【权限审批】【标题渲染】渲染 CLI 审计提示标题行，待审目标命令或路径保持清晰醒目字重。
 ///
 /// 参数:
 /// - `tool`: 待确认的工具名称
@@ -111,7 +111,7 @@ pub(crate) fn render_permission_controls(
 pub(crate) fn render_permission_title(tool: &str, arguments: Option<&str>) -> String {
     let label = crate::render::tool_event_line::tool_event_label(tool, arguments);
     format!(
-        "\x1b[1m{}\x1b[0m  \x1b[2m{label}\x1b[0m",
+        "\x1b[1;33m{}\x1b[0m  \x1b[1m{label}\x1b[0m",
         t("Permission required", "需要权限确认")
     )
 }
@@ -276,6 +276,7 @@ mod tests {
         let output = render_permission_title("edit_file", Some(r#"{"path":"src/main.rs"}"#));
         assert!(output.contains(t("Permission required", "需要权限确认")));
         assert!(output.contains("Edit"), "unexpected title: {output}");
+        assert!(!output.contains("\x1b[2m"), "target label must not be dimmed: {output:?}");
         assert!(!output.contains("{\"path\""));
     }
 

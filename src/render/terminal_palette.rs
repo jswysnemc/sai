@@ -56,18 +56,51 @@ pub(crate) fn terminal_palette() -> TerminalPalette {
             std::env::var_os("FORCE_COLOR").is_some(),
         )
     });
-    resolve_palette(colors, true_color)
+    resolve_palette_with_env(
+        colors,
+        true_color,
+        std::env::var("COLORFGBG").ok().as_deref(),
+    )
 }
 
-/// 【终端】【颜色缓存】补齐与 Codex 相同的缺省前景和背景颜色。
+/// 【终端】【颜色缓存】无环境提示时补齐深色终端安全缺省色，避免 tmux/SSH 下误判白底导致黑字隐形。
 /// 参数：`colors` 为可选探测结果，`true_color` 为颜色能力；返回：完整调色板。
+#[cfg(test)]
 fn resolve_palette(colors: Option<(Rgb, Rgb)>, true_color: bool) -> TerminalPalette {
-    let (foreground, background) = colors.unwrap_or(((128, 128, 128), (255, 255, 255)));
+    resolve_palette_with_env(colors, true_color, None)
+}
+
+/// 【终端】【颜色解析】优先采用 OSC 10/11 实测色，次选 COLORFGBG 亮暗提示，默认回退深色基准。
+/// 参数：`colors` 为实测前背景，`true_color` 为真彩支持，`colorfgbg` 为可选环境变量；返回：完整调色板。
+fn resolve_palette_with_env(
+    colors: Option<(Rgb, Rgb)>,
+    true_color: bool,
+    colorfgbg: Option<&str>,
+) -> TerminalPalette {
+    let (foreground, background) = colors.unwrap_or_else(|| {
+        if colorfgbg_indicates_light(colorfgbg) {
+            ((38, 40, 42), (248, 249, 250))
+        } else {
+            ((214, 218, 222), (24, 28, 32))
+        }
+    });
     TerminalPalette {
         foreground,
         background,
         true_color,
     }
+}
+
+/// 【终端】【环境推断】从标准 COLORFGBG（如 "0;15" 或 "15;0"）推断是否为浅色背景。
+/// 参数：`raw` 为 COLORFGBG 字符串；返回：背景色号对应浅色时返回 true。
+fn colorfgbg_indicates_light(raw: Option<&str>) -> bool {
+    let Some(bg_code) = raw
+        .and_then(|value| value.rsplit(';').next())
+        .and_then(|part| part.trim().parse::<u8>().ok())
+    else {
+        return false;
+    };
+    matches!(bg_code, 7 | 15)
 }
 
 /// 【终端】【颜色能力】补充 Windows Terminal 的真彩色识别，并尊重显式环境覆盖。
@@ -80,14 +113,16 @@ fn resolve_true_color(detected: bool, windows_terminal: bool, force_override: bo
 mod tests {
     use super::*;
 
-    /// 【终端】【颜色测试】探测失败时使用 Codex 缺省色，成功时保留真实主题颜色。
+    /// 【终端】【颜色测试】探测失败默认回退深色终端基准，COLORFGBG 可切换浅色，成功时保留真实颜色。
     /// 参数：无；返回：无。
     #[test]
     fn palette_uses_detected_colors_or_codex_defaults() {
         let fallback = resolve_palette(None, false);
-        assert_eq!(fallback.foreground, (128, 128, 128));
-        assert_eq!(fallback.background, (255, 255, 255));
+        assert_eq!(fallback.foreground, (214, 218, 222));
+        assert_eq!(fallback.background, (24, 28, 32));
         assert!(!fallback.true_color);
+        let light_env = resolve_palette_with_env(None, true, Some("0;15"));
+        assert_eq!(light_env.background, (248, 249, 250));
         for colors in [
             ((230, 230, 230), (24, 24, 24)),
             ((30, 30, 30), (250, 250, 250)),

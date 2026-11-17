@@ -299,21 +299,21 @@ fn counts_title(tools: usize, reads: usize, thoughts: usize) -> String {
     if tools > 0 {
         parts.push(format!(
             "{} {tools} {}",
-            crate::render::guide_symbols::TOOL,
+            crate::render::guide_symbols::tool_icon(),
             crate::render::terminal_text(if tools == 1 { "tool" } else { "tools" }, "工具")
         ));
     }
     if reads > 0 {
         parts.push(format!(
             "{} {reads} {}",
-            crate::render::guide_symbols::READ,
+            crate::render::guide_symbols::read_icon(),
             crate::render::terminal_text(if reads == 1 { "read" } else { "reads" }, "读取")
         ));
     }
     if thoughts > 0 {
         parts.push(format!(
             "{} {thoughts} {}",
-            crate::render::guide_symbols::THOUGHT,
+            crate::render::guide_symbols::thought_icon(),
             crate::render::terminal_text(
                 if thoughts == 1 { "thought" } else { "thoughts" },
                 "思考"

@@ -50,6 +50,7 @@ mod markdown_inline;
 mod markdown_inline_code;
 mod markdown_list;
 mod markdown_quote;
+pub(crate) mod nerd_font;
 pub(crate) mod omitted_line;
 pub(crate) mod panel_palette;
 mod permission;

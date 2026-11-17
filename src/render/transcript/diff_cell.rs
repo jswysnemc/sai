@@ -136,6 +136,22 @@ impl DiffCell {
         ));
     }
 
+    /// 【编辑审批】【沙箱范围】为已附着在 diff 视图上的权限请求记录沙箱范围说明。
+    ///
+    /// 参数:
+    /// - `sandbox`: 权限请求附带的沙箱范围
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn set_permission_sandbox(
+        &mut self,
+        sandbox: Option<crate::permission::SandboxScope>,
+    ) {
+        if let Some(permission) = self.permission.as_mut() {
+            permission.sandbox = sandbox;
+        }
+    }
+
     /// 写入权限请求的最终决定。
     ///
     /// 参数:
@@ -325,25 +341,13 @@ pub(crate) fn render(cell: &DiffCell, mode: ToolCallDisplayMode) -> String {
         output.push_str(fold_diff_body(body.trim_end(), cell.expanded).trim_end());
     }
 
-    // 权限控件与其他工具卡一致顶正文列，不再随 diff 正文内收
-    if let Some(permission) = &cell.permission {
-        match &permission.decision {
-            Some(decision) => {
-                if !output.ends_with('\n') {
-                    output.push('\n');
-                }
-                output.push_str(&crate::render::render_permission_decision(decision));
-            }
-            None => {
-                if !output.ends_with('\n') {
-                    output.push('\n');
-                }
-                output.push_str(&crate::render::render_permission_controls(
-                    permission.selected,
-                    permission.reply_draft.as_deref(),
-                ));
-            }
+    // 1. 【编辑审批】【控件拼装】权限控件与沙箱警示复用统一审批渲染，与其他工具卡对齐顶正文列
+    let permission_block = crate::render::tool_view::render_permission(cell.permission.as_ref());
+    if !permission_block.is_empty() {
+        if output.ends_with('\n') {
+            output.pop();
         }
+        output.push_str(&permission_block);
     }
     output
 }

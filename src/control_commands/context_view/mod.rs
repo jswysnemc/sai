@@ -47,6 +47,10 @@ pub(crate) fn render(view: &ContextOverview, width: usize, styled: bool) -> Vec<
         tokens(view.window),
         formatting::percent(view.used, view.window, true)
     )];
+    // 1. 【上下文】【极简线性进度条】宽面板顶栏下方使用单轴横线直观反映总占用比例
+    if width >= 24 && view.window > 0 {
+        lines.push(minimal_bar(view, width.min(52), styled));
+    }
     lines.push(String::new());
     let legend = formatting::legend(view, styled);
     let legend_width = legend
@@ -87,6 +91,36 @@ pub(crate) fn render(view: &ContextOverview, width: usize, styled: bool) -> Vec<
             .collect(),
         width,
     )
+}
+
+/// 【上下文】【极简线性条】使用单轴横线展示总窗口占用，摒弃花哨杂乱符号。
+/// 参数: `view` 为上下文概览，`width` 为轨道宽度，`styled` 为是否启用 ANSI 颜色；返回: 单行简约进度条。
+fn minimal_bar(view: &ContextOverview, width: usize, styled: bool) -> String {
+    let cells = width.max(1);
+    let window = view.window.max(1);
+    let used = view.used.min(window);
+    let filled = if used > 0 {
+        ((used as u128 * cells as u128).div_ceil(window as u128) as usize).clamp(1, cells)
+    } else {
+        0
+    };
+    let filled_str = "━".repeat(filled);
+    let empty_str = "─".repeat(cells - filled);
+    if !styled {
+        return format!("{filled_str}{empty_str}");
+    }
+    let palette = crate::render::panel_palette::PanelPalette::current();
+    let ratio = used as f64 / window as f64;
+    let fill_color = if ratio >= 0.90 {
+        palette.removed
+    } else if ratio >= 0.72 {
+        palette.warning
+    } else {
+        palette.accent
+    };
+    let fill_fg = crate::render::panel_palette::fg(fill_color);
+    let empty_fg = crate::render::panel_palette::fg(palette.subtle);
+    format!("{fill_fg}{filled_str}{empty_fg}{empty_str}\x1b[0m")
 }
 
 /// 【上下文】【分段换行】按 ` · ` 分隔符换行，避免把数字拆到两行；单段超宽时交给安全换行处理。

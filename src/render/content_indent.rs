@@ -39,6 +39,10 @@ fn is_guide_marker(ch: char) -> bool {
                 | '◇'
                 | '◈'
                 | '◆'
+                | '▸'
+                | '≡'
+                | '$'
+                | '?'
                 | '\u{f0ad}'
         )
 }

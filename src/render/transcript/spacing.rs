@@ -65,7 +65,7 @@ pub(super) fn drop_duplicate_leading_blank(next: &mut Vec<AnsiLine>, previous: O
     }
 }
 
-/// 正文/提示之后的工具需要一块空行；思考或连续工具之间不加。
+/// 【终端】【区块间距】正文、提示或思考块之后接工具时插入一行空行，连续工具之间保持紧凑。
 ///
 /// 参数:
 /// - `previous`: 上一块 cell
@@ -76,20 +76,23 @@ pub(super) fn drop_duplicate_leading_blank(next: &mut Vec<AnsiLine>, previous: O
 pub(super) fn needs_section_gap(previous: &HistoryCell, next: &HistoryCell) -> bool {
     matches!(
         previous,
-        HistoryCell::Markdown(_) | HistoryCell::Meta(_) | HistoryCell::UserEcho(_)
+        HistoryCell::Markdown(_)
+            | HistoryCell::Meta(_)
+            | HistoryCell::UserEcho(_)
+            | HistoryCell::Reasoning(_)
     ) && matches!(
         next,
         HistoryCell::Tool(_) | HistoryCell::Shell(_) | HistoryCell::Diff(_)
     )
 }
 
-/// 判断 live 区第一行有效内容是否为工具行。
+/// 【终端】【实时工具检测】判断 live 区第一行有效内容是否为工具行或状态伴随行。
 ///
 /// 参数:
 /// - `lines`: live 预换行
 ///
 /// 返回:
-/// - 首个非空行以工具引导符、活动圆点或状态表情开头时为 true
+/// - 首个非空行以工具引导符、活动圆点或状态标记开头时为 true
 pub(super) fn live_opens_with_tool(lines: &[AnsiLine]) -> bool {
     lines
         .iter()
@@ -101,17 +104,18 @@ pub(super) fn live_opens_with_tool(lines: &[AnsiLine]) -> bool {
                 .next()
                 .is_some_and(|ch| {
                     crate::render::guide_symbols::is_semantic(ch)
+                        || ch == crate::render::activity_animation::activity_guide()
                         || matches!(ch, '•' | ACTIVITY_GUIDE | '╶' | '╴')
                 })
                 || crate::render::activity_animation::is_status_companion_line(line.as_str())
         })
 }
 
-/// 上一块是正文类时，给即将接上的工具 live 补一块前空行。
+/// 【终端】【实时过渡间距】上一块是正文或思考块时，为即将接上的工具 live 补一块前空行。
 ///
 /// 参数:
 /// - `live`: live 行
-/// - `previous`: 定稿区最后一块
+/// - `previous`: 定稿区最后一块可见单元
 ///
 /// 返回:
 /// - 无
@@ -121,7 +125,10 @@ pub(super) fn ensure_live_tool_gap(live: &mut Vec<AnsiLine>, previous: Option<&H
     };
     if !matches!(
         previous,
-        HistoryCell::Markdown(_) | HistoryCell::Meta(_) | HistoryCell::UserEcho(_)
+        HistoryCell::Markdown(_)
+            | HistoryCell::Meta(_)
+            | HistoryCell::UserEcho(_)
+            | HistoryCell::Reasoning(_)
     ) {
         return;
     }
@@ -170,14 +177,14 @@ mod tests {
         assert_eq!(next[0].as_str(), "  body");
     }
 
-    /// 【终端】【块间距】正文后的工具要空行，思考后的工具不要。
+    /// 【终端】【块间距】正文与思考后的工具留出过渡空行，连续工具之间仍紧凑相邻。
     #[test]
-    fn section_gap_only_between_body_and_tool() {
+    fn section_gap_only_between_body_or_reasoning_and_tool() {
         let body = HistoryCell::markdown("answer".into());
         let think = HistoryCell::reasoning("plan".into());
         let tool = HistoryCell::shell("ls".into(), String::new(), Some(0));
         assert!(needs_section_gap(&body, &tool));
-        assert!(!needs_section_gap(&think, &tool));
+        assert!(needs_section_gap(&think, &tool));
         assert!(!needs_section_gap(&tool, &tool));
     }
 

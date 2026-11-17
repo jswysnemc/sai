@@ -216,6 +216,53 @@ fn render_thinking_body_with_cols(
     render_thinking_body_with_title(source, expanded, show_expand_hint, terminal_cols, title)
 }
 
+/// 【终端】【思考空行判定】判断折行后的单行思考文本是否仅含控制序列或空白。
+///
+/// 参数:
+/// - `line`: 已折行的单行文本
+///
+/// 返回:
+/// - 可见正文为空白时返回 true
+fn is_thinking_line_blank(line: &str) -> bool {
+    crate::render::activity_animation::strip_ansi_for_test(line)
+        .trim()
+        .is_empty()
+}
+
+/// 【终端】【思考段落整形】展开时去除首尾空行并将连续空行折叠为单行段落间隔，收起时滤除空行。
+///
+/// 参数:
+/// - `wrapped`: 已完成宽度折行的思考行序列
+/// - `expanded`: 当前是否按全文展开显示
+///
+/// 返回:
+/// - 整理后的正文行序列
+fn normalize_thinking_lines(wrapped: Vec<String>, expanded: bool) -> Vec<String> {
+    if !expanded {
+        return wrapped
+            .into_iter()
+            .filter(|line| !is_thinking_line_blank(line))
+            .collect();
+    }
+    let mut normalized: Vec<String> = Vec::with_capacity(wrapped.len());
+    let mut previous_blank = true;
+    for line in wrapped {
+        if is_thinking_line_blank(&line) {
+            if !previous_blank {
+                normalized.push(String::new());
+                previous_blank = true;
+            }
+        } else {
+            normalized.push(line);
+            previous_blank = false;
+        }
+    }
+    if normalized.last().is_some_and(|line| line.is_empty()) {
+        normalized.pop();
+    }
+    normalized
+}
+
 /// 使用指定标题渲染统一的思考正文块。
 ///
 /// 参数:
@@ -242,7 +289,6 @@ fn render_thinking_body_with_title(
     }
     // 2. 【终端】【思考折行】预留两列引导区，正文与标题文字保持相同起始列
     let wrapped = if body.contains("```") {
-        // 2. 【全屏代码】【思考展开】代码围栏先解析高亮，再按 ANSI 显示宽度折行
         let rendered = crate::render::expandable::render_expandable_body(
             crate::render::expandable::ExpandableBlockKind::Markdown,
             body,
@@ -254,12 +300,9 @@ fn render_thinking_body_with_title(
     } else {
         wrap_display_lines_for_copy(body, thinking_body_wrap_width(terminal_cols))
     };
-    // 3. 【终端】【思考段落】丢掉空段落：模型常在思考里插 `\n\n`，渲染成 gutter 空行会像「块内硬隔开」；
-    //    思考与后续正文的间距由 cell / live 的前空行负责，工具块不加前空行
-    let lines: Vec<String> = wrapped
-        .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .collect();
+    // 3. 【终端】【思考段落】展开时将连续空白折叠为单行段落间隔，收起预览时保留紧凑实词行
+    let is_expanded = crate::render::render_expand::resolve_expanded(expanded);
+    let lines = normalize_thinking_lines(wrapped, is_expanded);
     let visible = fold_preview_lines(&lines, expanded);
 
     let mut output = title;
@@ -276,8 +319,12 @@ fn render_thinking_body_with_title(
             }
             FoldedDisplayLine::Line(line) => line,
         };
-        let prefix = "│ ";
-        output.push_str(&format!("\n\x1b[2m\x1b[36m{prefix}{line}\x1b[0m"));
+        if line.is_empty() {
+            output.push_str("\n\x1b[2m\x1b[36m│\x1b[0m");
+        } else {
+            let prefix = "│ ";
+            output.push_str(&format!("\n\x1b[2m\x1b[36m{prefix}{line}\x1b[0m"));
+        }
     }
     output
 }
@@ -512,24 +559,37 @@ mod tests {
         assert_eq!(thinking_body_wrap_width(4), 4);
     }
 
+    /// 【终端】【思考段落呼吸感测试】展开时保留单行段落间隔并去除首尾空行，收起时保持紧凑。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
     #[test]
-    fn thinking_body_drops_blank_paragraphs() {
+    fn thinking_body_collapses_blank_paragraphs_when_expanded() {
         let rendered = render_thinking_body(
-            "第一段说明能力。\n\n我先检查工作区再回复。",
+            "\n\n第一段说明能力。\n\n\n我先检查工作区再回复。\n\n",
             true,
             false,
             None,
         );
         let plain = strip_ansi_for_test(&rendered);
         let body: Vec<&str> = plain.lines().skip(1).collect();
-        assert_eq!(
-            body.len(),
-            2,
-            "blank paragraph must not become a gutter gap: {body:?}"
-        );
+        assert_eq!(body.len(), 3, "expected single gutter gap: {body:?}");
         assert!(body[0].contains("第一段"));
-        assert!(body[1].contains("我先检查"));
-        assert!(body.iter().all(|line| !line.trim().is_empty()));
+        assert_eq!(body[1], "│");
+        assert!(body[2].contains("我先检查"));
+
+        let collapsed = render_thinking_body(
+            "\n\n第一段说明能力。\n\n\n我先检查工作区再回复。\n\n",
+            false,
+            false,
+            None,
+        );
+        let collapsed_plain = strip_ansi_for_test(&collapsed);
+        let collapsed_body: Vec<&str> = collapsed_plain.lines().skip(1).collect();
+        assert_eq!(collapsed_body.len(), 2, "{collapsed_body:?}");
     }
 
     /// 计算纯文本显示宽度。

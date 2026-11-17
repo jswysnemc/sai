@@ -75,7 +75,22 @@ impl UserEchoCell {
     }
 }
 
-/// 渲染用户提交后的输入回显。
+/// 【用户回显】【全屏字重】为全屏模式下的单行用户消息叠加粗体字重，并在原子胶囊复位后自动续接粗体。
+///
+/// 参数:
+/// - `line`: 已完成宽度折行的单行文本
+///
+/// 返回:
+/// - 保持可见宽度不变的粗体 ANSI 行
+fn style_fullscreen_user_line(line: &str) -> String {
+    if line.is_empty() {
+        return String::new();
+    }
+    let restored = line.replace("\x1b[0m", "\x1b[0m\x1b[1m");
+    format!("\x1b[1m{restored}\x1b[0m")
+}
+
+/// 【用户回显】【渲染入口】渲染用户提交后的输入回显，全屏模式下增强字重与前缀对比以区分助手正文。
 ///
 /// 已登记附件默认显示标签，长文本和图片通过展开查看；旧文本记录沿用首尾预览。
 /// 普通键入消息无论多长都全文展示。
@@ -86,11 +101,22 @@ impl UserEchoCell {
 /// 返回:
 /// - ANSI 文本块
 pub(crate) fn render(cell: &UserEchoCell) -> String {
-    let prefix = match cell.mode {
-        TranscriptMode::Yolo => "\x1b[38;5;208m●\x1b[0m ",
-        TranscriptMode::Plan => "\x1b[36m●\x1b[0m ",
-        #[cfg(test)]
-        TranscriptMode::Automatic => "\x1b[38;5;39m●\x1b[0m ",
+    let fullscreen = crate::render::tui_mode::prefers_fullscreen();
+    // 1. 【用户回显】【模式前缀】全屏模式提高模式标记辨识度，避免与助手回答首行同色混淆
+    let prefix = if fullscreen {
+        match cell.mode {
+            TranscriptMode::Yolo => "\x1b[1;38;5;208m●\x1b[0m ",
+            TranscriptMode::Plan => "\x1b[1;38;5;75m●\x1b[0m ",
+            #[cfg(test)]
+            TranscriptMode::Automatic => "\x1b[1;38;5;39m●\x1b[0m ",
+        }
+    } else {
+        match cell.mode {
+            TranscriptMode::Yolo => "\x1b[38;5;208m●\x1b[0m ",
+            TranscriptMode::Plan => "\x1b[36m●\x1b[0m ",
+            #[cfg(test)]
+            TranscriptMode::Automatic => "\x1b[38;5;39m●\x1b[0m ",
+        }
     };
     let expanded = crate::render::render_expand::resolve_expanded(cell.expanded);
     let styled = render_input_atoms(&cell.text, &cell.atoms, expanded);
@@ -98,7 +124,7 @@ pub(crate) fn render(cell: &UserEchoCell) -> String {
     if body.is_empty() {
         return format!("\n{prefix}");
     }
-    // 续行缩进两列；按净宽折行后再按需折叠
+    // 2. 【用户回显】【折行折叠】续行缩进两列，按净宽折行后再按粘贴折叠策略裁剪
     let wrap = terminal_wrap_width().saturating_sub(2).max(8);
     let wrapped: Vec<String> = AnsiLine::wrap_block(body, wrap)
         .into_iter()
@@ -125,10 +151,15 @@ pub(crate) fn render(cell: &UserEchoCell) -> String {
             }
             FoldedDisplayLine::Line(line) => line,
         };
-        if content_index == 0 {
-            lines.push(format!("{prefix}{line}"));
+        let formatted = if fullscreen {
+            style_fullscreen_user_line(&line)
         } else {
-            lines.push(format!("  {line}"));
+            line
+        };
+        if content_index == 0 {
+            lines.push(format!("{prefix}{formatted}"));
+        } else {
+            lines.push(format!("  {formatted}"));
         }
         content_index += 1;
     }

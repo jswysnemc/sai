@@ -69,7 +69,7 @@ fn mixed_cells_use_distinct_markers_and_section_gaps() {
     );
 }
 
-/// 【终端】【块间距】正文与后续工具之间必须空一行；思考后的工具仍紧挨。
+/// 【终端】【块间距】思考与正文进入工具簇前均保留一行过渡空行，连续工具之间保持紧凑。
 #[test]
 fn assembled_window_separates_body_from_following_tool() {
     let opts = options();
@@ -77,6 +77,7 @@ fn assembled_window_separates_body_from_following_tool() {
     store.push_user_echo(TranscriptMode::Automatic, "ask".into());
     store.push_cell(HistoryCell::reasoning("consider options".into()));
     store.push_tool_call("read_file".into(), r#"{"path":"a.rs"}"#.into());
+    store.push_tool_call("read_file".into(), r#"{"path":"c.rs"}"#.into());
     store.push_cell(HistoryCell::markdown("Here is the answer.".into()));
     store.push_tool_call("read_file".into(), r#"{"path":"b.rs"}"#.into());
 
@@ -85,17 +86,24 @@ fn assembled_window_separates_body_from_following_tool() {
         .iter()
         .map(|line| strip_ansi_for_test(line.as_str()))
         .collect();
-    let think = plain.iter().position(|line| line.starts_with('›'));
+    let think = plain.iter().position(|line| line.starts_with('◇'));
     let first_tool = plain.iter().position(|line| line.contains("Reading a.rs"));
+    let contiguous_tool = plain.iter().position(|line| line.contains("Reading c.rs"));
     let body = plain.iter().position(|line| line.contains("Here is"));
     let second_tool = plain.iter().position(|line| line.contains("Reading b.rs"));
 
-    assert!(think < first_tool, "{plain:?}");
+    assert!(think.is_some() && think < first_tool, "{plain:?}");
     assert!(
         first_tool
             .and_then(|index| index.checked_sub(1))
+            .is_some_and(|prev| plain[prev].trim().is_empty()),
+        "thinking should leave a transition gap before the first tool: {plain:?}"
+    );
+    assert!(
+        contiguous_tool
+            .and_then(|index| index.checked_sub(1))
             .is_some_and(|prev| !plain[prev].trim().is_empty()),
-        "thinking must sit against the first tool: {plain:?}"
+        "contiguous tools must remain grouped without extra blank lines: {plain:?}"
     );
     assert!(body < second_tool, "{plain:?}");
     assert!(
@@ -168,7 +176,7 @@ fn streaming_section_gaps_match_finalized_cells() {
     live.set_work_status(WorkStatus::Working);
     let mid_tool = plain_tail(&mut live, &opts);
     assert_no_consecutive_blanks(&mid_tool);
-    assert_preceded_by_blank(&mid_tool, "Read", false);
+    assert_preceded_by_blank(&mid_tool, "Read", true);
 
     live.push_tool_result("read_file".into(), true, "ok".into());
     live.push_chunk(&chunk(ChatStreamKind::Content, "Here is the answer.\n"));
@@ -196,7 +204,7 @@ fn streaming_section_gaps_match_finalized_cells() {
     assert_no_consecutive_blanks(&finalized);
 }
 
-/// 【终端】【块间距】思考还在 live 时工具预览跟上，中间不能多出空行。
+/// 【终端】【块间距】思考还在 live 时工具预览跟上，与定稿一致保留单行过渡空行。
 #[test]
 fn live_reasoning_and_tool_preview_share_single_gap_rules() {
     let opts = options();
@@ -215,7 +223,7 @@ fn live_reasoning_and_tool_preview_share_single_gap_rules() {
     let lines = plain_tail(&mut store, &opts);
     assert_no_consecutive_blanks(&lines);
     assert_preceded_by_blank(&lines, "Thinking", true);
-    assert_preceded_by_blank(&lines, "Read", false);
+    assert_preceded_by_blank(&lines, "Read", true);
 }
 
 /// 渲染当前窗口为去 ANSI 后的纯文本行。

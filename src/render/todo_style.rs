@@ -42,7 +42,7 @@ pub(crate) fn status_marker_framed(status: &str, frame: usize) -> String {
             frame,
             Some((86, 182, 194)),
         )
-        .replace(crate::render::activity_animation::ACTIVITY_GUIDE, "→")
+        .replace(crate::render::activity_animation::activity_guide(), "→")
     } else {
         status_marker(status).to_string()
     }

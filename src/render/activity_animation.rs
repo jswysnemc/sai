@@ -6,7 +6,9 @@ mod guide;
 mod shimmer;
 
 pub(crate) use companion::is_status_companion_line;
-pub(crate) use guide::{render_activity_guide, render_activity_guide_with_color, ACTIVITY_GUIDE};
+pub(crate) use guide::{
+    activity_guide, render_activity_guide, render_activity_guide_with_color, ACTIVITY_GUIDE,
+};
 pub(crate) use shimmer::render_activity_text;
 
 /// 状态动效统一刷新节拍

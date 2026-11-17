@@ -3,9 +3,37 @@ use crate::render::terminal_palette::{terminal_palette, TerminalPalette};
 
 /// 环形活动图标固定占一列，亮度变化不移动文字
 pub(crate) const ACTIVITY_GUIDE: char = '\u{f110}';
+/// 禁用 Nerd Fonts 时的标准单列活动图标
+pub(crate) const ACTIVITY_GUIDE_FALLBACK: char = '●';
 /// 每轮 1.6 秒，两个亮度脉冲之后短暂停歇
 const GUIDE_CYCLE_FRAMES: usize = 50;
 const GUIDE_MIN_CONTRAST: f32 = 0.6;
+
+/// 【终端】【字体回退】按字体开关选择活动引导字形。
+///
+/// 参数:
+/// - `nerd_font`: 是否启用 Nerd Fonts 私有区图标
+///
+/// 返回:
+/// - 单列活动引导字符
+pub(crate) const fn activity_guide_for(nerd_font: bool) -> char {
+    if nerd_font {
+        ACTIVITY_GUIDE
+    } else {
+        ACTIVITY_GUIDE_FALLBACK
+    }
+}
+
+/// 【终端】【引导读取】读取当前环境生效的单列活动引导字符。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 单列活动引导字符
+pub(crate) fn activity_guide() -> char {
+    activity_guide_for(crate::render::nerd_font::nerd_font_enabled())
+}
 
 /// 【终端】【状态动效】渲染与终端前景同色的双脉冲线段。
 /// 参数：`frame` 为动画帧号；返回：带亮度变化的单列 ANSI 引导符。
@@ -29,6 +57,25 @@ pub(super) fn render_guide_at(
     color: Option<(u8, u8, u8)>,
     palette: TerminalPalette,
 ) -> String {
+    render_guide_at_with_glyph(frame, color, palette, activity_guide())
+}
+
+/// 【终端】【引导绘制】使用指定单列字形与脉冲曲线绘制活动引导符。
+///
+/// 参数:
+/// - `frame`: 动画帧号
+/// - `color`: 可选 RGB 状态色
+/// - `palette`: 终端颜色配置
+/// - `glyph`: 单列活动字形
+///
+/// 返回:
+/// - 带脉冲样式的 ANSI 引导符
+pub(super) fn render_guide_at_with_glyph(
+    frame: usize,
+    color: Option<(u8, u8, u8)>,
+    palette: TerminalPalette,
+    glyph: char,
+) -> String {
     // 1. 【终端】【状态动效】主脉冲与稍弱的第二脉冲共用平滑曲线，字形和位置固定
     let position = (frame % GUIDE_CYCLE_FRAMES) as f32;
     let pulse =
@@ -51,7 +98,7 @@ pub(super) fn render_guide_at(
             output.push_str("\x1b[2m");
         }
     }
-    output.push(ACTIVITY_GUIDE);
+    output.push(glyph);
     output.push_str(RESET);
     output
 }

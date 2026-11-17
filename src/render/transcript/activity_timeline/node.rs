@@ -64,9 +64,11 @@ pub(super) fn render_cell(
             HistoryCell::Tool(ToolCell::Invocation(view)) => {
                 Some(crate::render::guide_symbols::tool(&view.name))
             }
-            HistoryCell::Diff(_) => Some(crate::render::guide_symbols::EDIT),
-            HistoryCell::Shell(_) => Some(crate::render::guide_symbols::COMMAND),
-            HistoryCell::Tool(ToolCell::Subagent(_)) => Some(crate::render::guide_symbols::AGENTS),
+            HistoryCell::Diff(_) => Some(crate::render::guide_symbols::edit_icon()),
+            HistoryCell::Shell(_) => Some(crate::render::guide_symbols::command_icon()),
+            HistoryCell::Tool(ToolCell::Subagent(_)) => {
+                Some(crate::render::guide_symbols::agents_icon())
+            }
             HistoryCell::Tool(
                 ToolCell::CompactionStarted { .. } | ToolCell::CompactionFinished { .. },
             ) => Some(crate::render::guide_symbols::tool("compress_context")),

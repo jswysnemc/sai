@@ -48,9 +48,9 @@ pub(crate) fn render(cell: &MetaCell) -> String {
                 || first.starts_with("current session:")
                 || first.starts_with("当前会话:")
             {
-                crate::render::guide_symbols::SESSION
+                crate::render::guide_symbols::session_icon()
             } else {
-                crate::render::guide_symbols::INFO
+                crate::render::guide_symbols::info_icon()
             },
             first,
         ),

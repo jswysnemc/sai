@@ -19,8 +19,12 @@ pub(crate) fn render(view: &ToolView) -> String {
     let tool = audit.tool.as_deref().unwrap_or(&view.name);
     let args = serde_json::from_str::<Value>(arguments).unwrap_or_default();
     let action = args["action"].as_str().unwrap_or(tool);
-    let mut rows = vec![format!("{}: {}", t("Action", "操作"), clean(action))];
-    // 1. 【终端】【审批对象】只使用目标字段，不读取正文、口令或任意嵌套字段
+    let mut rows = vec![format!(
+        "\x1b[2m{}:\x1b[0m \x1b[1m{}\x1b[0m",
+        t("Action", "操作"),
+        clean(action)
+    )];
+    // 1. 【终端】【审批对象】只使用目标字段并保持目标路径或命令清晰醒目，不读取敏感正文
     for (key, label) in [
         ("command", t("Command", "命令")),
         ("path", t("Path", "路径")),
@@ -40,7 +44,7 @@ pub(crate) fn render(view: &ToolView) -> String {
                 .map(str::to_string)
                 .unwrap_or_else(|| value.to_string());
             if !text.trim().is_empty() {
-                rows.push(format!("{label}: {}", clean(&text)));
+                rows.push(format!("\x1b[2m{label}:\x1b[0m \x1b[1m{}\x1b[0m", clean(&text)));
             }
         }
     }

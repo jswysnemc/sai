@@ -75,6 +75,24 @@ pub(in crate::render::transcript) struct RecentDetails {
 }
 
 impl RecentDetails {
+    /// 【终端】【离屏收起】将已滚出底屏可视区的步骤登记为已折叠，使其回归默认折叠生命周期。
+    ///
+    /// 参数:
+    /// - `cells`: 需收起的步骤单元下标集合
+    ///
+    /// 返回:
+    /// - 是否有新增收起项
+    pub(in crate::render::transcript) fn fold_cells(
+        &mut self,
+        cells: impl IntoIterator<Item = usize>,
+    ) -> bool {
+        let mut changed = false;
+        for cell in cells {
+            changed |= self.folded.insert(cell);
+        }
+        changed
+    }
+
     /// 【终端】【详情窗口】从末尾向前渲染节点，只在较新内容占满十行且未受查看保护时自动收起旧详情。
     ///
     /// 参数:
