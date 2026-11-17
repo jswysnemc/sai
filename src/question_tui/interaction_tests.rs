@@ -27,7 +27,7 @@ fn other_is_editable_and_submittable_for_both_question_types() {
             .collect::<Vec<_>>()
             .join("\n");
         assert!(visible.contains("2. 其他") || visible.contains("2. Other"));
-        assert!(visible.contains(if multiple { "□" } else { "○" }));
+        assert!(visible.contains('○'));
         if multiple {
             state.activate_number(&request, 1).unwrap();
         }
@@ -64,16 +64,16 @@ fn other_is_editable_and_submittable_for_both_question_types() {
     }
 }
 
-/// 【终端提问】【选择标记回归】单选使用圆点、多选使用方框，且焦点与选择状态相互独立。
+/// 【终端提问】【选择标记回归】单选与多选统一使用圆点标记，且焦点与选择状态相互独立。
 #[test]
 fn choice_markers_distinguish_question_kind_and_focus() {
-    for (multiple, unselected, selected) in [(false, "○", "●"), (true, "□", "■")] {
+    for multiple in [false, true] {
         let focus =
             strip_ansi(&super::components::option_lines("选项", "", true, false, multiple, 40)[0]);
         let chosen =
             strip_ansi(&super::components::option_lines("选项", "", false, true, multiple, 40)[0]);
-        assert!(focus.starts_with(&format!("› {unselected} ")));
-        assert!(chosen.starts_with(&format!("  {selected} ")));
+        assert!(focus.starts_with("› ○ "));
+        assert!(chosen.starts_with("  ● "));
     }
 }
 

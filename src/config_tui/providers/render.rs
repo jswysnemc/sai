@@ -38,14 +38,14 @@ pub(super) fn browser_help_line(filter_mode: bool) -> String {
         let base = help_line(&[
             ("/", t("search", "搜索")),
             ("j/k", t("move", "移动")),
-            ("h/l", t("columns", "切栏")),
+            ("h/l", t("cols", "切栏")),
             ("Space/u", t("use", "设为当前")),
-            ("Tab", t("activate", "激活")),
+            ("Tab", t("toggle", "激活")),
             ("Enter", t("edit", "设置")),
-            ("r", t("refresh", "刷新")),
+            ("r", t("sync", "刷新")),
             ("a", t("add", "添加")),
         ]);
-        // 1. 【供应商配置】【热区对齐】使用统一 help_separator 分隔删除与返回键，根除点击删除/返回误触发添加的问题
+        // 1. 【供应商配置】【热区对齐】使用统一 help_separator 分隔删除与返回键，并控制英文总宽不超过面板上限
         format!(
             "{base}{sep}{}d{RESET} {}{}{RESET}{sep}{}q{RESET} {}{}{RESET}",
             palette.danger,
@@ -382,7 +382,7 @@ impl ProviderBrowser<'_> {
 mod render_tests {
     use super::*;
 
-    /// 【供应商配置】【底栏热区回归测试】验证添加、删除与返回键各自映射独立热区，绝不因分隔符失配而错位为添加。
+    /// 【供应商配置】【底栏热区回归测试】验证中英文环境下添加、删除与返回键各自映射独立热区。
     #[test]
     fn browser_footer_splits_add_delete_and_back_actions_accurately() {
         let frame = FrameRect {
@@ -391,22 +391,26 @@ mod render_tests {
             width: 118,
             height: 20,
         };
-        let help = browser_help_line(false);
-        let hits = crate::config_tui::ui::status_bar_hits(&frame, &help);
+        for locale in [crate::i18n::Locale::En, crate::i18n::Locale::Zh] {
+            crate::i18n::with_locale(locale, || {
+                let help = browser_help_line(false);
+                let hits = crate::config_tui::ui::status_bar_hits(&frame, &help);
 
-        let mut found_add = false;
-        let mut found_delete = false;
-        let mut found_back = false;
-        for col in 0..118 {
-            match hits.hit(col, 19) {
-                Some(KeyCode::Char('a')) => found_add = true,
-                Some(KeyCode::Char('d')) => found_delete = true,
-                Some(KeyCode::Char('q')) => found_back = true,
-                _ => {}
-            }
+                let mut found_add = false;
+                let mut found_delete = false;
+                let mut found_back = false;
+                for col in 0..118 {
+                    match hits.hit(col, 19) {
+                        Some(KeyCode::Char('a')) => found_add = true,
+                        Some(KeyCode::Char('d')) => found_delete = true,
+                        Some(KeyCode::Char('q')) => found_back = true,
+                        _ => {}
+                    }
+                }
+                assert!(found_add, "应包含 a 添加热区 ({locale:?})");
+                assert!(found_delete, "应包含独立的 d 删除热区 ({locale:?})");
+                assert!(found_back, "应包含独立的 q 返回热区 ({locale:?})");
+            });
         }
-        assert!(found_add, "应包含 a 添加热区");
-        assert!(found_delete, "应包含独立的 d 删除热区");
-        assert!(found_back, "应包含独立的 q 返回热区");
     }
 }

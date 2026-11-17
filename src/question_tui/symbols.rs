@@ -1,20 +1,19 @@
 /// 【终端提问】【引导标记】选项前缀显示列数，供换行与编辑光标共用。
 pub(super) const OPTION_PREFIX_WIDTH: usize = 4;
 
-/// 【终端提问】【选项标记】按单选或多选题型与选中状态返回独立几何字形。
+/// 【终端提问】【选项标记】按选中状态返回统一单列圆形字形。
 ///
 /// 参数:
-/// - `multiple`: 是否为多选题
+/// - `_multiple`: 是否为多选题
 /// - `picked`: 当前项是否已选中
 ///
 /// 返回:
-/// - 单选题返回圆形字形，多选题返回方形复选框字形
-pub(super) fn choice(multiple: bool, picked: bool) -> &'static str {
-    match (multiple, picked) {
-        (false, true) => "●",
-        (false, false) => "○",
-        (true, true) => "■",
-        (true, false) => "□",
+/// - 已选中返回实心圆，未选中返回空心圆
+pub(super) fn choice(_multiple: bool, picked: bool) -> &'static str {
+    if picked {
+        "●"
+    } else {
+        "○"
     }
 }
 

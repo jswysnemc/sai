@@ -85,7 +85,8 @@ impl ReplRuntime {
         &mut self,
         request: PermissionRequest,
     ) -> Result<()> {
-        let guard_confirm = self.stream_active || !self.stream_draft.text.is_empty();
+        // 1. 【权限】【草稿防误触】仅在用户已在草稿区输入排队文本时拦截前 300ms 直接确认键，避免吞掉空闲态立即确认
+        let guard_confirm = !self.stream_draft.text.is_empty();
         self.pause_for_permission_prompt()?;
         self.record_permission_request(request.clone())?;
         self.permission_prompts.push_back(PendingPermissionPrompt {
