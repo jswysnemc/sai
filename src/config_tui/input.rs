@@ -37,9 +37,16 @@ impl UnsavedState {
             ACTIVE_UNSAVED_SCOPES.fetch_add(1, Ordering::SeqCst);
         } else if !unsaved && self.active {
             self.active = false;
-            let _ = ACTIVE_UNSAVED_SCOPES.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| {
-                Some(v.saturating_sub(1))
-            });
+            // 1. 【配置界面】【原子饱和递减】采用 compare_exchange_weak 循环替代已弃用的 fetch_update，兼容多版本工具链且保持零警告
+            let mut current = ACTIVE_UNSAVED_SCOPES.load(Ordering::SeqCst);
+            while let Err(actual) = ACTIVE_UNSAVED_SCOPES.compare_exchange_weak(
+                current,
+                current.saturating_sub(1),
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                current = actual;
+            }
         }
     }
 }
