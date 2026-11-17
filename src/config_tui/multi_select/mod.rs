@@ -1,7 +1,4 @@
 //! 可复用的多态选择清单：Agent 工具白名单、Skills 暴露级别等场景共用。
-//!
-//! 列表项在若干状态间循环（如 隐藏 → 启用 → 延迟），支持分组标题行、
-//! 顶部布尔开关行和 `/` 过滤；右侧详情栏展示当前项说明。
 
 mod render;
 
@@ -9,8 +6,9 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, MouseEventKind};
 use std::io;
 
-use super::input::{read_event, ConfigEvent};
+use super::input::{read_event, sanitize_paste_single_line, ConfigEvent};
 use super::mouse::ClickTracker;
+use super::search::{insert_char_at, insert_str_at_char, remove_char_at, remove_char_before};
 use render::draw;
 
 /// 清单条目的一个可循环状态。
@@ -55,7 +53,35 @@ impl Row {
     }
 }
 
-/// 运行多态选择清单交互循环。
+/// 多选清单过滤态的输入法守卫，保证离开页面时关闭输入法。
+#[derive(Default)]
+struct FilterImeState {
+    active: bool,
+}
+
+impl FilterImeState {
+    fn enter(&mut self) {
+        if !self.active {
+            self.active = true;
+            super::ime::enable_for_edit();
+        }
+    }
+
+    fn leave(&mut self) {
+        if self.active {
+            self.active = false;
+            super::ime::disable_for_nav();
+        }
+    }
+}
+
+impl Drop for FilterImeState {
+    fn drop(&mut self) {
+        self.leave();
+    }
+}
+
+/// 【多态清单】【交互循环】驱动分组清单导航、状态切换、粘贴过滤及两段式 Esc 清空退出。
 ///
 /// 参数:
 /// - `stdout`: 终端输出
@@ -74,7 +100,9 @@ pub(super) fn run_multi_select(
     entries: &mut [SelectEntry],
 ) -> Result<bool> {
     let mut filter = String::new();
+    let mut filter_cursor = 0usize;
     let mut filter_mode = false;
+    let mut ime = FilterImeState::default();
     let mut rows = build_rows(toggles, entries, &filter);
     let mut selected = first_selectable(&rows);
     let mut hovered: Option<usize> = None;
@@ -93,13 +121,25 @@ pub(super) fn run_multi_select(
             hovered,
             footer_hover,
             &filter,
+            filter_cursor,
             filter_mode,
         )?;
         let key = match read_event()? {
             ConfigEvent::Resize => continue,
+            ConfigEvent::Paste(text) => {
+                if filter_mode {
+                    let cleaned = sanitize_paste_single_line(&text);
+                    if !cleaned.is_empty() {
+                        insert_str_at_char(&mut filter, &mut filter_cursor, &cleaned);
+                        rows = build_rows(toggles, entries, &filter);
+                        selected = first_selectable(&rows);
+                    }
+                }
+                continue;
+            }
             ConfigEvent::Key(key) => key.code,
             ConfigEvent::Mouse(mouse) => {
-                // 1. 悬停更新：同步追踪候选行（跳过分组标题）和底栏按钮
+                // 1. 【多态清单】【悬停追踪】同步追踪候选行（跳过分组标题）与底栏按钮
                 if matches!(mouse.kind, MouseEventKind::Moved) {
                     let next = hitbox
                         .list
@@ -112,7 +152,7 @@ pub(super) fn run_multi_select(
                     }
                     continue;
                 }
-                // 2. 滚轮上下滚动：跳过不可选的分组标题行
+                // 2. 【多态清单】【滚轮浏览】跳过不可选的分组标题行上下移动
                 if hitbox.list.frame.contains(mouse.column, mouse.row) {
                     match mouse.kind {
                         MouseEventKind::ScrollUp => {
@@ -126,12 +166,12 @@ pub(super) fn run_multi_select(
                         _ => {}
                     }
                 }
-                // 3. 底栏快捷键胶囊点击（如 A 全选、0 清空、/ 搜索、s 保存、q 取消）
+                // 3. 【多态清单】【底栏点击】响应底栏快捷键胶囊点击
                 let footer_target = hitbox.footer.hit(mouse.column, mouse.row);
                 if let Some(code) = footer_clicks.update(mouse, footer_target) {
                     code
                 } else {
-                    // 4. 列表行点击：点击左侧状态圆点列立即切换，点击文字先选中、再次点击切换
+                    // 4. 【多态清单】【列表点击】点击状态圆点列立即切换，点击文字先选中再切换
                     let target = hitbox
                         .list
                         .row_at(mouse.column, mouse.row)
@@ -139,6 +179,10 @@ pub(super) fn run_multi_select(
                     let Some(index) = clicks.update(mouse, target) else {
                         continue;
                     };
+                    if filter_mode {
+                        filter_mode = false;
+                        ime.leave();
+                    }
                     let in_mark_col = mouse.column < hitbox.list.list.x.saturating_add(5);
                     if index == selected || in_mark_col {
                         selected = index;
@@ -151,46 +195,72 @@ pub(super) fn run_multi_select(
             }
         };
         if filter_mode {
+            let len = filter.chars().count();
+            filter_cursor = filter_cursor.min(len);
             let query_changed = match key {
                 KeyCode::Esc => {
                     filter_mode = false;
+                    ime.leave();
                     filter.clear();
+                    filter_cursor = 0;
                     true
                 }
                 KeyCode::Enter => {
                     filter_mode = false;
+                    ime.leave();
+                    false
+                }
+                KeyCode::Left => {
+                    filter_cursor = filter_cursor.saturating_sub(1);
+                    false
+                }
+                KeyCode::Right => {
+                    filter_cursor = (filter_cursor + 1).min(len);
+                    false
+                }
+                KeyCode::Home => {
+                    filter_cursor = 0;
+                    false
+                }
+                KeyCode::End => {
+                    filter_cursor = len;
                     false
                 }
                 KeyCode::Backspace => {
-                    filter.pop();
+                    if filter_cursor > 0 {
+                        remove_char_before(&mut filter, &mut filter_cursor);
+                    }
                     if filter.is_empty() {
                         filter_mode = false;
+                        ime.leave();
                     }
                     true
                 }
-                KeyCode::Up | KeyCode::Down | KeyCode::Home | KeyCode::End => false,
+                KeyCode::Delete => {
+                    if filter_cursor < len {
+                        remove_char_at(&mut filter, filter_cursor);
+                        true
+                    } else {
+                        false
+                    }
+                }
+                KeyCode::Up | KeyCode::Down => false,
                 KeyCode::Char(ch) => {
-                    filter.push(ch);
+                    insert_char_at(&mut filter, &mut filter_cursor, ch);
                     true
                 }
                 _ => false,
             };
-            if matches!(
-                key,
-                KeyCode::Up | KeyCode::Down | KeyCode::Home | KeyCode::End
-            ) {
+            if matches!(key, KeyCode::Up | KeyCode::Down) {
                 rows = build_rows(toggles, entries, &filter);
                 selected = match key {
                     KeyCode::Up => previous_selectable(&rows, selected),
                     KeyCode::Down => next_selectable(&rows, selected),
-                    KeyCode::Home => first_selectable(&rows),
-                    KeyCode::End => last_selectable(&rows),
                     _ => selected,
                 };
                 continue;
             }
             rows = build_rows(toggles, entries, &filter);
-            // 过滤词一变就落到第一条命中，而不是停在已经滚出视野的旧下标
             selected = if query_changed {
                 first_selectable(&rows)
             } else {
@@ -199,6 +269,13 @@ pub(super) fn run_multi_select(
             continue;
         }
         match key {
+            // 5. 【多态清单】【两段式Esc】保留过滤词时首次按 Esc 先清空过滤词恢复完整列表，再按 Esc 才退出
+            KeyCode::Esc if !filter.is_empty() => {
+                filter.clear();
+                filter_cursor = 0;
+                rows = build_rows(toggles, entries, &filter);
+                selected = clamp_selection(&rows, selected);
+            }
             KeyCode::Esc | KeyCode::Char('q') => return Ok(false),
             KeyCode::Char('s') => return Ok(true),
             KeyCode::Up | KeyCode::Char('k') => selected = previous_selectable(&rows, selected),
@@ -208,10 +285,11 @@ pub(super) fn run_multi_select(
             KeyCode::Char('/') => {
                 filter_mode = true;
                 filter.clear();
+                filter_cursor = 0;
+                ime.enter();
                 rows = build_rows(toggles, entries, &filter);
                 selected = clamp_selection(&rows, selected);
             }
-            // 批量设置：只作用于当前过滤结果，配合 / 可以「先过滤再批量改」
             KeyCode::Char('A') => {
                 if states.len() > 1 {
                     for index in visible_entry_indices(&rows) {
@@ -261,12 +339,6 @@ fn build_rows(toggles: &[HeaderToggle], entries: &[SelectEntry], filter: &str) -
 }
 
 /// 取出当前可见（未被过滤掉）的条目下标。
-///
-/// 参数:
-/// - `rows`: 已按过滤词构建的行序列
-///
-/// 返回:
-/// - 可见条目在 entries 中的下标
 fn visible_entry_indices(rows: &[Row]) -> Vec<usize> {
     rows.iter()
         .filter_map(|row| match row {
@@ -326,8 +398,9 @@ fn clamp_selection(rows: &[Row], selected: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::render::state_summary;
+    use super::render::{format_row_text, state_summary};
     use super::*;
+    use crate::config_tui::theme::{ThemePalette, RESET, SELECTION_BAR};
 
     fn entry(key: &str, group: &str, state: usize) -> SelectEntry {
         SelectEntry {
@@ -338,7 +411,6 @@ mod tests {
         }
     }
 
-    /// 相邻同组条目只插入一个分组标题，导航自动跳过标题行。
     #[test]
     fn rows_group_headers_are_skipped_in_navigation() {
         let entries = vec![
@@ -348,16 +420,13 @@ mod tests {
         ];
         let rows = build_rows(&[], &entries, "");
 
-        // 组标题 + 条目：基础, read, write, 网络, web
         assert_eq!(rows.len(), 5);
         assert_eq!(first_selectable(&rows), 1);
         assert_eq!(next_selectable(&rows, 2), 4);
         assert_eq!(previous_selectable(&rows, 4), 2);
-        // 末行再向下停留原地
         assert_eq!(next_selectable(&rows, 4), 4);
     }
 
-    /// 过滤同时匹配条目名与描述，开关行恒可见。
     #[test]
     fn filter_matches_key_and_description() {
         let toggles = vec![HeaderToggle {
@@ -378,7 +447,6 @@ mod tests {
         assert_eq!(entry_count, 1);
         assert!(matches!(rows[0], Row::Toggle(0)));
 
-        // 匹配描述
         let rows = build_rows(&toggles, &entries, "描述");
         let entry_count = rows
             .iter()
@@ -387,18 +455,15 @@ mod tests {
         assert_eq!(entry_count, 2);
     }
 
-    /// 过滤后选中项夹回最近可选行，不落在分组标题上。
     #[test]
     fn clamp_selection_lands_on_selectable_rows() {
         let entries = vec![entry("a", "组一", 0), entry("b", "组二", 0)];
         let rows = build_rows(&[], &entries, "");
-        // rows: 组一, a, 组二, b
         assert_eq!(clamp_selection(&rows, 2), 3);
         assert_eq!(clamp_selection(&rows, 9), 3);
         assert_eq!(clamp_selection(&[], 3), 0);
     }
 
-    /// 副标题统计非默认态数量。
     #[test]
     fn summary_counts_non_default_states() {
         let states = [
@@ -420,7 +485,6 @@ mod tests {
         assert!(summary.contains('3'));
     }
 
-    /// 默认态也要计数：工具列表里第 0 态是「隐藏」，漏掉它用户得自己做减法。
     #[test]
     fn summary_counts_the_default_state_too() {
         let states = vec![
@@ -442,7 +506,6 @@ mod tests {
         assert!(summary.contains("● 启用 1"), "{summary}");
     }
 
-    /// 批量操作只取过滤后仍可见的条目：分组标题与开关行不能混进来。
     #[test]
     fn visible_entry_indices_skips_group_headers_and_toggles() {
         let rows = vec![
@@ -454,5 +517,28 @@ mod tests {
         ];
 
         assert_eq!(visible_entry_indices(&rows), vec![3, 7]);
+    }
+
+    /// 【多态清单】【连续背景测试】验证悬停行与选中行不会因中间 RESET 产生斑马背景断层。
+    #[test]
+    fn hovered_and_selected_rows_preserve_continuous_background() {
+        let palette = ThemePalette::current();
+        let states = [StateStyle {
+            mark: "●",
+            label: "启用",
+            color: palette.ok,
+        }];
+        let entries = vec![entry("read_file", "", 0)];
+
+        let hovered = format_row_text(&states, &[], &entries, &Row::Entry(0), false, true, 40);
+        assert!(!crate::config_tui::ui::strip_ansi_plain(&hovered).contains(SELECTION_BAR));
+        let hover_body = hovered.strip_suffix(RESET).unwrap();
+        assert!(!hover_body.contains(&format!("{RESET} ")));
+        assert!(hover_body.contains(&format!("{RESET}{}", palette.hover_bg)));
+
+        let selected = format_row_text(&states, &[], &entries, &Row::Entry(0), true, false, 40);
+        assert!(crate::config_tui::ui::strip_ansi_plain(&selected).contains(SELECTION_BAR));
+        let sel_body = selected.strip_suffix(RESET).unwrap();
+        assert!(!sel_body.contains(&format!("{RESET} ")));
     }
 }

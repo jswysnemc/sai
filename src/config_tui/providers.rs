@@ -1,29 +1,32 @@
+//! 供应商与模型三栏浏览器主状态机：驱动三栏导航、过滤游标、粘贴检索与两段式 Esc 清空。
+
+mod actions;
+mod active_selector;
 mod catalog;
 #[cfg(test)]
 mod catalog_tests;
 mod mouse;
 mod render;
 
+pub(crate) use active_selector::select_active_provider;
+
 use crate::config::{AppConfig, ModelMetadata, ProviderConfig};
-use crate::i18n::text as t;
 use anyhow::Result;
-use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::KeyCode;
-use crossterm::queue;
-use crossterm::style::Print;
-use crossterm::terminal::{self, Clear, ClearType};
+use crossterm::terminal;
 use std::collections::BTreeMap;
 use std::io;
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
-use super::form::add_custom_model_form;
-use super::input::{read_event_with_timeout, ConfigEvent};
+use super::input::{read_event_with_timeout, sanitize_paste_single_line, ConfigEvent};
 use super::layout::three_column_widths;
-use super::mouse::{ClickTracker, ListMouseState, MenuInput};
+use super::mouse::ClickTracker;
 use super::provider_fetch::{fetch_models, FetchModelsResult};
-use super::provider_forms::{edit_model_form, edit_provider_form};
-use super::ui::{confirm_delete, display_width, draw_menu_interactive, message, pad, truncate};
+use super::search::{
+    clamp_index, insert_char_at, insert_str_at_char, remove_char_at, remove_char_before,
+};
+use super::ui::{display_width, pad, truncate};
 
 pub(crate) struct ProviderBrowser<'a> {
     config: &'a mut AppConfig,
@@ -34,6 +37,7 @@ pub(crate) struct ProviderBrowser<'a> {
     hovered: Option<mouse::ProviderClick>,
     hovered_footer: Option<super::mouse::HitRect>,
     filter: String,
+    filter_cursor: usize,
     filter_mode: bool,
     raw_models: Vec<String>,
     remote_metadata: BTreeMap<String, ModelMetadata>,
@@ -48,7 +52,23 @@ pub(crate) struct ProviderBrowser<'a> {
     cursor_visible: bool,
 }
 
+impl Drop for ProviderBrowser<'_> {
+    /// 【供应商配置】【输入法恢复】离开供应商浏览器时若仍处搜索编辑态则关闭输入法。
+    fn drop(&mut self) {
+        if self.filter_mode {
+            super::ime::disable_for_nav();
+        }
+    }
+}
+
 impl<'a> ProviderBrowser<'a> {
+    /// 【供应商配置】【初始化】构造供应商三栏浏览器实例。
+    ///
+    /// 参数:
+    /// - `config`: 当前会话配置可变引用
+    ///
+    /// 返回:
+    /// - 供应商浏览器状态机
     pub(crate) fn new(config: &'a mut AppConfig) -> Self {
         Self {
             config,
@@ -59,6 +79,7 @@ impl<'a> ProviderBrowser<'a> {
             hovered: None,
             hovered_footer: None,
             filter: String::new(),
+            filter_cursor: 0,
             filter_mode: false,
             raw_models: Vec::new(),
             remote_metadata: BTreeMap::new(),
@@ -72,10 +93,31 @@ impl<'a> ProviderBrowser<'a> {
         }
     }
 
+    /// 【供应商配置】【进入过滤】打开模型过滤栏、定位光标并激活系统输入法。
+    pub(super) fn enter_filter_mode(&mut self) {
+        self.filter_mode = true;
+        self.active_col = 2;
+        self.filter_cursor = self.filter.chars().count();
+        super::ime::enable_for_edit();
+    }
+
+    /// 【供应商配置】【退出过滤编辑】退出过滤输入态并恢复导航态输入法关闭策略。
+    pub(super) fn leave_filter_mode(&mut self) {
+        if self.filter_mode {
+            self.filter_mode = false;
+            super::ime::disable_for_nav();
+        }
+    }
+
+    /// 【供应商配置】【主循环】驱动三栏绘制、异步目录轮询、过滤粘贴与键盘鼠标事件。
+    ///
+    /// 参数:
+    /// - `stdout`: 终端输出流
+    ///
+    /// 返回:
+    /// - 浏览器退出结果
     pub(crate) fn run(mut self, stdout: &mut io::Stdout) -> Result<()> {
         self.refresh_models();
-        // 上一帧签名：轮询 tick 里内容没变就不重绘，避免加载期间
-        // 10Hz 清屏重画造成的整屏闪烁
         let mut last_frame: Option<String> = None;
         let mut last_hitbox = mouse::ProviderHitbox::default();
         let mut clicks = ClickTracker::default();
@@ -97,6 +139,11 @@ impl<'a> ProviderBrowser<'a> {
                     last_frame = None;
                     continue;
                 }
+                Some(ConfigEvent::Paste(text)) => {
+                    self.handle_filter_paste(&text);
+                    last_frame = None;
+                    continue;
+                }
                 Some(ConfigEvent::Mouse(mouse)) => {
                     match self.handle_browser_mouse(stdout, mouse, &last_hitbox, &mut clicks)? {
                         mouse::BrowserMouseStep::None => continue,
@@ -111,15 +158,16 @@ impl<'a> ProviderBrowser<'a> {
             };
             match key {
                 key if self.filter_mode => self.handle_filter_key(key),
+                // 1. 【供应商配置】【两段式Esc】保留过滤词时首次按 Esc 先清空过滤条件，第二次按 Esc 再退出页面
+                KeyCode::Esc if !self.filter.is_empty() => {
+                    self.clear_retained_filter();
+                }
                 KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
                 KeyCode::Left | KeyCode::Char('h') => self.move_left(),
                 KeyCode::Right | KeyCode::Char('l') => self.move_right(),
                 KeyCode::Up | KeyCode::Char('k') => self.move_up(),
                 KeyCode::Down | KeyCode::Char('j') => self.move_down(),
-                KeyCode::Char('/') => {
-                    self.filter_mode = true;
-                    self.active_col = 2;
-                }
+                KeyCode::Char('/') => self.enter_filter_mode(),
                 KeyCode::Char('r') => {
                     self.model_cache.remove(&self.catalog_key());
                     self.refresh_models();
@@ -133,24 +181,37 @@ impl<'a> ProviderBrowser<'a> {
                 KeyCode::Enter | KeyCode::Char('i') => self.select_or_edit(stdout)?,
                 _ => {}
             }
-            // 1. 【服务商配置】【交互重绘】子表单退出后即使数据未改变，也需恢复列表画面
+            // 2. 【供应商配置】【交互重绘】子表单或动作完成后清空签名以强制刷新画面
             last_frame = None;
         }
     }
 
-    /// 计算当前界面的内容签名。
-    ///
-    /// 渲染涉及的全部状态拼接为字符串，用于轮询 tick 的脏检查：
-    /// loading 等待期 100ms 一拍，若签名未变则跳过整屏重绘。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 内容签名
-    fn frame_signature(&self) -> String {
+    /// 【供应商配置】【清空保留过滤】清除非编辑态下残留的过滤词并重建完整模型列表。
+    fn clear_retained_filter(&mut self) {
+        self.filter.clear();
+        self.filter_cursor = 0;
+        self.model_idx = 0;
+        self.rebuild_models();
+    }
+
+    /// 【供应商配置】【粘贴过滤词】在过滤输入态下接收粘贴内容并插入光标位置。
+    fn handle_filter_paste(&mut self, text: &str) {
+        if !self.filter_mode {
+            return;
+        }
+        let cleaned = sanitize_paste_single_line(text);
+        if cleaned.is_empty() {
+            return;
+        }
+        insert_str_at_char(&mut self.filter, &mut self.filter_cursor, &cleaned);
+        self.model_idx = 0;
+        self.rebuild_models();
+    }
+
+    /// 【供应商配置】【帧签名】拼接渲染依赖的全部状态用于跳过空闲轮询期的无变化重绘。
+    pub(super) fn frame_signature(&self) -> String {
         format!(
-            "{}|{}|{}|{}|{:?}|{:?}|{}|{}|{}|{}|{}|{}|{}|{:?}",
+            "{}|{}|{}|{}|{:?}|{:?}|{}|{}|{}|{}|{}|{}|{}|{}|{:?}",
             self.active_col,
             self.provider_idx,
             self.org_idx,
@@ -158,6 +219,7 @@ impl<'a> ProviderBrowser<'a> {
             self.hovered,
             self.hovered_footer,
             self.filter,
+            self.filter_cursor,
             self.filter_mode,
             self.loading,
             self.status,
@@ -168,13 +230,36 @@ impl<'a> ProviderBrowser<'a> {
         )
     }
 
+    /// 【供应商配置】【过滤按键处理】支持游标移动、退格与删除、回车保留过滤及 Esc 清空。
     fn handle_filter_key(&mut self, key: KeyCode) {
+        let len = self.filter.chars().count();
+        self.filter_cursor = self.filter_cursor.min(len);
         match key {
             KeyCode::Esc => {
-                self.filter_mode = false;
+                self.leave_filter_mode();
                 self.filter.clear();
+                self.filter_cursor = 0;
             }
-            KeyCode::Enter | KeyCode::Tab => self.filter_mode = false,
+            KeyCode::Enter | KeyCode::Tab => {
+                self.leave_filter_mode();
+                return;
+            }
+            KeyCode::Left => {
+                self.filter_cursor = self.filter_cursor.saturating_sub(1);
+                return;
+            }
+            KeyCode::Right => {
+                self.filter_cursor = (self.filter_cursor + 1).min(len);
+                return;
+            }
+            KeyCode::Home => {
+                self.filter_cursor = 0;
+                return;
+            }
+            KeyCode::End => {
+                self.filter_cursor = len;
+                return;
+            }
             KeyCode::Up => {
                 self.move_up();
                 return;
@@ -184,30 +269,40 @@ impl<'a> ProviderBrowser<'a> {
                 return;
             }
             KeyCode::Backspace => {
-                self.filter.pop();
+                if self.filter_cursor > 0 {
+                    remove_char_before(&mut self.filter, &mut self.filter_cursor);
+                }
                 if self.filter.is_empty() {
-                    self.filter_mode = false;
+                    self.leave_filter_mode();
                 }
                 self.model_idx = 0;
             }
+            KeyCode::Delete => {
+                if self.filter_cursor < len {
+                    remove_char_at(&mut self.filter, self.filter_cursor);
+                    self.model_idx = 0;
+                } else {
+                    return;
+                }
+            }
             KeyCode::Char(ch) => {
-                self.filter.push(ch);
+                insert_char_at(&mut self.filter, &mut self.filter_cursor, ch);
                 self.model_idx = 0;
             }
-            _ => {}
+            _ => return,
         }
         self.rebuild_models();
     }
 
-    fn move_left(&mut self) {
+    pub(super) fn move_left(&mut self) {
         self.active_col = self.active_col.saturating_sub(1);
     }
 
-    fn move_right(&mut self) {
+    pub(super) fn move_right(&mut self) {
         self.active_col = (self.active_col + 1).min(2);
     }
 
-    fn move_up(&mut self) {
+    pub(super) fn move_up(&mut self) {
         match self.active_col {
             0 => {
                 self.provider_idx = self.provider_idx.saturating_sub(1);
@@ -222,324 +317,33 @@ impl<'a> ProviderBrowser<'a> {
         }
     }
 
-    fn move_down(&mut self) {
+    pub(super) fn move_down(&mut self) {
         match self.active_col {
             0 => {
-                self.provider_idx =
-                    super::search::clamp_index(self.provider_idx + 1, self.config.providers.len());
+                self.provider_idx = clamp_index(self.provider_idx + 1, self.config.providers.len());
                 self.refresh_models();
             }
             1 => {
-                self.org_idx = super::search::clamp_index(self.org_idx + 1, self.orgs.len());
+                self.org_idx = clamp_index(self.org_idx + 1, self.orgs.len());
                 self.rebuild_models();
             }
-            2 => self.model_idx = super::search::clamp_index(self.model_idx + 1, self.models.len()),
+            2 => self.model_idx = clamp_index(self.model_idx + 1, self.models.len()),
             _ => {}
         }
-    }
-
-    /// 【供应商配置】【新增保存】保存供应商草稿；无模型时保留原激活项，返回交互结果。
-    /// 参数: stdout 为终端输出
-    fn add_provider(&mut self, stdout: &mut io::Stdout) -> Result<()> {
-        let mut draft = ProviderConfig::new_openai_compatible();
-        draft.id = (1..)
-            .map(|index| format!("custom-{index}"))
-            .find(|id| self.config.providers.iter().all(|item| &item.id != id))
-            .unwrap();
-        if let Some(provider) = edit_provider_form(stdout, draft, true)? {
-            if self
-                .config
-                .providers
-                .iter()
-                .any(|item| item.id == provider.id)
-            {
-                message(
-                    stdout,
-                    t("Provider ID already exists", "供应商配置 ID 已存在"),
-                )?;
-                return Ok(());
-            }
-            let previous_active = self.config.active_provider.clone();
-            let has_model = !local_provider_models(&provider).is_empty();
-            self.config.upsert_provider(provider);
-            // 1. 【供应商配置】【激活保护】目录失败或为空时允许稍后手动添加模型
-            if !has_model {
-                self.config.active_provider = previous_active;
-            }
-            self.provider_idx = self.config.providers.len().saturating_sub(1);
-            self.refresh_models();
-        }
-        Ok(())
-    }
-
-    fn delete_provider(&mut self, stdout: &mut io::Stdout) -> Result<()> {
-        if self.config.providers.is_empty() {
-            return Ok(());
-        }
-        let provider_id = self.config.providers[self.provider_idx].id.clone();
-        // 删除会级联清理压缩/视觉/嵌入/subagent 的模型引用，且无法撤销，
-        // 必须先确认，并在副标题里说明后果
-        if !confirm_delete(
-            stdout,
-            t(" DELETE PROVIDER ", " 删除供应商 "),
-            &provider_id,
-            t(
-                "This also clears models, keys and any model references pointing at it.",
-                "同时删除其下的模型与密钥，并清空指向它的模型引用（压缩 / 视觉 / 嵌入 / 子代理）。",
-            ),
-        )? {
-            self.status = t("Delete cancelled", "已取消删除").to_string();
-            return Ok(());
-        }
-        if let Err(error) = self.config.remove_provider(&provider_id) {
-            self.status = error.to_string();
-            return Ok(());
-        }
-        self.provider_idx = self
-            .provider_idx
-            .min(self.config.providers.len().saturating_sub(1));
-        self.status = format!("{}: {provider_id}", t("Removed provider", "已删除供应商"));
-        self.refresh_models();
-        Ok(())
-    }
-
-    fn select_or_edit(&mut self, stdout: &mut io::Stdout) -> Result<()> {
-        match self.active_col {
-            0 => {
-                if let Some(provider) = self.config.providers.get(self.provider_idx).cloned() {
-                    if let Some(provider) = edit_provider_form(stdout, provider, false)? {
-                        let old_id = self.config.providers[self.provider_idx].id.clone();
-                        self.config.providers[self.provider_idx] = provider.clone();
-                        if self.config.active_provider == old_id {
-                            self.config.active_provider = provider.id.clone();
-                        }
-                        self.refresh_models();
-                    }
-                }
-            }
-            2 => {
-                if let (Some(provider), Some(model)) = (
-                    self.config.providers.get_mut(self.provider_idx),
-                    self.models.get(self.model_idx).cloned(),
-                ) {
-                    let original = provider.clone();
-                    if let Some(metadata) = self.remote_metadata.get(&model.full).cloned() {
-                        let current = provider
-                            .model_metadata
-                            .entry(model.full.clone())
-                            .or_default();
-                        if current.context_chars.is_none() {
-                            current.context_chars = metadata.context_chars;
-                        }
-                        if current.max_output_tokens.is_none() {
-                            current.max_output_tokens = metadata.max_output_tokens;
-                        }
-                        if current.tags.is_empty() {
-                            current.tags = metadata.tags;
-                        }
-                    }
-                    if edit_model_form(stdout, provider, &model.full)? {
-                        self.record_model_edit(&model.full);
-                    } else {
-                        *provider = original;
-                    }
-                }
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    /// 【配置】【模型保存】记录已确认的模型表单修改。
-    ///
-    /// 参数: `model` 为当前供应商下保存的模型标识
-    /// 返回: 无；登记可选模型并更新界面状态
-    fn record_model_edit(&mut self, model: &str) {
-        let Some(provider) = self.config.providers.get_mut(self.provider_idx) else {
-            return;
-        };
-        if provider.default_model.trim().is_empty() {
-            provider.default_model = model.to_string();
-        }
-        // 【配置】【模型刷新】显式保存的模型进入候选列表，不依赖是否设为默认模型
-        if !provider.models.iter().any(|item| item == model) {
-            provider.models.push(model.to_string());
-        }
-        if provider.enabled && provider.default_model == model {
-            self.config.active_provider = provider.id.clone();
-        }
-        self.status = format!("{}: {model}", t("Updated model settings", "已更新模型设置"));
-        self.rebuild_models();
-    }
-
-    fn toggle_model_activation(&mut self) {
-        if self.active_col != 2 {
-            return;
-        }
-        let Some(model) = self.models.get(self.model_idx).cloned() else {
-            return;
-        };
-        let Some(provider_id) = self
-            .config
-            .providers
-            .get(self.provider_idx)
-            .map(|provider| provider.id.clone())
-        else {
-            return;
-        };
-        let is_active = self
-            .config
-            .providers
-            .get(self.provider_idx)
-            .map(|provider| provider.models.iter().any(|item| item == &model.full))
-            .unwrap_or(false);
-        if is_active {
-            // 通过统一移除接口清理列表与元数据
-            if self
-                .config
-                .remove_active_provider_model(&provider_id, &model.full)
-                .is_ok()
-            {
-                self.status = format!(
-                    "{}: {}",
-                    t("Deactivated model", "已取消激活模型"),
-                    model.full
-                );
-            }
-            return;
-        }
-        if let Some(provider) = self.config.providers.get_mut(self.provider_idx) {
-            provider.models.push(model.full.clone());
-            if provider.default_model.trim().is_empty() {
-                provider.default_model = model.full.clone();
-            }
-            self.status = format!("{}: {}", t("Activated model", "已激活模型"), model.full);
-        }
-    }
-
-    /// 【供应商配置】【一键设为当前】在模型栏按 Space 或 u 直接将该模型设为默认并激活供应商，免进二级表单。
-    ///
-    /// 参数: 无
-    ///
-    /// 返回: 无
-    fn set_current_model(&mut self) {
-        if self.active_col != 2 {
-            return;
-        }
-        let Some(model) = self.models.get(self.model_idx).cloned() else {
-            return;
-        };
-        let Some(provider_id) = self
-            .config
-            .providers
-            .get(self.provider_idx)
-            .map(|provider| provider.id.clone())
-        else {
-            return;
-        };
-        if self
-            .config
-            .set_active_provider_model(&provider_id, &model.full)
-            .is_ok()
-        {
-            self.status = format!(
-                "{}: {provider_id} / {}",
-                t("Set active model", "已设为当前模型"),
-                model.full
-            );
-            self.rebuild_models();
-        }
-    }
-
-    /// 在当前供应商下新增自定义模型。
-    fn add_custom_model(&mut self, stdout: &mut io::Stdout) -> Result<()> {
-        let Some(model) = add_custom_model_form(stdout)? else {
-            return Ok(());
-        };
-        let Some(provider) = self.config.providers.get_mut(self.provider_idx) else {
-            return Ok(());
-        };
-        if provider.models.iter().any(|item| item == &model) {
-            self.status = format!("{}: {model}", t("Model already exists", "模型已存在"));
-            return Ok(());
-        }
-        provider.models.push(model.clone());
-        if provider.default_model.trim().is_empty() {
-            provider.default_model = model.clone();
-        }
-        if !self.raw_models.iter().any(|item| item == &model) {
-            self.raw_models.push(model.clone());
-        }
-        self.rebuild_models();
-        self.model_idx = self
-            .models
-            .iter()
-            .position(|entry| entry.full == model)
-            .unwrap_or(self.model_idx);
-        self.status = format!("{}: {model}", t("Added custom model", "已添加自定义模型"));
-        Ok(())
-    }
-
-    /// 删除当前选中的本地模型和关联元数据。
-    fn delete_model(&mut self, stdout: &mut io::Stdout) -> Result<()> {
-        let Some(model) = self
-            .models
-            .get(self.model_idx)
-            .map(|entry| entry.full.clone())
-        else {
-            return Ok(());
-        };
-        let Some(provider_id) = self
-            .config
-            .providers
-            .get(self.provider_idx)
-            .map(|provider| provider.id.clone())
-        else {
-            return Ok(());
-        };
-        if !confirm_delete(
-            stdout,
-            t(" REMOVE MODEL ", " 移除模型 "),
-            &model,
-            t(
-                "Removes it from this provider's model list.",
-                "从该供应商的模型列表中移除。",
-            ),
-        )? {
-            self.status = t("Delete cancelled", "已取消删除").to_string();
-            return Ok(());
-        }
-        if self
-            .config
-            .remove_active_provider_model(&provider_id, &model)
-            .is_ok()
-        {
-            self.rebuild_models();
-            self.status = format!("{}: {model}", t("Removed model", "已移除模型"));
-        }
-        Ok(())
     }
 }
 
-fn format_status_line(value: &str) -> String {
+pub(super) fn format_status_line(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 #[derive(Clone)]
-struct ModelEntry {
-    name: String,
-    full: String,
+pub(super) struct ModelEntry {
+    pub(super) name: String,
+    pub(super) full: String,
 }
 
-/// 判断模型标识是否命中过滤词（大小写不敏感子串）。
-///
-/// 参数:
-/// - `model`: 完整模型标识
-/// - `filter`: 已规范化或原始的过滤词
-///
-/// 返回:
-/// - 空过滤词视为全部命中
-fn model_matches_filter(model: &str, filter: &str) -> bool {
+pub(super) fn model_matches_filter(model: &str, filter: &str) -> bool {
     let filter = filter.trim();
     filter.is_empty()
         || model
@@ -547,8 +351,7 @@ fn model_matches_filter(model: &str, filter: &str) -> bool {
             .contains(&filter.to_ascii_lowercase())
 }
 
-/// 返回当前供应商的本地模型，默认模型和已激活模型优先。
-fn local_provider_models(provider: &ProviderConfig) -> Vec<String> {
+pub(super) fn local_provider_models(provider: &ProviderConfig) -> Vec<String> {
     let mut models = Vec::new();
     if !provider.default_model.trim().is_empty() {
         models.push(provider.default_model.clone());
@@ -562,147 +365,10 @@ fn local_provider_models(provider: &ProviderConfig) -> Vec<String> {
 }
 
 impl ModelEntry {
-    fn new(name: &str, full: &str) -> Self {
+    pub(super) fn new(name: &str, full: &str) -> Self {
         Self {
             name: name.to_string(),
             full: full.to_string(),
-        }
-    }
-}
-
-pub(crate) fn select_active_provider(
-    stdout: &mut io::Stdout,
-    config: &mut AppConfig,
-) -> Result<()> {
-    let mut choices = config.provider_model_choices();
-    if choices.is_empty() {
-        message(
-            stdout,
-            t(
-                "No available Provider, add one first.",
-                "没有可用 Provider，请先添加。",
-            ),
-        )?;
-        return Ok(());
-    }
-    let current = choices.iter().position(|choice| {
-        config
-            .provider(None)
-            .map(|provider| {
-                provider.id == choice.provider_id && provider.default_model == choice.model
-            })
-            .unwrap_or(false)
-    });
-    let mut selected = current.unwrap_or(0);
-    let mut mouse = ListMouseState::default();
-    let mut search = super::search::ListSearch::default();
-    let mut status = String::new();
-    loop {
-        if choices.is_empty() {
-            message(
-                stdout,
-                t(
-                    "No available Provider models left.",
-                    "已无可用 Provider 模型。",
-                ),
-            )?;
-            return Ok(());
-        }
-        let visible = choices
-            .iter()
-            .enumerate()
-            .filter(|(_, choice)| search.matches(&choice.label()))
-            .map(|(index, _)| index)
-            .collect::<Vec<_>>();
-        selected = super::search::clamp_index(selected, visible.len());
-        let options = if visible.is_empty() {
-            vec![format!("({})", t("no matches", "没有匹配"))]
-        } else {
-            visible
-                .iter()
-                .map(|index| choices[*index].label())
-                .collect::<Vec<_>>()
-        };
-        let help = search.help().unwrap_or_else(|| {
-            if status.is_empty() {
-                super::theme::help_line(&[
-                    ("/", t("search", "搜索")),
-                    ("↑↓", t("move", "移动")),
-                    ("Enter", t("select", "选择")),
-                    ("d", t("remove", "移除")),
-                    ("q", t("back", "返回")),
-                ])
-            } else {
-                status.clone()
-            }
-        });
-        let hitbox = draw_menu_interactive(
-            stdout,
-            t(" SELECT PROVIDER/MODEL ", " 选择供应商/模型 "),
-            &options,
-            &[],
-            selected,
-            &mouse,
-            &help,
-            "",
-        )?;
-        let key = match hitbox.read(&mut mouse, selected, false)? {
-            MenuInput::Redraw => continue,
-            MenuInput::Select(index) | MenuInput::RightClick(index) => {
-                if !visible.is_empty() {
-                    selected = index;
-                }
-                continue;
-            }
-            MenuInput::Activate(index) => {
-                if !visible.is_empty() {
-                    selected = index;
-                }
-                KeyCode::Enter
-            }
-            MenuInput::Key(key) => key.code,
-            MenuInput::Action(code) => code,
-        };
-        match search.handle(key) {
-            super::search::SearchEffect::Updated => {
-                selected = 0;
-                status.clear();
-                continue;
-            }
-            super::search::SearchEffect::Closed => continue,
-            super::search::SearchEffect::Passthrough => {}
-        }
-        match key {
-            KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
-            KeyCode::Up | KeyCode::Char('k') if !search.editing => {
-                selected = selected.saturating_sub(1)
-            }
-            KeyCode::Down | KeyCode::Char('j') if !search.editing => {
-                selected = super::search::clamp_index(selected + 1, visible.len())
-            }
-            KeyCode::Up if search.editing => selected = selected.saturating_sub(1),
-            KeyCode::Down if search.editing => {
-                selected = super::search::clamp_index(selected + 1, visible.len())
-            }
-            KeyCode::Char('d') if !visible.is_empty() => {
-                // 移除当前高亮模型（含元数据），失败时在菜单内提示而不终止 TUI
-                let choice = &choices[visible[selected]];
-                let provider_id = choice.provider_id.clone();
-                let model = choice.model.clone();
-                match config.remove_active_provider_model(&provider_id, &model) {
-                    Ok(()) => {
-                        status.clear();
-                        choices = config.provider_model_choices();
-                    }
-                    Err(err) => status = err.to_string(),
-                }
-            }
-            KeyCode::Enter if !visible.is_empty() => {
-                let choice = &choices[visible[selected]];
-                config.set_active_provider_model(&choice.provider_id, &choice.model)?;
-                return Ok(());
-            }
-            _ => {}
         }
     }
 }
@@ -711,7 +377,6 @@ pub(crate) fn select_active_provider(
 mod tests {
     use super::*;
 
-    /// 【配置】【模型刷新测试】保存远程模型设置并重新加载后，模型选择器应能找到该模型。
     #[test]
     fn regression_saved_model_is_available_after_returning_to_repl() {
         let temp = tempfile::tempdir().unwrap();
@@ -738,12 +403,32 @@ mod tests {
         );
     }
 
-    /// 空过滤词不过滤；大小写与子串都能命中。
     #[test]
     fn model_filter_matches_substring_case_insensitively() {
         assert!(model_matches_filter("minimax-m3", ""));
         assert!(model_matches_filter("minimax-m3", "Mini"));
         assert!(model_matches_filter("openai/gpt-4o", "gpt-4"));
         assert!(!model_matches_filter("minimax-m3", "claude"));
+    }
+
+    #[test]
+    fn filter_paste_and_retained_escape_clear_behave_consistently() {
+        let mut config = AppConfig::default();
+        config.providers[0].models = vec!["openai/gpt-4o".into(), "anthropic/claude-3".into()];
+        let mut browser = ProviderBrowser::new(&mut config);
+        browser.refresh_models();
+
+        browser.enter_filter_mode();
+        browser.handle_filter_paste("gpt\n");
+        assert_eq!(browser.filter, "gpt");
+        assert_eq!(browser.models.len(), 1);
+
+        browser.handle_filter_key(KeyCode::Enter);
+        assert!(!browser.filter_mode);
+        assert_eq!(browser.filter, "gpt");
+
+        browser.clear_retained_filter();
+        assert!(browser.filter.is_empty());
+        assert!(browser.models.len() >= 2);
     }
 }

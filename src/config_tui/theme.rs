@@ -1,39 +1,13 @@
-/// 配置界面的边框与文本配色。
-///
-/// 与 TUI 会话界面共用同一套色板基调：品牌绿松用于标题与主按钮，
-/// 亮青用于选中与键位提示，弱化灰蓝用于边框与说明。
-/// 所有前景色都取中高亮度：终端背景可能是纯黑、深灰或半透明浅灰，
-/// 低于约 45% 亮度的颜色在浅灰背景上会与底色混在一起。
-/// 品牌色（与 Web --signal 同色系，提亮一档保证浅灰背景可读）
-pub(crate) const BRAND: &str = "\x1b[38;2;94;196;168m";
-/// 选中项高亮色
-pub(crate) const ACCENT: &str = "\x1b[38;2;170;232;246m";
-/// 说明文字与未选中项
-pub(crate) const MUTED: &str = "\x1b[38;2;160;180;186m";
-/// 边框、分隔点与占位说明
-pub(crate) const DIM: &str = "\x1b[38;2;118;138;146m";
-/// 字段值的强调色：值比标签更值得被看到
-pub(crate) const VALUE: &str = "\x1b[38;2;152;216;200m";
-/// 开启 / 成功状态
-pub(crate) const OK: &str = "\x1b[38;2;140;206;116m";
-/// 提醒 / 待保存状态
-pub(crate) const WARN: &str = "\x1b[38;2;236;194;110m";
-/// 关闭 / 中性状态沿用 MUTED；危险状态色
-pub(crate) const DANGER: &str = "\x1b[38;2;236;128;132m";
-/// 状态胶囊浅底色（青绿微底，适合开关与当前项标识）
-pub(crate) const PILL_BG: &str = "\x1b[48;2;32;54;60m";
-/// 选中行整行底色（深青灰，与任意背景都能拉开层次）
-pub(crate) const SELECT_BG: &str = "\x1b[48;2;36;62;70m";
-/// 主按钮实心底（品牌绿松）
-pub(crate) const BUTTON_BG: &str = "\x1b[48;2;46;120;102m";
-/// 主按钮前景（近白）
-pub(crate) const BUTTON_FG: &str = "\x1b[38;2;236;246;242m";
-/// 样式复位
+//! 配置界面的明暗终端自适应配色与行级视觉原语。
+
+use crate::render::panel_palette::{PanelPalette, Rgb};
+
+/// 样式复位序列。
 pub(crate) const RESET: &str = "\x1b[0m";
-/// 加粗
+/// 加粗序列。
 pub(crate) const BOLD: &str = "\x1b[1m";
 
-/// 圆角边框字符：左上、右上、左下、右下、横线、竖线
+/// 圆角边框字符：左上、右上、左下、右下、横线、竖线。
 pub(crate) const CORNER_TOP_LEFT: char = '╭';
 pub(crate) const CORNER_TOP_RIGHT: char = '╮';
 pub(crate) const CORNER_BOTTOM_LEFT: char = '╰';
@@ -41,26 +15,160 @@ pub(crate) const CORNER_BOTTOM_RIGHT: char = '╯';
 pub(crate) const LINE_HORIZONTAL: char = '─';
 pub(crate) const LINE_VERTICAL: char = '│';
 
-/// 选中项左侧的指示条
+/// 选中项左侧的异色竖条锚点。
 pub(crate) const SELECTION_BAR: char = '▏';
 
-/// 【配置界面】【视觉】构造选中项的样式前缀。
-///
-/// 选中态 = 亮青竖条 + 整行深底 + 亮青文字；未选中恢复弱化前景。
-/// 整行深底让选中行在长列表里可被余光捕获，竖条标明锚点。
+/// 配置界面语义调色板，随终端明暗背景自动切换。
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ThemePalette {
+    /// 品牌绿松色（用于标题锚点与分组标识）
+    pub brand: &'static str,
+    /// 选中项与快捷键高亮色
+    pub accent: &'static str,
+    /// 说明文字与常规未选中项前景
+    pub muted: &'static str,
+    /// 边框、分隔符与占位提示色
+    pub dim: &'static str,
+    /// 表单字段值强调色
+    pub value: &'static str,
+    /// 开启与成功状态色
+    pub ok: &'static str,
+    /// 提醒与待保存状态色
+    pub warn: &'static str,
+    /// 删除与危险提示色
+    pub danger: &'static str,
+    /// 状态胶囊微底色
+    pub pill_bg: &'static str,
+    /// 选中行整行底色
+    pub select_bg: &'static str,
+    /// 鼠标悬停行连续柔和底色
+    pub hover_bg: &'static str,
+    /// 选中行组合样式（底色 + 高对比前景）
+    pub selected_text: &'static str,
+    /// 悬停行组合样式（柔和底色 + 清晰前景）
+    pub hover_text: &'static str,
+    /// 主按钮实心底色
+    pub button_bg: &'static str,
+    /// 主按钮文字前景色
+    pub button_fg: &'static str,
+}
+
+/// 深色终端配色：保留品牌绿松与亮青质感。
+const DARK_PALETTE: ThemePalette = ThemePalette {
+    brand: "\x1b[38;2;94;196;168m",
+    accent: "\x1b[38;2;170;232;246m",
+    muted: "\x1b[38;2;160;180;186m",
+    dim: "\x1b[38;2;118;138;146m",
+    value: "\x1b[38;2;152;216;200m",
+    ok: "\x1b[38;2;140;206;116m",
+    warn: "\x1b[38;2;236;194;110m",
+    danger: "\x1b[38;2;236;128;132m",
+    pill_bg: "\x1b[48;2;32;54;60m",
+    select_bg: "\x1b[48;2;36;62;70m",
+    hover_bg: "\x1b[48;2;28;48;54m",
+    selected_text: "\x1b[48;2;36;62;70m\x1b[38;2;190;246;255m",
+    hover_text: "\x1b[48;2;28;48;54m\x1b[38;2;204;228;234m",
+    button_bg: "\x1b[48;2;46;120;102m",
+    button_fg: "\x1b[38;2;236;246;242m",
+};
+
+/// 浅色终端配色：使用清爽浅灰青底色与深色高对比前景，消除白底黑斑。
+const LIGHT_PALETTE: ThemePalette = ThemePalette {
+    brand: "\x1b[38;2;18;122;98m",
+    accent: "\x1b[38;2;14;100;118m",
+    muted: "\x1b[38;2;86;102;110m",
+    dim: "\x1b[38;2;132;146;154m",
+    value: "\x1b[38;2;20;112;92m",
+    ok: "\x1b[38;2;32;124;62m",
+    warn: "\x1b[38;2;168;102;18m",
+    danger: "\x1b[38;2;176;48;60m",
+    pill_bg: "\x1b[48;2;222;239;242m",
+    select_bg: "\x1b[48;2;212;234;238m",
+    hover_bg: "\x1b[48;2;232;244;246m",
+    selected_text: "\x1b[48;2;212;234;238m\x1b[38;2;12;72;86m",
+    hover_text: "\x1b[48;2;232;244;246m\x1b[38;2;28;56;64m",
+    button_bg: "\x1b[48;2;24;126;104m",
+    button_fg: "\x1b[38;2;246;252;250m",
+};
+
+impl ThemePalette {
+    /// 【配置界面】【当前主题】通过共享 PanelPalette 感知终端明暗背景并返回对应主题色板。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 当前终端适用的静态主题调色板引用
+    pub(crate) fn current() -> &'static Self {
+        Self::from_panel(PanelPalette::current())
+    }
+
+    /// 【配置界面】【指定背景主题】按给定终端背景 RGB 计算对应的明暗主题色板。
+    ///
+    /// 参数:
+    /// - `background`: 终端背景 RGB 三元组
+    ///
+    /// 返回:
+    /// - 深色或浅色静态主题调色板引用
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn for_background(background: Rgb) -> &'static Self {
+        Self::from_panel(PanelPalette::for_background(background))
+    }
+
+    /// 【配置界面】【面板映射】依据 PanelPalette 派生焦点底色亮度判定深浅色主题。
+    ///
+    /// 参数:
+    /// - `panel`: 共享终端面板调色板
+    ///
+    /// 返回:
+    /// - 匹配的静态主题调色板
+    fn from_panel(panel: PanelPalette) -> &'static Self {
+        let (r, g, b) = panel.focus_bg;
+        let light = u32::from(r) * 299 + u32::from(g) * 587 + u32::from(b) * 114 > 128_000;
+        if light {
+            &LIGHT_PALETTE
+        } else {
+            &DARK_PALETTE
+        }
+    }
+
+    /// 【配置界面】【行前缀构造】按当前色板生成列表项选中与悬停样式前缀。
+    ///
+    /// 参数:
+    /// - `selected`: 是否为当前焦点选中项
+    /// - `hovered`: 指针是否正悬停在该行
+    ///
+    /// 返回:
+    /// - `(左侧单列指示标记, 行文本样式前缀)`
+    pub(crate) fn row_marks(&self, selected: bool, hovered: bool) -> (String, &'static str) {
+        if selected {
+            // 1. 【配置界面】【主焦点锚点】选中行保留左侧异色竖条与整行选中底色
+            (
+                format!("{}{}{SELECTION_BAR}{RESET}", self.select_bg, self.accent),
+                self.selected_text,
+            )
+        } else if hovered {
+            // 2. 【配置界面】【悬停反馈】非选中悬停行输出带柔和悬停底色的单格空白，避免双竖条抢夺焦点
+            (format!("{} {RESET}", self.hover_bg), self.hover_text)
+        } else {
+            (" ".to_string(), self.muted)
+        }
+    }
+}
+
+/// 【配置界面】【选中标记】构造不含鼠标悬停态的列表选中前缀。
 ///
 /// 参数:
 /// - `selected`: 是否为当前选中项
 ///
 /// 返回:
 /// - `(左侧指示条, 文本样式前缀)`
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn selection_marks(selected: bool) -> (String, &'static str) {
     row_marks(selected, false)
 }
 
-/// 【配置界面】【视觉】构造列表项的选中与悬停样式前缀。
-///
-/// 选中态保持高亮锚点；仅悬停时叠加柔和青灰底色与浅蓝白字，不抢占选中态主焦点。
+/// 【配置界面】【列表行标记】构造感知当前明暗主题的选中与悬停样式前缀。
 ///
 /// 参数:
 /// - `selected`: 是否为当前选中项
@@ -69,52 +177,57 @@ pub(crate) fn selection_marks(selected: bool) -> (String, &'static str) {
 /// 返回:
 /// - `(左侧指示条, 文本样式前缀)`
 pub(crate) fn row_marks(selected: bool, hovered: bool) -> (String, &'static str) {
-    if selected {
-        (
-            format!("{SELECT_BG}{ACCENT}{SELECTION_BAR}{RESET}"),
-            SELECTED_TEXT_STYLE,
-        )
-    } else if hovered {
-        (
-            format!("{HOVER_BG}{VALUE}{SELECTION_BAR}{RESET}"),
-            HOVER_TEXT_STYLE,
-        )
-    } else {
-        (" ".to_string(), MUTED)
-    }
+    ThemePalette::current().row_marks(selected, hovered)
 }
 
-/// 选中行文本样式：深底 + 亮青，底色与 SELECT_BG 保持一致。
-const SELECTED_TEXT_STYLE: &str = "\x1b[48;2;36;62;70m\x1b[38;2;190;246;255m";
-/// 悬停行背景色：按同色相柔和提亮（略浅于暗底、弱于 SELECT_BG），与选中态拉开层级。
-const HOVER_BG: &str = "\x1b[48;2;28;48;54m";
-/// 悬停行文本样式：柔和底色搭配明晰前景。
-const HOVER_TEXT_STYLE: &str = "\x1b[48;2;28;48;54m\x1b[38;2;204;228;234m";
-
-/// 【配置界面】【视觉】渲染分段式快捷键帮助条。
-///
-/// 键名亮青、说明弱化、分段间以中点分隔，替代整行灰字的提示。
+/// 【配置界面】【连续底色】在行内每个样式复位序列后补回指定背景色，消除多色片段间的底色断层。
 ///
 /// 参数:
-/// - `pairs`: `(键名, 动作说明)` 序列
+/// - `text`: 含局部 ANSI 前景与复位序列的单行文本
+/// - `bg_style`: 目标整行背景色序列
+///
+/// 返回:
+/// - 背景连续贯穿且以复位序列收尾的文本
+pub(crate) fn tint_bg(text: &str, bg_style: &str) -> String {
+    if bg_style.is_empty() {
+        return text.to_string();
+    }
+    let body = text.strip_suffix(RESET).unwrap_or(text);
+    format!(
+        "{bg_style}{}{RESET}",
+        body.replace(RESET, &format!("{RESET}{bg_style}"))
+    )
+}
+
+/// 【配置界面】【帮助分隔符】返回状态栏统一的快捷键分段分隔符。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 带弱化样式的中点分隔符文本
+pub(crate) fn help_separator() -> String {
+    let palette = ThemePalette::current();
+    format!("{} · {RESET}", palette.dim)
+}
+
+/// 【配置界面】【帮助栏渲染】将快捷键与动作说明序列渲染为分段高亮帮助条。
+///
+/// 参数:
+/// - `pairs`: `(键名, 动作说明)` 切片
 ///
 /// 返回:
 /// - 单行 ANSI 帮助文本
-///   帮助条分段分隔符。
-///
-/// 单独暴露出来：状态栏放不下时需要在分隔符上切分并按优先级丢段，
-/// 调用方不能自己拼一份，否则两处格式会悄悄失配。
-///
-/// 返回:
-/// - 带样式的分隔符文本
-pub(crate) fn help_separator() -> String {
-    format!("{DIM} · {RESET}")
-}
-
 pub(crate) fn help_line(pairs: &[(&str, &str)]) -> String {
+    let palette = ThemePalette::current();
     pairs
         .iter()
-        .map(|(key, description)| format!("{ACCENT}{key}{RESET} {MUTED}{description}{RESET}"))
+        .map(|(key, description)| {
+            format!(
+                "{}{key}{RESET} {}{description}{RESET}",
+                palette.accent, palette.muted
+            )
+        })
         .collect::<Vec<_>>()
         .join(&help_separator())
 }
@@ -140,10 +253,19 @@ pub(crate) fn pill(label: &str, fg_style: &str, bg_style: &str) -> String {
 /// 返回:
 /// - 已样式化的保存状态胶囊
 pub(crate) fn save_state_pill(dirty: bool) -> String {
+    let palette = ThemePalette::current();
     if dirty {
-        pill(crate::i18n::text("unsaved", "待保存"), WARN, PILL_BG)
+        pill(
+            crate::i18n::text("unsaved", "待保存"),
+            palette.warn,
+            palette.pill_bg,
+        )
     } else {
-        pill(crate::i18n::text("saved", "已保存"), OK, PILL_BG)
+        pill(
+            crate::i18n::text("saved", "已保存"),
+            palette.ok,
+            palette.pill_bg,
+        )
     }
 }
 
@@ -151,7 +273,7 @@ pub(crate) fn save_state_pill(dirty: bool) -> String {
 mod tests {
     use super::*;
 
-    /// 【配置界面】【视觉】验证选中与未选中的标记可区分且宽度一致。
+    /// 【配置界面】【选中标记测试】验证选中与悬停、普通行的标记宽度一致且仅选中态绘制异色竖条。
     ///
     /// 参数:
     /// - 无
@@ -161,43 +283,85 @@ mod tests {
     #[test]
     fn selection_marks_differ_without_changing_width() {
         let (selected_bar, selected_style) = selection_marks(true);
+        let (hover_bar, hover_style) = row_marks(false, true);
         let (plain_bar, plain_style) = selection_marks(false);
 
         assert_ne!(selected_style, plain_style);
+        assert_ne!(hover_style, plain_style);
         assert!(selected_bar.contains(SELECTION_BAR));
+        assert!(!hover_bar.contains(SELECTION_BAR));
         assert!(!plain_bar.contains(SELECTION_BAR));
-        // 两者可见宽度都是一列，切换选中时正文不会左右跳动
         assert_eq!(visible_width(&selected_bar), 1);
+        assert_eq!(visible_width(&hover_bar), 1);
         assert_eq!(visible_width(&plain_bar), 1);
     }
 
-    /// 选中样式带整行底色，未选中不带。
+    /// 【配置界面】【行底色测试】验证选中态与悬停态携带背景色，未选中行不携带背景色。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
     #[test]
     fn selected_style_carries_row_background() {
         let (_, selected_style) = selection_marks(true);
+        let (_, hover_style) = row_marks(false, true);
         let (_, plain_style) = selection_marks(false);
 
         assert!(selected_style.contains("\x1b[48;2;"));
+        assert!(hover_style.contains("\x1b[48;2;"));
         assert!(!plain_style.contains("\x1b[48;2;"));
     }
 
-    /// 帮助条按键名 / 说明分色，段间带分隔点。
+    /// 【配置界面】【明暗自适应测试】验证深浅色背景切换不同底色且连续底色函数补齐中间复位。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn palette_adapts_to_light_and_dark_backgrounds_and_tints_continuously() {
+        let dark = ThemePalette::for_background((24, 28, 32));
+        let light = ThemePalette::for_background((250, 250, 250));
+
+        assert_ne!(dark.select_bg, light.select_bg);
+        assert_ne!(dark.hover_bg, light.hover_bg);
+        assert_ne!(dark.pill_bg, light.pill_bg);
+        assert!(light.select_bg.contains("212;234;238"));
+
+        let raw = format!("{}label{RESET}  {}value{RESET}", dark.muted, dark.value);
+        let tinted = tint_bg(&raw, dark.hover_bg);
+        let without_tail = tinted.strip_suffix(RESET).unwrap();
+        assert!(!without_tail.contains(&format!("{RESET} ")));
+        assert!(without_tail.contains(&format!("{RESET}{}  ", dark.hover_bg)));
+    }
+
+    /// 【配置界面】【帮助栏样式测试】验证帮助条按键名与说明分色且包含分隔符。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
     #[test]
     fn help_line_styles_keys_and_descriptions() {
+        let palette = ThemePalette::current();
         let line = help_line(&[("↑↓", "移动"), ("Enter", "打开")]);
 
-        assert!(line.contains(&format!("{ACCENT}↑↓{RESET}")));
-        assert!(line.contains(&format!("{MUTED}移动{RESET}")));
+        assert!(line.contains(&format!("{}↑↓{RESET}", palette.accent)));
+        assert!(line.contains(&format!("{}移动{RESET}", palette.muted)));
         assert!(line.contains('·'));
     }
 
-    /// 计算去除 ANSI 后的显示宽度。
+    /// 【配置界面】【测试辅助】计算去除 ANSI 转义序列后的可见列宽。
     ///
     /// 参数:
     /// - `text`: 带样式文本
     ///
     /// 返回:
-    /// - 可见宽度
+    /// - 可见列宽
     fn visible_width(text: &str) -> usize {
         let mut width = 0usize;
         let mut chars = text.chars().peekable();

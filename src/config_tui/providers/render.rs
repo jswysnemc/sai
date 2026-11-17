@@ -1,17 +1,74 @@
+//! 供应商与模型三栏浏览器的屏幕渲染、统一底栏热区与过滤框真实光标定位。
+
 use super::mouse::{column_hitbox, ProviderClick, ProviderHitbox};
 use super::*;
 use crate::config_tui::layout::FrameRect;
 use crate::config_tui::mouse::HitRect;
+use crate::config_tui::search::split_at_char;
+use crate::config_tui::theme::{help_line, help_separator, ThemePalette, BOLD, RESET};
+use crate::i18n::text as t;
+use crossterm::cursor::{Hide, MoveTo, Show};
+use crossterm::queue;
+use crossterm::style::Print;
+use crossterm::terminal::{Clear, ClearType};
 
 /// 列表区最少行数。
 const MIN_LIST_ROWS: usize = 6;
 /// 列表区最多行数，更长的模型列表在栏内滚动。
 const MAX_LIST_ROWS: usize = 16;
 
+/// 【供应商配置】【底栏文案】生成供应商浏览器的状态栏帮助串，统一使用 `help_separator` 确保鼠标热区切分准确。
+///
+/// 参数:
+/// - `filter_mode`: 是否处于过滤输入态
+///
+/// 返回:
+/// - 带分段样式与标准分隔符的底栏文本
+pub(super) fn browser_help_line(filter_mode: bool) -> String {
+    if filter_mode {
+        help_line(&[
+            ("type", t("filter models", "过滤模型")),
+            ("↑↓", t("move", "移动")),
+            ("Enter", t("keep filter", "保留过滤")),
+            ("Esc", t("clear", "清除")),
+        ])
+    } else {
+        let palette = ThemePalette::current();
+        let sep = help_separator();
+        let base = help_line(&[
+            ("/", t("search", "搜索")),
+            ("j/k", t("move", "移动")),
+            ("h/l", t("columns", "切栏")),
+            ("Space/u", t("use", "设为当前")),
+            ("Tab", t("activate", "激活")),
+            ("Enter", t("edit", "设置")),
+            ("r", t("refresh", "刷新")),
+            ("a", t("add", "添加")),
+        ]);
+        // 1. 【供应商配置】【热区对齐】使用统一 help_separator 分隔删除与返回键，根除点击删除/返回误触发添加的问题
+        format!(
+            "{base}{sep}{}d{RESET} {}{}{RESET}{sep}{}q{RESET} {}{}{RESET}",
+            palette.danger,
+            palette.muted,
+            t("delete", "删除"),
+            palette.accent,
+            palette.muted,
+            t("back", "返回")
+        )
+    }
+}
+
 impl ProviderBrowser<'_> {
+    /// 【供应商配置】【画面绘制】渲染三栏浏览器、过滤框、状态摘要及底栏热区。
+    ///
+    /// 参数:
+    /// - `stdout`: 终端输出流
+    ///
+    /// 返回:
+    /// - 当前帧命中几何
     pub(super) fn draw(&mut self, stdout: &mut io::Stdout) -> Result<ProviderHitbox> {
+        let palette = ThemePalette::current();
         let (cols, rows) = terminal::size()?;
-        // 高度按三栏中最长者计算并封顶，条目少时不再撑满整屏
         let longest = self
             .config
             .providers
@@ -19,14 +76,12 @@ impl ProviderBrowser<'_> {
             .max(self.orgs.len())
             .max(self.models.len())
             .clamp(MIN_LIST_ROWS, MAX_LIST_ROWS);
-        // 框内：过滤行 + 空行 + 栏标题 + 列表 + 两行留白 + 状态行
         let frame = crate::config_tui::layout::content_frame(
             cols,
             rows,
             (longest + 6) as u16,
             crate::config_tui::layout::MAX_FRAME_WIDTH,
         );
-        // 外框内缩：左右各留边框 + 一格边距，底部留状态行与嵌入式帮助条
         let inner_x = frame.x.saturating_add(2);
         let inner_y = frame.y.saturating_add(1);
         let inner_w = frame.width.saturating_sub(4);
@@ -109,7 +164,7 @@ impl ProviderBrowser<'_> {
             _ => None,
         };
         let header_hovered = |col: usize| self.hovered == Some(ProviderClick::ColumnHeader(col));
-        // 1. 终端够宽时绘制三栏；宽度之和不超过内容区，保证不重叠
+        // 1. 【供应商配置】【三栏绘制】终端足够宽时并排绘制供应商、组织与模型三栏
         if let Some((left_w, mid_w, right_w)) = three_column_widths(inner_w) {
             let area0 = FrameRect {
                 x: inner_x,
@@ -171,7 +226,7 @@ impl ProviderBrowser<'_> {
             headers[2] = Some(h2);
             columns[2] = Some(c2);
         } else {
-            // 2. 窄终端降级为单栏，仅绘制当前激活栏
+            // 2. 【供应商配置】【窄屏单栏】超窄终端降级为单栏，仅绘制当前聚焦栏
             let area = FrameRect {
                 x: inner_x,
                 y: list_y,
@@ -202,33 +257,8 @@ impl ProviderBrowser<'_> {
             headers[col] = Some(hdr);
             columns[col] = Some(hb);
         }
-        use crate::config_tui::theme::{help_line, ACCENT, DANGER, MUTED, RESET};
-        let help = if self.filter_mode {
-            help_line(&[
-                ("type", t("filter models", "过滤模型")),
-                ("↑↓", t("move", "移动")),
-                ("Enter", t("keep filter", "保留过滤")),
-                ("Esc", t("clear", "清除")),
-            ])
-        } else {
-            // 删除是破坏性操作，键名用警示色与其它键区分
-            let base = help_line(&[
-                ("/", t("search", "搜索")),
-                ("j/k", t("move", "移动")),
-                ("h/l", t("columns", "切栏")),
-                ("Space/u", t("use", "设为当前")),
-                ("Tab", t("activate", "激活")),
-                ("Enter", t("edit", "设置")),
-                ("r", t("refresh", "刷新")),
-                ("a", t("add", "添加")),
-            ]);
-            format!(
-                "{base}{MUTED} · {RESET}{DANGER}d{RESET} {MUTED}{}{RESET}{MUTED} · {RESET}{ACCENT}q{RESET} {MUTED}{}{RESET}",
-                t("delete", "删除"),
-                t("back", "返回")
-            )
-        };
-        // 状态行放在框内底部，弱化显示，不与内容抢视线
+
+        let help = browser_help_line(self.filter_mode);
         queue!(
             stdout,
             MoveTo(
@@ -236,8 +266,12 @@ impl ProviderBrowser<'_> {
                 frame.y.saturating_add(frame.height.saturating_sub(2))
             ),
             Print(crate::render::readable_terminal_text(
-                &(format!("{MUTED}{}{RESET}", truncate(&self.status, inner_w as usize)))
-                    .to_string()
+                &(format!(
+                    "{}{}{RESET}",
+                    palette.muted,
+                    truncate(&self.status, inner_w as usize)
+                ))
+                .to_string()
             ))
         )?;
         crate::config_tui::ui::draw_status_bar_interactive(
@@ -247,7 +281,6 @@ impl ProviderBrowser<'_> {
             self.hovered_footer,
         )?;
         let footer = crate::config_tui::ui::status_bar_hits(&frame, &help);
-        // 光标显隐只在过滤态切换后的首帧发送，逐帧重发会放大终端闪烁
         if let Some((cx, cy)) = filter_cursor {
             if !self.cursor_visible {
                 queue!(stdout, Show)?;
@@ -268,16 +301,16 @@ impl ProviderBrowser<'_> {
         })
     }
 
-    /// 在三栏上方画一条全宽过滤框，避免查询被挤进窄列标题。
+    /// 【供应商配置】【过滤框绘制】在三栏上方绘制全宽搜索栏并按游标字符下标返回真实光标坐标。
     ///
     /// 参数:
     /// - `stdout`: 终端输出
     /// - `x`: 内容区左列
-    /// - `y`: 过滤框行
+    /// - `y`: 过滤框所在行
     /// - `width`: 内容区宽度
     ///
     /// 返回:
-    /// - 过滤态下的光标坐标
+    /// - 过滤编辑态下的 `(列, 行)` 光标坐标
     fn draw_filter_bar(
         &self,
         stdout: &mut io::Stdout,
@@ -285,7 +318,7 @@ impl ProviderBrowser<'_> {
         y: u16,
         width: u16,
     ) -> Result<Option<(u16, u16)>> {
-        use crate::config_tui::theme::{ACCENT, BOLD, MUTED, PILL_BG, RESET, SELECT_BG};
+        let palette = ThemePalette::current();
         let prefix = format!("/ {}", t("Search models", "搜索模型"));
         let query = if self.filter.is_empty() && !self.filter_mode {
             t("type to filter", "输入以过滤")
@@ -305,13 +338,18 @@ impl ProviderBrowser<'_> {
                 stdout,
                 MoveTo(x, y),
                 Print(crate::render::readable_terminal_text(
-                    &(format!("{SELECT_BG}{ACCENT}{BOLD} {line}{RESET}")).to_string()
+                    &(format!(
+                        "{}{}{BOLD} {line}{RESET}",
+                        palette.select_bg, palette.accent
+                    ))
+                    .to_string()
                 ))
             )?;
+            let before_cursor = split_at_char(&self.filter, self.filter_cursor).0;
             let cursor_x = x
                 + 1
                 + display_width(&truncate(
-                    &format!("{prefix}  {}", self.filter),
+                    &format!("{prefix}  {before_cursor}"),
                     field_w.saturating_sub(1),
                 )) as u16;
             Ok(Some((
@@ -323,7 +361,7 @@ impl ProviderBrowser<'_> {
                 stdout,
                 MoveTo(x, y),
                 Print(crate::render::readable_terminal_text(
-                    &(format!("{PILL_BG}{ACCENT} {line}{RESET}")).to_string()
+                    &(format!("{}{} {line}{RESET}", palette.hover_bg, palette.accent)).to_string()
                 ))
             )?;
             Ok(None)
@@ -332,10 +370,43 @@ impl ProviderBrowser<'_> {
                 stdout,
                 MoveTo(x, y),
                 Print(crate::render::readable_terminal_text(
-                    &(format!("{MUTED} {line}{RESET}")).to_string()
+                    &(format!("{} {line}{RESET}", palette.muted)).to_string()
                 ))
             )?;
             Ok(None)
         }
+    }
+}
+
+#[cfg(test)]
+mod render_tests {
+    use super::*;
+
+    /// 【供应商配置】【底栏热区回归测试】验证添加、删除与返回键各自映射独立热区，绝不因分隔符失配而错位为添加。
+    #[test]
+    fn browser_footer_splits_add_delete_and_back_actions_accurately() {
+        let frame = FrameRect {
+            x: 1,
+            y: 0,
+            width: 118,
+            height: 20,
+        };
+        let help = browser_help_line(false);
+        let hits = crate::config_tui::ui::status_bar_hits(&frame, &help);
+
+        let mut found_add = false;
+        let mut found_delete = false;
+        let mut found_back = false;
+        for col in 0..118 {
+            match hits.hit(col, 19) {
+                Some(KeyCode::Char('a')) => found_add = true,
+                Some(KeyCode::Char('d')) => found_delete = true,
+                Some(KeyCode::Char('q')) => found_back = true,
+                _ => {}
+            }
+        }
+        assert!(found_add, "应包含 a 添加热区");
+        assert!(found_delete, "应包含独立的 d 删除热区");
+        assert!(found_back, "应包含独立的 q 返回热区");
     }
 }

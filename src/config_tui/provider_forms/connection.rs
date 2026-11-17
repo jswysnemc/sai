@@ -7,8 +7,13 @@ pub(super) fn edit(
     provider: &mut ProviderConfig,
     new_provider: bool,
 ) -> Result<()> {
+    let id_field = if new_provider {
+        Field::new(t("Config ID", "配置 ID"), provider.id.clone())
+    } else {
+        Field::new(t("Config ID", "配置 ID"), provider.id.clone()).readonly()
+    };
     let mut fields = vec![
-        Field::new(t("Config ID", "配置 ID"), provider.id.clone()),
+        id_field,
         Field::new(t("Display name", "显示名称"), provider.display_name.clone()),
         Field::new(t("Base URL", "基础地址"), provider.base_url.clone()),
         Field::new(t("Protocol", "协议"), provider.protocol.clone()).choices(&[
@@ -24,9 +29,6 @@ pub(super) fn edit(
         .secret(),
         Field::boolean(t("Enabled", "启用"), provider.enabled),
     ];
-    if !new_provider {
-        fields[0].choices = vec![provider.id.clone()];
-    }
     loop {
         if !run_form(stdout, t(" CONNECTION ", " 连接设置 "), &mut fields)? {
             return Ok(());

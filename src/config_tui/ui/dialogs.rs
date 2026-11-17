@@ -63,7 +63,7 @@ pub(crate) fn confirm_delete(
             warning,
         )?;
         let code = match hitbox.read(&mut mouse, selected, true)? {
-            MenuInput::Redraw => continue,
+            MenuInput::Redraw | MenuInput::Paste(_) => continue,
             MenuInput::Select(index) => {
                 selected = index;
                 continue;
@@ -126,7 +126,7 @@ pub(crate) fn confirm_unsaved_exit(stdout: &mut io::Stdout) -> Result<UnsavedExi
             _ => UnsavedExitChoice::Cancel,
         };
         let code = match hitbox.read(&mut mouse, selected, true)? {
-            MenuInput::Redraw => continue,
+            MenuInput::Redraw | MenuInput::Paste(_) => continue,
             MenuInput::Select(index) => {
                 selected = index;
                 continue;
@@ -205,7 +205,7 @@ pub(crate) fn message(stdout: &mut io::Stdout, text: &str) -> Result<()> {
         end_synced_frame(stdout)?;
         let hit_frame = HitRect::from(frame);
         match read_event()? {
-            ConfigEvent::Resize => {}
+            ConfigEvent::Resize | ConfigEvent::Paste(_) => {}
             ConfigEvent::Mouse(mouse) => match mouse.kind {
                 MouseEventKind::ScrollUp => offset = offset.saturating_sub(1),
                 MouseEventKind::ScrollDown => offset = (offset + 1).min(max_offset),

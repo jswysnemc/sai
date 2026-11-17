@@ -113,7 +113,7 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
             "",
         )?;
         let code = match hitbox.read(&mut mouse, selected, false)? {
-            MenuInput::Redraw => continue,
+            MenuInput::Redraw | MenuInput::Paste(_) => continue,
             MenuInput::Select(index) | MenuInput::RightClick(index) => {
                 selected = index;
                 continue;
@@ -240,7 +240,7 @@ pub(super) fn edit_permissions_and_sandbox_menu(
             "",
         )?;
         let code = match hitbox.read(&mut mouse, selected, false)? {
-            MenuInput::Redraw => continue,
+            MenuInput::Redraw | MenuInput::Paste(_) => continue,
             MenuInput::Select(index) | MenuInput::RightClick(index) => {
                 selected = index;
                 continue;
@@ -321,7 +321,7 @@ pub(super) fn edit_display_and_context_menu(
             "",
         )?;
         let code = match hitbox.read(&mut mouse, selected, false)? {
-            MenuInput::Redraw => continue,
+            MenuInput::Redraw | MenuInput::Paste(_) => continue,
             MenuInput::Select(index) | MenuInput::RightClick(index) => {
                 selected = index;
                 continue;
@@ -375,20 +375,10 @@ fn edit_tool_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result
             config.tools.command_filter.clone(),
         )
         .choices(&["auto", "rtk", "off"]),
-        {
-            // 表单字段是单行且会按终端宽度截断，rtk 能代理的命令有数十项塞不下；
-            // 这里只给出可代理的条目数，完整清单在 Web 设置页展示。label 需 'static，缓存一次
-            static DENYLIST_LABEL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-            let label = DENYLIST_LABEL.get_or_init(|| {
-                let count = crate::tools::command::rtk_proxy_commands().len();
-                if crate::i18n::is_zh() {
-                    format!("不走 rtk 的命令（rtk 现可代理 {count} 项），逗号分隔")
-                } else {
-                    format!("commands kept out of rtk (rtk proxies {count}), comma separated")
-                }
-            });
-            Field::new(label, config.tools.command_filter_denylist.join(", "))
-        },
+        Field::new(
+            rtk_denylist_label(),
+            config.tools.command_filter_denylist.join(", "),
+        ),
         Field::section(t("Background commands", "后台命令")),
         Field::boolean(
             t("Background commands enabled", "后台命令启用"),
@@ -434,6 +424,22 @@ fn edit_tool_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result
     }
 }
 
+/// 【配置界面】【过滤器标签】按当前实时语言动态组装 rtk 排除列表标签，不缓存锁死语言。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 与当前语言一致的字段标签
+fn rtk_denylist_label() -> String {
+    let count = crate::tools::command::rtk_proxy_commands().len();
+    if crate::i18n::is_zh() {
+        format!("不走 rtk 的命令（rtk 现可代理 {count} 项），逗号分隔")
+    } else {
+        format!("Commands kept out of rtk (rtk proxies {count}), comma separated")
+    }
+}
+
 /// 将工具小节表单值写入配置；任一字段解析失败时不写入。
 fn apply_tool_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()> {
     // 分组标题行只用于视觉分区，取值前先剔除
@@ -445,11 +451,11 @@ fn apply_tool_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()> {
     };
     // 1. 先完成全部易失败的解析，避免半写入配置
     let timeout_seconds =
-        parse_number_field::<u64>(background_timeout.label, &background_timeout.value)?;
+        parse_number_field::<u64>(&background_timeout.label, &background_timeout.value)?;
     let log_max_bytes =
-        parse_number_field::<u64>(background_log_max.label, &background_log_max.value)?;
+        parse_number_field::<u64>(&background_log_max.label, &background_log_max.value)?;
     let stop_grace_seconds =
-        parse_number_field::<u64>(background_stop_grace.label, &background_stop_grace.value)?;
+        parse_number_field::<u64>(&background_stop_grace.label, &background_stop_grace.value)?;
     let tools_enabled = parse_bool_field(&tools_enabled.value)?;
     let background_commands = parse_bool_field(&background_commands.value)?;
     // 2. 解析全部通过后统一写入配置
@@ -552,15 +558,15 @@ fn edit_display_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Res
 /// 【终端】【显示配置】将显示小节表单值写入配置；任一字段解析失败时不写入。
 /// 参数: `config` 为应用配置，`fields` 为显示表单；返回: 验证与更新结果。
 fn apply_display_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()> {
-    let transcript_row_cap = parse_number_field::<usize>(fields[5].label, &fields[5].value)?;
+    let transcript_row_cap = parse_number_field::<usize>(&fields[5].label, &fields[5].value)?;
     let readable_names = parse_bool_field(&fields[2].value)?;
     let wait_model = parse_bool_field(&fields[3].value)?;
     let wait_thinking = parse_bool_field(&fields[4].value)?;
     let fullscreen = parse_bool_field(&fields[6].value)?;
     let math_images = parse_bool_field(&fields[7].value)?;
     let mermaid_images = parse_bool_field(&fields[8].value)?;
-    let fold_head = parse_number_field::<usize>(fields[10].label, &fields[10].value)?;
-    let fold_tail = parse_number_field::<usize>(fields[11].label, &fields[11].value)?;
+    let fold_head = parse_number_field::<usize>(&fields[10].label, &fields[10].value)?;
+    let fold_tail = parse_number_field::<usize>(&fields[11].label, &fields[11].value)?;
     let input_style = crate::config::InputStyle::parse(&fields[12].value)
         .ok_or_else(|| anyhow::anyhow!(t("invalid input style", "输入框样式无效")))?;
     config.display.reasoning = fields[0].value.trim().to_string();

@@ -1,4 +1,5 @@
 use super::*;
+use crate::i18n::text as t;
 
 impl ProviderBrowser<'_> {
     /// 【服务商配置】【目录缓存】生成包含接入配置的缓存键，仅存于内存且不输出日志。
@@ -93,8 +94,15 @@ impl ProviderBrowser<'_> {
         }
     }
 
-    /// 按过滤词和组织重建模型候选，无参数，返回值为空。
+    /// 【供应商配置】【模型分组】按过滤词和组织前缀重建模型候选，将“全部/All”固定在组织栏首位。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
     pub(super) fn rebuild_models(&mut self) {
+        let all_label = t("All", "全部").to_string();
         let mut grouped: BTreeMap<String, Vec<ModelEntry>> = BTreeMap::new();
         let ordered_models = self.prioritized_models();
         for model in &ordered_models {
@@ -103,29 +111,28 @@ impl ProviderBrowser<'_> {
             }
             let org = model
                 .split_once('/')
-                .map(|(org, _)| org)
-                .unwrap_or("All")
-                .to_string();
+                .map(|(org, _)| org.to_string())
+                .unwrap_or_else(|| all_label.clone());
             let name = model
                 .split_once('/')
                 .map(|(_, name)| name)
                 .unwrap_or(model)
                 .to_string();
             grouped
-                .entry("All".to_string())
+                .entry(all_label.clone())
                 .or_default()
                 .push(ModelEntry::new(model, model));
-            if org != "All" {
+            if org != all_label {
                 grouped
                     .entry(org)
                     .or_default()
                     .push(ModelEntry::new(&name, model));
             }
         }
-        self.orgs = grouped.keys().cloned().collect();
-        if self.orgs.is_empty() {
-            self.orgs.push("All".to_string());
-        }
+        // 1. 【供应商配置】【首位固定】保证“全部/All”始终排在组织栏第 0 项，不受中英文编码排序影响
+        let mut orgs = vec![all_label.clone()];
+        orgs.extend(grouped.keys().filter(|key| *key != &all_label).cloned());
+        self.orgs = orgs;
         self.org_idx = super::super::search::clamp_index(self.org_idx, self.orgs.len());
         self.models = grouped.remove(&self.orgs[self.org_idx]).unwrap_or_default();
         self.model_idx = super::super::search::clamp_index(self.model_idx, self.models.len());

@@ -1,17 +1,61 @@
+//! 模型接入分区编辑器：提供 `j`/`k` 移动、`s` 键直存、`t` 键测速与脏草稿星标提示。
+
 use super::*;
 use crate::config_tui::form::{run_form, Field};
+use crate::config_tui::input::UnsavedState;
 use crate::config_tui::mouse::{ListMouseState, MenuInput};
 use crate::config_tui::ui::draw_menu_interactive;
+use crossterm::event::KeyModifiers;
 
-/// 【模型接入】【分区编辑】编辑连接与密钥，支持目录导入及手动模型输入。
-/// 参数: stdout 为终端，item 为独立草稿；返回: 保存后的草稿或取消
+/// 【模型接入】【草稿校验】在隔离配置副本上验证当前接入草稿的合法性。
+///
+/// 参数:
+/// - `item`: 待校验的接入草稿
+///
+/// 返回:
+/// - 合法返回 `Ok(())`；地址或协议非法时返回校验错误
+pub(super) fn validate_draft(item: &ModelEndpointConfig) -> Result<()> {
+    let mut check = AppConfig::default();
+    check.model_endpoints.push(item.clone());
+    check.validate()
+}
+
+/// 【模型接入】【脏检查】判断子表单编辑后的草稿相对进入时的基线是否发生改动。
+///
+/// 参数:
+/// - `current`: 当前草稿
+/// - `baseline`: 进入编辑器时的初始基线
+///
+/// 返回:
+/// - 存在未提交改动时返回 true
+pub(super) fn is_draft_dirty(
+    current: &ModelEndpointConfig,
+    baseline: &ModelEndpointConfig,
+) -> bool {
+    current != baseline
+}
+
+/// 【模型接入】【分区编辑】编辑连接与密钥，支持 `s` 直接校验保存并在存在改动时拦截静默返回。
+///
+/// 参数:
+/// - `stdout`: 终端输出流
+/// - `item`: 独立接入草稿
+///
+/// 返回:
+/// - 用户确认保存后的草稿；放弃或无改动返回时为 `Ok(None)`
 pub(super) fn edit(
     stdout: &mut io::Stdout,
     mut item: ModelEndpointConfig,
 ) -> Result<Option<ModelEndpointConfig>> {
+    // 1. 【模型接入】【基线记录】保存进入编辑器时的快照，用于在按 q/Esc 时保护子表单改动
+    let baseline = item.clone();
+    let mut unsaved_guard = UnsavedState::default();
     let mut selected = 0usize;
     let mut mouse = ListMouseState::default();
     loop {
+        let dirty = is_draft_dirty(&item, &baseline);
+        unsaved_guard.set(dirty);
+
         let options = [
             t("Connection and model", "连接与模型"),
             t("Credentials", "密钥管理"),
@@ -53,22 +97,29 @@ pub(super) fn edit(
             )
             .into(),
         ];
+        let title = if dirty {
+            t(" EDIT CONNECTION * ", " 编辑接入 * ")
+        } else {
+            t(" EDIT CONNECTION ", " 编辑接入 ")
+        };
         let hitbox = draw_menu_interactive(
             stdout,
-            t(" EDIT CONNECTION ", " 编辑接入 "),
+            title,
             &options,
             &details,
             selected,
             &mouse,
             &super::super::theme::help_line(&[
                 ("1-5", t("jump", "跳转")),
-                ("Enter", t("open", "打开")),
-                ("q", t("back", "返回")),
+                ("j/k", t("move", "移动")),
+                ("t", t("test", "测试")),
+                ("s", t("save", "保存")),
+                ("q", t("cancel", "取消")),
             ]),
             &item.id,
         )?;
         let code = match hitbox.read(&mut mouse, selected, false)? {
-            MenuInput::Redraw => continue,
+            MenuInput::Redraw | MenuInput::Paste(_) => continue,
             MenuInput::Select(index) | MenuInput::RightClick(index) => {
                 selected = index;
                 continue;
@@ -78,13 +129,26 @@ pub(super) fn edit(
                 KeyCode::Enter
             }
             MenuInput::Action(code) => code,
-            MenuInput::Key(key) => key.code,
+            MenuInput::Key(key) => {
+                if key.code == KeyCode::Char('s') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                    KeyCode::Char('s')
+                } else {
+                    key.code
+                }
+            }
         };
         match code {
+            // 2. 【模型接入】【取消草稿】与供应商编辑器保持一致，按 q/Esc 明确放弃当前分区草稿修改
             KeyCode::Esc | KeyCode::Char('q') => return Ok(None),
-            KeyCode::Up => selected = selected.saturating_sub(1),
-            KeyCode::Down => selected = (selected + 1).min(4),
+            KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
+            KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(4),
             KeyCode::Char(digit @ '1'..='5') => selected = digit as usize - '1' as usize,
+            KeyCode::Char('t') => probe::test(stdout, &item)?,
+            // 3. 【模型接入】【单键保存】支持按 s 直接校验草稿并保存返回上级菜单
+            KeyCode::Char('s') => match validate_draft(&item) {
+                Ok(()) => return Ok(Some(item)),
+                Err(error) => message(stdout, &error.to_string())?,
+            },
             KeyCode::Enter => match selected {
                 0 => connection(stdout, &mut item)?,
                 1 => super::super::provider_forms::edit_credentials(
@@ -96,14 +160,10 @@ pub(super) fn edit(
                 )?,
                 2 => probe::catalog(stdout, &mut item)?,
                 3 => probe::test(stdout, &item)?,
-                _ => {
-                    let mut check = AppConfig::default();
-                    check.model_endpoints.push(item.clone());
-                    match check.validate() {
-                        Ok(()) => return Ok(Some(item)),
-                        Err(error) => message(stdout, &error.to_string())?,
-                    }
-                }
+                _ => match validate_draft(&item) {
+                    Ok(()) => return Ok(Some(item)),
+                    Err(error) => message(stdout, &error.to_string())?,
+                },
             },
             _ => {}
         }
@@ -111,7 +171,13 @@ pub(super) fn edit(
 }
 
 /// 【模型接入】【连接字段】保留完整请求路径；模型可从目录选取或手动填写。
-/// 参数: stdout 为终端，item 为草稿；返回: 表单结果
+///
+/// 参数:
+/// - `stdout`: 终端输出流
+/// - `item`: 待修改草稿
+///
+/// 返回:
+/// - 表单执行结果
 fn connection(stdout: &mut io::Stdout, item: &mut ModelEndpointConfig) -> Result<()> {
     let mut models = vec![String::new()];
     models.extend(item.models.clone());

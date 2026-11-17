@@ -1,5 +1,6 @@
 mod card;
 mod components;
+mod mouse;
 mod navigation;
 mod overlay;
 mod render;

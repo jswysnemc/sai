@@ -140,3 +140,51 @@ fn preview_wraps_and_shows_selected_trigger() {
         );
     }
 }
+
+/// 【上下文】【80列折行热区与矮屏裁剪热区测试】验证 80 列英文折行不丢弃热区，且矮屏裁剪后底边点击 X 坐标精确对齐。
+#[test]
+fn eighty_column_wrapped_footer_and_short_clamped_footer_register_accurate_hitboxes() {
+    crate::i18n::with_locale(crate::i18n::Locale::En, || {
+        let draft = Draft::new(
+            CompactionBudgetPolicy::DEFAULT,
+            CompactionBudgetPolicy::DEFAULT,
+        );
+        let context = PreviewContext {
+            window: 128_000,
+            used: Some(32_000),
+            scope: "session".into(),
+        };
+
+        // 1. 80 列英文终端下帮助栏折为两行正文，仍须完整注册 Tab、Enter 与第二行的 Esc 热区
+        let full_80 = frame(&draft, &context, 80);
+        let hb_80 = CardHitbox::compute(&draft, 2, 80, full_80.len(), full_80.len());
+        let mut found_tab = false;
+        let mut found_enter = false;
+        let mut found_esc = false;
+        for y in 2..(2 + full_80.len() as u16) {
+            for x in 0..80 {
+                match hb_80.actions.hit(x, y) {
+                    Some(KeyCode::Tab) => found_tab = true,
+                    Some(KeyCode::Enter) => found_enter = true,
+                    Some(KeyCode::Esc) => found_esc = true,
+                    _ => {}
+                }
+            }
+        }
+        assert!(found_tab, "80 列折行底栏缺少 Tab 热区");
+        assert!(found_enter, "80 列折行底栏缺少 Enter 热区");
+        assert!(found_esc, "80 列折行底栏第二行缺少 Esc 热区");
+
+        // 2. 矮屏（4 行）触发 fit_height 裁剪后，"Enter save · Esc cancel" 从第 3 列开始
+        let short = card::fit_height(full_80.clone(), 4);
+        let hb_short = CardHitbox::compute(&draft, 0, 80, full_80.len(), short.len());
+        assert_eq!(hb_short.actions.hit(4, 3), Some(KeyCode::Enter));
+        assert_eq!(hb_short.actions.hit(18, 3), Some(KeyCode::Esc));
+    });
+
+    // 3. 验证浅色与深色背景切换不同卡片选中底色
+    let dark = card::CardPalette::for_background((24, 28, 32));
+    let light = card::CardPalette::for_background((250, 250, 250));
+    assert_ne!(dark.selected, light.selected);
+    assert_ne!(dark.hover, light.hover);
+}

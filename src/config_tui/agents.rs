@@ -1,7 +1,12 @@
+//! Agent 档案管理菜单与分区编辑器。
+
 mod permissions;
+mod summary;
+
 use permissions::{edit_agent_skills, edit_agent_tools};
 #[cfg(test)]
 use permissions::{initial_skill_state, initial_tool_state};
+use summary::{basics_summary, profile_overview, prompt_summary, skills_summary, tools_summary};
 
 use crate::config::{
     normalize_deferred_tools, AgentProfile, AppConfig, DEFAULT_AGENT_ID, DEFERRED_ALL_NON_BASE,
@@ -20,10 +25,9 @@ use super::form::{
 };
 use super::mouse::{ListMouseState, MenuInput};
 use super::multi_select::{run_multi_select, HeaderToggle, SelectEntry, StateStyle};
-use super::theme::{DIM, OK, VALUE};
-use super::ui::{draw_menu_interactive, message, truncate};
+use super::ui::{draw_menu_interactive, message};
 
-/// 编辑统一 Agent 档案和各运行入口默认项。
+/// 【Agent配置】【列表管理】编辑统一 Agent 档案和各运行入口默认项，支持 `/` 搜索与粘贴过滤。
 ///
 /// 参数:
 /// - `stdout`: 终端标准输出
@@ -110,6 +114,12 @@ pub(crate) fn edit_agents(
         )?;
         let key = match hitbox.read(&mut mouse, selected, false)? {
             MenuInput::Redraw => continue,
+            MenuInput::Paste(text) => {
+                if search.handle_paste(&text) == super::search::SearchEffect::Updated {
+                    selected = 0;
+                }
+                continue;
+            }
             MenuInput::Select(index) | MenuInput::RightClick(index) => {
                 selected = index;
                 continue;
@@ -145,7 +155,6 @@ pub(crate) fn edit_agents(
                 };
                 let id = profiles[index].id.clone();
                 if !is_builtin(&id) {
-                    // 删除不可撤销，且 d 与 Enter 同区，默认必须停在「取消」
                     if super::ui::confirm_delete(
                         stdout,
                         t(" DELETE AGENT ", " 删除自定义 Agent "),
@@ -185,28 +194,7 @@ pub(crate) fn edit_agents(
     }
 }
 
-/// Agent 列表右侧的档案概览。
-fn profile_overview(profile: &AgentProfile) -> String {
-    let kind = if is_builtin(&profile.id) {
-        t("Built-in profile", "内置档案")
-    } else {
-        t("Custom profile — d to delete.", "自定义档案 — d 删除。")
-    };
-    format!(
-        "{kind}\n\n{}\n{}",
-        tools_summary(profile),
-        skills_summary(profile)
-    )
-}
-
 /// 编辑 Web、TUI 与 CLI 默认 Agent。
-///
-/// 参数:
-/// - `stdout`: 终端标准输出
-/// - `config`: 待更新应用配置
-///
-/// 返回:
-/// - 表单编辑结果
 fn edit_surface_defaults(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
     let choices = agent_choice_ids(config);
     let mut fields = vec![
@@ -256,28 +244,21 @@ fn edit_surface_defaults(stdout: &mut io::Stdout, config: &mut AppConfig) -> Res
     Ok(())
 }
 
-/// Agent 编辑菜单：基本信息、系统提示词、工具与 Skills 分区编辑。
-///
-/// 修改先落在本地档案副本上，选择「保存修改」才写入内存配置；
-/// q 返回则放弃全部修改。
-///
-/// 参数:
-/// - `stdout`: 终端标准输出
-/// - `paths`: Sai 路径
-/// - `config`: 待更新应用配置
-/// - `profile`: 当前 Agent 档案副本
-///
-/// 返回:
-/// - 编辑流程是否成功
+/// 【Agent配置】【档案分区编辑】编辑基本信息、系统提示词、工具与 Skills 能力。
 fn edit_agent_profile(
     stdout: &mut io::Stdout,
     paths: &SaiPaths,
     config: &mut AppConfig,
     mut profile: AgentProfile,
 ) -> Result<()> {
+    let baseline = serde_json::to_string(&profile).ok();
+    let mut unsaved_guard = super::input::UnsavedState::default();
     let mut selected = 0usize;
     let mut mouse = ListMouseState::default();
     loop {
+        let dirty = serde_json::to_string(&profile).ok() != baseline;
+        unsaved_guard.set(dirty);
+
         let options = vec![
             t("Basic info", "基本信息").to_string(),
             t("System prompt", "系统提示词").to_string(),
@@ -312,7 +293,7 @@ fn edit_agent_profile(
             &subtitle,
         )?;
         let code = match hitbox.read(&mut mouse, selected, false)? {
-            MenuInput::Redraw => continue,
+            MenuInput::Redraw | MenuInput::Paste(_) => continue,
             MenuInput::Select(index) | MenuInput::RightClick(index) => {
                 selected = index;
                 continue;
@@ -385,7 +366,6 @@ fn edit_agent_basics(
         if !run_form(stdout, t(" AGENT BASICS ", " AGENT 基本信息 "), &mut fields)? {
             return Ok(());
         }
-        // 布尔字段由表单开关保证合法，仍统一解析以防手输异常值
         let (register_to_main, load_instruction_files) = match parse_bool_field(&fields[4].value)
             .and_then(|register| Ok((register, parse_bool_field(&fields[5].value)?)))
         {
@@ -408,116 +388,6 @@ fn edit_agent_basics(
     }
 }
 
-/// 基本信息分区的当前值摘要。
-fn basics_summary(profile: &AgentProfile) -> String {
-    let model = if profile.provider_id.is_empty() {
-        t("inherit current model", "沿用当前模型").to_string()
-    } else if profile.model.is_empty() {
-        profile.provider_id.clone()
-    } else {
-        format!("{} / {}", profile.provider_id, profile.model)
-    };
-    let description = if profile.description.trim().is_empty() {
-        t("(no description)", "（无描述）").to_string()
-    } else {
-        profile.description.clone()
-    };
-    format!(
-        "{description}\n\n{}: {model}\n{}: {}\n{}: {} · AGENT.md: {}",
-        t("Model", "模型"),
-        t("Thinking", "思考等级"),
-        profile.thinking_level,
-        t("Register to main", "注册主 Agent"),
-        bool_text(profile.register_to_main),
-        bool_text(profile.load_instruction_files),
-    )
-}
-
-/// 系统提示词分区的当前值摘要。
-fn prompt_summary(profile: &AgentProfile) -> String {
-    let prompt = profile.system_prompt.trim();
-    if prompt.is_empty() {
-        t(
-            "Empty — the agent uses the built-in prompt. Enter opens $EDITOR.",
-            "为空 — 使用内置提示词。Enter 打开 $EDITOR 编辑。",
-        )
-        .to_string()
-    } else {
-        format!(
-            "{} {} · {}\n\n{}",
-            prompt.chars().count(),
-            t("chars", "字符"),
-            t("Enter opens $EDITOR", "Enter 打开 $EDITOR"),
-            truncate(&prompt.replace('\n', " "), 160)
-        )
-    }
-}
-
-/// 工具能力分区的当前值摘要。
-fn tools_summary(profile: &AgentProfile) -> String {
-    let wildcard = profile
-        .deferred_tools
-        .iter()
-        .any(|name| name == DEFERRED_ALL_NON_BASE);
-    let deferred_count = profile
-        .deferred_tools
-        .iter()
-        .filter(|name| name.as_str() != DEFERRED_ALL_NON_BASE)
-        .count();
-    let base = if profile.enabled_tools.is_empty() {
-        t("Tools: inherit all", "工具：继承全量").to_string()
-    } else {
-        format!(
-            "{}: {} {}",
-            t("Tools", "工具"),
-            profile.enabled_tools.len(),
-            t("whitelisted", "项白名单")
-        )
-    };
-    let deferred = if wildcard {
-        t("all non-base tools deferred (*)", "非基础工具全部延迟（*）").to_string()
-    } else if deferred_count > 0 {
-        format!("{deferred_count} {}", t("deferred", "项延迟"))
-    } else {
-        t("none deferred", "无延迟").to_string()
-    };
-    format!("{base} · {deferred}")
-}
-
-/// Skills 分区的当前值摘要。
-fn skills_summary(profile: &AgentProfile) -> String {
-    if profile.skills_full.is_empty() && profile.skills_named.is_empty() {
-        t(
-            "Skills: not restricted (all visible when no capability override is set)",
-            "Skills：未单独配置（无其他能力限制时全部可见）",
-        )
-        .to_string()
-    } else {
-        format!(
-            "Skills: {} {} · {} {}",
-            profile.skills_full.len(),
-            t("full", "完整"),
-            profile.skills_named.len(),
-            t("name only", "仅名称")
-        )
-    }
-}
-
-fn bool_text(value: bool) -> &'static str {
-    if value {
-        t("yes", "是")
-    } else {
-        t("no", "否")
-    }
-}
-
-/// 返回 TUI 可编辑的默认、内置和自定义 Agent。
-///
-/// 参数:
-/// - `config`: 应用配置
-///
-/// 返回:
-/// - Agent 档案列表
 fn visible_profiles(config: &AppConfig) -> Vec<AgentProfile> {
     let mut profiles = config.resolved_agent_profiles();
     if !profiles
@@ -537,13 +407,6 @@ fn visible_profiles(config: &AppConfig) -> Vec<AgentProfile> {
     profiles
 }
 
-/// 创建不与现有标识冲突的自定义 Agent。
-///
-/// 参数:
-/// - `config`: 应用配置
-///
-/// 返回:
-/// - 新 Agent 档案
 fn new_agent(config: &AppConfig) -> AgentProfile {
     let used = config
         .resolved_agent_profiles()
@@ -562,14 +425,6 @@ fn new_agent(config: &AppConfig) -> AgentProfile {
     }
 }
 
-/// 写入或替换指定 Agent 档案。
-///
-/// 参数:
-/// - `config`: 待更新应用配置
-/// - `profile`: Agent 档案
-///
-/// 返回:
-/// - 无
 fn upsert_agent(config: &mut AppConfig, profile: AgentProfile) {
     if let Some(existing) = config
         .agents
@@ -582,13 +437,6 @@ fn upsert_agent(config: &mut AppConfig, profile: AgentProfile) {
     }
 }
 
-/// 返回所有入口默认项可以选择的 Agent 标识。
-///
-/// 参数:
-/// - `config`: 应用配置
-///
-/// 返回:
-/// - 去重后的 Agent 标识
 fn agent_choice_ids(config: &AppConfig) -> Vec<String> {
     let mut ids = vec![DEFAULT_AGENT_ID.to_string()];
     ids.extend(
@@ -602,26 +450,12 @@ fn agent_choice_ids(config: &AppConfig) -> Vec<String> {
     ids
 }
 
-/// 将默认 Agent 标识转换为空配置值。
-///
-/// 参数:
-/// - `value`: 表单 Agent 标识
-///
-/// 返回:
-/// - 非默认 Agent 标识
 fn optional_agent_id(value: &str) -> Option<String> {
     let value = value.trim();
     (value != DEFAULT_AGENT_ID && !value.is_empty()).then(|| value.to_string())
 }
 
-/// 判断 Agent 是否为不可删除的内置档案。
-///
-/// 参数:
-/// - `id`: Agent 标识
-///
-/// 返回:
-/// - 是否为内置档案
-fn is_builtin(id: &str) -> bool {
+pub(super) fn is_builtin(id: &str) -> bool {
     matches!(
         id,
         DEFAULT_AGENT_ID | GENERAL_AGENT_ID | EXPLORE_AGENT_ID | GATEWAY_AGENT_ID
@@ -632,7 +466,6 @@ fn is_builtin(id: &str) -> bool {
 mod tests {
     use super::*;
 
-    /// 验证入口默认选项包含虚拟默认项和内置 Agent。
     #[test]
     fn agent_choices_include_default_and_builtins() {
         let choices = agent_choice_ids(&AppConfig::default());
@@ -643,7 +476,6 @@ mod tests {
         assert!(choices.contains(&GATEWAY_AGENT_ID.to_string()));
     }
 
-    /// 全量继承模式下工具默认显示为启用，延迟标记优先。
     #[test]
     fn tool_state_reflects_inherit_and_deferred() {
         let mut profile = AgentProfile::default();
@@ -657,7 +489,6 @@ mod tests {
         assert_eq!(initial_tool_state(&profile, "web_search"), 0);
     }
 
-    /// Skill 状态映射：完整优先于仅名称，未配置为不暴露。
     #[test]
     fn skill_state_maps_full_and_named() {
         let profile = AgentProfile {
@@ -671,7 +502,6 @@ mod tests {
         assert_eq!(initial_skill_state(&profile, "other"), 0);
     }
 
-    /// 工具摘要区分全量继承、白名单与通配延迟。
     #[test]
     fn tools_summary_covers_modes() {
         let mut profile = AgentProfile::default();

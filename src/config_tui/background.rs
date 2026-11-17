@@ -60,7 +60,7 @@ pub(super) fn run<T: Send + 'static>(
                     return Ok(None);
                 }
             }
-            Some(ConfigEvent::Key(_)) => {}
+            Some(ConfigEvent::Key(_)) | Some(ConfigEvent::Paste(_)) => {}
         }
     }
 }

@@ -116,7 +116,7 @@ use kb_commands::run_kb;
 pub(crate) use localization::parse;
 use memory_commands::{clear_memory, run_memory};
 use message::{join_message, prepare_clipboard_chat_input};
-use providers::{apply_thinking_override, run_providers, run_set, run_set_thinking};
+use providers::{apply_thinking_override, run_providers, run_set};
 use render_options::stream_render_options;
 use repl::run_repl;
 use repl_background::run_repl_background_manager;

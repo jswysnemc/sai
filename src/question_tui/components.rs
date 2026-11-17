@@ -1,5 +1,6 @@
 use super::text::{display_inline, wrap_display_text};
 use crate::i18n::text as t;
+use crate::render::panel_palette::{fg, PanelPalette};
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct PanelLayout {
@@ -10,18 +11,18 @@ pub(super) struct PanelLayout {
     pub(super) footer_start: usize,
 }
 
-/// 计算提问面板顶部、主体和底部区域的可见范围。
+/// 【终端提问】【视口分区】计算提问面板顶部、主体和底部区域的可见范围。
 ///
-/// # 参数
+/// 参数:
 /// - `top_len`: 顶部行数
 /// - `body_len`: 主体行数
 /// - `footer_len`: 底部行数
 /// - `max_lines`: 面板最大行数
-/// - `focused_body_index`: 当前主体焦点行
+/// - `focused_body_index`: 当前主体焦点行（自由滚动时为空）
 /// - `current_body_start`: 当前主体起始行
 ///
-/// # 返回值
-/// 各区域的可见范围
+/// 返回:
+/// - 各区域的可见范围
 pub(super) fn panel_layout(
     top_len: usize,
     body_len: usize,
@@ -58,9 +59,9 @@ pub(super) fn panel_layout(
     }
 }
 
-/// 生成单个选项及其说明的显示行。
+/// 【终端提问】【选项绘制】按当前终端调色板生成单个选项及其说明的显示行。
 ///
-/// # 参数
+/// 参数:
 /// - `label`: 选项标题
 /// - `description`: 选项说明
 /// - `active`: 是否为当前焦点
@@ -68,8 +69,9 @@ pub(super) fn panel_layout(
 /// - `multiple`: 是否为多选问题
 /// - `content_width`: 可用显示宽度
 ///
-/// # 返回值
-/// 带终端样式的选项行
+/// 返回:
+/// - 带自适应终端样式的选项行
+#[cfg(test)]
 pub(super) fn option_lines(
     label: &str,
     description: &str,
@@ -78,11 +80,51 @@ pub(super) fn option_lines(
     multiple: bool,
     content_width: usize,
 ) -> Vec<String> {
+    option_lines_with_palette(
+        label,
+        description,
+        active,
+        picked,
+        multiple,
+        content_width,
+        PanelPalette::current(),
+    )
+}
+
+/// 【终端提问】【指定主题选项】使用给定调色板生成选项及说明行。
+///
+/// 参数:
+/// - `label`: 选项标题
+/// - `description`: 选项说明
+/// - `active`: 是否为当前焦点
+/// - `picked`: 是否已经选择
+/// - `multiple`: 是否为多选问题
+/// - `content_width`: 可用显示宽度
+/// - `palette`: 明暗自适应调色板
+///
+/// 返回:
+/// - 带自适应终端样式的选项行
+pub(super) fn option_lines_with_palette(
+    label: &str,
+    description: &str,
+    active: bool,
+    picked: bool,
+    multiple: bool,
+    content_width: usize,
+    palette: PanelPalette,
+) -> Vec<String> {
     let marker = super::symbols::choice(multiple, picked);
     let pointer = super::symbols::focus(active);
     let indent = super::symbols::OPTION_PREFIX_WIDTH;
     let width = content_width.saturating_sub(indent).max(1);
     let label = display_inline(label);
+    let color = if active {
+        format!("\x1b[1m{}", fg(palette.accent))
+    } else if picked {
+        fg(palette.accent)
+    } else {
+        fg(palette.text)
+    };
     let mut lines = Vec::new();
     for (index, part) in wrap_display_text(&label, width).into_iter().enumerate() {
         let prefix = if index == 0 {
@@ -90,26 +132,20 @@ pub(super) fn option_lines(
         } else {
             " ".repeat(indent)
         };
-        let color = if active {
-            "\x1b[1;36m"
-        } else if picked {
-            "\x1b[36m"
-        } else {
-            ""
-        };
         lines.push(super::text::truncate_width(
             &format!("{color}{prefix}{part}\x1b[0m"),
             content_width,
         ));
     }
-    // 1. 【终端提问】【选项说明】全部细则默认展开，不随焦点切换
+    // 1. 【终端提问】【选项说明】全部细则默认展开并使用满足对比度的弱化色
     if !description.trim().is_empty() {
+        let muted = fg(palette.muted);
         lines.extend(
             wrap_display_text(&display_inline(description), width)
                 .into_iter()
                 .map(|line| {
                     super::text::truncate_width(
-                        &format!("{}\x1b[2m{line}\x1b[0m", " ".repeat(indent)),
+                        &format!("{}{muted}{line}\x1b[0m", " ".repeat(indent)),
                         content_width,
                     )
                 }),
@@ -118,24 +154,46 @@ pub(super) fn option_lines(
     lines
 }
 
-/// 生成自定义答案编辑行。
+/// 【终端提问】【编辑行绘制】生成自定义答案编辑行。
 ///
-/// # 参数
+/// 参数:
 /// - `multiple`: 是否为多选问题
 /// - `picked`: 自定义答案是否已经选择
 /// - `editor`: 当前编辑器显示内容
 ///
-/// # 返回值
-/// 带终端样式的编辑行
+/// 返回:
+/// - 带终端样式的编辑行
+#[cfg(test)]
 pub(super) fn editor_option_line(multiple: bool, picked: bool, editor: &str) -> String {
+    editor_option_line_with_palette(multiple, picked, editor, PanelPalette::current())
+}
+
+/// 【终端提问】【指定主题编辑行】使用给定调色板生成自定义答案编辑行。
+///
+/// 参数:
+/// - `multiple`: 是否为多选问题
+/// - `picked`: 自定义答案是否已经选择
+/// - `editor`: 当前编辑器显示内容
+/// - `palette`: 明暗自适应调色板
+///
+/// 返回:
+/// - 带终端样式的编辑行
+pub(super) fn editor_option_line_with_palette(
+    multiple: bool,
+    picked: bool,
+    editor: &str,
+    palette: PanelPalette,
+) -> String {
     let marker = super::symbols::choice(multiple, picked);
+    let accent = fg(palette.accent);
     let value = if editor.is_empty() {
         format!(
-            "\x1b[2m{}\x1b[0m",
+            "{}{}\x1b[0m",
+            fg(palette.muted),
             t("Type your own answer", "输入其他答案")
         )
     } else {
-        editor.to_string()
+        format!("{}{editor}\x1b[0m", fg(palette.text))
     };
-    format!("\x1b[36m› {marker}\x1b[0m {value}")
+    format!("{accent}› {marker}\x1b[0m {value}")
 }

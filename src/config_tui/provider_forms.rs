@@ -69,8 +69,9 @@ pub(super) fn edit_model_form(
     let levels_len = level_list.len();
     fields.extend(level_list);
 
+    let form_title = format!(" {}: {model} ", t("EDIT MODEL", "编辑模型"));
     loop {
-        if !run_form(stdout, &format!(" EDIT MODEL: {model} "), &mut fields)? {
+        if !run_form(stdout, &form_title, &mut fields)? {
             return Ok(false);
         }
         // 1. 【供应商配置】【原子解析】先校验全部输入，失败就地提示并不破坏原有数据

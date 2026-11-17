@@ -101,6 +101,12 @@ pub(crate) fn edit_knowledge_base(
 
         let key = match hitbox.read(&mut mouse, selected, false)? {
             MenuInput::Redraw => continue,
+            MenuInput::Paste(text) => {
+                if search.handle_paste(&text) == super::search::SearchEffect::Updated {
+                    selected = 0;
+                }
+                continue;
+            }
             MenuInput::Select(index) | MenuInput::RightClick(index) => {
                 selected = index;
                 continue;
@@ -232,27 +238,38 @@ fn remove_one(paths: &SaiPaths, config: &AppConfig, name: &str) -> Result<String
     Ok(format!("{} {name}", t("removed", "已移除")))
 }
 
-/// 【知识库界面】【确认清空】参数为输出、目录和配置；返回实际删除数量说明
+/// 【知识库界面】【确认清空】使用危险删除确认对话框二次确认后清空全部知识库文件与索引向量。
+///
+/// 参数:
+/// - `stdout`: 终端输出流
+/// - `paths`: 应用路径
+/// - `config`: 当前配置
+///
+/// 返回:
+/// - 清空结果状态文案
 fn clear_all(stdout: &mut io::Stdout, paths: &SaiPaths, config: &AppConfig) -> Result<String> {
-    let mut fields = [Field::boolean(
-        t(
-            "Confirm clear all knowledge base files",
-            "确认清空全部知识库文件",
-        ),
-        false,
-    )];
-    if !run_form(
+    let files = block_on(knowledge_view::list(paths, config))?;
+    if files.is_empty() {
+        return Ok(t("knowledge base is already empty", "知识库已为空").to_string());
+    }
+    let count = files.len();
+    let target = format!(
+        "{} ({count} {})",
+        t("all knowledge base files", "全部知识库文件"),
+        t("files", "个文件")
+    );
+    // 1. 【知识库界面】【危险确认】默认停在取消项，明确提示所有文件与向量将被不可逆清除
+    if !super::ui::confirm_delete(
         stdout,
         t(" CLEAR KNOWLEDGE BASE ", " 清空知识库 "),
-        &mut fields,
+        &target,
+        t(
+            "Permanently removes every file and all indexed vectors from the knowledge base.",
+            "永久删除知识库中的全部文件与已索引向量，无法恢复。",
+        ),
     )? {
-        return Ok(t("cancelled", "已取消").to_string());
+        return Ok(t("Clear cancelled", "已取消清空").to_string());
     }
-    if fields[0].value.trim() != "true" {
-        return Ok(t("cancelled", "已取消").to_string());
-    }
-    let files = block_on(knowledge_view::list(paths, config))?;
-    let count = files.len();
     for file in files {
         block_on(knowledge_view::remove(paths, config, &file.name))?;
     }

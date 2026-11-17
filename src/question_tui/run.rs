@@ -1,3 +1,4 @@
+use super::mouse::{MouseOutcome, QuestionMouse};
 use super::render::draw;
 use super::session::QuestionSession;
 use super::state::{handle_editing_key, submitted_answers, QuestionState};
@@ -9,12 +10,20 @@ use std::time::{Duration, Instant};
 
 const CANCEL_CONFIRM_WINDOW: Duration = Duration::from_secs(2);
 
-/// 【终端提问】【交互循环】参数为问题集合与终端会话，返回用户决定。
+/// 【终端提问】【交互循环】驱动键盘、粘贴、鼠标与缩放事件，返回用户的回答或取消决定。
+///
+/// 参数:
+/// - `request`: 结构化提问集合
+/// - `session`: 终端会话守卫
+///
+/// 返回:
+/// - 用户提交的回答或取消结果
 pub(super) fn run(
     request: &QuestionRequest,
     session: &mut QuestionSession,
 ) -> Result<QuestionResponse> {
     let mut state = QuestionState::new(request);
+    let mut mouse_handler = QuestionMouse::default();
     loop {
         if state
             .cancel_armed_until
@@ -30,17 +39,34 @@ pub(super) fn run(
         let event = event::read()?;
         match event {
             Event::Resize(cols, rows) => {
+                mouse_handler.clear();
                 let (cols, rows) = crate::platform::windows_console::viewport_resize(cols, rows);
                 session.resize_to_terminal(cols, rows);
                 continue;
             }
             Event::Paste(text) if state.editing => {
+                mouse_handler.clear();
                 insert_text(&mut state.edit_buffer, &mut state.edit_cursor, &text);
+            }
+            Event::Mouse(mouse) => {
+                if let MouseOutcome::SubmitIfReady = mouse_handler.handle(
+                    mouse,
+                    session.anchor_y,
+                    &session.hits,
+                    request,
+                    &mut state,
+                )? {
+                    if let Some(answers) = submitted_answers(request, &state)? {
+                        session.finish_answered(request, &answers)?;
+                        return Ok(QuestionResponse::Answered(answers));
+                    }
+                }
             }
             Event::Key(key) => {
                 if key.kind != KeyEventKind::Press {
                     continue;
                 }
+                mouse_handler.clear();
                 if matches!(key.code, KeyCode::Char('c'))
                     && key.modifiers.contains(KeyModifiers::CONTROL)
                 {
@@ -77,8 +103,9 @@ pub(super) fn run(
                                 state.scroll_starts[state.tab].saturating_sub(1)
                         }
                         KeyCode::Down => {
-                            state.scroll_starts[state.tab] =
-                                state.scroll_starts[state.tab].saturating_add(1)
+                            state.scroll_starts[state.tab] = state.scroll_starts[state.tab]
+                                .saturating_add(1)
+                                .min(session.hits.max_body_scroll)
                         }
                         KeyCode::Left | KeyCode::BackTab | KeyCode::Char('h') => {
                             state.previous_tab(request)

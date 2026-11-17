@@ -249,9 +249,10 @@ impl ListMouseState {
 }
 
 /// 统一菜单循环的输入结果，屏蔽底层鼠标/尺寸事件细节。
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) enum MenuInput {
     Key(KeyEvent),
+    Paste(String),
     Select(usize),
     Activate(usize),
     RightClick(usize),
@@ -259,7 +260,7 @@ pub(crate) enum MenuInput {
     Redraw,
 }
 
-/// 【配置界面】【统一读取】等待并把键盘、鼠标与尺寸变更归并为菜单输入。
+/// 【配置界面】【统一读取】等待并把键盘、鼠标、粘贴与尺寸变更归并为菜单输入。
 ///
 /// 参数:
 /// - `state`: 列表鼠标状态追踪器
@@ -280,6 +281,7 @@ pub(crate) fn read_menu_input(
     loop {
         match read_event()? {
             ConfigEvent::Key(key) => return Ok(MenuInput::Key(key)),
+            ConfigEvent::Paste(text) => return Ok(MenuInput::Paste(text)),
             ConfigEvent::Resize => return Ok(MenuInput::Redraw),
             ConfigEvent::Mouse(mouse) => {
                 // 1. 先追踪底栏按钮悬停变化，再交给点击判定与列表交互

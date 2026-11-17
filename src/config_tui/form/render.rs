@@ -1,10 +1,26 @@
+//! 表单布局与交互帧绘制：支持连续悬停底色、长表单右侧滚动条及 80 列窄屏底部说明摘要。
+
 use super::super::mouse::{HitButtons, HitRect, ListHitbox};
-use super::super::theme::{row_marks, ACCENT, BOLD, BRAND, DIM, MUTED, PILL_BG, RESET};
-use super::super::ui::{display_width, draw_box, pad, truncate};
-use super::{choice_label, parse_bool_field, take_chars, Field};
+use super::super::theme::{row_marks, tint_bg, ThemePalette, BOLD, RESET};
+use super::super::ui::{
+    begin_synced_frame, display_width, draw_box, draw_scroll_indicator,
+    draw_status_bar_interactive, end_synced_frame, pad, status_bar_hits, truncate,
+};
+use super::detail::{
+    compact_focus_hint, draw_form_detail, field_detail_text, field_display_value,
+    rendered_text_value, strip_field_ansi,
+};
+use super::{take_chars, Field};
 use crate::config_tui::layout::{
     content_frame, form_column_widths, form_label_width, scroll_start, MAX_FRAME_WIDTH,
 };
+use crate::i18n::text as t;
+use anyhow::Result;
+use crossterm::cursor::{Hide, MoveTo, Show};
+use crossterm::queue;
+use crossterm::style::Print;
+use crossterm::terminal::{self, Clear, ClearType};
+use std::io;
 
 /// 表单界面交互命中区：包含列表字段、`Save`/`Cancel` 按钮及底栏操作提示。
 #[derive(Clone, Debug, Default)]
@@ -18,13 +34,64 @@ pub(super) struct FormHitbox {
 
 /// 表单字段区最少保留的行数，右侧字段说明需要足够的折行空间。
 const MIN_FORM_BODY_ROWS: usize = 6;
-use crate::i18n::text as t;
-use anyhow::Result;
-use crossterm::cursor::{Hide, MoveTo, Show};
-use crossterm::queue;
-use crossterm::style::Print;
-use crossterm::terminal::{self, Clear, ClearType};
-use std::io;
+
+/// 【配置表单】【行文本组装】按选中、编辑与悬停态构造单行字段文本，保证悬停底色连续无断层。
+///
+/// 参数:
+/// - `field`: 当前字段
+/// - `label_col`: 标签列对齐宽度
+/// - `row_w`: 当前行总列宽
+/// - `is_selected`: 是否为非编辑焦点行
+/// - `is_editing_row`: 是否正处于行内文本编辑态
+/// - `is_hovered`: 鼠标是否正悬停在该行
+/// - `revealed_secret`: 是否明文显示密钥
+///
+/// 返回:
+/// - 可直接写入终端的整行 ANSI 文本
+fn format_field_row(
+    field: &Field,
+    label_col: usize,
+    row_w: usize,
+    is_selected: bool,
+    is_editing_row: bool,
+    is_hovered: bool,
+    revealed_secret: bool,
+) -> String {
+    let palette = ThemePalette::current();
+    let (bar, row_style) = row_marks(is_selected, is_hovered);
+    let label_text = pad(&field.label, label_col);
+    let value_budget = row_w.saturating_sub(2 + label_col + 2).max(8);
+    let value = field_display_value(field, revealed_secret, value_budget);
+    if is_selected {
+        // 1. 【配置表单】【焦点选中】选中行使用左侧异色竖条与整行统一选中底色
+        let line = truncate(
+            &format!("{label_text}  {}", strip_field_ansi(&value)),
+            row_w.saturating_sub(2),
+        );
+        return format!(
+            "{bar}{row_style} {}{RESET}",
+            pad(&line, row_w.saturating_sub(2))
+        );
+    }
+    let editing_marker = if is_editing_row {
+        format!("{}▸{RESET}", palette.accent)
+    } else {
+        bar
+    };
+    let used = 2 + label_col + 2 + display_width(&strip_field_ansi(&value));
+    let remaining = row_w.saturating_sub(used);
+    let trailing = " ".repeat(remaining);
+    let raw = format!(
+        "{editing_marker} {}{label_text}{RESET}  {value}{trailing}",
+        palette.muted
+    );
+    if is_hovered {
+        // 2. 【配置表单】【连续悬停】在非选中悬停行的每个 RESET 后补回柔和悬停底色，消除字段与值之间的背景断层
+        tint_bg(&raw, palette.hover_bg)
+    } else {
+        raw
+    }
+}
 
 /// 【配置表单】【交互绘制】绘制表单并返回字段列表、保存/取消按钮和底栏命中几何。
 ///
@@ -34,6 +101,7 @@ use std::io;
 /// - `fields`: 表单字段定义
 /// - `selected`: 当前焦点下标
 /// - `hovered`: 鼠标悬停条目下标（含字段与底部按钮）
+/// - `footer_hover`: 底栏悬停分段矩形
 /// - `editing`: 是否处于行内文本编辑态
 /// - `cursors`: 各字段字符光标位置
 /// - `revealed_secrets`: 密钥明文展示开关
@@ -52,9 +120,16 @@ pub(super) fn draw_form_interactive(
     cursors: &[usize],
     revealed_secrets: &[bool],
 ) -> Result<FormHitbox> {
+    let palette = ThemePalette::current();
     let (cols, rows) = terminal::size()?;
-    // 内容行 = 顶部留白 + 字段 + 按钮前留白 + 按钮行；字段少时面板随内容收缩
-    let content_rows = fields.len().saturating_add(3).max(MIN_FORM_BODY_ROWS + 3);
+    let probe = content_frame(cols, rows, 1, MAX_FRAME_WIDTH);
+    let (_, probe_right_w) = form_column_widths(probe.width.saturating_sub(4));
+    let extra_narrow_hint = usize::from(probe_right_w == 0);
+    // 1. 【配置表单】【面板高度】窄屏隐藏右侧栏时额外预留一行在底部展示聚焦字段说明摘要
+    let content_rows = fields
+        .len()
+        .saturating_add(3 + extra_narrow_hint)
+        .max(MIN_FORM_BODY_ROWS + 3 + extra_narrow_hint);
     let frame = content_frame(
         cols,
         rows,
@@ -66,25 +141,39 @@ pub(super) fn draw_form_interactive(
     let width = frame.width;
     let height = frame.height;
 
-    super::super::ui::begin_synced_frame(stdout)?;
+    begin_synced_frame(stdout)?;
     queue!(stdout, Clear(ClearType::All))?;
     draw_box(stdout, x, y, width, height, title)?;
     let inner_x = x.saturating_add(2);
     let inner_w = width.saturating_sub(4);
-    // 字段区占满中间；底两行留给按钮与状态；宽终端右侧放字段说明
-    let list_top = y.saturating_add(2);
-    let list_bottom = y.saturating_add(height.saturating_sub(3));
-    let body_h = list_bottom.saturating_sub(list_top).max(1);
     let (left_w, right_w) = form_column_widths(inner_w);
-    // 标签列对齐成一条竖线，但宽度让位于值列，避免 URL / 密钥被挤成省略号
+
+    let show_bottom_hint = right_w == 0 && height >= 9;
+    let list_top = y.saturating_add(2);
+    let button_y = y.saturating_add(height.saturating_sub(2));
+    let hint_y = button_y.saturating_sub(1);
+    let list_bottom = if show_bottom_hint {
+        hint_y
+    } else {
+        button_y.saturating_sub(1)
+    };
+    let body_h = list_bottom.saturating_sub(list_top).max(1);
+    let visible_rows = body_h as usize;
+
+    // 2. 【配置表单】【长表单滚动条】单栏窄屏且字段溢出时让出右缘 1 列放置滚动条，双栏时置于栏间空隙
+    let has_scroll = fields.len() > visible_rows;
+    let row_w = if right_w == 0 && has_scroll {
+        left_w.saturating_sub(1) as usize
+    } else {
+        left_w as usize
+    };
     let longest_label = fields
         .iter()
         .filter(|field| !field.section)
-        .map(|field| display_width(field.label))
+        .map(|field| display_width(&field.label))
         .max()
         .unwrap_or(8);
-    let label_col = form_label_width(longest_label, left_w as usize);
-    let visible_rows = body_h as usize;
+    let label_col = form_label_width(longest_label, row_w);
     let start = scroll_start(selected.min(fields.len().saturating_sub(1)), visible_rows);
     let mut cursor = None;
     for row in 0..visible_rows {
@@ -95,22 +184,24 @@ pub(super) fn draw_form_interactive(
             queue!(
                 stdout,
                 Print(crate::render::readable_terminal_text(
-                    &(" ".repeat(left_w as usize)).to_string()
+                    &(" ".repeat(row_w)).to_string()
                 ))
             )?;
             continue;
         }
         let field = &fields[index];
         if field.section {
-            // 分组标题：品牌色短横 + 名称 + 弱化延伸线
-            let name = truncate(field.label, left_w.saturating_sub(6) as usize);
+            let name = truncate(&field.label, row_w.saturating_sub(6));
             let used = 4 + display_width(&name) + 1;
-            let tail = (left_w as usize).saturating_sub(used);
+            let tail = row_w.saturating_sub(used);
             queue!(
                 stdout,
                 Print(crate::render::readable_terminal_text(
                     &(format!(
-                        "{DIM}── {RESET}{BRAND}{BOLD}{name}{RESET} {DIM}{}{RESET}",
+                        "{}── {RESET}{}{BOLD}{name}{RESET} {}{}{RESET}",
+                        palette.dim,
+                        palette.brand,
+                        palette.dim,
                         "─".repeat(tail)
                     ))
                     .to_string()
@@ -121,51 +212,21 @@ pub(super) fn draw_form_interactive(
         let is_selected = index == selected && !editing;
         let is_editing_row = index == selected && editing;
         let is_hovered = hovered == Some(index);
-        let (bar, row_style) = row_marks(is_selected, is_hovered);
-        let label_text = pad(field.label, label_col);
-        let value_budget = (left_w as usize).saturating_sub(2 + label_col + 2).max(8);
-        let value = field_display_value(field, revealed_secrets[index], value_budget);
-        if is_selected {
-            // 选中行：整行深底统一亮青，焦点清晰优先于分色
-            let line = truncate(
-                &format!("{label_text}  {}", strip_field_ansi(&value)),
-                left_w.saturating_sub(2) as usize,
-            );
-            queue!(
-                stdout,
-                Print(crate::render::readable_terminal_text(
-                    &(format!(
-                        "{bar}{row_style} {}{RESET}",
-                        pad(&line, left_w.saturating_sub(2) as usize)
-                    ))
-                    .to_string()
-                ))
-            )?;
-        } else {
-            // 常规行：标签弱化、值走语义色，两列对齐
-            let editing_marker = if is_editing_row {
-                format!("{ACCENT}▸{RESET}")
-            } else {
-                bar
-            };
-            queue!(
-                stdout,
-                Print(crate::render::readable_terminal_text(
-                    &(format!("{editing_marker} {MUTED}{label_text}{RESET}  {value}")).to_string()
-                ))
-            )?;
-            let used = 2 + label_col + 2 + display_width(&strip_field_ansi(&value));
-            let remaining = (left_w as usize).saturating_sub(used);
-            if remaining > 0 {
-                queue!(
-                    stdout,
-                    Print(crate::render::readable_terminal_text(
-                        &(" ".repeat(remaining)).to_string()
-                    ))
-                )?;
-            }
-        }
+        let rendered_row = format_field_row(
+            field,
+            label_col,
+            row_w,
+            is_selected,
+            is_editing_row,
+            is_hovered,
+            revealed_secrets[index],
+        );
+        queue!(
+            stdout,
+            Print(crate::render::readable_terminal_text(&rendered_row))
+        )?;
         if is_editing_row {
+            let value_budget = row_w.saturating_sub(2 + label_col + 2).max(8);
             let rendered_value = rendered_text_value(field, revealed_secrets[index]);
             let cursor_text = take_chars(&rendered_value, cursors[index]);
             let cursor_x = inner_x
@@ -174,11 +235,27 @@ pub(super) fn draw_form_interactive(
                 + 2
                 + display_width(&truncate(&cursor_text, value_budget)) as u16;
             cursor = Some((
-                cursor_x.min(inner_x.saturating_add(left_w.saturating_sub(1))),
+                cursor_x.min(inner_x.saturating_add((row_w as u16).saturating_sub(1))),
                 row_y,
             ));
         }
     }
+    let scroll_x = if right_w == 0 {
+        inner_x.saturating_add(row_w as u16)
+    } else {
+        inner_x.saturating_add(left_w)
+    };
+    draw_scroll_indicator(
+        stdout,
+        scroll_x,
+        list_top,
+        body_h,
+        fields.len(),
+        start,
+        visible_rows,
+    )?;
+
+    // 3. 【配置表单】【宽窄屏说明切换】宽屏绘制右侧详情栏，窄屏在按钮上方单行展示当前聚焦说明
     if right_w > 0 {
         let detail_x = inner_x.saturating_add(left_w).saturating_add(2);
         let detail = if selected < fields.len() {
@@ -197,8 +274,23 @@ pub(super) fn draw_form_interactive(
             .to_string()
         };
         draw_form_detail(stdout, detail_x, list_top, right_w, body_h, &detail)?;
+    } else if show_bottom_hint {
+        let hint = compact_focus_hint(fields, selected);
+        let hint_line = truncate(&format!("◈ {hint}"), inner_w as usize);
+        queue!(
+            stdout,
+            MoveTo(inner_x, hint_y),
+            Print(crate::render::readable_terminal_text(
+                &(format!(
+                    "{}{}{RESET}",
+                    palette.dim,
+                    pad(&hint_line, inner_w as usize)
+                ))
+                .to_string()
+            ))
+        )?;
     }
-    let button_y = y.saturating_add(height.saturating_sub(2));
+
     let save_hovered = hovered == Some(fields.len());
     let cancel_hovered = hovered == Some(fields.len() + 1);
     let save_width = draw_form_button(
@@ -221,10 +313,10 @@ pub(super) fn draw_form_interactive(
         false,
     )?;
 
-    // 底部帮助条按当前状态切换内容
     let help = if selected < fields.len() && editing && fields[selected].secret {
         super::super::theme::help_line(&[
             ("Enter/Esc", t("done", "结束")),
+            ("Tab", t("next", "下一项")),
             (
                 "Ctrl+R",
                 if revealed_secrets[selected] {
@@ -237,26 +329,26 @@ pub(super) fn draw_form_interactive(
     } else if selected < fields.len() && editing {
         super::super::theme::help_line(&[
             ("Enter/Esc", t("done", "结束编辑")),
+            ("Tab", t("next", "下一项")),
             ("←→", t("cursor", "光标")),
             ("Home/End", t("jump", "行首尾")),
         ])
     } else {
         super::super::theme::help_line(&[
-            ("↑↓", t("move", "移动")),
+            ("↑↓/Tab", t("move", "切换")),
             ("Enter", t("edit", "编辑")),
             ("s", t("save", "保存")),
             ("q", t("cancel", "取消")),
         ])
     };
-    super::super::ui::draw_status_bar_interactive(stdout, &frame, &help, footer_hover)?;
-    let footer = super::super::ui::status_bar_hits(&frame, &help);
-    // 光标显隐放在同步帧内，避免先闪出空屏再出现光标
+    draw_status_bar_interactive(stdout, &frame, &help, footer_hover)?;
+    let footer = status_bar_hits(&frame, &help);
     if let Some((cx, cy)) = cursor {
         queue!(stdout, Show, MoveTo(cx, cy))?;
     } else {
         queue!(stdout, Hide)?;
     }
-    super::super::ui::end_synced_frame(stdout)?;
+    end_synced_frame(stdout)?;
     let hit_frame = HitRect::from(frame);
     Ok(FormHitbox {
         frame: hit_frame,
@@ -265,7 +357,7 @@ pub(super) fn draw_form_interactive(
             list: HitRect {
                 x: inner_x,
                 y: list_top,
-                width: left_w,
+                width: row_w as u16,
                 height: visible_rows as u16,
             },
             start,
@@ -288,255 +380,19 @@ pub(super) fn draw_form_interactive(
     })
 }
 
-/// 去除字段值渲染中的 ANSI 序列（选中行统一样式时使用）。
-fn strip_field_ansi(value: &str) -> String {
-    let mut output = String::with_capacity(value.len());
-    let mut index = 0usize;
-    while index < value.len() {
-        if value[index..].starts_with('\x1b') {
-            index = crate::render::terminal_image::escape_sequence_end(value, index).max(index + 1);
-            continue;
-        }
-        let ch = value[index..].chars().next().unwrap_or_default();
-        output.push(ch);
-        index += ch.len_utf8();
-    }
-    output
-}
-
-/// 表单右侧字段说明栏。
-fn draw_form_detail(
-    stdout: &mut io::Stdout,
-    x: u16,
-    y: u16,
-    width: u16,
-    height: u16,
-    text: &str,
-) -> Result<()> {
-    if width == 0 || height == 0 {
-        return Ok(());
-    }
-    queue!(
-        stdout,
-        MoveTo(x, y),
-        Print(crate::render::readable_terminal_text(
-            &(format!(
-                "{BRAND}{BOLD}◈ {}{RESET}",
-                truncate(t("Field", "字段"), width.saturating_sub(2) as usize)
-            ))
-            .to_string()
-        ))
-    )?;
-    let mut lines = Vec::new();
-    let mut current = String::new();
-    let mut current_w = 0usize;
-    let max_w = width as usize;
-    for ch in text.chars() {
-        if ch == '\n' {
-            lines.push(std::mem::take(&mut current));
-            current_w = 0;
-            continue;
-        }
-        let w = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
-        if current_w + w > max_w && !current.is_empty() {
-            lines.push(std::mem::take(&mut current));
-            current_w = 0;
-        }
-        current.push(ch);
-        current_w += w;
-    }
-    if !current.is_empty() {
-        lines.push(current);
-    }
-    for (row, line) in lines
-        .into_iter()
-        .take(height.saturating_sub(2) as usize)
-        .enumerate()
-    {
-        queue!(
-            stdout,
-            MoveTo(x, y.saturating_add(row as u16).saturating_add(2)),
-            Print(crate::render::readable_terminal_text(
-                &(format!("{MUTED}{}{RESET}", pad(&line, width as usize))).to_string()
-            ))
-        )?;
-    }
-    Ok(())
-}
-
-/// 根据字段类型生成右侧说明。
-fn field_detail_text(field: &Field) -> String {
-    let mut parts = vec![field.label.to_string()];
-    if field.boolean {
-        parts.push(
-            t(
-                "Toggle: Space, ←/→ or Enter flips on/off.",
-                "开关：Space、←/→ 或 Enter 直接切换开关。",
-            )
-            .to_string(),
-        );
-    } else if field.textarea {
-        parts.push(
-            t(
-                "Multiline: Enter opens $EDITOR, then returns here.",
-                "多行：Enter 打开 $EDITOR，保存后回到此屏。",
-            )
-            .to_string(),
-        );
-    } else if !field.choices.is_empty() {
-        let hint = if field.choices.len() <= 5 {
-            t(
-                "Choice: Space, ←/→ or Enter cycles inline.",
-                "选项：Space、←/→ 或 Enter 直接行内切换。",
-            )
-        } else {
-            t(
-                "Choice list: Space/←/→ cycles or Enter opens picker.",
-                "选项列表：Space/←/→ 快速切换，Enter 打开选择器。",
-            )
-        };
-        let options_preview = field
-            .choices
-            .iter()
-            .take(6)
-            .map(|item| choice_label(item, field.empty_choice_label))
-            .collect::<Vec<_>>()
-            .join(" · ");
-        parts.push(format!(
-            "{hint}\n\n{}: {options_preview}",
-            t("Options", "可选")
-        ));
-    } else if field.secret {
-        parts.push(
-            t(
-                "Secret: shown masked; Ctrl+R toggles plain text while editing.",
-                "密钥：默认掩码；编辑时 Ctrl+R 切换明文。",
-            )
-            .to_string(),
-        );
-    } else {
-        parts.push(
-            t(
-                "Text: Enter to edit, type freely, Ctrl+S saves immediately.",
-                "文本：Enter 编辑，输入后 Enter 完成，Ctrl+S 直接保存。",
-            )
-            .to_string(),
-        );
-    }
-    if !field.value.trim().is_empty() && !field.secret {
-        let preview = truncate(&field.value.replace('\n', " "), 80);
-        parts.push(format!("{}: {preview}", t("Current", "当前值")));
-    }
-    parts.join("\n\n")
-}
-
-/// 返回表单字段展示文本。
-///
-/// 参数:
-/// - `field`: 表单字段
-/// - `revealed_secret`: 是否显示密钥明文
-/// - `max_value_width`: 值区域可用显示宽度
-///
-/// 返回:
-/// - 字段展示文本
-fn field_display_value(field: &Field, revealed_secret: bool, max_value_width: usize) -> String {
-    use super::super::theme::{DIM as VDIM, OK, VALUE};
-    if field.boolean {
-        match parse_bool_field(&field.value) {
-            Ok(true) => format!("{OK}● {}{RESET}", t("on", "启用")),
-            Ok(false) => format!("{VDIM}○ {}{RESET}", t("off", "关闭")),
-            Err(_) => rendered_text_value(field, revealed_secret),
-        }
-    } else if field.textarea && field.value.is_empty() {
-        format!(
-            "{VDIM}{}{RESET}",
-            t("(Enter opens $EDITOR)", "(Enter 打开 $EDITOR)")
-        )
-    } else if !field.choices.is_empty() {
-        let label = if field.value.is_empty() {
-            field.empty_choice_label.to_string()
-        } else {
-            choice_label(&field.value, field.empty_choice_label)
-        };
-        if field.choices.len() <= 5 {
-            format!(
-                "{VDIM}‹ {RESET}{VALUE}{}{RESET}{VDIM} ›{RESET}",
-                truncate(&label, max_value_width.saturating_sub(4)),
-            )
-        } else {
-            format!(
-                "{VALUE}{}{RESET} {VDIM}▾{RESET}",
-                truncate(&label, max_value_width.saturating_sub(2)),
-            )
-        }
-    } else if field.value.is_empty() {
-        format!("{VDIM}{}{RESET}", t("(empty)", "（空）"))
-    } else {
-        format!(
-            "{VALUE}{}{RESET}",
-            truncate(
-                &rendered_text_value(field, revealed_secret),
-                max_value_width,
-            )
-        )
-    }
-}
-
-/// 返回单行文本字段渲染值。
-///
-/// 参数:
-/// - `field`: 表单字段
-/// - `revealed_secret`: 是否显示密钥明文
-///
-/// 返回:
-/// - 字段单行渲染值
-fn rendered_text_value(field: &Field, revealed_secret: bool) -> String {
-    let value = field.value.replace('\n', " ");
-    if field.secret && !revealed_secret {
-        mask_secret(&value)
-    } else {
-        value
-    }
-}
-
-/// 掩码密钥文本。
-///
-/// 定宽掩码：不按长度打星，避免从星号数量反推出密钥长度
-/// （32 位 hex、108 位 OpenAI key、sk-ant-… 会立刻被区分开）。
-///
-/// 参数:
-/// - `value`: 原始文本
-///
-/// 返回:
-/// - 掩码后文本
-fn mask_secret(value: &str) -> String {
-    if value.is_empty() {
-        return String::new();
-    }
-    if value.chars().count() <= MASK_SECRET_MAX_STARS {
-        return "*".repeat(value.chars().count());
-    }
-    format!("{}…", "*".repeat(MASK_SECRET_MAX_STARS))
-}
-
-/// 掩码星号上限，超出后以省略号收尾。
-const MASK_SECRET_MAX_STARS: usize = 8;
-
-/// 绘制表单按钮，返回按钮可见宽度（供横向排布）。
-///
-/// 主按钮选中时为品牌实心底，次按钮选中时为深底描边感；
-/// 未选中一律弱化，视觉焦点始终只有一个。
+/// 【配置表单】【底部按钮绘制】绘制保存或取消按钮并返回其可见显示列宽。
 ///
 /// 参数:
 /// - `stdout`: 终端输出
-/// - `x`: 起始列
-/// - `y`: 所在行
+/// - `x`: 按钮起始列
+/// - `y`: 按钮所在行
 /// - `label`: 按钮文字
-/// - `selected`: 是否选中
-/// - `primary`: 是否主按钮
+/// - `selected`: 是否获得键盘焦点
+/// - `hovered`: 是否处于鼠标悬停态
+/// - `primary`: 是否为主动作按钮
 ///
 /// 返回:
-/// - 按钮渲染后的可见宽度
+/// - 按钮可见列宽
 fn draw_form_button(
     stdout: &mut io::Stdout,
     x: u16,
@@ -546,35 +402,39 @@ fn draw_form_button(
     hovered: bool,
     primary: bool,
 ) -> Result<u16> {
-    use super::super::theme::{BUTTON_BG, BUTTON_FG, SELECT_BG};
+    let palette = ThemePalette::current();
     queue!(stdout, MoveTo(x, y))?;
     let text = format!(" {label} ");
     if selected && primary {
         queue!(
             stdout,
             Print(crate::render::readable_terminal_text(
-                &(format!("{BUTTON_BG}{BUTTON_FG}{BOLD}{text}{RESET}")).to_string()
+                &(format!(
+                    "{}{}{BOLD}{text}{RESET}",
+                    palette.button_bg, palette.button_fg
+                ))
+                .to_string()
             ))
         )?;
     } else if selected {
         queue!(
             stdout,
             Print(crate::render::readable_terminal_text(
-                &(format!("{SELECT_BG}{ACCENT}{text}{RESET}")).to_string()
+                &(format!("{}{}{text}{RESET}", palette.select_bg, palette.accent)).to_string()
             ))
         )?;
     } else if hovered {
         queue!(
             stdout,
             Print(crate::render::readable_terminal_text(
-                &(format!("{PILL_BG}{ACCENT}{text}{RESET}")).to_string()
+                &(format!("{}{}{text}{RESET}", palette.hover_bg, palette.accent)).to_string()
             ))
         )?;
     } else {
         queue!(
             stdout,
             Print(crate::render::readable_terminal_text(
-                &(format!("{MUTED}{text}{RESET}")).to_string()
+                &(format!("{}{text}{RESET}", palette.muted)).to_string()
             ))
         )?;
     }
@@ -584,53 +444,18 @@ fn draw_form_button(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config_tui::theme::SELECTION_BAR;
 
+    /// 【配置表单】【连续悬停测试】验证非选中悬停行不画第二根异色竖条，且整行在复位后连续铺满悬停底色。
     #[test]
-    fn secret_field_is_masked_by_default() {
-        let field = Field::new("Token", "secret".to_string()).secret();
+    fn hovered_form_row_keeps_continuous_hover_bg_without_second_bar() {
+        let palette = ThemePalette::current();
+        let field = Field::new("Protocol", "auto".to_string()).choices(&["auto", "openai-chat"]);
+        let row = format_field_row(&field, 16, 60, false, false, true, false);
 
-        assert_eq!(
-            strip_field_ansi(&field_display_value(&field, false, 70)),
-            "******"
-        );
-    }
-
-    #[test]
-    fn secret_field_can_be_revealed() {
-        let field = Field::new("Token", "secret".to_string()).secret();
-
-        assert_eq!(
-            strip_field_ansi(&field_display_value(&field, true, 70)),
-            "secret"
-        );
-    }
-
-    #[test]
-    fn secret_textarea_is_masked_by_default() {
-        let field = Field::textarea("Tokens", "first\nsecond".to_string()).secret();
-
-        // 定宽掩码：不泄露真实长度
-        assert_eq!(
-            strip_field_ansi(&field_display_value(&field, false, 70)),
-            "********…"
-        );
-    }
-
-    /// 短密钥按原长度打星，空值不产生掩码。
-    #[test]
-    fn mask_secret_keeps_short_values_verbatim() {
-        assert_eq!(mask_secret(""), "");
-        assert_eq!(mask_secret("abc"), "***");
-        assert_eq!(mask_secret(&"x".repeat(MASK_SECRET_MAX_STARS)), "********");
-    }
-
-    /// 布尔字段渲染为状态圆点而不是原始 true/false。
-    #[test]
-    fn boolean_field_renders_status_dot() {
-        let on = Field::boolean("Tools", true);
-        let off = Field::boolean("Tools", false);
-
-        assert!(strip_field_ansi(&field_display_value(&on, false, 70)).starts_with('●'));
-        assert!(strip_field_ansi(&field_display_value(&off, false, 70)).starts_with('○'));
+        assert!(!strip_field_ansi(&row).contains(SELECTION_BAR));
+        let body = row.strip_suffix(RESET).unwrap();
+        assert!(!body.contains(&format!("{RESET} ")));
+        assert!(body.contains(&format!("{RESET}{}", palette.hover_bg)));
     }
 }

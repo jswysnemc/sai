@@ -11,20 +11,22 @@ pub(super) struct QuestionState {
     pub(super) scroll_starts: Vec<usize>,
     pub(super) answers: QuestionAnswers,
     pub(super) custom_answers: Vec<String>,
+    pub(super) edit_drafts: Vec<Option<String>>,
     pub(super) editing: bool,
     pub(super) edit_buffer: String,
     pub(super) edit_cursor: usize,
+    pub(super) free_scroll: bool,
     pub(super) cancel_armed_until: Option<Instant>,
 }
 
 impl QuestionState {
-    /// 根据提问请求创建初始交互状态。
+    /// 【终端提问】【初始化】根据提问请求创建初始交互状态。
     ///
     /// 参数:
     /// - `request`: 结构化提问请求
     ///
     /// 返回:
-    /// - 尚未回答的初始状态
+    /// - 尚未提交的初始交互状态
     pub(super) fn new(request: &QuestionRequest) -> Self {
         Self {
             tab: 0,
@@ -56,25 +58,27 @@ impl QuestionState {
                 .iter()
                 .map(default_custom_answer)
                 .collect(),
+            edit_drafts: vec![None; request.questions.len()],
             editing: false,
             edit_buffer: String::new(),
             edit_cursor: 0,
+            free_scroll: false,
             cancel_armed_until: None,
         }
     }
 
-    /// 判断当前标签是否为最终确认页。
+    /// 【终端提问】【确认页判断】判断当前标签是否为最终确认页。
     ///
     /// 参数:
     /// - `request`: 结构化提问请求
     ///
     /// 返回:
-    /// - 当前位于确认页时返回 `true`
+    /// - 当前位于确认页时返回 true
     pub(super) fn on_confirm(&self, request: &QuestionRequest) -> bool {
         request.needs_review() && self.tab == request.questions.len()
     }
 
-    /// 计算问题标签和确认标签的总数。
+    /// 【终端提问】【标签总数】计算问题标签和确认标签的总数。
     ///
     /// 参数:
     /// - `request`: 结构化提问请求
@@ -85,7 +89,24 @@ impl QuestionState {
         request.questions.len() + usize::from(request.needs_review())
     }
 
-    /// 切换到前一个问题或确认标签。
+    /// 【终端提问】【指定换题】切换到指定问题或确认标签，并保留未提交的编辑草稿。
+    ///
+    /// 参数:
+    /// - `request`: 结构化提问请求
+    /// - `target_tab`: 目标标签索引
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn select_tab(&mut self, request: &QuestionRequest, target_tab: usize) {
+        let count = self.tab_count(request);
+        if target_tab < count {
+            self.leave_editing_preserving_draft();
+            self.tab = target_tab;
+            self.free_scroll = false;
+        }
+    }
+
+    /// 【终端提问】【前一标签】切换到前一个问题或确认标签。
     ///
     /// 参数:
     /// - `request`: 结构化提问请求
@@ -94,10 +115,11 @@ impl QuestionState {
     /// - 无
     pub(super) fn previous_tab(&mut self, request: &QuestionRequest) {
         let count = self.tab_count(request);
-        self.tab = (self.tab + count - 1) % count;
+        let next = (self.tab + count - 1) % count;
+        self.select_tab(request, next);
     }
 
-    /// 切换到后一个问题或确认标签。
+    /// 【终端提问】【后一标签】切换到后一个问题或确认标签。
     ///
     /// 参数:
     /// - `request`: 结构化提问请求
@@ -105,10 +127,27 @@ impl QuestionState {
     /// 返回:
     /// - 无
     pub(super) fn next_tab(&mut self, request: &QuestionRequest) {
-        self.tab = (self.tab + 1) % self.tab_count(request);
+        let next = (self.tab + 1) % self.tab_count(request);
+        self.select_tab(request, next);
     }
 
-    /// 在当前问题中选择前一个选项。
+    /// 【终端提问】【草稿退出】退出自定义编辑状态并原样保留已输入的草稿。
+    ///
+    /// 参数:
+    /// - `self`: 当前状态
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn leave_editing_preserving_draft(&mut self) {
+        if self.editing {
+            if let Some(slot) = self.edit_drafts.get_mut(self.tab) {
+                *slot = Some(self.edit_buffer.clone());
+            }
+            self.editing = false;
+        }
+    }
+
+    /// 【终端提问】【上一选项】在当前问题中选择前一个选项。
     ///
     /// 参数:
     /// - `question`: 当前问题
@@ -120,10 +159,11 @@ impl QuestionState {
         if count > 0 {
             let selected = &mut self.selected[self.tab];
             *selected = (*selected + count - 1) % count;
+            self.free_scroll = false;
         }
     }
 
-    /// 在当前问题中选择后一个选项。
+    /// 【终端提问】【下一选项】在当前问题中选择后一个选项。
     ///
     /// 参数:
     /// - `question`: 当前问题
@@ -134,10 +174,11 @@ impl QuestionState {
         let count = option_count(question);
         if count > 0 {
             self.selected[self.tab] = (self.selected[self.tab] + 1) % count;
+            self.free_scroll = false;
         }
     }
 
-    /// 激活当前选项，或进入自定义答案编辑状态。
+    /// 【终端提问】【激活当前项】选定当前高亮选项，或打开带草稿恢复的自定义输入编辑器。
     ///
     /// 参数:
     /// - `request`: 结构化提问请求
@@ -145,11 +186,17 @@ impl QuestionState {
     /// 返回:
     /// - 操作成功时返回空结果
     pub(super) fn activate_current(&mut self, request: &QuestionRequest) -> Result<()> {
+        self.free_scroll = false;
         let question = &request.questions[self.tab];
         let selected = self.selected[self.tab];
         if selected == question.options.len() && question.custom {
             self.editing = true;
-            self.edit_buffer = self.custom_answers[self.tab].clone();
+            // 1. 【终端提问】【草稿恢复】优先恢复按 Esc 暂存的未提交草稿，否则加载已确认答案
+            self.edit_buffer = self
+                .edit_drafts
+                .get(self.tab)
+                .and_then(Option::clone)
+                .unwrap_or_else(|| self.custom_answers[self.tab].clone());
             self.edit_cursor = self.edit_buffer.chars().count();
             return Ok(());
         }
@@ -168,7 +215,14 @@ impl QuestionState {
         Ok(())
     }
 
-    /// 【终端提问】【编号选择】参数为问题集合与从一开始的编号；有效编号执行选择或编辑，返回结果。
+    /// 【终端提问】【编号选择】按从 1 开始的数字快捷键执行选择或进入编辑。
+    ///
+    /// 参数:
+    /// - `request`: 问题集合
+    /// - `number`: 从 1 开始的选项编号
+    ///
+    /// 返回:
+    /// - 处理结果
     pub(super) fn activate_number(
         &mut self,
         request: &QuestionRequest,
@@ -179,6 +233,7 @@ impl QuestionState {
             return Ok(());
         }
         self.selected[self.tab] = number - 1;
+        self.free_scroll = false;
         if question.multiple {
             self.toggle_current(request)
         } else {
@@ -186,7 +241,13 @@ impl QuestionState {
         }
     }
 
-    /// 【终端提问】【多选继续】参数为问题集合，返回推进结果；自定义选项进入编辑，不隐式勾选。
+    /// 【终端提问】【多选继续】多选题回车继续下一题，聚焦自定义选项时进入编辑而不隐式勾选。
+    ///
+    /// 参数:
+    /// - `request`: 问题集合
+    ///
+    /// 返回:
+    /// - 推进结果
     pub(super) fn continue_multiple(&mut self, request: &QuestionRequest) -> Result<()> {
         let question = &request.questions[self.tab];
         if question.custom && self.selected[self.tab] == question.options.len() {
@@ -197,7 +258,7 @@ impl QuestionState {
         }
     }
 
-    /// 切换当前答案的选中状态，单选保持互斥且不自动推进。
+    /// 【终端提问】【选中切换】切换当前答案的选中状态，单选保持互斥且不自动推进。
     ///
     /// 参数:
     /// - `request`: 结构化提问请求
@@ -205,6 +266,7 @@ impl QuestionState {
     /// 返回:
     /// - 操作成功时返回空结果
     pub(super) fn toggle_current(&mut self, request: &QuestionRequest) -> Result<()> {
+        self.free_scroll = false;
         let question = &request.questions[self.tab];
         let selected = self.selected[self.tab];
         let value = if selected == question.options.len() && question.custom {
@@ -232,20 +294,24 @@ impl QuestionState {
         Ok(())
     }
 
-    /// 【终端提问】【单选确认】参数为问题请求，返回确认结果；已有答案不随焦点改变，Other 仍进入编辑。
+    /// 【终端提问】【单选确认】将当前焦点选项写入答案并推进下一题，聚焦自定义项时进入编辑。
+    ///
+    /// 参数:
+    /// - `request`: 结构化提问请求
+    ///
+    /// 返回:
+    /// - 确认处理结果
     pub(super) fn confirm_single(&mut self, request: &QuestionRequest) -> Result<()> {
         let question = &request.questions[self.tab];
-        if self.answers[self.tab].is_empty()
-            || (question.custom && self.selected[self.tab] == question.options.len())
-        {
-            self.activate_current(request)
-        } else {
+        // 1. 【终端提问】【改选提交】普通选项始终写入当前高亮项，避免被旧答案或默认答案锁死
+        if question.options.is_empty() && !question.custom {
             self.advance_after_single(request);
-            Ok(())
+            return Ok(());
         }
+        self.activate_current(request)
     }
 
-    /// 单选完成后推进到下一个标签。
+    /// 【终端提问】【单选推进】单选完成后推进到下一个标签。
     ///
     /// 参数:
     /// - `request`: 结构化提问请求
@@ -257,9 +323,10 @@ impl QuestionState {
             return;
         }
         self.tab = (self.tab + 1).min(self.tab_count(request) - 1);
+        self.free_scroll = false;
     }
 
-    /// 将焦点移动到第一个未回答问题。
+    /// 【终端提问】【未答定位】将焦点移动到第一个未回答的必答问题。
     ///
     /// 参数:
     /// - `request`: 结构化提问请求
@@ -274,11 +341,12 @@ impl QuestionState {
             .position(|(index, answers)| answers.is_empty() && request.questions[index].required)
         {
             self.tab = index.min(request.questions.len().saturating_sub(1));
+            self.free_scroll = false;
         }
     }
 }
 
-/// 返回不属于预设选项的默认自定义答案。
+/// 【终端提问】【默认自定义值】返回不属于预设选项的默认自定义答案。
 ///
 /// 参数:
 /// - `question`: 当前结构化问题
@@ -299,7 +367,15 @@ pub(super) fn default_custom_answer(question: &QuestionPrompt) -> String {
         .unwrap_or_default()
 }
 
-/// 【终端提问】【答案编辑】参数为问题、状态与按键，返回是否保存了自定义答案。
+/// 【终端提问】【答案编辑】处理自定义输入框内的编辑按键，返回是否确认保存了非空自定义答案。
+///
+/// 参数:
+/// - `request`: 结构化提问请求
+/// - `state`: 当前回答状态
+/// - `key`: 键盘事件
+///
+/// 返回:
+/// - 保存并激活了自定义答案时返回 true
 pub(super) fn handle_editing_key(
     request: &QuestionRequest,
     state: &mut QuestionState,
@@ -310,12 +386,14 @@ pub(super) fn handle_editing_key(
             insert_text(&mut state.edit_buffer, &mut state.edit_cursor, "\n");
         }
         KeyCode::Esc => {
-            state.editing = false;
-            state.edit_buffer.clear();
-            state.edit_cursor = 0;
+            // 1. 【终端提问】【保护草稿】按一次 Esc 仅退出编辑态，保留用户已输入文本供后续续写
+            state.leave_editing_preserving_draft();
         }
         KeyCode::Enter => {
             let value = state.edit_buffer.trim().to_string();
+            if let Some(slot) = state.edit_drafts.get_mut(state.tab) {
+                *slot = None;
+            }
             if value.is_empty() {
                 let previous = std::mem::take(&mut state.custom_answers[state.tab]);
                 state.answers[state.tab].retain(|answer| answer != &previous);
@@ -364,14 +442,14 @@ pub(super) fn handle_editing_key(
     Ok(false)
 }
 
-/// 校验当前回答是否达到提交条件。
+/// 【终端提问】【提交校验】校验当前回答是否已满足全部必答与确认条件。
 ///
 /// 参数:
 /// - `request`: 结构化提问请求
 /// - `state`: 当前回答状态
 ///
 /// 返回:
-/// - 可以提交时返回答案，否则返回空
+/// - 可以提交时返回答案快照，否则返回空
 pub(super) fn submitted_answers(
     request: &QuestionRequest,
     state: &QuestionState,
@@ -392,18 +470,18 @@ pub(super) fn submitted_answers(
     Ok(Some(state.answers.clone()))
 }
 
-/// 计算问题的预设选项和自定义选项总数。
+/// 【终端提问】【选项总数】计算问题的预设选项和自定义选项总数。
 ///
 /// 参数:
 /// - `question`: 当前问题
 ///
 /// 返回:
 /// - 可选择项总数
-fn option_count(question: &QuestionPrompt) -> usize {
+pub(super) fn option_count(question: &QuestionPrompt) -> usize {
     question.options.len() + usize::from(question.custom)
 }
 
-/// 切换指定答案在多选结果中的存在状态。
+/// 【终端提问】【多选翻转】切换指定答案在多选结果中的存在状态。
 ///
 /// 参数:
 /// - `answers`: 当前多选答案

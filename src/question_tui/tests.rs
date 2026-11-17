@@ -7,6 +7,7 @@ use crate::question::QuestionOption;
 use crate::question::QuestionPrompt;
 use crate::question::QuestionRequest;
 use crate::question::MAX_CUSTOM_ANSWER_CHARS;
+use crate::render::panel_palette::{fg, PanelPalette};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::io;
 use unicode_width::UnicodeWidthStr;
@@ -141,7 +142,7 @@ fn inactive_option_still_shows_full_description() {
         .iter()
         .map(|line| strip_ansi(line))
         .collect::<Vec<_>>();
-    assert_eq!(visible[0], "  ○ 文档");
+    assert_eq!(visible[0], "  □ 文档");
     assert!(visible
         .iter()
         .any(|line| line.contains("说明新的操作方式和适用范围。")));
@@ -154,16 +155,17 @@ fn option_rows_have_no_numbers_and_put_description_below_title() {
         .iter()
         .map(|line| strip_ansi(line))
         .collect::<Vec<_>>();
+    let muted = fg(PanelPalette::current().muted);
     assert_eq!(visible[0], "› ○ 烧烤");
     assert!(!visible.iter().any(|line| line.contains("1.")));
     assert!(visible[1..].iter().all(|line| line.starts_with("  ")));
-    assert!(lines[1..].iter().all(|line| line.contains("\x1b[2m")));
+    assert!(lines[1..].iter().all(|line| line.contains(&muted)));
 }
 
 #[test]
 fn multi_option_rows_keep_checkbox_without_number() {
     let lines = option_lines("代码", "修改实现和测试", true, true, true, 18);
-    assert_eq!(strip_ansi(&lines[0]), "› ● 代码");
+    assert_eq!(strip_ansi(&lines[0]), "› ■ 代码");
     assert!(strip_ansi(&lines[1]).starts_with("    "));
 }
 
@@ -180,10 +182,12 @@ fn description_soft_wrap_preserves_indentation_budget() {
 #[test]
 fn resize_recovers_panel_height_after_terminal_grows() {
     let mut session = std::mem::ManuallyDrop::new(QuestionSession {
+        _mouse: None,
         stdout: io::stdout(),
         anchor_y: 8,
         panel_lines: 12,
         previous: Vec::new(),
+        hits: Default::default(),
         owns_terminal: false,
         overlay: false,
         inline_anchor: None,
@@ -198,10 +202,12 @@ fn resize_recovers_panel_height_after_terminal_grows() {
 #[test]
 fn overlay_resize_pins_panel_to_bottom() {
     let mut session = std::mem::ManuallyDrop::new(QuestionSession {
+        _mouse: None,
         stdout: io::stdout(),
         anchor_y: 8,
         panel_lines: 16,
         previous: Vec::new(),
+        hits: Default::default(),
         owns_terminal: false,
         overlay: true,
         inline_anchor: None,
@@ -215,10 +221,12 @@ fn overlay_resize_pins_panel_to_bottom() {
 #[test]
 fn inline_overlay_resize_keeps_content_anchor() {
     let mut session = std::mem::ManuallyDrop::new(QuestionSession {
+        _mouse: None,
         stdout: io::stdout(),
         anchor_y: 7,
         panel_lines: 16,
         previous: Vec::new(),
+        hits: Default::default(),
         owns_terminal: false,
         overlay: true,
         inline_anchor: Some(7),
@@ -240,9 +248,25 @@ fn truncation_honors_very_narrow_widths() {
 }
 
 #[test]
-fn focused_option_uses_cyan_emphasis() {
+fn strip_ansi_and_truncate_handle_non_sgr_sequences() {
+    let rich = "\x1b[2K\x1b]8;;https://example.com\x07链接正文\x1b]8;;\x07\x1b(B尾部";
+    assert_eq!(strip_ansi(rich), "链接正文尾部");
+    let clipped = truncate_width(rich, 9);
+    assert_eq!(strip_ansi(&clipped), "链接正...");
+}
+
+#[test]
+fn focused_option_uses_adaptive_accent_emphasis() {
+    let palette = PanelPalette::current();
     let lines = option_lines("烧烤", "", true, false, false, 20);
-    assert!(lines[0].contains("\x1b[1;36m"));
+    assert!(lines[0].contains("\x1b[1m"));
+    assert!(lines[0].contains(&fg(palette.accent)));
+
+    let light = PanelPalette::for_background((250, 250, 252));
+    let card = super::card::CardLayout::with_palette(60, 12, light);
+    let border = card.heading("标题");
+    assert!(border.contains(&fg(light.subtle)));
+    assert!(!border.contains("\x1b[2;37m"));
 }
 
 #[test]

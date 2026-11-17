@@ -134,11 +134,25 @@ pub(crate) fn edit_skills(
             }
         });
         let hitbox = draw_menu_interactive(
-            stdout, " SKILLS ", &options, &details, selected, &mouse, &help, &subtitle,
+            stdout,
+            t(" SKILLS ", " SKILLS 管理 "),
+            &options,
+            &details,
+            selected,
+            &mouse,
+            &help,
+            &subtitle,
         )?;
 
         let code = match hitbox.read(&mut mouse, selected, false)? {
             MenuInput::Redraw => continue,
+            MenuInput::Paste(text) => {
+                if search.handle_paste(&text) == super::search::SearchEffect::Updated {
+                    selected = 0;
+                    status.clear();
+                }
+                continue;
+            }
             MenuInput::Select(index) => {
                 selected = index;
                 status.clear();

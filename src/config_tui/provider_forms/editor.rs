@@ -51,7 +51,7 @@ pub(crate) fn edit_provider_form(
             "",
         )?;
         let code = match hitbox.read(&mut mouse, selected, false)? {
-            MenuInput::Redraw => continue,
+            MenuInput::Redraw | MenuInput::Paste(_) => continue,
             MenuInput::Select(index) | MenuInput::RightClick(index) => {
                 selected = index;
                 continue;

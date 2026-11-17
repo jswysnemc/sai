@@ -86,7 +86,7 @@ pub(super) fn run(stdout: &mut io::Stdout, paths: &SaiPaths, config: &AppConfig)
             &subtitle,
         )?;
         let code = match hitbox.read(&mut mouse, selected, false)? {
-            MenuInput::Redraw => continue,
+            MenuInput::Redraw | MenuInput::Paste(_) => continue,
             MenuInput::Select(index) | MenuInput::RightClick(index) => {
                 selected = index;
                 continue;

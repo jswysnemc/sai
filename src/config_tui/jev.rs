@@ -47,7 +47,7 @@ pub(crate) fn edit_jev(stdout: &mut io::Stdout, config: &mut AppConfig) -> Resul
         ];
         let hitbox = draw_menu_interactive(
             stdout,
-            " JEV ",
+            t(" JEV ", " JEV 设置 "),
             &options,
             &details,
             selected,
@@ -60,7 +60,7 @@ pub(crate) fn edit_jev(stdout: &mut io::Stdout, config: &mut AppConfig) -> Resul
             "",
         )?;
         let code = match hitbox.read(&mut mouse, selected, false)? {
-            MenuInput::Redraw => continue,
+            MenuInput::Redraw | MenuInput::Paste(_) => continue,
             MenuInput::Select(index) | MenuInput::RightClick(index) => {
                 selected = index;
                 continue;
@@ -232,11 +232,11 @@ fn apply_routing(config: &mut AppConfig, fields: &[Field]) -> Result<()> {
     // 1. 先解析全部字段，再在副本上校验范围
     let mut next = config.jev.clone();
     next.routing.enabled = parse_bool_field(&fields[0].value)?;
-    next.routing.threshold = parse_number_field(fields[1].label, &fields[1].value)?;
-    next.routing.max_tools = parse_number_field(fields[2].label, &fields[2].value)?;
-    next.routing.max_skills = parse_number_field(fields[3].label, &fields[3].value)?;
-    next.routing.timeout_seconds = parse_number_field(fields[4].label, &fields[4].value)?;
-    next.routing.context_chars = parse_number_field(fields[5].label, &fields[5].value)?;
+    next.routing.threshold = parse_number_field(&fields[1].label, &fields[1].value)?;
+    next.routing.max_tools = parse_number_field(&fields[2].label, &fields[2].value)?;
+    next.routing.max_skills = parse_number_field(&fields[3].label, &fields[3].value)?;
+    next.routing.timeout_seconds = parse_number_field(&fields[4].label, &fields[4].value)?;
+    next.routing.context_chars = parse_number_field(&fields[5].label, &fields[5].value)?;
     next.routing.prompt_segments = parse_bool_field(&fields[6].value)?;
     let memory_injection = parse_bool_field(&fields[7].value)?;
     next.validate(&config.model_endpoints)?;
@@ -285,9 +285,9 @@ fn edit_audit(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
 fn apply_audit(config: &mut AppConfig, fields: &[Field]) -> Result<()> {
     let mut next = config.jev.clone();
     next.audit.enabled = parse_bool_field(&fields[0].value)?;
-    next.audit.minimum_probability = parse_number_field(fields[1].label, &fields[1].value)?;
-    next.audit.minimum_confidence = parse_number_field(fields[2].label, &fields[2].value)?;
-    next.audit.timeout_seconds = parse_number_field(fields[3].label, &fields[3].value)?;
+    next.audit.minimum_probability = parse_number_field(&fields[1].label, &fields[1].value)?;
+    next.audit.minimum_confidence = parse_number_field(&fields[2].label, &fields[2].value)?;
+    next.audit.timeout_seconds = parse_number_field(&fields[3].label, &fields[3].value)?;
     next.validate(&config.model_endpoints)?;
     config.jev = next;
     Ok(())

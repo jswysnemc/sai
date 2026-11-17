@@ -56,3 +56,21 @@ fn invalid_draft_does_not_mutate_config() {
     assert!(save(&mut config, invalid).is_err());
     assert_eq!(config.model_endpoints, vec![item]);
 }
+
+/// 【模型接入】【草稿脏检查与校验测试】验证子表单修改密钥或地址后触发脏状态并执行独立校验。
+/// 参数: 无；返回: 无
+#[test]
+fn editor_detects_subform_draft_mutations_and_validates_before_save() {
+    let config = AppConfig::default();
+    let baseline = new_endpoint(&config, ModelEndpointKind::Jev);
+    let mut edited = baseline.clone();
+    assert!(!editor::is_draft_dirty(&edited, &baseline));
+    assert!(editor::validate_draft(&edited).is_ok());
+
+    edited.api_key = "sk-jev-draft-123".into();
+    assert!(editor::is_draft_dirty(&edited, &baseline));
+    assert!(editor::validate_draft(&edited).is_ok());
+
+    edited.endpoint = "ftp://invalid".into();
+    assert!(editor::validate_draft(&edited).is_err());
+}

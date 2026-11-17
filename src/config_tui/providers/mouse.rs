@@ -197,8 +197,7 @@ impl ProviderBrowser<'_> {
         };
         match clicked {
             ProviderClick::FilterBar => {
-                self.filter_mode = true;
-                self.active_col = 2;
+                self.enter_filter_mode();
                 Ok(BrowserMouseStep::None)
             }
             ProviderClick::ColumnHeader(col) => {
@@ -207,7 +206,7 @@ impl ProviderBrowser<'_> {
             }
             ProviderClick::Footer(code) => Ok(BrowserMouseStep::Key(code)),
             ProviderClick::Row(col, idx) => {
-                self.filter_mode = false;
+                self.leave_filter_mode();
                 let same_cell = self.active_col == col
                     && match col {
                         0 => self.provider_idx == idx,

@@ -31,20 +31,37 @@ pub(super) fn max_output_tokens_field_value(provider: &ProviderConfig, model: &s
         .unwrap_or_default()
 }
 
-/// 返回模型标签勾选字段。
+/// 【模型配置】【标签展示】为内置模型标签附加双语说明。
+fn model_tag_label(tag: &str) -> &'static str {
+    match tag {
+        "tool" => t("tool (function calling)", "tool（工具调用）"),
+        "reasoning" => t("reasoning (chain-of-thought)", "reasoning（深度思考）"),
+        "vision" => t("vision (image input)", "vision（视觉识图）"),
+        "embedding" => t("embedding (vectors)", "embedding（向量嵌入）"),
+        _ => "",
+    }
+}
+
+/// 【模型配置】【标签字段】返回模型标签勾选字段。
 ///
 /// 参数:
 /// - `provider`: Provider 配置
 /// - `model`: 模型 ID
 ///
 /// 返回:
-/// - 模型标签勾选字段
+/// - 模型标签勾选字段列表
 pub(super) fn tag_fields(provider: &ProviderConfig, model: &str) -> Vec<Field> {
     MODEL_TAGS
         .iter()
         .map(|tag| {
+            let label = model_tag_label(tag);
+            let display = if label.is_empty() {
+                (*tag).to_string()
+            } else {
+                label.to_string()
+            };
             Field::boolean(
-                tag,
+                display,
                 provider
                     .model_tags_for(model)
                     .iter()
@@ -113,7 +130,7 @@ pub(super) fn apply_web_search_tool_mode_field(
     );
 }
 
-/// 解析模型最大输出 token 字段（只校验，不修改配置）。
+/// 【模型配置】【最大输出校验】解析模型最大输出 token 字段（只校验，不修改配置）。
 ///
 /// 参数:
 /// - `value`: 表单输入的最大输出 token 数
@@ -124,11 +141,22 @@ pub(super) fn parse_max_output_tokens(value: &str) -> Result<Option<u32>> {
     let value = parse_context_chars(value)?;
     let value = value
         .map(|value| {
-            u32::try_from(value).map_err(|_| anyhow::anyhow!("max output tokens is too large"))
+            u32::try_from(value).map_err(|_| {
+                anyhow::anyhow!(
+                    "{}",
+                    t("max output tokens is too large", "最大输出 token 数过大")
+                )
+            })
         })
         .transpose()?;
     if value == Some(0) {
-        bail!("max output tokens must be greater than 0");
+        bail!(
+            "{}",
+            t(
+                "max output tokens must be greater than 0",
+                "最大输出 token 数必须大于 0"
+            )
+        );
     }
     Ok(value)
 }
@@ -144,7 +172,7 @@ pub(super) fn parse_context_chars_field(value: &str) -> Result<Option<usize>> {
     parse_context_chars(value)
 }
 
-/// 应用模型标签勾选字段。
+/// 【模型配置】【写入标签】按规范常量顺序写回勾选的模型标签，不依赖界面展示语言。
 ///
 /// 参数:
 /// - `provider`: Provider 配置
@@ -159,9 +187,9 @@ pub(super) fn apply_tag_fields(
     fields: &[Field],
 ) -> Result<()> {
     let mut tags = Vec::new();
-    for field in fields {
+    for (tag, field) in MODEL_TAGS.iter().zip(fields) {
         if parse_bool_field(&field.value)? {
-            tags.push(field.label.to_string());
+            tags.push((*tag).to_string());
         }
     }
     provider.set_model_tags_for(model, tags);
@@ -184,7 +212,7 @@ pub(super) fn thinking_level_fields(provider: &ProviderConfig, model: &str) -> V
         .iter()
         .map(|level| {
             Field::boolean(
-                level,
+                *level,
                 provider
                     .model_thinking_levels_for(model)
                     .iter()
@@ -209,9 +237,9 @@ pub(super) fn apply_thinking_level_fields(
     fields: &[Field],
 ) -> Result<()> {
     let mut levels = Vec::new();
-    for field in fields {
+    for (level, field) in crate::config::THINKING_LEVELS.iter().zip(fields) {
         if parse_bool_field(&field.value)? {
-            levels.push(field.label.to_string());
+            levels.push((*level).to_string());
         }
     }
     provider.set_model_thinking_levels_for(model, levels);

@@ -49,10 +49,9 @@ pub(super) fn run(
     let mut clicks = crate::config_tui::mouse::ClickTracker::default();
     loop {
         let (cols, rows) = terminal::size()?;
-        let lines = card::fit_height(
-            view::frame_interactive(&draft, context, hovered, usize::from(cols)),
-            usize::from(rows.saturating_sub(1).max(1)),
-        );
+        let full = view::frame_interactive(&draft, context, hovered, usize::from(cols));
+        let full_len = full.len();
+        let lines = card::fit_height(full, usize::from(rows.saturating_sub(1).max(1)));
         let shape = (cols, rows, lines.len());
         if geometry != Some(shape) {
             top = place(lines.len() as u16)?.anchor_y;
@@ -70,13 +69,21 @@ pub(super) fn run(
                 Some(&previous),
             )?;
             crate::config_tui::ui::end_synced_frame(&mut stdout)?;
-            hitbox = view::CardHitbox::compute(&draft, top, usize::from(cols), lines.len());
+            hitbox =
+                view::CardHitbox::compute(&draft, top, usize::from(cols), full_len, lines.len());
             previous = lines;
         }
         match crate::config_tui::input::read_event_with_timeout(Some(Duration::from_millis(100)))? {
             Some(crate::config_tui::input::ConfigEvent::Key(key)) => {
                 if let Some(outcome) = draft.handle_event(key) {
                     return Ok(outcome);
+                }
+            }
+            Some(crate::config_tui::input::ConfigEvent::Paste(text)) => {
+                if draft.input.is_some() {
+                    for ch in text.chars() {
+                        draft.edit_input(crossterm::event::KeyCode::Char(ch));
+                    }
                 }
             }
             Some(crate::config_tui::input::ConfigEvent::Mouse(mouse)) => {

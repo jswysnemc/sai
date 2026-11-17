@@ -1,3 +1,5 @@
+//! 消息渠道网关管理：缓存网关运行状态避免悬停重绘频繁查进程，并在启动网关落盘后同步主会话基线。
+
 use crate::config::AppConfig;
 use crate::gateways::manager::{
     gateway_runtime_statuses, start_gateway, stop_gateway, GatewayRuntimeStatus, ManagedGateway,
@@ -13,24 +15,40 @@ use super::form::{parse_bool_field, run_form, Field};
 use super::mouse::{ListMouseState, MenuInput};
 use super::ui::{draw_menu_interactive, message};
 
-/// 编辑渠道接入配置。
+/// 【渠道接入】【基线同步】网关进程启动并强制写盘后，同步刷新外层配置会话的已保存基线快照。
 ///
 /// 参数:
-/// - `stdout`: 终端输出
-/// - `config`: 应用配置
+/// - `config`: 已成功写入磁盘的内存配置
+/// - `baseline`: 主菜单持有的序列化基线快照
 ///
 /// 返回:
-/// - 编辑是否成功
+/// - 无
+pub(super) fn sync_saved_baseline(config: &AppConfig, baseline: &mut Option<String>) {
+    *baseline = serde_json::to_string(config).ok();
+}
+
+/// 【渠道接入】【管理菜单】展示并控制 QQ 与微信网关运行状态，缓存状态结果消除鼠标悬停卡顿。
+///
+/// 参数:
+/// - `stdout`: 终端输出流
+/// - `paths`: Sai 路径
+/// - `config`: 待修改的应用配置
+/// - `baseline`: 主菜单未保存检测基线快照
+///
+/// 返回:
+/// - 菜单交互结果
 pub(crate) fn edit_gateways(
     stdout: &mut io::Stdout,
     paths: &SaiPaths,
     config: &mut AppConfig,
+    baseline: &mut Option<String>,
 ) -> Result<()> {
     let mut selected = 0usize;
     let mut mouse = ListMouseState::default();
     let mut status_line = String::new();
+    // 1. 【渠道接入】【状态缓存】仅在进入、启停、修改配置或按 r 刷新时查询进程，鼠标移动重绘直接复用缓存
+    let mut statuses = load_gateway_statuses(paths, config)?;
     loop {
-        let statuses = load_gateway_statuses(paths, config)?;
         let options = vec![
             gateway_status_label(&statuses, ManagedGateway::Qq),
             gateway_status_label(&statuses, ManagedGateway::Weixin),
@@ -83,7 +101,7 @@ pub(crate) fn edit_gateways(
             "",
         )?;
         let code = match hitbox.read(&mut mouse, selected, false)? {
-            MenuInput::Redraw => continue,
+            MenuInput::Redraw | MenuInput::Paste(_) => continue,
             MenuInput::Select(index) | MenuInput::RightClick(index) => {
                 selected = index;
                 continue;
@@ -100,37 +118,61 @@ pub(crate) fn edit_gateways(
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
             KeyCode::Enter => match selected {
-                0 => toggle_gateway(paths, config, ManagedGateway::Qq, &mut status_line)?,
-                1 => toggle_gateway(paths, config, ManagedGateway::Weixin, &mut status_line)?,
-                2 => edit_qq_gateway(stdout, config)?,
-                3 => edit_weixin_gateway(stdout, config)?,
+                0 => {
+                    toggle_gateway(
+                        paths,
+                        config,
+                        ManagedGateway::Qq,
+                        &statuses,
+                        &mut status_line,
+                        baseline,
+                    )?;
+                    statuses = load_gateway_statuses(paths, config)?;
+                }
+                1 => {
+                    toggle_gateway(
+                        paths,
+                        config,
+                        ManagedGateway::Weixin,
+                        &statuses,
+                        &mut status_line,
+                        baseline,
+                    )?;
+                    statuses = load_gateway_statuses(paths, config)?;
+                }
+                2 => {
+                    edit_qq_gateway(stdout, config)?;
+                    statuses = load_gateway_statuses(paths, config)?;
+                }
+                3 => {
+                    edit_weixin_gateway(stdout, config)?;
+                    statuses = load_gateway_statuses(paths, config)?;
+                }
                 4 => return Ok(()),
                 _ => {}
             },
             KeyCode::Char('s') => {
                 if let Some(gateway) = selected_gateway(selected) {
-                    start_selected_gateway(paths, config, gateway, &mut status_line)?;
+                    start_selected_gateway(paths, config, gateway, &mut status_line, baseline)?;
+                    statuses = load_gateway_statuses(paths, config)?;
                 }
             }
             KeyCode::Char('x') => {
                 if let Some(gateway) = selected_gateway(selected) {
                     stop_selected_gateway(paths, config, gateway, &mut status_line)?;
+                    statuses = load_gateway_statuses(paths, config)?;
                 }
             }
-            KeyCode::Char('r') => status_line = t("refreshed", "已刷新").to_string(),
+            KeyCode::Char('r') => {
+                statuses = load_gateway_statuses(paths, config)?;
+                status_line = t("refreshed", "已刷新").to_string();
+            }
             _ => {}
         }
     }
 }
 
 /// 加载网关运行状态。
-///
-/// 参数:
-/// - `paths`: Sai 路径
-/// - `config`: 应用配置
-///
-/// 返回:
-/// - 网关运行状态列表
 fn load_gateway_statuses(
     paths: &SaiPaths,
     config: &AppConfig,
@@ -139,13 +181,6 @@ fn load_gateway_statuses(
 }
 
 /// 组装网关状态标签。
-///
-/// 参数:
-/// - `statuses`: 网关状态列表
-/// - `gateway`: 网关
-///
-/// 返回:
-/// - 菜单标签
 fn gateway_status_label(statuses: &[GatewayRuntimeStatus], gateway: ManagedGateway) -> String {
     let status = statuses
         .iter()
@@ -155,7 +190,6 @@ fn gateway_status_label(statuses: &[GatewayRuntimeStatus], gateway: ManagedGatew
         .as_ref()
         .map(|status| status.enabled)
         .unwrap_or(false);
-    // 运行状态映射为双语标签
     let runtime = match status.as_ref().map(|status| status.status.as_str()) {
         Some("running") => t("running", "运行中"),
         _ => t("stopped", "已停止"),
@@ -184,24 +218,10 @@ fn gateway_status_label(statuses: &[GatewayRuntimeStatus], gateway: ManagedGatew
     )
 }
 
-/// 返回短任务 ID。
-///
-/// 参数:
-/// - `task_id`: 后台任务 ID
-///
-/// 返回:
-/// - 短 ID
 fn short_task_id(task_id: &str) -> String {
     task_id.chars().take(18).collect()
 }
 
-/// 返回选中行对应网关。
-///
-/// 参数:
-/// - `selected`: 选中索引
-///
-/// 返回:
-/// - 可选网关
 fn selected_gateway(selected: usize) -> Option<ManagedGateway> {
     match selected {
         0 => Some(ManagedGateway::Qq),
@@ -210,23 +230,15 @@ fn selected_gateway(selected: usize) -> Option<ManagedGateway> {
     }
 }
 
-/// 根据当前状态启动或停止网关。
-///
-/// 参数:
-/// - `paths`: Sai 路径
-/// - `config`: 应用配置
-/// - `gateway`: 网关
-/// - `status_line`: 状态提示文本
-///
-/// 返回:
-/// - 操作是否成功
+/// 【渠道接入】【启停切换】依据已缓存状态决定启动或停止目标网关。
 fn toggle_gateway(
     paths: &SaiPaths,
     config: &AppConfig,
     gateway: ManagedGateway,
+    statuses: &[GatewayRuntimeStatus],
     status_line: &mut String,
+    baseline: &mut Option<String>,
 ) -> Result<()> {
-    let statuses = load_gateway_statuses(paths, config)?;
     let running = statuses
         .iter()
         .find(|status| status.gateway == gateway)
@@ -235,29 +247,18 @@ fn toggle_gateway(
     if running {
         stop_selected_gateway(paths, config, gateway, status_line)
     } else {
-        start_selected_gateway(paths, config, gateway, status_line)
+        start_selected_gateway(paths, config, gateway, status_line, baseline)
     }
 }
 
-/// 启动选中网关。
-///
-/// 参数:
-/// - `paths`: Sai 路径
-/// - `config`: 应用配置
-/// - `gateway`: 网关
-/// - `status_line`: 状态提示文本
-///
-/// 返回:
-/// - 操作是否成功
+/// 【渠道接入】【启动并同步基线】校验写盘后启动网关进程，并同步刷新主会话基线。
 fn start_selected_gateway(
     paths: &SaiPaths,
     config: &AppConfig,
     gateway: ManagedGateway,
     status_line: &mut String,
+    baseline: &mut Option<String>,
 ) -> Result<()> {
-    // 网关以独立进程启动、从磁盘读取配置，因此必须先落盘当前内存配置。
-    // 这与其它界面的「显式保存」模型不同，必须在状态行里说明，否则用户
-    // 退出时选「放弃更改」会误以为改动从未写入
     if let Err(error) = config.validate() {
         *status_line = format!(
             "{}: {error}",
@@ -266,6 +267,8 @@ fn start_selected_gateway(
         return Ok(());
     }
     config.save(paths)?;
+    // 1. 【渠道接入】【基线对齐】配置已真实落盘，同步刷新 baseline 消除主菜单虚假的“待保存”状态
+    sync_saved_baseline(config, baseline);
     block_on_runtime(start_gateway(paths, config, gateway))?;
     *status_line = format!(
         "{}: {} · {}",
@@ -277,15 +280,6 @@ fn start_selected_gateway(
 }
 
 /// 停止选中网关。
-///
-/// 参数:
-/// - `paths`: Sai 路径
-/// - `config`: 应用配置
-/// - `gateway`: 网关
-/// - `status_line`: 状态提示文本
-///
-/// 返回:
-/// - 操作是否成功
 fn stop_selected_gateway(
     paths: &SaiPaths,
     config: &AppConfig,
@@ -301,25 +295,10 @@ fn stop_selected_gateway(
     Ok(())
 }
 
-/// 在同步 TUI 中运行异步任务。
-///
-/// 参数:
-/// - `future`: 异步任务
-///
-/// 返回:
-/// - 异步任务结果
 fn block_on_runtime<F: Future>(future: F) -> F::Output {
     tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(future))
 }
 
-/// 编辑 QQ 官方机器人配置。
-///
-/// 参数:
-/// - `stdout`: 终端输出
-/// - `config`: 应用配置
-///
-/// 返回:
-/// - 编辑是否成功
 fn edit_qq_gateway(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
     let qq = &config.gateways.qq;
     let mut fields = vec![
@@ -355,7 +334,6 @@ fn edit_qq_gateway(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()
         )? {
             return Ok(());
         }
-        // 解析失败时就地提示并重新打开表单，不让非法输入终止 TUI
         let enabled = match parse_bool_field(&fields[0].value) {
             Ok(enabled) => enabled,
             Err(err) => {
@@ -377,14 +355,6 @@ fn edit_qq_gateway(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()
     }
 }
 
-/// 编辑微信 iLink 机器人配置。
-///
-/// 参数:
-/// - `stdout`: 终端输出
-/// - `config`: 应用配置
-///
-/// 返回:
-/// - 编辑是否成功
 fn edit_weixin_gateway(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
     let weixin = &config.gateways.weixin;
     let mut fields = vec![
@@ -413,7 +383,6 @@ fn edit_weixin_gateway(stdout: &mut io::Stdout, config: &mut AppConfig) -> Resul
         )? {
             return Ok(());
         }
-        // 解析失败时就地提示并重新打开表单，不让非法输入终止 TUI
         let enabled = match parse_bool_field(&fields[0].value) {
             Ok(enabled) => enabled,
             Err(err) => {
@@ -432,5 +401,22 @@ fn edit_weixin_gateway(stdout: &mut io::Stdout, config: &mut AppConfig) -> Resul
         config.gateways.weixin.account = fields[5].value.trim().to_string();
         config.gateways.weixin.bot_agent = fields[6].value.trim().to_string();
         return Ok(());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 【渠道接入】【基线同步测试】验证网关保存配置后同步更新基线快照，消除主菜单脏标记残留。
+    #[test]
+    fn gateway_save_syncs_session_baseline() {
+        let mut config = AppConfig::default();
+        let mut baseline = serde_json::to_string(&config).ok();
+        config.gateways.qq.enabled = true;
+        assert_ne!(serde_json::to_string(&config).ok(), baseline);
+
+        sync_saved_baseline(&config, &mut baseline);
+        assert_eq!(serde_json::to_string(&config).ok(), baseline);
     }
 }

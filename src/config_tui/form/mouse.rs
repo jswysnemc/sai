@@ -24,6 +24,7 @@ pub(super) enum FormClick {
 pub(super) enum FormEventStep {
     Redraw,
     Key(KeyEvent),
+    Paste(String),
     Finish(bool),
 }
 
@@ -55,7 +56,16 @@ pub(super) fn form_hover_target(
         .filter(|index| !fields[*index].section)
 }
 
-/// 识别表单左键单击命中目标（包含字段行、底部按钮与底栏快捷键）。
+/// 【配置表单】【点击探测】识别表单左键单击命中目标（包含字段行、底部按钮与底栏快捷键）。
+///
+/// 参数:
+/// - `fields`: 表单字段切片
+/// - `hitbox`: 当前帧命中几何
+/// - `column`: 终端列坐标
+/// - `row`: 终端行坐标
+///
+/// 返回:
+/// - 命中的表单目标区域
 fn form_click_target(
     fields: &[Field],
     hitbox: &FormHitbox,
@@ -79,6 +89,21 @@ fn form_click_target(
 }
 
 /// 【配置表单】【防闪等待】鼠标同格微移时不触发重绘，直到悬停改变或触发实操作。
+///
+/// 参数:
+/// - `stdout`: 终端输出
+/// - `fields`: 表单字段可变切片
+/// - `selected`: 当前焦点下标
+/// - `hovered`: 当前悬停下标
+/// - `footer_hover`: 底栏悬停矩形
+/// - `editing`: 行内编辑状态
+/// - `fcitx`: 输入法守卫
+/// - `clicks`: 点击追踪器
+/// - `cursors`: 字段光标数组
+/// - `hitbox`: 本帧热区集合
+///
+/// 返回:
+/// - 下一步事件处理指令
 #[allow(clippy::too_many_arguments)]
 pub(super) fn wait_form_non_hover_key(
     stdout: &mut io::Stdout,
@@ -96,6 +121,7 @@ pub(super) fn wait_form_non_hover_key(
         match read_event()? {
             ConfigEvent::Resize => return Ok(FormEventStep::Redraw),
             ConfigEvent::Key(key) => return Ok(FormEventStep::Key(key)),
+            ConfigEvent::Paste(text) => return Ok(FormEventStep::Paste(text)),
             ConfigEvent::Mouse(mouse) => {
                 if matches!(mouse.kind, MouseEventKind::Moved) {
                     let next = form_hover_target(fields, hitbox, mouse.column, mouse.row);
@@ -116,6 +142,20 @@ pub(super) fn wait_form_non_hover_key(
 }
 
 /// 【配置表单】【点击与滚轮】响应字段焦点、行内开关/枚举轮换以及保存/取消按钮点击。
+///
+/// 参数:
+/// - `stdout`: 终端输出
+/// - `mouse`: 鼠标事件
+/// - `fields`: 表单字段切片
+/// - `hitbox`: 当前帧命中几何
+/// - `selected`: 当前选中下标
+/// - `editing`: 行内编辑标志
+/// - `fcitx`: 输入法状态
+/// - `clicks`: 单击追踪器
+/// - `cursors`: 字符游标切片
+///
+/// 返回:
+/// - 鼠标操作转换后的下一步状态
 #[allow(clippy::too_many_arguments)]
 pub(super) fn apply_form_mouse(
     stdout: &mut io::Stdout,
@@ -164,6 +204,9 @@ pub(super) fn apply_form_mouse(
             }
             let was_selected = *selected == index;
             *selected = index;
+            if fields[index].readonly {
+                return Ok(FormEventStep::Redraw);
+            }
             if fields[index].boolean {
                 let value = parse_bool_field(&fields[index].value)?;
                 fields[index].value = (!value).to_string();
@@ -174,7 +217,7 @@ pub(super) fn apply_form_mouse(
                 } else {
                     fields[index].value = select_choice(
                         stdout,
-                        fields[index].label,
+                        &fields[index].label,
                         &fields[index].value,
                         &fields[index].choices,
                         fields[index].empty_choice_label,

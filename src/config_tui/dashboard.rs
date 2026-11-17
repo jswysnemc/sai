@@ -1,6 +1,6 @@
 //! `/config` 主控制台面板：扁平化导航、顶栏状态胶囊与单键快捷切换。
 
-use super::theme::{pill, save_state_pill, ACCENT, BRAND, DIM, MUTED, OK, PILL_BG, RESET};
+use super::theme::{pill, save_state_pill, ThemePalette, RESET};
 use crate::config::{AppConfig, DefaultPermissionMode};
 use crate::i18n::text as t;
 
@@ -36,18 +36,22 @@ pub(super) struct MainItem {
 /// 返回:
 /// - 带样式的顶栏摘要字符串
 pub(super) fn header_subtitle(config: &AppConfig, dirty: bool, notice: Option<&str>) -> String {
+    let palette = ThemePalette::current();
     let active = active_model_label(config);
     let mode = config.permission.tui_mode().as_str();
     let save_pill = save_state_pill(dirty);
     let mut parts = vec![
-        format!("{BRAND}◆{RESET} {ACCENT}{active}{RESET}"),
-        pill(&format!("TUI: {mode}"), MUTED, PILL_BG),
+        format!(
+            "{}◆{RESET} {}{active}{RESET}",
+            palette.brand, palette.accent
+        ),
+        pill(&format!("TUI: {mode}"), palette.muted, palette.pill_bg),
         save_pill,
     ];
     if let Some(note) = notice.filter(|text| !text.is_empty()) {
-        parts.push(pill(note, OK, PILL_BG));
+        parts.push(pill(note, palette.ok, palette.pill_bg));
     }
-    parts.join(&format!(" {DIM}·{RESET} "))
+    parts.join(&format!(" {}·{RESET} ", palette.dim))
 }
 
 /// 【配置界面】【导航构造】构造扁平主菜单及右侧即时参数预览。

@@ -1,3 +1,5 @@
+//! Jev 与生图模型独立接入管理菜单。
+
 mod editor;
 mod operations;
 mod probe;
@@ -15,7 +17,14 @@ use crossterm::event::KeyCode;
 use std::io;
 
 /// 【模型接入】【列表管理】管理 Jev 与生图接入，修改保留在配置会话中。
-/// 参数: stdout 为终端，config 为会话草稿，kind 为接入类型；返回: 菜单结果
+///
+/// 参数:
+/// - `stdout`: 终端输出流
+/// - `config`: 会话草稿配置
+/// - `kind`: 接入类型
+///
+/// 返回:
+/// - 菜单交互执行结果
 pub(super) fn run(
     stdout: &mut io::Stdout,
     config: &mut AppConfig,
@@ -56,11 +65,17 @@ pub(super) fn run(
                 )
             })
             .collect::<Vec<_>>();
-        details.push(t("Configure an independent endpoint, model and credentials. * marks the current default.", "配置独立请求地址、模型与密钥。* 表示当前默认接入。").into());
+        details.push(
+            t(
+                "Configure an independent endpoint, model and credentials. * marks the current default.",
+                "配置独立请求地址、模型与密钥。* 表示当前默认接入。",
+            )
+            .into(),
+        );
         let hitbox = draw_menu_interactive(
             stdout,
             if kind == ModelEndpointKind::Jev {
-                " JEV "
+                t(" JEV CONNECTIONS ", " JEV 接入 ")
             } else {
                 t(" IMAGE MODELS ", " 生图模型 ")
             },
@@ -69,6 +84,7 @@ pub(super) fn run(
             selected,
             &mouse,
             &super::theme::help_line(&[
+                ("j/k", t("move", "移动")),
                 ("Enter", t("edit", "编辑")),
                 ("a", t("add", "新增")),
                 ("d", t("delete", "删除")),
@@ -78,7 +94,7 @@ pub(super) fn run(
             "",
         )?;
         let code = match hitbox.read(&mut mouse, selected, false)? {
-            MenuInput::Redraw => continue,
+            MenuInput::Redraw | MenuInput::Paste(_) => continue,
             MenuInput::Select(index) => {
                 selected = index;
                 continue;
@@ -96,8 +112,8 @@ pub(super) fn run(
         };
         match code {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
-            KeyCode::Up => selected = selected.saturating_sub(1),
-            KeyCode::Down => selected = (selected + 1).min(endpoints.len()),
+            KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
+            KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(endpoints.len()),
             KeyCode::Char(' ') if selected < endpoints.len() => {
                 operations::activate(config, &endpoints[selected].id)
             }
@@ -136,13 +152,19 @@ pub(super) fn run(
 }
 
 /// 【模型接入】【分类入口】选择接入类型或进入 Jev 功能设置。
-/// 参数: stdout 为终端，config 为草稿；返回: 菜单结果
+///
+/// 参数:
+/// - `stdout`: 终端输出流
+/// - `config`: 会话草稿配置
+///
+/// 返回:
+/// - 菜单交互结果
 pub(super) fn menu(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
     let mut selected = 0usize;
     let mut mouse = ListMouseState::default();
     loop {
         let options = [
-            "1  Jev".into(),
+            t("1  Jev", "1  Jev 接入").into(),
             t("2  Image models", "2  生图模型").into(),
             t("3  Jev routing and audit", "3  Jev 路由与审核").into(),
         ];
@@ -155,13 +177,14 @@ pub(super) fn menu(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()
             &mouse,
             &super::theme::help_line(&[
                 ("1-3", t("jump", "跳转")),
+                ("j/k", t("move", "移动")),
                 ("Enter", t("open", "打开")),
                 ("q", t("back", "返回")),
             ]),
             "",
         )?;
         let code = match hitbox.read(&mut mouse, selected, false)? {
-            MenuInput::Redraw => continue,
+            MenuInput::Redraw | MenuInput::Paste(_) => continue,
             MenuInput::Select(index) | MenuInput::RightClick(index) => {
                 selected = index;
                 continue;
@@ -175,8 +198,8 @@ pub(super) fn menu(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()
         };
         match code {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
-            KeyCode::Up => selected = selected.saturating_sub(1),
-            KeyCode::Down => selected = (selected + 1).min(2),
+            KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
+            KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(2),
             KeyCode::Char(digit @ '1'..='3') => selected = digit as usize - '1' as usize,
             KeyCode::Enter => match selected {
                 0 => run(stdout, config, ModelEndpointKind::Jev)?,
@@ -189,7 +212,13 @@ pub(super) fn menu(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()
 }
 
 /// 【Jev接入】【统一编辑】编辑生效接入并保留多密钥、模型目录等已有配置。
-/// 参数: stdout 为终端，config 为草稿；返回: 编辑结果
+///
+/// 参数:
+/// - `stdout`: 终端输出流
+/// - `config`: 会话草稿配置
+///
+/// 返回:
+/// - 编辑执行结果
 pub(super) fn edit_active_jev(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
     let current = config
         .jev_endpoint()?
@@ -197,7 +226,10 @@ pub(super) fn edit_active_jev(stdout: &mut io::Stdout, config: &mut AppConfig) -
         .unwrap_or_else(|| operations::new_endpoint(config, ModelEndpointKind::Jev));
     if let Some(item) = editor::edit(stdout, current)? {
         let id = item.id.clone();
-        operations::save(config, item)?;
+        if let Err(error) = operations::save(config, item) {
+            message(stdout, &error.to_string())?;
+            return Ok(());
+        }
         operations::activate(config, &id);
     }
     Ok(())

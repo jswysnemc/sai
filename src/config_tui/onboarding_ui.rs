@@ -1,7 +1,7 @@
 //! 首次引导界面的视觉标签、卡片摘要与流程精简辅助。
 
 use super::form::Field;
-use super::theme::{help_line, pill, ACCENT, BRAND, DIM, OK, PILL_BG, RESET, WARN};
+use super::theme::{help_line, pill, ThemePalette, RESET};
 use crate::config::{ModelMetadata, ProviderConfig};
 use crate::i18n::text as t;
 use crate::paths::SaiPaths;
@@ -56,19 +56,22 @@ pub(super) fn step_subtitle(
     notice: Option<&str>,
     ok_notice: bool,
 ) -> String {
+    let palette = ThemePalette::current();
     let step_label = format!("{} {step}/{total}", t("Step", "步骤"));
     let mut parts = vec![format!(
-        "{} {BRAND}◆{RESET} {ACCENT}{stage}{RESET}",
-        pill(&step_label, BRAND, PILL_BG)
+        "{} {}◆{RESET} {}{stage}{RESET}",
+        pill(&step_label, palette.brand, palette.pill_bg),
+        palette.brand,
+        palette.accent,
     )];
     if let Some(note) = notice.filter(|text| !text.trim().is_empty()) {
-        let color = if ok_notice { OK } else { WARN };
-        parts.push(pill(note, color, PILL_BG));
+        let color = if ok_notice { palette.ok } else { palette.warn };
+        parts.push(pill(note, color, palette.pill_bg));
     }
-    parts.join(&format!(" {DIM}·{RESET} "))
+    parts.join(&format!(" {}·{RESET} ", palette.dim))
 }
 
-/// 【首次配置】【供应商卡片】构造左侧选项标签与右侧详情说明卡片。
+/// 【首次配置】【供应商卡片】构造左侧选项标签与右侧详情说明卡片，文案对齐单击选中、再次点击确认机制。
 ///
 /// 参数:
 /// - `provider`: 候选供应商配置
@@ -112,18 +115,19 @@ pub(super) fn provider_menu_entry(
     } else {
         provider.default_model.clone()
     };
+    // 1. 【首次配置】【提示统一】说明文案对齐真实的“单击选中、再次点击已选中项确认”交互，消除“双击”误导
     let actions = match kind {
         QuickStartKind::BuiltInFree => t(
-            "Enter / Double-click: Start immediately\nm: Choose model   e: Edit endpoint",
-            "Enter / 双击: 立即开始对话\nm: 选择模型   e: 编辑接入信息",
+            "Enter / Click selected: Start immediately\nm: Choose model   e: Edit endpoint",
+            "Enter / 点击已选中项: 立即开始对话\nm: 选择模型   e: 编辑接入信息",
         ),
         QuickStartKind::EnvReady => t(
-            "Space / s: Quick start with default model\nEnter / Double-click: Edit key or pick model",
-            "Space / s: 使用默认模型一键启动\nEnter / 双击: 修改凭据或挑选模型",
+            "Space / s: Quick start with default model\nEnter / Click selected: Edit key or pick model",
+            "Space / s: 使用默认模型一键启动\nEnter / 点击已选中项: 修改凭据或挑选模型",
         ),
         QuickStartKind::NeedsInput => t(
-            "Enter / Double-click: Enter key & pick model",
-            "Enter / 双击: 填写密钥并选择模型",
+            "Enter / Click selected: Enter key & pick model",
+            "Enter / 点击已选中项: 填写密钥并选择模型",
         ),
     };
     let detail = format!(
@@ -150,20 +154,14 @@ pub(super) fn custom_provider_entry() -> (String, String) {
         ),
         t("Protocols", "支持协议"),
         t(
-            "Enter / Double-click: Fill URL, key and model",
-            "Enter / 双击: 填写地址、密钥和模型",
+            "Enter / Click selected: Fill URL, key and model",
+            "Enter / 点击已选中项: 填写地址、密钥和模型",
         ),
     );
     (label, detail)
 }
 
 /// 【首次配置】【底栏操作】根据当前高亮项生成可点击的快捷键提示栏。
-///
-/// 参数:
-/// - `kind`: 当前高亮预设的就绪分类；自定义项传入 None
-///
-/// 返回:
-/// - 带颜色分段的底栏文案
 pub(super) fn provider_footer(kind: Option<&QuickStartKind>) -> String {
     match kind {
         Some(QuickStartKind::BuiltInFree) => help_line(&[
@@ -188,13 +186,6 @@ pub(super) fn provider_footer(kind: Option<&QuickStartKind>) -> String {
 }
 
 /// 【首次配置】【表单字段】按供应商类型排序字段，使预设模板打开后直接聚焦密钥输入框。
-///
-/// 参数:
-/// - `provider`: 模板或自定义基础配置
-/// - `existing`: 是否为内置模板
-///
-/// 返回:
-/// - 带分组标题的表单字段集合
 pub(super) fn provider_form_fields(provider: &ProviderConfig, existing: bool) -> Vec<Field> {
     let key_first = existing && !provider.is_opencode_zen();
     let name_field = Field::new(
@@ -215,7 +206,6 @@ pub(super) fn provider_form_fields(provider: &ProviderConfig, existing: bool) ->
     .secret();
 
     if key_first {
-        // 1. 预设模板已填好名称与地址，把凭据放在首屏焦点减少无意义翻行
         vec![
             Field::section(t("Credentials", "接入凭据")),
             key_field,
@@ -237,13 +227,6 @@ pub(super) fn provider_form_fields(provider: &ProviderConfig, existing: bool) ->
 }
 
 /// 【首次配置】【字段解析】从分组表单提取供应商名称、地址、协议与密钥。
-///
-/// 参数:
-/// - `fields`: 表单提交后的字段切片
-/// - `existing`: 是否使用预设键优先布局
-///
-/// 返回:
-/// - `(name, normalized_base_url, protocol, raw_api_key)`
 pub(super) fn extract_provider_form(
     fields: &[Field],
     existing: bool,
@@ -277,14 +260,6 @@ pub(super) fn extract_provider_form(
 }
 
 /// 【首次配置】【模型卡片】生成模型列表行标题与右侧元数据详情卡片。
-///
-/// 参数:
-/// - `model`: 模型标识
-/// - `provider`: 供应商配置
-/// - `status`: 目录拉取状态摘要
-///
-/// 返回:
-/// - `(列表显示标签, 右侧详情文本)`
 pub(super) fn model_menu_entry(
     model: &str,
     provider: &ProviderConfig,
@@ -310,8 +285,8 @@ pub(super) fn model_menu_entry(
     detail_lines.push(String::new());
     detail_lines.push(
         t(
-            "Enter / Double-click: Confirm & start chatting\nm: Custom ID   f: Refresh catalog",
-            "Enter / 双击: 确认并开始对话\nm: 手动填写模型   f: 刷新目录",
+            "Enter / Click selected: Confirm & start chatting\n/: Search   m: Custom ID   f: Refresh catalog",
+            "Enter / 点击已选中项: 确认并开始对话\n/: 搜索过滤   m: 手动填写模型   f: 刷新目录",
         )
         .to_string(),
     );
@@ -357,10 +332,11 @@ fn is_local_endpoint(url: &str) -> bool {
     lower.contains("localhost") || lower.contains("127.0.0.1")
 }
 
-/// 【首次配置】【模型引导】生成模型步底栏与状态摘要。
+/// 【首次配置】【模型引导底栏】生成含 `/` 关键字检索入口的模型步底栏提示。
 pub(super) fn model_footer(can_confirm: bool) -> String {
     if can_confirm {
         help_line(&[
+            ("/", t("search", "搜索")),
             ("↑↓", t("move", "移动")),
             ("Enter", t("confirm", "确认")),
             ("m", t("custom", "自定义")),
@@ -369,6 +345,7 @@ pub(super) fn model_footer(can_confirm: bool) -> String {
         ])
     } else {
         help_line(&[
+            ("/", t("search", "搜索")),
             ("Enter", t("custom", "自定义")),
             ("f", t("refresh", "刷新")),
             ("Esc", t("back", "返回")),
@@ -404,7 +381,6 @@ mod tests {
         }
     }
 
-    /// 【首次配置测试】【快速分类】内置免费供应商归为免密即用，缺失环境变量则提示录入。
     #[test]
     fn quick_start_classifies_free_env_and_manual_providers() {
         let temp = tempfile::tempdir().unwrap();
@@ -433,7 +409,6 @@ mod tests {
         );
     }
 
-    /// 【首次配置测试】【字段排序】预设模板首屏聚焦凭据输入框，提取结果与端点信息一致。
     #[test]
     fn preset_form_puts_credentials_first_and_normalizes_endpoint() {
         let mut preset = ProviderConfig::default_openai();
@@ -456,7 +431,7 @@ mod tests {
         assert!(custom_fields[5].secret);
     }
 
-    /// 【首次配置测试】【卡片格式】验证步骤胶囊与模型详情卡包含容量与快捷键提示。
+    /// 【首次配置测试】【卡片格式与点击文案】验证模型卡片包含搜索入口且不再出现“双击”误导字样。
     #[test]
     fn step_header_and_model_card_format_cleanly() {
         let subtitle = step_subtitle(1, 2, "Choose provider", Some("1 ready"), true);
@@ -481,5 +456,10 @@ mod tests {
         assert!(detail.contains("128k ctx"));
         assert!(detail.contains("16k out"));
         assert!(detail.contains("low/high"));
+        assert!(!detail.contains("Double-click") && !detail.contains("双击"));
+
+        let (_, prov_detail) = provider_menu_entry(&provider, &QuickStartKind::BuiltInFree);
+        assert!(!prov_detail.contains("Double-click") && !prov_detail.contains("双击"));
+        assert!(super::super::ui::strip_ansi_plain(&model_footer(true)).contains('/'));
     }
 }

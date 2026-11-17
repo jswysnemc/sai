@@ -13,6 +13,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// 本进程在当前屏幕上压入的键盘增强层数。
 static PUSHED: AtomicUsize = AtomicUsize::new(0);
+/// 备用屏嵌套引用计数，防止内层面板退出时发送 `?1049l` 击穿外层全屏会话。
+static ALT_DEPTH: AtomicUsize = AtomicUsize::new(0);
 
 /// 本进程压入键盘增强协议时使用的标志。
 pub(super) const ENHANCEMENT_FLAGS: KeyboardEnhancementFlags =
@@ -116,26 +118,37 @@ fn write_screen_switch<W: Write>(writer: &mut W, enter: bool) -> io::Result<()> 
     }
 }
 
-/// 进入备用屏，键盘增强层随之迁移。
-///
-/// 参数:
-/// - `writer`: 终端输出
-///
-/// 返回:
-/// - 写出结果
+/// 【终端】【备用屏进入】进入备用屏并维护嵌套深度，仅从主屏首次进入时切换缓冲区并迁移键盘增强层。
+/// 参数: writer 为终端输出；返回: 写出结果。
 pub(crate) fn enter_alternate_screen<W: Write>(writer: &mut W) -> io::Result<()> {
-    switch_screen(writer, true)
+    let previous = ALT_DEPTH.fetch_add(1, Ordering::SeqCst);
+    if previous == 0 {
+        switch_screen(writer, true)
+    } else {
+        writer.flush()
+    }
 }
 
-/// 回到主屏，键盘增强层随之迁移。
-///
-/// 参数:
-/// - `writer`: 终端输出
-///
-/// 返回:
-/// - 写出结果
+/// 【终端】【备用屏退出】递减嵌套深度，仅最外层备用屏持有者退出时真正切回主屏。
+/// 参数: writer 为终端输出；返回: 写出结果。
 pub(crate) fn leave_alternate_screen<W: Write>(writer: &mut W) -> io::Result<()> {
-    switch_screen(writer, false)
+    let prev = ALT_DEPTH
+        .try_update(Ordering::SeqCst, Ordering::SeqCst, |depth| {
+            Some(depth.saturating_sub(1))
+        })
+        .unwrap_or(0);
+    if prev <= 1 {
+        switch_screen(writer, false)
+    } else {
+        writer.flush()
+    }
+}
+
+/// 【终端】【备用屏查询】判断当前是否已处于受管备用屏内。
+/// 参数: 无；返回: 嵌套深度大于零时返回 true。
+#[cfg(test)]
+pub(crate) fn in_alternate_screen() -> bool {
+    ALT_DEPTH.load(Ordering::SeqCst) > 0
 }
 
 /// 【终端】【退出兜底】弹掉本进程仍压着的全部键盘增强层。
@@ -160,6 +173,7 @@ pub(super) fn pop_all_enhancement<W: Write>(writer: &mut W) -> io::Result<()> {
 /// 返回:
 /// - `CSI < n u`；没有压栈时为空
 pub(super) fn take_pop_all_sequence() -> String {
+    ALT_DEPTH.store(0, Ordering::SeqCst);
     pop_sequence(PUSHED.swap(0, Ordering::SeqCst))
 }
 
@@ -226,6 +240,7 @@ mod tests {
     fn screen_switches_keep_both_stacks_balanced() {
         let _guard = LOCK.lock().unwrap();
         PUSHED.store(0, Ordering::SeqCst);
+        ALT_DEPTH.store(0, Ordering::SeqCst);
         let mut output = Vec::new();
         // 主屏压栈 → 进全屏 → 在备用屏出栈再压栈（下一轮输入） → 回主屏 → 出栈
         push_enhancement(&mut output).unwrap();
@@ -240,11 +255,34 @@ mod tests {
         assert_eq!(pushed_layers(), 0);
     }
 
+    /// 【终端测试】【嵌套备用屏】内层子面板离开备用屏时保持外层备用屏不被击穿。
+    /// 参数: 无；返回: 无。
+    #[test]
+    fn nested_alternate_screen_does_not_drop_back_to_main_prematurely() {
+        let _guard = LOCK.lock().unwrap();
+        PUSHED.store(0, Ordering::SeqCst);
+        ALT_DEPTH.store(0, Ordering::SeqCst);
+        let mut output = Vec::new();
+        enter_alternate_screen(&mut output).unwrap();
+        enter_alternate_screen(&mut output).unwrap();
+        leave_alternate_screen(&mut output).unwrap();
+        let mut stacks = KittyStacks::default();
+        stacks.feed(&output);
+        assert!(stacks.alternate, "inner leave must stay in alternate screen");
+        assert!(in_alternate_screen());
+        leave_alternate_screen(&mut output).unwrap();
+        let mut final_stacks = KittyStacks::default();
+        final_stacks.feed(&output);
+        assert!(!final_stacks.alternate);
+        assert!(!in_alternate_screen());
+    }
+
     /// 验证在备用屏里退出时，兜底出栈清掉备用屏的层，主屏也不残留。
     #[test]
     fn exiting_inside_the_alternate_screen_leaves_no_layers() {
         let _guard = LOCK.lock().unwrap();
         PUSHED.store(0, Ordering::SeqCst);
+        ALT_DEPTH.store(0, Ordering::SeqCst);
         let mut output = Vec::new();
         push_enhancement(&mut output).unwrap();
         enter_alternate_screen(&mut output).unwrap();

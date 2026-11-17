@@ -55,25 +55,24 @@ pub(crate) fn content_frame(cols: u16, rows: u16, content_rows: u16, max_width: 
     }
 }
 
-/// 表单主栏与右侧字段说明的宽度。
-///
-/// 值列是表单主体：URL、密钥、JSON 都在这里读和改。
-/// 说明栏只是辅助，宽度封顶；空间不够时整栏收起，绝不挤占输入列。
+/// 【配置布局】【表单分栏】计算表单主栏与右侧字段说明栏宽度，窄屏自动收起右侧栏以保障中文标签完整显示。
 ///
 /// 参数:
 /// - `inner_w`: 去掉左右边框后的内容宽度
 ///
 /// 返回:
-/// - `(表单栏宽, 说明栏宽)`；过窄时说明栏为 0
+/// - `(表单栏宽, 说明栏宽)`；窄终端（如 80 列）下说明栏自动置 0
 pub(crate) fn form_column_widths(inner_w: u16) -> (u16, u16) {
     const GAP: u16 = 2;
-    const MIN_FORM: u16 = 48;
+    const MIN_FORM: u16 = 62;
     const MIN_HELP: u16 = 22;
     const MAX_HELP: u16 = 34;
 
+    // 1. 【配置布局】【窄屏让位】终端列数低于约 92 列（inner_w < 86）时收起右侧栏，释放主栏空间
     if inner_w < MIN_FORM.saturating_add(GAP).saturating_add(MIN_HELP) {
         return (inner_w, 0);
     }
+    // 2. 【配置布局】【宽屏双栏】宽终端保留右侧常驻说明栏并限制其上限，避免挤压输入值列
     let help = (inner_w / 4).clamp(MIN_HELP, MAX_HELP);
     let form = inner_w.saturating_sub(help).saturating_sub(GAP);
     if form < MIN_FORM {
@@ -285,5 +284,17 @@ mod tests {
         let label = form_label_width(40, 48);
         assert!(label <= 12, "label={label}");
         assert!(48 - 4 - label >= 32);
+    }
+
+    /// 【配置布局】【80列窄屏测试】验证 80 列标准终端收起右侧说明栏，使中文标签宽度达到 24 列以上。
+    #[test]
+    fn eighty_column_terminal_expands_chinese_form_labels() {
+        let frame = full_frame(80, 24);
+        let inner_w = frame.width.saturating_sub(4);
+        let (left_w, right_w) = form_column_widths(inner_w);
+        assert_eq!(right_w, 0);
+        assert_eq!(left_w, inner_w);
+        let label_col = form_label_width(26, left_w as usize);
+        assert!(label_col >= 24, "label_col={label_col}");
     }
 }

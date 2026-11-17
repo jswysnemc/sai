@@ -130,6 +130,14 @@ fn edit(
                 }
                 redraw = true;
             }
+            Some(super::input::ConfigEvent::Paste(text)) => {
+                if draft.input.is_some() {
+                    for ch in text.chars() {
+                        draft.edit_input(crossterm::event::KeyCode::Char(ch));
+                    }
+                    redraw = true;
+                }
+            }
             Some(super::input::ConfigEvent::Resize) => {
                 size = terminal::size()?;
                 redraw = true;

@@ -2,42 +2,44 @@ use super::*;
 
 /// 工具清单的三个状态：隐藏、启用、延迟 load。
 fn tool_states() -> [StateStyle; 3] {
+    let palette = crate::config_tui::theme::ThemePalette::current();
     [
         StateStyle {
             mark: "○",
             label: t("hidden", "隐藏"),
-            color: DIM,
+            color: palette.dim,
         },
         StateStyle {
             mark: "●",
             label: t("enabled", "启用"),
-            color: OK,
+            color: palette.ok,
         },
         StateStyle {
             mark: "◐",
             label: t("deferred", "延迟"),
-            color: VALUE,
+            color: palette.value,
         },
     ]
 }
 
 /// Skills 清单的三个状态：不暴露、完整、仅名称。
 fn skill_states() -> [StateStyle; 3] {
+    let palette = crate::config_tui::theme::ThemePalette::current();
     [
         StateStyle {
             mark: "○",
             label: t("off", "不暴露"),
-            color: DIM,
+            color: palette.dim,
         },
         StateStyle {
             mark: "●",
             label: t("full", "完整"),
-            color: OK,
+            color: palette.ok,
         },
         StateStyle {
             mark: "◐",
             label: t("name only", "仅名称"),
-            color: VALUE,
+            color: palette.value,
         },
     ]
 }

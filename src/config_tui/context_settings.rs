@@ -57,17 +57,17 @@ pub(super) fn edit_context_settings(stdout: &mut io::Stdout, config: &mut AppCon
             return Ok(());
         }
         // 解析失败时就地提示并重新打开表单，不让非法输入终止 TUI
-        let default_max_chars = match parse_number_field::<usize>(fields[1].label, &fields[1].value)
-        {
-            Ok(value) => value,
-            Err(err) => {
-                message(
-                    stdout,
-                    &format!("{}: {err}", t("Invalid input", "输入无效")),
-                )?;
-                continue;
-            }
-        };
+        let default_max_chars =
+            match parse_number_field::<usize>(&fields[1].label, &fields[1].value) {
+                Ok(value) => value,
+                Err(err) => {
+                    message(
+                        stdout,
+                        &format!("{}: {err}", t("Invalid input", "输入无效")),
+                    )?;
+                    continue;
+                }
+            };
         let experimental = parse_bool_field(&fields[4].value)?;
         config.context.experimental_context_blocks = experimental;
         config.terminal.shell = fields[0].value.trim().to_string();

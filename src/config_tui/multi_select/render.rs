@@ -1,26 +1,34 @@
-//! 【配置界面】【多选清单绘制】绘制多态选择列表、状态图标、右侧详情与底栏操作热区。
+//! 【配置界面】【多选清单绘制】绘制多态选择列表、连续整行底色、右侧详情及搜索真实光标。
 
 use super::{HeaderToggle, Row, SelectEntry, StateStyle};
 use crate::config_tui::layout::{full_frame, master_detail_widths, scroll_start};
 use crate::config_tui::mouse::{HitRect, ListHitbox};
-use crate::config_tui::theme::{help_line, row_marks, ACCENT, BOLD, BRAND, DIM, MUTED, OK, RESET};
+use crate::config_tui::search::{split_at_char, SEARCH_CURSOR_MARK};
+use crate::config_tui::theme::{help_line, row_marks, tint_bg, ThemePalette, BOLD, RESET};
 use crate::config_tui::ui::{
-    draw_box, draw_scroll_indicator, draw_status_bar_interactive, draw_wrapped_detail, pad,
-    status_bar_hits, truncate, MenuHitbox,
+    begin_synced_frame, display_width, draw_box, draw_scroll_indicator,
+    draw_status_bar_with_cursor, draw_wrapped_detail, end_synced_frame, pad, status_bar_hits,
+    truncate, MenuHitbox,
 };
 use crate::i18n::text as t;
 use anyhow::Result;
-use crossterm::cursor::MoveTo;
+use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::queue;
 use crossterm::style::Print;
 use crossterm::terminal::{self, Clear, ClearType};
 use std::io;
 
-/// 统计各状态条目数量，组装副标题（如 `● 启用 12 · ◐ 延迟 5 · 共 58`）。
+/// 【多态清单】【状态统计】统计各状态条目数量，组装副标题（如 `● 启用 12 · ◐ 延迟 5 · 共 58`）。
+///
+/// 参数:
+/// - `states`: 状态样式数组
+/// - `entries`: 清单条目切片
+///
+/// 返回:
+/// - 汇总字符串
 pub(super) fn state_summary(states: &[StateStyle], entries: &[SelectEntry]) -> String {
     let mut parts = Vec::new();
     for (index, state) in states.iter().enumerate() {
-        // 1. 每个状态都计数，包括默认态：第 0 态是隐藏，漏掉它无法直接看清隐藏总数
         let count = entries.iter().filter(|entry| entry.state == index).count();
         if count > 0 {
             parts.push(format!("{} {} {count}", state.mark, state.label));
@@ -38,7 +46,7 @@ pub(super) fn state_summary(states: &[StateStyle], entries: &[SelectEntry]) -> S
     }
 }
 
-/// 【配置界面】【多选绘制】渲染完整多态清单界面并返回列表及底栏命中区。
+/// 【多态清单】【界面绘制】渲染完整多态清单界面并在过滤输入态定位真实硬件光标。
 #[allow(clippy::too_many_arguments)]
 pub(super) fn draw(
     stdout: &mut io::Stdout,
@@ -51,11 +59,13 @@ pub(super) fn draw(
     hovered: Option<usize>,
     footer_hover: Option<HitRect>,
     filter: &str,
+    filter_cursor: usize,
     filter_mode: bool,
 ) -> Result<MenuHitbox> {
+    let palette = ThemePalette::current();
     let (cols, terminal_rows) = terminal::size()?;
     let frame = full_frame(cols, terminal_rows);
-    crate::config_tui::ui::begin_synced_frame(stdout)?;
+    begin_synced_frame(stdout)?;
     queue!(stdout, Clear(ClearType::All))?;
     draw_box(stdout, frame.x, frame.y, frame.width, frame.height, title)?;
 
@@ -79,7 +89,12 @@ pub(super) fn draw(
         stdout,
         MoveTo(inner_x, body_y),
         Print(crate::render::readable_terminal_text(
-            &(format!("{MUTED}{}{RESET}", truncate(&subtitle, inner_w as usize))).to_string()
+            &(format!(
+                "{}{}{RESET}",
+                palette.muted,
+                truncate(&subtitle, inner_w as usize)
+            ))
+            .to_string()
         ))
     )?;
     body_y = body_y.saturating_add(2);
@@ -103,8 +118,7 @@ pub(super) fn draw(
             )?;
             continue;
         }
-        draw_row(
-            stdout,
+        let line_text = format_row_text(
             states,
             toggles,
             entries,
@@ -112,6 +126,10 @@ pub(super) fn draw(
             index == selected,
             hovered == Some(index),
             left_w,
+        );
+        queue!(
+            stdout,
+            Print(crate::render::readable_terminal_text(&line_text))
         )?;
     }
     draw_scroll_indicator(
@@ -131,11 +149,33 @@ pub(super) fn draw(
     }
 
     let help = if filter_mode {
-        format!(
-            "{ACCENT}{}{RESET}{MUTED}: {filter}{RESET}{ACCENT}_{RESET}  {}",
-            t("Search", "搜索"),
-            help_line(&[("Enter", t("confirm", "确认")), ("Esc", t("clear", "清除")),])
-        )
+        let query = if filter.is_empty() {
+            format!("{SEARCH_CURSOR_MARK}{}", t("type to filter", "输入以过滤"))
+        } else {
+            let (before, after) = split_at_char(filter, filter_cursor);
+            format!("{before}{SEARCH_CURSOR_MARK}{after}")
+        };
+        help_line(&[
+            ("/", &query),
+            ("↑↓", t("move", "移动")),
+            ("Enter", t("keep filter", "保留过滤")),
+            ("Esc", t("clear", "清除")),
+        ])
+    } else if !filter.is_empty() {
+        let cycle = states
+            .iter()
+            .map(|state| state.label)
+            .collect::<Vec<_>>()
+            .join("/");
+        help_line(&[
+            ("Space", &format!("{} ({cycle})", t("cycle", "切换"))),
+            ("A", t("select all", "全选")),
+            ("0", t("clear all", "全不选")),
+            ("/", t("search", "搜索")),
+            ("Esc", t("clear filter", "清除过滤")),
+            ("s", t("save", "保存")),
+            ("q", t("cancel", "取消")),
+        ])
     } else {
         let cycle = states
             .iter()
@@ -151,9 +191,14 @@ pub(super) fn draw(
             ("q", t("cancel", "取消")),
         ])
     };
-    draw_status_bar_interactive(stdout, &frame, &help, footer_hover)?;
+    let bar_cursor = draw_status_bar_with_cursor(stdout, &frame, &help, footer_hover)?;
     let footer = status_bar_hits(&frame, &help);
-    crate::config_tui::ui::end_synced_frame(stdout)?;
+    if let Some((cx, cy)) = bar_cursor {
+        queue!(stdout, Show, MoveTo(cx, cy))?;
+    } else {
+        queue!(stdout, Hide)?;
+    }
+    end_synced_frame(stdout)?;
     Ok(MenuHitbox {
         list: ListHitbox {
             frame: HitRect::from(frame),
@@ -171,10 +216,20 @@ pub(super) fn draw(
     })
 }
 
-/// 绘制单行：开关行、分组标题或条目行。
-#[allow(clippy::too_many_arguments)]
-fn draw_row(
-    stdout: &mut io::Stdout,
+/// 【多态清单】【行格式化】构造分组标题、开关行或条目行，确保选中态与悬停态整行底色连续贯穿。
+///
+/// 参数:
+/// - `states`: 状态样式切片
+/// - `toggles`: 开关切片
+/// - `entries`: 条目切片
+/// - `row`: 当前行类型
+/// - `is_selected`: 是否为选中项
+/// - `is_hovered`: 鼠标是否悬停
+/// - `width`: 行总列宽
+///
+/// 返回:
+/// - 整行 ANSI 文本
+pub(super) fn format_row_text(
     states: &[StateStyle],
     toggles: &[HeaderToggle],
     entries: &[SelectEntry],
@@ -182,58 +237,51 @@ fn draw_row(
     is_selected: bool,
     is_hovered: bool,
     width: u16,
-) -> Result<()> {
+) -> String {
+    let palette = ThemePalette::current();
     let width = width as usize;
     match row {
         Row::Group(label) => {
-            // 2. 分组标题：品牌色短横 + 名称 + 弱化延伸线
             let name = truncate(label, width.saturating_sub(6));
-            let used = 4 + crate::config_tui::ui::display_width(&name) + 1;
+            let used = 4 + display_width(&name) + 1;
             let tail = width.saturating_sub(used);
-            queue!(
-                stdout,
-                Print(crate::render::readable_terminal_text(
-                    &(format!(
-                        "{DIM}── {RESET}{BRAND}{BOLD}{name}{RESET} {DIM}{}{RESET}",
-                        "─".repeat(tail)
-                    ))
-                    .to_string()
-                ))
-            )?;
+            format!(
+                "{}── {RESET}{}{BOLD}{name}{RESET} {}{}{RESET}",
+                palette.dim,
+                palette.brand,
+                palette.dim,
+                "─".repeat(tail)
+            )
         }
         Row::Toggle(index) => {
             let toggle = &toggles[*index];
             let (bar, style) = row_marks(is_selected, is_hovered);
             let (mark, mark_color) = if toggle.value {
-                ("●", OK)
+                ("●", palette.ok)
             } else {
-                ("○", DIM)
+                ("○", palette.dim)
             };
             let label = truncate(&toggle.label, width.saturating_sub(6));
             if is_selected {
                 let line = format!("{mark} {label}");
-                queue!(
-                    stdout,
-                    Print(crate::render::readable_terminal_text(
-                        &(format!(
-                            "{bar}{style} {}{RESET}",
-                            pad(&line, width.saturating_sub(2))
-                        ))
-                        .to_string()
-                    ))
-                )?;
+                let raw = format!(
+                    "{bar}{style} {}{RESET}",
+                    pad(&line, width.saturating_sub(2))
+                );
+                tint_bg(&raw, palette.select_bg)
+            } else if is_hovered {
+                // 1. 【多态清单】【连续悬停】补齐圆点与文字之间的 RESET 底色断层
+                let raw = format!(
+                    "{bar} {mark_color}{mark}{RESET} {style}{}{RESET}",
+                    pad(&label, width.saturating_sub(4))
+                );
+                tint_bg(&raw, palette.hover_bg)
             } else {
-                let label_style = if is_hovered { style } else { MUTED };
-                queue!(
-                    stdout,
-                    Print(crate::render::readable_terminal_text(
-                        &(format!(
-                            "{bar} {mark_color}{mark}{RESET} {label_style}{}{RESET}",
-                            pad(&label, width.saturating_sub(4))
-                        ))
-                        .to_string()
-                    ))
-                )?;
+                format!(
+                    "{bar} {mark_color}{mark}{RESET} {}{}{RESET}",
+                    palette.muted,
+                    pad(&label, width.saturating_sub(4))
+                )
             }
         }
         Row::Entry(index) => {
@@ -241,43 +289,30 @@ fn draw_row(
             let (bar, style) = row_marks(is_selected, is_hovered);
             let state = states.get(entry.state);
             let mark = state.map(|state| state.mark).unwrap_or("?");
-            let mark_color = state.map(|state| state.color).unwrap_or(MUTED);
+            let mark_color = state.map(|state| state.color).unwrap_or(palette.muted);
             let label = truncate(&entry.key, width.saturating_sub(6));
             if is_selected {
                 let line = format!("{mark} {label}");
-                queue!(
-                    stdout,
-                    Print(crate::render::readable_terminal_text(
-                        &(format!(
-                            "{bar}{style} {}{RESET}",
-                            pad(&line, width.saturating_sub(2))
-                        ))
-                        .to_string()
-                    ))
-                )?;
+                let raw = format!(
+                    "{bar}{style} {}{RESET}",
+                    pad(&line, width.saturating_sub(2))
+                );
+                tint_bg(&raw, palette.select_bg)
+            } else if is_hovered {
+                let raw = format!(
+                    "{bar} {mark_color}{mark}{RESET} {style}{}{RESET}",
+                    pad(&label, width.saturating_sub(4))
+                );
+                tint_bg(&raw, palette.hover_bg)
             } else {
-                // 3. 未选中条目：悬停时使用提亮样式，未启用条目弱化显示
-                let name_style = if is_hovered {
-                    style
-                } else if entry.state == 0 {
-                    DIM
-                } else {
-                    RESET
-                };
-                queue!(
-                    stdout,
-                    Print(crate::render::readable_terminal_text(
-                        &(format!(
-                            "{bar} {mark_color}{mark}{RESET} {name_style}{}{RESET}",
-                            pad(&label, width.saturating_sub(4))
-                        ))
-                        .to_string()
-                    ))
-                )?;
+                let name_style = if entry.state == 0 { palette.dim } else { RESET };
+                format!(
+                    "{bar} {mark_color}{mark}{RESET} {name_style}{}{RESET}",
+                    pad(&label, width.saturating_sub(4))
+                )
             }
         }
     }
-    Ok(())
 }
 
 /// 组装右侧详情文本。

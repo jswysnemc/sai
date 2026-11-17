@@ -1,7 +1,7 @@
 //! 【配置界面】【菜单渲染】绘制近全屏主从菜单并生成列表行与底栏按键的鼠标命中区。
 
 use anyhow::Result;
-use crossterm::cursor::MoveTo;
+use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::KeyCode;
 use crossterm::queue;
 use crossterm::style::Print;
@@ -12,10 +12,13 @@ use super::super::layout::{content_frame, master_detail_widths, scroll_start, Fr
 use super::super::mouse::{
     read_menu_input, HitButtons, HitRect, ListHitbox, ListMouseState, MenuInput,
 };
-use super::super::theme::{help_line, help_separator, row_marks, DIM, LINE_VERTICAL, MUTED, RESET};
+use super::super::search::SEARCH_CURSOR_MARK;
+use super::super::theme::{
+    help_line, help_separator, row_marks, ThemePalette, LINE_VERTICAL, RESET,
+};
 use super::{
     ansi_width, begin_synced_frame, draw_box, draw_inner_divider, draw_scroll_indicator,
-    draw_status_bar_interactive, draw_wrapped_detail, end_synced_frame, fit_status_bar, pad,
+    draw_status_bar_with_cursor, draw_wrapped_detail, end_synced_frame, fit_status_bar, pad,
     truncate, truncate_ansi, wrap_text,
 };
 use crate::i18n::text as t;
@@ -33,7 +36,7 @@ pub(crate) struct MenuHitbox {
 }
 
 impl MenuHitbox {
-    /// 【配置界面】【菜单输入】读取本帧关联的键盘、点击、滚轮与窗口变化事件。
+    /// 【配置界面】【菜单输入】读取本帧关联的键盘、点击、滚轮、粘贴与窗口变化事件。
     ///
     /// 参数:
     /// - `mouse`: 列表悬停与单击追踪状态
@@ -58,7 +61,7 @@ impl MenuHitbox {
     }
 }
 
-/// 绘制近全屏菜单（可选右侧说明栏）。
+/// 【配置界面】【单栏菜单】绘制不含右侧说明栏的近全屏菜单。
 ///
 /// 参数:
 /// - `stdout`: 终端输出
@@ -68,7 +71,7 @@ impl MenuHitbox {
 /// - `status`: 底栏自定义状态；空则用默认快捷键说明
 ///
 /// 返回:
-/// - 绘制是否成功
+/// - 绘制结果
 #[allow(dead_code)]
 pub(crate) fn draw_menu(
     stdout: &mut io::Stdout,
@@ -80,7 +83,7 @@ pub(crate) fn draw_menu(
     draw_menu_with_details(stdout, title, options, &[], selected, status, "")
 }
 
-/// 绘制近全屏主从菜单：左侧选项、右侧说明。
+/// 【配置界面】【详情菜单】绘制无鼠标悬停态的主从详情菜单。
 ///
 /// 参数:
 /// - `stdout`: 终端输出
@@ -89,10 +92,10 @@ pub(crate) fn draw_menu(
 /// - `details`: 与选项对齐的说明；空切片则单栏铺满
 /// - `selected`: 选中下标
 /// - `status`: 底栏状态
-/// - `subtitle`: 标题下的摘要行（如当前激活配置）
+/// - `subtitle`: 标题下的摘要行
 ///
 /// 返回:
-/// - 绘制是否成功
+/// - 绘制结果
 #[allow(dead_code)]
 pub(crate) fn draw_menu_with_details(
     stdout: &mut io::Stdout,
@@ -109,7 +112,20 @@ pub(crate) fn draw_menu_with_details(
     Ok(())
 }
 
-/// 【配置界面】【交互菜单】绘制主从菜单并应用鼠标行与底栏悬停高亮。
+/// 【配置界面】【交互菜单】绘制主从菜单并应用鼠标行悬停、底栏悬停及搜索光标显示。
+///
+/// 参数:
+/// - `stdout`: 终端输出
+/// - `title`: 顶栏标题
+/// - `options`: 选项切片
+/// - `details`: 右侧说明切片
+/// - `selected`: 当前选中下标
+/// - `mouse`: 鼠标悬停与点击状态
+/// - `status`: 底栏状态文本
+/// - `subtitle`: 顶栏副标题
+///
+/// 返回:
+/// - 本帧菜单鼠标命中区域
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_menu_interactive(
     stdout: &mut io::Stdout,
@@ -135,6 +151,20 @@ pub(crate) fn draw_menu_interactive(
 }
 
 /// 【配置界面】【完整绘制】绘制主从菜单与悬停高亮点，返回列表与底栏命中区域。
+///
+/// 参数:
+/// - `stdout`: 终端输出
+/// - `title`: 顶栏标题
+/// - `options`: 左侧选项切片
+/// - `details`: 右侧详情切片
+/// - `selected`: 选中下标
+/// - `hovered`: 鼠标悬停行下标
+/// - `hovered_footer`: 鼠标悬停底栏按钮矩形
+/// - `status`: 底栏文本
+/// - `subtitle`: 副标题文本
+///
+/// 返回:
+/// - 列表与底栏热区集合
 #[allow(clippy::too_many_arguments)]
 fn draw_menu_with_hover(
     stdout: &mut io::Stdout,
@@ -147,6 +177,7 @@ fn draw_menu_with_hover(
     status: &str,
     subtitle: &str,
 ) -> Result<MenuHitbox> {
+    let palette = ThemePalette::current();
     let (cols, rows) = terminal::size()?;
     let frame = menu_frame(cols, rows, options, details, !subtitle.is_empty());
 
@@ -161,7 +192,11 @@ fn draw_menu_with_hover(
         let rendered_subtitle = if subtitle.contains('\x1b') {
             truncate_ansi(subtitle, inner_w as usize)
         } else {
-            format!("{MUTED}{}{RESET}", truncate(subtitle, inner_w as usize))
+            format!(
+                "{}{}{RESET}",
+                palette.muted,
+                truncate(subtitle, inner_w as usize)
+            )
         };
         queue!(
             stdout,
@@ -169,12 +204,12 @@ fn draw_menu_with_hover(
             Print(crate::render::readable_terminal_text(&rendered_subtitle))
         )?;
         body_y = body_y.saturating_add(1);
-        // 1. 副标题与内容间画一条弱化分隔线，标题区从此有边界
+        // 1. 【配置界面】【副标题分隔】副标题与正文之间绘制弱化横线划定边界
         draw_inner_divider(stdout, frame.x, body_y, frame.width)?;
         body_y = body_y.saturating_add(1);
     }
 
-    // 2. 内容区：底部留一行给帮助条
+    // 2. 【配置界面】【主从分栏】底部预留状态条行，按内容宽度划分左侧列表与右侧详情
     let body_bottom = frame.y.saturating_add(frame.height.saturating_sub(2));
     let body_h = body_bottom.saturating_sub(body_y).max(1);
     let (left_w, right_w) = if details.is_empty() {
@@ -209,13 +244,14 @@ fn draw_menu_with_hover(
         )?;
     }
     if right_w > 0 && options.len() <= visible_rows {
-        // 3. 列表未溢出时在左右栏之间绘制柔和竖线，区分主从结构
+        // 3. 【配置界面】【中轴分隔】列表未溢出时在左右栏之间绘制柔和竖线，溢出时切换为滚动指示条
         for row in 0..body_h {
             queue!(
                 stdout,
                 MoveTo(inner_x.saturating_add(left_w), body_y.saturating_add(row)),
                 Print(crate::render::readable_terminal_text(&format!(
-                    "{DIM}{LINE_VERTICAL}{RESET}"
+                    "{}{LINE_VERTICAL}{RESET}",
+                    palette.dim
                 )))
             )?;
         }
@@ -237,9 +273,15 @@ fn draw_menu_with_hover(
         draw_wrapped_detail(stdout, detail_x, body_y, right_w, body_h, detail)?;
     }
 
+    // 4. 【配置界面】【底栏与光标同步】绘制底栏热区，并在搜索编辑态下显示真实硬件光标
     let rendered_status = menu_help(status);
-    draw_status_bar_interactive(stdout, &frame, &rendered_status, hovered_footer)?;
+    let bar_cursor = draw_status_bar_with_cursor(stdout, &frame, &rendered_status, hovered_footer)?;
     let footer = status_bar_hits(&frame, &rendered_status);
+    if let Some((cx, cy)) = bar_cursor {
+        queue!(stdout, Show, MoveTo(cx, cy))?;
+    } else {
+        queue!(stdout, Hide)?;
+    }
     end_synced_frame(stdout)?;
     Ok(MenuHitbox {
         list: ListHitbox {
@@ -258,7 +300,7 @@ fn draw_menu_with_hover(
     })
 }
 
-/// 按选项数量与最长说明计算菜单外框，条目少时面板随内容收缩。
+/// 【配置界面】【菜单外框计算】按选项数量与最长说明计算菜单外框，条目少时面板随内容收缩。
 ///
 /// 参数:
 /// - `cols`: 终端列数
@@ -276,7 +318,6 @@ fn menu_frame(
     details: &[String],
     has_subtitle: bool,
 ) -> FrameRect {
-    // 1. 先按最大宽度确定两栏宽度，说明折行行数依赖右栏宽度
     let probe = content_frame(cols, rows, 1, MENU_MAX_WIDTH);
     let inner_w = probe.width.saturating_sub(4);
     let right_w = if details.is_empty() {
@@ -284,7 +325,6 @@ fn menu_frame(
     } else {
         master_detail_widths(inner_w).1
     };
-    // 2. 说明栏高度取所有选项中最长者，保证切换选项时外框稳定
     let detail_rows = if right_w == 0 {
         0
     } else {
@@ -295,14 +335,19 @@ fn menu_frame(
             .unwrap_or(0)
             .max(MENU_MIN_DETAIL_ROWS)
     };
-    // 3. 内容行 = 副标题与分隔线 + 列表/说明较高者 + 底部留白
     let header_rows = if has_subtitle { 2 } else { 0 };
     let body_rows = options.len().max(detail_rows).max(1);
     let content_rows = (header_rows + body_rows + 1).min(usize::from(u16::MAX)) as u16;
     content_frame(cols, rows, content_rows, MENU_MAX_WIDTH)
 }
 
-/// 组装菜单底部帮助条；传入非空自定义文本时原样保留。
+/// 【配置界面】【默认底栏】组装菜单底部帮助条；传入非空自定义文本时原样保留。
+///
+/// 参数:
+/// - `status`: 自定义状态栏文本
+///
+/// 返回:
+/// - 最终用于绘制的状态栏文本
 fn menu_help(status: &str) -> String {
     if status.is_empty() {
         help_line(&[
@@ -355,7 +400,13 @@ pub(crate) fn status_bar_hits(frame: &FrameRect, content: &str) -> HitButtons<Ke
     buttons
 }
 
-/// 去除文本中的 ANSI 转义序列以便提取纯键盘标识。
+/// 【配置界面】【纯文本提取】去除文本中的 ANSI 转义序列与光标控制符以便提取纯键盘标识。
+///
+/// 参数:
+/// - `value`: 含 ANSI 序列的文本
+///
+/// 返回:
+/// - 纯文本字符串
 pub(crate) fn strip_ansi_plain(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     let mut index = 0usize;
@@ -365,13 +416,21 @@ pub(crate) fn strip_ansi_plain(value: &str) -> String {
             index = crate::render::terminal_image::escape_sequence_end(value, index);
             continue;
         }
-        out.push(ch);
+        if ch != SEARCH_CURSOR_MARK {
+            out.push(ch);
+        }
         index += ch.len_utf8();
     }
     out
 }
 
-/// 将帮助条分段首词映射到对应的按键事件码。
+/// 【配置界面】【键位映射】将帮助条分段首词映射到对应的按键事件码。
+///
+/// 参数:
+/// - `token`: 帮助分段首个词元
+///
+/// 返回:
+/// - 可触发动作的按键码
 fn parse_status_key_token(token: &str) -> Option<KeyCode> {
     match token {
         "Enter" | "y/s/Enter" | "Enter/Esc" => Some(KeyCode::Enter),
@@ -414,7 +473,6 @@ mod tests {
             ("q", "quit"),
         ]);
         let hits = status_bar_hits(&frame, &status);
-        // 起始列 x = 1 + 3 = 4；"↑↓ move"(7) + " · "(3) => "Space cycle" 从第 14 列开始
         assert_eq!(hits.hit(5, 19), None);
         assert_eq!(hits.hit(14, 19), Some(KeyCode::Char(' ')));
         assert_eq!(hits.hit(28, 19), Some(KeyCode::Enter));

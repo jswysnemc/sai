@@ -85,14 +85,14 @@ pub(super) fn edit(stdout: &mut io::Stdout, provider: &mut ProviderConfig) -> Re
 /// 参数: provider 为原配置，fields 为表单；返回: 完整新配置或错误
 fn apply(provider: &ProviderConfig, fields: &[Field]) -> Result<ProviderConfig> {
     let mut next = provider.clone();
-    next.timeout_seconds = parse_number_field(fields[0].label, &fields[0].value)?;
+    next.timeout_seconds = parse_number_field(&fields[0].label, &fields[0].value)?;
     if next.timeout_seconds == 0 {
         bail!(t("Timeout must be positive", "超时秒数必须大于零"));
     }
     next.temperature = if fields[1].value.trim().is_empty() {
         None
     } else {
-        let value: f64 = parse_number_field(fields[1].label, &fields[1].value)?;
+        let value: f64 = parse_number_field(&fields[1].label, &fields[1].value)?;
         if !value.is_finite() || !(0.0..=2.0).contains(&value) {
             bail!(t("Temperature must be 0-2", "温度参数必须介于 0–2"));
         }
@@ -103,7 +103,7 @@ fn apply(provider: &ProviderConfig, fields: &[Field]) -> Result<ProviderConfig> 
     next.extra_body = normalize_extra_body(&fields[4].value)?;
     next.client_style = fields[5].value.clone();
     next.claude_1m_context = parse_bool_field(&fields[6].value)?;
-    next.anthropic_max_tokens = parse_number_field(fields[7].label, &fields[7].value)?;
+    next.anthropic_max_tokens = parse_number_field(&fields[7].label, &fields[7].value)?;
     next.user_agent = fields[8].value.trim().into();
     next.extra_headers = normalize_extra_headers(&fields[9].value)?;
     Ok(next)

@@ -1,6 +1,6 @@
-//! 压缩策略卡片：模式选择、实时阈值和快捷键说明。
+//! 压缩策略卡片视图：模式选择、实时阈值、折行底栏多行热区与矮屏裁剪热区同步。
 
-use super::card::{self, ACCENT, BORDER, BRAND, MUTED, RESET, SELECTED};
+use super::card::{self, CardPalette, RESET};
 use super::draft::{format_percent, Draft, Outcome, RESERVE_PRESETS};
 use crate::config_tui::mouse::{ClickTracker, HitButtons, HitRect};
 use crate::i18n::text as t;
@@ -22,77 +22,161 @@ pub(super) struct CardHitbox {
     pub actions: HitButtons<KeyCode>,
 }
 
+/// 【上下文】【单行热区登记】按分段间隔在指定屏幕行上登记可点击快捷键区域。
+///
+/// 参数:
+/// - `actions`: 待追加的按钮集合
+/// - `line_text`: 单行帮助文本
+/// - `start_col`: 帮助文本在屏幕上的起始列
+/// - `row_y`: 帮助文本所在的屏幕行
+/// - `max_right`: 该行允许响应点击的右边界列（不含右侧边框）
+///
+/// 返回:
+/// - 无
+fn register_help_segments(
+    actions: &mut HitButtons<KeyCode>,
+    line_text: &str,
+    start_col: usize,
+    row_y: u16,
+    max_right: usize,
+) {
+    let mut col = start_col;
+    for seg in line_text.split(" · ") {
+        let seg_w = crate::render::ansi_clip::ansi_visible_width(seg);
+        if col >= max_right {
+            break;
+        }
+        let hit_w = seg_w.min(max_right - col);
+        let plain = crate::render::ansi_clip::strip_ansi(seg);
+        let mapped = match plain.split_whitespace().next() {
+            Some("Enter") => Some(KeyCode::Enter),
+            Some("Esc") => Some(KeyCode::Esc),
+            Some("r") => Some(KeyCode::Char('r')),
+            Some("e") => Some(KeyCode::Char('e')),
+            Some("Tab") => Some(KeyCode::Tab),
+            _ => None,
+        };
+        if let Some(code) = mapped {
+            actions.push(
+                HitRect {
+                    x: col as u16,
+                    y: row_y,
+                    width: hit_w as u16,
+                    height: 1,
+                },
+                code,
+            );
+        }
+        col = col.saturating_add(seg_w).saturating_add(3);
+    }
+}
+
 impl CardHitbox {
-    /// 【上下文】【热区计算】按卡片起始行与列宽同步生成可点区域。
+    /// 【上下文】【热区计算】按卡片起始行、列宽及裁剪前后高度同步生成模式按钮与多行/裁剪底栏热区。
     ///
     /// 参数:
     /// - `draft`: 当前策略草稿
     /// - `top`: 卡片首行屏幕坐标
     /// - `cols`: 终端列宽
-    /// - `height`: 卡片总行数
+    /// - `full_height`: 高度裁剪前的完整卡片行数
+    /// - `height`: 实际绘制到屏幕的卡片行数
     ///
     /// 返回:
-    /// - 与当前绘制帧对齐的热区集合
-    pub(super) fn compute(draft: &Draft, top: u16, cols: usize, height: usize) -> Self {
+    /// - 与当前绘制帧精确对齐的热区集合
+    pub(super) fn compute(
+        draft: &Draft,
+        top: u16,
+        cols: usize,
+        full_height: usize,
+        height: usize,
+    ) -> Self {
         let width = cols.clamp(1, 88);
         let framed = width >= 16;
         let inner = width.saturating_sub(if framed { 4 } else { 0 }).max(1);
         let left_x = if framed { 2u16 } else { 0u16 };
+        let clamped = height < full_height;
+        let usable_body_limit = if clamped {
+            height.saturating_sub(1)
+        } else {
+            height
+        };
         let choices = selectors(draft);
         let w0 = crate::render::ansi_clip::ansi_visible_width(&choices[0]);
         let w1 = crate::render::ansi_clip::ansi_visible_width(&choices[1]);
         let combined = choices.join("   ");
         let stacked = crate::render::ansi_clip::ansi_visible_width(&combined) > inner;
-        let mode0 = HitRect {
-            x: left_x,
-            y: top.saturating_add(1),
-            width: w0 as u16,
-            height: 1,
-        };
-        let mode1 = if stacked {
+        let mode0 = if usable_body_limit > 1 {
             HitRect {
                 x: left_x,
-                y: top.saturating_add(2),
-                width: w1.min(inner) as u16,
+                y: top.saturating_add(1),
+                width: w0.min(inner) as u16,
                 height: 1,
             }
         } else {
+            HitRect::default()
+        };
+        let mode1 = if stacked {
+            if usable_body_limit > 2 {
+                HitRect {
+                    x: left_x,
+                    y: top.saturating_add(2),
+                    width: w1.min(inner) as u16,
+                    height: 1,
+                }
+            } else {
+                HitRect::default()
+            }
+        } else if usable_body_limit > 1 {
             HitRect {
                 x: left_x.saturating_add(w0 as u16).saturating_add(3),
                 y: top.saturating_add(1),
                 width: w1 as u16,
                 height: 1,
             }
+        } else {
+            HitRect::default()
         };
 
         let mut actions = HitButtons::default();
         if height > 0 && draft.input.is_none() {
-            let help_str = help_text(draft);
-            if framed && crate::render::ansi_clip::ansi_visible_width(help_str) + 6 <= width {
-                let mut col = 3usize;
+            if clamped {
+                // 1. 【上下文】【矮屏热区对齐】高度被 fit_height 裁剪时，末行改为精简提示并按底边缩进定位 X 坐标
                 let bar_y = top.saturating_add(height.saturating_sub(1) as u16);
-                for seg in help_str.split(" · ") {
-                    let seg_w = crate::render::ansi_clip::ansi_visible_width(seg);
-                    let mapped = match seg.split_whitespace().next() {
-                        Some("Enter") => Some(KeyCode::Enter),
-                        Some("Esc") => Some(KeyCode::Esc),
-                        Some("r") => Some(KeyCode::Char('r')),
-                        Some("e") => Some(KeyCode::Char('e')),
-                        Some("Tab") => Some(KeyCode::Tab),
-                        _ => None,
-                    };
-                    if let Some(code) = mapped {
-                        actions.push(
-                            HitRect {
-                                x: col as u16,
-                                y: bar_y,
-                                width: seg_w as u16,
-                                height: 1,
-                            },
-                            code,
-                        );
+                let (start_col, max_right) = if framed {
+                    (3, width.saturating_sub(3))
+                } else {
+                    (0, width)
+                };
+                register_help_segments(
+                    &mut actions,
+                    card::short_height_help(),
+                    start_col,
+                    bar_y,
+                    max_right,
+                );
+            } else {
+                let help_str = help_text(draft);
+                if framed && crate::render::ansi_clip::ansi_visible_width(help_str) + 6 <= width {
+                    // 2. 【上下文】【宽屏底边热区】单行内嵌于底边边框时从第 3 列起排布热区
+                    let bar_y = top.saturating_add(height.saturating_sub(1) as u16);
+                    register_help_segments(
+                        &mut actions,
+                        help_str,
+                        3,
+                        bar_y,
+                        width.saturating_sub(3),
+                    );
+                } else {
+                    // 3. 【上下文】【80列折行热区】底栏折为多行正文时逐行注册热区，内容列从第 2 列起算
+                    let wrapped = card::help_rows(help_str, inner);
+                    let border_tail = usize::from(framed);
+                    let first_help_offset =
+                        height.saturating_sub(border_tail.saturating_add(wrapped.len()));
+                    let (start_col, max_right) = if framed { (2, 2 + inner) } else { (0, width) };
+                    for (idx, row_str) in wrapped.iter().enumerate() {
+                        let row_y = top.saturating_add((first_help_offset + idx) as u16);
+                        register_help_segments(&mut actions, row_str, start_col, row_y, max_right);
                     }
-                    col = col.saturating_add(seg_w).saturating_add(3);
                 }
             }
         }
@@ -126,22 +210,13 @@ fn help_text(draft: &Draft) -> &'static str {
 }
 
 /// 压缩卡片单次鼠标点击区域枚举。
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum CardClick {
     Mode(usize),
     Action(KeyCode),
 }
 
 /// 【上下文】【鼠标处理】响应模式切换、数值滚轮步进及底栏保存/取消点击。
-///
-/// 参数:
-/// - `mouse`: 鼠标输入事件
-/// - `hitbox`: 当前帧卡片热区
-/// - `draft`: 待更新策略草稿
-/// - `clicks`: 单击判定追踪器
-///
-/// 返回:
-/// - `(是否需要重绘, 可选结束动作)`
 pub(super) fn apply_mouse(
     mouse: MouseEvent,
     hitbox: &CardHitbox,
@@ -210,14 +285,14 @@ pub(super) struct PreviewContext {
 }
 
 /// 【上下文】【模式选择】显示两种互斥策略，预留模式展开快捷档位。
-/// 参数：`draft` 为草稿；返回：两个可独立换行的模式控件。
 fn selectors(draft: &Draft) -> [String; 2] {
+    let palette = CardPalette::current();
     let ratio = if draft.selected == 0 && draft.input.is_some() {
         draft.input_display()
     } else {
         let value = format!("{}%", format_percent(draft.policy.ratio));
         if draft.selected == 0 {
-            format!("{SELECTED} ← {value} → {RESET}")
+            format!("{} ← {value} → {RESET}", palette.selected)
         } else {
             value
         }
@@ -239,13 +314,13 @@ fn selectors(draft: &Draft) -> [String; 2] {
                     card::compact(value)
                 };
                 if value == draft.policy.reserve_tokens {
-                    format!("{SELECTED}{ACCENT} ← {text} → {RESET}")
+                    format!("{}{} ← {text} → {RESET}", palette.selected, palette.accent)
                 } else {
-                    format!("{MUTED}{text}{RESET}")
+                    format!("{}{text}{RESET}", palette.muted)
                 }
             })
             .collect::<Vec<_>>()
-            .join(&format!("{BORDER} | {RESET}"))
+            .join(&format!("{} | {RESET}", palette.border))
     } else {
         card::compact(draft.policy.reserve_tokens)
     };
@@ -258,9 +333,9 @@ fn selectors(draft: &Draft) -> [String; 2] {
     .enumerate()
     .map(|(index, text)| {
         let (style, radio) = if index == draft.selected {
-            (ACCENT, "●")
+            (palette.accent, "●")
         } else {
-            (MUTED, "○")
+            (palette.muted, "○")
         };
         format!("{style}{radio} {text}{RESET}")
     })
@@ -269,13 +344,16 @@ fn selectors(draft: &Draft) -> [String; 2] {
     .unwrap()
 }
 
-/// 【上下文】【模式高亮】为未选中却被鼠标悬停的模式控件叠加提亮底色与主题前景色。
+/// 【上下文】【模式高亮】为未选中却被鼠标悬停的模式控件叠加感知明暗主题的柔和悬停底色。
 fn selectors_interactive(draft: &Draft, hovered: Option<CardClick>) -> [String; 2] {
+    let palette = CardPalette::current();
     let mut base = selectors(draft);
     for (index, item) in base.iter_mut().enumerate() {
         if hovered == Some(CardClick::Mode(index)) && index != draft.selected {
             *item = format!(
-                "\x1b[48;2;28;48;54m{ACCENT}{}{RESET}",
+                "{}{}{}{RESET}",
+                palette.hover,
+                palette.accent,
                 crate::render::ansi_clip::strip_ansi(item)
             );
         }
@@ -288,6 +366,7 @@ fn highlight_card_help(help_str: &str, hovered: Option<CardClick>) -> String {
     let Some(CardClick::Action(target)) = hovered else {
         return help_str.to_string();
     };
+    let palette = CardPalette::current();
     help_str
         .split(" · ")
         .map(|seg| {
@@ -300,7 +379,7 @@ fn highlight_card_help(help_str: &str, hovered: Option<CardClick>) -> String {
                 _ => false,
             };
             if matched {
-                format!("{ACCENT}\x1b[1m{seg}{RESET}{MUTED}")
+                format!("{}\x1b[1m{seg}{RESET}{}", palette.accent, palette.muted)
             } else {
                 seg.to_string()
             }
@@ -310,7 +389,6 @@ fn highlight_card_help(help_str: &str, hovered: Option<CardClick>) -> String {
 }
 
 /// 【上下文】【卡片排版】宽屏保持五行，窄屏拆分控件和统计，不强制最小宽度。
-/// 参数：草稿、上下文与终端列数；返回：完整 ANSI 卡片。
 #[cfg(test)]
 pub(super) fn frame(draft: &Draft, context: &PreviewContext, cols: usize) -> Vec<String> {
     frame_interactive(draft, context, None, cols)
@@ -323,6 +401,7 @@ pub(super) fn frame_interactive(
     hovered: Option<CardClick>,
     cols: usize,
 ) -> Vec<String> {
+    let palette = CardPalette::current();
     let width = cols.clamp(1, 88);
     let inner = width.saturating_sub(4).max(1);
     let preview = draft.preview();
@@ -361,19 +440,23 @@ pub(super) fn frame_interactive(
         .clone()
         .or_else(|| preview.err().map(|error| error.to_string()))
     {
-        body.push(format!("\x1b[31m{error}{RESET}"));
+        body.push(format!("{}{error}{RESET}", palette.danger));
     }
     let help = highlight_card_help(help_text(draft), hovered);
     let title = if width < 60 {
         format!(
-            "{BRAND}{}{RESET} {MUTED}[{}]{RESET}",
+            "{}{}{RESET} {}[{}]{RESET}",
+            palette.brand,
             t("AUTO-COMPACT", "自动压缩策略"),
+            palette.muted,
             card::compact(context.window)
         )
     } else {
         format!(
-            "{BRAND}{}{RESET} · {MUTED}{} [{}]{RESET}",
+            "{}{}{RESET} · {}{} [{}]{RESET}",
+            palette.brand,
             t("AUTO-COMPACT", "自动压缩策略"),
+            palette.muted,
             context.scope,
             card::compact(context.window)
         )
@@ -382,7 +465,6 @@ pub(super) fn frame_interactive(
 }
 
 /// 【上下文】【全局绘制】在配置界面自身画布中居中显示同一张策略卡片。
-/// 参数：输出、草稿与上下文；返回：绘制结果与鼠标热区。
 pub(super) fn draw(
     stdout: &mut io::Stdout,
     draft: &Draft,
@@ -390,10 +472,9 @@ pub(super) fn draw(
     hovered: Option<CardClick>,
 ) -> Result<CardHitbox> {
     let (cols, rows) = terminal::size()?;
-    let lines = card::fit_height(
-        frame_interactive(draft, context, hovered, usize::from(cols)),
-        usize::from(rows),
-    );
+    let full = frame_interactive(draft, context, hovered, usize::from(cols));
+    let full_len = full.len();
+    let lines = card::fit_height(full, usize::from(rows));
     let top = rows.saturating_sub(lines.len() as u16) / 2;
     crate::config_tui::ui::begin_synced_frame(stdout)?;
     queue!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
@@ -403,6 +484,7 @@ pub(super) fn draw(
         draft,
         top,
         usize::from(cols),
+        full_len,
         lines.len(),
     ))
 }

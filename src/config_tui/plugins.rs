@@ -1,3 +1,5 @@
+//! 内置助手工具配置列表：支持单键启停、连续整行选中/悬停底色与明细表单跳转。
+
 use crate::config::AppConfig;
 use crate::i18n::text as t;
 use anyhow::Result;
@@ -9,18 +11,17 @@ use crossterm::terminal::{self, Clear, ClearType};
 use std::io;
 
 use super::form::run_form;
-use super::input::read_event;
+use super::input::{read_event, ConfigEvent};
 use super::layout::full_frame;
 use super::mouse::{HitRect, ListHitbox, ListMouseOutcome, ListMouseState};
 use super::plugin_fields::{apply_plugin_fields, plugin_fields};
-use super::theme::{row_marks, BOLD, MUTED, RESET};
+use super::theme::{row_marks, tint_bg, ThemePalette, BOLD, RESET};
 use super::ui::{
-    display_width, draw_box, draw_status_bar_interactive, message, pad, status_bar_hits, truncate,
-    MenuHitbox,
+    display_width, draw_box, draw_scroll_indicator, draw_status_bar_interactive, message, pad,
+    status_bar_hits, truncate, MenuHitbox,
 };
-use crate::config_tui::input::ConfigEvent;
 
-/// 编辑助手工具。
+/// 【助手工具】【菜单循环】编辑内置 CLI 助手工具启停与参数明细。
 ///
 /// 参数:
 /// - `stdout`: 终端标准输出
@@ -35,7 +36,7 @@ pub(crate) fn edit_cli_tools(stdout: &mut io::Stdout, config: &mut AppConfig) ->
         let count = cli_tool_names().len();
         let hitbox = draw_cli_tool_menu(stdout, config, selected, &mouse)?;
         let code = match read_event()? {
-            ConfigEvent::Resize => continue,
+            ConfigEvent::Resize | ConfigEvent::Paste(_) => continue,
             ConfigEvent::Key(key) => key.code,
             ConfigEvent::Mouse(event) => {
                 let mut footer_redraw = false;
@@ -60,7 +61,6 @@ pub(crate) fn edit_cli_tools(stdout: &mut io::Stdout, config: &mut AppConfig) ->
                         }
                         ListMouseOutcome::Select(idx) => {
                             selected = idx;
-                            // 点击最左侧状态列时直接切换开关
                             if event.column < hitbox.list.list.x.saturating_add(12) {
                                 KeyCode::Char(' ')
                             } else {
@@ -90,22 +90,70 @@ pub(crate) fn edit_cli_tools(stdout: &mut io::Stdout, config: &mut AppConfig) ->
     }
 }
 
-/// 绘制 CLI 助手工具列表并返回鼠标命中区。
+/// 【助手工具】【行渲染】构造工具列表单行文本，修复选中态与悬停态因中间 RESET 导致的底色断层。
 ///
 /// 参数:
-/// - `stdout`: 终端标准输出
-/// - `config`: 当前应用配置
-/// - `selected`: 当前选中工具索引
-/// - `hovered`: 当前鼠标悬停工具索引
+/// - `enabled`: 工具是否启用
+/// - `name`: 工具显示名称
+/// - `description`: 工具用途说明
+/// - `row_width`: 可用显示列宽（不含左侧两列前缀）
+/// - `is_selected`: 是否处于键盘选中态
+/// - `is_hovered`: 是否处于鼠标悬停态
 ///
 /// 返回:
-/// - 列表与底栏快捷键命中几何
+/// - 带完整连续背景或分色样式的单行 ANSI 文本
+fn format_plugin_row(
+    enabled: bool,
+    name: &str,
+    description: &str,
+    row_width: usize,
+    is_selected: bool,
+    is_hovered: bool,
+) -> String {
+    let palette = ThemePalette::current();
+    let (bar, style) = row_marks(is_selected, is_hovered);
+    if is_selected {
+        let state = if enabled {
+            t("● on", "● 启用")
+        } else {
+            t("○ off", "○ 关闭")
+        };
+        let line = cli_tool_row(state, name, description, row_width);
+        let raw = format!("{bar}{style} {}{RESET}", pad(&line, row_width));
+        return tint_bg(&raw, palette.select_bg);
+    }
+    let (dot_style, state) = if enabled {
+        (palette.ok, t("● on", "● 启用"))
+    } else {
+        (palette.dim, t("○ off", "○ 关闭"))
+    };
+    let state_w = 8.min(row_width);
+    let name_w = 24.min(row_width.saturating_sub(state_w));
+    let state_cell = pad(state, state_w);
+    let name_cell = pad(name, name_w);
+    let desc_w = row_width.saturating_sub(display_width(&state_cell) + display_width(&name_cell));
+    let desc_cell = pad(&truncate(description, desc_w), desc_w);
+    let label_style = if is_hovered { style } else { RESET };
+    let raw = format!(
+        "{bar} {dot_style}{state_cell}{RESET}{label_style}{name_cell}{}{desc_cell}{RESET}",
+        palette.muted
+    );
+    if is_hovered {
+        // 1. 【助手工具】【连续悬停】对状态列、名称列与说明列统一补回悬停底色，消除色块断层
+        tint_bg(&raw, palette.hover_bg)
+    } else {
+        raw
+    }
+}
+
+/// 【助手工具】【界面绘制】绘制 CLI 助手工具列表并返回鼠标命中区。
 fn draw_cli_tool_menu(
     stdout: &mut io::Stdout,
     config: &AppConfig,
     selected: usize,
     mouse: &ListMouseState,
 ) -> Result<MenuHitbox> {
+    let palette = ThemePalette::current();
     let (cols, rows) = terminal::size()?;
     let frame = full_frame(cols, rows);
     let width = frame.width;
@@ -115,29 +163,32 @@ fn draw_cli_tool_menu(
     super::ui::begin_synced_frame(stdout)?;
     queue!(stdout, Clear(ClearType::All))?;
     draw_box(stdout, x, y, width, height, t("TOOLS", "助手工具"))?;
-    // 表头与数据行相同缩进（数据行有两列选中条前缀）
+    let header_w = width.saturating_sub(6) as usize;
     queue!(
         stdout,
         MoveTo(x + 4, y + 1),
         Print(crate::render::readable_terminal_text(
             &(format!(
-                "{MUTED}{BOLD}{}{RESET}",
+                "{}{BOLD}{}{RESET}",
+                palette.muted,
                 pad(
                     &cli_tool_row(
                         t("State", "状态"),
                         t("Tool", "工具"),
                         t("Description", "说明"),
-                        width.saturating_sub(6) as usize,
+                        header_w,
                     ),
-                    width.saturating_sub(6) as usize,
+                    header_w,
                 )
             ))
             .to_string()
         ))
     )?;
     let tools = cli_tool_names();
-    let visible_rows = height.saturating_sub(4) as usize;
+    let visible_rows = height.saturating_sub(4).max(1) as usize;
     let start = selected.saturating_sub(visible_rows.saturating_sub(1));
+    let has_scroll = tools.len() > visible_rows;
+    let row_width = width.saturating_sub(if has_scroll { 7 } else { 6 }) as usize;
     for row in 0..visible_rows {
         let index = start + row;
         if index >= tools.len() {
@@ -145,53 +196,29 @@ fn draw_cli_tool_menu(
         }
         let (id, name, description) = tools[index];
         let enabled = plugin_enabled(config, id);
-        let row_width = width.saturating_sub(6) as usize;
         queue!(stdout, MoveTo(x + 2, y + row as u16 + 2))?;
-        let (bar, style) = row_marks(index == selected, mouse.hovered == Some(index));
-        if index == selected {
-            // 选中行：整行深底统一样式
-            let state = if enabled {
-                t("● on", "● 启用")
-            } else {
-                t("○ off", "○ 关闭")
-            };
-            let line = cli_tool_row(state, name, description, row_width);
-            queue!(
-                stdout,
-                Print(crate::render::readable_terminal_text(
-                    &(format!("{bar}{style} {}{RESET}", pad(&line, row_width))).to_string()
-                ))
-            )?;
-        } else {
-            // 常规行：状态点分色，名称常规，说明弱化
-            use super::theme::{DIM, OK};
-            let (dot_style, state) = if enabled {
-                (OK, t("● on", "● 启用"))
-            } else {
-                (DIM, t("○ off", "○ 关闭"))
-            };
-            let name_cell = pad(name, 24);
-            let state_cell = pad(state, 8);
-            let remaining = row_width
-                .saturating_sub(display_width(&state_cell) + display_width(&name_cell))
-                .max(10);
-            let label_style = if mouse.hovered == Some(index) {
-                style
-            } else {
-                RESET
-            };
-            queue!(
-                stdout,
-                Print(crate::render::readable_terminal_text(
-                    &(format!(
-                        "{bar} {dot_style}{state_cell}{RESET}{label_style}{name_cell}{MUTED}{}{RESET}",
-                        truncate(description, remaining)
-                    ))
-                    .to_string()
-                ))
-            )?;
-        }
+        let rendered = format_plugin_row(
+            enabled,
+            name,
+            description,
+            row_width,
+            index == selected,
+            mouse.hovered == Some(index),
+        );
+        queue!(
+            stdout,
+            Print(crate::render::readable_terminal_text(&rendered))
+        )?;
     }
+    draw_scroll_indicator(
+        stdout,
+        x.saturating_add(width.saturating_sub(3)),
+        y.saturating_add(2),
+        visible_rows as u16,
+        tools.len(),
+        start,
+        visible_rows,
+    )?;
     let help = super::theme::help_line(&[
         ("Space", t("toggle", "开关")),
         ("Enter", t("configure", "配置")),
@@ -218,26 +245,16 @@ fn draw_cli_tool_menu(
     })
 }
 
-/// 组装 CLI 助手工具列表行。
-///
-/// 参数:
-/// - `state`: 启用状态
-/// - `name`: 工具名称
-/// - `description`: 工具说明
-/// - `width`: 可用显示宽度
-///
-/// 返回:
-/// - 已按宽度截断和补齐的列表行
+/// 【助手工具】【列对齐】组装 CLI 助手工具列表纯文本行。
 fn cli_tool_row(state: &str, name: &str, description: &str, width: usize) -> String {
-    let fixed = pad(state, 8) + &pad(name, 24);
-    let remaining = width.saturating_sub(display_width(&fixed)).max(10);
+    let state_w = 8.min(width);
+    let name_w = 24.min(width.saturating_sub(state_w));
+    let fixed = pad(state, state_w) + &pad(name, name_w);
+    let remaining = width.saturating_sub(display_width(&fixed));
     fixed + &truncate(description, remaining)
 }
 
 /// 返回助手工具菜单目录，以稳定配置标识绑定每个表单。
-///
-/// 返回:
-/// - 历史配置标识、显示名称和说明组成的固定目录
 fn cli_tool_names() -> [(&'static str, &'static str, &'static str); 4] {
     [
         (
@@ -270,13 +287,6 @@ fn cli_tool_names() -> [(&'static str, &'static str, &'static str); 4] {
 }
 
 /// 判断配置标识对应的工具是否启用。
-///
-/// 参数:
-/// - `config`: 当前应用配置
-/// - `id`: 当前工具的稳定配置标识
-///
-/// 返回:
-/// - 工具启用时返回 true
 pub(super) fn plugin_enabled(config: &AppConfig, id: &str) -> bool {
     match id {
         "web" => config.plugins.web.enabled,
@@ -288,13 +298,6 @@ pub(super) fn plugin_enabled(config: &AppConfig, id: &str) -> bool {
 }
 
 /// 切换配置标识对应的工具启用状态。
-///
-/// 参数:
-/// - `config`: 待更新应用配置
-/// - `id`: 当前工具的稳定配置标识
-///
-/// 返回:
-/// - 无返回值
 pub(super) fn toggle_plugin(config: &mut AppConfig, id: &str) {
     let value = !plugin_enabled(config, id);
     match id {
@@ -307,14 +310,6 @@ pub(super) fn toggle_plugin(config: &mut AppConfig, id: &str) {
 }
 
 /// 编辑当前选中的 CLI 助手工具。
-///
-/// 参数:
-/// - `stdout`: 终端标准输出
-/// - `config`: 待更新应用配置
-/// - `index`: 工具菜单索引
-///
-/// 返回:
-/// - 表单退出或配置保存结果
 fn edit_cli_tool_detail(
     stdout: &mut io::Stdout,
     config: &mut AppConfig,
@@ -327,7 +322,6 @@ fn edit_cli_tool_detail(
         if !run_form(stdout, &title, &mut fields)? {
             return Ok(());
         }
-        // 解析失败时就地提示并重新打开表单，沿用已填内容
         match apply_plugin_fields(config, id, &fields) {
             Ok(()) => return Ok(()),
             Err(err) => message(
@@ -341,10 +335,11 @@ fn edit_cli_tool_detail(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config_tui::theme::SELECTION_BAR;
+    use crate::config_tui::ui::strip_ansi_plain;
     use std::collections::BTreeSet;
 
     /// 【工具菜单测试】【稳定标识】菜单完整对应当前配置，切换只修改指定工具
-    /// @returns 无；删除业务条目不能造成表单配置错位
     #[test]
     fn tool_menu_uses_stable_ids_for_current_configuration() {
         let mut config = AppConfig::default();
@@ -372,5 +367,16 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// 【助手工具测试】【连续悬停背景】验证悬停行不含异色双竖条且背景在状态列后连续不断开。
+    #[test]
+    fn plugin_hover_row_fills_continuous_background() {
+        let palette = ThemePalette::current();
+        let hovered = format_plugin_row(true, "Web search", "Built-in search", 64, false, true);
+        assert!(!strip_ansi_plain(&hovered).contains(SELECTION_BAR));
+        let body = hovered.strip_suffix(RESET).unwrap();
+        assert!(!body.contains(&format!("{RESET} ")));
+        assert!(body.contains(&format!("{RESET}{}", palette.hover_bg)));
     }
 }

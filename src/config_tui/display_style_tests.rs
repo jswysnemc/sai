@@ -40,3 +40,12 @@ fn tui_mode_form_validates_before_updating_configuration() {
     assert!(apply_display_fields(&mut config, &fields).is_err());
     assert_eq!(serde_json::to_value(&config).unwrap(), saved);
 }
+
+/// 【终端】【语言实时切换测试】验证移除 OnceLock 后 rtk 过滤标签随当前语言实时变化。
+#[test]
+fn rtk_denylist_label_switches_dynamically_with_locale() {
+    let en = crate::i18n::with_locale(crate::i18n::Locale::En, rtk_denylist_label);
+    let zh = crate::i18n::with_locale(crate::i18n::Locale::Zh, rtk_denylist_label);
+    assert!(en.contains("Commands kept out of rtk"));
+    assert!(zh.contains("不走 rtk 的命令"));
+}
