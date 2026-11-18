@@ -61,15 +61,17 @@ fn segmented_bar_handles_empty_full_and_overflow() {
                 let track = bar.track(width);
                 assert_eq!(ansi_visible_width(&track), width);
                 let text = strip_ansi(&track);
-                assert_eq!(text.matches('┆').count(), usize::from(width > 0));
-                if width > 1 && used > 0 {
+                assert!(text.chars().all(|ch| matches!(ch, '▰' | '▱')), "{text}");
+                if width > 0 && used > 0 {
                     assert!(text.contains('▰'), "{text}");
                 }
                 if used == 0 {
                     assert!(!text.contains('▰'), "{text}");
                 }
                 assert!(ansi_visible_width(&bar.heading(width)) <= width);
-                assert!(ansi_visible_width(&bar.legend(width)) <= width);
+                let legend = bar.legend(width);
+                assert!(ansi_visible_width(&legend) <= width);
+                assert!(!strip_ansi(&legend).contains('┆'));
             }
         }
     }
@@ -92,10 +94,6 @@ fn context_bar_uses_session_compaction_policy() {
         strip_ansi(&rows[0])
     );
     assert!(strip_ansi(&rows[2]).contains("80k"));
-    assert_eq!(
-        strip_ansi(&rows[1]).chars().position(|ch| ch == '┆'),
-        Some(38)
-    );
     chrome.compaction_policy = crate::state::CompactionBudgetPolicy::from_context(0.8, 50_000)
         .with_mode(crate::config::CompactionMode::Reserve);
     let rows = SidebarMetrics::new(Some(&chrome), &Default::default()).rows(48, 34);

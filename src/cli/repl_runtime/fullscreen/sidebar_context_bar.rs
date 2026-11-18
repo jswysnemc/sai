@@ -51,22 +51,21 @@ impl ContextBar {
         columns(&left, &right, width)
     }
 
-    /// 【终端指标】【分段轨道】按物理容量绘制缓存、新写、余量和保留区，压缩线始终可见。
+    /// 【终端指标】【分段轨道】按物理容量绘制连续色段，仅通过颜色区分缓存、新写、余量和保留区。
     /// 参数: width 为可用列数；返回: 恰好占用 width 列的 ANSI 轨道。
     pub(super) fn track(&self, width: usize) -> String {
         if width == 0 || self.window == 0 {
             return String::new();
         }
         let palette = PanelPalette::current();
-        let cells = width - 1;
         let used = self.used.min(self.window);
         let trigger = self.trigger.min(self.window);
-        let marker = (trigger as f64 / self.window as f64 * cells as f64).round() as usize;
+        let reserve_start = (trigger as f64 / self.window as f64 * width as f64).round() as usize;
         // 1. 【终端指标】【非零可见】真实用量至少占一格，缓存与新写均有用量时保留各自色段
         let filled = if used == 0 {
             0
         } else {
-            ((used as f64 / self.window as f64 * cells as f64).ceil() as usize).min(cells)
+            ((used as f64 / self.window as f64 * width as f64).ceil() as usize).min(width)
         };
         let cached = self.cached.map(|cached| cached.min(used));
         let cached_cells = cached.map_or(0, |cached| {
@@ -77,36 +76,24 @@ impl ContextBar {
                 count.min(filled)
             }
         });
-        // 2. 【终端指标】【单列锚线】压缩标记独占一列，剩余格按同一物理比例分配
+        // 2. 【终端指标】【连续色段】全部列用于比例轨道，保留区直接衔接余量段
         let mut line = String::new();
         for col in 0..width {
-            let (glyph, tone) = if col == marker {
-                (
-                    '┆',
-                    if self.used >= trigger {
-                        palette.removed
-                    } else {
-                        palette.warning
-                    },
-                )
-            } else {
-                let index = col - usize::from(col > marker);
-                if index < filled {
-                    let tone = if index >= marker {
-                        palette.removed
-                    } else if index < cached_cells {
-                        palette.added
-                    } else if cached.is_some() {
-                        self.tone(palette)
-                    } else {
-                        palette.muted
-                    };
-                    ('▰', tone)
-                } else if col > marker {
-                    ('░', palette.subtle)
+            let (glyph, tone) = if col < filled {
+                let tone = if col >= reserve_start {
+                    palette.removed
+                } else if col < cached_cells {
+                    palette.added
+                } else if cached.is_some() {
+                    self.tone(palette)
                 } else {
-                    ('▱', palette.subtle)
-                }
+                    palette.muted
+                };
+                ('▰', tone)
+            } else if col >= reserve_start {
+                ('▱', palette.warning)
+            } else {
+                ('▱', palette.subtle)
             };
             line.push_str(&fg(tone));
             line.push(glyph);
@@ -115,7 +102,7 @@ impl ContextBar {
         line
     }
 
-    /// 【终端指标】【成分图例】展示当前请求缓存与新写用量，右侧注明压缩线后保留容量。
+    /// 【终端指标】【成分图例】展示当前请求缓存与新写用量，右侧注明保留容量。
     /// 参数: width 为净列宽；返回: 自适应的成分图例，未知缓存使用占位符。
     pub(super) fn legend(&self, width: usize) -> String {
         let palette = PanelPalette::current();
@@ -138,7 +125,7 @@ impl ContextBar {
             fg(palette.text),
         );
         let right = format!(
-            "{}┆{}{} {}\x1b[39m",
+            "{}■{}{} {}\x1b[39m",
             fg(palette.warning),
             fg(palette.subtle),
             t("Reserve", "留"),
