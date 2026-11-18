@@ -99,7 +99,6 @@ impl FullscreenState {
 
         // 3. 【全屏视图】【恢复实时跟随】清空查看固定锁，恢复执行链与思考块尾随并强制重排正文
         self.pinned_cells.clear();
-        self.hover_froze_fold = false;
         self.activity.resume_tail_follow();
         self.reasoning.resume_live_follow();
         self.scroll = self.max_scroll(body_height);

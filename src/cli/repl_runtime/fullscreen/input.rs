@@ -372,7 +372,6 @@ impl ReplRuntime {
                 let before_track =
                     state.pointer_col == Some(layout.scrollbar_col) && state.pointer_row.is_some();
                 let before_pointer = (state.pointer_row, state.pointer_col);
-                let before_inspect = state.hovered_inspect_anchor();
                 let before = state.hovered_paragraph().map(|span| span.key);
                 let before_row = state.pointer_row;
                 let before_button = session.bottom_button.is_some_and(|(start, end)| {
@@ -387,7 +386,6 @@ impl ReplRuntime {
                 state.pointer_row = in_body.then_some(body_row);
                 state.pointer_col = in_body.then_some(mouse.column);
                 let after = state.hovered_paragraph().map(|span| span.key);
-                let after_inspect = state.hovered_inspect_anchor();
                 let after_footer = state.hovered_activity_footer();
                 let after_button = session.bottom_button.is_some_and(|(start, end)| {
                     state.pointer_row == Some(height.saturating_sub(1))
@@ -397,15 +395,6 @@ impl ReplRuntime {
                 });
                 let after_track =
                     state.pointer_col == Some(layout.scrollbar_col) && state.pointer_row.is_some();
-                let release_hover_fold = before_inspect.is_some()
-                    && after_inspect.is_none()
-                    && state.hover_froze_fold
-                    && state.follow
-                    && state.activity.all_following();
-                if release_hover_fold {
-                    state.hover_froze_fold = false;
-                    state.pending_refresh = true;
-                }
                 let changed = before_track != after_track
                     || before_pointer != (state.pointer_row, state.pointer_col)
                     || hover != state.hover
@@ -413,8 +402,7 @@ impl ReplRuntime {
                     || (before.is_some() && before_row != state.pointer_row)
                     || before_button != after_button
                     || header_hover != state.header_hover
-                    || before_footer != after_footer
-                    || release_hover_fold;
+                    || before_footer != after_footer;
                 state.hover = hover;
                 state.header_hover = header_hover;
                 changed
@@ -543,10 +531,8 @@ impl ReplRuntime {
                             .is_some_and(|(start, end)| mouse.column >= start && mouse.column < end)
                     {
                         // 2. 【全屏视图】【回到底部按钮】跳至底部，收起可视区外的工具详情并保留最下方可见区域展开项
-                        let offscreen = state.return_to_bottom_closing_offscreen(
-                            height,
-                            usize::from(layout.rows),
-                        );
+                        let offscreen = state
+                            .return_to_bottom_closing_offscreen(height, usize::from(layout.rows));
                         self.transcript.fold_offscreen_cells(&offscreen);
                         return Effect::Refresh;
                     } else if !layout.in_body(mouse.row) {
@@ -609,13 +595,6 @@ impl ReplRuntime {
             return false;
         }
         let had_hover = state.pointer_row.take().is_some() | state.pointer_col.take().is_some();
-        let released = if state.hover_froze_fold && state.follow && state.activity.all_following() {
-            state.hover_froze_fold = false;
-            state.pending_refresh = true;
-            true
-        } else {
-            false
-        };
-        had_hover || released
+        had_hover
     }
 }

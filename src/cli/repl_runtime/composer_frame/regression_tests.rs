@@ -12,6 +12,7 @@ fn frame() -> ComposerFrame {
         mode: AgentMode::Yolo,
         context_ratio: 0.0,
         context_window_tokens: 120_000,
+        compaction_policy: Default::default(),
         model: "test-model".into(),
         thinking: "auto".into(),
         directory: "/workspace".into(),

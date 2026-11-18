@@ -78,6 +78,7 @@ mod sidebar_background;
 #[cfg(test)]
 mod sidebar_background_tests;
 mod sidebar_background_view;
+mod sidebar_context_bar;
 pub(super) mod sidebar_control;
 #[cfg(test)]
 mod sidebar_control_tests;
@@ -401,7 +402,7 @@ impl ReplRuntime {
             session.state.pending_refresh = false;
             session.state.rendered_options = Some(self.options);
             let resuming_bottom = std::mem::take(&mut session.state.resuming_bottom);
-            let hover_anchor = if resuming_bottom {
+            let inspect_anchor = if resuming_bottom {
                 None
             } else {
                 session.state.prepare_inspection_refresh()
@@ -423,36 +424,20 @@ impl ReplRuntime {
                 },
             );
             transcript.clear_dirty();
-            if let Some(anchor) = hover_anchor {
-                if let inspection_lock::InspectTarget::Reasoning(cell)
-                | inspection_lock::InspectTarget::Step(cell) = anchor.target
+            // 1. 【终端】【主动查看】只有用户展开并暂停主视口时才锁定实时思考窗口
+            if !session.state.follow {
+                if let Some(inspection_lock::InspectAnchor {
+                    target: inspection_lock::InspectTarget::Reasoning(cell),
+                    ..
+                }) = inspect_anchor
                 {
-                    session.state.reasoning.pause_if_hovered(cell);
+                    session.state.reasoning.pause_for_inspection(cell);
                 }
             }
             let document = session
                 .state
                 .reasoning
                 .update(document, usize::from(layout.content_width));
-            if let Some(anchor) = hover_anchor {
-                let region_key = match anchor.target {
-                    inspection_lock::InspectTarget::Activity(key) => Some(key),
-                    inspection_lock::InspectTarget::Step(_) => session
-                        .state
-                        .document
-                        .activities
-                        .iter()
-                        .find(|region| anchor.row >= region.start && anchor.row < region.end)
-                        .map(|region| region.key),
-                    inspection_lock::InspectTarget::Reasoning(_) => None,
-                };
-                if let Some(region_key) = region_key {
-                    session
-                        .state
-                        .activity
-                        .pause_if_hovered_and_growing(region_key, &document);
-                }
-            }
             let document = session.state.activity.update(
                 document,
                 body_height,
@@ -462,7 +447,7 @@ impl ReplRuntime {
             session.state.apply_document_with_anchor(
                 document,
                 body_height,
-                hover_anchor,
+                inspect_anchor,
                 !resuming_bottom,
             );
             session

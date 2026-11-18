@@ -130,14 +130,12 @@ fn wide_sidebar_moves_overviews_and_restores_bottom_at_narrow_width() {
             for line in screen(&runtime) {
                 assert!(unicode_width::UnicodeWidthStr::width(line.as_str()) <= 160);
             }
-            assert!(
-                screen(&runtime)
-                    [usize::from(row_for(&runtime, super::sidebar_i18n::subagents_heading()))]
-                .chars()
-                .skip(usize::from(side.left))
-                .collect::<String>()
-                .contains(super::sidebar_i18n::subagents_heading())
-            );
+            assert!(screen(&runtime)
+                [usize::from(row_for(&runtime, super::sidebar_i18n::subagents_heading()))]
+            .chars()
+            .skip(usize::from(side.left))
+            .collect::<String>()
+            .contains(super::sidebar_i18n::subagents_heading()));
         },
     );
     runtime.paint_fullscreen().unwrap();
@@ -386,7 +384,11 @@ fn redesigned_sidebar_compacts_empty_sections_and_supports_accordion_focus() {
     assert!(!plain_doc.contains("No background commands"));
     assert!(!plain_doc.contains("Current · "));
     assert!(!plain_doc.contains("0/0"), "{plain_doc}");
-    assert!(plain_doc.contains("▎ ● snow-shot 自启动配置"), "{plain_doc}");
+    assert!(
+        plain_doc.contains("  ● snow-shot 自启动配置"),
+        "{plain_doc}"
+    );
+    assert!(!plain_doc.contains('▎'), "{plain_doc}");
     assert!(plain_doc.contains("2h"));
 
     TerminalSize::with_size(
@@ -419,10 +421,10 @@ fn redesigned_sidebar_compacts_empty_sections_and_supports_accordion_focus() {
                 "侧栏分组禁止使用横实线或虚线分割，改由透明留白与标题字重隔离"
             );
             for pair in plan.regions.windows(2) {
-                let gap_row = pair[1].top - 1;
-                assert!(
-                    strip_ansi_for_test(&panel[gap_row]).trim().is_empty(),
-                    "相邻分组之间必须保留纯空白呼吸行: row={gap_row}"
+                assert_eq!(
+                    pair[1].top,
+                    pair[0].top + 1 + pair[0].visible,
+                    "中等高度应将分组空行归还清单正文"
                 );
             }
             let unfocused_footer = strip_ansi_for_test(panel.last().unwrap());

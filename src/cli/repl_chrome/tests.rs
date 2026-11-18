@@ -9,6 +9,7 @@ fn test_chrome() -> ReplChrome {
         mode: AgentMode::Yolo,
         context_ratio: 0.0,
         context_window_tokens: 200_000,
+        compaction_policy: Default::default(),
         model: "gpt".to_string(),
         thinking: "auto".to_string(),
         directory: "/workspace".to_string(),
@@ -104,6 +105,7 @@ fn footer_puts_mode_before_context() {
         mode: AgentMode::Yolo,
         context_ratio: 0.0,
         context_window_tokens: 272_000,
+        compaction_policy: Default::default(),
         model: "gpt".to_string(),
         thinking: "xhigh".to_string(),
         directory: "/workspace".to_string(),
@@ -141,6 +143,7 @@ fn footer_line_never_exceeds_terminal_cols() {
         mode: AgentMode::AutoAudit,
         context_ratio: 0.12,
         context_window_tokens: 500_000,
+        compaction_policy: Default::default(),
         model: "gpt-5.6-sol".to_string(),
         thinking: "auto".to_string(),
         directory: "/home/snemc/workspace/sai/very/long/path/segment".to_string(),
@@ -274,7 +277,8 @@ fn footer_shows_branch_after_directory() {
 
 #[test]
 fn input_row_prefix_follows_line_role() {
-    let first = chrome_input_row_for_background((24, 28, 32), ChromeInputPrefix::Message, "hello", 20);
+    let first =
+        chrome_input_row_for_background((24, 28, 32), ChromeInputPrefix::Message, "hello", 20);
     assert!(first.contains(CHROME_PANEL_BG));
     assert!(first.contains('→'));
     assert!(first.contains("hello"));
@@ -283,8 +287,12 @@ fn input_row_prefix_follows_line_role() {
     assert!(shell.contains('$'));
     assert!(!shell.contains('→'));
     // 续行只保留缩进
-    let cont =
-        chrome_input_row_for_background((24, 28, 32), ChromeInputPrefix::Continuation, "wrapped", 20);
+    let cont = chrome_input_row_for_background(
+        (24, 28, 32),
+        ChromeInputPrefix::Continuation,
+        "wrapped",
+        20,
+    );
     assert!(!cont.contains('→') && !cont.contains('$'));
     assert!(cont.contains("wrapped"));
     // 浅色背景自动切换柔和浅灰面板与深色正文，不使用深黑 235 背景

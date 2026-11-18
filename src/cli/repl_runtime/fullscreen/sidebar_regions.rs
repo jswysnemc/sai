@@ -144,16 +144,15 @@ pub(super) fn plan_vertical(
     let header_len = super::sidebar_header_path::content_height(height);
     let top_sink = usize::from(header_len > 0);
     let metrics_len = super::sidebar_metrics::height(height);
-    let header_metrics_gap = usize::from(height >= 34 && header_len > 0 && metrics_len > 0);
     let gaps = usize::from(has_breathing_gaps(height));
-    let base_header = top_sink + header_len + header_metrics_gap + metrics_len + gaps;
+    let base_header = top_sink + header_len + metrics_len + gaps;
     let footer = 1 + gaps;
     let body_end = height.saturating_sub(footer);
     let panel_count = document.panels.len();
     let raw_available = body_end.saturating_sub(base_header + panel_count);
 
-    // 1. 【终端侧栏】【纯留白分组隔离】高屏均衡模式下在相邻分组之间预留一行透明空白，替代生硬分割线
-    let separators = if focused_section.is_none() && height >= 24 && panel_count > 1 {
+    // 1. 【终端侧栏】【紧凑分组】中等高度归还分组空行给清单，高屏保留一行分组留白
+    let separators = if focused_section.is_none() && height >= 34 && panel_count > 1 {
         (panel_count - 1).min(raw_available / 2)
     } else {
         0
@@ -234,7 +233,9 @@ pub(super) fn plan_vertical(
         .map(|panel| visible_for(panel.section))
         .sum();
     let occupied = panel_count + separators + total_visible;
-    let surplus = body_end.saturating_sub(base_header).saturating_sub(occupied);
+    let surplus = body_end
+        .saturating_sub(base_header)
+        .saturating_sub(occupied);
     let ideal_shift = if focused_section.is_none() && height >= 26 {
         ((surplus * 2) / 5).min(14)
     } else {
@@ -252,7 +253,7 @@ pub(super) fn plan_vertical(
     };
     let extra_section_sink = applied_shift - extra_top_sink;
     let header_top = top_sink + extra_top_sink;
-    let metrics_top = header_top + header_len + header_metrics_gap;
+    let metrics_top = header_top + header_len;
     let sections_top = metrics_top + metrics_len + gaps + extra_section_sink;
 
     let mut remaining_seps = separators;

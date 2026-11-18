@@ -211,7 +211,6 @@ impl FullscreenState {
         }
         if self.pending_refresh {
             self.resuming_bottom = true;
-            self.hover_froze_fold = false;
         }
     }
 

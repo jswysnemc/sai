@@ -10,6 +10,7 @@ use std::time::Instant;
 pub(super) struct LiveTurnUsage {
     /// 最近一次请求 provider 实报的 prompt tokens，即当前上下文占用
     context_prompt_tokens: usize,
+    context_cache_read_tokens: usize,
     cache_read_tokens: u64,
     prompt_tokens: u64,
     started: Option<Instant>,
@@ -39,6 +40,8 @@ impl LiveTurnUsage {
         // 1. 上下文占用取最近一次读数，不累加：它表示当前请求体有多大
         if usage.prompt_tokens > 0 {
             self.context_prompt_tokens = usage.prompt_tokens as usize;
+            self.context_cache_read_tokens =
+                usage.cache_read_tokens.min(usage.prompt_tokens) as usize;
         }
         // 2. 缓存命中率按轮累计，与轮次结束摘要口径一致
         self.prompt_tokens = self.prompt_tokens.saturating_add(usage.prompt_tokens);
@@ -61,6 +64,12 @@ impl LiveTurnUsage {
     /// - 最近一次请求的 prompt tokens；尚无读数时返回空
     pub(super) fn context_prompt_tokens(&self) -> Option<usize> {
         (self.context_prompt_tokens > 0).then_some(self.context_prompt_tokens)
+    }
+
+    /// 【终端指标】【当前缓存】读取最近一次请求的缓存命中量，与当前上下文使用相同口径。
+    /// 参数: 无；返回: 缓存 token 数，尚无请求读数时为空。
+    pub(super) fn context_cache_read_tokens(&self) -> Option<usize> {
+        (self.context_prompt_tokens > 0).then_some(self.context_cache_read_tokens)
     }
 
     /// 返回本轮累计缓存命中率。

@@ -1,5 +1,6 @@
-//! 常驻指标独立于可滚动分组，未知读数显示占位符而非伪造零值。
+//! 常驻上下文分段指标独立于可滚动分组，未知读数显示占位符。
 
+use super::sidebar_context_bar::ContextBar;
 use crate::cli::repl_chrome::ReplChrome;
 use crate::cli::repl_runtime::live_usage::LiveTurnUsage;
 use crate::render::panel_palette::{fg, PanelPalette};
@@ -8,6 +9,8 @@ use crate::render::panel_palette::{fg, PanelPalette};
 pub(super) struct SidebarMetrics {
     rate: Option<f64>,
     context: Option<(usize, usize)>,
+    cached: Option<usize>,
+    policy: crate::state::CompactionBudgetPolicy,
     cache: Option<f32>,
     output: Option<usize>,
     prompt: Option<usize>,
@@ -15,9 +18,12 @@ pub(super) struct SidebarMetrics {
     branch: Option<String>,
 }
 
-/// 【终端】【指标空间】参数为侧栏高度，返回指标行数，极矮屏保留主要操作入口
+/// 【终端指标】【空间分配】正常高度显示四行分段指标，矮屏使用双行摘要。
+/// 参数: rows 为侧栏高度；返回: 指标行数，极矮屏不占用操作入口。
 pub(super) fn height(rows: usize) -> usize {
-    if rows >= 16 {
+    if rows >= 22 {
+        4
+    } else if rows >= 16 {
         2
     } else {
         0
@@ -25,20 +31,32 @@ pub(super) fn height(rows: usize) -> usize {
 }
 
 impl SidebarMetrics {
-    /// 【终端】【指标快照】参数为输入栏与实时用量，返回本帧只读指标
+    /// 【终端指标】【指标快照】收集当前容量、最新请求缓存量和会话压缩策略。
+    /// 参数: chrome 为输入栏快照，live 为本轮实时用量；返回: 本帧只读指标。
     pub(super) fn new(chrome: Option<&ReplChrome>, live: &LiveTurnUsage) -> Self {
+        let context = chrome.map(|chrome| {
+            (
+                live.context_prompt_tokens().unwrap_or(
+                    (chrome.context_ratio * chrome.context_window_tokens as f32) as usize,
+                ),
+                chrome.context_window_tokens,
+            )
+        });
+        // 1. 【终端指标】【缓存口径】最新请求有实报时使用其缓存量，否则从会话最后一次请求快照估算
+        let cached = live.context_cache_read_tokens().or_else(|| {
+            let ratio = chrome?.cache_hit_ratio?;
+            let used = context?.0;
+            ratio
+                .is_finite()
+                .then(|| (used as f64 * ratio.clamp(0.0, 1.0) as f64).round() as usize)
+        });
         Self {
             rate: live.rate(),
             output: live.output_tokens(),
             prompt: live.context_prompt_tokens(),
-            context: chrome.map(|chrome| {
-                (
-                    live.context_prompt_tokens().unwrap_or(
-                        (chrome.context_ratio * chrome.context_window_tokens as f32) as usize,
-                    ),
-                    chrome.context_window_tokens,
-                )
-            }),
+            context,
+            cached,
+            policy: chrome.map_or_else(Default::default, |chrome| chrome.compaction_policy),
             cache: live
                 .cache_hit_ratio()
                 .or_else(|| chrome.and_then(|chrome| chrome.cache_hit_ratio)),
@@ -47,108 +65,98 @@ impl SidebarMetrics {
         }
     }
 
-    /// 【终端指标】【工作区标题】生成工作区目录与 Git 分支双行正文，顶部下沉偏移由纵向布局统一排布。
+    /// 【终端指标】【工作区标题】生成目录与分支双行正文，由纵向布局统一安排位置。
     /// 参数: width 为净宽，rows 为侧栏高度；返回: 顶栏正文行。
     pub(super) fn heading(&self, width: usize, rows: usize) -> Vec<String> {
-        super::sidebar_header_path::body_rows(
-            &self.directory,
-            self.branch.as_deref(),
-            width,
-            rows,
-        )
+        super::sidebar_header_path::body_rows(&self.directory, self.branch.as_deref(), width, rows)
     }
 
-    /// 【终端】【指标排版】参数为净宽和侧栏高度，返回上下文数值、线性轨道和按有效负载着色的生成摘要
-    pub(super) fn rows(&self, width: usize, rows: usize) -> Vec<String> {
+    /// 【终端指标】【生成摘要】展示物理占用率、本轮累计缓存命中率与输出速度。
+    /// 参数: width 为净列宽；返回: ANSI 摘要行，未知数据使用占位符。
+    fn summary(&self, width: usize) -> String {
         let palette = PanelPalette::current();
         let rate = self
             .rate
             .map_or_else(|| "--".into(), |rate| format!("{rate:.1}"));
         let cache = self.cache.map_or_else(
             || "--".into(),
-            |cache| format!("{:.0}%", cache.clamp(0.0, 1.0) * 100.0),
+            |value| format!("{:.0}%", value.clamp(0.0, 1.0) * 100.0),
         );
-        let context = if self.context.is_none() {
-            self.prompt.map_or_else(
-                || super::sidebar_metrics_view::context(None),
-                |prompt| format!("{} / -- · --%", super::sidebar_metrics_view::tokens(prompt)),
-            )
-        } else {
-            super::sidebar_metrics_view::context(self.context)
-        };
         let output = self
             .output
             .map_or_else(|| "--".into(), super::sidebar_metrics_view::tokens);
-        // 1. 【终端指标】【负载权重】零负载状态弱化百分比与零值字重，仅在高水位预警时加粗强调
-        let (numbers, percent) = context.split_once(" · ").unwrap_or((&context, ""));
-        let spare = width.saturating_sub(
-            crate::cli::repl_text::visible_width(numbers)
-                + crate::cli::repl_text::visible_width(percent)
-                + 3,
+        let context = super::sidebar_metrics_view::context(self.context);
+        let percent = context
+            .split_once(" · ")
+            .map_or("--%", |(_, percent)| percent);
+        let cache_label = if width >= 42 { "Cache " } else { "C" };
+        let speed = if width >= 42 { " tok/s" } else { "/s" };
+        let left = format!(
+            "{}{percent} · {cache_label}{cache}\x1b[39m",
+            fg(palette.muted)
         );
-        let gauge = super::sidebar_metrics_view::bar(self.context, spare.min(22));
-        let ratio = self
+        let right = format!(
+            "{}{rate}{}{speed} · out {}{output}\x1b[39m",
+            fg(palette.text),
+            fg(palette.muted),
+            fg(palette.text)
+        );
+        super::sidebar_widgets::columns(&left, &right, width)
+    }
+
+    /// 【终端指标】【分段排版】按屏幕高度选择四行解剖条或双行摘要，宽度不足时统一裁剪。
+    /// 参数: width 为净宽，rows 为侧栏高度；返回: 有界 ANSI 指标行。
+    pub(super) fn rows(&self, width: usize, rows: usize) -> Vec<String> {
+        let context = self
             .context
             .filter(|(_, window)| *window > 0)
-            .map(|(used, window)| used as f64 / window as f64);
-        let has_load = ratio.is_some_and(|value| value > 0.0)
-            || self.prompt.is_some_and(|prompt| prompt > 0);
-        let styled_numbers = if let Some((used, window)) = numbers.split_once(" / ") {
-            let (used_tone, window_tone) = if has_load {
-                (palette.text, palette.muted)
-            } else {
-                (palette.muted, palette.subtle)
-            };
-            format!(
-                "{}{used}{} / {}{window}\x1b[39m",
-                fg(used_tone),
-                fg(window_tone),
-                fg(window_tone)
-            )
+            .map(|(used, window)| ContextBar {
+                used,
+                window,
+                trigger: self.policy.trigger_chars(window),
+                cached: self.cached,
+            });
+        let first = context.as_ref().map_or_else(
+            || {
+                self.prompt.map_or_else(
+                    || "CTX -- / -- · --%".into(),
+                    |prompt| {
+                        format!(
+                            "CTX {} / -- · --%",
+                            super::sidebar_metrics_view::tokens(prompt)
+                        )
+                    },
+                )
+            },
+            |bar| bar.heading(width),
+        );
+        // 1. 【终端指标】【纵向自适应】仅正常高度展示独立轨道与图例，矮屏保留标题和生成摘要
+        let lines = if height(rows) == 4 {
+            let track = context.as_ref().map_or_else(
+                || {
+                    format!(
+                        "{}{}\x1b[0m",
+                        fg(PanelPalette::current().subtle),
+                        "▱".repeat(width)
+                    )
+                },
+                |bar| bar.track(width),
+            );
+            let legend = context.as_ref().map_or_else(
+                || "Cache -- · New -- · Reserve --".into(),
+                |bar| bar.legend(width),
+            );
+            vec![first, track, legend, self.summary(width)]
         } else {
-            let tone = if has_load { palette.text } else { palette.muted };
-            format!("{}{numbers}\x1b[39m", fg(tone))
+            vec![first, self.summary(width)]
         };
-        let styled_percent = if ratio.is_some_and(|value| value >= 0.9) {
-            format!("{}\x1b[1m{percent}\x1b[22m\x1b[39m", fg(palette.removed))
-        } else if ratio.is_some_and(|value| value >= 0.72) {
-            format!("{}\x1b[1m{percent}\x1b[22m\x1b[39m", fg(palette.warning))
-        } else if has_load {
-            format!("{}{percent}\x1b[39m", fg(palette.text))
-        } else {
-            format!("{}{percent}\x1b[39m", fg(palette.muted))
-        };
-        let left_part = if spare == 0 {
-            styled_numbers
-        } else {
-            format!("{styled_numbers} {gauge}")
-        };
-        let first = super::sidebar_widgets::columns(&left_part, &styled_percent, width);
-        // 2. 【终端指标】【空闲降噪】未产生数据的占位读数整体退至静默色，有实测读数时点亮标签与数值
-        let sep = format!(" {}· ", fg(palette.subtle));
-        let cache_part = if self.cache.is_some() {
-            format!("{}Cache {}{cache}", fg(palette.muted), fg(palette.text))
-        } else {
-            format!("{}Cache {cache}", fg(palette.subtle))
-        };
-        let rate_part = if self.rate.is_some() {
-            format!("{}{rate} {}tok/s", fg(palette.text), fg(palette.muted))
-        } else {
-            format!("{}{rate} tok/s", fg(palette.subtle))
-        };
-        let out_part = if self.output.is_some() {
-            format!("{}out {}{output}", fg(palette.muted), fg(palette.text))
-        } else {
-            format!("{}out {output}", fg(palette.subtle))
-        };
-        let second = format!("{cache_part}{sep}{rate_part}{sep}{out_part}\x1b[0m");
-        [first, second]
+        lines
             .into_iter()
             .take(height(rows))
             .map(|line| {
                 format!(
                     "{}{}\x1b[0m",
-                    fg(palette.muted),
+                    fg(PanelPalette::current().muted),
                     crate::render::ansi_clip::clip_ansi_to_width(&line, width, "")
                 )
             })

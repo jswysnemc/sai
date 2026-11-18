@@ -1,4 +1,4 @@
-//! 工具详情查看保护：在展开或悬停阅读期间锁定视口与焦点，避免新输出抢占画面。
+//! 工具详情查看保护：仅主动展开或手动滚动时保持阅读位置。
 
 use super::state::FullscreenState;
 use crate::render::transcript::{FullscreenDocument, ParagraphKey, ParagraphPart};
@@ -12,7 +12,7 @@ pub(super) enum InspectTarget {
     Activity(ParagraphKey),
 }
 
-/// 【终端】【悬停锚点】记录指针命中的元素及其当前文档行，用于重排后保持屏幕行不动。
+/// 【终端】【阅读锚点】记录主动展开元素的文档行，用于重排后保持屏幕位置。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct InspectAnchor {
     pub(super) target: InspectTarget,
@@ -20,68 +20,65 @@ pub(super) struct InspectAnchor {
 }
 
 impl FullscreenState {
-    /// 【终端】【悬停识别】识别指针当前正在查看的工具步骤、思考块或执行链区域。
-    ///
-    /// 参数: 无
-    ///
-    /// 返回:
-    /// - 命中可查看区域时返回查看锚点，拖选或底部按钮悬停时返回 None
-    pub(super) fn hovered_inspect_anchor(&self) -> Option<InspectAnchor> {
-        if self.press.is_some() || self.selection.is_some() || self.dragging {
-            return None;
-        }
-        let body_row = self.pointer_row?;
-        if let Some(layout) = self.layout {
-            let content_width = usize::from(layout.content_width);
-            let body_height = usize::from(layout.body_height);
-            if self
-                .pointer_col
-                .is_some_and(|col| usize::from(col) >= content_width)
-            {
-                return None;
-            }
-            if super::bottom_button::is_hovered(self, content_width, body_height) {
-                return None;
-            }
-        }
-        let doc_row = self.body_document_row(body_row);
-        if self.hovered_activity_footer().is_some() {
-            return None;
-        }
-        if let Some(span) = self.document.paragraph_at(doc_row) {
-            if !matches!(
-                span.key.part,
-                ParagraphPart::ActivityGroup | ParagraphPart::OlderActivity
-            ) {
-                return Some(InspectAnchor {
-                    target: InspectTarget::Step(span.key.cell),
+    /// 【终端】【主动阅读】寻找当前可见且由用户主动展开的工具或思考节点。
+    /// 参数: 无；返回: 阅读锚点，普通悬停不产生锚点。
+    pub(super) fn inspection_anchor(&self) -> Option<InspectAnchor> {
+        let end = self.scroll
+            + self.layout.map_or(usize::MAX - self.scroll, |layout| {
+                usize::from(layout.body_height)
+            });
+        // 1. 【终端】【展开识别】仅使用手动展开键或固定集合，不根据指针位置推断阅读意图
+        self.document
+            .paragraphs
+            .iter()
+            .find_map(|span| {
+                let manual = self.pinned_cells.contains(&span.key.cell)
+                    || self.expanded.contains(&span.key)
+                    || self.expanded.contains(&ParagraphKey::whole(span.key.cell));
+                if !manual
+                    || !span.expanded
+                    || span.end <= self.scroll
+                    || span.start >= end
+                    || matches!(
+                        span.key.part,
+                        ParagraphPart::ActivityGroup | ParagraphPart::OlderActivity
+                    )
+                {
+                    return None;
+                }
+                let target = if self
+                    .document
+                    .reasonings
+                    .iter()
+                    .any(|region| region.key.cell == span.key.cell)
+                {
+                    InspectTarget::Reasoning(span.key.cell)
+                } else {
+                    InspectTarget::Step(span.key.cell)
+                };
+                Some(InspectAnchor {
+                    target,
                     row: span.start,
-                });
-            }
-        }
-        if let Some(region) = self
-            .document
-            .reasonings
-            .iter()
-            .find(|region| doc_row >= region.start && doc_row < region.end)
-        {
-            return Some(InspectAnchor {
-                target: InspectTarget::Reasoning(region.key.cell),
-                row: region.start,
-            });
-        }
-        if let Some(region) = self
-            .document
-            .activities
-            .iter()
-            .find(|region| doc_row >= region.start && doc_row < region.end)
-        {
-            return Some(InspectAnchor {
-                target: InspectTarget::Activity(region.key),
-                row: region.start,
-            });
-        }
-        None
+                })
+            })
+            .or_else(|| {
+                // 2. 【终端】【链内阅读】手动滚动执行链时保留区域锚点，正常跟随不锁定
+                if self.activity.all_following() {
+                    return None;
+                }
+                self.document
+                    .activities
+                    .iter()
+                    .find(|region| {
+                        Some(region.key) == self.activity.selected
+                            && region.end > self.scroll
+                            && region.start < end
+                    })
+                    .map(|region| InspectAnchor {
+                        target: InspectTarget::Activity(region.key),
+                        row: region.start,
+                    })
+            })
     }
 
     /// 【终端】【折叠保护】收集当前渲染周期需要冻结折叠与固定展示的步骤下标。
@@ -91,29 +88,18 @@ impl FullscreenState {
     /// 返回:
     /// - `(是否冻结近期自动折叠, 不可隐藏或折叠的单元集合)`
     pub(super) fn inspection_protection(&self) -> (bool, HashSet<usize>) {
-        let hovered = self.hovered_inspect_anchor();
         let pause_active = !self.follow
             || !self.activity.all_following()
             || self.reasoning.any_paused()
-            || hovered.is_some()
             || !self.pinned_cells.is_empty();
         let mut pinned = self.pinned_cells.clone();
-        // 1. 【终端】【悬停保护】悬停所在步骤与思考块在刷新期间保持展开并留在可见区
-        if let Some(anchor) = hovered {
-            match anchor.target {
-                InspectTarget::Step(cell) | InspectTarget::Reasoning(cell) => {
-                    pinned.insert(cell);
-                }
-                InspectTarget::Activity(_) => {}
-            }
-        }
-        // 2. 【终端】【手动展开】已写入全文展开键的步骤在任何刷新下都不会被收起
+        // 1. 【终端】【手动展开】已写入全文展开键的步骤在任何刷新下都不会被收起
         for key in &self.expanded {
             if key.part == ParagraphPart::Whole {
                 pinned.insert(key.cell);
             }
         }
-        // 3. 【终端】【阅读保护】暂停跟随或悬停查看时，保住屏幕上已展开的近期详情
+        // 2. 【终端】【阅读保护】手动暂停跟随时保住屏幕上已展开的近期详情
         if pause_active {
             for span in &self.document.paragraphs {
                 if span.expanded
@@ -129,25 +115,25 @@ impl FullscreenState {
         (pause_active, pinned)
     }
 
-    /// 【终端】【刷新保护】在同步新文档前捕获悬停锚点，仅在已暂停跟随时锁定当前展开步骤。
+    /// 【终端】【刷新保护】在同步新文档前捕获阅读锚点，仅在已暂停跟随时锁定当前展开步骤。
     ///
     /// 参数: 无
     ///
     /// 返回:
-    /// - 刷新前捕获的悬停锚点
+    /// - 刷新前捕获的阅读锚点
     pub(super) fn prepare_inspection_refresh(&mut self) -> Option<InspectAnchor> {
-        let anchor = self.hovered_inspect_anchor();
-        // 1. 【终端】【防永久锁定】仅在脱离底部或执行链暂停时持久化已展开步骤；停在底部时由单帧悬停判定保护，移开即失效
+        let anchor = self.inspection_anchor();
+        // 1. 【终端】【阅读锁定】仅在用户暂停跟随时持久化已展开步骤
         if !self.follow || !self.activity.all_following() {
             self.lock_visible_inspection(anchor);
         }
         anchor
     }
 
-    /// 【终端】【阅读锁定】将当前悬停步骤与画面内已展开节点写入持久固定集合，直到恢复底部。
+    /// 【终端】【阅读锁定】将当前展开步骤与画面内已展开节点写入持久固定集合，直到恢复底部。
     ///
     /// 参数:
-    /// - `anchor`: 当前悬停锚点
+    /// - `anchor`: 当前阅读锚点
     ///
     /// 返回:
     /// - 无
@@ -171,11 +157,11 @@ impl FullscreenState {
         }
     }
 
-    /// 【终端】【悬停定位】计算新文档中对应锚点的起始行，保持正在查看的元素留在原屏行。
+    /// 【终端】【阅读定位】计算新文档中对应锚点的起始行，保持正在查看的元素留在原屏行。
     ///
     /// 参数:
     /// - `document`: 新渲染的投影文档
-    /// - `anchor`: 刷新前捕获的悬停锚点
+    /// - `anchor`: 刷新前捕获的阅读锚点
     ///
     /// 返回:
     /// - 新文档中的起始行；元素已消失时为 None
@@ -229,10 +215,8 @@ impl FullscreenState {
         let had_locks = !self.pinned_cells.is_empty()
             || !self.activity.all_following()
             || self.reasoning.any_paused()
-            || self.expanded.len() != before_expanded
-            || self.hover_froze_fold;
+            || self.expanded.len() != before_expanded;
         self.pinned_cells.clear();
-        self.hover_froze_fold = false;
         self.activity.resume_tail_follow();
         self.reasoning.resume_live_follow();
         had_locks

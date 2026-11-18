@@ -33,8 +33,6 @@ pub(super) struct FullscreenState {
     pub(super) expanded: HashSet<ParagraphKey>,
     /// 查看保护期间固定不折叠的步骤单元下标
     pub(super) pinned_cells: HashSet<usize>,
-    /// 停留在底部时曾因悬停冻结过自动折叠，指针移开后需立即补一次重排
-    pub(super) hover_froze_fold: bool,
     /// 恢复底部分支后触发一次正文重绘
     pub(super) pending_refresh: bool,
     /// 本帧由“回到底部”或手动滚到底部触发恢复，跳过本次光标行重新锁定
@@ -102,17 +100,17 @@ impl FullscreenState {
     /// - 无
     #[cfg(test)]
     pub(super) fn apply_document(&mut self, document: FullscreenDocument, body_height: usize) {
-        let anchor = self.hovered_inspect_anchor();
+        let anchor = self.inspection_anchor();
         self.apply_document_with_anchor(document, body_height, anchor, true);
     }
 
-    /// 【终端】【防抢焦点】在保持悬停查看位置的前提下换入新文档；回到底部或未查看时正常跟随。
+    /// 【终端】【防抢焦点】在保持主动展开后的阅读位置的前提下换入新文档；回到底部或未查看时正常跟随。
     ///
     /// 参数:
     /// - `document`: 新正文
     /// - `body_height`: 正文区行数
-    /// - `hover_anchor`: 刷新前捕获的悬停锚点
-    /// - `respect_hover`: 是否根据悬停状态冻结跟随
+    /// - `inspect_anchor`: 刷新前捕获的阅读锚点
+    /// - `respect_inspection`: 是否保留主动阅读锚点
     ///
     /// 返回:
     /// - 无
@@ -120,17 +118,15 @@ impl FullscreenState {
         &mut self,
         document: FullscreenDocument,
         body_height: usize,
-        hover_anchor: Option<super::inspection_lock::InspectAnchor>,
-        respect_hover: bool,
+        inspect_anchor: Option<super::inspection_lock::InspectAnchor>,
+        respect_inspection: bool,
     ) {
-        let anchor = if respect_hover {
-            hover_anchor.or_else(|| self.hovered_inspect_anchor())
+        let anchor = if respect_inspection {
+            inspect_anchor.or_else(|| self.inspection_anchor())
         } else {
             None
         };
         let grew = document.lines.len() > self.document.lines.len();
-        let changed = document.lines != self.document.lines;
-        let previous_max = self.max_scroll(body_height);
         // 1. 清掉已不存在的展开键（/clear 或会话切换后）
         let mut live_keys = document
             .paragraphs
@@ -143,18 +139,7 @@ impl FullscreenState {
         self.pinned_cells.retain(|cell| live_cells.contains(cell));
         self.document = document;
         let max = self.max_scroll(body_height);
-        // 2. 【终端】【悬停保护】悬停查看工具详情期间若出现新输出或滚动窗口扩展，冻结跟随并锁定当前行
-        if self.follow && anchor.is_some() && changed && (max > previous_max || max > self.scroll) {
-            self.follow = false;
-            self.hover_froze_fold = false;
-            self.lock_visible_inspection(anchor);
-            if grew || max > self.scroll {
-                self.unseen = true;
-            }
-        } else if self.follow && anchor.is_some() {
-            self.hover_froze_fold = true;
-        }
-        // 3. 跟随时贴底；否则保持视觉位置，仅在内容增长或滞后时提示有新输出
+        // 2. 跟随时贴底；否则保持视觉位置，仅在内容增长或滞后时提示有新输出
         if self.follow {
             self.scroll = max;
             self.unseen = false;
@@ -213,7 +198,6 @@ impl FullscreenState {
             // 1. 【终端】【主动触底恢复】主动跳到底部、向下滚动触底或底部继续下滚时均解除查看锁定并强制刷新折叠态
             if target == usize::MAX || previous_scroll < max || target > previous_scroll {
                 self.resuming_bottom = true;
-                self.hover_froze_fold = false;
                 if self.release_inspection_locks() || !was_following {
                     self.pending_refresh = true;
                 }

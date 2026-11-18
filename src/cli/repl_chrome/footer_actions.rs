@@ -70,6 +70,7 @@ mod tests {
             mode: crate::agent::AgentMode::Yolo,
             context_ratio: 0.2,
             context_window_tokens: 200_000,
+            compaction_policy: Default::default(),
             model: "中文模型".into(),
             thinking: "high".into(),
             directory: "/workspace".into(),

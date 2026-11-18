@@ -49,9 +49,9 @@ impl ReasoningViewports {
             .any(|position| position.live && !position.follow)
     }
 
-    /// 【终端】【思考固定】悬停查看实时思考时暂停该思考块的尾随滚动。
-    /// 参数: `cell` 为思考单元下标；返回: 无。
-    pub(super) fn pause_if_hovered(&mut self, cell: usize) {
+    /// 【终端】【主动查看】用户展开实时思考后暂停内部跟随，保持阅读位置。
+    /// 参数: cell 为主动展开的思考单元下标；返回: 无。
+    pub(super) fn pause_for_inspection(&mut self, cell: usize) {
         if let Some(position) = self.positions.get_mut(&cell) {
             if position.live {
                 position.follow = false;
@@ -169,13 +169,13 @@ impl ReasoningViewports {
             let limit = if self.width > 0 { self.width } else { 80 };
             let label = format!(" · {}", crate::i18n::text("paused", "已暂停跟随"));
             let label_width = unicode_width::UnicodeWidthStr::width(label.as_str());
-            let muted = super::sidebar_palette::fg(
-                super::sidebar_palette::SidebarPalette::current().muted,
-            );
+            let muted =
+                super::sidebar_palette::fg(super::sidebar_palette::SidebarPalette::current().muted);
             for title_row in paused_titles {
                 if let Some(line) = document.lines.get_mut(title_row) {
                     let current = line.as_str();
-                    if crate::render::ansi_clip::ansi_visible_width(current) + label_width <= limit {
+                    if crate::render::ansi_clip::ansi_visible_width(current) + label_width <= limit
+                    {
                         *line = crate::render::transcript::AnsiLine::new(format!(
                             "{current}{muted}{label}\x1b[0m"
                         ));

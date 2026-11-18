@@ -33,6 +33,88 @@ fn push_bash(runtime: &mut ReplRuntime, command: &str, output: &str) {
         .push_tool_result("bash".into(), true, output.into());
 }
 
+/// 【终端】【思考跟随】悬停实时思考不会暂停，主动展开后才固定内部阅读位置。
+/// 参数: 无；返回: 无。
+#[test]
+fn live_reasoning_pauses_only_after_manual_expansion() {
+    use crate::llm::{ChatStreamChunk, ChatStreamKind};
+    use crate::render::transcript::ParagraphPart;
+    tui_mode::set_override(Some(TuiMode::Fullscreen));
+    let mut runtime = ReplRuntime::new(200, full_options());
+    runtime.transcript.push_chunk(&ChatStreamChunk {
+        kind: ChatStreamKind::Reasoning,
+        text: (0..20).map(|row| format!("THOUGHT-{row:02}\n")).collect(),
+    });
+    runtime.enter_fullscreen().unwrap();
+    let session = runtime.fullscreen.as_ref().unwrap();
+    let layout = session.state.layout.unwrap();
+    let region = &session.state.document.reasonings[0];
+    let screen_row = layout.body_top + (region.start + 1 - session.state.scroll) as u16;
+    // 1. 【终端】【悬停验证】仅移动鼠标后继续生成，五行思考窗口保持跟随最新内容
+    runtime
+        .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 6, screen_row))
+        .unwrap();
+    runtime.transcript.push_chunk(&ChatStreamChunk {
+        kind: ChatStreamKind::Reasoning,
+        text: (20..30).map(|row| format!("THOUGHT-{row:02}\n")).collect(),
+    });
+    runtime.paint_fullscreen().unwrap();
+    let session = runtime.fullscreen.as_ref().unwrap();
+    assert!(session.state.follow);
+    assert!(!session.state.reasoning.any_paused());
+    assert!(session
+        .state
+        .document
+        .lines
+        .iter()
+        .any(|line| plain(line.as_str()).contains("THOUGHT-29")));
+
+    // 2. 【终端】【主动展开】收起后重新展开实时思考，后续生成不能改变当前阅读位置
+    for _ in 0..2 {
+        let session = runtime.fullscreen.as_ref().unwrap();
+        let span = session
+            .state
+            .document
+            .paragraphs
+            .iter()
+            .find(|span| {
+                span.key.cell == 0
+                    && !matches!(
+                        span.key.part,
+                        ParagraphPart::ActivityGroup | ParagraphPart::OlderActivity
+                    )
+            })
+            .unwrap();
+        let row = layout.body_top + (span.control - session.state.scroll) as u16;
+        click(&mut runtime, 6, row);
+    }
+    let before = runtime
+        .fullscreen
+        .as_ref()
+        .unwrap()
+        .state
+        .document
+        .lines
+        .clone();
+    runtime.transcript.push_chunk(&ChatStreamChunk {
+        kind: ChatStreamKind::Reasoning,
+        text: (30..40).map(|row| format!("THOUGHT-{row:02}\n")).collect(),
+    });
+    runtime.paint_fullscreen().unwrap();
+    let state = &runtime.fullscreen.as_ref().unwrap().state;
+    assert!(!state.follow);
+    assert!(state.reasoning.any_paused());
+    let thoughts = |lines: &[crate::render::transcript::AnsiLine]| {
+        lines
+            .iter()
+            .map(|line| plain(line.as_str()))
+            .filter(|line| line.contains("THOUGHT-"))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(thoughts(&state.document.lines), thoughts(&before));
+    tui_mode::set_override(None);
+}
+
 /// 【终端】【防永久锁死】停在底部时短暂悬停再移开鼠标，不得永久禁用后续工具详情自动收缩。
 #[test]
 fn transient_hover_without_pause_preserves_auto_collapse() {
@@ -97,9 +179,10 @@ fn transient_hover_without_pause_preserves_auto_collapse() {
     tui_mode::set_override(None);
 }
 
-/// 【终端】【悬停后恢复】悬停暂停期间保持展开，点击回到底部后立即恢复自动收缩。
+/// 【终端】【悬停跟随】鼠标停在工具正文时，新步骤继续滚动并正常收缩旧详情。
+/// 参数: 无；返回: 无。
 #[test]
-fn clicking_bottom_after_hover_pause_restores_auto_collapse() {
+fn hovered_tools_keep_following_and_auto_collapsing() {
     tui_mode::set_override(Some(TuiMode::Fullscreen));
     let mut runtime = ReplRuntime::new(200, full_options());
     push_bash(&mut runtime, "echo step-0", "INSPECT-HOLD-LINE");
@@ -128,16 +211,9 @@ fn clicking_bottom_after_hover_pause_restores_auto_collapse() {
     }
     runtime.paint_fullscreen().unwrap();
 
-    // 1. 仅工具链超出内部窗口时，执行链保持暂停并显示点击恢复跟随入口
+    // 1. 【终端】【悬停跟随】新步骤超出内部窗口也不能因悬停暂停主视口或执行链
     let session = runtime.fullscreen.as_ref().unwrap();
-    assert!(!session.state.activity.all_following());
-    let footer_doc_row = session.state.document.activities[0]
-        .footer
-        .expect("超出预算的执行链应显示恢复跟随页脚");
-    let footer_screen_row = layout.body_top + (footer_doc_row - session.state.scroll) as u16;
-    click(&mut runtime, 6, footer_screen_row);
-
-    let session = runtime.fullscreen.as_ref().unwrap();
+    assert!(session.state.follow, "悬停不能暂停主会话跟随");
     assert!(session.state.activity.all_following());
     assert!(session.state.pinned_cells.is_empty());
     let screen = session
@@ -150,7 +226,11 @@ fn clicking_bottom_after_hover_pause_restores_auto_collapse() {
         .join("\n");
     assert!(
         !screen.contains("INSPECT-HOLD-LINE"),
-        "点击恢复跟随后原本被悬停保活的旧工具应恢复自动收缩:\n{screen}"
+        "悬停期间旧工具应正常收缩:\n{screen}"
+    );
+    assert!(
+        screen.contains("BATCH-4-ROW-7"),
+        "应展示最新工具输出:\n{screen}"
     );
     tui_mode::set_override(None);
 }

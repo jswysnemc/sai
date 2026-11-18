@@ -16,6 +16,8 @@ pub(super) struct ReplChrome {
     pub(super) mode: AgentMode,
     pub(super) context_ratio: f32,
     pub(super) context_window_tokens: usize,
+    /// 会话实际采用的自动压缩策略
+    pub(super) compaction_policy: crate::state::CompactionBudgetPolicy,
     pub(super) model: String,
     pub(super) thinking: String,
     pub(super) directory: String,
@@ -88,6 +90,16 @@ impl ReplChrome {
                 .as_ref()
                 .map(|item| item.context_window_tokens)
                 .unwrap_or(context_limit),
+            compaction_policy: state
+                .resolve_compaction_policy(&config.context)
+                .map(|resolved| resolved.policy)
+                .unwrap_or_else(|_| {
+                    crate::state::CompactionBudgetPolicy::from_context(
+                        config.context.clamped_compaction_ratio(),
+                        config.context.compaction_reserve_tokens,
+                    )
+                    .with_mode(config.context.compaction_mode)
+                }),
             model: short_model_name(&model),
             thinking,
             directory,
@@ -549,10 +561,7 @@ pub(super) fn chrome_input_pad_row(cols: usize) -> String {
 
 /// 【终端】【指定背景内边距行】在指定终端背景 RGB 下生成输入条上下背景内边距行。
 /// 参数: `background` 为终端背景 RGB，`cols` 为列宽；返回: 整行背景填充文本。
-pub(super) fn chrome_input_pad_row_for_background(
-    background: (u8, u8, u8),
-    cols: usize,
-) -> String {
+pub(super) fn chrome_input_pad_row_for_background(background: (u8, u8, u8), cols: usize) -> String {
     let panel_bg = if is_light_background(background) {
         let palette = crate::render::panel_palette::PanelPalette::for_background(background);
         crate::render::panel_palette::bg(palette.hover_bg)

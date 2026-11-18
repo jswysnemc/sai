@@ -23,6 +23,7 @@ pub(super) fn chrome() -> ReplChrome {
         mode: AgentMode::Yolo,
         context_ratio: 0.0,
         context_window_tokens: 200_000,
+        compaction_policy: Default::default(),
         model: "gpt".to_string(),
         thinking: "auto".to_string(),
         directory: "/workspace".to_string(),
@@ -480,9 +481,10 @@ fn bottom_button_returns_to_latest_output() {
     assert!(session.state.selection.is_none());
 }
 
-/// 【终端】【悬停保护回归】悬停工具详情期间新增工具与输出不抢焦点、不自动收起，仅点击回到底部或滚到底部后恢复。
+/// 【终端】【悬停跟随回归】悬停工具详情时新增工具与回答正常滚动，手动滚轮仍能暂停阅读。
+/// 参数: 无；返回: 无。
 #[test]
-fn hovering_tool_detail_prevents_focus_steal_and_auto_collapse_until_bottom_resumed() {
+fn hovering_tool_detail_keeps_following_tools_and_answers() {
     use crate::render::activity_animation::strip_ansi_for_test as plain;
     use crossterm::event::MouseButton;
     crate::render::tui_mode::set_override(Some(crate::config::TuiMode::Fullscreen));
@@ -501,7 +503,7 @@ fn hovering_tool_detail_prevents_focus_steal_and_auto_collapse_until_bottom_resu
         .push_tool_result("bash".into(), true, "INSPECT-FIRST-OUTPUT".into());
     runtime.enter_fullscreen().unwrap();
 
-    // 1. 【终端】【悬停锁定】在底部悬停首个工具详情行
+    // 1. 【终端】【悬停跟随】在底部悬停首个工具详情行
     let session = runtime.fullscreen.as_ref().unwrap();
     let layout = session.state.layout.unwrap();
     let inspect_doc_row = session
@@ -515,11 +517,7 @@ fn hovering_tool_detail_prevents_focus_steal_and_auto_collapse_until_bottom_resu
     runtime
         .handle_fullscreen_event(&mouse(MouseEventKind::Moved, 6, hover_screen_row))
         .unwrap();
-    let hover_doc_row_before = inspect_doc_row;
-    let hover_visual_offset_before =
-        hover_doc_row_before - runtime.fullscreen.as_ref().unwrap().state.scroll;
-
-    // 2. 【终端】【新增输出】连续刷新多个新工具及后续回复，视口不跳走且原详情保持展开可见
+    // 2. 【终端】【新增输出】连续刷新多个新工具及后续回复，视口保持实时跟随
     for idx in 0..5 {
         runtime
             .transcript
@@ -542,39 +540,31 @@ fn hovering_tool_detail_prevents_focus_steal_and_auto_collapse_until_bottom_resu
     runtime.paint_fullscreen().unwrap();
 
     let session = runtime.fullscreen.as_ref().unwrap();
-    assert!(!session.state.follow, "悬停查看新输出出现后应冻结自动跟随");
+    assert!(session.state.follow, "悬停不能暂停主会话自动跟随");
     assert!(
-        !session.state.activity.all_following(),
-        "内部执行链同样应暂停自动跟随"
+        session.state.activity.all_following(),
+        "悬停不能暂停内部执行链自动跟随"
     );
-    assert!(session.state.unseen, "应显示有新输出按钮提示");
-    let inspect_doc_row_after = session
+    assert!(!session.state.unseen);
+    assert!(session.state.pinned_cells.is_empty());
+    assert!(!session
         .state
         .document
         .lines
         .iter()
-        .position(|line| plain(line.as_str()).contains("INSPECT-FIRST-OUTPUT"))
-        .expect("悬停查看的工具详情在新增输出后不得自动收起或被折叠入口吞掉");
-    assert_eq!(
-        inspect_doc_row_after - session.state.scroll,
-        hover_visual_offset_before,
-        "悬停行相对屏幕的位置应保持稳定（即使上方出现了分组标题）"
-    );
-    let (start, end) = session.bottom_button.expect("应显示回到底部/有新输出按钮");
-
-    // 3. 【终端】【点击恢复】点击回到底部按钮后恢复自动跟随与底部显示
-    let last_row = layout.body_top + layout.body_height - 1;
-    click(&mut runtime, (start + end) / 2, last_row);
-    let session = runtime.fullscreen.as_ref().unwrap();
-    assert!(session.state.follow);
-    assert!(session.state.activity.all_following());
-    assert!(!session.state.unseen);
+        .any(|line| plain(line.as_str()).contains("INSPECT-FIRST-OUTPUT")));
+    assert!(session
+        .state
+        .document
+        .lines
+        .iter()
+        .any(|line| plain(line.as_str()).contains("FINAL-REPLY-11")));
     assert_eq!(
         session.state.scroll,
         session.state.max_scroll(usize::from(layout.body_height))
     );
 
-    // 4. 【终端】【手动滚到底部恢复】鼠标左键按下或滚轮上滚离开后，主动滚到底部同样恢复跟随
+    // 3. 【终端】【手动阅读】滚轮上滚仍暂停跟随，主动滚到底部恢复跟随
     runtime
         .handle_fullscreen_event(&mouse(MouseEventKind::ScrollUp, 6, hover_screen_row))
         .unwrap();

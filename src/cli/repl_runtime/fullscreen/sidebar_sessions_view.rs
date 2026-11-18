@@ -105,7 +105,7 @@ fn subheading(label: &str, width: usize) -> SidebarRow {
     )
 }
 
-/// 【终端侧栏】【会话条目】保留当前会话左侧异色竖条特别设计，统一第 2 列状态符与第 4 列标题基线。
+/// 【终端侧栏】【会话条目】统一第 2 列状态符与第 4 列标题基线，当前会话仅使用实心状态点。
 /// 参数: entry 为会话条目，viewed 为当前浏览会话标识，current 为是否当前终端归属会话，width 为净宽；返回: 可点击会话行。
 fn session_row(
     entry: &SessionEntry,
@@ -114,17 +114,14 @@ fn session_row(
     width: usize,
 ) -> SidebarRow {
     let palette = SidebarPalette::current();
-    // 1. 【终端侧栏】【专属锚点】当前会话保留左侧异色竖条与实心点，空闲态不再重复叠加右侧绿色状态词
+    // 1. 【终端侧栏】【当前状态】当前会话使用实心点，标题缩进与其他会话保持一致
     let (prefix, right_badge) = if current {
         let right = if entry.status == SessionStatus::Running {
             badge(t("running", "运行中"), palette.accent)
         } else {
             String::new()
         };
-        (
-            format!("{}▎ {}●\x1b[39m ", fg(palette.accent), fg(palette.added)),
-            right,
-        )
+        (format!("  {}●\x1b[39m ", fg(palette.added)), right)
     } else {
         let (glyph, glyph_color, right) = match entry.status {
             SessionStatus::Running => (
@@ -132,11 +129,7 @@ fn session_row(
                 palette.accent,
                 badge(t("running", "运行中"), palette.accent),
             ),
-            SessionStatus::Idle => (
-                "○",
-                palette.added,
-                badge(t("ready", "就绪"), palette.added),
-            ),
+            SessionStatus::Idle => ("○", palette.added, badge(t("ready", "就绪"), palette.added)),
             SessionStatus::Recent => (
                 "·",
                 palette.subtle,
@@ -201,7 +194,8 @@ mod tests {
             1
         );
         let current_plain = strip_ansi(&rows[position("CURRENT")].text);
-        assert!(current_plain.starts_with("▎ ● CURRENT"), "{current_plain}");
+        assert!(current_plain.starts_with("  ● CURRENT"), "{current_plain}");
+        assert!(!current_plain.contains('▎'), "{current_plain}");
         assert!(!current_plain.contains("ready"), "{current_plain}");
         assert_eq!(super::rows(&sessions, true, 40).len(), 2);
     }
@@ -232,9 +226,15 @@ mod tests {
         let expected_today = t("Today", "今天");
         let expected_week = t("Past 7d", "近 7 天");
         let expected_older = t("Older", "更早");
-        assert!(joined.contains(&format!("    {expected_today}")), "{joined}");
+        assert!(
+            joined.contains(&format!("    {expected_today}")),
+            "{joined}"
+        );
         assert!(joined.contains(&format!("    {expected_week}")), "{joined}");
-        assert!(joined.contains(&format!("    {expected_older}")), "{joined}");
+        assert!(
+            joined.contains(&format!("    {expected_older}")),
+            "{joined}"
+        );
         let today_header = rendered
             .iter()
             .find(|line| line.contains(expected_today))

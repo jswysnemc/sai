@@ -34,6 +34,7 @@ fn chrome(config: &AppConfig, paths: &SaiPaths) -> ReplChrome {
         mode: AgentMode::Yolo,
         context_ratio: 0.25,
         context_window_tokens: 128000,
+        compaction_policy: Default::default(),
         model: "test-model".into(),
         thinking: "high".into(),
         directory: "~/项目/sai".into(),
