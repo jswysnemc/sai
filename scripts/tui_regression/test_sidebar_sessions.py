@@ -86,7 +86,7 @@ class SidebarSessionTests(unittest.TestCase):
                 terminal.wait_for(lambda: "FIRST-SESSION-DRAFT" in terminal.text())
                 row = next(index for index, line in enumerate(lines(terminal)) if "TARGET-SESSION" in line[120:])
                 click(terminal, 130, row)
-                terminal.wait_for(lambda: any("▎" in line[120:] and "TARGET" in line[120:] for line in lines(terminal)))
+                terminal.wait_for(lambda: any("●" in line[120:] and "TARGET" in line[120:] for line in lines(terminal)))
                 self.assertNotIn("Read-only session view", terminal.text())
                 self.assertNotIn("FIRST-SESSION-DRAFT", terminal.text())
                 # 1. 【终端侧栏】【独立提交】首会话仍挂起时，目标会话直接收到并完成自己的消息

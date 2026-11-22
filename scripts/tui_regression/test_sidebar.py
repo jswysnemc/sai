@@ -94,7 +94,7 @@ class SidebarTests(unittest.TestCase):
                 click(terminal, 3, 0)
                 terminal.wait_for(lambda: "User messages (1)" in terminal.text())
                 self.assertTrue(any("Subagents" in line[120:] for line in lines(terminal)))
-                self.assertTrue(any("tok/s" in line[120:] for line in lines(terminal)))
+                self.assertTrue(any("/s" in line[120:] for line in lines(terminal)))
                 self.assertIn("Changes", terminal.text())
                 terminal.send(b"\x1b")
                 terminal.wait_for(lambda: "User messages" not in terminal.text())

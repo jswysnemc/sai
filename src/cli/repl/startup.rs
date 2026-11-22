@@ -24,6 +24,7 @@ pub(super) fn initialize_runtime(
     };
     let mut runtime = ReplRuntime::new(config.display.repl_transcript_row_cap, options);
     runtime.bind_session_browser(paths, state);
+    runtime.bind_group_browser(paths);
     // 2. 【终端】【输入就绪】先启用输入模式和键盘协议，再显示可操作界面
     runtime.enable_startup_input()?;
     // 3. 【终端图片】【输入保留】探测期间的按键交回正式输入循环，保持原有事件顺序
