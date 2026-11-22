@@ -7,7 +7,7 @@ use crate::render::transcript::{AnsiLine, ExpandableBlock, ExpandableBlockKind, 
 use anyhow::Result;
 use crossterm::cursor::{Hide, Show};
 use crossterm::event::{
-    self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyEvent, KeyEventKind,
+    DisableBracketedPaste, EnableBracketedPaste, Event, KeyEvent, KeyEventKind,
 };
 use crossterm::execute;
 use crossterm::terminal;
@@ -321,12 +321,12 @@ impl PagerScreen {
         loop {
             let ready = match wait {
                 None => true,
-                Some(timeout) => event::poll(timeout)?,
+                Some(timeout) => super::terminal_events::poll(timeout)?,
             };
             if !ready {
                 return Ok(false);
             }
-            match event::read()? {
+            match super::terminal_events::read()? {
                 Event::Key(KeyEvent {
                     code,
                     modifiers,

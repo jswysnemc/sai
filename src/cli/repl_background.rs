@@ -28,7 +28,7 @@ use crate::config::AppConfig;
 use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyEventKind};
+use crossterm::event::{Event, KeyEventKind};
 use model::TaskManager;
 use service::{Request, TaskService};
 use std::time::{Duration, Instant};
@@ -67,10 +67,10 @@ pub(super) async fn run_repl_background_manager(
         screen.draw(&frame.placed(), size)?;
 
         // 2. 【后台任务】【输入分流】日志模式与列表模式独立处理，释放事件不重复执行操作
-        if !event::poll(Duration::from_millis(80))? {
+        if !crate::cli::terminal_events::poll(Duration::from_millis(80))? {
             continue;
         }
-        let effect = match event::read()? {
+        let effect = match crate::cli::terminal_events::read()? {
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 input::handle(&mut manager, key, frame.page_rows)
             }

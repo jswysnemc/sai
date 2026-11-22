@@ -4,8 +4,9 @@
 //! `Event::Resize`。`dwSize` 是屏幕缓冲区（含回滚），不是可见窗口。
 //! 可见行列在 `GetConsoleScreenBufferInfo.srWindow` 里，`terminal::size()` 读的就是它。
 //!
-//! 另外，未设置 `DISABLE_NEWLINE_AUTO_RETURN` 时，写满一行会立刻换行并把画面顶上去。
-//! 满宽状态行、中文折行会因此间歇性错位。
+//! 另外，未设置 `DISABLE_NEWLINE_AUTO_RETURN` 时，写满一行会立刻换行并把画面顶上去；
+//! 若父进程残留开启 `ENABLE_VIRTUAL_TERMINAL_INPUT`，ConPTY 会停止将方向键、Home/End/Shift+Tab
+//! 等翻译为 Win32 输入记录，导致跨终端快捷键失效。
 
 #[cfg(all(windows, not(test)))]
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -19,6 +20,9 @@ const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
 /// `DISABLE_NEWLINE_AUTO_RETURN`
 #[cfg(any(windows, test))]
 const DISABLE_NEWLINE_AUTO_RETURN: u32 = 0x0008;
+/// `ENABLE_VIRTUAL_TERMINAL_INPUT`
+#[cfg(any(windows, test))]
+const ENABLE_VIRTUAL_TERMINAL_INPUT: u32 = 0x0200;
 
 #[cfg(all(windows, not(test)))]
 static OUTPUT_MODE_DEPTH: AtomicU32 = AtomicU32::new(0);
@@ -26,6 +30,10 @@ static OUTPUT_MODE_DEPTH: AtomicU32 = AtomicU32::new(0);
 static ORIGINAL_OUTPUT_MODE: AtomicU32 = AtomicU32::new(0);
 #[cfg(all(windows, not(test)))]
 static OUTPUT_MODE_APPLIED: AtomicBool = AtomicBool::new(false);
+#[cfg(all(windows, not(test)))]
+static ORIGINAL_INPUT_MODE: AtomicU32 = AtomicU32::new(0);
+#[cfg(all(windows, not(test)))]
+static INPUT_MODE_APPLIED: AtomicBool = AtomicBool::new(false);
 
 /// 选择本次 Resize 应采用的可见窗口尺寸。
 ///
@@ -94,7 +102,21 @@ pub(crate) fn tui_output_mode(current: u32) -> u32 {
         | DISABLE_NEWLINE_AUTO_RETURN
 }
 
-/// 进入 TUI 时修正 Windows 控制台输出模式。嵌套调用只计深度。
+/// 【终端】【Windows 输入模式】计算 TUI 需要的控制台输入模式，清除残留的 VT 输入标志。
+///
+/// 保持 Win32 输入记录模式，使 ConPTY 正常翻译方向键/功能键，同时放行未识别的 Kitty CSI-u 序列。
+///
+/// 参数:
+/// - `current`: 当前 `GetConsoleMode` 输入模式
+///
+/// 返回:
+/// - 进入 TUI 后应设置的输入模式
+#[cfg(any(windows, test))]
+pub(crate) fn tui_input_mode(current: u32) -> u32 {
+    current & !ENABLE_VIRTUAL_TERMINAL_INPUT
+}
+
+/// 进入 TUI 时修正 Windows 控制台输出与输入模式。嵌套调用只计深度。
 ///
 /// 参数:
 /// - 无
@@ -103,10 +125,22 @@ pub(crate) fn tui_output_mode(current: u32) -> u32 {
 /// - 无
 pub(crate) fn enter_tui_output_mode() {
     #[cfg(all(windows, not(test)))]
-    enter_windows_output_mode();
+    enter_windows_modes();
 }
 
-/// 离开一层 TUI 输入守卫。最后一层退出时恢复进入前的输出模式。
+/// 【终端】【Windows 输入保活】交互子控件归还终端后再次确保输入记录模式生效。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+pub(crate) fn ensure_tui_input_mode() {
+    #[cfg(all(windows, not(test)))]
+    ensure_windows_input_record_mode();
+}
+
+/// 离开一层 TUI 输入守卫。最后一层退出时恢复进入前的输出与输入模式。
 ///
 /// 参数:
 /// - 无
@@ -115,10 +149,10 @@ pub(crate) fn enter_tui_output_mode() {
 /// - 无
 pub(crate) fn leave_tui_output_mode() {
     #[cfg(all(windows, not(test)))]
-    leave_windows_output_mode();
+    leave_windows_modes();
 }
 
-/// panic 或紧急恢复时立刻还原输出模式，不再等待守卫配对。
+/// panic 或紧急恢复时立刻还原输出与输入模式，不再等待守卫配对。
 ///
 /// 参数:
 /// - 无
@@ -129,7 +163,7 @@ pub(crate) fn force_restore_tui_output_mode() {
     #[cfg(all(windows, not(test)))]
     {
         OUTPUT_MODE_DEPTH.store(0, Ordering::SeqCst);
-        restore_windows_output_mode();
+        restore_windows_modes();
     }
 }
 
@@ -153,7 +187,27 @@ fn console_output_mode() -> Option<(windows_sys::Win32::Foundation::HANDLE, u32)
     Some((handle, mode))
 }
 
-/// 第一层进入时写入 TUI 输出模式。
+/// 【终端】【Windows 输入查询】读取标准输入的控制台模式。管道或非控制台句柄返回 `None`。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 句柄与当前模式
+#[cfg(all(windows, not(test)))]
+fn console_input_mode() -> Option<(windows_sys::Win32::Foundation::HANDLE, u32)> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::System::Console::GetConsoleMode;
+
+    let handle = std::io::stdin().as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
+    let mut mode = 0u32;
+    if unsafe { GetConsoleMode(handle, &mut mode) } == 0 {
+        return None;
+    }
+    Some((handle, mode))
+}
+
+/// 第一层进入时写入 TUI 输出模式与输入记录模式。
 ///
 /// 参数:
 /// - 无
@@ -161,22 +215,31 @@ fn console_output_mode() -> Option<(windows_sys::Win32::Foundation::HANDLE, u32)
 /// 返回:
 /// - 无
 #[cfg(all(windows, not(test)))]
-fn enter_windows_output_mode() {
+fn enter_windows_modes() {
     use windows_sys::Win32::System::Console::SetConsoleMode;
 
     if OUTPUT_MODE_DEPTH.fetch_add(1, Ordering::SeqCst) != 0 {
+        ensure_windows_input_record_mode();
         return;
     }
-    let Some((handle, mode)) = console_output_mode() else {
-        return;
-    };
-    ORIGINAL_OUTPUT_MODE.store(mode, Ordering::SeqCst);
-    if unsafe { SetConsoleMode(handle, tui_output_mode(mode)) } != 0 {
-        OUTPUT_MODE_APPLIED.store(true, Ordering::SeqCst);
+    // 1. 【终端】【输出模式】启用 VT 处理与延迟换行
+    if let Some((handle, mode)) = console_output_mode() {
+        ORIGINAL_OUTPUT_MODE.store(mode, Ordering::SeqCst);
+        if unsafe { SetConsoleMode(handle, tui_output_mode(mode)) } != 0 {
+            OUTPUT_MODE_APPLIED.store(true, Ordering::SeqCst);
+        }
+    }
+    // 2. 【终端】【输入模式】清除残留 VT 输入标志并保存原始值以便退出恢复
+    if let Some((handle, mode)) = console_input_mode() {
+        ORIGINAL_INPUT_MODE.store(mode, Ordering::SeqCst);
+        let next = tui_input_mode(mode);
+        if next == mode || unsafe { SetConsoleMode(handle, next) } != 0 {
+            INPUT_MODE_APPLIED.store(next != mode, Ordering::SeqCst);
+        }
     }
 }
 
-/// 最后一层离开时恢复输出模式。
+/// 确保存储在标准输入句柄上的 VT 输入标志已关闭。
 ///
 /// 参数:
 /// - 无
@@ -184,7 +247,29 @@ fn enter_windows_output_mode() {
 /// 返回:
 /// - 无
 #[cfg(all(windows, not(test)))]
-fn leave_windows_output_mode() {
+fn ensure_windows_input_record_mode() {
+    use windows_sys::Win32::System::Console::SetConsoleMode;
+
+    let Some((handle, mode)) = console_input_mode() else {
+        return;
+    };
+    let next = tui_input_mode(mode);
+    if next != mode {
+        unsafe {
+            SetConsoleMode(handle, next);
+        }
+    }
+}
+
+/// 最后一层离开时恢复输出与输入模式。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[cfg(all(windows, not(test)))]
+fn leave_windows_modes() {
     // 1. 紧急恢复可能已经把深度清零，这里不能再减，否则会绕回
     let mut depth = OUTPUT_MODE_DEPTH.load(Ordering::SeqCst);
     loop {
@@ -199,7 +284,7 @@ fn leave_windows_output_mode() {
         ) {
             Ok(_) => {
                 if depth == 1 {
-                    restore_windows_output_mode();
+                    restore_windows_modes();
                 }
                 return;
             }
@@ -208,7 +293,7 @@ fn leave_windows_output_mode() {
     }
 }
 
-/// 把输出模式恢复成进入 TUI 之前的值。
+/// 把输出与输入模式恢复成进入 TUI 之前的值。
 ///
 /// 参数:
 /// - 无
@@ -216,23 +301,29 @@ fn leave_windows_output_mode() {
 /// 返回:
 /// - 无
 #[cfg(all(windows, not(test)))]
-fn restore_windows_output_mode() {
+fn restore_windows_modes() {
     use windows_sys::Win32::System::Console::SetConsoleMode;
 
-    if !OUTPUT_MODE_APPLIED.swap(false, Ordering::SeqCst) {
-        return;
+    if OUTPUT_MODE_APPLIED.swap(false, Ordering::SeqCst) {
+        if let Some((handle, _)) = console_output_mode() {
+            unsafe {
+                SetConsoleMode(handle, ORIGINAL_OUTPUT_MODE.load(Ordering::SeqCst));
+            }
+        }
     }
-    let Some((handle, _)) = console_output_mode() else {
-        return;
-    };
-    unsafe {
-        SetConsoleMode(handle, ORIGINAL_OUTPUT_MODE.load(Ordering::SeqCst));
+    if INPUT_MODE_APPLIED.swap(false, Ordering::SeqCst) {
+        if let Some((handle, mode)) = console_input_mode() {
+            let original_vt = ORIGINAL_INPUT_MODE.load(Ordering::SeqCst) & ENABLE_VIRTUAL_TERMINAL_INPUT;
+            unsafe {
+                SetConsoleMode(handle, (mode & !ENABLE_VIRTUAL_TERMINAL_INPUT) | original_vt);
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_windows_resize, tui_output_mode};
+    use super::{resolve_windows_resize, tui_input_mode, tui_output_mode};
 
     /// 【终端】【Windows 尺寸】缓冲区高度和 crossterm 多加的 1 不能覆盖可见窗口。
     #[test]
@@ -259,5 +350,14 @@ mod tests {
         assert_eq!(next & current, current);
         assert_eq!(next & 0x0004, 0x0004);
         assert_eq!(next & 0x0008, 0x0008);
+    }
+
+    /// 【终端】【Windows 输入模式】必须清除 ENABLE_VIRTUAL_TERMINAL_INPUT 且保留其他标志。
+    #[test]
+    fn tui_input_mode_clears_virtual_terminal_input_flag() {
+        let current = 0x0218u32;
+        let next = tui_input_mode(current);
+        assert_eq!(next & 0x0200, 0);
+        assert_eq!(next, 0x0018u32);
     }
 }

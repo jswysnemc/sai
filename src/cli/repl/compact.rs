@@ -64,12 +64,11 @@ pub(super) async fn run_compaction(
 /// - 收到 Ctrl+C 或 Esc 时返回 true
 fn poll_compact_cancel() -> Result<bool> {
     while crate::cli::terminal_events::ready()? {
-        if let Event::Key(key) = event::read()? {
+        if let Event::Key(key) = crate::cli::terminal_events::read()? {
             if key.kind == KeyEventKind::Release {
                 continue;
             }
-            let ctrl_c = matches!(key.code, KeyCode::Char('c'))
-                && key.modifiers.contains(KeyModifiers::CONTROL);
+            let ctrl_c = crate::cli::terminal_events::is_ctrl_char(key.code, key.modifiers, 'c');
             if ctrl_c || matches!(key.code, KeyCode::Esc) {
                 return Ok(true);
             }

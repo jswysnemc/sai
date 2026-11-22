@@ -67,8 +67,8 @@ impl ReplRuntime {
         let result = async {
             self.begin_permission_prompt(request.clone())?;
             while permission::is_permission_pending(&request.id) {
-                if crossterm::event::poll(Duration::ZERO)? {
-                    self.handle_permission_input(&crossterm::event::read()?)?;
+                if crate::cli::terminal_events::poll(Duration::ZERO)? {
+                    self.handle_permission_input(&crate::cli::terminal_events::read()?)?;
                 } else {
                     tokio::time::sleep(Duration::from_millis(20)).await;
                 }

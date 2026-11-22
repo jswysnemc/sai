@@ -4,6 +4,7 @@ mod probe;
 mod probe_response;
 #[cfg(windows)]
 mod probe_windows;
+mod terminal_identity;
 
 pub(crate) use buffered::render_buffered_image;
 pub(crate) use composer_tile::{composer_tile_environment, render_composer_tile, ComposerTile};

@@ -38,7 +38,7 @@ pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
             &matches,
             selected,
         )?;
-        let input = match event::read()? {
+        let input = match crate::cli::terminal_events::read()? {
             Event::Resize(columns, rows) => {
                 click.clear();
                 clear_inline_fuzzy(
@@ -117,7 +117,7 @@ pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
                 continue;
             }
             match code {
-                KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
+                KeyCode::Char('c' | 'C') if modifiers.contains(KeyModifiers::CONTROL) => {
                     clear_inline_fuzzy(&mut session.stdout, anchor_y, menu_lines)?;
                     return Ok(None);
                 }
@@ -132,13 +132,13 @@ pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
                 // 导航只用方向键与 Ctrl 组合：q/j/k 必须留给搜索输入
                 KeyCode::Up => selected = selected.saturating_sub(1),
                 KeyCode::Down => selected = (selected + 1).min(matches.len().saturating_sub(1)),
-                KeyCode::Char('p') if modifiers.contains(KeyModifiers::CONTROL) => {
+                KeyCode::Char('p' | 'P') if modifiers.contains(KeyModifiers::CONTROL) => {
                     selected = selected.saturating_sub(1);
                 }
-                KeyCode::Char('n') if modifiers.contains(KeyModifiers::CONTROL) => {
+                KeyCode::Char('n' | 'N') if modifiers.contains(KeyModifiers::CONTROL) => {
                     selected = (selected + 1).min(matches.len().saturating_sub(1));
                 }
-                KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => {
+                KeyCode::Char('u' | 'U') if modifiers.contains(KeyModifiers::CONTROL) => {
                     query.clear();
                     selected = 0;
                 }
@@ -146,7 +146,9 @@ pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
                     query.pop();
                     selected = 0;
                 }
-                KeyCode::Char(ch) if !modifiers.contains(KeyModifiers::CONTROL) => {
+                KeyCode::Char(ch)
+                    if !modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+                {
                     query.push(ch);
                     selected = 0;
                 }

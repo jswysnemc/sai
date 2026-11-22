@@ -3,7 +3,7 @@ use crate::cli::repl_runtime::ReplRuntime;
 use crate::cli::terminal_restore;
 use crate::ssh::{SecretRequest, SecretResponse};
 use anyhow::Result;
-use crossterm::event::{self, Event};
+use crossterm::event::Event;
 use std::io;
 use std::time::Duration;
 
@@ -53,14 +53,14 @@ fn read_response(
 ) -> Result<SecretResponse> {
     runtime.show_ssh_prompt(SshPromptView::new(request, input))?;
     loop {
-        if !event::poll(POLL_INTERVAL)? {
+        if !crate::cli::terminal_events::poll(POLL_INTERVAL)? {
             // 后端超时撤销请求后不再阻塞等待按键
             if !crate::ssh::is_pending(&request.id) {
                 return Ok(SecretResponse::Cancelled);
             }
             continue;
         }
-        let event = event::read()?;
+        let event = crate::cli::terminal_events::read()?;
         if let Event::Resize(cols, rows) = event {
             runtime.observe_stream_resize(cols, rows)?;
             runtime.redraw_stream_composer()?;

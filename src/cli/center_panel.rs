@@ -6,7 +6,7 @@ use crate::render::readable_terminal_text;
 use crate::render::transcript::AnsiLine;
 use anyhow::Result;
 use crossterm::cursor::{Hide, MoveTo, Show};
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
+use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
 use crossterm::style::Print;
 use crossterm::{execute, queue};
 use std::io::{self, Write};
@@ -67,16 +67,16 @@ fn run_panel_loop(title: &str, body: &str) -> Result<()> {
         offset = offset.min(layout.max_offset());
         layout.draw(&mut io::stdout(), offset)?;
         // 2. 【居中面板】【事件监听】轮询键盘、鼠标滚轮、点击关闭与窗口缩放
-        if !event::poll(Duration::from_millis(250))? {
+        if !crate::cli::terminal_events::poll(Duration::from_millis(250))? {
             continue;
         }
         let page = layout.content_height.max(1);
-        match event::read()? {
+        match crate::cli::terminal_events::read()? {
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 click.clear();
                 match key.code {
                     KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => return Ok(()),
-                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    KeyCode::Char('c' | 'C') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         return Ok(())
                     }
                     KeyCode::Up | KeyCode::Char('k') => offset = offset.saturating_sub(1),

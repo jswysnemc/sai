@@ -51,7 +51,9 @@ impl PagerState {
         count: usize,
     ) -> bool {
         let max_scroll = display_len.saturating_sub(height);
-        if modifiers.contains(KeyModifiers::CONTROL) && matches!(code, KeyCode::Char('c' | 'o')) {
+        if crate::cli::terminal_events::is_ctrl_char(code, modifiers, 'c')
+            || crate::cli::repl_input::shortcuts::is_fullscreen_toggle_key(code, modifiers)
+        {
             return true;
         }
         // 1. 搜索编辑：普通字符属于搜索词；Esc 放弃并回到进入搜索前的位置
@@ -67,7 +69,7 @@ impl PagerState {
                     self.search.backspace(search_lines);
                     self.follow_match = true;
                 }
-                KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => {
+                KeyCode::Char('u' | 'U') if modifiers.contains(KeyModifiers::CONTROL) => {
                     self.search.update("", search_lines);
                     self.follow_match = true;
                 }
@@ -99,11 +101,11 @@ impl PagerState {
                 self.search.step(!self.search_forward);
                 self.follow_match = true;
             }
-            KeyCode::Char('j') if modifiers.contains(KeyModifiers::CONTROL) && count > 1 => {
+            KeyCode::Char('j' | 'J') if modifiers.contains(KeyModifiers::CONTROL) && count > 1 => {
                 self.index = (self.index + 1) % count;
                 self.snap_paragraph = true;
             }
-            KeyCode::Char('k') if modifiers.contains(KeyModifiers::CONTROL) && count > 1 => {
+            KeyCode::Char('k' | 'K') if modifiers.contains(KeyModifiers::CONTROL) && count > 1 => {
                 self.index = (self.index + count - 1) % count;
                 self.snap_paragraph = true;
             }

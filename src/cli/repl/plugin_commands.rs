@@ -6,7 +6,7 @@ use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use crate::tools::ToolRegistry;
 use anyhow::{bail, Context, Result};
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEventKind};
 use serde_json::json;
 use std::time::Duration;
 
@@ -189,11 +189,10 @@ async fn execute_live(
 /// @returns 用户是否请求取消
 fn cancelled() -> Result<bool> {
     while crate::cli::terminal_events::ready()? {
-        if let Event::Key(key) = event::read()? {
+        if let Event::Key(key) = crate::cli::terminal_events::read()? {
             if key.kind != KeyEventKind::Release
                 && (key.code == KeyCode::Esc
-                    || (key.code == KeyCode::Char('c')
-                        && key.modifiers.contains(KeyModifiers::CONTROL)))
+                    || crate::cli::terminal_events::is_ctrl_char(key.code, key.modifiers, 'c'))
             {
                 return Ok(true);
             }

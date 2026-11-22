@@ -109,7 +109,7 @@ fn read_hidden_line(prompt: &str) -> Result<String> {
 /// 返回:
 /// - 输入内容；用户取消时返回错误
 fn read_hidden_keys() -> Result<String> {
-    use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
     let mut line = String::new();
     loop {
@@ -118,7 +118,7 @@ fn read_hidden_keys() -> Result<String> {
             modifiers,
             kind,
             ..
-        }) = event::read()?
+        }) = crate::cli::terminal_events::read()?
         else {
             continue;
         };

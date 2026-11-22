@@ -223,12 +223,15 @@ pub(crate) fn process_stream_input(
                     runtime.redraw_stream_composer()?;
                     continue;
                 }
-                // 1. 【终端】【面板焦点】中断保持全局可用，其余按键先交给焦点面板
-                if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                // 1. 【终端】【面板焦点】中断与全屏切换保持全局可用（含 Alt+O 回退），其余按键先交给焦点面板
+                if crate::cli::terminal_events::is_ctrl_char(key.code, key.modifiers, 'c') {
                     runtime.pending_clear_queue = false;
                     return Ok(StreamInputAction::Interrupt);
                 }
-                if key.code == KeyCode::Char('o') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                if crate::cli::repl_input::shortcuts::is_fullscreen_toggle_key(
+                    key.code,
+                    key.modifiers,
+                ) {
                     return Ok(StreamInputAction::ToggleFullscreen);
                 }
                 if runtime.handle_queue_panel_key(key.code, key.modifiers)? {
@@ -259,22 +262,17 @@ pub(crate) fn process_stream_input(
                     runtime.jump_to_output_bottom(true)?;
                     continue;
                 }
-                if !(matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y'))
-                    && key.modifiers.contains(KeyModifiers::CONTROL))
-                {
+                if !crate::cli::terminal_events::is_ctrl_char(key.code, key.modifiers, 'y') {
                     runtime.pending_clear_queue = false;
                 }
-                if matches!(key.code, KeyCode::Char('t'))
-                    && key.modifiers.contains(KeyModifiers::CONTROL)
+                if crate::cli::repl_input::shortcuts::is_todo_fold_key(key.code, key.modifiers)
                     && runtime.toggle_todo_panel_compact()
                 {
                     runtime.redraw_stream_composer()?;
                     continue;
                 }
                 // Ctrl+Z 撤回队尾、Ctrl+Y 清空队列：排错入队的消息不必等本轮结束
-                if matches!(key.code, KeyCode::Char('z'))
-                    && key.modifiers.contains(KeyModifiers::CONTROL)
-                {
+                if crate::cli::terminal_events::is_ctrl_char(key.code, key.modifiers, 'z') {
                     if runtime.undo_last_queued()?.is_none() {
                         runtime.record_meta(
                             crate::i18n::text(
@@ -286,9 +284,7 @@ pub(crate) fn process_stream_input(
                     }
                     continue;
                 }
-                if matches!(key.code, KeyCode::Char('y'))
-                    && key.modifiers.contains(KeyModifiers::CONTROL)
-                {
+                if crate::cli::terminal_events::is_ctrl_char(key.code, key.modifiers, 'y') {
                     let count = runtime.queue_len() + runtime.queued_control_commands().len();
                     if count == 0 {
                         runtime.pending_clear_queue = false;

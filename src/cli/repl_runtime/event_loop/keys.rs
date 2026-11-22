@@ -81,6 +81,42 @@ pub(super) fn handle_stream_key(
         runtime.redraw_stream_composer()?;
         return Ok(StreamInputAction::Continue);
     }
+    // 1. 【终端输入】【流式编辑】复用空闲态共享快捷键（Ctrl+A/E、词级移动、Alt+B/F、Ctrl+W/Backspace/Alt+Backspace、Ctrl+U/K）
+    {
+        let draft = runtime.stream_draft_mut();
+        if let Some(outcome) = crate::cli::repl_input::shortcuts::apply_composer_edit_key(
+            &mut draft.text,
+            &mut draft.cursor,
+            code,
+            modifiers,
+        ) {
+            if outcome == crate::cli::repl_input::shortcuts::ComposerEditOutcome::TextEdited {
+                draft.slash_selection = 0;
+                draft.is_pasted = false;
+            }
+            runtime.redraw_stream_composer()?;
+            return Ok(StreamInputAction::Continue);
+        }
+    }
+    // 2. 【终端输入】【流式换行】支持 Shift+Enter、Alt+Enter 与 Ctrl+J 换行
+    if crate::cli::repl_input::shortcuts::is_composer_newline_key(code, modifiers) {
+        let draft = runtime.stream_draft_mut();
+        insert_char(&mut draft.text, &mut draft.cursor, '\n');
+        draft.slash_selection = 0;
+        draft.is_pasted = false;
+        runtime.redraw_stream_composer()?;
+        return Ok(StreamInputAction::Continue);
+    }
+    if is_paste_key(runtime.paste_image_key(), code, modifiers) {
+        let draft = runtime.stream_draft_mut();
+        draft.windows_paste.reset();
+        draft.is_pasted = draft
+            .clipboard
+            .paste_into_input(&mut draft.text, &mut draft.cursor)?;
+        draft.slash_selection = 0;
+        runtime.redraw_stream_composer()?;
+        return Ok(StreamInputAction::Continue);
+    }
     match code {
         KeyCode::BackTab => {
             // 部分终端把 Shift+Tab 发成 BackTab：立即生效
@@ -135,14 +171,6 @@ pub(super) fn handle_stream_key(
             runtime.redraw_stream_composer()?;
         }
         KeyCode::Enter => {
-            if modifiers.contains(KeyModifiers::SHIFT) {
-                let draft = runtime.stream_draft_mut();
-                insert_char(&mut draft.text, &mut draft.cursor, '\n');
-                draft.slash_selection = 0;
-                draft.is_pasted = false;
-                runtime.redraw_stream_composer()?;
-                return Ok(StreamInputAction::Continue);
-            }
             if modifiers.contains(KeyModifiers::CONTROL) {
                 runtime.set_queue_draft_timing(crate::cli::repl_runtime::QueueInsertAt::Request);
             }
@@ -203,24 +231,6 @@ pub(super) fn handle_stream_key(
         KeyCode::Right => {
             let draft = runtime.stream_draft_mut();
             draft.cursor = draft.clipboard.cursor_right(&draft.text, draft.cursor);
-            runtime.redraw_stream_composer()?;
-        }
-        KeyCode::Home => {
-            runtime.stream_draft_mut().cursor = 0;
-            runtime.redraw_stream_composer()?;
-        }
-        KeyCode::End => {
-            let draft = runtime.stream_draft_mut();
-            draft.cursor = draft.text.chars().count();
-            runtime.redraw_stream_composer()?;
-        }
-        KeyCode::Char('v') if is_paste_key(runtime.paste_image_key(), code, modifiers) => {
-            let draft = runtime.stream_draft_mut();
-            draft.windows_paste.reset();
-            draft.is_pasted = draft
-                .clipboard
-                .paste_into_input(&mut draft.text, &mut draft.cursor)?;
-            draft.slash_selection = 0;
             runtime.redraw_stream_composer()?;
         }
         KeyCode::Char(ch)

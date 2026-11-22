@@ -5,9 +5,11 @@ use std::time::Duration;
 
 const CASES: &[&str] = &[
     "startup",
+    "ely-conpty",
     "success",
     "fragmented",
     "translated",
+    "conpty-orphan-st",
     "error",
     "wrong-id",
     "timeout",
@@ -78,6 +80,27 @@ fn native_console_case() {
         assert!(crate::probe::initialize_terminal_graphics().is_empty());
         responder.join().unwrap();
         assert_eq!(crate::probe::kitty_supported(), Some(true));
+    } else if case == "ely-conpty" {
+        // 1. 【终端测试】【ConPTY 吞噬 APC】模拟真实 Windows ELYTerminal：无 APC 应答，仅通过 CSI 16 t 返回像素尺寸
+        std::env::set_var("TERM", "xterm-256color");
+        std::env::set_var("TERM_PROGRAM", "elyterminal");
+        std::env::set_var("WT_SESSION", "inherited-session");
+        std::env::remove_var("TMUX");
+        let input = console.input() as usize;
+        let expected = console_fixture::text_records("hi");
+        console_fixture::write_records(console.input(), &expected);
+        let responder = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(15));
+            console_fixture::write_text(input as _, "\x1b[6;24;12t");
+        });
+        assert!(crate::probe::initialize_terminal_graphics().is_empty());
+        responder.join().unwrap();
+        assert_eq!(crate::probe::kitty_supported(), Some(true));
+        assert_eq!(crate::probe::cell_pixel_size(), Some((12, 24)));
+        assert_eq!(
+            console_fixture::key_snapshot(&console.remaining()),
+            console_fixture::key_snapshot(&expected)
+        );
     } else if case == "redirected" {
         let path = report.with_extension("redirected");
         let file = std::fs::File::create(&path).unwrap();

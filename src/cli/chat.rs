@@ -124,8 +124,8 @@ pub(super) fn drain_stdin() {
         return;
     }
     // 1. 只读取已经进入控制台队列的事件，避免等待新输入
-    while event::poll(Duration::ZERO).unwrap_or(false) {
-        if event::read().is_err() {
+    while crate::cli::terminal_events::poll(Duration::ZERO).unwrap_or(false) {
+        if crate::cli::terminal_events::read().is_err() {
             break;
         }
     }

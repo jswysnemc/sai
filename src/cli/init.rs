@@ -153,8 +153,10 @@ fn select_shell_hook() -> Result<Option<&'static str>> {
 
 fn read_shell_menu_key() -> Result<KeyCode> {
     loop {
-        if let Event::Key(KeyEvent { code, .. }) = event::read()? {
-            return Ok(code);
+        if let Event::Key(KeyEvent { code, kind, .. }) = crate::cli::terminal_events::read()? {
+            if kind != KeyEventKind::Release {
+                return Ok(code);
+            }
         }
     }
 }

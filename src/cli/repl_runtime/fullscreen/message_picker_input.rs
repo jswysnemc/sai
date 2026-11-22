@@ -3,7 +3,7 @@
 use super::input::Effect;
 use super::message_picker_view::PickerLayout;
 use crate::cli::repl_runtime::ReplRuntime;
-use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind};
+use crossterm::event::{Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind};
 
 impl ReplRuntime {
     /// 【消息导航】【事件隔离】面板打开时导航、确认和取消均由列表处理。
@@ -25,8 +25,11 @@ impl ReplRuntime {
             Event::Key(key) if key.kind == KeyEventKind::Release => return Some(Effect::Nothing),
             Event::Key(key) => {
                 // 1. 【消息导航】【全局快捷键】中断和退出全屏保留原行为，其余编辑按键不修改草稿
-                if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && matches!(key.code, KeyCode::Char('c' | 'o'))
+                if crate::cli::terminal_events::is_ctrl_char(key.code, key.modifiers, 'c')
+                    || crate::cli::repl_input::shortcuts::is_fullscreen_toggle_key(
+                        key.code,
+                        key.modifiers,
+                    )
                 {
                     picker.close();
                     return Some(Effect::Pass);

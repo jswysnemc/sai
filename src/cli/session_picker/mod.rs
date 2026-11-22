@@ -12,8 +12,7 @@ use anyhow::Result;
 use crossterm::{
     cursor::{Hide, Show},
     event::{
-        self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEventKind,
-        KeyModifiers,
+        DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEventKind, KeyModifiers,
     },
     execute, terminal,
 };
@@ -47,10 +46,10 @@ pub(super) fn select(
             mouse.state = view::draw(&mut stdout, &mut picker, terminal::size()?)?;
         }
         dirty = false;
-        if !event::poll(Duration::from_millis(150))? {
+        if !crate::cli::terminal_events::poll(Duration::from_millis(150))? {
             continue;
         }
-        match mouse.event(event::read()?, &mut picker) {
+        match mouse.event(crate::cli::terminal_events::read()?, &mut picker) {
             Event::Mouse(_) => dirty = true,
             Event::Resize(_, _) => dirty = true,
             Event::Paste(text) => {
@@ -63,7 +62,9 @@ pub(super) fn select(
                 dirty = true;
                 match key.code {
                     KeyCode::Esc => return Ok(None),
-                    KeyCode::Char('c' | 'd') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    KeyCode::Char('c' | 'C' | 'd' | 'D')
+                        if key.modifiers.contains(KeyModifiers::CONTROL) =>
+                    {
                         return Ok(None)
                     }
                     KeyCode::Enter => {
@@ -91,7 +92,7 @@ pub(super) fn select(
                     }
                     KeyCode::Home => picker.selected = 0,
                     KeyCode::End => picker.selected = picker.visible.len().saturating_sub(1),
-                    KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    KeyCode::Char('u' | 'U') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         picker.query.clear();
                         picker.selected = 0;
                         picker.scroll = 0;
@@ -103,7 +104,11 @@ pub(super) fn select(
                         picker.scroll = 0;
                         picker.filter();
                     }
-                    KeyCode::Char(ch) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    KeyCode::Char(ch)
+                        if !key
+                            .modifiers
+                            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+                    {
                         picker.query.push(ch);
                         picker.selected = 0;
                         picker.scroll = 0;

@@ -1,7 +1,7 @@
 use super::{submit_if_pending, PromptInput, PromptStep, SshPromptView};
 use crate::ssh::{SecretRequest, SecretResponse};
 use anyhow::Result;
-use crossterm::event::{self, DisableBracketedPaste, EnableBracketedPaste};
+use crossterm::event::{DisableBracketedPaste, EnableBracketedPaste};
 use crossterm::execute;
 use std::io::{self, IsTerminal, Write};
 use std::time::Duration;
@@ -57,13 +57,13 @@ pub(in crate::cli) fn prompt_ssh_secret_request_cli(request: &SecretRequest) -> 
 /// - 用户应答
 fn read_response(request: &SecretRequest, input: &mut PromptInput) -> Result<SecretResponse> {
     loop {
-        if !event::poll(POLL_INTERVAL)? {
+        if !crate::cli::terminal_events::poll(POLL_INTERVAL)? {
             if !crate::ssh::is_pending(&request.id) {
                 return Ok(SecretResponse::Cancelled);
             }
             continue;
         }
-        if let PromptStep::Done(response) = input.handle(event::read()?) {
+        if let PromptStep::Done(response) = input.handle(crate::cli::terminal_events::read()?) {
             return Ok(response);
         }
     }

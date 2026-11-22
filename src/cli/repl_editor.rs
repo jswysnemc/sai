@@ -95,10 +95,10 @@ fn wait_for_gui_editor_save(editor: &str, path: &PathBuf, before: SystemTime, el
         if modified_after(path, before) {
             return;
         }
-        if crossterm::event::poll(Duration::from_millis(250)).unwrap_or(false) {
+        if crate::cli::terminal_events::poll(Duration::from_millis(250)).unwrap_or(false) {
             // 2. 只把 Enter 视为放弃等待，忽略窗口调整等非按键事件
             if matches!(
-                crossterm::event::read(),
+                crate::cli::terminal_events::read(),
                 Ok(crossterm::event::Event::Key(key))
                     if key.code == crossterm::event::KeyCode::Enter
                         && key.kind != crossterm::event::KeyEventKind::Release

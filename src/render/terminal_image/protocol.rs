@@ -63,7 +63,7 @@ fn terminal_cell_pixel_size() -> (usize, usize) {
 
 #[cfg(not(unix))]
 fn terminal_cell_pixel_size() -> (usize, usize) {
-    (SIXEL_CELL_WIDTH_PX, SIXEL_CELL_HEIGHT_PX)
+    probe::cell_pixel_size().unwrap_or((SIXEL_CELL_WIDTH_PX, SIXEL_CELL_HEIGHT_PX))
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -206,22 +206,7 @@ fn supports_kitty_graphics() -> bool {
     if let Some(value) = probe::kitty_supported() {
         return value;
     }
-    if std::env::var_os("KITTY_WINDOW_ID").is_some() {
-        return true;
-    }
-    if std::env::var_os("TMUX").is_some() {
-        return false;
-    }
-    let term = std::env::var("TERM").unwrap_or_default();
-    // xterm-kitty 与 Ghostty 都走 Kitty 协议；foot 以 foot / foot-extra 开头
-    if term.contains("xterm-kitty") || term.starts_with("xterm-ghostty") || term.starts_with("foot")
-    {
-        return true;
-    }
-    matches!(
-        std::env::var("TERM_PROGRAM").unwrap_or_default().as_str(),
-        "ghostty" | "foot" | "Konsole" | "rio"
-    )
+    terminal_identity::known_kitty_graphics_env()
 }
 
 /// 判断当前终端是否支持 iTerm2 图片协议。

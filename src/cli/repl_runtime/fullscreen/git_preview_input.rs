@@ -4,7 +4,7 @@ use super::git_preview::{DiffMode, ReviewFocus};
 use super::git_preview_view::PreviewLayout;
 use super::input::Effect;
 use crate::cli::repl_runtime::ReplRuntime;
-use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind};
+use crossterm::event::{Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind};
 
 impl ReplRuntime {
     /// 【终端审查】【区域输入】聊天、文件清单和差异各自接管所属区域的滚动，不全局捕获鼠标。
@@ -126,8 +126,11 @@ impl ReplRuntime {
                     return Some(Effect::Refresh);
                 }
                 let focus = preview.focus?;
-                if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && matches!(key.code, KeyCode::Char('c' | 'o'))
+                if crate::cli::terminal_events::is_ctrl_char(key.code, key.modifiers, 'c')
+                    || crate::cli::repl_input::shortcuts::is_fullscreen_toggle_key(
+                        key.code,
+                        key.modifiers,
+                    )
                 {
                     return Some(Effect::Pass);
                 }

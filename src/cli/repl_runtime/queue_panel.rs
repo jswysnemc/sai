@@ -133,7 +133,7 @@ impl QueuePanelState {
             return QueuePanelAction::Exit;
         }
         if matches!(code, KeyCode::Char('u' | 'U')) && !modifiers.contains(KeyModifiers::CONTROL)
-            || code == KeyCode::Char('z') && modifiers.contains(KeyModifiers::CONTROL)
+            || crate::cli::terminal_events::is_ctrl_char(code, modifiers, 'z')
         {
             self.pending_delete = false;
             self.exit_armed = false;

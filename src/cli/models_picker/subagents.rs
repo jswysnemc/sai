@@ -11,7 +11,7 @@ use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use anyhow::Result;
 use crossterm::event::{
-    self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
+    Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
 };
 use state::{choice_state, SubagentListState};
 use std::io;
@@ -217,7 +217,7 @@ fn read_list_key(
     click: &mut ClickTracker<ListTarget>,
 ) -> Result<Option<KeyEvent>> {
     loop {
-        match event::read()? {
+        match crate::cli::terminal_events::read()? {
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 click.clear();
                 state.set_hovered(None);

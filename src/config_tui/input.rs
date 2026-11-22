@@ -1,7 +1,7 @@
 //! 配置界面的键盘、鼠标、粘贴与终端尺寸事件读取及未保存中断保护。
 
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
@@ -175,12 +175,12 @@ pub(crate) fn read_event_with_timeout(timeout: Option<Duration>) -> Result<Optio
     loop {
         // 1. 【配置界面】【超时轮询】按需等待终端输入，超时后返回空值供后台任务刷新
         if let Some(timeout) = timeout {
-            if !event::poll(timeout)? {
+            if !crate::cli::terminal_events::poll(timeout)? {
                 return Ok(None);
             }
         }
         // 2. 【配置界面】【事件分发】统一转换按键、鼠标、粘贴与尺寸变更事件
-        match event::read()? {
+        match crate::cli::terminal_events::read()? {
             Event::Key(event) => {
                 if let Some(resolved) = resolve_key_event(event)? {
                     return Ok(Some(ConfigEvent::Key(resolved)));

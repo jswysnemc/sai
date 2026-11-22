@@ -2,7 +2,7 @@
 
 use super::{image_viewer_layout::ViewerLayout, input::Effect};
 use crate::cli::repl_runtime::ReplRuntime;
-use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind};
+use crossterm::event::{Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind};
 
 impl ReplRuntime {
     /// 【图片浮窗】【输入分流】处理图片点击、关闭和悬停，不把浮窗操作发送到聊天框。
@@ -56,8 +56,11 @@ impl ReplRuntime {
             }
             Event::Key(key) if key.kind == KeyEventKind::Release => {}
             Event::Key(key)
-                if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && matches!(key.code, KeyCode::Char('c' | 'o')) =>
+                if crate::cli::terminal_events::is_ctrl_char(key.code, key.modifiers, 'c')
+                    || crate::cli::repl_input::shortcuts::is_fullscreen_toggle_key(
+                        key.code,
+                        key.modifiers,
+                    ) =>
             {
                 session.image_viewer.close();
                 session.state.previous = None;

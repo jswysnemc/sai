@@ -65,6 +65,7 @@ impl Write for TerminalFixture<'_> {
                 ),
                 "wrong-id" => format!("\x1b_Gi={};OK\x1b\\", crate::probe::QUERY_ID + 1),
                 "partial" => format!("\x1b_Gi={};O", crate::probe::QUERY_ID),
+                "conpty-orphan-st" => "\x1b\\".to_string(),
                 _ => String::new(),
             }
         } else if self.case == "timeout" {
@@ -100,7 +101,7 @@ impl Write for TerminalFixture<'_> {
                 write_text(input as _, "end");
             }));
         } else {
-            if self.case == "translated" {
+            if self.case == "translated" || self.case == "conpty-orphan-st" {
                 let mut chars = reply.chars();
                 while let Some(ch) = chars.next() {
                     if ch == '\x1b' {

@@ -9,6 +9,8 @@ mod probe_response;
 #[cfg(windows)]
 #[path = "../../../src/render/terminal_image/probe_windows.rs"]
 mod probe_windows;
+#[path = "../../../src/render/terminal_image/terminal_identity.rs"]
+mod terminal_identity;
 #[cfg(windows)]
 #[path = "../../../src/platform/windows_graphics_probe.rs"]
 pub(crate) mod windows_graphics_probe;

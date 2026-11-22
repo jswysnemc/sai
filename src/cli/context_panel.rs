@@ -5,7 +5,7 @@ use crate::render::panel_palette::{fg, PanelPalette};
 use anyhow::Result;
 use crossterm::{
     cursor::{Hide, MoveTo, Show},
-    event::{self, Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind},
+    event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind},
     execute, queue,
     style::Print,
     terminal::{Clear, ClearType},
@@ -45,14 +45,14 @@ pub(super) fn show(
                 layout.draw()?;
                 dirty = false;
             }
-            if !event::poll(Duration::from_millis(250))? {
+            if !crate::cli::terminal_events::poll(Duration::from_millis(250))? {
                 continue;
             }
             let previous_offset = offset;
-            match event::read()? {
+            match crate::cli::terminal_events::read()? {
                 Event::Key(key) if key.kind != KeyEventKind::Release => match key.code {
                     KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => return Ok(()),
-                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    KeyCode::Char('c' | 'C') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         return Ok(())
                     }
                     KeyCode::Up | KeyCode::Char('k') => offset = offset.saturating_sub(1),

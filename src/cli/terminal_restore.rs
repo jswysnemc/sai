@@ -141,6 +141,7 @@ impl Drop for TerminalInputGuard {
 pub(super) fn restore_stream_terminal_modes() -> Result<()> {
     crate::platform::job_control::claim_foreground();
     terminal::enable_raw_mode()?;
+    crate::platform::windows_console::ensure_tui_input_mode();
     execute!(io::stdout(), EnableBracketedPaste)?;
     Ok(())
 }

@@ -5,7 +5,7 @@ use super::state::{handle_editing_key, submitted_answers, QuestionState};
 use super::text::insert_text;
 use crate::question::{QuestionRequest, QuestionResponse};
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
 use std::time::{Duration, Instant};
 
 const CANCEL_CONFIRM_WINDOW: Duration = Duration::from_secs(2);
@@ -33,10 +33,10 @@ pub(super) fn run(
         }
         draw(session, request, &mut state)?;
 
-        if !event::poll(Duration::from_millis(100))? {
+        if !crate::cli::terminal_events::poll(Duration::from_millis(100))? {
             continue;
         }
-        let event = event::read()?;
+        let event = crate::cli::terminal_events::read()?;
         match event {
             Event::Resize(cols, rows) => {
                 mouse_handler.clear();

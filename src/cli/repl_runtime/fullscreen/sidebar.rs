@@ -9,7 +9,7 @@ use super::sidebar_regions::{plan_vertical, SidebarScrolls, SidebarVerticalPlan}
 use super::sidebar_view::{SidebarDocument, SidebarRow};
 use crate::cli::repl_runtime::ReplRuntime;
 use crossterm::event::{
-    Event, KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    Event, KeyCode, KeyEventKind, MouseButton, MouseEvent, MouseEventKind,
 };
 
 #[derive(Default)]
@@ -414,8 +414,8 @@ impl ReplRuntime {
         if !sidebar.focused || layout.sidebar.is_none() {
             return None;
         }
-        if key.modifiers.contains(KeyModifiers::CONTROL)
-            && matches!(key.code, KeyCode::Char('c' | 'o'))
+        if crate::cli::terminal_events::is_ctrl_char(key.code, key.modifiers, 'c')
+            || crate::cli::repl_input::shortcuts::is_fullscreen_toggle_key(key.code, key.modifiers)
         {
             sidebar.focused = false;
             return None;

@@ -77,16 +77,16 @@ fn handle_key(state: &mut GroupTuiState, key: KeyEvent) -> GroupAction {
         return handle_modal_key(state, key);
     }
 
-    if key.modifiers.contains(KeyModifiers::CONTROL) {
-        return match key.code {
-            KeyCode::Char('q' | 'Q' | 'c' | 'C') => GroupAction::Exit,
+    if key.modifiers.contains(KeyModifiers::CONTROL) && !key.modifiers.contains(KeyModifiers::ALT) {
+        match key.code {
+            KeyCode::Char('q' | 'Q' | 'c' | 'C') => return GroupAction::Exit,
             KeyCode::Char('n' | 'N') => {
                 state.modal = Some(GroupModal::CreateGroup {
                     name: String::new(),
                     description: String::new(),
                     field: 0,
                 });
-                GroupAction::None
+                return GroupAction::None;
             }
             KeyCode::Char('r' | 'R') => {
                 state.modal = Some(GroupModal::SpawnRunner {
@@ -95,7 +95,7 @@ fn handle_key(state: &mut GroupTuiState, key: KeyEvent) -> GroupAction {
                     prompt: String::new(),
                     field: 0,
                 });
-                GroupAction::None
+                return GroupAction::None;
             }
             KeyCode::Char('k' | 'K') => {
                 state.modal = Some(GroupModal::ChannelSim {
@@ -105,7 +105,7 @@ fn handle_key(state: &mut GroupTuiState, key: KeyEvent) -> GroupAction {
                     content: String::new(),
                     field: 3,
                 });
-                GroupAction::None
+                return GroupAction::None;
             }
             KeyCode::Char('x' | 'X') => {
                 if let (Some(group_id), Some(worker)) =
@@ -118,24 +118,36 @@ fn handle_key(state: &mut GroupTuiState, key: KeyEvent) -> GroupAction {
                     };
                 }
                 state.set_notice("请先在左侧 Roster 选中一个 Runner 再按 Ctrl+X 停止");
-                GroupAction::None
+                return GroupAction::None;
             }
             KeyCode::Up => {
-                if state.step_group(-1) {
+                return if state.step_group(-1) {
                     GroupAction::Reload
                 } else {
                     GroupAction::None
-                }
+                };
             }
             KeyCode::Down => {
-                if state.step_group(1) {
+                return if state.step_group(1) {
                     GroupAction::Reload
                 } else {
                     GroupAction::None
-                }
+                };
             }
-            _ => GroupAction::None,
-        };
+            _ => {}
+        }
+    }
+
+    // 1. 【群组终端】【输入编辑】复用共享光标与删词/删行快捷键，兼容 Winc/macOS/readline
+    if crate::cli::repl_input::shortcuts::apply_composer_edit_key(
+        &mut state.input,
+        &mut state.cursor,
+        key.code,
+        key.modifiers,
+    )
+    .is_some()
+    {
+        return GroupAction::None;
     }
 
     match key.code {
@@ -182,7 +194,11 @@ fn handle_key(state: &mut GroupTuiState, key: KeyEvent) -> GroupAction {
             GroupAction::None
         }
         KeyCode::Enter => submit_composer(state),
-        KeyCode::Char(ch) => {
+        KeyCode::Char(ch)
+            if !key
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+        {
             state.insert_char(ch);
             GroupAction::None
         }

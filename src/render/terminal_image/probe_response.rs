@@ -1,17 +1,20 @@
-//! 共用 Kitty 与设备属性应答解析器，保留 Unix 事件或 Windows 原生记录。
+//! 共用 Kitty、单元格像素与设备属性应答解析器，保留 Unix 事件或 Windows 原生记录。
 
 use crossterm::event::Event;
 #[cfg(any(not(windows), test))]
 use crossterm::event::{KeyCode, KeyEventKind, KeyModifiers};
 
 const MAX_RESPONSE: usize = 1024;
+const MAX_CELL_SIZE_RESPONSE: usize = 32;
 const PREFIX: &str = "\x1b_G";
 const DEVICE_PREFIX: &str = "\x1b[?";
+const CELL_SIZE_PREFIX: &str = "\x1b[6;";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ProbeReply {
     Kitty(bool),
     Sixel(bool),
+    CellSize(usize, usize),
 }
 
 pub(super) struct ProbeResponse<T = Event> {
@@ -19,6 +22,7 @@ pub(super) struct ProbeResponse<T = Event> {
     text: String,
     pending: Vec<usize>,
     input: Vec<Option<T>>,
+    discard_orphan_st: bool,
 }
 
 impl<T> ProbeResponse<T> {
@@ -30,7 +34,20 @@ impl<T> ProbeResponse<T> {
             text: String::new(),
             pending: Vec::new(),
             input: Vec::new(),
+            discard_orphan_st: false,
         }
+    }
+
+    /// 【终端图片】【ConPTY 残留清理】开启后丢弃 ConPTY 吞掉 APC 正文所残留的孤立 ST（`\x1b\\`）。
+    ///
+    /// 参数:
+    /// - `discard`: 是否丢弃孤立 ST
+    ///
+    /// 返回:
+    /// - 无
+    #[cfg(any(windows, test))]
+    pub(super) fn set_discard_orphan_st(&mut self, discard: bool) {
+        self.discard_orphan_st = discard;
     }
 
     /// 【终端图片】【应答解析】兼容 Alt 编码及独立 Esc 事件，不消耗普通键、粘贴或鼠标。
@@ -46,7 +63,7 @@ impl<T> ProbeResponse<T> {
             // 1. 【终端图片】【事件保留】窗口尺寸、鼠标和粘贴可能穿插到应答事件之间
             return None;
         };
-        // 2. 【终端图片】【序列边界】新的 APC 起点不能与用户先前单独按下的 Esc 混合
+        // 2. 【终端图片】【序列边界】新的序列起点不能与用户先前单独按下的 Esc 混合
         if fragment.starts_with('\x1b')
             && !self.text.is_empty()
             && !(self.text.starts_with(PREFIX) && (fragment == "\x1b" || fragment == "\x1b\\"))
@@ -55,7 +72,15 @@ impl<T> ProbeResponse<T> {
         }
         self.text.push_str(&fragment);
         self.pending.push(index);
-        if PREFIX.starts_with(&self.text) || DEVICE_PREFIX.starts_with(&self.text) {
+        // 3. 【终端图片】【孤立 ST】ConPTY 会吞掉 \x1b_G... 并仅把结尾 \x1b\\ 转成 Alt+\，探测期间需静默丢弃
+        if self.discard_orphan_st && self.text == "\x1b\\" {
+            self.discard_response();
+            return None;
+        }
+        if PREFIX.starts_with(&self.text)
+            || DEVICE_PREFIX.starts_with(&self.text)
+            || CELL_SIZE_PREFIX.starts_with(&self.text)
+        {
             return None;
         }
         if let Some(body) = self.text.strip_prefix(PREFIX) {
@@ -82,6 +107,18 @@ impl<T> ProbeResponse<T> {
                 return None;
             }
         }
+        if let Some(body) = self.text.strip_prefix(CELL_SIZE_PREFIX) {
+            if let Some(dims) = body.strip_suffix('t') {
+                let size = super::terminal_identity::parse_cell_pixel_size(&format!("6;{dims}"));
+                self.discard_response();
+                return size.map(|(width, height)| ProbeReply::CellSize(width, height));
+            }
+            if self.text.len() <= MAX_CELL_SIZE_RESPONSE
+                && body.bytes().all(|ch| ch.is_ascii_digit() || ch == b';')
+            {
+                return None;
+            }
+        }
         self.reset_pending();
         None
     }
@@ -96,7 +133,10 @@ impl<T> ProbeResponse<T> {
     /// 【终端图片】【查询边界】切换查询前清理残缺响应，保留尚未确认属于协议的输入。
     /// 参数: 无；返回: 无。
     pub(super) fn finish_query(&mut self) {
-        if self.text.starts_with(PREFIX) || self.text.starts_with(DEVICE_PREFIX) {
+        if self.text.starts_with(PREFIX)
+            || self.text.starts_with(DEVICE_PREFIX)
+            || self.text.starts_with(CELL_SIZE_PREFIX)
+        {
             self.discard_response();
         }
         self.reset_pending();

@@ -21,15 +21,15 @@ mod submission;
 /// 返回:
 /// - 命中时为 true
 pub(super) fn is_paste_key(key: PasteImageKey, code: KeyCode, modifiers: KeyModifiers) -> bool {
-    if code != KeyCode::Char('v') {
+    if !matches!(code, KeyCode::Char('v' | 'V')) {
         return false;
     }
     let ctrl = modifiers.contains(KeyModifiers::CONTROL);
     let alt = modifiers.contains(KeyModifiers::ALT);
     match key {
-        PasteImageKey::CtrlV => ctrl,
-        PasteImageKey::AltV => alt,
-        PasteImageKey::Both => ctrl || alt,
+        PasteImageKey::CtrlV => ctrl && !alt,
+        PasteImageKey::AltV => alt && !ctrl,
+        PasteImageKey::Both => ctrl ^ alt,
     }
 }
 

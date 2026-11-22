@@ -5,7 +5,7 @@ use crate::cli::mouse_menu::{ButtonRow, ClickTracker};
 use crate::i18n::text as t;
 use anyhow::Result;
 use crossterm::event::{
-    self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
+    Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
 };
 use crossterm::terminal;
 use std::io;
@@ -233,7 +233,7 @@ impl PickerFrame {
         tasks: bool,
     ) -> Result<Option<PickerInput>> {
         loop {
-            match event::read()? {
+            match crate::cli::terminal_events::read()? {
                 Event::Key(key) if key.kind != KeyEventKind::Release => {
                     click.clear();
                     picker.set_hovered(None);

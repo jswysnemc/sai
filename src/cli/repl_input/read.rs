@@ -131,7 +131,7 @@ pub(in crate::cli) fn read_repl_input(
             let wait = chrome.status_poll_wait(wait);
             // 占位提示为静态文本，空输入无需额外唤醒重绘，直接沿用挂起等待
             if let Some(wait) = wait {
-                if !event::poll(wait)? {
+                if !crate::cli::terminal_events::poll(wait)? {
                     // 内容未变时 draw_lines 会按签名跳过重绘；清零记账等于
                     // 绕开该缓存强制实绘，因此只在确有刷新时才重置
                     if runtime.process_idle_tick()? {
@@ -143,7 +143,9 @@ pub(in crate::cli) fn read_repl_input(
                 }
             }
         }
-        let mut event = queued_event.map(Ok).unwrap_or_else(event::read)?;
+        let mut event = queued_event
+            .map(Ok)
+            .unwrap_or_else(crate::cli::terminal_events::read)?;
         if let Some(action) = runtime.footer_action(&event) {
             if let Some(command) = action.command() {
                 runtime.save_footer_draft(crate::cli::repl_runtime::StreamComposerDraft {
@@ -263,8 +265,7 @@ pub(in crate::cli) fn read_repl_input(
                     // 清空确认窗口被其它按键打断，提示行随之恢复
                     runtime.clear_key_notice();
                 }
-                if !matches!(code, KeyCode::Char('c')) || !modifiers.contains(KeyModifiers::CONTROL)
-                {
+                if !crate::cli::terminal_events::is_ctrl_char(code, modifiers, 'c') {
                     last_ctrl_c = None;
                 }
                 let focus = runtime.panel_focus(&input, cursor);
@@ -291,7 +292,7 @@ pub(in crate::cli) fn read_repl_input(
                 }
                 // Ctrl+C 仍由后面的匹配处理；其余键在队列管理态由面板吞掉
                 let skip_queue_for_ctrl_c =
-                    matches!(code, KeyCode::Char('c')) && modifiers.contains(KeyModifiers::CONTROL);
+                    crate::cli::terminal_events::is_ctrl_char(code, modifiers, 'c');
                 if !skip_queue_for_ctrl_c
                     && (runtime.queue_panel_active()
                         || crate::cli::repl_runtime::queue_panel::is_enter_queue_key(
@@ -364,6 +365,92 @@ pub(in crate::cli) fn read_repl_input(
                     redraw_input!()?;
                     continue;
                 }
+                // 1. 【终端输入】【共享编辑】统一处理首尾移动、词级移动与词/行删除（兼容 Winc/macOS/readline）
+                if let Some(outcome) =
+                    shortcuts::apply_composer_edit_key(&mut input, &mut cursor, code, modifiers)
+                {
+                    if outcome == shortcuts::ComposerEditOutcome::TextEdited {
+                        slash_selection = 0;
+                        history_clean_index = None;
+                        is_pasted = false;
+                    }
+                    redraw_input!()?;
+                    continue;
+                }
+                // 2. 【终端输入】【换行快捷】支持 Shift+Enter、Alt+Enter、Ctrl+J 及空闲态 Ctrl+Enter（兼容旧版 ConPTY Ctrl+J）
+                if shortcuts::is_composer_newline_key(code, modifiers)
+                    || (code == KeyCode::Enter && modifiers.contains(KeyModifiers::CONTROL))
+                {
+                    insert_newline_at_cursor(&mut input, &mut cursor);
+                    slash_selection = 0;
+                    history_clean_index = None;
+                    is_pasted = false;
+                    redraw_input!()?;
+                    continue;
+                }
+                if is_paste_key(runtime.paste_image_key(), code, modifiers) {
+                    windows_paste.reset();
+                    is_pasted = clipboard_state.paste_into_input(&mut input, &mut cursor)?;
+                    slash_selection = 0;
+                    history_clean_index = None;
+                    redraw_input!()?;
+                    continue;
+                }
+                if shortcuts::is_external_editor_key(code, modifiers) {
+                    // 外部编辑器接管主屏，先退出全屏视图再清理输入区
+                    runtime.leave_fullscreen()?;
+                    clear_repl_input(&mut stdout, input_row, rendered_rows)?;
+                    runtime.end_composer()?;
+                    terminal_guard.finish(&mut stdout)?;
+                    if let Some(edited) = external_editor::edit(&input, &mut clipboard_state) {
+                        input = edited;
+                        cursor = input.chars().count();
+                        slash_selection = 0;
+                        history_clean_index = None;
+                    }
+                    terminal_guard = crate::cli::terminal_restore::TerminalInputGuard::enable(
+                        &mut stdout,
+                        true,
+                    )?;
+                    input_row = 0;
+                    rendered_rows = 0;
+                    is_pasted = false;
+                    redraw_input!()?;
+                    continue;
+                }
+                if shortcuts::is_redraw_key(code, modifiers) {
+                    runtime.redraw()?;
+                    input_row = 0;
+                    rendered_rows = 0;
+                    redraw_input!()?;
+                    continue;
+                }
+                if shortcuts::is_fullscreen_toggle_key(code, modifiers) {
+                    // Ctrl+O / Alt+O：进入或退出全屏会话视图，输入框随之迁移
+                    runtime.toggle_fullscreen()?;
+                    input_row = 0;
+                    rendered_rows = 0;
+                    redraw_input!()?;
+                    continue;
+                }
+                if shortcuts::is_todo_fold_key(code, modifiers) {
+                    // Ctrl+T / Alt+T：沉底 todo 单行 / 多行切换
+                    if runtime.toggle_todo_panel_compact() {
+                        input_row = 0;
+                        rendered_rows = 0;
+                        redraw_input!()?;
+                    } else {
+                        runtime.record_meta(
+                            t(
+                                "Ctrl+T: no active plan to fold",
+                                "Ctrl+T：当前没有进行中的计划可折叠",
+                            )
+                            .to_string(),
+                        )?;
+                        redraw_input!()?;
+                    }
+                    continue;
+                }
                 match code {
                     KeyCode::BackTab => {
                         // 部分终端把 Shift+Tab 发成 BackTab
@@ -420,23 +507,6 @@ pub(in crate::cli) fn read_repl_input(
                             }
                         }
                     }
-                    // 词级移动：Ctrl+←/→ 是 emacs/readline 通用键位，
-                    // Alt+←/→ 在多数终端上等价。没有这两个绑定时，
-                    // 长句子里只能一个字符一个字符挪
-                    KeyCode::Left
-                        if modifiers.contains(KeyModifiers::CONTROL)
-                            || modifiers.contains(KeyModifiers::ALT) =>
-                    {
-                        cursor = word_start_before(&input, cursor);
-                        redraw_input!()?;
-                    }
-                    KeyCode::Right
-                        if modifiers.contains(KeyModifiers::CONTROL)
-                            || modifiers.contains(KeyModifiers::ALT) =>
-                    {
-                        cursor = word_end_after(&input, cursor);
-                        redraw_input!()?;
-                    }
                     KeyCode::Left => {
                         // 输入为空时左移光标没有意义，改为打开会话树
                         if input.is_empty() {
@@ -466,20 +536,6 @@ pub(in crate::cli) fn read_repl_input(
                         cursor = clipboard_state.cursor_right(&input, cursor);
                         redraw_input!()?;
                     }
-                    // Ctrl+A / Ctrl+E 与 Home / End 等价：Windows 终端与部分
-                    // 远程会话下 Home / End 未必能送达，emacs 键位是通用回退
-                    KeyCode::Home | KeyCode::Char('a')
-                        if code == KeyCode::Home || modifiers.contains(KeyModifiers::CONTROL) =>
-                    {
-                        cursor = 0;
-                        redraw_input!()?;
-                    }
-                    KeyCode::End | KeyCode::Char('e')
-                        if code == KeyCode::End || modifiers.contains(KeyModifiers::CONTROL) =>
-                    {
-                        cursor = input.chars().count();
-                        redraw_input!()?;
-                    }
                     KeyCode::Up => {
                         if history::navigate_up(
                             &mut input,
@@ -505,13 +561,6 @@ pub(in crate::cli) fn read_repl_input(
                             &mut slash_selection,
                             &mut is_pasted,
                         );
-                        redraw_input!()?;
-                    }
-                    KeyCode::Enter if modifiers.contains(KeyModifiers::SHIFT) => {
-                        insert_newline_at_cursor(&mut input, &mut cursor);
-                        slash_selection = 0;
-                        history_clean_index = None;
-                        is_pasted = false;
                         redraw_input!()?;
                     }
                     KeyCode::Enter => {
@@ -570,44 +619,7 @@ pub(in crate::cli) fn read_repl_input(
                         terminal_guard.finish(&mut stdout)?;
                         return Ok(Some(ReplInputEvent::User(submission)));
                     }
-                    KeyCode::Char('j') if modifiers.contains(KeyModifiers::CONTROL) => {
-                        insert_newline_at_cursor(&mut input, &mut cursor);
-                        slash_selection = 0;
-                        history_clean_index = None;
-                        is_pasted = false;
-                        redraw_input!()?;
-                    }
-                    KeyCode::Char('v')
-                        if is_paste_key(runtime.paste_image_key(), code, modifiers) =>
-                    {
-                        windows_paste.reset();
-                        is_pasted = clipboard_state.paste_into_input(&mut input, &mut cursor)?;
-                        slash_selection = 0;
-                        history_clean_index = None;
-                        redraw_input!()?;
-                    }
-                    KeyCode::Char('g') if modifiers.contains(KeyModifiers::CONTROL) => {
-                        // 外部编辑器接管主屏，先退出全屏视图再清理输入区
-                        runtime.leave_fullscreen()?;
-                        clear_repl_input(&mut stdout, input_row, rendered_rows)?;
-                        runtime.end_composer()?;
-                        terminal_guard.finish(&mut stdout)?;
-                        if let Some(edited) = external_editor::edit(&input, &mut clipboard_state) {
-                            input = edited;
-                            cursor = input.chars().count();
-                            slash_selection = 0;
-                            history_clean_index = None;
-                        }
-                        terminal_guard = crate::cli::terminal_restore::TerminalInputGuard::enable(
-                            &mut stdout,
-                            true,
-                        )?;
-                        input_row = 0;
-                        rendered_rows = 0;
-                        is_pasted = false;
-                        redraw_input!()?;
-                    }
-                    KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    KeyCode::Char('c' | 'C') if modifiers.contains(KeyModifiers::CONTROL) => {
                         let now = Instant::now();
                         if last_ctrl_c.is_some_and(|previous| {
                             now.duration_since(previous) <= REPL_CTRL_C_EXIT_WINDOW
@@ -634,7 +646,7 @@ pub(in crate::cli) fn read_repl_input(
                         rendered_rows = 0;
                         redraw_input!()?;
                     }
-                    KeyCode::Char('d')
+                    KeyCode::Char('d' | 'D')
                         if modifiers.contains(KeyModifiers::CONTROL) && input.is_empty() =>
                     {
                         finish_repl_input(
@@ -645,43 +657,6 @@ pub(in crate::cli) fn read_repl_input(
                             &mut terminal_guard,
                         )?;
                         return Ok(None);
-                    }
-                    KeyCode::Char('l') if modifiers.contains(KeyModifiers::CONTROL) => {
-                        runtime.redraw()?;
-                        input_row = 0;
-                        rendered_rows = 0;
-                        redraw_input!()?;
-                    }
-                    KeyCode::Char('o') if modifiers.contains(KeyModifiers::CONTROL) => {
-                        // Ctrl+O：进入或退出全屏会话视图，输入框随之迁移
-                        runtime.toggle_fullscreen()?;
-                        input_row = 0;
-                        rendered_rows = 0;
-                        redraw_input!()?;
-                    }
-                    KeyCode::Char('t') if modifiers.contains(KeyModifiers::CONTROL) => {
-                        // Ctrl+T：沉底 todo 单行 / 多行切换
-                        if runtime.toggle_todo_panel_compact() {
-                            input_row = 0;
-                            rendered_rows = 0;
-                            redraw_input!()?;
-                        } else {
-                            runtime.record_meta(
-                                t(
-                                    "Ctrl+T: no active plan to fold",
-                                    "Ctrl+T：当前没有进行中的计划可折叠",
-                                )
-                                .to_string(),
-                            )?;
-                            redraw_input!()?;
-                        }
-                    }
-                    KeyCode::Char('w') if modifiers.contains(KeyModifiers::CONTROL) => {
-                        remove_word_before_cursor(&mut input, &mut cursor);
-                        slash_selection = 0;
-                        history_clean_index = None;
-                        is_pasted = false;
-                        redraw_input!()?;
                     }
                     KeyCode::Backspace => {
                         let changed =

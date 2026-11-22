@@ -167,3 +167,70 @@ fn query_boundary_keeps_original_record_order() {
     response.push_fragment(Some("tail".into()), 50);
     assert_eq!(response.into_input(), [10, 30, 50]);
 }
+
+/// 【终端图片】【单元格像素】解析 CSI 16 t 响应（高度在前宽度在后），非法尺寸静默消费不误报。
+/// 参数: 无；返回: 无。
+#[test]
+fn parses_cell_pixel_size_reply_and_preserves_user_input() {
+    for split in [false, true] {
+        let mut response = ProbeResponse::new(31);
+        let before = events("hi", false);
+        let after = events("ok", false);
+        for event in before.clone() {
+            assert_eq!(response.push(event), None);
+        }
+        let replies: Vec<_> = events("\x1b[6;24;12t", split)
+            .into_iter()
+            .filter_map(|event| response.push(event))
+            .collect();
+        assert_eq!(replies, [ProbeReply::CellSize(12, 24)]);
+        for event in after.clone() {
+            assert_eq!(response.push(event), None);
+        }
+        assert_eq!(
+            response.into_input(),
+            before.into_iter().chain(after).collect::<Vec<_>>()
+        );
+    }
+
+    let mut invalid = ProbeResponse::new(31);
+    let replies: Vec<_> = events("\x1b[6;0;12t", true)
+        .into_iter()
+        .filter_map(|event| invalid.push(event))
+        .collect();
+    assert!(replies.is_empty());
+    assert!(invalid.into_input().is_empty());
+}
+
+/// 【终端图片】【孤立 ST】ConPTY 吞掉 APC 仅残留 Alt+\ 或 Esc+\ 时应静默清理，保留普通用户按键。
+/// 参数: 无；返回: 无。
+#[test]
+fn discards_orphan_st_when_enabled_without_losing_normal_escape() {
+    for split in [false, true] {
+        let mut response = ProbeResponse::new(31);
+        response.set_discard_orphan_st(true);
+        let before = events("a", false);
+        let after = events("b", false);
+        for event in before.clone() {
+            assert_eq!(response.push(event), None);
+        }
+        for event in events("\x1b\\", split) {
+            assert_eq!(response.push(event), None);
+        }
+        for event in after.clone() {
+            assert_eq!(response.push(event), None);
+        }
+        assert_eq!(
+            response.into_input(),
+            before.into_iter().chain(after).collect::<Vec<_>>()
+        );
+    }
+
+    let mut response = ProbeResponse::new(31);
+    response.set_discard_orphan_st(true);
+    let user_esc = events("\x1b", true);
+    for event in user_esc.clone() {
+        assert_eq!(response.push(event), None);
+    }
+    assert_eq!(response.into_input(), user_esc);
+}

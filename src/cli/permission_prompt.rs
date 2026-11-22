@@ -8,7 +8,7 @@ use crate::render::{
 use anyhow::Result;
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::{
-    self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEventKind, KeyModifiers,
+    DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEventKind, KeyModifiers,
 };
 use crossterm::style::Print;
 use crossterm::terminal::{Clear, ClearType};
@@ -80,12 +80,12 @@ fn read_terminal_decision(request: &PermissionRequest) -> Result<Option<Permissi
             stdout.flush()?;
             return Ok(None);
         }
-        if !event::poll(std::time::Duration::from_millis(120))? {
+        if !crate::cli::terminal_events::poll(std::time::Duration::from_millis(120))? {
             // 刷新自动审核状态提示
             paint_menu_at(&mut stdout, anchor, request, &state, request.auto_audit)?;
             continue;
         }
-        let event = event::read()?;
+        let event = crate::cli::terminal_events::read()?;
         // Ctrl+C / Ctrl+D 视为拒绝并退出
         if is_interrupt(&event) {
             erase_menu_at(&mut stdout, anchor)?;

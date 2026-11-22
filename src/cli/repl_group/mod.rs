@@ -13,7 +13,7 @@ use crate::super_agent::{shared_service, SpawnRunnerRequest, SuperAgentService};
 use anyhow::Result;
 use crossterm::{
     cursor::{Hide, Show},
-    event, execute,
+    execute,
     terminal::{self, Clear, ClearType},
 };
 use input::GroupAction;
@@ -136,10 +136,10 @@ pub(in crate::cli) async fn run_group_tui(
         }
 
         // 2. 轮询键盘与鼠标事件
-        if !event::poll(POLL_INTERVAL)? {
+        if !crate::cli::terminal_events::poll(POLL_INTERVAL)? {
             continue;
         }
-        let ev = event::read()?;
+        let ev = crate::cli::terminal_events::read()?;
         let action = input::handle_event(&mut state, ev);
         match execute_action(&service, &mut state, action).await {
             Ok(true) => break,

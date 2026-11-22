@@ -1,4 +1,4 @@
-//! 启动时查询图形能力；Windows 验证 Kitty 和 Sixel，Unix 为未知终端补充 Kitty 检测。
+//! 启动时查询图形能力；Windows 识别已知 Kitty 宿主并查询单元格像素，未知终端再主动探测 Kitty 和 Sixel。
 
 #[cfg(not(windows))]
 use super::probe_response::{ProbeReply, ProbeResponse};
@@ -22,6 +22,7 @@ static CAPABILITIES: OnceLock<GraphicsCapabilities> = OnceLock::new();
 pub(super) struct GraphicsCapabilities {
     pub(super) kitty: bool,
     pub(super) sixel: Option<bool>,
+    pub(super) cell_size: Option<(usize, usize)>,
 }
 
 /// 【终端图片】【能力缓存】读取启动查询结果，不触发 I/O。
@@ -34,6 +35,18 @@ pub(super) fn kitty_supported() -> Option<bool> {
 /// 参数: 无；返回: Sixel 能力应答或 None。
 pub(super) fn sixel_supported() -> Option<bool> {
     CAPABILITIES.get().and_then(|value| value.sixel)
+}
+
+/// 【终端图片】【像素缓存】返回启动时通过 CSI 16 t 探测到的单元格像素尺寸。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - `(宽度像素, 高度像素)`，未探测或终端未应答时为 None
+#[cfg_attr(unix, allow(dead_code))]
+pub(super) fn cell_pixel_size() -> Option<(usize, usize)> {
+    CAPABILITIES.get().and_then(|value| value.cell_size)
 }
 
 /// 【终端图片】【启动探测】在历史渲染与输入循环之前查询一次未知终端。
@@ -49,14 +62,27 @@ pub(crate) fn initialize_terminal_graphics() -> Vec<event::Event> {
     {
         return Vec::new();
     }
-    // 2. 【终端图片】【Windows 查询】原生记录保留 ESC 和用户输入，不能经过键盘字符转换
+    // 2. 【终端图片】【Windows 查询】已知 Kitty 宿主绕过 ConPTY APC 吞噬并改查 CSI 16 t 单元格尺寸
     #[cfg(windows)]
     {
         CAPABILITIES.get_or_init(|| {
-            super::probe_windows::query().unwrap_or(GraphicsCapabilities {
+            if super::terminal_identity::known_kitty_graphics_env() {
+                let cell_size = super::probe_windows::query_cell_size().ok().flatten();
+                return GraphicsCapabilities {
+                    kitty: true,
+                    sixel: Some(false),
+                    cell_size,
+                };
+            }
+            let mut capabilities = super::probe_windows::query().unwrap_or(GraphicsCapabilities {
                 kitty: false,
                 sixel: Some(false),
-            })
+                cell_size: None,
+            });
+            if capabilities.kitty && capabilities.cell_size.is_none() {
+                capabilities.cell_size = super::probe_windows::query_cell_size().ok().flatten();
+            }
+            capabilities
         });
         Vec::new()
     }
@@ -75,6 +101,7 @@ fn initialize_unix_graphics() -> Vec<event::Event> {
     CAPABILITIES.get_or_init(|| GraphicsCapabilities {
         kitty: query(&mut response).unwrap_or(false),
         sixel: None,
+        cell_size: None,
     });
     response.into_input()
 }

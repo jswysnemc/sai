@@ -13,6 +13,7 @@ pub(super) mod event_batch;
 mod external_editor;
 pub(super) mod history;
 pub(super) mod paste;
+pub(super) mod shortcuts;
 mod submission;
 
 use cleanup::finish_repl_input;

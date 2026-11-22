@@ -4,7 +4,7 @@ use crate::render::terminal_frame::TerminalFrame;
 use crate::render::terminal_rows::paint_changed_rows;
 use anyhow::Result;
 use crossterm::cursor::{Hide, Show};
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
+use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
 use crossterm::execute;
 use std::io;
 use std::time::Duration;
@@ -65,13 +65,13 @@ fn run_pager_loop(runtime: &mut ReplRuntime) -> Result<()> {
             previous_lines = draw_view(&lines, view_height, cols, offset_from_bottom, previous)?;
             drawn = Some(frame);
         }
-        if !event::poll(Duration::from_millis(250))? {
+        if !crate::cli::terminal_events::poll(Duration::from_millis(250))? {
             continue;
         }
-        match event::read()? {
+        match crate::cli::terminal_events::read()? {
             Event::Key(key) if key.kind != KeyEventKind::Release => match key.code {
                 KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => return Ok(()),
-                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                KeyCode::Char('c' | 'C') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     return Ok(())
                 }
                 KeyCode::Down if is_jump_to_output_bottom_key(key.code, key.modifiers) => {
