@@ -20,4 +20,5 @@ pub(super) struct WebAppState {
     pub terminals: TerminalManager,
     pub system_monitor: SystemMonitor,
     pub weixin_login: WeixinLoginManager,
+    pub super_agent: Arc<crate::super_agent::SuperAgentService>,
 }

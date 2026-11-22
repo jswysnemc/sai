@@ -175,6 +175,13 @@ fn repl_only_help_lines() -> Vec<String> {
             t("manage background tasks", "管理后台任务")
         ),
         format!(
+            "  /group [list|new|open|spawn|send]  {}",
+            t(
+                "open or manage Super-Agent groups (Leader + Runners)",
+                "打开或管理 Super-Agent 协作群组（Leader + Runners）"
+            )
+        ),
+        format!(
             "  /plugins [reload]  {}",
             t("show or reload session plugins", "查看或重新加载会话插件")
         ),

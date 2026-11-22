@@ -81,6 +81,25 @@ pub(in crate::cli) fn read_repl_input(
             terminal_guard.finish(&mut stdout)?;
             return Ok(Some(ReplInputEvent::SwitchSession));
         }
+        if let Some(target_group) = runtime.take_open_group_request() {
+            runtime.save_session_input_draft(crate::cli::repl_runtime::StreamComposerDraft {
+                text: input,
+                cursor,
+                clipboard: clipboard_state,
+                slash_selection,
+                is_pasted,
+                windows_paste,
+                mode: Some(mode),
+            });
+            terminal_guard.finish(&mut stdout)?;
+            let cmd = match target_group {
+                Some(id) => format!("/group open {id}"),
+                None => "/group".to_string(),
+            };
+            return Ok(Some(ReplInputEvent::User(ReplInputSubmission::control(
+                mode, cmd,
+            ))));
+        }
         for diagnostic in chrome.status_diagnostics() {
             runtime.record_meta(diagnostic)?;
         }

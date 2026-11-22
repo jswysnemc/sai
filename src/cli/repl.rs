@@ -15,6 +15,7 @@ mod command_screen;
 mod compact;
 mod exit_confirmation;
 mod exit_hint;
+mod group_commands;
 mod session_switch;
 use exit_confirmation::confirm_repl_exit;
 mod input_restore;
@@ -159,6 +160,7 @@ pub(super) async fn run_repl(
         runtime.bind_background_session(paths, state.session_id());
         runtime.configure_background_tasks(paths, &config, state.session_id());
         runtime.bind_session_browser(paths, &state);
+        runtime.bind_group_browser(paths);
         if presence
             .as_ref()
             .is_none_or(|record| !record.matches(state.state_dir()))
@@ -545,6 +547,9 @@ pub(super) async fn run_repl(
         }
         if input.eq_ignore_ascii_case("/ps") {
             command_screen::run_background_manager_overlay(paths, &config, &mut runtime).await?;
+            continue;
+        }
+        if group_commands::handle(input, paths, &mut runtime).await? {
             continue;
         }
         // 剩余的 / 开头命令形态输入不再静默发给模型：拼错的命令、

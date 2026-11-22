@@ -2,6 +2,7 @@ mod client;
 mod event;
 mod server;
 
+pub(crate) use client::FeishuClient;
 pub(crate) use server::{run_feishu_bot_server, FeishuBotServerConfig};
 
 /// 返回飞书渠道的系统提示词。

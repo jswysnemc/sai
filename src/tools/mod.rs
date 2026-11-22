@@ -36,15 +36,15 @@ pub(crate) mod subagent_goal;
 mod subagent_persistence;
 mod subagent_progress;
 mod subagent_runner;
-pub(crate) use subagent_runner::format_token_count;
-#[cfg(test)]
-pub(crate) use subagent_runner::{ProgressMode, SubagentProgress, SubagentRunner};
+pub(crate) use subagent_runner::{
+    format_token_count, ProgressMode, SubagentInjectedMessage, SubagentProgress, SubagentRunner,
+};
 #[cfg(test)]
 mod subagent_runner_tests;
 mod subagent_runtime;
 pub(crate) mod subagent_state;
 pub(crate) mod subagent_timeline;
-mod subagent_worktree;
+pub(crate) mod subagent_worktree;
 pub(crate) mod todo;
 mod tool_spec;
 mod trash_path;
@@ -167,6 +167,16 @@ pub fn readable_tool_name(name: &str) -> &str {
         "send_channel_image" => "发送渠道图片",
         "send_channel_file" => "发送渠道文件",
         "send_channel_video" => "发送渠道视频",
+        "super_list_state" => "查看群组状态",
+        "super_spawn_runner" => "创建执行器",
+        "super_dispatch_task" => "编排派发任务",
+        "super_message_runner" => "通知执行器",
+        "super_stop_runner" => "停止执行器",
+        "super_group_post" => "群组发言",
+        "super_deliver_result" => "归纳交付成果",
+        "super_subscribe_thread" => "订阅话题线程",
+        "super_recall" => "链式召回上下文",
+        "super_report_submit" => "提交执行报告",
         _ => name,
     }
 }

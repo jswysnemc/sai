@@ -16,6 +16,7 @@ struct CachedToken {
 }
 
 /// 飞书开放平台客户端。
+#[derive(Clone)]
 pub(crate) struct FeishuClient {
     http: reqwest::Client,
     base_url: String,

@@ -85,6 +85,8 @@ mod sidebar_control_tests;
 mod sidebar_drag_batch;
 mod sidebar_git;
 mod sidebar_git_view;
+pub(super) mod sidebar_groups;
+mod sidebar_groups_view;
 mod sidebar_header_path;
 mod sidebar_i18n;
 #[cfg(test)]
@@ -494,6 +496,10 @@ impl ReplRuntime {
                         .current
                         .as_ref()
                         .map(|_| &self.session_browser),
+                    groups: self
+                        .group_browser
+                        .is_bound()
+                        .then_some(&self.group_browser),
                     viewing: self.transcript.viewing_subagent_id(),
                     compact: session.sidebar.sections.todo_collapsed,
                     sections: &session.sidebar.sections,

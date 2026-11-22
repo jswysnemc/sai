@@ -251,6 +251,34 @@ impl QqBotProcessor {
             client.send(&message, Some(&event.msg_id)).await?;
             return Ok(());
         }
+        // 【超级智能体】【渠道桥接】命中群组命令或 Leader 路由时转交群组 Leader 异步编排
+        let super_target = serde_json::json!({
+            "target_kind": target_kind_name(event.target_kind),
+            "target_id": event.target_id,
+            "external_chat_id": event.target_id,
+            "msg_id": event.msg_id,
+        });
+        if let crate::super_agent::gateway_bridge::GatewayRouteOutcome::Handled {
+            immediate_reply,
+        } = crate::super_agent::gateway_bridge::try_handle_gateway_message(
+            &self.paths,
+            "qq",
+            &event.target_id,
+            &event.target_id,
+            &event.prompt,
+            super_target,
+        )
+        .await?
+        {
+            if let Some(reply) = immediate_reply.filter(|text| !text.trim().is_empty()) {
+                let message = OutboundMessage {
+                    text: Some(reply),
+                    media: Vec::new(),
+                };
+                client.send(&message, Some(&event.msg_id)).await?;
+            }
+            return Ok(());
+        }
         let (prompt, image_url) = self.prepare_agent_input(event).await?;
         let reply = self
             .run_agent(client.clone(), event, &context, prompt, image_url)

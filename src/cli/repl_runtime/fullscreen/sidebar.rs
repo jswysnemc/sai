@@ -243,7 +243,10 @@ impl ReplRuntime {
         let background = self.background_panel.wait(self.sidebar_visible(usize::from(
             super::super::viewport::TerminalSize::current().cols,
         )));
-        [preview, git, background, self.session_browser.wait()]
+        let groups = self.group_browser.wait(self.sidebar_visible(usize::from(
+            super::super::viewport::TerminalSize::current().cols,
+        )));
+        [preview, git, background, groups, self.session_browser.wait()]
             .into_iter()
             .flatten()
             .min()
@@ -343,6 +346,12 @@ impl ReplRuntime {
                     session.sidebar.hovered = None;
                 }
                 self.background_panel.open(index);
+            }
+            SidebarAction::Group(index) => {
+                if let Some(session) = self.fullscreen.as_mut() {
+                    session.sidebar.hovered = None;
+                }
+                self.group_browser.request_open(index);
             }
             SidebarAction::Toggle(section) => self
                 .fullscreen

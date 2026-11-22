@@ -6,6 +6,7 @@ use crate::cli::repl_runtime::panel_mouse::PanelAction;
 pub(super) enum SidebarSection {
     Sessions,
     Agents,
+    Groups,
     Git,
     Todo,
     Background,
@@ -18,12 +19,14 @@ pub(super) enum SidebarAction {
     Panel(PanelAction),
     GitFile(usize),
     Background(Option<usize>),
+    Group(Option<usize>),
 }
 
 #[derive(Default)]
 pub(super) struct SidebarSections {
     pub(super) sessions_collapsed: bool,
     pub(super) agents_collapsed: bool,
+    pub(super) groups_collapsed: bool,
     pub(super) git_collapsed: bool,
     pub(super) todo_collapsed: bool,
     pub(super) background_collapsed: bool,
@@ -45,6 +48,7 @@ impl SidebarSections {
         let collapsed = match section {
             SidebarSection::Sessions => &mut self.sessions_collapsed,
             SidebarSection::Agents => &mut self.agents_collapsed,
+            SidebarSection::Groups => &mut self.groups_collapsed,
             SidebarSection::Git => &mut self.git_collapsed,
             SidebarSection::Todo => &mut self.todo_collapsed,
             SidebarSection::Background => &mut self.background_collapsed,
@@ -72,6 +76,7 @@ impl SidebarSections {
         match section {
             SidebarSection::Sessions => self.sessions_collapsed,
             SidebarSection::Agents => self.agents_collapsed,
+            SidebarSection::Groups => self.groups_collapsed,
             SidebarSection::Git => self.git_collapsed,
             SidebarSection::Todo => self.todo_collapsed,
             SidebarSection::Background => self.background_collapsed,
@@ -84,6 +89,7 @@ impl SidebarSections {
         match section {
             SidebarSection::Sessions => self.sessions_collapsed = value,
             SidebarSection::Agents => self.agents_collapsed = value,
+            SidebarSection::Groups => self.groups_collapsed = value,
             SidebarSection::Git => self.git_collapsed = value,
             SidebarSection::Todo => self.todo_collapsed = value,
             SidebarSection::Background => self.background_collapsed = value,

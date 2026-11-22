@@ -38,6 +38,7 @@ pub(super) struct SidebarVerticalPlan {
 pub(super) struct SidebarScrolls {
     pub(super) sessions: usize,
     pub(super) agents: usize,
+    pub(super) groups: usize,
     pub(super) git: usize,
     pub(super) todo: usize,
     pub(super) background: usize,
@@ -50,6 +51,7 @@ impl SidebarScrolls {
         match section {
             SidebarSection::Sessions => self.sessions = offset,
             SidebarSection::Agents => self.agents = offset,
+            SidebarSection::Groups => self.groups = offset,
             SidebarSection::Git => self.git = offset,
             SidebarSection::Todo => self.todo = offset,
             SidebarSection::Background => self.background = offset,
@@ -62,6 +64,7 @@ impl SidebarScrolls {
         match section {
             SidebarSection::Sessions => self.sessions,
             SidebarSection::Agents => self.agents,
+            SidebarSection::Groups => self.groups,
             SidebarSection::Git => self.git,
             SidebarSection::Todo => self.todo,
             SidebarSection::Background => self.background,
@@ -74,6 +77,7 @@ impl SidebarScrolls {
         let offset = match region.section {
             SidebarSection::Sessions => &mut self.sessions,
             SidebarSection::Agents => &mut self.agents,
+            SidebarSection::Groups => &mut self.groups,
             SidebarSection::Git => &mut self.git,
             SidebarSection::Todo => &mut self.todo,
             SidebarSection::Background => &mut self.background,
@@ -94,6 +98,7 @@ impl SidebarScrolls {
         let offset = match region.section {
             SidebarSection::Sessions => &mut self.sessions,
             SidebarSection::Agents => &mut self.agents,
+            SidebarSection::Groups => &mut self.groups,
             SidebarSection::Git => &mut self.git,
             SidebarSection::Todo => &mut self.todo,
             SidebarSection::Background => &mut self.background,
@@ -167,49 +172,58 @@ pub(super) fn plan_vertical(
     };
 
     // 2. 【终端侧栏】【手风琴模式】单区聚焦时将其余非焦点区域收敛至 0 行，释放全屏高度
-    let (mut agents, mut todo, mut git, mut sessions, background) = if let Some(target) =
-        focused_section
-    {
-        (
-            usize::from(target == SidebarSection::Agents)
-                * len(SidebarSection::Agents).min(available),
-            usize::from(target == SidebarSection::Todo) * len(SidebarSection::Todo).min(available),
-            usize::from(target == SidebarSection::Git) * len(SidebarSection::Git).min(available),
-            usize::from(target == SidebarSection::Sessions)
-                * len(SidebarSection::Sessions).min(available),
-            usize::from(target == SidebarSection::Background)
-                * len(SidebarSection::Background).min(available),
-        )
-    } else {
-        // 3. 【终端侧栏】【保底分配】后台入口与短分组优先保底，长文件与待办均衡共享
-        let background = len(SidebarSection::Background)
-            .min(4)
-            .min((available / 3).max(1))
-            .min(available);
-        let rem = available.saturating_sub(background);
-        let sessions = len(SidebarSection::Sessions)
-            .min(6)
-            .min(rem / 3 + usize::from(rem > 0));
-        let rem = rem.saturating_sub(sessions);
-        let agents = len(SidebarSection::Agents)
-            .min(5)
-            .min(rem / 3 + usize::from(rem > 0));
-        let rem_todo_git = rem.saturating_sub(agents);
-        let git_reserve = len(SidebarSection::Git).min(6).min(rem_todo_git / 2);
-        let todo = len(SidebarSection::Todo).min(rem_todo_git.saturating_sub(git_reserve));
-        let git = len(SidebarSection::Git).min(rem_todo_git.saturating_sub(todo));
-        (agents, todo, git, sessions, background)
-    };
+    let (mut agents, mut groups, mut todo, mut git, mut sessions, background) =
+        if let Some(target) = focused_section {
+            (
+                usize::from(target == SidebarSection::Agents)
+                    * len(SidebarSection::Agents).min(available),
+                usize::from(target == SidebarSection::Groups)
+                    * len(SidebarSection::Groups).min(available),
+                usize::from(target == SidebarSection::Todo)
+                    * len(SidebarSection::Todo).min(available),
+                usize::from(target == SidebarSection::Git)
+                    * len(SidebarSection::Git).min(available),
+                usize::from(target == SidebarSection::Sessions)
+                    * len(SidebarSection::Sessions).min(available),
+                usize::from(target == SidebarSection::Background)
+                    * len(SidebarSection::Background).min(available),
+            )
+        } else {
+            // 3. 【终端侧栏】【保底分配】后台入口与短分组优先保底，长文件与待办均衡共享
+            let background = len(SidebarSection::Background)
+                .min(4)
+                .min((available / 3).max(1))
+                .min(available);
+            let rem = available.saturating_sub(background);
+            let groups = len(SidebarSection::Groups)
+                .min(4)
+                .min((rem / 3).max(usize::from(len(SidebarSection::Groups) > 0)))
+                .min(rem);
+            let rem = rem.saturating_sub(groups);
+            let sessions = len(SidebarSection::Sessions)
+                .min(6)
+                .min(rem / 3 + usize::from(rem > 0));
+            let rem = rem.saturating_sub(sessions);
+            let agents = len(SidebarSection::Agents)
+                .min(5)
+                .min(rem / 3 + usize::from(rem > 0));
+            let rem_todo_git = rem.saturating_sub(agents);
+            let git_reserve = len(SidebarSection::Git).min(6).min(rem_todo_git / 2);
+            let todo = len(SidebarSection::Todo).min(rem_todo_git.saturating_sub(git_reserve));
+            let git = len(SidebarSection::Git).min(rem_todo_git.saturating_sub(todo));
+            (agents, groups, todo, git, sessions, background)
+        };
 
-    // 4. 【终端侧栏】【余量回收】剩余空间优先归还会话、变更与待办列表
+    // 4. 【终端侧栏】【余量回收】剩余空间优先归还会话、变更、群组与待办列表
     if focused_section.is_none() {
-        let used = agents + todo + git + sessions + background;
+        let used = agents + groups + todo + git + sessions + background;
         let mut leftover = available.saturating_sub(used);
         if leftover > 0 {
             for (slot, max_len) in [
                 (&mut sessions, len(SidebarSection::Sessions)),
                 (&mut git, len(SidebarSection::Git)),
                 (&mut agents, len(SidebarSection::Agents)),
+                (&mut groups, len(SidebarSection::Groups)),
                 (&mut todo, len(SidebarSection::Todo)),
             ] {
                 let extra = max_len.saturating_sub(*slot).min(leftover);
@@ -223,6 +237,7 @@ pub(super) fn plan_vertical(
     let visible_for = |section| match section {
         SidebarSection::Sessions => sessions,
         SidebarSection::Agents => agents,
+        SidebarSection::Groups => groups,
         SidebarSection::Git => git,
         SidebarSection::Todo => todo,
         SidebarSection::Background => background,

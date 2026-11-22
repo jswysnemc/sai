@@ -56,6 +56,7 @@ pub(super) struct SidebarRow {
 
 pub(super) struct SidebarView<'a> {
     pub(super) sessions: Option<&'a super::sidebar_sessions::SidebarSessions>,
+    pub(super) groups: Option<&'a super::sidebar_groups::SidebarGroups>,
     pub(super) viewing: Option<&'a str>,
     pub(super) compact: bool,
     pub(super) sections: &'a SidebarSections,
@@ -119,6 +120,16 @@ pub(super) fn document(
                 view.sections.is_collapsed(SidebarSection::Background),
                 view.width,
             ),
+        ),
+        (
+            SidebarSection::Groups,
+            view.groups.map_or_else(Vec::new, |groups| {
+                super::sidebar_groups_view::rows(
+                    groups,
+                    view.sections.is_collapsed(SidebarSection::Groups),
+                    view.width,
+                )
+            }),
         ),
     ] {
         if panel.is_empty() {

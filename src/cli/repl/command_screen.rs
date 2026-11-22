@@ -35,7 +35,10 @@ pub(super) fn classify_command_screen(input: &str) -> CommandScreenPolicy {
             CommandScreenPolicy::StayCurrent
         };
     }
-    if trimmed.eq_ignore_ascii_case("/config") || trimmed.eq_ignore_ascii_case("/ps") {
+    if trimmed.eq_ignore_ascii_case("/config")
+        || trimmed.eq_ignore_ascii_case("/ps")
+        || group_commands::opens_group_overlay(trimmed)
+    {
         return CommandScreenPolicy::AlternateOverlay;
     }
     match crate::control_commands::parse_control_command(

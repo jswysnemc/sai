@@ -207,6 +207,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
       <SessionSidebarActions
         onNewSession={() => actions.create.mutate(undefined)}
         onSearch={() => setSearchOpen(true)}
+        onSuperAgent={() => { navigate("/super-agent"); onNavigate?.(); }}
         onBackgroundTasks={openBackgroundTasks}
         onScheduledTasks={() => { navigate("/cron-jobs"); onNavigate?.(); }}
         onSkills={() => { navigate("/settings/skills"); onNavigate?.(); }}

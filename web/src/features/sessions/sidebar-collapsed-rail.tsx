@@ -1,4 +1,4 @@
-import { Activity, CalendarClock, FolderOpen, PanelLeftOpen, Search, Settings2, SquarePen, type IconSize } from "../../shared/ui/icons";
+import { Activity, CalendarClock, FolderOpen, MessagesSquare, PanelLeftOpen, Search, Settings2, SquarePen, type IconSize } from "../../shared/ui/icons";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../shared/ui/button/button";
 import { LocaleSwitcher } from "../i18n/locale-switcher";
@@ -28,6 +28,7 @@ export function SidebarCollapsedRail({ onExpand, onNewSession, onSearch, onBackg
     { label: t("Expand session sidebar", "展开会话侧栏"), icon: PanelLeftOpen, action: onExpand, size: 14 },
     { label: t("New task", "新建任务"), icon: SquarePen, action: onNewSession, disabled: newSessionPending },
     { label: t("Search", "搜索"), icon: Search, action: onSearch },
+    { label: t("Super-Agent groups", "Super-Agent 群组"), icon: MessagesSquare, action: () => { navigate("/super-agent"); onAfterNavigate?.(); } },
     { label: t("Background tasks", "后台任务"), icon: Activity, action: onBackgroundTasks },
     { label: t("Scheduled tasks", "定时任务"), icon: CalendarClock, action: () => { navigate("/cron-jobs"); onAfterNavigate?.(); } },
     { label: t("Skills", "技能"), icon: Settings2, action: () => { navigate("/settings/skills"); onAfterNavigate?.(); } },

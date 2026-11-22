@@ -161,6 +161,28 @@ async fn process_message(state: Arc<FeishuState>, message: FeishuMessage) -> Res
         state.client.send_text(&message.chat_id, &reply).await?;
         return Ok(());
     }
+    // 2. 【超级智能体】【渠道桥接】将命中群组路由的飞书消息转交 Leader 编排并由 Leader 主动回推成果
+    let super_target = json!({
+        "chat_id": message.chat_id,
+        "external_chat_id": message.chat_id,
+        "message_id": message.message_id,
+    });
+    if let crate::super_agent::gateway_bridge::GatewayRouteOutcome::Handled { immediate_reply } =
+        crate::super_agent::gateway_bridge::try_handle_gateway_message(
+            &state.paths,
+            "feishu",
+            &message.chat_id,
+            &message.chat_id,
+            &message.text,
+            super_target,
+        )
+        .await?
+    {
+        if let Some(reply) = immediate_reply.filter(|text| !text.trim().is_empty()) {
+            state.client.send_text(&message.chat_id, &reply).await?;
+        }
+        return Ok(());
+    }
     let reply = run_turn(&state, &context, &message).await?;
     if reply.trim().is_empty() {
         return Ok(());

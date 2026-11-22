@@ -12,6 +12,7 @@ pub const REPL_COMMANDS: &[&str] = &[
     "/providers",
     "/config",
     "/ps",
+    "/group",
     "/plugins",
     "/plugin",
     "/subagents",

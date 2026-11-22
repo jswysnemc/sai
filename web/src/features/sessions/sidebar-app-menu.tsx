@@ -1,4 +1,4 @@
-import { Cable, CalendarClock, FolderOpen, ImagePlus, Settings, Sparkles } from "../../shared/ui/icons";
+import { Cable, CalendarClock, FolderOpen, ImagePlus, MessagesSquare, Settings, Sparkles } from "../../shared/ui/icons";
 import { useNavigate } from "react-router-dom";
 import { ActionMenu } from "../../shared/ui/menu/action-menu";
 import { useI18n } from "../i18n/use-i18n";
@@ -34,6 +34,7 @@ export function SidebarAppMenu({ collapsed = false, onOpenDirectory, onAfterNavi
       trigger={<><Settings size={collapsed ? 16 : 14} />{!collapsed && <span>{t("Settings", "设置")}</span>}</>}
       items={[
         { id: "settings", label: t("Settings", "设置"), icon: <Settings size={16} />, onSelect: () => openPage("/settings") },
+        { id: "super-agent", label: t("Super-Agent groups", "Super-Agent 群组"), icon: <MessagesSquare size={16} />, onSelect: () => openPage("/super-agent") },
         { id: "skills", label: t("Skills", "技能"), icon: <Sparkles size={16} />, onSelect: () => openPage("/settings/skills") },
         { id: "cron", label: t("Scheduled tasks", "定时任务"), icon: <CalendarClock size={16} />, onSelect: () => openPage("/cron-jobs") },
         { id: "image-workbench", label: t("Image workbench", "生图工作台"), icon: <ImagePlus size={16} />, onSelect: () => openPage("/image-workbench") },

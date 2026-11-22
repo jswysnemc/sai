@@ -1,4 +1,5 @@
 use super::channel_context::{load_latest_channel_context, ChannelContext};
+use super::feishu::FeishuClient;
 use super::qq_bot::auth::QqBotAuthenticator;
 use super::qq_bot::config::{resolve_qq_credentials, QqBotCredentialOverrides};
 use super::qq_official::{QqOfficialClient, QqTargetKind};
@@ -21,6 +22,10 @@ pub(crate) enum ActiveChannelTarget {
         client: WeixinBotClient,
         to_user_id: String,
         context_token: Option<String>,
+    },
+    Feishu {
+        client: FeishuClient,
+        chat_id: String,
     },
 }
 
@@ -80,12 +85,34 @@ pub(crate) async fn resolve_channel_target(
         } => {
             resolve_weixin_context_target(paths, config, to_user_id.clone(), context_token.clone())
         }
-        // 飞书暂未接主动推送工具：回复走网关自身的发送路径
-        ChannelContext::Feishu { .. } => bail!(t(
-            "the Feishu channel does not support proactive messages yet",
-            "飞书渠道暂不支持主动推送消息",
-        )),
+        ChannelContext::Feishu { chat_id, .. } => resolve_feishu_context_target(config, chat_id),
     }
+}
+
+/// 根据明确飞书上下文重建发送目标。
+///
+/// 参数:
+/// - `config`: 应用配置
+/// - `chat_id`: 飞书会话标识
+///
+/// 返回:
+/// - 飞书发送目标
+fn resolve_feishu_context_target(config: &AppConfig, chat_id: &str) -> Result<ActiveChannelTarget> {
+    let feishu = &config.gateways.feishu;
+    let app_id = non_empty_config(&feishu.app_id).context(t(
+        "Feishu app_id is not configured",
+        "尚未配置飞书 app_id",
+    ))?;
+    let app_secret = non_empty_config(&feishu.app_secret).context(t(
+        "Feishu app_secret is not configured",
+        "尚未配置飞书 app_secret",
+    ))?;
+    let base_url = non_empty_config(&feishu.base_url)
+        .unwrap_or_else(|| "https://open.feishu.cn".to_string());
+    Ok(ActiveChannelTarget::Feishu {
+        client: FeishuClient::new(&base_url, &app_id, &app_secret),
+        chat_id: chat_id.to_string(),
+    })
 }
 
 /// 根据明确 QQ 上下文重建发送目标。

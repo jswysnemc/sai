@@ -127,6 +127,9 @@ pub enum Command {
     /// Manage Lua plugins, tools, commands and grants
     Plugins(super::plugins::PluginsArgs),
     Ps(BackgroundCommandsArgs),
+    /// 进入或管理 Super-Agent 群组（Leader + Runners 协同）
+    #[command(alias = "groups")]
+    Group(super::group_commands::GroupArgs),
     Gateway(GatewayArgs),
     WeixinLogin(TopLevelWeixinLoginArgs),
     Set(SetArgs),

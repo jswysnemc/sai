@@ -42,6 +42,7 @@ mod session;
 mod sidebar;
 mod ssh;
 mod subagent_models;
+mod super_agent;
 mod tool_whitelist;
 mod tui_mode;
 mod web_search;
@@ -96,4 +97,5 @@ pub use ssh::{SshConfig, SshHostConfig, DEFAULT_SSH_PORT};
 pub(crate) use subagent_models::{
     subagent_runtime_config, SubagentModelChoice, SubagentModelSettings,
 };
+pub use super_agent::SuperAgentConfig;
 pub use tool_whitelist::{unknown_whitelist_tools, whitelist_allows_tool};

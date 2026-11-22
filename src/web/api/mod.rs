@@ -39,6 +39,7 @@ mod ssh_hosts;
 mod ssh_secrets;
 mod subagent_models;
 mod subagents;
+mod super_agent;
 mod system;
 mod terminal;
 mod todos;
@@ -81,6 +82,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         .merge(memory::routes())
         .merge(subagents::routes())
         .merge(subagent_models::routes())
+        .merge(super_agent::routes())
         .merge(cron_jobs::routes())
         .merge(providers::routes())
         .merge(jev::routes())

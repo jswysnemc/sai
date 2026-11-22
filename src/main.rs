@@ -35,6 +35,7 @@ mod sandbox;
 mod shell;
 mod ssh;
 mod state;
+mod super_agent;
 mod token_counter;
 mod token_estimate;
 mod tools;

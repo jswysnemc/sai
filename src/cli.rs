@@ -35,6 +35,7 @@ mod config_commands;
 mod confirm;
 mod context_panel;
 mod fuzzy_select;
+mod group_commands;
 mod history;
 mod hooks_commands;
 mod init;
@@ -69,6 +70,7 @@ mod repl_editor;
 mod repl_editor_buffer;
 mod repl_exit_guard;
 mod repl_external_events;
+mod repl_group;
 mod repl_input;
 mod repl_input_navigation;
 mod repl_input_render;
@@ -318,6 +320,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             .await
         }
         Some(Command::Ps(args)) => run_background_commands(&paths, args).await,
+        Some(Command::Group(args)) => group_commands::run(&paths, args).await,
         Some(Command::Gateway(args)) => run_gateway(&paths, args).await,
         Some(Command::WeixinLogin(args)) => {
             run_gateway(

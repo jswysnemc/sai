@@ -1,4 +1,4 @@
-use super::channel_delivery::{send_qq_message, send_weixin_message};
+use super::channel_delivery::{send_feishu_message, send_qq_message, send_weixin_message};
 use super::channel_target::resolve_latest_target;
 pub(crate) use super::channel_target::{resolve_channel_target, ActiveChannelTarget};
 use crate::config::AppConfig;
@@ -50,8 +50,8 @@ pub(crate) fn register_channel_message_tool(
                 "properties": {
                     "channel": {
                         "type": "string",
-                        "description": "Target channel: current/default, qq, or weixin. Unbound sessions default to the latest Weixin chat.",
-                        "enum": ["current", "default", "qq", "weixin"]
+                        "description": "Target channel: current/default, qq, weixin, or feishu. Unbound sessions default to the latest Weixin chat.",
+                        "enum": ["current", "default", "qq", "weixin", "feishu"]
                     },
                     "kind": {
                         "type": "string",
@@ -117,6 +117,9 @@ async fn send_channel_message(
         ActiveChannelTarget::Qq { client, msg_id } => {
             send_qq_message(client, msg_id, &kind, text, path).await
         }
+        ActiveChannelTarget::Feishu { client, chat_id } => {
+            send_feishu_message(client, chat_id, &kind, text).await
+        }
         ActiveChannelTarget::Weixin {
             client,
             to_user_id,
@@ -165,7 +168,11 @@ async fn ensure_weixin_gateway(
     let channel = channel.trim().to_ascii_lowercase();
     let uses_current = matches!(channel.as_str(), "" | "current" | "default");
     let is_weixin = matches!(channel.as_str(), "weixin" | "wechat")
-        || (uses_current && !matches!(current, ActiveChannelTarget::Qq { .. }));
+        || (uses_current
+            && !matches!(
+                current,
+                ActiveChannelTarget::Qq { .. } | ActiveChannelTarget::Feishu { .. }
+            ));
     if !is_weixin {
         return Ok(());
     }
@@ -196,7 +203,7 @@ async fn resolve_target(
     if matches!(current, ActiveChannelTarget::Unbound) {
         let requested = match channel.as_str() {
             "" | "current" | "default" => "weixin",
-            "qq" | "weixin" | "wechat" => channel.as_str(),
+            "qq" | "weixin" | "wechat" | "feishu" => channel.as_str(),
             value => bail!("{}: {value}", t("unsupported channel", "不支持的渠道")),
         };
         return resolve_latest_target(paths, config, requested).await;
@@ -206,7 +213,10 @@ async fn resolve_target(
         // 1. 【渠道消息】【目标隔离】同渠道名称绑定本次入站目标，不读取其他并发会话的最近目标
         "qq" if matches!(current, ActiveChannelTarget::Qq { .. }) => Ok(current),
         "weixin" | "wechat" if matches!(current, ActiveChannelTarget::Weixin { .. }) => Ok(current),
-        "qq" | "weixin" | "wechat" => resolve_latest_target(paths, config, &channel).await,
+        "feishu" if matches!(current, ActiveChannelTarget::Feishu { .. }) => Ok(current),
+        "qq" | "weixin" | "wechat" | "feishu" => {
+            resolve_latest_target(paths, config, &channel).await
+        }
         value => bail!("{}: {value}", t("unsupported channel", "不支持的渠道")),
     }
 }

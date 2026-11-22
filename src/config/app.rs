@@ -185,6 +185,7 @@ impl AppConfig {
         crate::hooks::validate(&self.hooks)?;
         self.codemode.validate()?;
         self.computer_use.validate()?;
+        self.super_agent.validate()?;
         self.plugins.web.validate()?;
         super::model_endpoints::validate(&self.model_endpoints)?;
         self.jev.validate(&self.model_endpoints)?;

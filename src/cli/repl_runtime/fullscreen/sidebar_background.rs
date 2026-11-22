@@ -11,7 +11,8 @@ impl ReplRuntime {
     pub(in crate::cli::repl_runtime) fn tick_sidebar(&mut self) -> bool {
         let background = self.tick_sidebar_background();
         let sessions = self.tick_session_browser();
-        self.tick_sidebar_git() || background || sessions
+        let groups = self.tick_group_browser();
+        self.tick_sidebar_git() || background || sessions || groups
     }
 
     /// 【后台任务】【运行环境】绑定当前会话管理接口，不混入其他会话或已消费任务。

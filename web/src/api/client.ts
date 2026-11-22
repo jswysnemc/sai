@@ -3,6 +3,7 @@ import { apiRequest } from "./api-request";
 import { usageApi } from "./usage-client";
 import { imageModelsApi, jevApi } from "./model-endpoint-client";
 import { backgroundTasksApi } from "./background-tasks-api";
+import { superAgentApi } from "./super-agent-client";
 export { apiRequest } from "./api-request";
 export { bootstrapSession, fetchAuthMode, hasActiveSession, loginWithPassword } from "./auth-client";
 import type { BranchSwitchResult } from "./turn-tree-contracts";
@@ -690,7 +691,8 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ source, language })
       })
-  }
+  },
+  superAgent: superAgentApi
 };
 
 /**

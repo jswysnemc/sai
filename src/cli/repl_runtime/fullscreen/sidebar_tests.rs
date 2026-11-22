@@ -269,6 +269,7 @@ fn sidebar_sanitizes_user_text_and_keeps_full_todo_list() {
         &Default::default(),
         sidebar_view::SidebarView {
             sessions: None,
+            groups: None,
             viewing: None,
             compact: false,
             sections: &Default::default(),
@@ -364,6 +365,7 @@ fn redesigned_sidebar_compacts_empty_sections_and_supports_accordion_focus() {
         &Default::default(),
         sidebar_view::SidebarView {
             sessions: Some(&sessions),
+            groups: None,
             viewing: None,
             compact: false,
             sections: &Default::default(),

@@ -11,6 +11,7 @@ const SettingsPage = lazy(() => import("../features/settings/settings-page").the
 const GatewaysPage = lazy(() => import("../features/gateways/gateways-page").then((module) => ({ default: module.GatewaysPage })));
 const CronJobsPage = lazy(() => import("../features/cron-jobs/cron-jobs-page").then((module) => ({ default: module.CronJobsPage })));
 const ImageWorkbenchPage = lazy(() => import("../features/image-workbench/image-workbench-page").then((module) => ({ default: module.ImageWorkbenchPage })));
+const SuperAgentPage = lazy(() => import("../features/super-agent/super-agent-page").then((module) => ({ default: module.SuperAgentPage })));
 
 /**
  * 组合应用级上下文和页面路由。
@@ -30,6 +31,8 @@ export function App() {
               <Route path="gateways" element={<GatewaysPage />} />
               <Route path="cron-jobs" element={<CronJobsPage />} />
               <Route path="image-workbench" element={<ImageWorkbenchPage />} />
+              <Route path="super-agent" element={<SuperAgentPage />} />
+              <Route path="super-agent/:groupId" element={<SuperAgentPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

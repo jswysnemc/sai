@@ -1,3 +1,4 @@
+use super::feishu::FeishuClient;
 use super::message::{MediaKind, OutboundMedia, OutboundMessage};
 use super::qq_official::QqOfficialClient;
 use super::weixin_bot::client::WeixinBotClient;
@@ -119,6 +120,42 @@ pub(super) async fn send_weixin_message(
         value => bail!(
             "{}: {value}",
             t("unsupported message kind", "不支持的消息类型")
+        ),
+    }
+}
+
+/// 发送飞书渠道消息。
+///
+/// 参数:
+/// - `client`: 飞书开放平台客户端
+/// - `chat_id`: 飞书会话 ID
+/// - `kind`: 消息类型
+/// - `text`: 可选文本
+///
+/// 返回:
+/// - JSON 格式发送结果
+pub(super) async fn send_feishu_message(
+    client: FeishuClient,
+    chat_id: String,
+    kind: &str,
+    text: Option<String>,
+) -> Result<String> {
+    match kind {
+        "text" => {
+            client.send_text(&chat_id, &required_text(text)?).await?;
+            Ok(serde_json::to_string_pretty(&json!({
+                "ok": true,
+                "channel": "feishu",
+                "kind": "text",
+                "chat_id": chat_id,
+            }))?)
+        }
+        value => bail!(
+            "{}: {value}",
+            t(
+                "Feishu channel currently supports text messages only",
+                "飞书渠道当前仅支持发送文本消息"
+            )
         ),
     }
 }

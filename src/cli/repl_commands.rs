@@ -54,6 +54,7 @@ const EXTRA_REPL_COMMANDS: &[&str] = &[
     "/thinking",
     "/think",
     "/ps",
+    "/group",
     "/plugins",
     "/plugin",
     "/jev",
@@ -292,7 +293,9 @@ pub(super) fn command_category(command: &str) -> &'static str {
             t("model", "模型")
         }
         "/plan" | "/audit" | "/yolo" | "/auto" | "/auto-audit" => t("mode", "模式"),
-        "/ps" | "/plugins" | "/plugin" | "/subagents" | "/msg" | "/goal" => t("agent", "任务"),
+        "/ps" | "/group" | "/plugins" | "/plugin" | "/subagents" | "/msg" | "/goal" => {
+            t("agent", "任务")
+        }
         "/view" | "/tui" | "/context" | "/content" => t("view", "视图"),
         "/config" | "/jev" | "/sandbox" | "/help" | "/exit" => t("system", "系统"),
         _ => "",
@@ -337,6 +340,10 @@ fn command_description(command: &str) -> &'static str {
         ),
         "/config" => t("open fullscreen settings", "打开全屏配置"),
         "/ps" => t("manage background tasks", "管理后台任务"),
+        "/group" => t(
+            "open or manage Super-Agent groups (Leader + Runners)",
+            "打开或管理 Super-Agent 群组（Leader + Runners）",
+        ),
         "/subagents" => t("list session subagents", "列出会话子智能体"),
         "/msg" => t("leave a message on a subagent", "给子智能体留言"),
         "/thinking" | "/think" => t("set reasoning effort", "设置思考等级"),

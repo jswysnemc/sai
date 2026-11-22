@@ -103,6 +103,9 @@ pub struct AppConfig {
     /// 会话网格：跨会话消息收发开关，默认只允许投递给自己
     #[serde(default)]
     pub mesh: super::mesh::MeshConfig,
+    /// Super-Agent 双层群组编排、多渠道路由与 Watchdog 配置
+    #[serde(default, skip_serializing_if = "super::SuperAgentConfig::is_default")]
+    pub super_agent: super::SuperAgentConfig,
     /// 内置 TypeSafe Jev 功能：工具与 skills 暴露决策、权限自动审核
     #[serde(default)]
     pub jev: super::JevConfig,

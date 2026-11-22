@@ -30,6 +30,18 @@ pub(super) fn background_heading() -> &'static str {
     t("Background tasks", "后台任务")
 }
 
+/// 【侧栏国际化】【群组标题】返回 Super-Agent 群组分组标题。
+/// 参数: 无；返回: 当前语言下的标题文本。
+pub(super) fn groups_heading() -> &'static str {
+    t("Groups", "群组")
+}
+
+/// 【侧栏国际化】【打开群组】返回打开群组工作台的入口文本。
+/// 参数: 无；返回: 当前语言下的入口标签。
+pub(super) fn open_groups() -> &'static str {
+    t("Open group chat", "进入群组对话")
+}
+
 /// 【侧栏国际化】【管理任务】返回打开后台任务面板的入口文本。
 /// 参数: 无；返回: 当前语言下的入口标签。
 pub(super) fn manage_tasks() -> &'static str {

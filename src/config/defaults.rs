@@ -48,6 +48,7 @@ impl Default for AppConfig {
             system_prompt: None,
             load_instruction_files: true,
             mesh: super::mesh::MeshConfig::default(),
+            super_agent: super::SuperAgentConfig::default(),
             jev: super::JevConfig::default(),
             legacy_jev_routing: None,
         }

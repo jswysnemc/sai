@@ -174,6 +174,7 @@ pub(super) struct ReplRuntime {
     fullscreen: Option<fullscreen::FullscreenSession>,
     sidebar_control: fullscreen::sidebar_control::SidebarControl,
     session_browser: fullscreen::sidebar_sessions::SidebarSessions,
+    group_browser: fullscreen::sidebar_groups::SidebarGroups,
     session_workspace: session_workspace::SessionWorkspace,
     /// 提问覆盖层临时占用的底部槽高度；存在时全屏正文让出该行数
     question_overlay_height: Option<u16>,
@@ -269,6 +270,7 @@ impl ReplRuntime {
             submission_queue_paused: Arc::new(AtomicBool::new(false)),
             control_queue: VecDeque::new(),
             session_browser: Default::default(),
+            group_browser: Default::default(),
             session_workspace: Default::default(),
             live_mode_handle: None,
             live_model_settings: None,

@@ -52,6 +52,8 @@ pub(super) async fn run(
     } else {
         RunManager::new(paths)?.with_console_logging()
     };
+    let super_agent = crate::super_agent::shared_service(paths)?;
+    super_agent.ensure_watchdog_started();
     let state = WebAppState {
         paths: paths.clone(),
         auth_token: Arc::from(token.as_str()),
@@ -62,6 +64,7 @@ pub(super) async fn run(
         terminals: TerminalManager::new(),
         system_monitor: SystemMonitor::new(),
         weixin_login: WeixinLoginManager::new(paths),
+        super_agent,
     };
     runs.resume_queued().await;
     let mut app = Router::new()

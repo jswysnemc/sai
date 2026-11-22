@@ -188,6 +188,30 @@ pub(super) async fn process_message_event(
             .await?;
         return Ok(());
     }
+    // 1. 【超级智能体】【渠道桥接】若命中群组命令或已绑定/开启 Leader 路由，转交群组 Leader 异步编排
+    let super_target = serde_json::json!({
+        "to_user_id": event.from_user_id,
+        "external_chat_id": event.from_user_id,
+        "context_token": event.context_token,
+    });
+    if let crate::super_agent::gateway_bridge::GatewayRouteOutcome::Handled { immediate_reply } =
+        crate::super_agent::gateway_bridge::try_handle_gateway_message(
+            paths,
+            "weixin",
+            &event.from_user_id,
+            &event.from_user_id,
+            &event.prompt,
+            super_target,
+        )
+        .await?
+    {
+        if let Some(reply) = immediate_reply.filter(|text| !text.trim().is_empty()) {
+            client
+                .send_text(&event.from_user_id, &reply, event.context_token.as_deref())
+                .await?;
+        }
+        return Ok(());
+    }
     let (prompt, image_url) = prepare_agent_input(paths, client, http_client, &event).await?;
     let reply = run_agent(paths, client, &event, &context, prompt, image_url).await?;
     if reply.trim().is_empty() {
