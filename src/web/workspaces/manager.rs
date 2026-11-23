@@ -24,6 +24,32 @@ impl WorkspaceManager {
     /// 返回:
     /// - 工作区管理器
     pub(crate) fn new(paths: &SaiPaths, initial_workspace: Option<&Path>) -> Result<Self> {
+        Self::init(paths, initial_workspace, true)
+    }
+
+    /// 【工作区测试】【隔离构造】在测试中构造工作区管理器，不修改进程全局 cwd，避免并行测试遇到目录消失。
+    ///
+    /// 参数:
+    /// - `paths`: Sai 路径集合
+    /// - `initial_workspace`: 测试专用初始工作区目录
+    ///
+    /// 返回:
+    /// - 工作区管理器
+    #[cfg(test)]
+    pub(crate) fn new_for_tests(paths: &SaiPaths, initial_workspace: &Path) -> Result<Self> {
+        Self::init(paths, Some(initial_workspace), false)
+    }
+
+    /// 初始化工作区注册表，并按需切换进程当前目录。
+    ///
+    /// 参数:
+    /// - `paths`: Sai 路径集合
+    /// - `initial_workspace`: 可选初始工作区目录
+    /// - `enter_dir`: 是否调用 `set_current_dir` 切入活动工作区
+    ///
+    /// 返回:
+    /// - 工作区管理器
+    fn init(paths: &SaiPaths, initial_workspace: Option<&Path>, enter_dir: bool) -> Result<Self> {
         let registry_file = paths.state_dir.join("web/workspaces.json");
         let current = match initial_workspace {
             Some(path) => canonical_directory(path)?,
@@ -73,9 +99,11 @@ impl WorkspaceManager {
             registry: Arc::new(RwLock::new(registry)),
             active_id: Arc::new(RwLock::new(active_id)),
         };
-        let active = manager.active()?;
-        std::env::set_current_dir(&active.path)
-            .with_context(|| format!("failed to enter workspace {}", active.path))?;
+        if enter_dir {
+            let active = manager.active()?;
+            std::env::set_current_dir(&active.path)
+                .with_context(|| format!("failed to enter workspace {}", active.path))?;
+        }
         manager.save()?;
         Ok(manager)
     }

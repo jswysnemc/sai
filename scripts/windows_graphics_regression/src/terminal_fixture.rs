@@ -52,8 +52,14 @@ impl Write for TerminalFixture<'_> {
         self.console.assert_query_modes();
         self.requests += 1;
         let kitty_query = bytes.starts_with(b"\x1b_G");
-        assert!(kitty_query || bytes == b"\x1b[c", "unexpected query");
-        let reply = if kitty_query {
+        let cell_size_query = bytes == b"\x1b[16t";
+        assert!(
+            kitty_query || cell_size_query || bytes == b"\x1b[c",
+            "unexpected query"
+        );
+        let reply = if cell_size_query {
+            "\x1b[6;24;12t".to_string()
+        } else if kitty_query {
             assert!(bytes.windows(3).any(|part| part == b"a=q"));
             match self.case {
                 "success" | "fragmented" | "translated" => {

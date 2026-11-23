@@ -37,7 +37,7 @@ async fn start_test_server(paths: &SaiPaths, ws: &Path) -> (String, tokio::task:
         auth_token: Arc::from("test-token"),
         password_hash: None,
         allow_anonymous: true,
-        workspaces: WorkspaceManager::new(paths, Some(ws)).unwrap(),
+        workspaces: WorkspaceManager::new_for_tests(paths, ws).unwrap(),
         runs: RunManager::new(paths).unwrap(),
         terminals: TerminalManager::new(),
         system_monitor: SystemMonitor::new(),

@@ -366,7 +366,6 @@ mod tests {
     /// 否则临时目录一删，同进程其它测试的 `current_dir()` 全部 ENOENT。
     #[test]
     fn workspace_resolution_prefers_the_requested_workspace() {
-        let previous_cwd = std::env::current_dir().unwrap();
         let temp = tempfile::tempdir().unwrap();
         let paths = test_paths(temp.path());
         let first = temp.path().join("first");
@@ -374,17 +373,14 @@ mod tests {
         std::fs::create_dir_all(&first).unwrap();
         std::fs::create_dir_all(&second).unwrap();
 
-        let result = {
-            let workspaces =
-                super::super::super::workspaces::WorkspaceManager::new(&paths, Some(&first))
-                    .unwrap();
-            let second_info = workspaces.add(&second, None).unwrap();
+        let workspaces =
+            super::super::super::workspaces::WorkspaceManager::new_for_tests(&paths, &first)
+                .unwrap();
+        let second_info = workspaces.add(&second, None).unwrap();
 
-            let active = workspace_for(&workspaces, None).unwrap();
-            let asked = workspace_for(&workspaces, Some(&second_info.id)).unwrap();
-            (active, asked)
-        };
-        std::env::set_current_dir(&previous_cwd).unwrap();
+        let active = workspace_for(&workspaces, None).unwrap();
+        let asked = workspace_for(&workspaces, Some(&second_info.id)).unwrap();
+        let result = (active, asked);
 
         assert_eq!(
             result.0,
