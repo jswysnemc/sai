@@ -19,6 +19,7 @@ use axum::Router;
 pub(super) fn routes() -> Router<WebAppState> {
     Router::new()
         .route("/api/super-agent/overview", get(groups::overview))
+        .route("/api/super-agent/capabilities", get(channels::capabilities))
         .route("/api/super-agent/stream", get(channels::stream))
         .route(
             "/api/super-agent/config",

@@ -8,6 +8,8 @@ const SUPER_AGENT_EVENT_TYPES = [
   "message.created",
   "trigger.recorded",
   "leader.thinking",
+  "leader.activity",
+  "leader.delta",
   "leader.idle",
   "runner.created",
   "runner.progress",

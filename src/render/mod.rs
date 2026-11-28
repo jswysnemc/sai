@@ -43,7 +43,7 @@ pub(crate) mod image_reference;
 pub(crate) mod input_atom;
 mod jev_preselect;
 mod live_tool_status;
-mod markdown;
+pub(crate) mod markdown;
 mod markdown_blocks;
 mod markdown_display_math;
 mod markdown_inline;

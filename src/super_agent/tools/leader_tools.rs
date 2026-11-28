@@ -319,6 +319,8 @@ pub fn register_leader_tools(
         let service = Arc::clone(&service);
         let group_id = group_id.clone();
         let default_thread_id = default_thread_id.clone();
+        let origin_channel = origin_channel.clone();
+        let origin_target = origin_target.clone();
         registry.register(
             ToolSpec::new(
                 "super_deliver_result",
@@ -343,6 +345,8 @@ pub fn register_leader_tools(
                     let service = Arc::clone(&service);
                     let group_id = group_id.clone();
                     let default_thread_id = default_thread_id.clone();
+                    let origin_channel = origin_channel.clone();
+                    let origin_target = origin_target.clone();
                     async move {
                         let task_id = optional_str(&args, "task_id");
                         let report_ids = string_array(&args, "report_ids");
@@ -358,6 +362,8 @@ pub fn register_leader_tools(
                                 &summary,
                                 &deliverable,
                                 channel_override.as_deref(),
+                                Some(origin_channel.as_str()),
+                                Some(&origin_target),
                             )
                             .await?;
                         Ok(serde_json::to_string_pretty(&json!({

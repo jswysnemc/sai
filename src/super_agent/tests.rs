@@ -216,6 +216,8 @@ async fn channel_inbound_report_and_leader_proactive_delivery_loop() {
             "已完成排查：登录接口已改为复用连接池，P95 延迟降低 68%。",
             "## 交付成果\n已完成登录接口性能排查与优化，改动文件 `src/auth/login.rs`。",
             None,
+            None,
+            None,
         )
         .await
         .unwrap();
@@ -360,4 +362,143 @@ async fn gateway_bridge_commands_and_routing_work() {
             immediate_reply: Some(_)
         }
     ));
+}
+
+/// 【超级智能体测试】【Leader 会话建档】验证 ensure_leader_session 可被 StateStore::for_session 找到且不污染项目工作区会话列表。
+#[test]
+fn leader_session_is_provisioned_and_locatable_without_polluting_workspace() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = test_paths(dir.path());
+    let project_ws = dir.path().join("project");
+    std::fs::create_dir_all(&project_ws).unwrap();
+    let service = SuperAgentService::open(&paths).unwrap();
+    let (group, _) = service
+        .create_group("Core", "leader session test", &project_ws.display().to_string(), None)
+        .unwrap();
+
+    // 1. 建档后 StateStore::for_session 必须成功打开，绝不再报 session not found
+    let session_id = super::leader_runtime::ensure_leader_session(&paths, &group).unwrap();
+    assert_eq!(session_id, format!("super-leader-{}", group.id));
+    let store = crate::state::StateStore::for_session(&paths, &session_id).unwrap();
+    assert_eq!(store.session_id(), session_id);
+
+    // 2. 项目工作区自身的会话列表未被 Leader 会话污染
+    let project_sessions = crate::state::list_sessions_for_workspace(&paths, &project_ws).unwrap();
+    assert!(project_sessions.is_empty());
+}
+
+/// 【超级智能体测试】【Leader 工具边界】验证 Leader 拥有 9 个编排工具与只读感知工具，且排除全部重执行/冲突工具。
+#[test]
+fn leader_tool_registry_exposes_orchestration_and_excludes_heavy_execution() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = test_paths(dir.path());
+    crate::config::AppConfig::init_files(&paths).unwrap();
+    let config = crate::config::AppConfig::load_or_default(&paths).unwrap();
+    let service = SuperAgentService::open(&paths).unwrap();
+    let (group, leader) = service.create_group("Tools", "", "/tmp", None).unwrap();
+
+    let registry = super::leader_runtime::build_leader_tool_registry(
+        &config,
+        &paths,
+        service,
+        group.id.clone(),
+        leader.id,
+        leader.name,
+        group.default_thread_id,
+        "tui".to_string(),
+        json!({}),
+    )
+    .unwrap();
+
+    for expected in super::tools::LEADER_TOOL_NAMES {
+        assert!(registry.contains(expected), "leader missing tool: {expected}");
+    }
+    for readonly in super::tools::LEADER_READONLY_TOOLS {
+        assert!(registry.contains(readonly), "leader missing readonly tool: {readonly}");
+    }
+    for forbidden in [
+        "run_command",
+        "background_command",
+        "write_file",
+        "str_replace",
+        "apply_patch",
+        "trash_path",
+        "subagent",
+        "ssh_run_command",
+        "browser_open",
+        "computer_click",
+    ] {
+        assert!(!registry.contains(forbidden), "leader must not expose: {forbidden}");
+    }
+}
+
+/// 【超级智能体测试】【主大厅路由保护】验证在默认大厅启动 Runner 后，普通消息仍路由给 Leader 而不会永久劫持给 Runner。
+#[tokio::test]
+async fn spawning_runner_in_lobby_preserves_leader_default_routing() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = test_paths(dir.path());
+    let service = SuperAgentService::open(&paths).unwrap();
+    let (group, _) = service.create_group("Lobby", "", "/tmp", None).unwrap();
+    let (worker, _) = service
+        .spawn_runner(SpawnRunnerRequest {
+            group_id: group.id.clone(),
+            name: "coder".to_string(),
+            specialty: "Rust".to_string(),
+            subagent_type: "general".to_string(),
+            task_title: "Fix bug".to_string(),
+            prompt: "Inspect main.rs".to_string(),
+            thread_id: None,
+            origin_channel: Some("tui".to_string()),
+            origin_target: None,
+        })
+        .await
+        .unwrap();
+
+    // 1. 主大厅普通发言仍应送交 Leader，而不是被已创建的 Runner 劫持
+    let (_, plain_decision) = service
+        .post_user_message(&group.id, "You", "再帮我规划下一个需求", None, None, "tui", false)
+        .await
+        .unwrap();
+    assert!(matches!(plain_decision, RoutingDecision::SlowPathLeader { .. }));
+
+    // 2. 显式 @coder 依然通过 Fast Path 直通目标 Runner
+    let (_, mention_decision) = service
+        .post_user_message(&group.id, "You", "@coder 顺便加下测试", None, None, "tui", false)
+        .await
+        .unwrap();
+    assert_eq!(
+        mention_decision,
+        RoutingDecision::FastPathWorkers {
+            worker_ids: vec![worker.id],
+            reason: "mentioned_worker_fast_path".to_string(),
+        }
+    );
+}
+
+/// 【超级智能体测试】【无任务 ID 渠道回推】验证 Leader 不带 task_id 直接调用交付时仍能沿批次来源回推渠道。
+#[tokio::test]
+async fn delivery_without_task_id_falls_back_to_batch_origin_channel() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = test_paths(dir.path());
+    let service = SuperAgentService::open(&paths).unwrap();
+    let (group, _) = service.create_group("WeChat", "", "/tmp", None).unwrap();
+    let origin_target = json!({ "external_chat_id": "wx_direct", "simulate": true });
+
+    let (_, receipt) = service
+        .deliver_leader_result(
+            &group.id,
+            &group.default_thread_id,
+            None,
+            &[],
+            "已汇总当前项目进展",
+            "## 进展汇总\n已完成核对。",
+            None,
+            Some("weixin"),
+            Some(&origin_target),
+        )
+        .await
+        .unwrap();
+    assert_eq!(receipt.channel, "weixin");
+    assert_eq!(receipt.status, "simulated");
+    assert_eq!(receipt.target, "weixin:wx_direct");
 }

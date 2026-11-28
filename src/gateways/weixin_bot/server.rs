@@ -189,6 +189,15 @@ pub(super) async fn process_message_event(
         return Ok(());
     }
     // 1. 【超级智能体】【渠道桥接】若命中群组命令或已绑定/开启 Leader 路由，转交群组 Leader 异步编排
+    let prepared_input = if event.media.is_empty() {
+        None
+    } else {
+        Some(prepare_agent_input(paths, client, http_client, &event).await?)
+    };
+    let super_prompt = prepared_input
+        .as_ref()
+        .map(|(text, _)| text.as_str())
+        .unwrap_or(event.prompt.as_str());
     let super_target = serde_json::json!({
         "to_user_id": event.from_user_id,
         "external_chat_id": event.from_user_id,
@@ -200,7 +209,7 @@ pub(super) async fn process_message_event(
             "weixin",
             &event.from_user_id,
             &event.from_user_id,
-            &event.prompt,
+            super_prompt,
             super_target,
         )
         .await?
@@ -212,7 +221,10 @@ pub(super) async fn process_message_event(
         }
         return Ok(());
     }
-    let (prompt, image_url) = prepare_agent_input(paths, client, http_client, &event).await?;
+    let (prompt, image_url) = match prepared_input {
+        Some(prepared) => prepared,
+        None => prepare_agent_input(paths, client, http_client, &event).await?,
+    };
     let reply = run_agent(paths, client, &event, &context, prompt, image_url).await?;
     if reply.trim().is_empty() {
         return Ok(());

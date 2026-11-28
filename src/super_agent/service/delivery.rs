@@ -116,6 +116,8 @@ impl SuperAgentService {
         summary: &str,
         deliverable: &str,
         channel_override: Option<&str>,
+        fallback_channel: Option<&str>,
+        fallback_target: Option<&serde_json::Value>,
     ) -> Result<(GroupMessage, ChannelDeliveryReceipt)> {
         let group = self
             .store
@@ -127,22 +129,83 @@ impl SuperAgentService {
             .map(|m| m.name)
             .unwrap_or_else(|| "Leader".to_string());
 
-        // 1. 解析任务与目标回推渠道
-        let task = match task_id {
+        // 1. 若 Leader 调用交付时省略了 report_ids 与 task_id，自动收敛该群组全部待归纳报告，防止循环重触发
+        let pending_reports = if report_ids.is_empty() && task_id.is_none() {
+            self.store.list_unsynthesized_reports(Some(group_id))?
+        } else {
+            Vec::new()
+        };
+        let effective_report_ids: Vec<String> = if !report_ids.is_empty() {
+            report_ids.to_vec()
+        } else {
+            pending_reports.iter().map(|rep| rep.id.clone()).collect()
+        };
+        let resolved_task_id: Option<String> = task_id.map(ToOwned::to_owned).or_else(|| {
+            pending_reports
+                .iter()
+                .rev()
+                .find_map(|rep| rep.task_id.clone())
+        });
+
+        // 2. 解析任务与目标回推渠道（优先显式覆盖，其次任务来源，再次当前批次来源）
+        let task = match resolved_task_id.as_deref() {
             Some(tid) => self.store.get_task(tid)?,
             None => None,
         };
         let target_channel = channel_override
+            .map(str::trim)
+            .filter(|ch| !ch.is_empty())
             .map(ToOwned::to_owned)
-            .or_else(|| task.as_ref().map(|t| t.origin_channel.clone()))
+            .or_else(|| {
+                task.as_ref()
+                    .map(|t| t.origin_channel.clone())
+                    .filter(|ch| !ch.trim().is_empty())
+            })
+            .or_else(|| {
+                fallback_channel
+                    .map(str::trim)
+                    .filter(|ch| !ch.is_empty())
+                    .map(ToOwned::to_owned)
+            })
             .unwrap_or_else(|| "group".to_string());
-        let target_json = task
+        let mut target_json = task
             .as_ref()
             .map(|t| t.origin_target.clone())
+            .filter(|val| val.as_object().is_some_and(|map| !map.is_empty()))
+            .or_else(|| {
+                fallback_target
+                    .cloned()
+                    .filter(|val| val.as_object().is_some_and(|map| !map.is_empty()))
+            })
             .unwrap_or_else(|| json!({}));
+        // 3. 若仍无具体外部会话目标，回退到该群组已绑定的同名外部渠道
+        if target_json.as_object().is_some_and(|map| map.is_empty())
+            && !matches!(target_channel.as_str(), "" | "group" | "tui" | "web")
+        {
+            if let Ok(bindings) = self.store.list_channel_bindings(Some(group_id)) {
+                if let Some(binding) = bindings.into_iter().find(|item| {
+                    item.enabled
+                        && item.channel.eq_ignore_ascii_case(&target_channel)
+                        && item.external_chat_id != "*"
+                }) {
+                    target_json = json!({ "external_chat_id": binding.external_chat_id });
+                }
+            }
+        }
 
-        // 2. 更新任务为已交付，标记关联报告为已归纳
-        if let Some(tid) = task_id {
+        // 4. 更新主任务及全部关联待审任务为已交付，标记关联报告为已归纳
+        let mut delivered_task_ids: Vec<String> = Vec::new();
+        if let Some(tid) = resolved_task_id.as_deref() {
+            delivered_task_ids.push(tid.to_string());
+        }
+        for rep in &pending_reports {
+            if let Some(tid) = rep.task_id.as_deref() {
+                if !delivered_task_ids.iter().any(|existing| existing == tid) {
+                    delivered_task_ids.push(tid.to_string());
+                }
+            }
+        }
+        for tid in &delivered_task_ids {
             let _ = self.store.update_task(
                 tid,
                 Some(TaskStatus::Delivered),
@@ -152,9 +215,11 @@ impl SuperAgentService {
                 Some(deliverable.trim().to_string()),
             );
         }
-        let _ = self.store.mark_reports_synthesized(report_ids, task_id)?;
+        let _ = self
+            .store
+            .mark_reports_synthesized(&effective_report_ids, resolved_task_id.as_deref())?;
 
-        // 3. 在群组中写入正式交付消息
+        // 5. 在群组中写入正式交付消息
         let message = self.record_group_message(NewGroupMessage {
             group_id: group_id.to_string(),
             thread_id: thread_id.to_string(),
@@ -167,11 +232,11 @@ impl SuperAgentService {
             channel_source: Some(target_channel.clone()),
             content: deliverable.trim().to_string(),
             summary: Some(summary.trim().to_string()),
-            related_task_id: task_id.map(ToOwned::to_owned),
-            related_report_id: report_ids.first().cloned(),
+            related_task_id: resolved_task_id.clone(),
+            related_report_id: effective_report_ids.first().cloned(),
         })?;
 
-        // 4. 主动推送回来源外部渠道（微信/飞书/QQ/OneBot）并记录回执
+        // 6. 主动推送回来源外部渠道（微信/飞书/QQ/OneBot）并记录回执
         let outbound_text = if matches!(
             target_channel.as_str(),
             "weixin" | "wechat" | "feishu" | "qq" | "onebot"
@@ -184,7 +249,7 @@ impl SuperAgentService {
             &self.paths,
             &self.store,
             group_id,
-            task_id,
+            resolved_task_id.as_deref(),
             &target_channel,
             &target_json,
             outbound_text,

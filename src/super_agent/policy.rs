@@ -118,12 +118,12 @@ pub fn evaluate_inbound_route(
 
     // 1. 程序层确定性准入过滤（Fast Path Gate）
     if let Some(binding) = channel_binding {
-        if !binding.enabled || binding.admission_mode == "ignore" {
+        if !binding.enabled || matches!(binding.admission_mode.as_str(), "ignore" | "manual") {
             return RoutingDecision::Ignore {
                 reason: format!("channel_policy_{}", binding.admission_mode),
             };
         }
-        if binding.admission_mode == "explicit_only"
+        if matches!(binding.admission_mode.as_str(), "explicit_only" | "mentions_only")
             && explicit_recipient_id.is_none()
             && !contains_explicit_addressing(trimmed, members)
         {

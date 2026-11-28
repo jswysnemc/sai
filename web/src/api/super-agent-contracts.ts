@@ -259,3 +259,33 @@ export type ChannelInboundPayload = {
   simulate_outbound?: boolean;
   auto_dispatch?: boolean;
 };
+
+export type SuperToolDoc = {
+  name: string;
+  category: string;
+  summary: string;
+};
+
+export type SuperAgentCapabilities = {
+  leader_tools: SuperToolDoc[];
+  leader_readonly_tools: string[];
+  leader_excluded_tools: string[];
+  worker_tools: SuperToolDoc[];
+  gateways: {
+    channel_leader_routing: boolean;
+    weixin: {
+      logged_in: boolean;
+      running: boolean;
+      enabled: boolean;
+    };
+    qq: {
+      configured: boolean;
+      running: boolean;
+      enabled: boolean;
+    };
+    feishu: {
+      configured: boolean;
+      enabled: boolean;
+    };
+  };
+};

@@ -247,7 +247,7 @@ fn color_branch(value: &str) -> String {
 ///
 /// 返回:
 /// - 末段模型名；无斜杠或末段为空时返回原值
-fn short_model_name(model: &str) -> String {
+pub(in crate::cli) fn short_model_name(model: &str) -> String {
     model
         .trim()
         .rsplit('/')
@@ -263,7 +263,7 @@ fn short_model_name(model: &str) -> String {
 ///
 /// 返回:
 /// - 着色后的右侧状态
-fn colorize_right_status(right_text: &str) -> String {
+pub(in crate::cli) fn colorize_right_status(right_text: &str) -> String {
     match right_text.rsplit_once("  ") {
         Some((directory, branch))
             if !directory.is_empty()
@@ -284,7 +284,7 @@ fn colorize_right_status(right_text: &str) -> String {
 ///
 /// 返回:
 /// - 缩写文本
-fn format_token_k(value: usize) -> String {
+pub(in crate::cli) fn format_token_k(value: usize) -> String {
     if value >= 1_000 {
         let scaled = value as f64 / 1_000.0;
         if scaled >= 10.0 {
@@ -312,7 +312,11 @@ const STATUS_SEGMENT_GAP: usize = 2;
 ///
 /// 返回:
 /// - (左侧文本, 右侧文本, 中间空格数)；总显示宽度不超过 cols
-fn fit_status_segments(left: &str, right: &str, cols: usize) -> (String, String, usize) {
+pub(in crate::cli) fn fit_status_segments(
+    left: &str,
+    right: &str,
+    cols: usize,
+) -> (String, String, usize) {
     let cols = cols.max(1);
     let mut left = left.to_string();
     let mut right = right.to_string();
@@ -442,7 +446,7 @@ const CHROME_PANEL_BG: &str = "\x1b[48;5;235m";
 
 /// 【终端】【背景亮度】判定终端背景是否为浅色，阈值与 PanelPalette 保持严格一致。
 /// 参数: `background` 为终端背景 RGB；返回: 浅色背景时返回 true。
-fn is_light_background((r, g, b): (u8, u8, u8)) -> bool {
+pub(in crate::cli) fn is_light_background((r, g, b): (u8, u8, u8)) -> bool {
     u32::from(r) * 299 + u32::from(g) * 587 + u32::from(b) * 114 > 128_000
 }
 

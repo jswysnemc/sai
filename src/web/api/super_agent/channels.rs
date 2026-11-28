@@ -183,6 +183,85 @@ pub(super) async fn run_watchdog_check(
     Ok(Json(events))
 }
 
+/// 读取暴露给 Leader / Runner 的工具架构设计及本地网关（微信/QQ/飞书）实时状态。
+pub(super) async fn capabilities(State(state): State<WebAppState>) -> WebResult<Json<Value>> {
+    let config = AppConfig::load_or_default(&state.paths).map_err(WebError::from)?;
+    let records = crate::gateways::process_control::refresh_gateway_processes(&state.paths)
+        .unwrap_or_default();
+    let is_running = |id: &str| {
+        records
+            .iter()
+            .any(|record| record.gateway_id == id && record.is_running())
+    };
+    let weixin_logged_in = !config.gateways.weixin.token.trim().is_empty()
+        || crate::gateways::weixin_bot::login::load_weixin_account(
+            &state.paths,
+            (!config.gateways.weixin.account.trim().is_empty())
+                .then_some(config.gateways.weixin.account.trim()),
+        )
+        .is_ok();
+    let qq_configured = !config.gateways.qq.app_id.trim().is_empty()
+        || !config.gateways.qq.token.trim().is_empty();
+    let feishu_configured = !config.gateways.feishu.app_id.trim().is_empty()
+        && !config.gateways.feishu.app_secret.trim().is_empty();
+
+    let leader_tools: Vec<Value> = crate::super_agent::tools::leader_tool_design()
+        .iter()
+        .map(|doc| {
+            json!({
+                "name": doc.name,
+                "category": doc.category,
+                "summary": doc.summary,
+            })
+        })
+        .collect();
+    let worker_tools: Vec<Value> = crate::super_agent::tools::worker_tool_design()
+        .iter()
+        .map(|doc| {
+            json!({
+                "name": doc.name,
+                "category": doc.category,
+                "summary": doc.summary,
+            })
+        })
+        .collect();
+
+    Ok(Json(json!({
+        "leader_tools": leader_tools,
+        "leader_readonly_tools": crate::super_agent::tools::LEADER_READONLY_TOOLS,
+        "leader_excluded_tools": [
+            "run_command",
+            "background_command",
+            "write_file",
+            "str_replace",
+            "apply_patch",
+            "trash_path",
+            "browser_*",
+            "computer_*",
+            "ssh_*",
+            "subagent"
+        ],
+        "worker_tools": worker_tools,
+        "gateways": {
+            "channel_leader_routing": config.super_agent.channel_leader_routing,
+            "weixin": {
+                "logged_in": weixin_logged_in,
+                "running": is_running("weixin"),
+                "enabled": config.gateways.weixin.enabled,
+            },
+            "qq": {
+                "configured": qq_configured,
+                "running": is_running("qq"),
+                "enabled": config.gateways.qq.enabled,
+            },
+            "feishu": {
+                "configured": feishu_configured,
+                "enabled": config.gateways.feishu.enabled,
+            }
+        }
+    })))
+}
+
 /// 读取当前 Super-Agent 配置。
 pub(super) async fn get_config(
     State(state): State<WebAppState>,

@@ -312,6 +312,20 @@ impl ToolRegistry {
     /// - 保留原注册顺序和权限配置的新注册表
     pub(crate) fn clone_excluding(&self, excluded: &[&str]) -> ToolRegistry {
         let excluded = excluded.iter().copied().collect::<BTreeSet<_>>();
+        self.clone_excluding_predicate(|name| excluded.contains(name))
+    }
+
+    /// 按谓词过滤克隆工具注册表，排除所有匹配的重执行或冲突工具。
+    ///
+    /// 参数:
+    /// - `should_exclude`: 返回 true 表示排除该工具
+    ///
+    /// 返回:
+    /// - 保留原注册顺序和权限配置的新注册表
+    pub(crate) fn clone_excluding_predicate(
+        &self,
+        mut should_exclude: impl FnMut(&str) -> bool,
+    ) -> ToolRegistry {
         let mut registry = ToolRegistry::new();
         registry.hooks = self.hooks.clone();
         registry.permission_profile = self.permission_profile.clone();
@@ -326,7 +340,7 @@ impl ToolRegistry {
         registry.plugin_vision = self.plugin_vision.clone();
         // 1. 按来源注册顺序复制，确保供应商工具定义顺序稳定
         for tool in self.ordered_tools() {
-            if !excluded.contains(tool.name.as_str()) {
+            if !should_exclude(tool.name.as_str()) {
                 registry.register(tool.clone());
             }
         }

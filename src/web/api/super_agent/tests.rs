@@ -63,7 +63,7 @@ async fn super_agent_web_api_roundtrip_works() {
     let (base, server) = start_test_server(&paths, &ws).await;
     let client = reqwest::Client::new();
 
-    // 1. 首次拉取概览自动创建默认群组
+    // 1. 首次拉取概览自动创建默认群组，并验证能力与工具接口返回完整工具边界与网关状态
     let res = client
         .get(format!("{base}/api/super-agent/overview"))
         .send()
@@ -72,6 +72,18 @@ async fn super_agent_web_api_roundtrip_works() {
     assert_eq!(res.status(), StatusCode::OK);
     let overview: Value = res.json().await.unwrap();
     assert_eq!(overview["group_count"].as_u64(), Some(1));
+
+    let caps: Value = client
+        .get(format!("{base}/api/super-agent/capabilities"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(caps["leader_tools"].as_array().unwrap().len(), 9);
+    assert_eq!(caps["worker_tools"].as_array().unwrap().len(), 4);
+    assert!(caps["gateways"]["weixin"].is_object());
 
     // 2. 新建群组
     let res = client

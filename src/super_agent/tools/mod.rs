@@ -36,6 +36,140 @@ pub const WORKER_TOOL_NAMES: &[&str] = &[
     "super_subscribe_thread",
 ];
 
+/// Leader 保留的轻量只读感知工具（用于拆解任务前快速核实仓库与环境，不陷入耗时执行）。
+pub const LEADER_READONLY_TOOLS: &[&str] = &["read_file", "glob", "grep", "check_os_info"];
+
+/// 工具暴露设计说明项（供 TUI 检视栏与系统提示词共享单一真源）。
+#[derive(Debug, Clone, Copy)]
+pub struct SuperToolDoc {
+    pub name: &'static str,
+    pub category: &'static str,
+    pub summary: &'static str,
+}
+
+/// 【超级智能体】【工具过滤】判断工具名是否属于应从 Leader 隔离的重执行/冲突工具。
+///
+/// 参数:
+/// - `name`: 工具名称
+///
+/// 返回:
+/// - 应从 Leader 工具表排除时返回 true
+pub fn is_leader_excluded_tool(name: &str) -> bool {
+    if matches!(
+        name,
+        "run_command"
+            | "background_command"
+            | "write_file"
+            | "str_replace"
+            | "apply_patch"
+            | "edit_file"
+            | "trash_path"
+            | "subagent"
+            | "codemode"
+            | "generate_image"
+            | "mcp_manager"
+            | "computer_use"
+            | "browser"
+            | "ssh_list_hosts"
+            | "ssh_run_command"
+            | "ssh_upload_file"
+            | "ssh_download_file"
+    ) {
+        return true;
+    }
+    crate::tools::browser::BROWSER_TOOL_NAMES.contains(&name)
+        || crate::tools::computer_use::is_tool(name)
+}
+
+/// 返回暴露给 Leader 的 9 个编排工具设计清单。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 工具设计文档切片
+pub fn leader_tool_design() -> &'static [SuperToolDoc] {
+    &[
+        SuperToolDoc {
+            name: "super_list_state",
+            category: "态势感知",
+            summary: "查看群组成员、任务、待归纳报告、线程订阅与渠道绑定",
+        },
+        SuperToolDoc {
+            name: "super_spawn_runner",
+            category: "编排派发",
+            summary: "异步创建隔离上下文(可选 worktree)的 Runner 并绑定任务",
+        },
+        SuperToolDoc {
+            name: "super_dispatch_task",
+            category: "编排派发",
+            summary: "向已有 Runner 派发新任务，不存在时按名称自动新建",
+        },
+        SuperToolDoc {
+            name: "super_message_runner",
+            category: "协同控制",
+            summary: "向运行中 Runner 步间注入追问，或唤醒空闲 Runner",
+        },
+        SuperToolDoc {
+            name: "super_stop_runner",
+            category: "协同控制",
+            summary: "立即中止指定 Runner 执行并更新成员状态",
+        },
+        SuperToolDoc {
+            name: "super_group_post",
+            category: "群组协同",
+            summary: "在群聊公开同步进度或 @指定成员 定向沟通",
+        },
+        SuperToolDoc {
+            name: "super_deliver_result",
+            category: "成果交付",
+            summary: "归纳 Runner 报告正式交付用户，并自动回推来源渠道",
+        },
+        SuperToolDoc {
+            name: "super_subscribe_thread",
+            category: "路由订阅",
+            summary: "管理 Runner 对话题线程的 owner/context 订阅直通",
+        },
+        SuperToolDoc {
+            name: "super_recall",
+            category: "链式召回",
+            summary: "按 ID 分页回读被 Spill 截断的报告/任务/消息原文",
+        },
+    ]
+}
+
+/// 返回暴露给 Worker(Runner) 的 4 个协作汇报工具设计清单。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - Worker 工具设计文档切片
+pub fn worker_tool_design() -> &'static [SuperToolDoc] {
+    &[
+        SuperToolDoc {
+            name: "super_report_submit",
+            category: "成果上报",
+            summary: "提交结构化报告(ready/progress/waiting/blocked/failed)唤醒 Leader",
+        },
+        SuperToolDoc {
+            name: "super_group_post",
+            category: "群组协同",
+            summary: "在群聊同步关键发现或 @其他成员 直接协作",
+        },
+        SuperToolDoc {
+            name: "super_subscribe_thread",
+            category: "路由订阅",
+            summary: "调整自己对子话题线程的订阅关系",
+        },
+        SuperToolDoc {
+            name: "super_recall",
+            category: "链式召回",
+            summary: "按 ID 按需召回关联任务、报告或原始触发消息详情",
+        },
+    ]
+}
+
 /// 按角色（Leader 或 Worker）解析运行期 AppConfig（应用论文 2.1/2.2 节双层异构模型配置）。
 ///
 /// 参数:

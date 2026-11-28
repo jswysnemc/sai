@@ -1,29 +1,87 @@
 use super::cards;
 use super::model::{
-    MemberStatus, MessageKind, MessageSenderKind, RunnerReport, TriggerDisposition, TriggerEvent,
+    Group, MemberStatus, MessageKind, MessageSenderKind, RunnerReport, TriggerDisposition,
+    TriggerEvent,
 };
 use super::prompts::leader_system_prompt;
 use super::service::SuperAgentService;
-use super::tools::{register_leader_tools, role_runtime_config};
-use crate::agent::AgentMode;
+use super::tools::{is_leader_excluded_tool, register_leader_tools, role_runtime_config};
+use crate::agent::{AgentEvent, AgentMode};
 use crate::config::AppConfig;
-use crate::runner::{RunnerSubmission, SessionRunner, SubmissionSource, UserInputSubmission};
+use crate::llm::ChatStreamKind;
+use crate::paths::SaiPaths;
+use crate::runner::{
+    RunnerEvent, RunnerSubmission, SessionRunner, SubmissionSource, UserInputSubmission,
+};
+use crate::tools::ToolRegistry;
 use anyhow::Result;
 use serde_json::{json, Value};
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-/// Leader 排除的高耗时直接执行工具（对应论文 2.1 节：Router 层专注编排与对外交互，将具体执行委派给 Worker）。
-const LEADER_EXCLUDED_EXECUTION_TOOLS: &[&str] = &[
-    "run_command",
-    "background_command",
-    "write_file",
-    "str_replace",
-    "apply_patch",
-    "trash_path",
-    "computer_use",
-    "browser",
-];
+/// 【超级智能体】【Leader 会话】确保群组常驻 Leader 对应的稳定会话已在独立作用域中建档。
+///
+/// 会话落在 `state_dir/super-agent/leader-sessions` 独立作用域，既能被 `StateStore::for_session`
+/// 跨工作区稳定检索，又不会污染用户日常项目工作区的 `/sessions` 列表。
+///
+/// 参数:
+/// - `paths`: Sai 路径集合
+/// - `group`: 目标群组
+///
+/// 返回:
+/// - 已建档的稳定会话 ID
+pub fn ensure_leader_session(paths: &SaiPaths, group: &Group) -> Result<String> {
+    let scope_dir = paths.state_dir.join("super-agent").join("leader-sessions");
+    std::fs::create_dir_all(&scope_dir)?;
+    let session_id = format!("super-leader-{}", group.id);
+    let title = format!("Super-Agent Leader · {}", group.name);
+    let session = crate::state::ensure_workspace_session(paths, &scope_dir, &session_id, &title)?;
+    Ok(session.id)
+}
+
+/// 【超级智能体】【Leader 工具构建】构造 Leader 专用工具表：排除重执行/冲突工具并注入 9 个编排工具。
+///
+/// 参数:
+/// - `leader_config`: Leader 运行期配置
+/// - `paths`: Sai 路径集合
+/// - `service`: Super-Agent 核心服务句柄
+/// - `group_id`: 当前群组 ID
+/// - `leader_id`: Leader 成员 ID
+/// - `leader_name`: Leader 展示名称
+/// - `active_thread_id`: 当前主线程 ID
+/// - `origin_channel`: 当前批次来源渠道
+/// - `origin_target`: 当前批次来源回复目标
+///
+/// 返回:
+/// - 已过滤并注入编排工具的注册表
+#[allow(clippy::too_many_arguments)]
+pub fn build_leader_tool_registry(
+    leader_config: &AppConfig,
+    paths: &SaiPaths,
+    service: Arc<SuperAgentService>,
+    group_id: String,
+    leader_id: String,
+    leader_name: String,
+    active_thread_id: String,
+    origin_channel: String,
+    origin_target: Value,
+) -> Result<ToolRegistry> {
+    let mut registry =
+        crate::cli::build_tool_registry_without_mcp(leader_config, paths, AgentMode::Yolo)?
+            .clone_excluding_predicate(is_leader_excluded_tool);
+    register_leader_tools(
+        &mut registry,
+        service,
+        group_id,
+        leader_id,
+        leader_name,
+        active_thread_id,
+        origin_channel,
+        origin_target,
+    );
+    Ok(registry)
+}
 
 /// 【超级智能体】【Leader 批处理调度器】保证每个群组同一时刻最多运行一个常驻 Leader 回合，
 /// 运行期间到达的新 Trigger 与 Runner 报告自动积压，在下一轮一并批处理（论文 2.1 & 7.2 节）。
@@ -115,6 +173,18 @@ impl LeaderCoordinator {
             .remove(group_id);
         false
     }
+
+    /// 发生错误时直接释放群组活跃锁与重查标记，等待后续显式事件再次唤醒。
+    fn release(&self, group_id: &str) {
+        self.pending_recheck
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .remove(group_id);
+        self.active_groups
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .remove(group_id);
+    }
 }
 
 /// 排空群组 Leader 的全部积压 Trigger 与待归纳 Runner 报告。
@@ -145,6 +215,9 @@ async fn run_leader_drain_loop(service: Arc<SuperAgentService>, group_id: String
                     related_report_id: None,
                 });
             }
+            // 出错后主动退避退出循环，避免同一批未消费报告触发无限重试循环
+            service.leader_coordinator().release(&group_id);
+            break;
         }
         // 1. 检查是否还有新一轮积压 Trigger 或未归纳报告
         let has_more = service
@@ -241,13 +314,12 @@ pub async fn run_single_leader_batch(service: &Arc<SuperAgentService>, group_id:
         .map(|msg| msg.seq)
         .unwrap_or(0);
 
-    // 4. 构造 Leader 专用运行期配置与工具表（排除重执行工具，专注 Router 编排）
+    // 4. 确保 Leader 稳定会话存在并构造专用工具表（排除重执行工具，专注 Router 编排）
+    let session_id = ensure_leader_session(paths, &group)?;
     let leader_config = role_runtime_config(&base_config, true);
-    let mut registry =
-        crate::cli::build_tool_registry_without_mcp(&leader_config, paths, AgentMode::Yolo)?
-            .clone_excluding(LEADER_EXCLUDED_EXECUTION_TOOLS);
-    register_leader_tools(
-        &mut registry,
+    let registry = build_leader_tool_registry(
+        &leader_config,
+        paths,
         Arc::clone(service),
         group_id.to_string(),
         leader.id.clone(),
@@ -255,7 +327,7 @@ pub async fn run_single_leader_batch(service: &Arc<SuperAgentService>, group_id:
         active_thread_id.clone(),
         origin_channel.clone(),
         origin_target.clone(),
-    );
+    )?;
 
     let batch_prompt = build_leader_batch_prompt(&triggers, &unsynthesized_reports);
     let system_prompt = leader_system_prompt(
@@ -264,7 +336,6 @@ pub async fn run_single_leader_batch(service: &Arc<SuperAgentService>, group_id:
         &members,
         base_config.super_agent.im_reply_max_words,
     );
-    let session_id = format!("super-leader-{}", group.id);
     let user_input = UserInputSubmission::new(batch_prompt, AgentMode::Yolo)
         .with_extra_system_prompt(system_prompt);
     let mut channel = crate::runner::ChannelSubmission::new("super_agent");
@@ -275,14 +346,51 @@ pub async fn run_single_leader_batch(service: &Arc<SuperAgentService>, group_id:
         .with_session_id(session_id)
         .with_channel(channel);
 
-    let workdir = if !group.workspace_path.trim().is_empty() {
-        std::path::PathBuf::from(&group.workspace_path)
-    } else {
-        crate::runtime_cwd::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
-    };
+    let workdir = resolve_group_workdir(&group.workspace_path, paths);
     let mut output = crate::runner::RunnerOutput::default();
+    let stream_service = Arc::clone(service);
+    let stream_group_id = group_id.to_string();
+    let stream_leader_id = leader.id.clone();
     let run_result = crate::runtime_cwd::scope(workdir, async {
+        let mut live_text = String::new();
         let mut sink = |event| {
+            match &event {
+                RunnerEvent::Agent(AgentEvent::ToolCall { name, .. })
+                | RunnerEvent::Agent(AgentEvent::ToolCallIdentified { name, .. }) => {
+                    let label = crate::tools::readable_tool_name(name);
+                    let activity = format!("调用工具：{label}");
+                    let _ = stream_service.store().update_member_state(
+                        &stream_leader_id,
+                        MemberStatus::Running,
+                        Some(&activity),
+                        None,
+                    );
+                    stream_service.emit_event(
+                        "leader.activity",
+                        Some(&stream_group_id),
+                        json!({
+                            "member_id": stream_leader_id,
+                            "tool": name,
+                            "activity": activity,
+                        }),
+                    );
+                }
+                RunnerEvent::Agent(AgentEvent::Chunk(chunk))
+                    if chunk.kind == ChatStreamKind::Content && !chunk.text.is_empty() =>
+                {
+                    live_text.push_str(&chunk.text);
+                    stream_service.emit_event(
+                        "leader.delta",
+                        Some(&stream_group_id),
+                        json!({
+                            "member_id": stream_leader_id,
+                            "delta": chunk.text,
+                            "preview": first_paragraph(&live_text, 320),
+                        }),
+                    );
+                }
+                _ => {}
+            }
             output.push_event(event);
             Ok(())
         };
@@ -298,11 +406,31 @@ pub async fn run_single_leader_batch(service: &Arc<SuperAgentService>, group_id:
         .store()
         .update_member_state(&leader.id, MemberStatus::Idle, Some("ready"), None);
 
-    let reply_text = run_result?
-        .map(|chat| chat.content)
-        .unwrap_or_default()
-        .trim()
-        .to_string();
+    let reply_text = match run_result {
+        Ok(chat) => chat.map(|item| item.content).unwrap_or_default().trim().to_string(),
+        Err(error) => {
+            // 若来源于外部渠道，及时回推失败说明，避免微信/飞书/QQ 侧静默无响应
+            if !matches!(origin_channel.as_str(), "" | "group" | "tui" | "web") {
+                let notice = format!("Leader 编排执行失败：{error:#}");
+                let _ = super::channel_bridge::deliver_to_channel(
+                    paths,
+                    service.store(),
+                    group_id,
+                    None,
+                    &origin_channel,
+                    &origin_target,
+                    &notice,
+                )
+                .await;
+            }
+            service.emit_event(
+                "leader.idle",
+                Some(group_id),
+                json!({ "member_id": leader.id }),
+            );
+            return Err(error);
+        }
+    };
 
     // 5. 标记本批 Trigger 已完成研判
     service.store().update_trigger_disposition(
@@ -347,6 +475,8 @@ pub async fn run_single_leader_batch(service: &Arc<SuperAgentService>, group_id:
                 &summary,
                 &reply_text,
                 None,
+                Some(origin_channel.as_str()),
+                Some(&origin_target),
             )
             .await;
     } else if !leader_posted && !reply_text.is_empty() {
@@ -437,6 +567,25 @@ fn resolve_batch_origin(
         }
     }
     ("group".to_string(), json!({}))
+}
+
+/// 解析群组可用工作目录；若原目录已不存在则安全回退到当前目录或数据目录。
+fn resolve_group_workdir(workspace_path: &str, paths: &SaiPaths) -> PathBuf {
+    let trimmed = workspace_path.trim();
+    if !trimmed.is_empty() {
+        let candidate = PathBuf::from(trimmed);
+        if candidate.is_dir() {
+            return candidate;
+        }
+    }
+    if let Ok(cwd) = crate::runtime_cwd::current_dir() {
+        if cwd.is_dir() {
+            return cwd;
+        }
+    }
+    let fallback = paths.data_dir.join("workspace");
+    let _ = std::fs::create_dir_all(&fallback);
+    fallback
 }
 
 /// 提取回复首段作为简洁摘要。

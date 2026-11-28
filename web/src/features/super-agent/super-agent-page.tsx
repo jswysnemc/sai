@@ -73,6 +73,12 @@ export function SuperAgentPage() {
     queryFn: api.superAgent.getConfig
   });
 
+  const capabilitiesQuery = useQuery({
+    queryKey: ["super-agent-capabilities"],
+    queryFn: api.superAgent.capabilities,
+    refetchInterval: 10_000
+  });
+
   const invalidateAll = () => {
     void queryClient.invalidateQueries({ queryKey: ["super-agent-overview"] });
     if (activeGroupId) {
@@ -393,6 +399,7 @@ export function SuperAgentPage() {
                   deliveries={detail.deliveries}
                   watchdogEvents={ov?.recent_watchdog ?? []}
                   config={configQuery.data}
+                  capabilities={capabilitiesQuery.data}
                   busy={busy}
                   onBindChannel={async (payload) => { await bindChannel.mutateAsync(payload); }}
                   onUnbindChannel={async (bindingId) => { await unbindChannel.mutateAsync(bindingId); }}

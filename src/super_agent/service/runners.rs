@@ -67,12 +67,17 @@ impl SuperAgentService {
             origin_channel: req.origin_channel.unwrap_or_else(|| "group".to_string()),
             origin_target: req.origin_target.unwrap_or_else(|| json!({})),
         })?;
-        // 2. 自动为该 Runner 订阅所属 Thread（开启 Fast-Path 直通）
+        // 2. 订阅策略：独立子线程设 Owner 支持订阅直通，主大厅仅设 Context 避免劫持后续发给 Leader 的消息
+        let sub_mode = if thread_id == group.default_thread_id {
+            SubscriptionMode::Context
+        } else {
+            SubscriptionMode::Owner
+        };
         let _ = self.store.upsert_subscription(
             &req.group_id,
             &thread_id,
             &worker.id,
-            SubscriptionMode::Owner,
+            sub_mode,
         )?;
         // 3. 在群聊记录 Leader 派工动态
         let leader_name = self
@@ -143,9 +148,18 @@ impl SuperAgentService {
             origin_channel: origin_channel.to_string(),
             origin_target,
         })?;
-        let _ =
-            self.store
-                .upsert_subscription(group_id, thread_id, &member.id, SubscriptionMode::Owner)?;
+        let group = self
+            .store
+            .get_group(group_id)?
+            .ok_or_else(|| anyhow!("group not found: {group_id}"))?;
+        let sub_mode = if thread_id == group.default_thread_id {
+            SubscriptionMode::Context
+        } else {
+            SubscriptionMode::Owner
+        };
+        let _ = self
+            .store
+            .upsert_subscription(group_id, thread_id, &member.id, sub_mode)?;
         let prompt = format!("新分配任务「{title}」（task_id={}）：\n{objective}", task.id);
         if !self.workers.enqueue_live_message(member_id, "Leader", &prompt)
             && tokio::runtime::Handle::try_current().is_ok()

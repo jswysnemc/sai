@@ -304,20 +304,49 @@ describe("SuperAgentPage and Panels", () => {
     expect(threadsHtml).toContain("请修复网关路由");
 
     const channelsHtml = renderWithProviders(
-      <ChannelsWatchdogPanel
-        channels={sampleDetail.channels}
-        deliveries={sampleDetail.deliveries}
-        watchdogEvents={sampleOverview.recent_watchdog}
-        config={sampleConfig}
-        busy={false}
-        onBindChannel={async () => {}}
-        onUnbindChannel={async () => {}}
-        onRunWatchdog={async () => {}}
-        onSaveConfig={async () => {}}
-      />
+      <MemoryRouter>
+        <ChannelsWatchdogPanel
+          channels={sampleDetail.channels}
+          deliveries={sampleDetail.deliveries}
+          watchdogEvents={sampleOverview.recent_watchdog}
+          config={sampleConfig}
+          capabilities={{
+            leader_tools: [
+              {
+                name: "super_spawn_runner",
+                category: "编排派发",
+                summary: "异步创建隔离上下文 Runner"
+              }
+            ],
+            leader_readonly_tools: ["read_file", "glob", "grep"],
+            leader_excluded_tools: ["run_command", "write_file"],
+            worker_tools: [
+              {
+                name: "super_report_submit",
+                category: "成果上报",
+                summary: "提交结构化成果报告"
+              }
+            ],
+            gateways: {
+              channel_leader_routing: true,
+              weixin: { logged_in: true, running: true, enabled: true },
+              qq: { configured: false, running: false, enabled: false },
+              feishu: { configured: false, enabled: false }
+            }
+          }}
+          busy={false}
+          onBindChannel={async () => {}}
+          onUnbindChannel={async () => {}}
+          onRunWatchdog={async () => {}}
+          onSaveConfig={async () => {}}
+        />
+      </MemoryRouter>
     );
     expect(channelsHtml).toContain("Owner Weixin");
     expect(channelsHtml).toContain("weixin:wx_owner");
     expect(channelsHtml).toContain("All runners healthy");
+    expect(channelsHtml).toContain("super_spawn_runner");
+    expect(channelsHtml).toContain("super_report_submit");
+    expect(channelsHtml).toContain("weixin-login");
   });
 });

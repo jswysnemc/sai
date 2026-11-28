@@ -64,6 +64,8 @@ export function GroupChatPanel({
     }
   };
 
+  const runningMembers = members.filter((m) => m.status === "running");
+
   return (
     <div className="sa-chat-wrap">
       <div className="sa-chat-timeline" role="log" aria-label={t("Group chat timeline", "群组对话时间线")}>
@@ -78,6 +80,20 @@ export function GroupChatPanel({
         {messages.map((msg) => (
           <MessageCard key={msg.id} message={msg} />
         ))}
+        {runningMembers.length > 0 && (
+          <div className="sa-item-card" role="status" aria-live="polite">
+            <div className="sa-group-meta">
+              <i className="sa-dot running" />
+              <strong>{t("Live Activity", "实时执行中")}</strong>
+              {runningMembers.map((member) => (
+                <span key={member.id} className="sa-badge accent">
+                  {member.name}
+                  {member.last_activity ? `: ${member.last_activity}` : ""}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
 

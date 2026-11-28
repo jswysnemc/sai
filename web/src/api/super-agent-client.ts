@@ -4,6 +4,7 @@ import type {
   ChannelInboundPayload,
   CreateGroupPayload,
   SpawnRunnerPayload,
+  SuperAgentCapabilities,
   SuperAgentConfig,
   SuperAgentOverview,
   SuperChannelBinding,
@@ -22,6 +23,9 @@ import type {
 export const superAgentApi = {
   /** 读取全局 Super-Agent 概览统计与群组摘要。 */
   overview: () => apiRequest<SuperAgentOverview>("/api/super-agent/overview"),
+
+  /** 读取暴露给 Leader / Runner 的工具架构设计及本地网关实时状态。 */
+  capabilities: () => apiRequest<SuperAgentCapabilities>("/api/super-agent/capabilities"),
 
   /** 创建新的 Super-Agent 群组。 */
   createGroup: (payload: CreateGroupPayload) =>

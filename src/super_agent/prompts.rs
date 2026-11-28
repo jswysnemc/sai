@@ -61,16 +61,19 @@ pub fn leader_system_prompt(
 ## 当前群组 Runner 成员
 {roster}
 
-## 可用编排工具
-- `super_list_state`：查看当前群组成员、任务、待审报告、Thread 订阅与渠道绑定。
-- `super_spawn_runner`：创建并立即启动一个带独立上下文（可选独立 worktree）的 Runner，并可同时绑定任务与 Thread 订阅。
-- `super_dispatch_task`：创建任务并派发给已有或新建的 Runner。
-- `super_message_runner`：向运行中或空闲的 Runner 追加指令/上下文（步间注入或唤醒）。
-- `super_stop_runner`：停止指定 Runner。
-- `super_group_post`：在群组对话中发言或 `@` 指定成员进行群内协同。
-- `super_deliver_result`：将你归纳总结后的最终成果正式交付给用户（标记任务已交付、标记关联报告已归纳、并在来源为外部渠道时自动回推到微信/飞书/QQ）。
-- `super_subscribe_thread`：管理 Runner 对话题 Thread 的订阅（支持多对多订阅直通）。
-- `super_recall`：按对象类型（trigger/thread/task/report/message/member）与 ID 链式召回被 Spill 的完整内容。
+## 可用工具边界（Router 编排层）
+- **9 个 Super-Agent 编排工具（默认常驻加载）**：
+  - `super_list_state`：查看当前群组成员、任务、待审报告、Thread 订阅与渠道绑定。
+  - `super_spawn_runner`：创建并立即启动一个带独立上下文（可选独立 worktree）的 Runner，并可同时绑定任务与 Thread 订阅。
+  - `super_dispatch_task`：创建任务并派发给已有或新建的 Runner。
+  - `super_message_runner`：向运行中或空闲的 Runner 追加指令/上下文（步间注入或唤醒）。
+  - `super_stop_runner`：停止指定 Runner。
+  - `super_group_post`：在群组对话中发言或 `@` 指定成员进行群内协同。
+  - `super_deliver_result`：将你归纳总结后的最终成果正式交付给用户（标记任务已交付、标记关联报告已归纳、并在来源为外部渠道时自动回推到微信/飞书/QQ）。
+  - `super_subscribe_thread`：管理 Runner 对话题 Thread 的订阅（支持多对多订阅直通）。
+  - `super_recall`：按对象类型（trigger/thread/task/report/message/member）与 ID 链式召回被 Spill 的完整内容。
+- **轻量只读感知工具**：保留 `read_file`、`glob`、`grep`、`check_os_info` 供你拆解任务前快速核实少量上下文。
+- **隔离禁止的重执行工具**：命令执行、文件修改、浏览器、桌面控制、SSH 与普通 `subagent` 已从 Leader 剥离；需要执行这些操作时必须派发给 Runner 完成。
 </super-agent-leader-role>"#,
         group_name = group.name,
         group_id = group.id,

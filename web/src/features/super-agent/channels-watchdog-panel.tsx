@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Cable, CheckCircle2, RefreshCw, Save, ShieldCheck, Trash2 } from "../../shared/ui/icons";
 import type {
   BindChannelPayload,
+  SuperAgentCapabilities,
   SuperAgentConfig,
   SuperChannelBinding,
   SuperDeliveryReceipt,
@@ -9,12 +10,14 @@ import type {
 } from "../../api/super-agent-contracts";
 import { Button } from "../../shared/ui/button/button";
 import { useI18n } from "../i18n/use-i18n";
+import { CapabilitiesGuideCard } from "./capabilities-guide-card";
 
 type ChannelsWatchdogPanelProps = {
   channels: SuperChannelBinding[];
   deliveries: SuperDeliveryReceipt[];
   watchdogEvents: SuperWatchdogEvent[];
   config?: SuperAgentConfig;
+  capabilities?: SuperAgentCapabilities;
   busy: boolean;
   onBindChannel: (payload: BindChannelPayload) => Promise<void>;
   onUnbindChannel: (bindingId: string) => Promise<void>;
@@ -33,6 +36,7 @@ export function ChannelsWatchdogPanel({
   deliveries,
   watchdogEvents,
   config,
+  capabilities,
   busy,
   onBindChannel,
   onUnbindChannel,
@@ -65,6 +69,8 @@ export function ChannelsWatchdogPanel({
 
   return (
     <div className="sa-panel-scroll">
+      <CapabilitiesGuideCard capabilities={capabilities} />
+
       <section className="sa-section-card">
         <header className="sa-section-title">
           <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
@@ -100,8 +106,8 @@ export function ChannelsWatchdogPanel({
             <span>{t("Admission policy", "准入策略")}</span>
             <select className="sa-select" value={admission} onChange={(e) => setAdmission(e.target.value)}>
               <option value="auto">auto</option>
-              <option value="mentions_only">mentions_only</option>
-              <option value="manual">manual</option>
+              <option value="explicit_only">explicit_only</option>
+              <option value="ignore">ignore</option>
             </select>
           </label>
           <Button variant="primary" size="small" disabled={busy} onClick={() => void handleBind()}>
